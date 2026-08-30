@@ -101,6 +101,8 @@ Gate: timezone/date-only fixtures pass; video has a recorded ship/defer decision
 
 Entry prerequisite: PD-005 is accepted.
 
+The decision-independent export-request and archive-contract groundwork is recorded in `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md`. It is not a Phase 7 entry or completion claim: the request ledger is bounded and private, the structured-data harness is pure and unconnected, and no worker, media, artifact delivery, retention duration, purge behavior, or user-facing export action exists.
+
 Deliver:
 
 - Trash/restore, idempotent purge ledger, immutable deletion requests, audit events, export jobs, safe archive names, structured manifest, originals, and checksums.

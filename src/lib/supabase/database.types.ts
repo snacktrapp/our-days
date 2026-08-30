@@ -663,6 +663,10 @@ export type Database = {
         Args: { email: string; token: string };
         Returns: boolean;
       };
+      request_family_export: {
+        Args: { circle_id: string; request_key: string };
+        Returns: string;
+      };
       revoke_invitation: {
         Args: { invitation_id: string };
         Returns: undefined;

@@ -454,6 +454,47 @@ describe("FamilySettingsPanel", () => {
     ).toBeNull();
   });
 
+  it("does not claim archive delivery exists while reviewing an organizer promotion", async () => {
+    const user = userEvent.setup();
+    const promotionModel = {
+      ...connectedOrganizerModel,
+      members: connectedOrganizerModel.members.map((member) =>
+        member.id === "other"
+          ? {
+              ...member,
+              role: "member" as const,
+              relationshipLabel: "Family member",
+            }
+          : member,
+      ),
+    };
+
+    render(
+      <FamilySettingsPanel
+        model={promotionModel}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Manage role and access for Other organizer",
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        /They will manage family exports once private archive delivery is connected/u,
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/export the family archive/u)).toBeNull();
+  });
+
   it("shows effective child-journal care and changes one explicit guardian at a time", async () => {
     const user = userEvent.setup();
     const setGuardian = vi.fn().mockResolvedValue({

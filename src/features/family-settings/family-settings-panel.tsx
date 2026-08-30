@@ -714,8 +714,9 @@ function AccountRoleReview({
       {nextRole === "organizer" ? (
         <p>
           Organizers can invite and remove people, change roles and journal
-          care, export the family archive, and care for every child journal.
-          This does not let them edit another adult’s moments.
+          care, and care for every child journal. They will manage family
+          exports once private archive delivery is connected. This does not let
+          them edit another adult’s moments.
         </p>
       ) : (
         <p>

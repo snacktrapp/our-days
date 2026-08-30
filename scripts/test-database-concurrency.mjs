@@ -1211,6 +1211,89 @@ try {
     $guardian_revocation_audit$;
   `);
 
+  const duplicateExportRequestKey = randomUUID();
+  const duplicateExportResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "request_family_export",
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/request_family_export",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              request_key: duplicateExportRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/request_family_export",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              request_key: duplicateExportRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  if (
+    duplicateExportResults.some(({ response }) => !response.ok) ||
+    duplicateExportResults[0].body !== duplicateExportResults[1].body
+  ) {
+    throw new Error(
+      `Duplicate export requests did not converge on one job (${duplicateExportResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $duplicate_export_audit$
+    declare
+      job_count integer;
+      audit_count integer;
+      queued_job_count integer;
+    begin
+      select count(*)::integer,
+             count(*) filter (where state = 'queued')::integer
+        into job_count, queued_job_count
+        from private.export_jobs
+       where circle_id = '${CIRCLE_A}'::uuid
+         and requested_by_membership_id = '${ORGANIZER_A_MEMBERSHIP}'::uuid
+         and request_key = '${duplicateExportRequestKey}'::uuid;
+      select count(*)::integer into audit_count
+        from private.audit_events as audit
+        join private.export_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.requested_by_membership_id = '${ORGANIZER_A_MEMBERSHIP}'::uuid
+         and job.request_key = '${duplicateExportRequestKey}'::uuid
+         and audit.event_type = 'export_requested';
+
+      if job_count <> 1 or queued_job_count <> 1 or audit_count <> 1 then
+        raise exception 'Duplicate export requests created duplicate durable state';
+      end if;
+    end
+    $duplicate_export_audit$;
+  `);
+
   const roleResults = await runOverlappedCircleRace({
     apiKey,
     apiUrl,
@@ -1300,8 +1383,129 @@ try {
     $role_audit$;
   `);
 
+  runDatabaseQuery(`
+    update public.circle_memberships
+       set role = 'organizer'
+     where circle_id = '${CIRCLE_A}'::uuid
+       and id in (
+         '${ORGANIZER_A_MEMBERSHIP}'::uuid,
+         '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+       );
+  `);
+
+  const exportDemotionRequestKey = randomUUID();
+  const exportDemotionResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "export request and organizer demotion",
+    operationNames: ["request_family_export", "set_membership_role"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerATwoToken,
+          "rpc/request_family_export",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              request_key: exportDemotionRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/set_membership_role",
+          {
+            body: JSON.stringify({
+              membership_id: ORGANIZER_A_TWO_MEMBERSHIP,
+              role: "member",
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  const [exportRaceRequest, exportRaceDemotion] = exportDemotionResults;
+  if (
+    !exportRaceDemotion.response.ok ||
+    (!exportRaceRequest.response.ok &&
+      (exportRaceRequest.body?.code !== "42501" ||
+        exportRaceRequest.body?.message !==
+          "Family export could not be requested"))
+  ) {
+    throw new Error(
+      `Export request/demotion race did not use a safe serialized path (${exportDemotionResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $export_demotion_audit$
+    declare
+      requester_role text;
+      job_count integer;
+      audit_count integer;
+      authorized_job_count integer;
+      invalidation_audit_count integer;
+      queued_job_count integer;
+    begin
+      select role into requester_role
+        from public.circle_memberships
+       where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
+      select count(*)::integer,
+             count(*) filter (where state = 'queued')::integer,
+             count(*) filter (
+               where private.export_job_requester_is_authorized(id)
+             )::integer
+        into job_count, queued_job_count, authorized_job_count
+        from private.export_jobs
+       where circle_id = '${CIRCLE_A}'::uuid
+         and requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and request_key = '${exportDemotionRequestKey}'::uuid;
+      select count(*)::integer into audit_count
+        from private.audit_events as audit
+        join private.export_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and job.request_key = '${exportDemotionRequestKey}'::uuid
+         and audit.event_type = 'export_requested';
+      select count(*)::integer into invalidation_audit_count
+        from private.audit_events as audit
+        join private.export_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and job.request_key = '${exportDemotionRequestKey}'::uuid
+         and audit.event_type = 'export_invalidated';
+
+      if requester_role <> 'member'
+        or job_count not in (0, 1)
+        or audit_count <> job_count
+        or invalidation_audit_count <> job_count
+        or queued_job_count <> 0
+        or authorized_job_count <> 0 then
+        raise exception 'Export request/demotion race left eligible or duplicate state';
+      end if;
+    end
+    $export_demotion_audit$;
+  `);
+
   process.stdout.write(
-    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, and member revocation serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, member revocation, and export requests serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;
