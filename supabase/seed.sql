@@ -15,10 +15,10 @@ values
   ('10000000-0000-4000-8000-000000000006', 'organizer-b@example.test', statement_timestamp(), '{}'),
   ('10000000-0000-4000-8000-000000000007', 'no-circle@example.test', statement_timestamp(), '{}');
 
-insert into public.circles (id, name, created_by_membership_id)
+insert into public.circles (id, name, time_zone, created_by_membership_id)
 values
-  ('20000000-0000-4000-8000-000000000001', 'Cedar Circle', '40000000-0000-4000-8000-000000000001'),
-  ('20000000-0000-4000-8000-000000000002', 'Harbor Circle', '40000000-0000-4000-8000-000000000006');
+  ('20000000-0000-4000-8000-000000000001', 'Cedar Circle', 'America/Los_Angeles', '40000000-0000-4000-8000-000000000001'),
+  ('20000000-0000-4000-8000-000000000002', 'Harbor Circle', 'UTC', '40000000-0000-4000-8000-000000000006');
 
 insert into public.people (
   id,

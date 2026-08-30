@@ -39,6 +39,12 @@ describe("memory calendar dates", () => {
   });
 
   it("describes visible calendar gaps without creating Date instances", () => {
+    expect(elapsedCalendarLabel("2026-03-01", "2026-02-28")).toBe(
+      "one day earlier",
+    );
+    expect(elapsedCalendarLabel("2026-01-01", "2025-12-31")).toBe(
+      "one day earlier",
+    );
     expect(elapsedCalendarLabel("2026-08-28", "2026-08-14")).toBe(
       "2 weeks earlier",
     );

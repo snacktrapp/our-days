@@ -666,6 +666,7 @@ export function getMemoriesFixture(): MemoriesViewModel {
     heading: "On this day",
     subheading: "Across the years",
     feature: {
+      state: "photo",
       href: "/memories/on-this-day",
       imageSrc: featured.image.src,
       imageAlt: featured.image.alt,

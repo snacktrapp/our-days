@@ -535,6 +535,54 @@ export type Database = {
           trashed_at: string;
         }[];
       };
+      list_memory_moments: {
+        Args: {
+          anniversary_day?: number;
+          anniversary_month?: number;
+          circle_id: string;
+          cursor_has_precise_time?: boolean;
+          cursor_moment_id?: string;
+          cursor_occurred_at?: string;
+          cursor_occurred_on?: string;
+          memory_year?: number;
+          page_size?: number;
+          snapshot_at?: string;
+        };
+        Returns: {
+          body: string;
+          can_change: boolean;
+          created_at: string;
+          feed_snapshot_at: string;
+          journal_person_accent: string;
+          journal_person_kind: string;
+          journal_person_name: string;
+          moment_circle_id: string;
+          moment_id: string;
+          moment_journal_person_id: string;
+          moment_kind: string;
+          moment_title: string;
+          occurred_at: string;
+          occurred_on: string;
+          occurred_timezone: string;
+          place_name: string;
+          recorder_person_id: string;
+          recorder_person_name: string;
+          revision: number;
+          tagged_people: Json;
+          time_precision: string;
+          updated_at: string;
+        }[];
+      };
+      list_memory_years: {
+        Args: {
+          before_year?: number;
+          circle_id: string;
+          page_size?: number;
+        };
+        Returns: {
+          memory_year: number;
+        }[];
+      };
       list_pending_invitations: {
         Args: { circle_id: string };
         Returns: {

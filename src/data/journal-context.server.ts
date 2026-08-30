@@ -26,13 +26,13 @@ function initialFor(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
 }
 
-function plainToday(timeZone: string) {
+export function plainToday(timeZone: string, instant = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(instant);
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value;
   const year = read("year");
@@ -156,7 +156,7 @@ export async function loadConnectedJournalContext(
     composer,
     timelineOptionsHref: "/trash",
     settingsHref: null,
-    memoriesHref: null,
+    memoriesHref: "/memories",
   };
 
   return {

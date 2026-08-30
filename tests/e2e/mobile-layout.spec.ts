@@ -78,6 +78,73 @@ test("reduced-motion preference removes entrance animations", async ({
   );
 });
 
+test("maximum-length family names stay bounded beside the mobile timeline", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/family");
+  const geometry = await page
+    .locator(".moment-meta strong")
+    .first()
+    .evaluate((element) => {
+      element.textContent = "A".repeat(80);
+      const label = element.getBoundingClientRect();
+      const stage = document
+        .querySelector(".phone-stage")!
+        .getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        clipped: element.scrollWidth > element.clientWidth,
+        documentFits:
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+        insideStage: label.right <= stage.right,
+        overflow: style.overflow,
+        textOverflow: style.textOverflow,
+      };
+    });
+
+  expect(geometry).toMatchObject({
+    clipped: true,
+    documentFits: true,
+    insideStage: true,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  });
+});
+
+test("maximum-length family names wrap inside the Memories portal", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/memories");
+  const geometry = await page
+    .locator(".memory-feature h3")
+    .evaluate((heading) => {
+      heading.textContent = "A".repeat(80);
+      const label = heading.getBoundingClientRect();
+      const feature = heading
+        .closest(".memory-feature")!
+        .getBoundingClientRect();
+      const style = getComputedStyle(heading);
+      return {
+        documentFits:
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+        insideFeature: label.right <= feature.right,
+        overflowWrap: style.overflowWrap,
+        textFits: heading.scrollWidth <= heading.clientWidth,
+      };
+    });
+
+  expect(geometry).toEqual({
+    documentFits: true,
+    insideFeature: true,
+    overflowWrap: "anywhere",
+    textFits: true,
+  });
+});
+
 test("deep memory actions can scroll above the fixed navigation", async ({
   page,
 }) => {

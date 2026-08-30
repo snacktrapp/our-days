@@ -46,6 +46,7 @@ const memories = {
   heading: "On this day",
   subheading: "4 years ago",
   feature: {
+    state: "photo",
     href: "/memories/on-this-day",
     imageSrc: "/sample-family.jpg",
     imageAlt: "A family memory",
@@ -109,6 +110,54 @@ describe("Memories browsing", () => {
       screen.getByRole("link", { name: "Browse memories from 2026" }),
     ).toHaveAttribute("href", "/memories/years/2026");
     expect(screen.queryByRole("button", { name: "2026" })).toBeNull();
+  });
+
+  it("renders a private written portal without requiring preview media", () => {
+    render(
+      <MemoriesPanel
+        model={{
+          ...memories,
+          feature: {
+            state: "moment",
+            href: "/memories/on-this-day",
+            dateLabel: "August 28, 2022",
+            personName: "Molly",
+            personInitial: "M",
+            personAccent: "moss",
+            kindLabel: "Thought",
+            summary: "The late light reached across the kitchen.",
+            actionLabel: "Open moments from this day →",
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Molly")).toBeInTheDocument();
+    expect(screen.getByText(/late light/u)).toBeInTheDocument();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("keeps an empty On This Day doorway and explains an empty archive", () => {
+    render(
+      <MemoriesPanel
+        model={{
+          ...memories,
+          feature: {
+            state: "empty",
+            href: "/memories/on-this-day",
+            title: "Nothing from this day yet",
+            description: "As the journal grows, moments will gather here.",
+            actionLabel: "Open this day →",
+          },
+          years: [],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: /Nothing from this day yet/u }),
+    ).toHaveAttribute("href", "/memories/on-this-day");
+    expect(screen.getByText(/Years will gather here/u)).toBeInTheDocument();
   });
 
   it("returns from a memory journey and keeps the central timeline semantic", () => {

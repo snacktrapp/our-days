@@ -857,7 +857,9 @@ try {
     throw new Error(
       `Concurrent reactions did not serialize as one reversible row (${reactionResults
         .map(({ response }) => response.status)
-        .join(", ")}).`,
+        .join(", ")}; ${reactionResults
+        .map(({ body }) => JSON.stringify(body))
+        .join(" | ")}).`,
     );
   }
 

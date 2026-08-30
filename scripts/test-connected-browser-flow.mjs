@@ -68,6 +68,17 @@ function createLocalUserToken(userId, jwtSecret) {
   return `${header}.${payload}.${signature}`;
 }
 
+function plainDateInTimeZone(timeZone, instant = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const read = (type) => parts.find((part) => part.type === type)?.value;
+  return `${read("year")}-${read("month")}-${read("day")}`;
+}
+
 async function jsonRequest(url, apiKey, init = {}) {
   const response = await fetch(url, {
     ...init,
@@ -463,6 +474,12 @@ try {
   shouldRestoreFixtures = true;
 
   const suffix = randomUUID();
+  const circleTimeZone = "America/Los_Angeles";
+  const circleToday = plainDateInTimeZone(circleTimeZone);
+  const circleAnniversary = circleToday.slice(5);
+  const anniversaryYear =
+    circleAnniversary === "02-29" ? 2024 : Number(circleToday.slice(0, 4)) - 4;
+  const anniversaryOccurredOn = `${anniversaryYear}-${circleAnniversary}`;
   const email = `browser-invite-${suffix}@example.test`;
   const adminHeaders = { authorization: `Bearer ${serviceKey}` };
   const createdUser = await jsonRequest(
@@ -511,6 +528,7 @@ try {
 
   browser = await connectedBrowserType.launch({ headless: true });
   const invitedContext = await browser.newContext({
+    timezoneId: "Pacific/Kiritimati",
     viewport: { height: 844, width: 390 },
   });
   const invitedPage = await invitedContext.newPage();
@@ -914,6 +932,71 @@ try {
   ) {
     throw new Error("Connected pagination member lookup failed.");
   }
+  const memoryCanary = `An anniversary memory ${suffix}`;
+  const memoryWrite = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_written_moment`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: "20000000-0000-4000-8000-000000000001",
+        journal_person_id: invitedPersonId,
+        body: memoryCanary,
+        occurred_on: anniversaryOccurredOn,
+        occurred_at: `${anniversaryOccurredOn}T23:30:00-07:00`,
+        occurred_timezone: circleTimeZone,
+      }),
+      headers: { authorization: `Bearer ${invitedUserToken}` },
+      method: "POST",
+    },
+  );
+  if (!memoryWrite.response.ok) {
+    throw new Error("The connected anniversary fixture could not be created.");
+  }
+  serverCanaries.push(memoryCanary);
+  browserPhase = "connected memories";
+  const memoriesResponse = await invitedPage.goto(`${appUrl}/memories`);
+  assertPrivateResponse(memoriesResponse, "Connected Memories landing");
+  await invitedPage.getByRole("heading", { name: "Memories" }).waitFor();
+  await invitedPage.getByText("Across the years").waitFor();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected Memories landing");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage
+    .getByRole("link", { name: /Open moments from this day/u })
+    .click();
+  await invitedPage.waitForURL(`${appUrl}/memories/on-this-day`);
+  await invitedPage.getByText(memoryCanary).waitFor();
+  if ((await invitedPage.getByText(/Local preview/u).count()) !== 0) {
+    throw new Error("Connected On This Day rendered preview-only controls.");
+  }
+  const memoryArticle = invitedPage
+    .locator("article")
+    .filter({ hasText: memoryCanary });
+  await memoryArticle.getByRole("button", { name: /^Edit/u }).waitFor();
+  await memoryArticle
+    .getByRole("button", { name: /^Open private notes/u })
+    .waitFor();
+  await assertPageQuality(invitedPage, "Connected On This Day");
+  await invitedPage.goBack();
+  await invitedPage.waitForURL(`${appUrl}/memories`);
+  await invitedPage
+    .getByRole("link", {
+      name: `Browse memories from ${anniversaryYear}`,
+    })
+    .click();
+  await invitedPage.waitForURL(`${appUrl}/memories/years/${anniversaryYear}`);
+  await invitedPage.getByText(memoryCanary).waitFor();
+  await assertPageQuality(invitedPage, "Connected year memories");
+  const emptyMemoryResponse = await invitedPage.goto(
+    `${appUrl}/memories/years/1998`,
+  );
+  assertPrivateResponse(emptyMemoryResponse, "Connected empty memory year");
+  await invitedPage.getByText("No moments from this year").waitFor();
+  if ((await invitedPage.locator(".memory-empty-node").count()) !== 1) {
+    throw new Error("The empty memory year lost its quiet timeline node.");
+  }
+  await assertPageQuality(invitedPage, "Connected empty memory year");
+
   const paginationPrefix = `Browser pagination ${suffix}`;
   const paginationWrites = await Promise.all(
     Array.from({ length: 42 }, (_, index) =>
@@ -935,6 +1018,36 @@ try {
     throw new Error("Connected pagination fixtures could not be created.");
   }
   serverCanaries.push(paginationPrefix);
+  const memoryPaginationResponse = await invitedPage.goto(
+    `${appUrl}/memories/years/2010`,
+  );
+  assertPrivateResponse(
+    memoryPaginationResponse,
+    "Connected memory pagination",
+  );
+  const memoryEarlierLink = invitedPage.getByRole("link", {
+    name: "Show earlier days",
+  });
+  await memoryEarlierLink.waitFor();
+  await memoryEarlierLink.scrollIntoViewIfNeeded();
+  const memoryAnchor = invitedPage.locator("article").last();
+  const memoryAnchorId = await memoryAnchor.getAttribute("id");
+  const memoryAnchorTopBefore = await memoryAnchor.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  await memoryEarlierLink.click();
+  await invitedPage.waitForURL(/\/memories\/years\/2010\?pages=2&snapshot=/u);
+  if (!memoryAnchorId)
+    throw new Error("The memory page anchor had no stable ID.");
+  const memoryAnchorTopAfter = await invitedPage
+    .locator(`[id="${memoryAnchorId}"]`)
+    .evaluate((element) => element.getBoundingClientRect().top);
+  if (Math.abs(memoryAnchorTopAfter - memoryAnchorTopBefore) > 2) {
+    throw new Error(
+      "Loading older memories shifted the visible timeline anchor.",
+    );
+  }
+  await assertPageQuality(invitedPage, "Connected memory continuation");
   await invitedPage.goto(`${appUrl}/family`);
   const firstEarlierLink = invitedPage.getByRole("link", {
     name: "Show earlier days",
@@ -1069,7 +1182,7 @@ try {
   await invitedPage.getByText(deepEditedMoment).waitFor();
 
   const journalErrorPage = await invitedContext.newPage();
-  await journalErrorPage.goto(`${appUrl}/family?pages=10001`);
+  await journalErrorPage.goto(`${appUrl}/family?pages=26`);
   await journalErrorPage.getByText("Something interrupted the story").waitFor();
   if ((await journalErrorPage.locator(".time-rail").count()) !== 1) {
     throw new Error("Journal error state did not retain the timeline rail.");
@@ -1114,11 +1227,12 @@ try {
     .join("");
   const retainedAccountContext = await browser.newContext({
     storageState: await invitedContext.storageState(),
+    timezoneId: "Pacific/Kiritimati",
     viewport: { height: 844, width: 390 },
   });
   const retainedAccountPage = await retainedAccountContext.newPage();
-  await retainedAccountPage.goto(`${appUrl}/family`);
-  await retainedAccountPage.getByText(deepEditedMoment).waitFor();
+  await retainedAccountPage.goto(`${appUrl}/memories/on-this-day`);
+  await retainedAccountPage.getByText(memoryCanary).waitFor();
 
   const switchedEmail = `browser-switch-${suffix}@example.test`;
   browserPhase = "account switch acceptance";
@@ -1201,6 +1315,7 @@ try {
     lateHistoricalMoment,
     deepCreatedMoment,
     deepEditedMoment,
+    memoryCanary,
   ];
   await assertNoCanaries(
     invitedPage,
@@ -1236,8 +1351,15 @@ try {
     "Cross-family Forward browser state",
   );
   browserPhase = "post-switch family";
+  await invitedPage.goto(`${appUrl}/memories`);
+  await invitedPage.getByRole("heading", { name: "Memories" }).waitFor();
+  await invitedPage.getByText("Across the years").waitFor();
+  await assertNoCanaries(
+    invitedPage,
+    firstCircleCanaries,
+    "Cross-family Memories landing",
+  );
   await invitedPage.goto(`${appUrl}/family`);
-  await invitedPage.getByRole("heading", { name: "Harbor Circle" }).waitFor();
   await invitedPage.getByText(harborMoment).waitFor();
   const switchedAccountCookie = authCookies(await invitedContext.cookies())
     .map(({ value }) => value)
@@ -1261,7 +1383,7 @@ try {
     throw new Error("The connected membership could not be revoked.");
   }
   await retainedAccountPage.setViewportSize({ height: 350, width: 320 });
-  await retainedAccountPage.goto(`${appUrl}/family`);
+  await retainedAccountPage.goto(`${appUrl}/memories`);
   await retainedAccountPage.waitForURL(`${appUrl}/access-unavailable`);
   await retainedAccountPage
     .getByText("This account does not have family access")
@@ -1315,6 +1437,7 @@ try {
     lateHistoricalMoment,
     deepCreatedMoment,
     deepEditedMoment,
+    memoryCanary,
   ];
   const acceptedSecretCanaries = [
     ...fixtureCanaries,
@@ -1601,7 +1724,7 @@ try {
   await retainedAccountContext.close();
   await invitedContext.close();
   process.stdout.write(
-    `Connected staged invite, OTP, lazy notes, reactions, thought/milestone/place creation, edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
+    `Connected staged invite, OTP, Memories/year/anniversary browsing, stable pagination, lazy notes, reactions, thought/milestone/place creation, edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
   );
 } finally {
   if (browser) await browser.close();

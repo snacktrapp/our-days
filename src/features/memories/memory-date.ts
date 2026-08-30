@@ -32,6 +32,25 @@ function parseOccurredOn(value: string): CalendarDate {
   return { year, month, day };
 }
 
+export function parseMemoryDate(value: string): CalendarDate {
+  return parseOccurredOn(value);
+}
+
+function calendarOrdinal({ year, month, day }: CalendarDate) {
+  const adjustedYear = year - (month <= 2 ? 1 : 0);
+  const era = Math.floor(adjustedYear / 400);
+  const yearOfEra = adjustedYear - era * 400;
+  const adjustedMonth = month + (month > 2 ? -3 : 9);
+  const dayOfYear = Math.floor((153 * adjustedMonth + 2) / 5) + day - 1;
+  return (
+    era * 146_097 +
+    yearOfEra * 365 +
+    Math.floor(yearOfEra / 4) -
+    Math.floor(yearOfEra / 100) +
+    dayOfYear
+  );
+}
+
 export function anniversaryKey(occurredOn: string) {
   parseOccurredOn(occurredOn);
   return occurredOn.slice(5);
@@ -85,17 +104,15 @@ export function elapsedCalendarLabel(newerDate: string, olderDate: string) {
   if (newerDate < olderDate) {
     throw new Error("The elapsed gap must run from newer to older.");
   }
+  const dayDelta = calendarOrdinal(newer) - calendarOrdinal(older);
+  if (dayDelta <= 0) return "earlier that day";
+  if (dayDelta === 1) return "one day earlier";
+  if (dayDelta < 14) return `${dayDelta} days earlier`;
+  if (dayDelta < 28) return `${Math.floor(dayDelta / 7)} weeks earlier`;
+
   const monthDelta =
     newer.year * 12 + newer.month - (older.year * 12 + older.month);
-
-  if (monthDelta === 0) {
-    const days = newer.day - older.day;
-    if (days <= 0) return "earlier that day";
-    if (days === 1) return "one day earlier";
-    if (days < 14) return `${days} days earlier`;
-    const weeks = Math.floor(days / 7);
-    return `${weeks} weeks earlier`;
-  }
+  if (monthDelta === 0) return `${Math.floor(dayDelta / 7)} weeks earlier`;
   if (monthDelta === 1) return "one month earlier";
   if (monthDelta < 12) return `${monthDelta} months earlier`;
 

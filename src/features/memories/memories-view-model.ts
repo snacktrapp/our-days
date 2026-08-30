@@ -7,19 +7,46 @@ export type MemoryYearViewModel = Readonly<{
   ariaLabel: string;
 }>;
 
+export type MemoryFeatureViewModel =
+  | Readonly<{
+      state: "photo";
+      href: string;
+      imageSrc: string;
+      imageAlt: string;
+      dateLabel: string;
+      title: string;
+      actionLabel: string;
+    }>
+  | Readonly<{
+      state: "moment";
+      href: string;
+      dateLabel: string;
+      personName: string;
+      personInitial: string;
+      personAccent: import("@/features/accent-token").AccentToken;
+      kindLabel: string;
+      summary: string;
+      actionLabel: string;
+    }>
+  | Readonly<{
+      state: "empty";
+      href: string;
+      title: string;
+      description: string;
+      actionLabel: string;
+    }>;
+
 export type MemoriesViewModel = Readonly<{
   chrome: JournalChromeViewModel;
   heading: string;
   subheading: string;
-  feature: Readonly<{
-    href: string;
-    imageSrc: string;
-    imageAlt: string;
-    dateLabel: string;
-    title: string;
-    actionLabel: string;
-  }>;
+  feature: MemoryFeatureViewModel;
   years: readonly MemoryYearViewModel[];
+  yearsEmptyMessage?: string;
+  yearNavigation?: Readonly<{
+    earlierHref?: string;
+    newestHref?: string;
+  }>;
 }>;
 
 type MemoryJourneyBase = Readonly<{

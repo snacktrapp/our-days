@@ -104,6 +104,9 @@ function refreshMomentSurfaces(personId?: string) {
   revalidatePath("/people");
   revalidatePath("/people/[personId]", "page");
   revalidatePath("/trash");
+  revalidatePath("/memories");
+  revalidatePath("/memories/on-this-day");
+  revalidatePath("/memories/years/[year]", "page");
   if (personId) revalidatePath(`/people/${personId}`);
 }
 

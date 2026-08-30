@@ -15,7 +15,7 @@ import { mapDatabaseAccent } from "./journal-context.server";
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
   Database["public"]["Functions"]["list_timeline_moments"]["Returns"][number];
-type TimelineRow = Omit<
+export type TimelineRow = Omit<
   GeneratedTimelineRow,
   | "occurred_at"
   | "occurred_timezone"
@@ -33,7 +33,7 @@ type TimelineRow = Omit<
 };
 
 const pageSize = 20;
-const maximumCumulativePages = 10_000;
+const maximumCumulativePages = 25;
 
 function formatPlainDate(value: string, today: string) {
   if (value === today) return "Today";
@@ -133,6 +133,10 @@ export function buildTimelineEntries(
   today: string,
   hasMore: boolean,
   personalName?: string,
+  completion: Readonly<{ markerLabel: string; message: string }> = {
+    markerLabel: "The beginning",
+    message: "You’ve reached the earliest moment kept here.",
+  },
 ): readonly TimelineEntryViewModel[] {
   if (moments.length === 0) {
     return [
@@ -180,14 +184,14 @@ export function buildTimelineEntries(
     entries.push({
       id: "connected-end",
       entryType: "end-message",
-      markerLabel: "The beginning",
-      message: "You’ve reached the earliest moment kept here.",
+      markerLabel: completion.markerLabel,
+      message: completion.message,
     });
   }
   return entries;
 }
 
-function requestedPageCount(value: number) {
+export function requestedPageCount(value: number) {
   if (!Number.isInteger(value)) return 1;
   if (value < 1) return 1;
   if (value > maximumCumulativePages) {
@@ -196,12 +200,40 @@ function requestedPageCount(value: number) {
   return value;
 }
 
-function requestedSnapshot(value: string | undefined) {
+export function requestedSnapshot(value: string | undefined) {
   if (!value) return undefined;
   if (value.length > 40 || !Number.isFinite(Date.parse(value))) {
     throw new Error("Timeline snapshot is invalid");
   }
   return value;
+}
+
+export function connectedTimelineInteraction(
+  access: AuthenticatedAccess,
+  context: ConnectedJournalContext,
+): TimelineViewModel["interaction"] {
+  const currentPerson = context.people.find(
+    (person) => person.id === access.personId,
+  );
+  return {
+    audienceName: context.circleName,
+    currentPerson: {
+      name: currentPerson?.name ?? "You",
+      initial: currentPerson?.initial ?? "•",
+      accent: currentPerson?.accent ?? "slate",
+    },
+    taggablePeople: context.people.map((person) => ({
+      id: person.id,
+      name: person.name,
+      initial: person.initial,
+      accent: person.accent,
+    })),
+    reactionOptions: [
+      { id: "held-close", label: "Held close", symbol: "♡" },
+      { id: "made-me-smile", label: "Made me smile", symbol: "◡" },
+      { id: "remember-this", label: "Remember this", symbol: "✦" },
+    ],
+  };
 }
 
 export async function loadConnectedTimeline(
@@ -274,31 +306,7 @@ export async function loadConnectedTimeline(
           summary: "One life, held in its true order.",
         }
       : undefined,
-    interaction: {
-      audienceName: context.circleName,
-      currentPerson: {
-        name:
-          context.people.find((person) => person.id === access.personId)
-            ?.name ?? "You",
-        initial:
-          context.people.find((person) => person.id === access.personId)
-            ?.initial ?? "•",
-        accent:
-          context.people.find((person) => person.id === access.personId)
-            ?.accent ?? "slate",
-      },
-      taggablePeople: context.people.map((person) => ({
-        id: person.id,
-        name: person.name,
-        initial: person.initial,
-        accent: person.accent,
-      })),
-      reactionOptions: [
-        { id: "held-close", label: "Held close", symbol: "♡" },
-        { id: "made-me-smile", label: "Made me smile", symbol: "◡" },
-        { id: "remember-this", label: "Remember this", symbol: "✦" },
-      ],
-    },
+    interaction: connectedTimelineInteraction(access, context),
     entries: buildTimelineEntries(
       moments,
       context.today,
