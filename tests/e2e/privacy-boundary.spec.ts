@@ -29,6 +29,7 @@ const privateRoutes = [
   "/family",
   "/people",
   "/people/molly",
+  "/settings/family",
   "/memories",
   "/memories/on-this-day",
   "/memories/years/2023",
@@ -126,6 +127,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     ["/family", await captureNavigation("/people", "/family")],
     ["/people", await captureNavigation("/family", "/people")],
     ["/people/molly", await captureNavigation("/family", "/people/molly")],
+    [
+      "/settings/family",
+      await captureNavigation("/family", "/settings/family"),
+    ],
     ["/memories", await captureNavigation("/family", "/memories")],
     [
       "/memories/on-this-day",

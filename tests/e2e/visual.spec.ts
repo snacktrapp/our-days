@@ -301,3 +301,53 @@ test(
     );
   },
 );
+
+test(
+  "family access and invitation previews stay calm and explicit",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile");
+    await page.goto("/settings/family");
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page).toHaveScreenshot("family-settings-chromium-mobile.png", {
+      fullPage: true,
+      animations: "disabled",
+      caret: "hide",
+    });
+
+    await page.getByRole("button", { name: "Review access" }).click();
+    await expect(page).toHaveScreenshot(
+      "family-settings-access-review-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page.getByRole("button", { name: "Close review" }).click();
+
+    await page
+      .getByRole("textbox", { name: "Email address" })
+      .fill("relative@example.com");
+    await page.getByRole("button", { name: "Review invitation" }).click();
+    await expect(page).toHaveScreenshot(
+      "family-settings-invite-review-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);
+
+test(
+  "family invitation review stays usable with the software keyboard",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-short");
+    await page.setViewportSize({ width: 320, height: 350 });
+    await page.goto("/settings/family#invite");
+    await page.evaluate(() => document.fonts.ready);
+    const input = page.getByRole("textbox", { name: "Email address" });
+    await input.scrollIntoViewIfNeeded();
+    await input.fill("relative@example.com");
+    await page.getByRole("button", { name: "Review invitation" }).click();
+    await expect(page).toHaveScreenshot(
+      "family-settings-invite-short-chromium-short.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);

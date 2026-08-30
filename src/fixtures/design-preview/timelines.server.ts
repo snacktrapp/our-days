@@ -11,6 +11,7 @@ import type {
   MemoryJourneyViewModel,
 } from "@/features/memories/memories-view-model";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
+import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import {
@@ -404,23 +405,81 @@ export function getPeopleFixture(): PeopleViewModel {
         name: "Avery",
         initial: "A",
         accent: "ochre",
-        roleLabel: "Journal profile",
+        roleLabel: "Managed profile · No sign-in",
       },
       {
         id: "sam",
         name: "Sam",
         initial: "S",
         accent: "slate",
-        roleLabel: "Journal profile",
+        roleLabel: "Managed profile · No sign-in",
       },
       {
         id: "june",
         name: "June",
         initial: "J",
         accent: "moss",
-        roleLabel: "Journal profile",
+        roleLabel: "Managed profile · No sign-in",
       },
     ],
+  };
+}
+
+export function getFamilySettingsFixture(): FamilySettingsViewModel {
+  return {
+    chrome: chrome("teal", "Family settings"),
+    panel: {
+      intro:
+        "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
+      currentMemberId: "brian",
+      members: [
+        {
+          id: "brian",
+          name: "Brian",
+          initial: "B",
+          accent: "teal",
+          relationshipLabel: "Co-organizer",
+          accessLabel: "Account · Can sign in",
+          canPreviewRemoval: false,
+        },
+        {
+          id: "molly",
+          name: "Molly",
+          initial: "M",
+          accent: "clay",
+          relationshipLabel: "Co-organizer",
+          accessLabel: "Account · Can sign in",
+          canPreviewRemoval: true,
+        },
+        {
+          id: "avery",
+          name: "Avery",
+          initial: "A",
+          accent: "ochre",
+          relationshipLabel: "Child journal",
+          accessLabel: "Managed profile · No sign-in",
+          canPreviewRemoval: false,
+        },
+        {
+          id: "sam",
+          name: "Sam",
+          initial: "S",
+          accent: "slate",
+          relationshipLabel: "Child journal",
+          accessLabel: "Managed profile · No sign-in",
+          canPreviewRemoval: false,
+        },
+        {
+          id: "june",
+          name: "June",
+          initial: "J",
+          accent: "moss",
+          relationshipLabel: "Child journal",
+          accessLabel: "Managed profile · No sign-in",
+          canPreviewRemoval: false,
+        },
+      ],
+    },
   };
 }
 

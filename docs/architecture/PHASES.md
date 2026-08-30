@@ -64,6 +64,8 @@ Gate: byte-for-byte original verification, EXIF/GPS absence from derivatives, ex
 
 ## 5. Family context
 
+The decision-independent Family settings preview is recorded in `docs/quality/FAMILY_SETTINGS_PREVIEW_REPORT.md`. It establishes the account-versus-managed-profile language, invitation review, access-removal consequence, and mobile interaction only; it performs no security-sensitive mutation and does not accept a pending policy.
+
 Deliver:
 
 - Managed profiles/guardians, people tags, optional places, milestones, comments presented as notes, constrained reactions, member/invite management, and removal UI.

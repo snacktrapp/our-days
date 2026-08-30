@@ -16,6 +16,7 @@ const privateRoutes = [
   "/family",
   "/people",
   "/people/:path*",
+  "/settings/:path*",
   "/memories/:path*",
   "/quality/:path*",
 ];

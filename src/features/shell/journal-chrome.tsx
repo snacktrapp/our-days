@@ -17,35 +17,54 @@ export function JournalChrome({
   section,
   children,
 }: JournalChromeProps) {
+  const familyBadges = model.familyMark.map((badge) => (
+    <span
+      key={badge.id}
+      className={`family-mark-dot dot-${badge.accent}`}
+      aria-hidden="true"
+    >
+      {badge.initial}
+    </span>
+  ));
+
   return (
     <main className={`app-shell theme-${model.accent}`}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <section className="phone-stage" aria-label="Family journal">
         <header className="topbar">
-          <Link
-            className="family-mark"
-            aria-label="Open family settings"
-            href="/people"
-            prefetch={false}
-          >
-            {model.familyMark.map((badge) => (
-              <span
-                key={badge.id}
-                className={`family-mark-dot dot-${badge.accent}`}
-                aria-hidden="true"
-              >
-                {badge.initial}
-              </span>
-            ))}
-          </Link>
+          {section === "settings" ? (
+            <span className="family-mark" aria-hidden="true">
+              {familyBadges}
+            </span>
+          ) : (
+            <Link
+              className="family-mark"
+              aria-label="Open family settings"
+              href="/settings/family"
+              prefetch={false}
+            >
+              {familyBadges}
+            </Link>
+          )}
           <div className="title-lockup">
             <span className="eyebrow">{model.eyebrow}</span>
             <h1>{model.title}</h1>
           </div>
-          <button className="quiet-button" aria-label="Timeline options">
-            •••
-          </button>
+          {section === "settings" ? (
+            <Link
+              className="quiet-button settings-close-link"
+              aria-label="Back to People"
+              href="/people"
+              prefetch={false}
+            >
+              ←
+            </Link>
+          ) : (
+            <button className="quiet-button" aria-label="Timeline options">
+              •••
+            </button>
+          )}
         </header>
         {children}
         <PrimaryNavigation composer={model.composer} section={section} />

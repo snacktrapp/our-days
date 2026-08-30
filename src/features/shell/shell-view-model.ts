@@ -1,7 +1,7 @@
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { AccentToken } from "@/features/accent-token";
 
-export type JournalSection = "timeline" | "people" | "memories";
+export type JournalSection = "timeline" | "people" | "memories" | "settings";
 
 export type JournalChromeViewModel = Readonly<{
   accent: AccentToken;

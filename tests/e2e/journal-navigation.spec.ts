@@ -142,6 +142,7 @@ test("primary screens and composer states have no serious axe violations", async
     "/family",
     "/people/molly",
     "/people",
+    "/settings/family",
     "/memories",
     "/memories/on-this-day",
     "/memories/years/2023",

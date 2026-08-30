@@ -4,6 +4,7 @@ const routes = [
   "/family",
   "/people/molly",
   "/people",
+  "/settings/family",
   "/memories",
   "/memories/on-this-day",
   "/memories/years/2023",
