@@ -14,7 +14,7 @@ npm run dev
 
 Open <http://localhost:3000>; local development redirects the locked root to `/family` for design work.
 
-Requires Node.js 22 or newer. The checked-in package lock is authoritative.
+Requires Node.js 22 or newer. `.node-version` pins the locally verified and CI runtime; the checked-in package lock is authoritative.
 
 ## Verification
 
@@ -27,7 +27,9 @@ npm run check
 npm run test:e2e
 ```
 
-In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for the local production-build check. CI and Vercel must still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; unrestricted CI always includes it.
+In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for a fallback local production-build check. CI and Vercel still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
+
+`.github/workflows/ci.yml` is committed locally but cannot run until the separate GitHub repository is explicitly approved and created. It uses a read-only token, immutable GitHub-owned action SHAs, no secrets or dependency cache, Linux functional checks across Chromium/Firefox/WebKit, and x64 macOS 15 visual comparisons. The first hosted visual run is a calibration gate because screenshot rendering can differ by host OS; any new baseline must be reviewed rather than automatically accepted. Browser traces, screenshots, and HTML reports are intentionally not uploaded because future authenticated runs may contain private family data.
 
 ## Durable project documents
 

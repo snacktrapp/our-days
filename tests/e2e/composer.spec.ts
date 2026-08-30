@@ -1,5 +1,14 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
+
+const focusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
 
 async function expectReachable(control: Locator) {
   await control.scrollIntoViewIfNeeded();
@@ -24,6 +33,70 @@ async function expectMinimumTargets(dialog: Locator) {
       .filter(({ width, height }) => width < 43.9 || height < 43.9),
   );
   expect(undersized).toEqual([]);
+}
+
+async function collectContainedFocusCycle(
+  page: Page,
+  dialog: Locator,
+  key: "Tab" | "Shift+Tab",
+) {
+  const controls = dialog.locator(focusableSelector);
+  const controlCount = await controls.count();
+  const visited = new Set<number>();
+
+  for (let index = 0; index < controlCount + 1; index += 1) {
+    const focusState = await dialog.evaluate((element, selector) => {
+      const active = document.activeElement;
+      const focusableControls = [...element.querySelectorAll(selector)];
+      const controlIndex = focusableControls.findIndex(
+        (control) => control === active,
+      );
+      return {
+        contained: active === element || element.contains(active),
+        controlIndex,
+        active:
+          active instanceof HTMLElement
+            ? active.getAttribute("aria-label") ||
+              active.textContent?.trim() ||
+              active.tagName
+            : "none",
+      };
+    }, focusableSelector);
+    expect(
+      focusState.contained,
+      `${key} focus escaped the modal to ${focusState.active}`,
+    ).toBe(true);
+    if (focusState.controlIndex >= 0) visited.add(focusState.controlIndex);
+    await page.keyboard.press(key);
+  }
+
+  return visited;
+}
+
+async function expectCompleteFocusTraversal(
+  page: Page,
+  dialog: Locator,
+  startingControl: Locator,
+  stateLabel: string,
+) {
+  await startingControl.focus();
+  const forwardFocus = await collectContainedFocusCycle(page, dialog, "Tab");
+  await startingControl.focus();
+  const reverseFocus = await collectContainedFocusCycle(
+    page,
+    dialog,
+    "Shift+Tab",
+  );
+  const visitedControls = new Set([...forwardFocus, ...reverseFocus]);
+  expect(
+    [...visitedControls].sort((left, right) => left - right),
+    `forward and reverse focus traversal must reach every ${stateLabel} control`,
+  ).toEqual(
+    Array.from(
+      { length: await dialog.locator(focusableSelector).count() },
+      (_, index) => index,
+    ),
+  );
 }
 
 test("composer is modal, contains focus, confirms drafts, and restores focus", async ({
@@ -55,10 +128,8 @@ test("composer is modal, contains focus, confirms drafts, and restores focus", a
   }
   expect(backgroundBlocked).toBe(true);
 
-  await page.keyboard.press("Shift+Tab");
-  await expect(dialog.locator(":focus")).toBeVisible();
-  await page.keyboard.press("Tab");
-  await expect(dialog.locator(":focus")).toBeVisible();
+  const firstChoice = page.getByRole("button", { name: /Photo or video/ });
+  await expectCompleteFocusTraversal(page, dialog, firstChoice, "chooser");
 
   await dialog
     .getByRole("button", { name: "A thought A few words to keep", exact: true })
@@ -66,6 +137,7 @@ test("composer is modal, contains focus, confirms drafts, and restores focus", a
   await expectMinimumTargets(dialog);
   const text = page.getByRole("textbox", { name: "Moment text" });
   await text.fill("A draft worth keeping");
+  await expectCompleteFocusTraversal(page, dialog, text, "written composer");
 
   page.once("dialog", async (confirmation) => confirmation.dismiss());
   await page.getByRole("button", { name: "Close moment composer" }).click();

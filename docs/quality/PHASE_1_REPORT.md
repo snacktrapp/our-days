@@ -16,29 +16,30 @@ Status: candidate checkpoint. The local implementation, default production build
 
 ## Green evidence
 
-| Check | Result |
-| --- | --- |
-| Formatting, ESLint, TypeScript, unit/component suite | `npm run check`: pass; 4 files and 10 tests |
-| Dependency audit | `npm audit --json`: 0 vulnerabilities |
-| Production compilation | `npm run build`: pass with default Turbopack; `npm run build:webpack`: pass; protected journal pages are dynamic |
-| Local browser matrix | `npx playwright test`: 44 passed, 13 intentional project-specific skips, 0 failures |
-| Engines covered locally | Chromium mobile/short/wide-visual and Firefox mobile functional, composer, 320px, reduced-motion, axe, console, request-failure, navigation, and visual checks |
-| Privacy boundary | Preview-disabled `/`, `/sign-in`, and every journal route contain no fixture names, places, or timeline payload; responses are private/no-store/noindex |
-| PWA/cache | Cache contains exactly five approved public paths; `/family`, RSC payloads, fixture content, and runtime media are absent; offline navigation shows the locked document |
-| Accessibility | Serious/critical axe findings: 0 in Family, personal, People, Memories, chooser, and written composer states |
-| Mobile layout | No horizontal overflow and no visible target below 44 CSS px at 320×568 in all primary screens; 320×350 composer controls remain reachable; the 640×450 CSS viewport equivalent of a 1280×900 window at 200% browser zoom reflows in one dimension |
-| Runtime health | No unexpected console errors, page errors, or request failures in the passing matrix |
+| Check                                                         | Result                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Formatting, ESLint, TypeScript, unit/component/contract suite | `npm run check`: pass; 5 files and 12 tests                                                                                                                                                                                                                                                |
+| Dependency audit                                              | `npm audit --json`: 0 vulnerabilities                                                                                                                                                                                                                                                      |
+| Production compilation                                        | `npm run build`: pass with default Turbopack; `npm run build:webpack`: pass; protected journal pages are dynamic                                                                                                                                                                           |
+| Local browser matrix                                          | `npx playwright test`: 44 passed, 13 intentional project-specific skips, 0 failures                                                                                                                                                                                                        |
+| Engines covered locally                                       | Chromium mobile/short/wide-visual and Firefox mobile functional, composer, 320px, reduced-motion, axe, console, request-failure, navigation, and visual checks                                                                                                                             |
+| Privacy boundary                                              | Preview-disabled `/`, `/sign-in`, and every journal route contain no fixture names, places, or timeline payload; responses are private/no-store/noindex                                                                                                                                    |
+| PWA/cache                                                     | Cache contains exactly five approved public paths; `/family`, RSC payloads, fixture content, and runtime media are absent; offline navigation shows the locked document                                                                                                                    |
+| Accessibility                                                 | Serious/critical axe findings: 0 in Family, personal, People, Memories, chooser, and written composer states                                                                                                                                                                               |
+| Mobile layout                                                 | No horizontal overflow and no visible target below 44 CSS px at 320×568 in all primary screens; 320×350 composer controls remain reachable; the 640×450 CSS viewport equivalent of a 1280×900 window at 200% browser zoom reflows in one dimension                                         |
+| Runtime health                                                | No unexpected console errors, page errors, or request failures in the passing matrix                                                                                                                                                                                                       |
+| Prepared CI contract                                          | Workflow contract checks pass; the read-only workflow lists all functional projects including WebKit and keeps x64 macOS 15 pixel checks separate. Its first hosted visual run is a reviewed calibration gate, and it remains unexecuted until the isolated GitHub repository is approved. |
 
 The first adversarial browser run exposed a real Next streaming issue: an ancestor layout redirect visually blocked the preview, but the redirect response still included the rendered child RSC model. Every protected page now calls the fail-closed guard before creating its view model. The regression suite captures real preview-enabled Next link navigation envelopes, proves no private RSC is requested before interaction, then replays RSC requests against every locked route and requires a private/no-store/noindex redirect payload with no fixture or media strings. Private-route prefetching is also disabled pending Phase 2 account-isolation tests.
 
 ## Automated visual baselines
 
-| Screenshot | SHA-256 |
-| --- | --- |
-| `family-chromium-mobile-chromium-mobile-darwin.png` | `3d8ed52cf71afa71365818074cf3616fde5b65871cae1e830e16c7e894bd614d` |
-| `family-chromium-short-chromium-short-darwin.png` | `dc261da60f90a5ff475abad6022dcdfa0473ab2826d5a5e6028b45fe97187852` |
+| Screenshot                                                    | SHA-256                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `family-chromium-mobile-chromium-mobile-darwin.png`           | `3d8ed52cf71afa71365818074cf3616fde5b65871cae1e830e16c7e894bd614d` |
+| `family-chromium-short-chromium-short-darwin.png`             | `dc261da60f90a5ff475abad6022dcdfa0473ab2826d5a5e6028b45fe97187852` |
 | `family-chromium-wide-visual-chromium-wide-visual-darwin.png` | `2c531778866027465c43f5e830ca4bd0fe363bcd6acd752d3abfd2db8b647972` |
-| `personal-chromium-mobile-chromium-mobile-darwin.png` | `f0aad9e6a38ccd36d0132aa652590a0a1d7ed97f735d564d7c7435ce2fad01ec` |
+| `personal-chromium-mobile-chromium-mobile-darwin.png`         | `f0aad9e6a38ccd36d0132aa652590a0a1d7ed97f735d564d7c7435ce2fad01ec` |
 | `composer-chooser-chromium-mobile-chromium-mobile-darwin.png` | `8040cdef49f3aca00fbcc8790ce67d540d5d13755bc8dadd060baf1bc099e88d` |
 | `composer-written-chromium-mobile-chromium-mobile-darwin.png` | `cb2185638c5d8313c1c5c62bf436fedf353e9c83b44a81393e2e15ef98e2727a` |
 
@@ -58,11 +59,14 @@ The first architecture and mobile reviews correctly withheld a checkpoint approv
 
 Final independent candidate verdicts: architecture **GO**, mobile/accessibility **GO**, and privacy/adversarial **GO**. The reviewers found no current-tree defect that blocks committing this checkpoint. Their remaining concerns are the external evidence gates and later-phase Supabase authorization/media work listed below.
 
+A subsequent full focus-order audit caught a Chromium-only escape from the modal to `document.body` after a complete Tab traversal. The composer now enforces explicit first/last focus boundaries, excludes hidden, disabled, and non-layout controls from that cycle, and full forward plus reverse traversal reaches every chooser and written-composer control without leaving the dialog in Chromium and Firefox. Follow-up architecture, mobile/accessibility, and privacy reviews all returned **GO** with no current-tree blocker.
+
 WebKit execution, true browser zoom, and physical iPhone behavior remain explicit external evidence gates below; they are not represented as passes.
 
 ## Open evidence, not hidden passes
 
 - Playwright WebKit 2251 is a frozen macOS 14 build on this host and exits before page creation with `Bus error: 10` (exit 138). The project is retained and mandatory in CI; local opt-in is `PLAYWRIGHT_INCLUDE_WEBKIT=1`.
+- The first isolated GitHub run must execute the 60 listed functional browser checks and calibrate the reviewed local snapshots against the x64 macOS 15 host. Baseline differences must be inspected and approved; CI never updates them automatically.
 - The clean install warns that ESLint 9.39.5 is outside its upstream support window. ESLint 10.9.1 was evaluated, but `eslint-config-next` 16.3.3's bundled import, React, and JSX accessibility plugins still declare ESLint 9 as their maximum supported major. The candidate therefore retains the exact-pinned, zero-advisory ESLint 9 release rather than using peer overrides; upgrade when the complete Next lint stack supports 10.
 - Desktop browser 200% zoom/large-text review, nonzero iOS safe areas, real software keyboard/predictive text, VoiceOver, standalone foreground/background, and update behavior require the documented headed/real-device passes.
 - The current service worker deliberately provides only a public locked offline experience. Authenticated state purge and two-account isolation belong to Phase 2, when account-scoped state exists.
