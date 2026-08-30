@@ -1,0 +1,53 @@
+# Architecture and product decisions
+
+This log separates decisions already justified by evidence from decisions that need Brian's approval. A decision marked `pending` must not be embedded irreversibly in production policy or infrastructure.
+
+## Locked for the foundation
+
+| ID | Decision | Reason |
+| --- | --- | --- |
+| ADR-001 | `our-days` is a standard, single-repository Next.js App Router application deployed to a dedicated Vercel project. | It preserves the approved prototype while staying on the familiar stack and leaving a clean HTTP boundary for a future native client. |
+| ADR-002 | Proof code, accounts, projects, secrets, data, domains, and deployment links are never reused. | Separation is an explicit product and privacy requirement. |
+| ADR-003 | Server Components are the default. Client Components are limited to interactive islands such as the composer, reactions, and pagination. | This reduces browser code and keeps protected reads on the server. |
+| ADR-004 | Supabase RLS and Storage policies are authoritative. UI checks and route checks are defense in depth, not authorization. | A private family app must remain safe when a route or client is called directly. |
+| ADR-005 | Every circle-owned table carries `circle_id`, a composite uniqueness key, and composite foreign keys that prevent cross-circle ID mixing. | RLS alone does not create referential tenant integrity, especially for a user who belongs to multiple circles. |
+| ADR-006 | `journal_person_id` and `recorded_by_user_id` are distinct. | A parent can preserve a child's life while attribution remains truthful. |
+| ADR-007 | Historic ordering uses authoritative `occurred_on date`, with optional time, timezone, and precision fields. | Date-only memories must not move to another day because of timezone conversion. |
+| ADR-008 | Pagination is cursor-based and stably ordered by occurrence fields plus `id`. | Equal timestamps must never create duplicate or skipped moments. |
+| ADR-009 | Originals are immutable and checksummed. Display assets are derivatives with stripped EXIF/GPS. | Ownership and fidelity require preserving source bytes without leaking hidden metadata into normal display. |
+| ADR-010 | Private media bypasses generic Next image-optimizer caching. Authenticated downloads or tightly controlled short-lived derivative URLs are used instead. | Optimizer/CDN caches can outlive a user's access. |
+| ADR-011 | The service worker, when introduced, allowlists only public versioned shell assets. It does not cache authenticated HTML, APIs, timelines, drafts, comments, locations, or media. | Offline convenience must never reveal the previous account's family data. |
+| ADR-012 | Long-running derivatives, exports, and purges are jobs, not ordinary Vercel request work. | They require retries, idempotency, and recovery from partial failure. |
+| ADR-013 | Node.js 22 or newer is required. Dependencies are audited before phase gates. | Current Supabase support and current patched dependencies require a modern runtime. |
+| ADR-014 | Authenticated routes render per request and use `private, no-store`; they never use ISR or public response caching. `src/proxy.ts` may refresh sessions and make optimistic `getClaims` checks, but RLS/current membership remains final authorization. | A cached refreshed `Set-Cookie` or RSC response can leak one family's session/content to another visitor. |
+| ADR-015 | Supabase server clients are created per request; browser clients are unprivileged and caller-scoped. Refresh responses preserve reviewed `Set-Cookie`, `Cache-Control`, `Pragma`, and `Expires` behavior. | Warm Vercel instances and shared responses must not carry user state across requests. |
+| ADR-016 | The web deployment has no Supabase secret/service-role credential. A separately deployed narrow worker receives that bypass only after import-boundary, job-integrity, and artifact/secret-scan controls exist. | A Vercel project environment variable is available to every Function in that project and is not a capability boundary. |
+| ADR-017 | Every environment declares `OUR_DAYS_ENVIRONMENT` and its expected Supabase project reference; startup/build checks reject Preview→Production, Proof, or mismatched resource references. | Resource separation should fail closed rather than rely on a README promise. |
+| ADR-018 | Until real auth exists, production `/` is a locked invitation-only screen. The approved fixture timeline is available only in development or an explicit local design-review process; external previews require deployment protection. | `robots.txt` and `noindex` are not access control. |
+| ADR-019 | The auth phase introduces a nonce-based CSP in the same Next 16 `src/proxy.ts` boundary, narrow origin directives, same-origin mutation tests, and per-action identity/membership/input validation. | XSS, CSRF, and hostile direct Server Action/Route Handler calls can expose an otherwise private session. |
+
+## Recommended defaults awaiting explicit approval
+
+All PD rows are `pending`. Before a consuming phase begins, its row must be changed to `accepted` with approver and date; tests and policies cite that accepted ID.
+
+| ID | Recommendation | Consequence |
+| --- | --- | --- |
+| PD-001 | Either active guardian may add/edit/trash a managed child's moments; the recorder is preserved. | Children have coherent journals before owning accounts. |
+| PD-002 | Adults control permanent deletion of their own moments; organizers manage access, exports, guardians, and managed-child content but cannot silently rewrite another adult's words. | Organizer power does not erase adult authorship. |
+| PD-003 | Start with invitation-bound emailed one-time codes/links, with ordinary OTP configured not to create users. | Low-friction sign-in without open registration; passkeys can be reconsidered when mature. |
+| PD-004 | Gate MVP video at one clip per moment and 60 seconds; defer it if the iPhone upload/transcode spike is unreliable. | Photo quality is not held hostage by disproportionate video complexity. |
+| PD-005 | Use a 30-day private trash; hard purge is worker-only and immediate purge requires explicit authorized intent. | Accidental deletion is recoverable while permanent deletion remains available. |
+| PD-006 | Issue display derivative URLs for about 60 seconds after a fresh membership check; use authenticated downloads for originals. | Lower delivery cost with a documented residual derivative-access window; strict immediate revocation remains available via an authenticated proxy if preferred. |
+
+## Infrastructure decisions that require approval
+
+- Supabase region and paid backup/PITR/staging level, because region is expensive to change.
+- Creation and billing of the separate GitHub, Supabase, Vercel, domain, worker, and media resources.
+- Production hostname. Until then, `NEXT_PUBLIC_SITE_URL` is environment-specific.
+
+## Baseline provenance
+
+- Approved visual prototype: `/Users/brianhome/Documents/Codex/family-journal-prototype`
+- Approved prototype commit: `d078ed8`
+- Production repository: `/Users/brianhome/Documents/Codex/our-days`
+- The prototype remains a reference; production work occurs only in `our-days`.

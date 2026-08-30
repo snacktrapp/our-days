@@ -1,34 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Our Days
 
-## Getting Started
+Our Days is a private, mobile-first family journal built around a chronological center-line timeline. This is the isolated production repository; it must never share Proof's GitHub, Supabase, Vercel, environment variables, domains, or data.
 
-First, run the development server:
+The current screen is the approved interactive design baseline. Backend/auth work intentionally follows the privacy and acceptance gates in `docs/`.
+
+## Local development
 
 ```bash
+npm ci
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Requires Node.js 22 or newer. The checked-in package lock is authoritative.
 
-## Learn More
+## Verification
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run lint
+npm run typecheck
+npm run build
+npm audit
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+In this restricted development environment, Turbopack cannot bind its internal CSS worker port; use `npm run build -- --webpack` for the local production-build check. CI and Vercel must still run the default build.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Durable project documents
 
-## Deploy on Vercel
+- `docs/product/PRODUCT_BRIEF.md` — product promise, MVP, flows, model, and initial technical direction
+- `docs/architecture/DECISIONS.md` — locked and pending decisions
+- `docs/architecture/PHASES.md` — small delivery slices and their gates
+- `docs/architecture/ACCEPTANCE_CRITERIA.md` — release-blocking requirements
+- `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment boundary
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Do not link or deploy this repository until Brian approves creation of the dedicated GitHub, Supabase, and Vercel resources. Preview environments must never point at production family data. Until invitation auth exists, any external preview also requires Vercel Deployment Protection; the default production route is fail-closed and does not render the fixture timeline.
