@@ -341,7 +341,7 @@ test(
       caret: "hide",
     });
 
-    await page.getByRole("button", { name: "Review access" }).click();
+    await page.getByRole("button", { name: "Review access for Molly" }).click();
     await expect(page).toHaveScreenshot(
       "family-settings-access-review-chromium-mobile.png",
       { animations: "disabled", caret: "hide" },

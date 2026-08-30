@@ -1,6 +1,6 @@
 begin;
 
-select plan(38);
+select plan(42);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values
@@ -376,6 +376,55 @@ select * from public.create_invitation(
 select ok(
   char_length(:'valid_raw_token') between 40 and 64,
   'invitation creation returns one URL-safe secret with the expected length'
+);
+
+select is(
+  (
+    select count(*)::bigint
+      from public.list_pending_invitations(
+        '20000000-0000-4000-8000-000000000001'
+      )
+     where invitation_id = :'valid_invitation_id'
+       and display_name = 'Valid Invite'
+  ),
+  1::bigint,
+  'an organizer can list minimal pending invitation metadata in their circle'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select is(
+  (
+    select count(*)::bigint
+      from public.list_pending_invitations(
+        '20000000-0000-4000-8000-000000000001'
+      )
+  ),
+  0::bigint,
+  'an ordinary member cannot list pending invitation metadata'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000004', true);
+select is(
+  (
+    select count(*)::bigint
+      from public.list_pending_invitations(
+        '20000000-0000-4000-8000-000000000001'
+      )
+  ),
+  0::bigint,
+  'a revoked member cannot list pending invitation metadata'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true);
+select is(
+  (
+    select count(*)::bigint
+      from public.list_pending_invitations(
+        '20000000-0000-4000-8000-000000000001'
+      )
+  ),
+  0::bigint,
+  'an organizer from another circle cannot list pending invitation metadata'
 );
 
 reset role;

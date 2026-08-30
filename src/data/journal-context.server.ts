@@ -155,7 +155,7 @@ export async function loadConnectedJournalContext(
     familyMark,
     composer,
     timelineOptionsHref: "/trash",
-    settingsHref: null,
+    settingsHref: "/settings/family",
     memoriesHref: "/memories",
   };
 

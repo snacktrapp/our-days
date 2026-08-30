@@ -353,6 +353,8 @@ async function assertCrossOriginActionRejected({
   const explicitlyDenied =
     !response.ok ||
     responseBody.includes("This invitation is unavailable.") ||
+    responseBody.includes("was not allowed") ||
+    responseBody.includes("could not be removed") ||
     responseBody.includes('"status":"denied"');
   if (!explicitlyDenied) {
     throw new Error("A cross-origin Server Action wire replay was not denied.");
@@ -369,6 +371,63 @@ async function assertCrossOriginActionRejected({
     throw new Error(
       "A rejected cross-origin Server Action replay generated an email.",
     );
+  }
+}
+
+async function assertServerActionReplayDenied({
+  actionRequest,
+  origin = appUrl,
+  replacements = [],
+  canaries = [],
+}) {
+  const requestHeaders = await actionRequest.allHeaders();
+  const originalBody = actionRequest.postDataBuffer();
+  if (!originalBody || !requestHeaders["next-action"]) {
+    throw new Error(
+      "The mutation did not use the expected Server Action wire format.",
+    );
+  }
+  let requestBody = originalBody.toString("utf8");
+  for (const [before, after] of replacements) {
+    if (!requestBody.includes(before)) {
+      throw new Error(
+        "The Server Action replay target was not present in its body.",
+      );
+    }
+    requestBody = requestBody.replaceAll(before, after);
+  }
+  const replayHeaders = { origin };
+  for (const name of [
+    "accept",
+    "content-type",
+    "cookie",
+    "next-action",
+    "next-router-state-tree",
+  ]) {
+    if (requestHeaders[name]) replayHeaders[name] = requestHeaders[name];
+  }
+  const response = await fetch(actionRequest.url(), {
+    body: Buffer.from(requestBody),
+    headers: replayHeaders,
+    method: "POST",
+    redirect: "manual",
+    signal: AbortSignal.timeout(10_000),
+  });
+  const responseBody = await response.text();
+  const denied =
+    !response.ok ||
+    responseBody.includes("was not allowed") ||
+    responseBody.includes("could not be removed") ||
+    responseBody.includes('"status":"denied"');
+  if (!denied) {
+    throw new Error("The hostile Server Action replay was not denied.");
+  }
+  for (const canary of canaries) {
+    if (responseBody.includes(canary)) {
+      throw new Error(
+        "The hostile Server Action replay exposed a private canary.",
+      );
+    }
   }
 }
 
@@ -695,6 +754,249 @@ try {
   await invitedPage.setViewportSize({ height: 350, width: 320 });
   await assertPageQuality(invitedPage, "Short connected family timeline");
   await invitedPage.setViewportSize({ height: 844, width: 390 });
+
+  browserPhase = "connected family settings";
+  const settingsLink = invitedPage.getByRole("link", {
+    name: "Open family settings",
+  });
+  if ((await settingsLink.getAttribute("href")) !== "/settings/family") {
+    throw new Error("The connected journal did not expose family settings.");
+  }
+  const settingsResponse = await invitedPage.goto(`${appUrl}/settings/family`);
+  assertPrivateResponse(settingsResponse, "Connected family settings");
+  await invitedPage.getByRole("heading", { name: "Family settings" }).waitFor();
+  await invitedPage.getByText(/Private circle · Access changes/u).waitFor();
+  if ((await invitedPage.getByText(/Local design preview/u).count()) !== 0) {
+    throw new Error("Connected family settings rendered preview-only copy.");
+  }
+  if (
+    (await invitedPage
+      .getByRole("button", { name: /Review access for/u })
+      .count()) !== 0 ||
+    (await invitedPage
+      .getByRole("button", { name: /Review invitation for/u })
+      .count()) !== 0
+  ) {
+    throw new Error("An ordinary member received organizer access controls.");
+  }
+  await invitedPage
+    .getByText(/An organizer can withdraw pending invitations/u)
+    .waitFor();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected family settings");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link", { name: "Family" })
+    .click();
+  await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
+
+  browserPhase = "connected organizer family settings";
+  const settingsUserToken = createLocalUserToken(
+    createdUser.body.id,
+    jwtSecret,
+  );
+  const settingsMembershipLookup = await jsonRequest(
+    `${apiUrl}/rest/v1/circle_memberships?select=id&circle_id=eq.20000000-0000-4000-8000-000000000001&user_id=eq.${createdUser.body.id}`,
+    anonKey,
+    { headers: { authorization: `Bearer ${settingsUserToken}` } },
+  );
+  const settingsMembershipId = settingsMembershipLookup.body?.[0]?.id;
+  if (!settingsMembershipLookup.response.ok || !settingsMembershipId) {
+    throw new Error("The connected settings membership lookup failed.");
+  }
+  const promotedSettingsMember = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/set_membership_role`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        membership_id: settingsMembershipId,
+        role: "organizer",
+      }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!promotedSettingsMember.response.ok) {
+    throw new Error("The connected settings member could not be promoted.");
+  }
+  const settingsPendingEmail = `settings-pending-${suffix}@example.test`;
+  const settingsPendingInvitation = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: "20000000-0000-4000-8000-000000000001",
+        display_name: "Browser Pending",
+        email: settingsPendingEmail,
+      }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  const settingsPendingToken = settingsPendingInvitation.body?.[0]?.raw_token;
+  if (!settingsPendingInvitation.response.ok || !settingsPendingToken) {
+    throw new Error("The connected pending invitation could not be created.");
+  }
+  serverCanaries.push(settingsPendingEmail, settingsPendingToken);
+
+  const organizerSettingsResponse = await invitedPage.goto(
+    `${appUrl}/settings/family`,
+  );
+  assertPrivateResponse(
+    organizerSettingsResponse,
+    "Connected organizer family settings",
+  );
+  await invitedPage.getByText("Browser Pending").waitFor();
+  if (
+    (await invitedPage.content()).includes(settingsPendingEmail) ||
+    (await invitedPage.content()).includes(settingsPendingToken)
+  ) {
+    throw new Error(
+      "Connected settings exposed invitation email or secret data.",
+    );
+  }
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected organizer settings");
+  const memberReview = invitedPage.getByRole("button", {
+    name: "Review access for A Member",
+  });
+  await memberReview.scrollIntoViewIfNeeded();
+  await memberReview.click();
+  const removeMember = invitedPage.getByRole("button", {
+    name: "Remove A Member’s access",
+  });
+  await removeMember.scrollIntoViewIfNeeded();
+  const actionLayout = await invitedPage
+    .locator(".access-review .settings-review-actions")
+    .evaluate((element) => {
+      const buttons = Array.from(element.querySelectorAll("button"));
+      return buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { bottom: rect.bottom, top: rect.top, width: rect.width };
+      });
+    });
+  if (
+    actionLayout.length !== 2 ||
+    actionLayout[1].top < actionLayout[0].bottom ||
+    actionLayout.some(({ width }) => width < 200)
+  ) {
+    throw new Error("Connected organizer actions did not reflow at 320px.");
+  }
+  const removalRequestPromise = invitedPage.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "POST" &&
+      url.pathname === "/settings/family" &&
+      Boolean(request.headers()["next-action"])
+    );
+  });
+  await removeMember.click();
+  const removalRequest = await removalRequestPromise;
+  await invitedPage
+    .getByRole("status")
+    .getByText("Family access removed.")
+    .waitFor();
+  await invitedPage.getByText("A Member").waitFor({ state: "detached" });
+  await assertCrossOriginActionRejected({
+    actionRequest: removalRequest,
+    canaries: [settingsPendingEmail, settingsPendingToken],
+    mailpitUrl,
+    recipient: email,
+  });
+  await assertServerActionReplayDenied({
+    actionRequest: removalRequest,
+    replacements: [
+      [
+        "40000000-0000-4000-8000-000000000003",
+        "40000000-0000-4000-8000-000000000006",
+      ],
+    ],
+    canaries: [settingsPendingEmail, settingsPendingToken],
+  });
+  const removedMemberToken = createLocalUserToken(
+    "10000000-0000-4000-8000-000000000003",
+    jwtSecret,
+  );
+  const removedMemberCircles = await jsonRequest(
+    `${apiUrl}/rest/v1/circles?select=id`,
+    anonKey,
+    { headers: { authorization: `Bearer ${removedMemberToken}` } },
+  );
+  if (
+    !removedMemberCircles.response.ok ||
+    (removedMemberCircles.body ?? []).length !== 0
+  ) {
+    throw new Error("Removed connected access remained usable.");
+  }
+  const harborMembershipCheck = await jsonRequest(
+    `${apiUrl}/rest/v1/circle_memberships?select=id,status&id=eq.40000000-0000-4000-8000-000000000006`,
+    anonKey,
+    { headers: { authorization: `Bearer ${harborOrganizerToken}` } },
+  );
+  if (
+    !harborMembershipCheck.response.ok ||
+    harborMembershipCheck.body?.[0]?.status !== "active"
+  ) {
+    throw new Error("A wrong-circle action replay changed Harbor access.");
+  }
+
+  const invitationReview = invitedPage.getByRole("button", {
+    name: "Review invitation for Browser Pending",
+  });
+  await invitationReview.scrollIntoViewIfNeeded();
+  await invitationReview.click();
+  const withdrawInvitation = invitedPage.getByRole("button", {
+    name: "Withdraw Browser Pending’s invitation",
+  });
+  await withdrawInvitation.scrollIntoViewIfNeeded();
+  await withdrawInvitation.click();
+  await invitedPage
+    .getByRole("status")
+    .getByText("Invitation withdrawn.")
+    .waitFor();
+  await invitedPage.getByText("Browser Pending").waitFor({ state: "detached" });
+  await assertPageQuality(invitedPage, "Mutated connected organizer settings");
+
+  const demotedSettingsMember = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/set_membership_role`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        membership_id: settingsMembershipId,
+        role: "member",
+      }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!demotedSettingsMember.response.ok) {
+    throw new Error("The connected settings member could not be demoted.");
+  }
+  await assertServerActionReplayDenied({
+    actionRequest: removalRequest,
+    replacements: [
+      [
+        "40000000-0000-4000-8000-000000000003",
+        "40000000-0000-4000-8000-000000000002",
+      ],
+    ],
+    canaries: [settingsPendingEmail, settingsPendingToken],
+  });
+  await invitedPage.reload();
+  if (
+    (await invitedPage
+      .getByRole("button", { name: /Review access for/u })
+      .count()) !== 0
+  ) {
+    throw new Error("A demoted organizer retained connected access controls.");
+  }
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link", { name: "Family" })
+    .click();
+  await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
 
   const seededNoteCanary =
     "The delighted laugh afterward is worth remembering.";
@@ -1424,6 +1726,8 @@ try {
     email,
     invitationToken,
     otp,
+    settingsPendingEmail,
+    settingsPendingToken,
     switchedEmail,
     switchedToken,
     switchedOtp,
@@ -1443,6 +1747,7 @@ try {
     ...fixtureCanaries,
     invitationToken,
     otp,
+    settingsPendingToken,
     switchedToken,
     switchedOtp,
   ];

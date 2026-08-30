@@ -72,6 +72,8 @@ The decision-independent Family settings preview is recorded in `docs/quality/FA
 
 The connected local family-context checkpoint is recorded in `docs/quality/PHASE_5_CHECKPOINT_REPORT.md`. Thoughts, milestones, manual places, people tags, lazy family notes, constrained reactions, trash identity, authorization denials, and destructive races pass locally in Chromium and Firefox; hosted WebKit and unrestricted default-build evidence remain required before this phase is called complete.
 
+The connected access-management checkpoint is recorded in `docs/quality/PHASE_5_ACCESS_MANAGEMENT_CHECKPOINT_REPORT.md`. Active account and managed-profile visibility, organizer-only membership removal and pending-invitation withdrawal, mobile recovery, and wrong-circle/revoked denial pass locally. New invitation creation remains deliberately unavailable until a separately trusted provisioning and delivery worker exists.
+
 Deliver:
 
 - Managed profiles/guardians, people tags, optional places, milestones, comments presented as notes, constrained reactions, member/invite management, and removal UI.

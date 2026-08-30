@@ -189,6 +189,7 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
     "/family",
     "/memories/on-this-day",
     "/memories/years/2023",
+    "/settings/family",
   ]) {
     await page.goto(route);
     const geometry = await page.evaluate(() => ({

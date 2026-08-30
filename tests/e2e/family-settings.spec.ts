@@ -84,7 +84,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("");
 
-  await page.getByRole("button", { name: "Review access" }).click();
+  await page.getByRole("button", { name: "Review access for Molly" }).click();
   const accessHeading = page.getByRole("heading", {
     name: "Review Molly’s access",
   });
@@ -118,7 +118,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
     0,
   );
   await page.getByRole("button", { name: "Back to edit" }).click();
-  await page.getByRole("button", { name: "Review access" }).click();
+  await page.getByRole("button", { name: "Review access for Molly" }).click();
   await page.getByRole("button", { name: "Close review" }).click();
 
   expect(requests).toEqual([]);
@@ -166,7 +166,9 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
   ).toEqual([]);
 
   await page.reload();
-  const accessTrigger = page.getByRole("button", { name: "Review access" });
+  const accessTrigger = page.getByRole("button", {
+    name: "Review access for Molly",
+  });
   await accessTrigger.scrollIntoViewIfNeeded();
   await accessTrigger.click();
   const accessHeading = page.getByRole("heading", {
