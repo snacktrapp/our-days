@@ -1,10 +1,10 @@
 import { FamilySettingsPanel } from "@/features/family-settings/family-settings-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { getFamilySettingsFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireDesignPreview } from "@/lib/design-preview.server";
+import { requirePreviewFixtureAccess } from "@/lib/auth/journal-access";
 
 export default async function FamilySettingsPage() {
-  await requireDesignPreview();
+  await requirePreviewFixtureAccess();
   const model = getFamilySettingsFixture();
 
   return (

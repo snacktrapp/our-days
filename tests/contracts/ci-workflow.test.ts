@@ -36,19 +36,19 @@ describe("CI workflow privacy and supply-chain contract", () => {
     const actionReferences = [...workflow.matchAll(/uses:\s+(\S+)/g)].map(
       ([, reference]) => reference,
     );
-    expect(actionReferences).toHaveLength(6);
+    expect(actionReferences).toHaveLength(8);
     expect(new Set(actionReferences)).toEqual(
       new Set([checkoutAction, setupNodeAction]),
     );
 
     const checkoutSteps = actionStepBlocks(checkoutAction);
-    expect(checkoutSteps).toHaveLength(3);
+    expect(checkoutSteps).toHaveLength(4);
     for (const step of checkoutSteps) {
       expect(step).toContain("persist-credentials: false");
     }
 
     const setupNodeSteps = actionStepBlocks(setupNodeAction);
-    expect(setupNodeSteps).toHaveLength(3);
+    expect(setupNodeSteps).toHaveLength(4);
     for (const step of setupNodeSteps) {
       expect(step).toContain("package-manager-cache: false");
     }
@@ -80,5 +80,16 @@ describe("CI workflow privacy and supply-chain contract", () => {
     for (const index of buildStepIndexes.slice(1)) {
       expect(steps[index + 1]).toContain("playwright test");
     }
+  });
+
+  it("runs the executable local authorization and schema-drift gates", () => {
+    expect(workflow).toContain("run: npm run test:db");
+    expect(workflow).toContain("run: npm run test:auth:integration");
+    expect(workflow).toContain("run: npm run test:db:concurrency");
+    expect(workflow).toContain("run: npm run types:db:check");
+    expect(workflow).toContain("run: npm run test:browser:connected");
+    expect(workflow).toContain("run: npm run db:lint");
+    expect(workflow).toContain("if: always()");
+    expect(workflow).toContain("run: npm run supabase:stop");
   });
 });

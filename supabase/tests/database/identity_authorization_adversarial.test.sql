@@ -1,0 +1,548 @@
+begin;
+
+select plan(38);
+
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+values
+  ('10000000-0000-4000-8000-000000000011', 'valid-invite@example.test', statement_timestamp(), '{}'),
+  ('10000000-0000-4000-8000-000000000012', 'wrong-recipient@example.test', statement_timestamp(), '{}'),
+  ('10000000-0000-4000-8000-000000000013', 'expired-invite@example.test', statement_timestamp(), '{}'),
+  ('10000000-0000-4000-8000-000000000014', 'revoked-invite@example.test', statement_timestamp(), '{}');
+
+select is(
+  (
+    select array_agg(
+      format('%s:%s', relation.relname, relation.relkind)
+      order by relation.relname, relation.relkind
+    )
+      from pg_catalog.pg_class as relation
+      join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
+     where namespace.nspname = 'public'
+       and relation.relkind in ('r', 'p', 'v', 'm', 'f')
+  ),
+  array[
+    'circle_memberships:r',
+    'circles:r',
+    'people:r',
+    'person_guardians:r'
+  ]::text[],
+  'the exposed family relation catalog exactly matches the four-table allowlist'
+);
+
+select is(
+  (
+    select array_agg(
+      format('%s:%s:%s', table_name, grantee, privilege_type)
+      order by table_name, grantee, privilege_type
+    )
+      from information_schema.role_table_grants
+     where table_schema = 'public'
+       and grantee in ('anon', 'authenticated', 'PUBLIC')
+  ),
+  array[
+    'circle_memberships:authenticated:SELECT',
+    'circles:authenticated:SELECT',
+    'people:authenticated:SELECT',
+    'person_guardians:authenticated:SELECT'
+  ]::text[],
+  'browser-facing public table ACLs exactly match authenticated read access'
+);
+
+select is(
+  (
+    select array_agg(
+      format(
+        '%s(%s)',
+        procedure.proname,
+        pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+      )
+      order by procedure.proname, pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+    )
+      from pg_catalog.pg_proc as procedure
+      join pg_catalog.pg_namespace as namespace on namespace.oid = procedure.pronamespace
+     where namespace.nspname = 'public'
+       and procedure.prokind = 'f'
+  ),
+  array[
+    'accept_invitation(token text)',
+    'create_invitation(circle_id uuid, display_name text, email text, reinvite_membership_id uuid)',
+    'create_managed_person(circle_id uuid, display_name text, accent_token text)',
+    'list_pending_invitations(circle_id uuid)',
+    'preflight_invitation(token text, email text)',
+    'revoke_invitation(invitation_id uuid)',
+    'revoke_membership(membership_id uuid)',
+    'set_membership_role(membership_id uuid, role text)',
+    'set_person_guardian(managed_person_id uuid, guardian_membership_id uuid, grant_access boolean)'
+  ]::text[],
+  'the public RPC catalog exactly matches the reviewed signatures'
+);
+
+select is(
+  (
+    select array_agg(
+      format('%s:%s:%s', routine_name, grantee, privilege_type)
+      order by routine_name, grantee, privilege_type
+    )
+      from information_schema.routine_privileges
+     where routine_schema = 'public'
+       and grantee in ('anon', 'authenticated', 'PUBLIC')
+  ),
+  array[
+    'accept_invitation:authenticated:EXECUTE',
+    'create_invitation:authenticated:EXECUTE',
+    'create_managed_person:authenticated:EXECUTE',
+    'list_pending_invitations:authenticated:EXECUTE',
+    'preflight_invitation:anon:EXECUTE',
+    'preflight_invitation:authenticated:EXECUTE',
+    'revoke_invitation:authenticated:EXECUTE',
+    'revoke_membership:authenticated:EXECUTE',
+    'set_membership_role:authenticated:EXECUTE',
+    'set_person_guardian:authenticated:EXECUTE'
+  ]::text[],
+  'browser-facing public RPC ACLs exactly match the reviewed allowlist'
+);
+
+select ok(
+  not has_schema_privilege('anon', 'public', 'CREATE')
+  and not has_schema_privilege('authenticated', 'public', 'CREATE')
+  and not exists (
+    select 1
+      from pg_catalog.pg_namespace as namespace
+      cross join lateral pg_catalog.aclexplode(namespace.nspacl) as acl
+     where namespace.nspname = 'public'
+       and acl.grantee = 0
+       and acl.privilege_type = 'CREATE'
+  ),
+  'browser roles and PUBLIC cannot expand the public catalog'
+);
+
+select is(
+  (
+    select array_agg(
+      format(
+        '%s(%s)',
+        procedure.proname,
+        pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+      )
+      order by procedure.proname, pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+    )
+      from pg_catalog.pg_proc as procedure
+      join pg_catalog.pg_namespace as namespace on namespace.oid = procedure.pronamespace
+     where namespace.nspname = 'private'
+       and procedure.prosecdef
+  ),
+  array[
+    'accept_invitation(invitation_token text)',
+    'can_manage_person(requested_circle_id uuid, requested_person_id uuid)',
+    'can_view_person(requested_circle_id uuid, requested_person_id uuid)',
+    'create_invitation(requested_circle_id uuid, invited_display_name text, invited_email text, reinvite_membership_id uuid)',
+    'create_managed_person(requested_circle_id uuid, requested_display_name text, requested_accent_token text)',
+    'current_membership_id(requested_circle_id uuid)',
+    'enforce_guardian_integrity()',
+    'enforce_membership_integrity()',
+    'is_active_circle_member(requested_circle_id uuid)',
+    'is_circle_organizer(requested_circle_id uuid)',
+    'list_pending_invitations(requested_circle_id uuid)',
+    'preflight_invitation(invitation_token text, invited_email text)',
+    'revoke_invitation(target_invitation_id uuid)',
+    'revoke_membership(target_membership_id uuid)',
+    'set_membership_role(target_membership_id uuid, requested_role text)',
+    'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)'
+  ]::text[],
+  'the private security-definer catalog exactly matches the reviewed signatures'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+
+select throws_ok(
+  $$select * from public.create_invitation(
+    '20000000-0000-4000-8000-000000000001',
+    'Forbidden Invite',
+    'forbidden@example.test'
+  )$$,
+  '42501',
+  'Invitation could not be created',
+  'ordinary members cannot create invitations'
+);
+
+select throws_ok(
+  $$select public.revoke_membership('40000000-0000-4000-8000-000000000006')$$,
+  '22023',
+  'Access could not be changed',
+  'a member cannot revoke a membership in another circle'
+);
+
+select throws_ok(
+  $$select public.set_person_guardian(
+    '30000000-0000-4000-8000-000000000008',
+    '40000000-0000-4000-8000-000000000006',
+    true
+  )$$,
+  '22023',
+  'Guardian access could not be changed',
+  'guardian grants cannot cross circle boundaries'
+);
+
+select throws_ok(
+  $$insert into public.people (
+    circle_id, display_name, profile_kind, accent_token, created_by_membership_id
+  ) values (
+    '20000000-0000-4000-8000-000000000001',
+    'Direct Insert',
+    'managed',
+    'clay',
+    '40000000-0000-4000-8000-000000000001'
+  )$$,
+  '42501',
+  'permission denied for table people',
+  'authenticated clients cannot bypass managed-person RPCs with direct inserts'
+);
+
+reset role;
+
+select throws_ok(
+  $$update public.circles
+       set id = '20000000-0000-4000-8000-000000000099'
+     where id = '20000000-0000-4000-8000-000000000001'$$,
+  '42501',
+  'Circle identity is immutable',
+  'circle identity fields are immutable'
+);
+
+select throws_ok(
+  $$update public.people
+       set profile_kind = 'managed'
+     where id = '30000000-0000-4000-8000-000000000003'$$,
+  '42501',
+  'Person identity is immutable',
+  'account profiles cannot be converted into managed profiles'
+);
+
+select throws_ok(
+  $$update public.circle_memberships
+       set user_id = '10000000-0000-4000-8000-000000000007'
+     where id = '40000000-0000-4000-8000-000000000003'$$,
+  '42501',
+  'Membership identity is immutable',
+  'membership identities cannot be reassigned'
+);
+
+select throws_ok(
+  $$delete from public.circle_memberships
+     where id = '40000000-0000-4000-8000-000000000003'$$,
+  '42501',
+  'Memberships are retained as history',
+  'membership history cannot be deleted'
+);
+
+select throws_ok(
+  $$insert into public.person_guardians (
+      circle_id,
+      managed_person_id,
+      guardian_membership_id,
+      created_by_membership_id
+    ) values (
+      '20000000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000008',
+      '40000000-0000-4000-8000-000000000006',
+      '40000000-0000-4000-8000-000000000001'
+    )$$,
+  '23503',
+  'insert or update on table "person_guardians" violates foreign key constraint "person_guardians_guardian_fkey"',
+  'the guardian composite foreign key rejects a membership from another circle'
+);
+
+select throws_ok(
+  $$insert into private.invitations (
+      circle_id,
+      person_id,
+      created_by_membership_id,
+      token_hash,
+      email_salt,
+      email_hash,
+      expires_at
+    ) values (
+      '20000000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000009',
+      '40000000-0000-4000-8000-000000000001',
+      extensions.digest('mixed-circle-invitation', 'sha256'),
+      extensions.gen_random_bytes(16),
+      extensions.digest('mixed-circle@example.test', 'sha256'),
+      statement_timestamp() + interval '1 hour'
+    )$$,
+  '23503',
+  'insert or update on table "invitations" violates foreign key constraint "invitations_person_fkey"',
+  'the invitation composite foreign key rejects a person from another circle'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
+
+select throws_ok(
+  $$select public.set_membership_role(
+    '40000000-0000-4000-8000-000000000003',
+    'organizer'
+  )$$,
+  '22023',
+  'Role could not be changed',
+  'an organizer in circle B cannot use the real RPC to change a circle A membership'
+);
+
+select public.create_managed_person(
+  '20000000-0000-4000-8000-000000000002',
+  'B Dual Organizer Child',
+  'sky'
+) as person_id \gset dual_circle_
+
+reset role;
+
+select ok(
+  exists (
+    select 1
+      from public.people as person
+     where person.id = :'dual_circle_person_id'
+       and person.circle_id = '20000000-0000-4000-8000-000000000002'
+       and person.profile_kind = 'managed'
+       and person.created_by_membership_id = '40000000-0000-4000-8000-000000000007'
+  )
+  and exists (
+    select 1
+      from private.audit_events as audit
+     where audit.circle_id = '20000000-0000-4000-8000-000000000002'
+       and audit.actor_membership_id = '40000000-0000-4000-8000-000000000007'
+       and audit.event_type = 'managed_person_created'
+       and audit.subject_id = :'dual_circle_person_id'
+  ),
+  'the same dual-circle identity can use the real organizer RPC inside circle B with correct attribution'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+
+select * from public.create_invitation(
+  '20000000-0000-4000-8000-000000000001',
+  'Valid Invite',
+  ' VALID-INVITE@example.test '
+) \gset valid_
+
+select ok(
+  char_length(:'valid_raw_token') between 40 and 64,
+  'invitation creation returns one URL-safe secret with the expected length'
+);
+
+reset role;
+
+select ok(
+  exists (
+    select 1
+      from private.invitations
+     where id = :'valid_invitation_id'
+       and token_hash = extensions.digest(:'valid_raw_token', 'sha256')
+       and email_hash is not null
+       and email_salt is not null
+  ),
+  'only hashed invitation credentials are persisted'
+);
+
+set local role anon;
+
+select is(
+  public.preflight_invitation(:'valid_raw_token', ' VALID-INVITE@example.test '),
+  true,
+  'anonymous preflight recognizes a pending token bound to the normalized invited email'
+);
+
+select is(
+  array[
+    public.preflight_invitation(:'valid_raw_token', 'wrong-recipient@example.test'),
+    public.preflight_invitation('too-short', 'valid-invite@example.test'),
+    public.preflight_invitation(:'valid_raw_token', repeat('a', 255) || '@example.test')
+  ],
+  array[false, false, false],
+  'preflight fails closed for a wrong email and malformed token or email without exposing details'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000011', true);
+select public.accept_invitation(:'valid_raw_token') as membership_id \gset accepted_
+
+select is(
+  (select status from public.circle_memberships where id = :'accepted_membership_id'),
+  'active',
+  'a valid invite activates a membership for the confirmed recipient'
+);
+
+select is(
+  (select role from public.circle_memberships where id = :'accepted_membership_id'),
+  'member',
+  'new invitees always enter as members'
+);
+
+reset role;
+set local role anon;
+select is(
+  public.preflight_invitation(:'valid_raw_token', 'valid-invite@example.test'),
+  false,
+  'preflight fails closed after an invitation has been consumed'
+);
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000011', true);
+select throws_ok(
+  format('select public.accept_invitation(%L)', :'valid_raw_token'),
+  '22023',
+  'Invitation is not available',
+  'an accepted invitation cannot be reused'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select * from public.create_invitation(
+  '20000000-0000-4000-8000-000000000001',
+  'Wrong Recipient',
+  'valid-invite@example.test'
+) \gset wrong_
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000012', true);
+select throws_ok(
+  format('select public.accept_invitation(%L)', :'wrong_raw_token'),
+  '22023',
+  'Invitation is not available',
+  'a confirmed user with the wrong email cannot accept an invite'
+);
+
+reset role;
+select ok(
+  (select accepted_at is null and revoked_at is null from private.invitations where id = :'wrong_invitation_id'),
+  'a wrong-recipient attempt does not consume the invitation'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select * from public.create_invitation(
+  '20000000-0000-4000-8000-000000000001',
+  'Expired Invite',
+  'expired-invite@example.test'
+) \gset expired_
+reset role;
+
+update private.invitations
+   set created_at = statement_timestamp() - interval '2 minutes',
+       expires_at = statement_timestamp() - interval '1 minute'
+ where id = :'expired_invitation_id';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000013', true);
+select throws_ok(
+  format('select public.accept_invitation(%L)', :'expired_raw_token'),
+  '22023',
+  'Invitation is not available',
+  'expired invitations cannot be accepted'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select * from public.create_invitation(
+  '20000000-0000-4000-8000-000000000001',
+  'Revoked Invite',
+  'revoked-invite@example.test'
+) \gset revoked_
+select public.revoke_invitation(:'revoked_invitation_id');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000014', true);
+select throws_ok(
+  format('select public.accept_invitation(%L)', :'revoked_raw_token'),
+  '22023',
+  'Invitation is not available',
+  'revoked invitations cannot be accepted'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select * from public.create_invitation(
+  '20000000-0000-4000-8000-000000000001',
+  'A Revoked Member',
+  'revoked-a@example.test',
+  '40000000-0000-4000-8000-000000000004'
+) \gset reinvite_
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000004', true);
+select public.accept_invitation(:'reinvite_raw_token') as membership_id \gset reaccepted_
+
+select is(
+  :'reaccepted_membership_id'::uuid,
+  '40000000-0000-4000-8000-000000000004'::uuid,
+  'reinvitation reactivates the retained membership instead of creating another identity'
+);
+
+select is(
+  (select role from public.circle_memberships where id = :'reaccepted_membership_id'),
+  'member',
+  'reinvitation cannot silently restore organizer authority'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select public.revoke_membership('40000000-0000-4000-8000-000000000003');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select is(
+  (select count(*)::bigint from public.circles),
+  0::bigint,
+  'revocation takes effect immediately even when the JWT identity is unchanged'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
+select public.revoke_membership('40000000-0000-4000-8000-000000000006');
+
+select throws_ok(
+  $$select public.set_membership_role(
+    '40000000-0000-4000-8000-000000000007',
+    'member'
+  )$$,
+  '23514',
+  'A circle must retain an active organizer',
+  'the last active organizer cannot demote themselves'
+);
+
+select throws_ok(
+  $$select public.revoke_membership('40000000-0000-4000-8000-000000000007')$$,
+  '23514',
+  'A circle must retain an active organizer',
+  'the last active organizer cannot revoke themselves'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+select public.revoke_membership('40000000-0000-4000-8000-000000000001');
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select ok(
+  not private.can_manage_person(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000008'
+  ),
+  'revoking a member also removes their active guardian authority'
+);
+
+reset role;
+
+select ok(
+  exists (
+    select 1
+      from private.audit_events
+     where event_type = 'membership_revoked'
+       and subject_id = '40000000-0000-4000-8000-000000000001'
+  ),
+  'sensitive membership changes retain durable audit attribution'
+);
+
+select ok(
+  exists (
+    select 1
+      from public.people
+     where id = '30000000-0000-4000-8000-000000000001'
+  ),
+  'revocation retains the person record needed for historic authorship'
+);
+
+select * from finish();
+rollback;

@@ -68,6 +68,45 @@ jobs:
       - name: Run Chromium, Firefox, and WebKit functional checks
         run: npx playwright test --grep-invert @visual
 
+  database:
+    name: Local Supabase authorization
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use the pinned Node.js runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install the exact dependency tree
+        run: npm ci
+      - name: Install pinned Chromium and system libraries
+        run: npx playwright install --with-deps chromium
+      - name: Start the isolated local Supabase stack
+        run: npm run supabase:start
+      - name: Prove migrations and seeds reset reproducibly
+        run: npm run db:reset && npm run db:reset
+      - name: Run catalog, RLS, and authorization tests
+        run: npm run test:db
+      - name: Run real local Auth, OTP, invite, and revocation flow
+        run: npm run test:auth:integration
+      - name: Race organizer revocations across independent sessions
+        run: npm run test:db:concurrency
+      - name: Detect generated database type drift
+        run: npm run types:db:check
+      - name: Build, scan, and run the connected production browser flow
+        run: npm run test:browser:connected
+      - name: Lint database functions and schemas
+        run: npm run db:lint
+      - name: Stop only the Our Days local stack
+        if: always()
+        run: npm run supabase:stop
+
   visual:
     name: Intel macOS visual baselines
     needs: quality

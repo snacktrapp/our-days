@@ -12,6 +12,11 @@ const environment = validateOurDaysEnvironment(
 const privateRoutes = [
   "/",
   "/sign-in",
+  "/auth/:path*",
+  "/invite",
+  "/invite/:path*",
+  "/access-unavailable",
+  "/api/auth/:path*",
   "/journal",
   "/family",
   "/people",

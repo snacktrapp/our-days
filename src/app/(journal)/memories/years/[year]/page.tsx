@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { getYearMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireDesignPreview } from "@/lib/design-preview.server";
+import { requirePreviewFixtureAccess } from "@/lib/auth/journal-access";
 
 type YearMemoriesProps = Readonly<{ params: Promise<{ year: string }> }>;
 
 export async function generateMetadata({
   params,
 }: YearMemoriesProps): Promise<Metadata> {
-  await requireDesignPreview();
+  await requirePreviewFixtureAccess();
   const { year } = await params;
   const model = getYearMemoriesFixture(year);
   return {
@@ -19,7 +19,7 @@ export async function generateMetadata({
 }
 
 export default async function YearMemoriesPage({ params }: YearMemoriesProps) {
-  await requireDesignPreview();
+  await requirePreviewFixtureAccess();
   const { year } = await params;
   const model = getYearMemoriesFixture(year);
   if (!model) notFound();

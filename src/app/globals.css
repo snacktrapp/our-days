@@ -91,6 +91,73 @@ textarea:focus-visible,
   font-size: 13px;
   line-height: 1.5;
 }
+.private-entry-content {
+  margin-top: 18px;
+  text-align: left;
+}
+.private-entry-content > p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.private-entry-content form {
+  display: grid;
+  gap: 9px;
+}
+.private-entry-content form + form {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+.private-entry-content label {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.private-entry-content input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 13px;
+  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+.private-entry-content input[aria-invalid="true"] {
+  border-color: var(--clay);
+}
+.private-entry-content button {
+  min-height: 48px;
+  margin-top: 3px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--teal);
+  color: var(--cream);
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.private-entry-content button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+.private-entry-content .auth-status,
+.private-entry-content .auth-error {
+  margin: 2px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.private-entry-content .auth-status {
+  color: var(--muted);
+}
+.private-entry-content .auth-error {
+  color: #773b36;
+}
 .private-entry-mark {
   width: 54px;
   height: 106px;
@@ -124,6 +191,25 @@ textarea:focus-visible,
 }
 .private-entry-mark i:nth-child(3) {
   background: #b88b42;
+}
+
+@media (max-height: 520px) {
+  .private-entry-shell {
+    min-height: 100svh;
+    place-items: start center;
+    overflow-y: auto;
+    padding-block: max(14px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-bottom));
+  }
+  .private-entry-card {
+    padding-block: 24px;
+  }
+  .private-entry-mark {
+    height: 64px;
+  }
+  .private-entry-card > p {
+    margin-top: 16px;
+  }
 }
 
 .app-shell {

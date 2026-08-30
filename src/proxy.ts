@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
+import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { buildContentSecurityPolicy } from "@/lib/content-security-policy";
+import type { Database } from "@/lib/supabase/database.types";
+import { readOptionalSupabasePublicConfig } from "@/lib/supabase/public-config";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const nonce = randomBytes(18).toString("base64");
   const contentSecurityPolicy = buildContentSecurityPolicy({
     nonce,
@@ -14,10 +17,45 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
 
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  const buildResponse = () => {
+    const nextResponse = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    nextResponse.headers.set("Content-Security-Policy", contentSecurityPolicy);
+    return nextResponse;
+  };
+
+  let response = buildResponse();
+  const supabaseConfig = readOptionalSupabasePublicConfig();
+  if (!supabaseConfig) return response;
+
+  const supabase = createServerClient<Database>(
+    supabaseConfig.url,
+    supabaseConfig.publishableKey,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet, cacheHeaders) {
+          for (const { name, value } of cookiesToSet) {
+            request.cookies.set(name, value);
+          }
+          requestHeaders.set("cookie", request.cookies.toString());
+
+          response = buildResponse();
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, options);
+          }
+          for (const [name, value] of Object.entries(cacheHeaders)) {
+            response.headers.set(name, value);
+          }
+        },
+      },
+    },
+  );
+
+  await supabase.auth.getClaims();
   return response;
 }
 

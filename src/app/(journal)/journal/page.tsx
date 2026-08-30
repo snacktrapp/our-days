@@ -1,7 +1,7 @@
-import { requireDesignPreview } from "@/lib/design-preview.server";
+import { requirePreviewFixtureAccess } from "@/lib/auth/journal-access";
 import { redirect } from "next/navigation";
 
 export default async function JournalPage() {
-  await requireDesignPreview();
+  await requirePreviewFixtureAccess();
   redirect("/family");
 }

@@ -16,6 +16,21 @@ Open <http://localhost:3000>; local development redirects the locked root to `/f
 
 Requires Node.js 22 or newer. `.node-version` pins the locally verified and CI runtime; the checked-in package lock is authoritative.
 
+The Phase 2 database foundation is local and unlinked. Running it requires a Docker-compatible container runtime, then:
+
+```bash
+npm run supabase:start
+npm run db:reset
+npm run test:db
+npm run test:auth:integration
+npm run test:db:concurrency
+npm run types:db:check
+npm run test:browser:connected
+npm run db:lint
+```
+
+`supabase/config.toml` disables open signup and automatic Data API exposure. The local seed is synthetic and spans two circles, including revoked and no-circle actors. The integration commands exercise real local Auth, OTP email, invitation preflight/acceptance, revocation, private Storage denial, provably overlapping concurrency, fragment/cookie lifecycle, hostile-origin denial, browser-state cleanup, and generated schema types; they restore the synthetic fixtures afterward. The web app never receives a service-role credential; login-capable integration users are provisioned only by a test-only local bootstrap boundary.
+
 ## Verification
 
 ```bash
@@ -45,6 +60,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/architecture/ACCEPTANCE_CRITERIA.md` — release-blocking requirements
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
+- `docs/quality/PHASE_2_CHECKPOINT_REPORT.md` — executable local Auth/database/browser evidence and remaining production gates
 - `docs/quality/MEMORIES_PREVIEW_REPORT.md` — date browsing preview evidence and production limits
 - `docs/quality/CAPTURE_PREVIEW_REPORT.md` — local capture contract, privacy proof, and production limits
 - `docs/quality/MOMENT_DETAIL_PREVIEW_REPORT.md` — count-free notes/responses contract and privacy proof
