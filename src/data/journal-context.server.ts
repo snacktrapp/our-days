@@ -129,13 +129,19 @@ export async function loadConnectedJournalContext(
         (access.role === "organizer" || guardedPersonIds.has(person.id))),
   );
   const composer: MomentComposerViewModel = {
-    experience: "connected-written",
+    experience: "connected-family",
     previewToday: plainToday(circleResult.data.time_zone),
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,
     recordedByName: recorder.name,
     journalPeople,
-    taggablePeople: [],
+    taggablePeople: personOptions.map((person) => ({
+      id: person.id,
+      name: person.name,
+      initial: person.initial,
+      accent: person.accent,
+      contextLabel: person.contextLabel,
+    })),
   };
   const familyMark = personOptions.slice(0, 5).map((person) => ({
     id: person.id,

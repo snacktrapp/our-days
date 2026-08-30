@@ -214,6 +214,35 @@ describe("MomentComposer", () => {
     ).toBeVisible();
   });
 
+  it("closes a saved moment without a discard warning and refreshes from the close control", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    render(
+      <ConnectedHarness
+        save={vi.fn().mockResolvedValue({ ok: true, message: "Saved" })}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Open connected composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.type(screen.getByLabelText("Your thought"), "Already safe");
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    expect(
+      await screen.findByRole("heading", { name: "Moment saved" }),
+    ).toBeVisible();
+
+    await user.click(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    );
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.refresh).toHaveBeenCalledOnce();
+  });
+
   it("opens honestly as a modal, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
     expect(screen.getByRole("dialog")).toHaveAttribute("open");

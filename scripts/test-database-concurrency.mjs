@@ -81,7 +81,7 @@ async function waitForConcurrencyProbe({
   apiUrl,
   expectedWaiters,
   label,
-  operationName,
+  operationNames,
   requireSleep = false,
   serviceKey,
   timeoutMs = 4000,
@@ -98,7 +98,7 @@ async function waitForConcurrencyProbe({
       {
         body: JSON.stringify({
           expected_waiters: expectedWaiters,
-          operation_name: operationName,
+          operation_names: operationNames,
           require_sleep: requireSleep,
         }),
         method: "POST",
@@ -157,6 +157,7 @@ async function runOverlappedCircleRace({
   circleId,
   holderToken,
   operationName,
+  operationNames = [operationName],
   requests,
   serviceKey,
 }) {
@@ -176,7 +177,7 @@ async function runOverlappedCircleRace({
     apiUrl,
     expectedWaiters: 1,
     label: `The ${operationName} circle-lock holder`,
-    operationName: "phase2_test_hold_circle_lock",
+    operationNames: ["phase2_test_hold_circle_lock"],
     requireSleep: true,
     serviceKey,
   });
@@ -188,7 +189,7 @@ async function runOverlappedCircleRace({
       apiUrl,
       expectedWaiters: 2,
       label: `Two overlapping ${operationName} requests`,
-      operationName,
+      operationNames,
       serviceKey,
     });
   } catch (error) {
@@ -279,7 +280,7 @@ try {
 
       execute $definition$
         create function public.phase2_test_concurrency_probe(
-          operation_name text,
+          operation_names text[],
           expected_waiters integer,
           require_sleep boolean
         )
@@ -293,18 +294,22 @@ try {
             from pg_catalog.pg_stat_activity as activity
            where activity.pid <> pg_catalog.pg_backend_pid()
              and activity.state = 'active'
-             and pg_catalog.strpos(
-               pg_catalog.lower(activity.query),
-               pg_catalog.lower(operation_name)
-             ) > 0
+             and exists (
+               select 1
+                 from pg_catalog.unnest(operation_names) as operation_name
+                where pg_catalog.strpos(
+                  pg_catalog.lower(activity.query),
+                  pg_catalog.lower(operation_name)
+                ) > 0
+             )
              and case
                when require_sleep then activity.wait_event = 'PgSleep'
                else activity.wait_event_type = 'Lock'
              end;
         $body$
       $definition$;
-      execute 'revoke all on function public.phase2_test_concurrency_probe(text, integer, boolean) from public, anon, authenticated';
-      execute 'grant execute on function public.phase2_test_concurrency_probe(text, integer, boolean) to service_role';
+      execute 'revoke all on function public.phase2_test_concurrency_probe(text[], integer, boolean) from public, anon, authenticated';
+      execute 'grant execute on function public.phase2_test_concurrency_probe(text[], integer, boolean) to service_role';
     end
     $install$;
   `);
@@ -314,7 +319,7 @@ try {
     apiUrl,
     expectedWaiters: 0,
     label: "The concurrency probe schema cache",
-    operationName: "phase2-schema-ready",
+    operationNames: ["phase2-schema-ready"],
     serviceKey,
   });
 
@@ -641,8 +646,409 @@ try {
     $moment_audit$;
   `);
 
+  const familyMoment = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    "rpc/create_family_moment",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        journal_person_id: acceptedPersonId,
+        moment_kind: "thought",
+        moment_title: null,
+        moment_body: "Family context concurrency starting value.",
+        place_name: null,
+        tagged_person_ids: [],
+        occurred_on: "2026-08-29",
+      }),
+      method: "POST",
+    },
+  );
+  if (!familyMoment.response.ok || !uuid.test(familyMoment.body)) {
+    throw new Error(
+      `Family moment concurrency setup failed with ${familyMoment.response.status}.`,
+    );
+  }
+
+  const familyEditBodies = [
+    "First family-context edit wins alone.",
+    "Second family-context edit wins alone.",
+  ];
+  const familyEditTags = [
+    "30000000-0000-4000-8000-000000000001",
+    "30000000-0000-4000-8000-000000000008",
+  ];
+  const familyEditResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "update_family_moment",
+    requests: [firstAcceptanceToken, secondAcceptanceToken].map(
+      (token, index) => () =>
+        jsonRequest(apiUrl, apiKey, token, "rpc/update_family_moment", {
+          body: JSON.stringify({
+            moment_id: familyMoment.body,
+            expected_revision: 1,
+            moment_title: null,
+            moment_body: familyEditBodies[index],
+            place_name: null,
+            tagged_person_ids: [familyEditTags[index]],
+            occurred_on: "2026-08-29",
+          }),
+          method: "POST",
+        }),
+    ),
+    serviceKey,
+  });
+  const familyEditSuccesses = familyEditResults.filter(
+    ({ response }) => response.ok,
+  );
+  const familyEditConflicts = familyEditResults.filter(
+    ({ response }) => !response.ok,
+  );
+  if (
+    familyEditSuccesses.length !== 1 ||
+    familyEditSuccesses[0].body !== 2 ||
+    familyEditConflicts.length !== 1 ||
+    familyEditConflicts[0].body?.code !== "40001" ||
+    familyEditConflicts[0].body?.message !== "Moment changed elsewhere"
+  ) {
+    throw new Error(
+      `Expected one atomic family-context edit and one revision conflict; received statuses ${familyEditResults
+        .map(({ response }) => response.status)
+        .join(", ")}.`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $family_moment_audit$
+    declare
+      durable_body text;
+      durable_revision bigint;
+      durable_tag uuid;
+      tag_count integer;
+    begin
+      select body, revision into durable_body, durable_revision
+        from public.moments where id = '${familyMoment.body}'::uuid;
+      select count(*)::integer, min(person_id::text)::uuid
+        into tag_count, durable_tag
+        from public.moment_people
+       where moment_id = '${familyMoment.body}'::uuid;
+
+      if durable_body not in (
+          'First family-context edit wins alone.',
+          'Second family-context edit wins alone.'
+        )
+        or durable_revision <> 2
+        or tag_count <> 1
+        or durable_tag not in (
+          '30000000-0000-4000-8000-000000000001'::uuid,
+          '30000000-0000-4000-8000-000000000008'::uuid
+        )
+        or (
+          durable_body = 'First family-context edit wins alone.'
+          and durable_tag <> '30000000-0000-4000-8000-000000000001'::uuid
+        )
+        or (
+          durable_body = 'Second family-context edit wins alone.'
+          and durable_tag <> '30000000-0000-4000-8000-000000000008'::uuid
+        ) then
+        raise exception 'Concurrent family-context edits split moment and tag state';
+      end if;
+    end
+    $family_moment_audit$;
+  `);
+
+  const createdNote = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    "rpc/create_moment_note",
+    {
+      body: JSON.stringify({
+        moment_id: familyMoment.body,
+        body: "Concurrent note starting value.",
+      }),
+      method: "POST",
+    },
+  );
+  if (!createdNote.response.ok || !uuid.test(createdNote.body)) {
+    throw new Error(
+      `Concurrent note setup failed with ${createdNote.response.status}.`,
+    );
+  }
+
+  const noteBodies = [
+    "First concurrent note edit wins alone.",
+    "Second concurrent note edit wins alone.",
+  ];
+  const noteEditResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "update_moment_note",
+    requests: [firstAcceptanceToken, secondAcceptanceToken].map(
+      (token, index) => () =>
+        jsonRequest(apiUrl, apiKey, token, "rpc/update_moment_note", {
+          body: JSON.stringify({
+            note_id: createdNote.body,
+            expected_revision: 1,
+            body: noteBodies[index],
+          }),
+          method: "POST",
+        }),
+    ),
+    serviceKey,
+  });
+  const noteEditSuccesses = noteEditResults.filter(
+    ({ response }) => response.ok,
+  );
+  const noteEditConflicts = noteEditResults.filter(
+    ({ response }) => !response.ok,
+  );
+  if (
+    noteEditSuccesses.length !== 1 ||
+    noteEditSuccesses[0].body !== 2 ||
+    noteEditConflicts.length !== 1 ||
+    noteEditConflicts[0].body?.code !== "40001" ||
+    noteEditConflicts[0].body?.message !== "Note changed elsewhere"
+  ) {
+    throw new Error(
+      `Expected one concurrent note edit and one revision conflict; received statuses ${noteEditResults
+        .map(({ response }) => response.status)
+        .join(", ")}.`,
+    );
+  }
+
+  const reactionResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "set_moment_reaction",
+    requests: ["held-close", "made-me-smile"].map(
+      (reactionType, index) => () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          index === 0 ? firstAcceptanceToken : secondAcceptanceToken,
+          "rpc/set_moment_reaction",
+          {
+            body: JSON.stringify({
+              moment_id: familyMoment.body,
+              reaction_type: reactionType,
+            }),
+            method: "POST",
+          },
+        ),
+    ),
+    serviceKey,
+  });
+  if (
+    reactionResults.some(({ response }) => !response.ok) ||
+    reactionResults
+      .map(({ body }) => body)
+      .sort()
+      .join(",") !== "1,2"
+  ) {
+    throw new Error(
+      `Concurrent reactions did not serialize as one reversible row (${reactionResults
+        .map(({ response }) => response.status)
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $family_context_audit$
+    declare
+      durable_note_body text;
+      durable_note_revision bigint;
+      note_edit_audit_count integer;
+      reaction_count integer;
+      reaction_revision bigint;
+      reaction_type text;
+    begin
+      select body, revision into durable_note_body, durable_note_revision
+        from public.moment_notes where id = '${createdNote.body}'::uuid;
+      select count(*)::integer into note_edit_audit_count
+        from private.audit_events
+       where event_type = 'moment_note_updated'
+         and subject_id = '${createdNote.body}'::uuid;
+      select count(*)::integer, max(revision), max(reaction.reaction_type)
+        into reaction_count, reaction_revision, reaction_type
+        from public.moment_reactions as reaction
+       where reaction.moment_id = '${familyMoment.body}'::uuid
+         and reaction.author_membership_id = '${acceptedMembershipId}'::uuid;
+
+      if durable_note_body not in (
+          'First concurrent note edit wins alone.',
+          'Second concurrent note edit wins alone.'
+        )
+        or durable_note_revision <> 2
+        or note_edit_audit_count <> 1
+        or reaction_count <> 1
+        or reaction_revision <> 2
+        or reaction_type not in ('held-close', 'made-me-smile') then
+        raise exception 'Concurrent note or response state was not durable and singular';
+      end if;
+    end
+    $family_context_audit$;
+  `);
+
+  const parentRaceMoment = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    "rpc/create_family_moment",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        journal_person_id: acceptedPersonId,
+        moment_kind: "thought",
+        moment_title: null,
+        moment_body: "Parent and child mutation race.",
+        place_name: null,
+        tagged_person_ids: [],
+        occurred_on: "2026-08-29",
+      }),
+      method: "POST",
+    },
+  );
+  if (!parentRaceMoment.response.ok || !uuid.test(parentRaceMoment.body)) {
+    throw new Error("Parent-trash race setup failed.");
+  }
+  const [racedNote, racedTrash] = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "parent trash/note creation",
+    operationNames: ["create_moment_note", "set_written_moment_trashed"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          firstAcceptanceToken,
+          "rpc/create_moment_note",
+          {
+            body: JSON.stringify({
+              moment_id: parentRaceMoment.body,
+              body: "A note racing its parent trash.",
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          firstAcceptanceToken,
+          "rpc/set_written_moment_trashed",
+          {
+            body: JSON.stringify({
+              moment_id: parentRaceMoment.body,
+              expected_revision: 1,
+              trashed: true,
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  if (
+    !racedTrash.response.ok ||
+    (!racedNote.response.ok && racedNote.body?.code !== "42501")
+  ) {
+    throw new Error(
+      `Parent-trash race did not end on a safe serialized path (${racedNote.response.status}, ${racedTrash.response.status}).`,
+    );
+  }
+  const hiddenConversation = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/get_moment_conversation",
+    {
+      body: JSON.stringify({ moment_id: parentRaceMoment.body }),
+      method: "POST",
+    },
+  );
+  if (
+    !hiddenConversation.response.ok ||
+    !Array.isArray(hiddenConversation.body) ||
+    hiddenConversation.body.length !== 0
+  ) {
+    throw new Error("A parent-trash race left descendants readable.");
+  }
+
+  const [revocationRacedNote, revocationResult] = await runOverlappedCircleRace(
+    {
+      apiKey,
+      apiUrl,
+      circleId: CIRCLE_A,
+      holderToken: organizerAToken,
+      operationName: "membership revocation/note creation",
+      operationNames: ["create_moment_note", "revoke_membership"],
+      requests: [
+        () =>
+          jsonRequest(
+            apiUrl,
+            apiKey,
+            firstAcceptanceToken,
+            "rpc/create_moment_note",
+            {
+              body: JSON.stringify({
+                moment_id: "60000000-0000-4000-8000-000000000001",
+                body: "A note racing membership revocation.",
+              }),
+              method: "POST",
+            },
+          ),
+        () =>
+          jsonRequest(
+            apiUrl,
+            apiKey,
+            organizerAToken,
+            "rpc/revoke_membership",
+            {
+              body: JSON.stringify({ membership_id: acceptedMembershipId }),
+              method: "POST",
+            },
+          ),
+      ],
+      serviceKey,
+    },
+  );
+  if (
+    !revocationResult.response.ok ||
+    (!revocationRacedNote.response.ok &&
+      revocationRacedNote.body?.code !== "42501")
+  ) {
+    throw new Error(
+      `Revocation race did not end on a safe serialized path (${revocationRacedNote.response.status}, ${revocationResult.response.status}).`,
+    );
+  }
+  const revokedVisibility = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    "moment_notes?select=id",
+  );
+  if (
+    !revokedVisibility.response.ok ||
+    !Array.isArray(revokedVisibility.body) ||
+    revokedVisibility.body.length !== 0
+  ) {
+    throw new Error("A revocation race left descendant rows readable.");
+  }
+
   process.stdout.write(
-    "Overlapping organizer revocation, invitation acceptance, and same-revision moment edits serialized correctly with one durable winner each.\n",
+    "Overlapping organizer revocation, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, and member revocation serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

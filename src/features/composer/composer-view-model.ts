@@ -9,7 +9,7 @@ export type ComposerPersonOption = Readonly<{
 }>;
 
 export type MomentComposerViewModel = Readonly<{
-  experience?: "preview" | "connected-written";
+  experience?: "preview" | "connected-written" | "connected-family";
   previewToday: string;
   defaultJournalPersonId: string;
   recorderPersonId: string;

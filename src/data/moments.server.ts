@@ -2,8 +2,8 @@ import "server-only";
 
 import { elapsedCalendarLabel } from "@/features/memories/memory-date";
 import type {
-  ThoughtMomentViewModel,
   TimelineEntryViewModel,
+  TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
@@ -17,10 +17,19 @@ type GeneratedTimelineRow =
   Database["public"]["Functions"]["list_timeline_moments"]["Returns"][number];
 type TimelineRow = Omit<
   GeneratedTimelineRow,
-  "occurred_at" | "occurred_timezone"
+  | "occurred_at"
+  | "occurred_timezone"
+  | "tagged_people"
+  | "moment_kind"
+  | "moment_title"
+  | "place_name"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
+  moment_kind?: string;
+  moment_title?: string | null;
+  place_name?: string | null;
+  tagged_people?: unknown;
 };
 
 const pageSize = 20;
@@ -48,11 +57,25 @@ function formatPreciseTime(value: string, timeZone: string | null) {
 export function mapTimelineRow(
   row: TimelineRow,
   today: string,
-): ThoughtMomentViewModel {
-  return {
+): TimelineMomentViewModel {
+  const taggedPeople = Array.isArray(row.tagged_people)
+    ? row.tagged_people.flatMap((tag): { id: string; name: string }[] => {
+        if (
+          typeof tag === "object" &&
+          tag !== null &&
+          "id" in tag &&
+          "name" in tag &&
+          typeof tag.id === "string" &&
+          typeof tag.name === "string"
+        ) {
+          return [{ id: tag.id, name: tag.name }];
+        }
+        return [];
+      })
+    : [];
+  const base = {
     id: row.moment_id,
     journalPersonId: row.moment_journal_person_id,
-    kind: "thought",
     personName: row.journal_person_name,
     personInitial:
       Array.from(row.journal_person_name.trim())[0]?.toLocaleUpperCase(
@@ -67,7 +90,11 @@ export function mapTimelineRow(
     maxOccurredOn: today,
     kicker:
       row.recorder_person_id === row.moment_journal_person_id
-        ? "A thought"
+        ? row.moment_kind === "milestone"
+          ? "A milestone"
+          : row.moment_kind === "location"
+            ? "A place"
+            : "A thought"
         : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
     conversation: { notes: [], reactions: [] },
@@ -77,11 +104,32 @@ export function mapTimelineRow(
       occurredAt: row.occurred_at,
       timeZone: row.occurred_timezone,
     },
+    taggedPeople,
+    taggedPeopleLabel:
+      taggedPeople.map((person) => person.name).join(", ") || undefined,
+    placeName: row.place_name ?? undefined,
   };
+  if (row.moment_kind === "milestone") {
+    return {
+      ...base,
+      kind: "milestone",
+      milestone: row.moment_title ?? "A milestone",
+      yearLabel: row.occurred_on.slice(0, 4),
+    };
+  }
+  if (row.moment_kind === "location") {
+    return {
+      ...base,
+      kind: "location",
+      place: row.place_name ?? "A remembered place",
+      mapLabel: "Remembered here",
+    };
+  }
+  return { ...base, kind: "thought" };
 }
 
 export function buildTimelineEntries(
-  moments: readonly ThoughtMomentViewModel[],
+  moments: readonly TimelineMomentViewModel[],
   today: string,
   hasMore: boolean,
   personalName?: string,
@@ -226,6 +274,31 @@ export async function loadConnectedTimeline(
           summary: "One life, held in its true order.",
         }
       : undefined,
+    interaction: {
+      audienceName: context.circleName,
+      currentPerson: {
+        name:
+          context.people.find((person) => person.id === access.personId)
+            ?.name ?? "You",
+        initial:
+          context.people.find((person) => person.id === access.personId)
+            ?.initial ?? "•",
+        accent:
+          context.people.find((person) => person.id === access.personId)
+            ?.accent ?? "slate",
+      },
+      taggablePeople: context.people.map((person) => ({
+        id: person.id,
+        name: person.name,
+        initial: person.initial,
+        accent: person.accent,
+      })),
+      reactionOptions: [
+        { id: "held-close", label: "Held close", symbol: "♡" },
+        { id: "made-me-smile", label: "Made me smile", symbol: "◡" },
+        { id: "remember-this", label: "Remember this", symbol: "✦" },
+      ],
+    },
     entries: buildTimelineEntries(
       moments,
       context.today,

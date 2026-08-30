@@ -4,7 +4,7 @@ import { loadManageableTrash } from "@/data/trash.server";
 import { TrashPanel } from "@/features/moments/trash-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import {
-  createWrittenMomentAction,
+  createFamilyMomentAction,
   restoreWrittenMomentAction,
 } from "@/features/moments/moment-actions";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
@@ -22,7 +22,7 @@ export default async function TrashPage() {
     <JournalChrome
       model={chrome}
       section="trash"
-      createMomentAction={createWrittenMomentAction}
+      createMomentAction={createFamilyMomentAction}
     >
       <TrashPanel moments={moments} restore={restoreWrittenMomentAction} />
       <div className="trash-sign-out">

@@ -85,6 +85,7 @@ Every PR runs all checks introduced by the current phase, and later phases canno
 | Phase 2 | RLS/grant/function/catalog pgTAP tests, invite/auth integration tests, cached-session/two-browser isolation, CSP/CSRF/direct-action tests, stale-token and wrong-circle denial suite, environment-boundary checks, and secret scan |
 | Phase 3 | written-moment RLS/RPC tests, adult/managed-child authority denials, equal-time cursor pagination, optimistic edit races, backdating, reversible trash/restore, connected browser persistence, scroll stability, and lifecycle accessibility states |
 | Phase 4 | Storage HTTP policy tests, private-cache inspection, media retry/idempotency, checksum, and EXIF tests |
+| Phase 5 | family-context catalog/RLS tests, kind/tag authority matrix, lazy conversation privacy, parent/descendant visibility, non-author note denial, one-response replacement, and connected mobile accessibility flows |
 | Phase 7 | export/deletion/worker partial-failure and recovery tests |
 
 - Release candidate: real current iPhone Safari and installed PWA, short-screen iPhone current/previous supported iOS, Dynamic-Island iPhone, Android installed PWA, and VoiceOver checks.

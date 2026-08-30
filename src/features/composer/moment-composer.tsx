@@ -5,17 +5,21 @@ import { useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
-import type { SaveWrittenMomentAction } from "@/features/moments/moment-action-types";
+import type {
+  SaveFamilyMomentAction,
+  SaveWrittenMomentAction,
+} from "@/features/moments/moment-action-types";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
   open: boolean;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
   onRequestClose: () => void;
+  saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
 }>;
 
-export type { SaveWrittenMomentAction };
+export type { SaveFamilyMomentAction, SaveWrittenMomentAction };
 
 type ModeCopy = Readonly<{
   kindLabel: string;
@@ -108,6 +112,7 @@ export function MomentComposer({
   open,
   returnFocusRef,
   onRequestClose,
+  saveFamilyMoment,
   saveWrittenMoment,
 }: MomentComposerProps) {
   const router = useRouter();
@@ -149,18 +154,22 @@ export function MomentComposer({
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
-  const connectedWritten = model.experience === "connected-written";
+  const connectedFamily = model.experience === "connected-family";
+  const connectedExperience =
+    connectedFamily || model.experience === "connected-written";
   const resolvedPlaceName = mode === "location" ? title : placeName;
-  const isDirty = Boolean(
-    body.length ||
-    title.length ||
-    placeName.length ||
-    photoFile ||
-    taggedPersonIds.length ||
-    occurredOn !== model.previewToday ||
-    occurredTime.length > 0 ||
-    journalPersonId !== model.defaultJournalPersonId,
-  );
+  const isDirty =
+    !savedMessage &&
+    Boolean(
+      body.length ||
+      title.length ||
+      placeName.length ||
+      photoFile ||
+      taggedPersonIds.length ||
+      occurredOn !== model.previewToday ||
+      occurredTime.length > 0 ||
+      journalPersonId !== model.defaultJournalPersonId,
+    );
 
   const revokeCurrentPhotoUrl = useCallback(() => {
     if (photoPreviewUrlRef.current) {
@@ -223,11 +232,24 @@ export function MomentComposer({
         return;
       }
 
+      const momentWasSaved = Boolean(savedMessage);
       resetDraft();
       onRequestClose();
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+      if (momentWasSaved) {
+        router.replace("/family");
+        router.refresh();
+      }
     },
-    [isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
+    [
+      isDirty,
+      onRequestClose,
+      resetDraft,
+      returnFocusRef,
+      router,
+      savedMessage,
+      saving,
+    ],
   );
 
   useEffect(() => () => revokeCurrentPhotoUrl(), [revokeCurrentPhotoUrl]);
@@ -364,7 +386,13 @@ export function MomentComposer({
   };
 
   const saveConnectedMoment = async () => {
-    if (saving || !saveWrittenMoment || mode !== "thought") return;
+    if (
+      saving ||
+      (!saveFamilyMoment && !saveWrittenMoment) ||
+      !mode ||
+      mode === "photo"
+    )
+      return;
     let occurredAt: string | null = null;
     let occurredTimezone: string | null = null;
     if (occurredTime) {
@@ -379,13 +407,25 @@ export function MomentComposer({
     setSaveError(null);
     setSaving(true);
     try {
-      const result = await saveWrittenMoment({
-        journalPersonId,
-        body,
-        occurredOn,
-        occurredAt,
-        occurredTimezone,
-      });
+      const result = saveFamilyMoment
+        ? await saveFamilyMoment({
+            journalPersonId,
+            kind: mode,
+            title: mode === "milestone" ? title : "",
+            body,
+            placeName: mode === "location" ? title : placeName,
+            taggedPersonIds,
+            occurredOn,
+            occurredAt,
+            occurredTimezone,
+          })
+        : await saveWrittenMoment!({
+            journalPersonId,
+            body,
+            occurredOn,
+            occurredAt,
+            occurredTimezone,
+          });
       if (!result.ok) {
         setSaveError(result.message);
         return;
@@ -444,11 +484,7 @@ export function MomentComposer({
               ref={savedDoneRef}
               className="save-moment"
               type="button"
-              onClick={() => {
-                close(true);
-                router.replace("/family");
-                router.refresh();
-              }}
+              onClick={() => close(true)}
             >
               Done
             </button>
@@ -456,7 +492,7 @@ export function MomentComposer({
         ) : !mode || choosingMode ? (
           <>
             <span id="composer-privacy" className="private-label">
-              {connectedWritten
+              {connectedExperience
                 ? "Private to this family"
                 : "Local design preview · Nothing is saved"}
             </span>
@@ -471,7 +507,7 @@ export function MomentComposer({
               </p>
             ) : null}
             <div className="moment-choices">
-              {!connectedWritten ? (
+              {!connectedExperience ? (
                 <button
                   ref={firstChoiceRef}
                   onClick={() => chooseMode("photo")}
@@ -484,7 +520,7 @@ export function MomentComposer({
                 </button>
               ) : null}
               <button
-                ref={connectedWritten ? firstChoiceRef : undefined}
+                ref={connectedExperience ? firstChoiceRef : undefined}
                 onClick={() => chooseMode("thought")}
               >
                 <span className="choice-icon thought-choice" aria-hidden="true">
@@ -493,7 +529,7 @@ export function MomentComposer({
                 <strong>A thought</strong>
                 <small>A few words to keep</small>
               </button>
-              {!connectedWritten ? (
+              {!connectedExperience || connectedFamily ? (
                 <button onClick={() => chooseMode("milestone")}>
                   <span
                     className="choice-icon milestone-choice"
@@ -505,7 +541,7 @@ export function MomentComposer({
                   <small>A meaningful first</small>
                 </button>
               ) : null}
-              {!connectedWritten ? (
+              {!connectedExperience || connectedFamily ? (
                 <button onClick={() => chooseMode("location")}>
                   <span
                     className="choice-icon location-choice"
@@ -522,7 +558,7 @@ export function MomentComposer({
         ) : reviewing && copy ? (
           <div className="composer-review">
             <span id="composer-privacy" className="private-label">
-              {connectedWritten
+              {connectedExperience
                 ? "Private to this family"
                 : "Design preview · Nothing was saved"}
             </span>
@@ -604,10 +640,10 @@ export function MomentComposer({
                 type="button"
                 disabled={saving}
                 onClick={
-                  connectedWritten ? saveConnectedMoment : () => close(true)
+                  connectedExperience ? saveConnectedMoment : () => close(true)
                 }
               >
-                {connectedWritten
+                {connectedExperience
                   ? saving
                     ? "Saving…"
                     : "Save moment"
@@ -636,7 +672,7 @@ export function MomentComposer({
               ← Choose another
             </button>
             <span id="composer-privacy" className="private-label">
-              {connectedWritten
+              {connectedExperience
                 ? "Private to this family"
                 : `Local ${copy.kindLabel.toLowerCase()} preview`}
             </span>
@@ -775,7 +811,7 @@ export function MomentComposer({
                   onChange={(event) => setOccurredOn(event.target.value)}
                 />
               </label>
-              {connectedWritten ? (
+              {connectedExperience ? (
                 <label className="composer-field">
                   <span>
                     Time <small>Optional</small>
@@ -806,30 +842,37 @@ export function MomentComposer({
               </div>
             </div>
 
-            {!connectedWritten ? (
-              <div className="composer-optional">
-                <button
-                  className="composer-optional-toggle"
-                  type="button"
-                  aria-expanded={optionalDetailsOpen}
-                  aria-controls="composer-optional-fields"
-                  onClick={() => setOptionalDetailsOpen((current) => !current)}
-                >
-                  People and place <span>Optional</span>
-                </button>
-                {optionalDetailsOpen ? (
-                  <div id="composer-optional-fields">
-                    <fieldset className="people-tags">
-                      <legend>Who was there?</legend>
-                      <div>
-                        {model.taggablePeople.map((person) => {
-                          const isJournalPerson = person.id === journalPersonId;
+            <div className="composer-optional">
+              <button
+                className="composer-optional-toggle"
+                type="button"
+                aria-expanded={optionalDetailsOpen}
+                aria-controls="composer-optional-fields"
+                onClick={() => setOptionalDetailsOpen((current) => !current)}
+              >
+                People and place <span>Optional</span>
+              </button>
+              {optionalDetailsOpen ? (
+                <div id="composer-optional-fields">
+                  <fieldset className="people-tags">
+                    <legend>Who else was part of this?</legend>
+                    <div>
+                      {model.taggablePeople
+                        .filter(
+                          (person) =>
+                            !connectedExperience ||
+                            person.id !== journalPersonId,
+                        )
+                        .map((person) => {
+                          const isPreviewJournalPerson =
+                            !connectedExperience &&
+                            person.id === journalPersonId;
                           return (
                             <label key={person.id}>
                               <input
                                 type="checkbox"
                                 checked={taggedPersonIds.includes(person.id)}
-                                disabled={isJournalPerson}
+                                disabled={isPreviewJournalPerson}
                                 onChange={() => toggleTaggedPerson(person.id)}
                               />
                               <span
@@ -842,36 +885,35 @@ export function MomentComposer({
                             </label>
                           );
                         })}
-                      </div>
-                    </fieldset>
-                    {mode !== "location" ? (
-                      <label className="composer-field">
-                        <span>Place</span>
-                        <input
-                          type="text"
-                          value={placeName}
-                          maxLength={160}
-                          placeholder="Add a place by hand"
-                          onChange={(event) => setPlaceName(event.target.value)}
-                        />
-                        <small>No location is read from your photo.</small>
-                      </label>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                    </div>
+                  </fieldset>
+                  {mode !== "location" ? (
+                    <label className="composer-field">
+                      <span>Place</span>
+                      <input
+                        type="text"
+                        value={placeName}
+                        maxLength={160}
+                        placeholder="Add a place by hand"
+                        onChange={(event) => setPlaceName(event.target.value)}
+                      />
+                      <small>No location is read from your photo.</small>
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
 
             {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <p className="composer-preview-note">
-              {connectedWritten
+              {connectedExperience
                 ? "This will appear in its true chronological place."
                 : "Preview only. Nothing will be uploaded or saved."}
             </p>
             <button className="save-moment" type="submit">
-              {connectedWritten ? "Review moment" : "Preview moment"}
+              {connectedExperience ? "Review moment" : "Preview moment"}
             </button>
           </form>
         ) : null}

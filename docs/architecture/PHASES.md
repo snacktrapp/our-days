@@ -70,6 +70,8 @@ Gate: byte-for-byte original verification, EXIF/GPS absence from derivatives, ex
 
 The decision-independent Family settings preview is recorded in `docs/quality/FAMILY_SETTINGS_PREVIEW_REPORT.md`. It establishes the account-versus-managed-profile language, invitation review, access-removal consequence, and mobile interaction only; it performs no security-sensitive mutation and does not accept a pending policy.
 
+The connected local family-context checkpoint is recorded in `docs/quality/PHASE_5_CHECKPOINT_REPORT.md`. Thoughts, milestones, manual places, people tags, lazy family notes, constrained reactions, trash identity, authorization denials, and destructive races pass locally in Chromium and Firefox; hosted WebKit and unrestricted default-build evidence remain required before this phase is called complete.
+
 Deliver:
 
 - Managed profiles/guardians, people tags, optional places, milestones, comments presented as notes, constrained reactions, member/invite management, and removal UI.

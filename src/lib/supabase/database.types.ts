@@ -105,6 +105,157 @@ export type Database = {
           },
         ];
       };
+      moment_notes: {
+        Row: {
+          author_membership_id: string;
+          body: string;
+          circle_id: string;
+          created_at: string;
+          id: string;
+          moment_id: string;
+          revision: number;
+          trashed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          author_membership_id: string;
+          body: string;
+          circle_id: string;
+          created_at?: string;
+          id?: string;
+          moment_id: string;
+          revision?: number;
+          trashed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          author_membership_id?: string;
+          body?: string;
+          circle_id?: string;
+          created_at?: string;
+          id?: string;
+          moment_id?: string;
+          revision?: number;
+          trashed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_notes_author_fkey";
+            columns: ["circle_id", "author_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_notes_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
+      moment_people: {
+        Row: {
+          circle_id: string;
+          created_at: string;
+          moment_id: string;
+          person_id: string;
+          removed_at: string | null;
+          tagged_by_membership_id: string;
+        };
+        Insert: {
+          circle_id: string;
+          created_at?: string;
+          moment_id: string;
+          person_id: string;
+          removed_at?: string | null;
+          tagged_by_membership_id: string;
+        };
+        Update: {
+          circle_id?: string;
+          created_at?: string;
+          moment_id?: string;
+          person_id?: string;
+          removed_at?: string | null;
+          tagged_by_membership_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_people_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_people_person_fkey";
+            columns: ["circle_id", "person_id"];
+            isOneToOne: false;
+            referencedRelation: "people";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_people_tagger_fkey";
+            columns: ["circle_id", "tagged_by_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
+      moment_reactions: {
+        Row: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at: string;
+          id: string;
+          moment_id: string;
+          reaction_type: string;
+          removed_at: string | null;
+          revision: number;
+          updated_at: string;
+        };
+        Insert: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at?: string;
+          id?: string;
+          moment_id: string;
+          reaction_type: string;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Update: {
+          author_membership_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          id?: string;
+          moment_id?: string;
+          reaction_type?: string;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_reactions_author_fkey";
+            columns: ["circle_id", "author_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_reactions_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moments: {
         Row: {
           body: string;
@@ -116,9 +267,11 @@ export type Database = {
           occurred_at: string | null;
           occurred_on: string;
           occurred_timezone: string | null;
+          place_name: string | null;
           recorded_by_user_id: string;
           revision: number;
           time_precision: string;
+          title: string | null;
           trashed_at: string | null;
           trashed_by_user_id: string | null;
           updated_at: string;
@@ -133,9 +286,11 @@ export type Database = {
           occurred_at?: string | null;
           occurred_on: string;
           occurred_timezone?: string | null;
+          place_name?: string | null;
           recorded_by_user_id: string;
           revision?: number;
           time_precision?: string;
+          title?: string | null;
           trashed_at?: string | null;
           trashed_by_user_id?: string | null;
           updated_at?: string;
@@ -150,9 +305,11 @@ export type Database = {
           occurred_at?: string | null;
           occurred_on?: string;
           occurred_timezone?: string | null;
+          place_name?: string | null;
           recorded_by_user_id?: string;
           revision?: number;
           time_precision?: string;
+          title?: string | null;
           trashed_at?: string | null;
           trashed_by_user_id?: string | null;
           updated_at?: string;
@@ -304,6 +461,21 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { token: string }; Returns: string };
+      create_family_moment: {
+        Args: {
+          circle_id: string;
+          journal_person_id: string;
+          moment_body: string;
+          moment_kind: string;
+          moment_title: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          tagged_person_ids: string[];
+        };
+        Returns: string;
+      };
       create_invitation: {
         Args: {
           circle_id: string;
@@ -325,6 +497,10 @@ export type Database = {
         };
         Returns: string;
       };
+      create_moment_note: {
+        Args: { body: string; moment_id: string };
+        Returns: string;
+      };
       create_written_moment: {
         Args: {
           body: string;
@@ -336,6 +512,13 @@ export type Database = {
         };
         Returns: string;
       };
+      get_moment_conversation: {
+        Args: { moment_id: string };
+        Returns: {
+          notes: Json;
+          reactions: Json;
+        }[];
+      };
       list_manageable_trashed_written_moments: {
         Args: { circle_id: string };
         Returns: {
@@ -344,7 +527,10 @@ export type Database = {
           journal_person_id: string;
           journal_person_name: string;
           moment_id: string;
+          moment_kind: string;
+          moment_title: string;
           occurred_on: string;
+          place_name: string;
           revision: number;
           trashed_at: string;
         }[];
@@ -380,12 +566,16 @@ export type Database = {
           moment_circle_id: string;
           moment_id: string;
           moment_journal_person_id: string;
+          moment_kind: string;
+          moment_title: string;
           occurred_at: string;
           occurred_on: string;
           occurred_timezone: string;
+          place_name: string;
           recorder_person_id: string;
           recorder_person_name: string;
           revision: number;
+          tagged_people: Json;
           time_precision: string;
           updated_at: string;
         }[];
@@ -406,6 +596,10 @@ export type Database = {
         Args: { membership_id: string; role: string };
         Returns: undefined;
       };
+      set_moment_reaction: {
+        Args: { moment_id: string; reaction_type: string };
+        Returns: number;
+      };
       set_person_guardian: {
         Args: {
           grant_access: boolean;
@@ -420,6 +614,28 @@ export type Database = {
           moment_id: string;
           trashed: boolean;
         };
+        Returns: number;
+      };
+      trash_moment_note: {
+        Args: { expected_revision: number; note_id: string };
+        Returns: number;
+      };
+      update_family_moment: {
+        Args: {
+          expected_revision: number;
+          moment_body: string;
+          moment_id: string;
+          moment_title: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          tagged_person_ids: string[];
+        };
+        Returns: number;
+      };
+      update_moment_note: {
+        Args: { body: string; expected_revision: number; note_id: string };
         Returns: number;
       };
       update_written_moment: {

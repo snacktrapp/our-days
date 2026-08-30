@@ -3,7 +3,7 @@ import { PeoplePanel } from "@/features/people/people-panel";
 import { getPeopleFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { createWrittenMomentAction } from "@/features/moments/moment-actions";
+import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 
 export default async function PeoplePage() {
   const access = await requireJournalAccess();
@@ -27,7 +27,7 @@ export default async function PeoplePage() {
     <JournalChrome
       model={model.chrome}
       section="people"
-      createMomentAction={createWrittenMomentAction}
+      createMomentAction={createFamilyMomentAction}
     >
       <PeoplePanel model={model} />
     </JournalChrome>

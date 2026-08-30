@@ -5,7 +5,10 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "./timeline-view-model";
-import type { ConnectedMomentActions } from "@/features/moments/moment-action-types";
+import type {
+  ConnectedMomentActions,
+  MomentConversationActions,
+} from "@/features/moments/moment-action-types";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
@@ -34,6 +37,7 @@ type TimelineEntryProps = Readonly<{
   firstMomentId?: string;
   interaction: TimelineViewModel["interaction"];
   connectedActions?: ConnectedMomentActions;
+  conversationActions?: MomentConversationActions;
   connectedPosition?: number;
   connectedTotal?: number;
 }>;
@@ -43,6 +47,7 @@ function TimelineEntry({
   firstMomentId,
   interaction,
   connectedActions,
+  conversationActions,
   connectedPosition,
   connectedTotal,
 }: TimelineEntryProps) {
@@ -72,6 +77,7 @@ function TimelineEntry({
             moment={entry.moment}
             preload={entry.moment.id === firstMomentId}
             connectedActions={connectedActions}
+            conversationActions={conversationActions}
             connectedPosition={connectedPosition}
             connectedTotal={connectedTotal}
           />
@@ -104,17 +110,17 @@ function TimelineEntry({
 export function TimelineFeed({
   model,
   connectedActions,
+  conversationActions,
 }: {
   model: TimelineViewModel;
   connectedActions?: ConnectedMomentActions;
+  conversationActions?: MomentConversationActions;
 }) {
   const firstMomentId = model.entries.find(
     (entry) => entry.entryType === "moment",
   )?.moment.id;
   const connectedMomentIds = model.entries.flatMap((entry) =>
-    entry.entryType === "moment" && entry.moment.kind === "thought"
-      ? [entry.moment.id]
-      : [],
+    entry.entryType === "moment" ? [entry.moment.id] : [],
   );
   const connectedPositionById = new Map(
     connectedMomentIds.map((id, index) => [id, index + 1]),
@@ -175,6 +181,7 @@ export function TimelineFeed({
             firstMomentId={firstMomentId}
             interaction={model.interaction}
             connectedActions={connectedActions}
+            conversationActions={conversationActions}
             connectedPosition={
               entry.entryType === "moment"
                 ? connectedPositionById.get(entry.moment.id)

@@ -7,7 +7,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001
 
 select is(
   (select count(*)::bigint from public.moments),
-  4::bigint,
+  5::bigint,
   'an active circle A member sees only live circle A moments'
 );
 
@@ -15,7 +15,7 @@ select is(
   (select count(*)::bigint from public.list_timeline_moments(
     '20000000-0000-4000-8000-000000000001'
   )),
-  4::bigint,
+  5::bigint,
   'the combined feed returns all live moments in the requested circle'
 );
 
@@ -331,7 +331,7 @@ select throws_ok(
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true);
 
-select is((select count(*)::bigint from public.moments), 2::bigint, 'circle B sees only its own live moments');
+select is((select count(*)::bigint from public.moments), 2::bigint, 'a dual-circle member sees only moments from their two active circles');
 select is(
   (select count(*)::bigint from public.list_manageable_trashed_written_moments(
     '20000000-0000-4000-8000-000000000001'

@@ -1,7 +1,10 @@
 import { CspPublicImage } from "@/components/csp-image";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
-import type { ConnectedMomentActions } from "@/features/moments/moment-action-types";
+import type {
+  ConnectedMomentActions,
+  MomentConversationActions,
+} from "@/features/moments/moment-action-types";
 import type {
   MomentDetailViewModel,
   MomentInteractionViewModel,
@@ -18,6 +21,7 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
     text: moment.text,
     conversation: moment.conversation,
     taggedPeopleLabel: moment.taggedPeopleLabel,
+    placeName: moment.placeName,
   };
 
   if (moment.kind === "photo") {
@@ -37,6 +41,7 @@ type MomentCardProps = Readonly<{
   moment: TimelineMomentViewModel;
   preload?: boolean;
   connectedActions?: ConnectedMomentActions;
+  conversationActions?: MomentConversationActions;
   connectedPosition?: number;
   connectedTotal?: number;
 }>;
@@ -46,6 +51,7 @@ export function MomentCard({
   moment,
   preload = false,
   connectedActions,
+  conversationActions,
   connectedPosition,
   connectedTotal,
 }: MomentCardProps) {
@@ -70,6 +76,9 @@ export function MomentCard({
             <MomentConversationControl
               interaction={interaction}
               model={detailModel(moment)}
+              actions={conversationActions}
+              position={connectedPosition}
+              total={connectedTotal}
             />
           ) : null}
         </div>
@@ -82,17 +91,25 @@ export function MomentCard({
       <div className="moment-card thought-card">
         <span className="thought-label">{moment.kicker}</span>
         <blockquote>“{moment.text}”</blockquote>
+        {moment.placeName ? (
+          <p className="moment-place-label">⌖ {moment.placeName}</p>
+        ) : null}
         {interaction ? (
           <MomentConversationControl
             interaction={interaction}
             model={detailModel(moment)}
+            actions={conversationActions}
+            position={connectedPosition}
+            total={connectedTotal}
           />
-        ) : connectedActions ? (
+        ) : null}
+        {connectedActions ? (
           <ConnectedMomentControl
             moment={moment}
             actions={connectedActions}
             position={connectedPosition}
             total={connectedTotal}
+            taggablePeople={interaction?.taggablePeople ?? []}
           />
         ) : null}
       </div>
@@ -119,6 +136,18 @@ export function MomentCard({
             <MomentConversationControl
               interaction={interaction}
               model={detailModel(moment)}
+              actions={conversationActions}
+              position={connectedPosition}
+              total={connectedTotal}
+            />
+          ) : null}
+          {connectedActions ? (
+            <ConnectedMomentControl
+              moment={moment}
+              actions={connectedActions}
+              position={connectedPosition}
+              total={connectedTotal}
+              taggablePeople={interaction?.taggablePeople ?? []}
             />
           ) : null}
         </div>
@@ -129,18 +158,33 @@ export function MomentCard({
   return (
     <div className="moment-card milestone-card">
       <div className="milestone-seal">
-        <span>{moment.ageLabel}</span>
+        {moment.ageLabel ? <span>{moment.ageLabel}</span> : null}
         <strong aria-hidden="true">✦</strong>
-        <span>{moment.yearLabel}</span>
+        {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
         <span>{moment.kicker}</span>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
+        {moment.placeName ? (
+          <p className="moment-place-label">⌖ {moment.placeName}</p>
+        ) : null}
         {interaction ? (
           <MomentConversationControl
             interaction={interaction}
             model={detailModel(moment)}
+            actions={conversationActions}
+            position={connectedPosition}
+            total={connectedTotal}
+          />
+        ) : null}
+        {connectedActions ? (
+          <ConnectedMomentControl
+            moment={moment}
+            actions={connectedActions}
+            position={connectedPosition}
+            total={connectedTotal}
+            taggablePeople={interaction?.taggablePeople ?? []}
           />
         ) : null}
       </div>

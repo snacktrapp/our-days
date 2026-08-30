@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ThoughtMomentViewModel } from "@/features/timeline/timeline-view-model";
@@ -25,6 +25,7 @@ const moment = {
   maxOccurredOn: "2026-08-30",
   kicker: "A thought",
   text: "Worth keeping.",
+  placeName: "Cedar Park",
   conversation: { notes: [], reactions: [] },
   canChange: true,
   revision: 1,
@@ -151,5 +152,57 @@ describe("ConnectedMomentControl", () => {
     );
     expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).toHaveBeenCalledOnce();
+    expect(actions.update).toHaveBeenCalledWith(
+      expect.objectContaining({ placeName: "Cedar Park" }),
+    );
+  });
+
+  it("keeps the editor open with recovery copy after an unexpected update failure", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectedMomentControl
+        moment={moment}
+        actions={{
+          update: vi.fn().mockRejectedValue(new Error("network failed")),
+          trash: vi.fn(),
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /^Edit/u }));
+    await user.type(screen.getByLabelText("Your thought"), " More");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That moment could not be changed. Try again.",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Your thought")).toHaveValue(
+      "Worth keeping. More",
+    );
+  });
+
+  it("shows recovery copy after an unexpected trash failure", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    render(
+      <ConnectedMomentControl
+        moment={moment}
+        actions={{
+          update: vi.fn(),
+          trash: vi.fn().mockRejectedValue(new Error("network failed")),
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /^Move to trash/u }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That moment could not be moved to trash. Try again.",
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /^Move to trash/u }),
+      ).toBeEnabled(),
+    );
+    confirm.mockRestore();
   });
 });

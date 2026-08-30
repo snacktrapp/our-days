@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import type { ThoughtMomentViewModel } from "@/features/timeline/timeline-view-model";
+import type {
+  MomentInteractionViewModel,
+  TimelineMomentViewModel,
+} from "@/features/timeline/timeline-view-model";
 import type { ConnectedMomentActions } from "./moment-action-types";
 
-function localTimeFor(moment: ThoughtMomentViewModel) {
+function localTimeFor(moment: TimelineMomentViewModel) {
   const instant = moment.editOccurrence?.occurredAt;
   const timeZone = moment.editOccurrence?.timeZone;
   if (!instant || !timeZone) return "";
@@ -39,8 +42,14 @@ function restoreJournalFocusAfterRefresh() {
   window.setTimeout(focusJournalContext, 150);
 }
 
-function actionMomentLabel(moment: ThoughtMomentViewModel) {
-  const normalized = moment.text.replace(/\s+/gu, " ").trim();
+function actionMomentLabel(moment: TimelineMomentViewModel) {
+  const source =
+    moment.kind === "milestone"
+      ? moment.milestone
+      : moment.kind === "location"
+        ? moment.place
+        : moment.text;
+  const normalized = source.replace(/\s+/gu, " ").trim();
   const excerpt =
     normalized.length <= 72
       ? normalized
@@ -53,17 +62,28 @@ export function ConnectedMomentControl({
   actions,
   position = 1,
   total = 1,
+  taggablePeople = [],
 }: {
-  moment: ThoughtMomentViewModel;
+  moment: TimelineMomentViewModel;
   actions: ConnectedMomentActions;
   position?: number;
   total?: number;
+  taggablePeople?: NonNullable<MomentInteractionViewModel["taggablePeople"]>;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState(moment.text);
+  const [title, setTitle] = useState(
+    moment.kind === "milestone" ? moment.milestone : "",
+  );
+  const [placeName, setPlaceName] = useState(
+    moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
+  );
+  const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
+    moment.taggedPeople?.map((person) => person.id) ?? [],
+  );
   const [occurredOn, setOccurredOn] = useState(moment.occurredOn);
   const originalTime = localTimeFor(moment);
   const [occurredTime, setOccurredTime] = useState(originalTime);
@@ -93,6 +113,11 @@ export function ConnectedMomentControl({
 
   const draftIsDirty =
     body !== moment.text ||
+    title !== (moment.kind === "milestone" ? moment.milestone : "") ||
+    placeName !==
+      (moment.placeName ?? (moment.kind === "location" ? moment.place : "")) ||
+    taggedPersonIds.join(",") !==
+      (moment.taggedPeople?.map((person) => person.id) ?? []).join(",") ||
     occurredOn !== moment.occurredOn ||
     occurredTime !== originalTime;
 
@@ -105,6 +130,11 @@ export function ConnectedMomentControl({
       return;
     }
     setBody(moment.text);
+    setTitle(moment.kind === "milestone" ? moment.milestone : "");
+    setPlaceName(
+      moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
+    );
+    setTaggedPersonIds(moment.taggedPeople?.map((person) => person.id) ?? []);
     setOccurredOn(moment.occurredOn);
     setOccurredTime(originalTime);
     setOpen(false);
@@ -112,11 +142,19 @@ export function ConnectedMomentControl({
     window.requestAnimationFrame(() => editButtonRef.current?.focus());
   };
 
-  const save = () => {
+  const save = async () => {
     const trimmedBody = body.trim();
-    if (!trimmedBody) {
+    if (moment.kind === "thought" && !trimmedBody) {
       setMessage("Write a thought before saving.");
       bodyRef.current?.focus();
+      return;
+    }
+    if (moment.kind === "milestone" && !title.trim()) {
+      setMessage("Name the milestone before saving.");
+      return;
+    }
+    if (moment.kind === "location" && !placeName.trim()) {
+      setMessage("Name the place before saving.");
       return;
     }
     let occurredAt = moment.editOccurrence?.occurredAt ?? null;
@@ -137,11 +175,15 @@ export function ConnectedMomentControl({
       occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
     setMessage(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await actions.update({
         momentId: moment.id,
         revision: moment.revision!,
+        title: title.trim(),
         body: trimmedBody,
+        placeName: placeName.trim(),
+        taggedPersonIds,
         occurredOn,
         occurredAt,
         occurredTimezone,
@@ -155,10 +197,14 @@ export function ConnectedMomentControl({
       router.replace(pathname);
       router.refresh();
       restoreJournalFocusAfterRefresh();
-    });
+    } catch {
+      setMessage("That moment could not be changed. Try again.");
+    } finally {
+      setPending(false);
+    }
   };
 
-  const trash = () => {
+  const trash = async () => {
     if (
       !window.confirm(
         "Move this moment to trash? It will leave both family and personal timelines until restored.",
@@ -167,7 +213,8 @@ export function ConnectedMomentControl({
       return;
     }
     setMessage(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await actions.trash({
         momentId: moment.id,
         revision: moment.revision!,
@@ -178,7 +225,11 @@ export function ConnectedMomentControl({
       }
       announce("Moment moved to trash.");
       restoreJournalFocusAfterRefresh();
-    });
+    } catch {
+      setMessage("That moment could not be moved to trash. Try again.");
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -233,8 +284,46 @@ export function ConnectedMomentControl({
             </button>
             <span className="private-label">Private to this family</span>
             <h2 id={`edit-moment-${moment.id}`}>Edit this moment</h2>
+            {moment.kind === "milestone" ? (
+              <label className="composer-field">
+                <span>Milestone</span>
+                <input
+                  type="text"
+                  value={title}
+                  maxLength={120}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </label>
+            ) : null}
+            {moment.kind === "location" ? (
+              <label className="composer-field">
+                <span>Place name</span>
+                <input
+                  type="text"
+                  value={placeName}
+                  maxLength={160}
+                  onChange={(event) => setPlaceName(event.target.value)}
+                />
+              </label>
+            ) : null}
+            {moment.kind !== "location" ? (
+              <label className="composer-field">
+                <span>
+                  Place <small>Optional</small>
+                </span>
+                <input
+                  type="text"
+                  value={placeName}
+                  maxLength={160}
+                  placeholder="Add a place by hand"
+                  onChange={(event) => setPlaceName(event.target.value)}
+                />
+              </label>
+            ) : null}
             <label className="composer-field">
-              <span>Your thought</span>
+              <span>
+                {moment.kind === "thought" ? "Your thought" : "Details"}
+              </span>
               <textarea
                 ref={bodyRef}
                 value={body}
@@ -263,6 +352,35 @@ export function ConnectedMomentControl({
                 />
               </label>
             </div>
+            <fieldset className="people-tags">
+              <legend>Who else was part of this?</legend>
+              <div>
+                {taggablePeople
+                  .filter((person) => person.id !== moment.journalPersonId)
+                  .map((person) => (
+                    <label key={person.id}>
+                      <input
+                        type="checkbox"
+                        checked={taggedPersonIds.includes(person.id)}
+                        onChange={() =>
+                          setTaggedPersonIds((current) =>
+                            current.includes(person.id)
+                              ? current.filter((id) => id !== person.id)
+                              : [...current, person.id],
+                          )
+                        }
+                      />
+                      <span
+                        className={`tag-person-dot dot-${person.accent}`}
+                        aria-hidden="true"
+                      >
+                        {person.initial}
+                      </span>
+                      {person.name}
+                    </label>
+                  ))}
+              </div>
+            </fieldset>
             {message ? (
               <p className="composer-error" role="alert">
                 {message}

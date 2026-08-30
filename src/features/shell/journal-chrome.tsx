@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import type { SaveWrittenMomentAction } from "@/features/composer/moment-composer";
+import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { PrimaryNavigation } from "./primary-navigation";
 import type {
   JournalSection,
@@ -11,7 +11,7 @@ type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
   section: JournalSection;
   children: ReactNode;
-  createMomentAction?: SaveWrittenMomentAction;
+  createMomentAction?: SaveFamilyMomentAction;
 }>;
 
 export function JournalChrome({

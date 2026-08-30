@@ -6,11 +6,18 @@ export type MomentKind = "photo" | "thought" | "milestone" | "location";
 export type MomentReactionId = "held-close" | "made-me-smile" | "remember-this";
 
 export type MomentInteractionViewModel = Readonly<{
+  audienceName?: string;
   currentPerson: Readonly<{
     name: string;
     initial: string;
     accent: AccentToken;
   }>;
+  taggablePeople?: readonly Readonly<{
+    id: string;
+    name: string;
+    initial: string;
+    accent: AccentToken;
+  }>[];
   reactionOptions: readonly Readonly<{
     id: MomentReactionId;
     label: string;
@@ -26,6 +33,8 @@ export type MomentConversationViewModel = Readonly<{
     authorAccent: AccentToken;
     body: string;
     displayDate: string;
+    revision?: number;
+    canChange?: boolean;
   }>[];
   reactions: readonly Readonly<{
     id: string;
@@ -33,6 +42,7 @@ export type MomentConversationViewModel = Readonly<{
     personInitial: string;
     personAccent: AccentToken;
     reactionId: MomentReactionId;
+    isCurrentMember?: boolean;
   }>[];
 }>;
 
@@ -56,6 +66,8 @@ type TimelineMomentBase = Readonly<{
     timeZone: string | null;
   }>;
   taggedPeopleLabel?: string;
+  taggedPeople?: readonly Readonly<{ id: string; name: string }>[];
+  placeName?: string;
 }>;
 
 export type PhotoMomentViewModel = TimelineMomentBase &
@@ -78,8 +90,8 @@ export type MilestoneMomentViewModel = TimelineMomentBase &
   Readonly<{
     kind: "milestone";
     milestone: string;
-    ageLabel: string;
-    yearLabel: string;
+    ageLabel?: string;
+    yearLabel?: string;
   }>;
 
 export type TimelineMomentViewModel =
@@ -97,6 +109,7 @@ type MomentDetailBase = Readonly<{
   text: string;
   conversation: MomentConversationViewModel;
   taggedPeopleLabel?: string;
+  placeName?: string;
 }>;
 
 export type MomentDetailViewModel =

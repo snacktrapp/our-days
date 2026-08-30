@@ -5,6 +5,20 @@ export type MomentActionResult = Readonly<{
   revision?: number;
 }>;
 
+export type EditableMomentKind = "thought" | "milestone" | "location";
+
+export type SaveFamilyMomentAction = (input: {
+  journalPersonId: string;
+  kind: EditableMomentKind;
+  title: string;
+  body: string;
+  placeName: string;
+  taggedPersonIds: readonly string[];
+  occurredOn: string;
+  occurredAt: string | null;
+  occurredTimezone: string | null;
+}) => Promise<MomentActionResult>;
+
 export type SaveWrittenMomentAction = (input: {
   journalPersonId: string;
   body: string;
@@ -13,10 +27,13 @@ export type SaveWrittenMomentAction = (input: {
   occurredTimezone: string | null;
 }) => Promise<MomentActionResult>;
 
-export type UpdateWrittenMomentAction = (input: {
+export type UpdateFamilyMomentAction = (input: {
   momentId: string;
   revision: number;
+  title: string;
   body: string;
+  placeName: string;
+  taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
@@ -28,6 +45,33 @@ export type ChangeTrashAction = (input: {
 }) => Promise<MomentActionResult>;
 
 export type ConnectedMomentActions = Readonly<{
-  update: UpdateWrittenMomentAction;
+  update: UpdateFamilyMomentAction;
   trash: ChangeTrashAction;
+}>;
+
+export type MomentConversationActions = Readonly<{
+  load: (input: { momentId: string }) => Promise<
+    | Readonly<{
+        ok: true;
+        conversation: import("@/features/timeline/timeline-view-model").MomentConversationViewModel;
+      }>
+    | Readonly<{ ok: false; message: string }>
+  >;
+  createNote: (input: {
+    momentId: string;
+    body: string;
+  }) => Promise<MomentActionResult>;
+  updateNote: (input: {
+    noteId: string;
+    revision: number;
+    body: string;
+  }) => Promise<MomentActionResult>;
+  trashNote: (input: {
+    noteId: string;
+    revision: number;
+  }) => Promise<MomentActionResult>;
+  setReaction: (input: {
+    momentId: string;
+    reactionId: string | null;
+  }) => Promise<MomentActionResult>;
 }>;

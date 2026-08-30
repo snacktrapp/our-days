@@ -5,9 +5,14 @@ import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { loadConnectedTimeline } from "@/data/moments.server";
 import {
-  createWrittenMomentAction,
+  createFamilyMomentAction,
+  createMomentNoteAction,
+  loadMomentConversationAction,
+  setMomentReactionAction,
   trashWrittenMomentAction,
-  updateWrittenMomentAction,
+  trashMomentNoteAction,
+  updateFamilyMomentAction,
+  updateMomentNoteAction,
 } from "@/features/moments/moment-actions";
 
 export default async function FamilyPage({
@@ -34,13 +39,20 @@ export default async function FamilyPage({
     <JournalChrome
       model={model.chrome}
       section="timeline"
-      createMomentAction={createWrittenMomentAction}
+      createMomentAction={createFamilyMomentAction}
     >
       <TimelineFeed
         model={model}
         connectedActions={{
-          update: updateWrittenMomentAction,
+          update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
+        }}
+        conversationActions={{
+          load: loadMomentConversationAction,
+          createNote: createMomentNoteAction,
+          updateNote: updateMomentNoteAction,
+          trashNote: trashMomentNoteAction,
+          setReaction: setMomentReactionAction,
         }}
       />
     </JournalChrome>

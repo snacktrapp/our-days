@@ -514,6 +514,8 @@ try {
     viewport: { height: 844, width: 390 },
   });
   const invitedPage = await invitedContext.newPage();
+  invitedPage.setDefaultTimeout(10_000);
+  invitedPage.setDefaultNavigationTimeout(15_000);
   const browserErrors = [];
   const consoleErrorReads = [];
   let browserPhase = "invitation entry";
@@ -560,6 +562,7 @@ try {
   const invitationResponse = await invitedPage.goto(
     `${appUrl}/invite#${invitationToken}`,
   );
+  process.stdout.write("Opened the private invitation entry.\n");
   await invitedPage.getByLabel("Email address").waitFor();
   await invitedPage.waitForLoadState("networkidle");
   assertPrivateResponse(invitationResponse, "Invitation entry");
@@ -570,6 +573,7 @@ try {
     [...fixtureCanaries, invitationToken],
     "Invitation entry",
   );
+  process.stdout.write("Checked invitation entry privacy and accessibility.\n");
 
   const stagedIntentCookies = invitationIntentCookies(
     await invitedContext.cookies(),
@@ -602,14 +606,20 @@ try {
     actionResponsePromise,
   ]);
   await invitedPage.getByLabel("Six-digit code").waitFor();
-  await actionResponse.finished();
+  if (!actionResponse.ok()) {
+    throw new Error(
+      `The first sign-in code action failed (${actionResponse.status()}).`,
+    );
+  }
   const firstOtp = await findOtp(mailpitUrl, email);
+  process.stdout.write("Received the first local sign-in code.\n");
   await assertCrossOriginActionRejected({
     actionRequest,
     canaries: [...fixtureCanaries, email, invitationToken, firstOtp],
     mailpitUrl,
     recipient: email,
   });
+  process.stdout.write("Rejected the cross-origin action replay.\n");
 
   await invitedPage.waitForLoadState("networkidle");
   const reloadedInvitationResponse = await invitedPage.reload();
@@ -628,6 +638,7 @@ try {
   if (invitationIntentCookies(await invitedContext.cookies()).length !== 1) {
     throw new Error("Reloading the code step lost the staged invitation.");
   }
+  process.stdout.write("Preserved the staged invitation across reload.\n");
 
   await invitedPage.getByLabel("Email address").fill(email);
   const secondCodeResponsePromise = invitedPage.waitForResponse((response) => {
@@ -637,8 +648,14 @@ try {
   });
   await invitedPage.getByRole("button", { name: "Email me a code" }).click();
   await invitedPage.getByLabel("Six-digit code").waitFor();
-  await (await secondCodeResponsePromise).finished();
+  const secondCodeResponse = await secondCodeResponsePromise;
+  if (!secondCodeResponse.ok()) {
+    throw new Error(
+      `The replacement sign-in code action failed (${secondCodeResponse.status()}).`,
+    );
+  }
   const otp = await findOtp(mailpitUrl, email);
+  process.stdout.write("Received the replacement local sign-in code.\n");
   serverCanaries.push(otp);
   await invitedPage.getByLabel("Six-digit code").fill(otp);
   await invitedPage
@@ -646,6 +663,7 @@ try {
     .click();
   await invitedPage.waitForURL(`${appUrl}/family`);
   await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
+  process.stdout.write("Accepted the invitation into Cedar Circle.\n");
   browserPhase = "accepted family and creation";
   await assertPageQuality(invitedPage, "Connected family timeline");
   if (authCookies(await invitedContext.cookies()).length === 0) {
@@ -660,11 +678,148 @@ try {
   await assertPageQuality(invitedPage, "Short connected family timeline");
   await invitedPage.setViewportSize({ height: 844, width: 390 });
 
+  const seededNoteCanary =
+    "The delighted laugh afterward is worth remembering.";
+  if ((await invitedPage.content()).includes(seededNoteCanary)) {
+    throw new Error(
+      "The initial timeline serialized a closed family conversation.",
+    );
+  }
+  const familyContextNote = `A connected family note ${suffix}`;
+  const editedFamilyContextNote = `An edited family note ${suffix}`;
+  serverCanaries.push(familyContextNote, editedFamilyContextNote);
+  process.stdout.write("Checking lazy family conversation controls.\n");
+  const seededMilestone = invitedPage
+    .locator('[data-moment-kind="milestone"]')
+    .first();
+  await seededMilestone
+    .getByRole("button", { name: /^Open private notes/u })
+    .click();
+  await invitedPage.getByText(seededNoteCanary).waitFor();
+  await invitedPage
+    .getByRole("textbox", { name: "Your note to the family" })
+    .fill(familyContextNote);
+  await invitedPage.getByRole("button", { name: "Save note" }).click();
+  await invitedPage.getByText(familyContextNote).waitFor();
+  await invitedPage.getByRole("button", { name: /^Edit — your note/u }).click();
+  const editFamilyNote = invitedPage.getByRole("textbox", {
+    name: "Edit your family note",
+  });
+  await editFamilyNote.fill(editedFamilyContextNote);
+  await invitedPage
+    .locator("form")
+    .filter({ has: editFamilyNote })
+    .getByRole("button", { name: "Save note" })
+    .click();
+  await editFamilyNote.waitFor({ state: "detached" });
+  await invitedPage.getByText(editedFamilyContextNote).waitFor();
+  await invitedPage
+    .getByRole("group", { name: "Your response" })
+    .getByRole("button", { name: "Made me smile" })
+    .click();
+  await invitedPage.getByRole("button", { name: "Save response" }).click();
+  await invitedPage.getByText("Response saved.").waitFor();
+  await invitedPage
+    .getByRole("group", { name: "Your response" })
+    .getByRole("button", { name: "Made me smile" })
+    .click();
+  await invitedPage.getByRole("button", { name: "Save response" }).click();
+  await invitedPage.getByText("Response removed.").waitFor();
+  invitedPage.once("dialog", (dialog) => dialog.accept());
+  const removeOwnNote = invitedPage.getByRole("button", {
+    name: /^Remove — your note/u,
+  });
+  if ((await removeOwnNote.count()) !== 1) {
+    const detailButtons = await invitedPage
+      .locator(".moment-detail-dialog button[aria-label]")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => button.getAttribute("aria-label")),
+      );
+    throw new Error(
+      `The current member lost note-removal authority after a response refresh: ${JSON.stringify(detailButtons)}.`,
+    );
+  }
+  await removeOwnNote.click();
+  await invitedPage.getByText("Note removed from this conversation.").waitFor();
+  await invitedPage.getByText(editedFamilyContextNote).waitFor({
+    state: "detached",
+  });
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected family conversation");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await assertPageQuality(invitedPage, "Connected family conversation");
+  await invitedPage.getByRole("button", { exact: true, name: "Close" }).click();
+  if ((await invitedPage.content()).includes(editedFamilyContextNote)) {
+    throw new Error("Closing moment details left a note body in the DOM.");
+  }
+
+  const milestoneMoment = `A connected milestone ${suffix}`;
+  const editedMilestoneMoment = `${milestoneMoment} remembered`;
+  const locationMoment = `A connected place ${suffix}`;
+  serverCanaries.push(milestoneMoment, locationMoment);
+  process.stdout.write("Checking connected milestone and place creation.\n");
+  await invitedPage.getByRole("button", { name: "Add moment" }).click();
+  await invitedPage
+    .getByRole("button", { name: /^Milestone A meaningful first$/u })
+    .click();
+  await invitedPage
+    .getByRole("textbox", { exact: true, name: "Milestone" })
+    .fill(milestoneMoment);
+  await invitedPage
+    .getByLabel("What made it meaningful?")
+    .fill("A brave first worth remembering.");
+  await invitedPage.getByRole("button", { name: /People and place/u }).click();
+  await invitedPage.getByRole("checkbox", { name: /A Organizer One/u }).check();
+  await invitedPage.getByLabel(/^Place/u).fill("Cedar Park");
+  await invitedPage.getByRole("button", { name: "Review moment" }).click();
+  await invitedPage.getByRole("button", { name: "Save moment" }).click();
+  await invitedPage.getByRole("heading", { name: "Moment saved" }).waitFor();
+  await invitedPage.getByRole("button", { name: "Done" }).click();
+  await invitedPage.getByText(milestoneMoment).waitFor();
+
+  await invitedPage.getByRole("button", { name: "Add moment" }).click();
+  await invitedPage
+    .getByRole("button", {
+      name: /^A place Somewhere worth returning to$/u,
+    })
+    .click();
+  await invitedPage.getByLabel("Place name").fill(locationMoment);
+  await invitedPage
+    .getByLabel("What happened here?")
+    .fill("The wind made everyone laugh.");
+  await invitedPage.getByRole("button", { name: "Review moment" }).click();
+  await invitedPage.getByRole("button", { name: "Save moment" }).click();
+  await invitedPage.getByRole("heading", { name: "Moment saved" }).waitFor();
+  await invitedPage.getByRole("button", { name: "Done" }).click();
+  await invitedPage.getByText(locationMoment).waitFor();
+
+  const milestoneCard = invitedPage
+    .locator(".moment-card")
+    .filter({ hasText: milestoneMoment });
+  await milestoneCard.getByRole("button", { name: /^Edit —/u }).click();
+  const optionalPlace = invitedPage.getByRole("textbox", {
+    name: /^Place Optional$/u,
+  });
+  if ((await optionalPlace.inputValue()) !== "Cedar Park") {
+    throw new Error("Editing a milestone did not preserve its optional place.");
+  }
+  await invitedPage
+    .getByRole("textbox", { exact: true, name: "Milestone" })
+    .fill(editedMilestoneMoment);
+  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
+  const editedMilestoneCard = invitedPage
+    .locator(".moment-card")
+    .filter({ hasText: editedMilestoneMoment });
+  await editedMilestoneCard.getByText("Cedar Park").waitFor();
+
   const writtenMoment = `A connected browser moment ${suffix}`;
   const editedMoment = `An edited connected browser moment ${suffix}`;
   serverCanaries.push(writtenMoment, editedMoment);
   await invitedPage.getByRole("button", { name: "Add moment" }).click();
-  await invitedPage.getByRole("button", { name: "A thought" }).click();
+  await invitedPage
+    .getByRole("button", { name: /^A thought A few words to keep$/u })
+    .click();
   await invitedPage.setViewportSize({ height: 350, width: 320 });
   await assertPageQuality(invitedPage, "Short connected moment composer");
   await invitedPage.getByLabel("Your thought").fill(writtenMoment);
@@ -692,6 +847,8 @@ try {
   await invitedPage.getByText(writtenMoment).waitFor();
   const personalJournalUrl = invitedPage.url();
   await invitedPage
+    .locator(".moment-card")
+    .filter({ hasText: writtenMoment })
     .getByRole("button", { name: /^Edit .* moment from/u })
     .click();
   await invitedPage.setViewportSize({ height: 350, width: 320 });
@@ -710,7 +867,11 @@ try {
     .click();
   await invitedPage.getByText(editedMoment).waitFor();
   invitedPage.once("dialog", (dialog) => dialog.accept());
-  await invitedPage.getByRole("button", { name: /^Move to trash/u }).click();
+  await invitedPage
+    .locator(".moment-card")
+    .filter({ hasText: editedMoment })
+    .getByRole("button", { name: /^Move to trash/u })
+    .click();
   await invitedPage.getByText(editedMoment).waitFor({ state: "detached" });
   await invitedPage.waitForFunction(
     () => document.activeElement?.id === "journal-focus-target",
@@ -868,13 +1029,27 @@ try {
       `Repeated timeline actions did not have unique names: ${JSON.stringify([...new Set(duplicates)])}.`,
     );
   }
+  const conversationActionNames = await invitedPage
+    .locator(".soft-actions button[aria-label]")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("aria-label")),
+    );
+  if (
+    new Set(conversationActionNames).size !== conversationActionNames.length
+  ) {
+    throw new Error(
+      "Repeated timeline response/note controls did not have unique names.",
+    );
+  }
   const deepSnapshotUrl = invitedPage.url();
   browserPhase = "deep-snapshot mutations";
   const deepCreatedMoment = `Created from a deep snapshot ${suffix}`;
   const deepEditedMoment = `Edited from a deep snapshot ${suffix}`;
   serverCanaries.push(deepCreatedMoment, deepEditedMoment);
   await invitedPage.getByRole("button", { name: "Add moment" }).click();
-  await invitedPage.getByRole("button", { name: "A thought" }).click();
+  await invitedPage
+    .getByRole("button", { name: /^A thought A few words to keep$/u })
+    .click();
   await invitedPage.getByLabel("Your thought").fill(deepCreatedMoment);
   await invitedPage.getByRole("button", { name: "Review moment" }).click();
   await invitedPage.getByRole("button", { name: "Save moment" }).click();
@@ -1017,6 +1192,9 @@ try {
   const harborMoment = "A harbor-circle moment stays in its own family.";
   await invitedPage.getByText(harborMoment).waitFor();
   const firstCircleCanaries = [
+    milestoneMoment,
+    locationMoment,
+    editedFamilyContextNote,
     writtenMoment,
     editedMoment,
     paginationPrefix,
@@ -1129,6 +1307,9 @@ try {
     switchedOtp,
     writtenMoment,
     editedMoment,
+    milestoneMoment,
+    locationMoment,
+    editedFamilyContextNote,
     harborMoment,
     paginationPrefix,
     lateHistoricalMoment,
@@ -1420,7 +1601,7 @@ try {
   await retainedAccountContext.close();
   await invitedContext.close();
   process.stdout.write(
-    `Connected staged invite, OTP, written create/edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
+    `Connected staged invite, OTP, lazy notes, reactions, thought/milestone/place creation, edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
   );
 } finally {
   if (browser) await browser.close();

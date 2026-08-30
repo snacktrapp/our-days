@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import {
   MomentComposer,
-  type SaveWrittenMomentAction,
+  type SaveFamilyMomentAction,
 } from "@/features/composer/moment-composer";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { JournalSection } from "./shell-view-model";
@@ -17,7 +17,7 @@ export function PrimaryNavigation({
 }: {
   composer: MomentComposerViewModel;
   section: JournalSection;
-  createMomentAction?: SaveWrittenMomentAction;
+  createMomentAction?: SaveFamilyMomentAction;
   memoriesHref?: string | null;
 }) {
   const [composerOpen, setComposerOpen] = useState(false);
@@ -78,7 +78,7 @@ export function PrimaryNavigation({
         open={composerOpen}
         returnFocusRef={addMomentRef}
         onRequestClose={() => setComposerOpen(false)}
-        saveWrittenMoment={createMomentAction}
+        saveFamilyMoment={createMomentAction}
       />
     </>
   );

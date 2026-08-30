@@ -14,7 +14,13 @@ function dateLabel(value: string) {
 }
 
 function restoreMomentLabel(moment: TrashedMomentViewModel) {
-  const normalized = moment.body.replace(/\s+/gu, " ").trim();
+  const identity =
+    moment.kind === "milestone"
+      ? (moment.title ?? "Milestone")
+      : moment.kind === "location"
+        ? (moment.placeName ?? "Remembered place")
+        : moment.body;
+  const normalized = identity.replace(/\s+/gu, " ").trim();
   const excerpt =
     normalized.length <= 72
       ? normalized
@@ -125,7 +131,13 @@ export function TrashPanel({
                 <span>
                   {moment.journalPersonName} · {dateLabel(moment.occurredOn)}
                 </span>
-                <p>{moment.body}</p>
+                <p>
+                  {moment.kind === "milestone"
+                    ? (moment.title ?? "Milestone")
+                    : moment.kind === "location"
+                      ? (moment.placeName ?? "Remembered place")
+                      : moment.body}
+                </p>
                 <RestoreButton
                   moment={moment}
                   restore={restore}

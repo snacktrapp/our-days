@@ -62,6 +62,53 @@ describe("connected timeline mapping", () => {
     expect(moment.displayTime).toBe("10:15 AM");
   });
 
+  it("maps milestones and manual places without inventing age or map precision", () => {
+    const milestone = mapTimelineRow(
+      row({
+        moment_kind: "milestone",
+        moment_title: "First library card",
+        place_name: "Cedar Park",
+        body: "A very proud afternoon.",
+        occurred_on: "2024-04-12",
+      }),
+      "2026-08-30",
+    );
+    const location = mapTimelineRow(
+      row({
+        moment_kind: "location",
+        place_name: "Ocean overlook",
+        body: "A windy picnic.",
+      }),
+      "2026-08-30",
+    );
+    expect(milestone).toMatchObject({
+      kind: "milestone",
+      milestone: "First library card",
+      placeName: "Cedar Park",
+      yearLabel: "2024",
+    });
+    expect(milestone).not.toHaveProperty("ageLabel");
+    expect(location).toMatchObject({
+      kind: "location",
+      place: "Ocean overlook",
+      mapLabel: "Remembered here",
+    });
+  });
+
+  it("maps tag identity while keeping closed conversations out of the feed row", () => {
+    const moment = mapTimelineRow(
+      row({
+        tagged_people: [
+          { id: "person-2", name: "Molly" },
+          { id: "person-3", name: "Avery" },
+        ],
+      }),
+      "2026-08-30",
+    );
+    expect(moment.taggedPeopleLabel).toBe("Molly, Avery");
+    expect(moment.conversation).toEqual({ notes: [], reactions: [] });
+  });
+
   it("builds visible dates and gaps once and withholds the ending while more exists", () => {
     const newer = mapTimelineRow(row(), "2026-08-30");
     const older = mapTimelineRow(

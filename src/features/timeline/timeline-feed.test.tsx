@@ -147,7 +147,7 @@ describe("TimelineFeed", () => {
     expect(screen.queryByText(/2 notes/u)).toBeNull();
 
     const respond = screen.getAllByRole("button", {
-      name: "Respond to Memory by Person",
+      name: /Respond to .* by Person on Aug 1, 2026/u,
     })[0];
     await user.click(respond);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
