@@ -115,9 +115,12 @@ Gate: export isolation/count/checksum tests, revoked-requester denial, partial-s
 
 ## 8. Recovery and release candidate
 
+The local logical recovery foundation is recorded in `docs/quality/PHASE_8A_LOCAL_RECOVERY_FOUNDATION_REPORT.md`. It proves checked synthetic database fidelity only by restoring into a temporary database in the same local Postgres container. It does not recover Storage object bytes, restore a hosted project, invalidate sessions or credentials, apply an external suppression ledger, create off-site encrypted backups, or establish RPO/RTO evidence.
+
 Deliver:
 
-- Backup/restore drill, secret scan, observability without family content, privacy/ownership copy, runbooks, and real-device PWA QA.
+- A production recovery rehearsal into a quarantined new Supabase project at the current migration head, including session/credential invalidation, external append-only suppression replay, and separate authenticated/encrypted media recovery with full-byte SHA-256 reconciliation.
+- Off-site backup retention and key custody, measured RPO/RTO, secret scan, observability without family content, privacy/ownership copy, runbooks, and real-device PWA QA.
 - Independent adversarial privacy, accessibility/mobile, test-gap, and final release reviews.
 
 Gate: no unresolved release blocker, CI green, clean fresh-environment deployment, current and short-screen iPhone Safari/standalone flows pass.

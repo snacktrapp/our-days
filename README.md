@@ -24,12 +24,13 @@ npm run db:reset
 npm run test:db
 npm run test:auth:integration
 npm run test:db:concurrency
+npm run test:db:restore
 npm run types:db:check
 npm run test:browser:connected
 npm run db:lint
 ```
 
-`supabase/config.toml` disables open signup and automatic Data API exposure. The local seed is synthetic and spans two circles, including revoked and no-circle actors. The integration commands exercise real local Auth, OTP email, invitation preflight/acceptance, revocation, private Storage denial, provably overlapping concurrency, fragment/cookie lifecycle, hostile-origin denial, browser-state cleanup, and generated schema types; they restore the synthetic fixtures afterward. The web app never receives a service-role credential; login-capable integration users are provisioned only by a test-only local bootstrap boundary.
+`supabase/config.toml` disables open signup and automatic Data API exposure. The local seed is synthetic and spans two circles, including revoked and no-circle actors. The integration commands exercise real local Auth, OTP email, invitation preflight/acceptance, revocation, private Storage denial, provably overlapping concurrency, fragment/cookie lifecycle, hostile-origin denial, browser-state cleanup, generated schema types, and same-container logical database fidelity; reset-owning integration commands restore the synthetic fixtures afterward. `test:db:restore` never resets or writes to its canonical source database: run `npm run db:reset` separately first, then the drill fails closed unless that source exactly matches the reviewed, committed synthetic fixture. It must never target a linked, hosted, or real-data project. It does not cover Storage object bytes or production disaster recovery; see `docs/operations/LOCAL_RECOVERY_DRILL.md`. The web app never receives a service-role credential; login-capable integration users are provisioned only by a test-only local bootstrap boundary.
 
 ## Verification
 
@@ -70,6 +71,8 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/VIDEO_FEASIBILITY_REPORT.md` — isolated local short-video treatment, lifecycle evidence, and production stop/defer gates
 - `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md` — private export-request ledger, zero-media archive contract, adversarial review, and remaining worker gates
 - `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md` — durable membership-based moment attribution, upgrade rehearsal, and remaining account-closure gates
+- `docs/quality/PHASE_8A_LOCAL_RECOVERY_FOUNDATION_REPORT.md` — same-container synthetic database restore evidence and remaining production recovery gates
+- `docs/operations/LOCAL_RECOVERY_DRILL.md` — destructive local-fixture drill procedure, safety boundary, and production recovery prerequisites
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 
