@@ -18,10 +18,10 @@ Status: candidate checkpoint. The local implementation, webpack production build
 
 | Check                                                         | Result                                                                                                                                                                                                                                                                                     |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Formatting, ESLint, TypeScript, unit/component/contract suite | `npm run check`: pass; 14 files and 168 tests                                                                                                                                                                                                                                               |
+| Formatting, ESLint, TypeScript, unit/component/contract suite | `npm run check`: pass; 15 files and 178 tests                                                                                                                                                                                                                                               |
 | Dependency audit                                              | `npm audit --json`: 0 vulnerabilities                                                                                                                                                                                                                                                      |
 | Production compilation                                        | `npm run build:webpack`: pass with private-artifact scan; protected journal pages are dynamic. The latest managed `npm run build` attempt reached Turbopack but could not bind its internal CSS worker port (`Operation not permitted`), so the default build remains an explicit unrestricted CI/Vercel gate.                         |
-| Local browser matrix                                          | `npm run test:e2e`: atomic webpack build and private-artifact scan passed; 79 browser checks passed, 29 intentional project-specific skips, 0 failures                                                                                                                                       |
+| Local browser matrix                                          | `npm run test:e2e`: atomic webpack build and private-artifact scan passed; 96 browser checks passed, 41 intentional project-specific skips, 0 failures                                                                                                                                       |
 | Engines covered locally                                       | Chromium mobile/short/wide-visual and Firefox mobile functional, composer, 320px, reduced-motion, axe, console, request-failure, navigation, and visual checks                                                                                                                             |
 | Privacy boundary                                              | Preview-disabled `/`, `/sign-in`, and every journal route contain no fixture names, places, or timeline payload; responses are private/no-store/noindex                                                                                                                                    |
 | PWA/cache                                                     | Cache contains exactly six approved public paths, including the CSP-compatible offline stylesheet; `/family`, RSC payloads, fixture content, and runtime media are absent; offline navigation shows the locked document                                                                   |
@@ -36,24 +36,30 @@ The first adversarial browser run exposed a real Next streaming issue: an ancest
 
 | Screenshot                                                    | SHA-256                                                            |
 | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `family-chromium-mobile-chromium-mobile-darwin.png`           | `b000532682bece41635194ce920fe012adf223c7c0e300c97da9d7060fefd004` |
-| `family-chromium-short-chromium-short-darwin.png`             | `9cf39cb6ff1dd46d64e2cfb645aa2689b63f4775f06ec5aea6f4d3f3b7cb0d02` |
-| `family-chromium-wide-visual-chromium-wide-visual-darwin.png` | `cf366b79e65c639a66fde0496d1da54c14a1395f0ddd9356c42d9ba43b7ee72b` |
-| `personal-chromium-mobile-chromium-mobile-darwin.png`         | `1ddb26e08fa40bb455c6d9e7eb7e0eaf2f98d6efca63bd79be51290f813e54dd` |
+| `family-chromium-mobile-chromium-mobile-darwin.png`           | `f71b12842c968feef31ddad5622946e0ac755a73c591c4e1830e2e1fd5503d91` |
+| `family-chromium-short-chromium-short-darwin.png`             | `8ca503ca9a196e2d8e232c09823a361e11e023feb2919d74c6e0b0cf7c75c918` |
+| `family-chromium-wide-visual-chromium-wide-visual-darwin.png` | `4c031f429fe5d0c0eff36be3debccbb8d851da1bf3414a646e2b7f2fbfe877fc` |
+| `personal-chromium-mobile-chromium-mobile-darwin.png`         | `40732d40920461e547cbf94ad0367bec8f2462b28b05352476e97730bfc01256` |
 | `composer-chooser-chromium-mobile-chromium-mobile-darwin.png` | `55b36b5b8b20e8e8f065f134d454a3c1c759013c4126c723ea03fb4cd31e416a` |
-| `composer-written-chromium-mobile-chromium-mobile-darwin.png` | `279834775b9028e85cc66d646c1593ec08377eb292dad641b91298abf8f17b02` |
-| `composer-review-chromium-mobile-chromium-mobile-darwin.png` | `b2491451c82ac030d7754a3f8555bdb9eb1d7e2d09be3e3bfec7b9bcf0a67bac` |
-| `composer-photo-chromium-mobile-chromium-mobile-darwin.png` | `c2adc22e5d6d8eb517fe322f76a21b12d91f78e11ccd9a16998fd45d5dc2fd47` |
+| `composer-written-chromium-mobile-chromium-mobile-darwin.png` | `2bbc17652d744cff3c6395dc546ebc6fcc59c4c37318cd8c87b74a0854cefd7c` |
+| `composer-review-chromium-mobile-chromium-mobile-darwin.png` | `f17d4aa39ede6de465392981cc0570233c4bca22e471c6c720deddeadee74796` |
+| `composer-photo-chromium-mobile-chromium-mobile-darwin.png` | `68575972d46332cc207aa6ffe7e157c715e425128d2225ca3955caa7f3e7dcf8` |
 | `composer-photo-review-chromium-mobile-chromium-mobile-darwin.png` | `4e3b969353525d61c1582427d95ff092fc12c00aaefe65d97fa4fef4b20f2a83` |
 | `composer-milestone-chromium-mobile-chromium-mobile-darwin.png` | `0c90abfcf2b2c1764a77fac2fe68b07bf7752726d63533347c8094e54a84ac76` |
-| `composer-place-chromium-mobile-chromium-mobile-darwin.png` | `13a139e185ce86558f2b55f9c6683813b548d42c49f3ba8d845deb67c0e88ecd` |
+| `composer-place-chromium-mobile-chromium-mobile-darwin.png` | `bfe74dbc18c5ac1703afcb3e47085925a849ab9389273430fdd634459bf024f6` |
 | `composer-place-review-chromium-mobile-chromium-mobile-darwin.png` | `9735e85fcb0b4c02148cc0d0a5136b7c81806e736f0390f2117dd9c0c16743b3` |
 | `composer-place-short-chromium-short-darwin.png` | `e07a3b2954feb7ace6bd4c2659226eaba36d7ba161b798459d3d3d5fdf28af99` |
 | `memories-empty-chromium-mobile-chromium-mobile-darwin.png` | `64074336fb9e0900a11b565009550ef2a795c672d2c49bae40bf265522a62a56` |
 | `memories-landing-chromium-mobile-chromium-mobile-darwin.png` | `1c4d2615049b16cd1ae9376c15bd69aa18305f456e29b744ed2470721e48819e` |
 | `memories-landing-viewport-chromium-short-chromium-short-darwin.png` | `d3ca8e7942a562ed1b368e981564d2540334f5cd6a747305f265d9dba29f1b24` |
-| `memories-on-this-day-chromium-mobile-chromium-mobile-darwin.png` | `b7261eaddaf1e2a9065b5cfa860b77a317a94c7526f5acd257ca05bb2557f482` |
-| `memories-year-chromium-mobile-chromium-mobile-darwin.png` | `2bc3742129a963a05b3269d6bc209638558f3918434ee7c44514efbc90dfef62` |
+| `memories-on-this-day-chromium-mobile-chromium-mobile-darwin.png` | `99e11de643a278dee86f27d7eb8bb0414ea370a5a50656116822da6888c4c00e` |
+| `memories-year-chromium-mobile-chromium-mobile-darwin.png` | `dd22c02bc672a6a0b686754bda906ff28548b4067c66490143cfa060de0c1fab` |
+| `moment-detail-photo-response-chromium-mobile-chromium-mobile-darwin.png` | `db4ead285c3640efb52fbdee1a3705a89779448c4881e52fca97c1fbff077d83` |
+| `moment-detail-thought-notes-chromium-mobile-chromium-mobile-darwin.png` | `61ff752324ac6131dc13d943504865f4a0e45603452f1cb83b2e3d4b922225e5` |
+| `moment-detail-location-notes-chromium-mobile-chromium-mobile-darwin.png` | `f34b168aadd6cb8b76f320ba34184db779272874aa297581fe70b1c97506face` |
+| `moment-detail-milestone-response-chromium-mobile-chromium-mobile-darwin.png` | `7eaf99b2d9a33117ab92e1ad45f88150fd0bcb050fec4c4439ccf8c904135713` |
+| `moment-detail-note-preview-chromium-mobile-chromium-mobile-darwin.png` | `c276f816408f262aeda17f453dcac6425624c03ea5d9162fb3a3ed6297d2dfab` |
+| `moment-detail-short-chromium-short-chromium-short-darwin.png` | `6425ac13725a9995169c63927a2e8ba30c830ddd0f3a33452b544fdc753ec5bc` |
 
 They live in `tests/e2e/visual.spec.ts-snapshots/` and are compared by the pinned Chromium projects.
 
@@ -61,7 +67,7 @@ They live in `tests/e2e/visual.spec.ts-snapshots/` and are compared by the pinne
 
 The first architecture and mobile reviews correctly withheld a checkpoint approval. The stable candidate now addresses their actionable findings:
 
-- The timeline and moment cards render on the server; only each reaction control retains local client state.
+- The timeline and moment cards render on the server; only each moment's notes/responses control retains local client state.
 - Chrome consumes a neutral view model, fixture imports are blocked across application code, and People and Memories own their presentation contracts.
 - Visual coverage now includes 320px, 390px, 430px, personal-timeline, chooser, and written-composer states.
 - Composer coverage proves native modal behavior, focus containment and restoration, Escape and backdrop dismissal, draft confirmation, 44px controls, and reachability with a 320×350 keyboard-sized viewport.
@@ -78,7 +84,7 @@ WebKit execution, true browser zoom, and physical iPhone behavior remain explici
 ## Open evidence, not hidden passes
 
 - Playwright WebKit 2251 is a frozen macOS 14 build on this host and exits before page creation with `Bus error: 10` (exit 138). The project is retained and mandatory in CI; local opt-in is `PLAYWRIGHT_INCLUDE_WEBKIT=1`.
-- The first isolated GitHub run must execute the prepared functional browser projects and calibrate the reviewed local snapshots against the x64 macOS 15 host. The complete CI list contains 142 checks across 7 files, including WebKit and project-specific visual cases. Baseline differences must be inspected and approved; CI never updates them automatically.
+- The first isolated GitHub run must execute the prepared functional browser projects and calibrate the reviewed local snapshots against the x64 macOS 15 host. The complete CI list contains 180 checks across 8 files, including WebKit and project-specific visual cases. Baseline differences must be inspected and approved; CI never updates them automatically.
 - The clean install warns that ESLint 9.39.5 is outside its upstream support window. ESLint 10.9.1 was evaluated, but `eslint-config-next` 16.3.3's bundled import, React, and JSX accessibility plugins still declare ESLint 9 as their maximum supported major. The candidate therefore retains the exact-pinned, zero-advisory ESLint 9 release rather than using peer overrides; upgrade when the complete Next lint stack supports 10.
 - Desktop browser 200% zoom/large-text review, nonzero iOS safe areas, real software keyboard/predictive text, VoiceOver, standalone foreground/background, and update behavior require the documented headed/real-device passes.
 - The current service worker deliberately provides only a public locked offline experience. Authenticated state purge and two-account isolation belong to Phase 2, when account-scoped state exists.

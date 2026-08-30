@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { isLocalDesignPreviewEnvironment } from "./design-preview-policy";
 import { resolveSupabaseOrigin, SupabaseOriginError } from "./supabase-origin";
 
 type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
@@ -336,6 +337,14 @@ export function validateOurDaysEnvironment(
     configuredValue(environment, "OUR_DAYS_RESOURCE_MODE", issues),
     issues,
   );
+  const designPreview = configuredValue(
+    environment,
+    "OUR_DAYS_ENABLE_DESIGN_PREVIEW",
+    issues,
+  );
+  if (designPreview && designPreview !== "true" && designPreview !== "false") {
+    issues.push("OUR_DAYS_ENABLE_DESIGN_PREVIEW must be true or false");
+  }
   const siteOrigin = parseOrigin(
     configuredValue(environment, "NEXT_PUBLIC_SITE_URL", issues),
     {
@@ -354,6 +363,14 @@ export function validateOurDaysEnvironment(
     },
     issues,
   );
+  if (
+    designPreview === "true" &&
+    !isLocalDesignPreviewEnvironment(environment)
+  ) {
+    issues.push(
+      "OUR_DAYS_ENABLE_DESIGN_PREVIEW=true requires local identity, detached resources, and an explicit loopback site origin",
+    );
+  }
 
   const vercelEnvironment = configuredValue(environment, "VERCEL_ENV", issues);
   const expectedVercelIdentity =

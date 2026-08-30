@@ -173,6 +173,101 @@ test(
 );
 
 test(
+  "private moment detail visuals stay quiet and count-free",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile");
+    await page.goto("/family");
+    await page.evaluate(() => document.fonts.ready);
+
+    const photo = page.locator('[data-moment-kind="photo"]').first();
+    await photo.getByRole("button", { name: /Respond to/u }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-photo-response-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Close moment details" })
+      .click();
+
+    const thought = page.locator('[data-moment-kind="thought"]').first();
+    await thought.getByRole("button", { name: /Open private notes/u }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-thought-notes-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Close moment details" })
+      .click();
+
+    const location = page.locator('[data-moment-kind="location"]').first();
+    await location.getByRole("button", { name: /Open private notes/u }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-location-notes-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Close moment details" })
+      .click();
+
+    const milestone = page.locator('[data-moment-kind="milestone"]').first();
+    await milestone.getByRole("button", { name: /Respond to/u }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-milestone-response-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Close moment details" })
+      .click();
+
+    await photo.getByRole("button", { name: /Open private notes/u }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("button", { name: "Made me smile", exact: true })
+      .click();
+    await dialog
+      .getByRole("textbox", { name: "Your note to the family" })
+      .fill("I want to remember how nobody was ready to leave.");
+    await dialog.getByRole("button", { name: "Preview note" }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-note-preview-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);
+
+test(
+  "moment detail remains calm on a keyboard-sized phone",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-short");
+    await page.setViewportSize({ width: 320, height: 350 });
+    await page.goto("/family");
+    await page.evaluate(() => document.fonts.ready);
+    const quietMoment = page.locator('[data-moment-kind="thought"]').last();
+    await quietMoment
+      .getByRole("button", { name: /Open private notes/u })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("button", { name: "Hold close", exact: true })
+      .click();
+    await dialog
+      .getByRole("textbox", { name: "Your note to the family" })
+      .fill("The porch light, and everyone still outside.");
+    await dialog.getByRole("button", { name: "Preview note" }).click();
+    await expect(page).toHaveScreenshot(
+      "moment-detail-short-chromium-short.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);
+
+test(
   "memory journeys preserve the timeline identity",
   { tag: "@visual" },
   async ({ page }, testInfo) => {

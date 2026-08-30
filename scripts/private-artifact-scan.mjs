@@ -48,6 +48,11 @@ const privateClientCanaries = [
   "Sand Harbor",
   "All our days",
   "/sample-family.jpg",
+  "The quiet ride home was my favorite part.",
+  "I can still hear everyone laughing by the water.",
+  "I wrote this down because I knew I would miss the noise.",
+  "Those wet shoes stayed by the door for days.",
+  "That brave wave still gets me.",
 ];
 
 const jwtCandidatePattern =
@@ -255,7 +260,7 @@ export function isBrowserDeliverableArtifact(path) {
 }
 
 export function trackedFiles(root) {
-  const result = spawnSync(
+  const presentResult = spawnSync(
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     {
@@ -264,10 +269,21 @@ export function trackedFiles(root) {
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  if (result.status !== 0) {
+  const deletedResult = spawnSync("git", ["ls-files", "--deleted", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (presentResult.status !== 0 || deletedResult.status !== 0) {
     throw new Error("Could not enumerate tracked files for the privacy scan.");
   }
-  return result.stdout.split("\0").filter(Boolean).sort();
+  const deletedPaths = new Set(
+    deletedResult.stdout.split("\0").filter(Boolean),
+  );
+  return presentResult.stdout
+    .split("\0")
+    .filter((path) => path && !deletedPaths.has(path))
+    .sort();
 }
 
 export function scanRepository(root) {

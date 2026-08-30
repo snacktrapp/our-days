@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isLocalDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import {
   environmentForNextConfig,
   OurDaysEnvironmentError,
@@ -69,6 +70,96 @@ describe("Our Days environment isolation", () => {
       siteOrigin: "https://journal.example.com",
       supabaseProjectRef: productionRef,
     });
+  });
+
+  it("confines the explicit design-preview bypass to local detached loopback", () => {
+    expect(
+      validateOurDaysEnvironment({
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      }),
+    ).toMatchObject({ identity: "local", resourceMode: "detached" });
+
+    expectUnsafe(
+      {
+        ...productionEnvironment,
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      },
+      "requires local identity",
+    );
+    expectUnsafe(
+      {
+        ...productionEnvironment,
+        VERCEL_ENV: "preview",
+        OUR_DAYS_ENVIRONMENT: "preview",
+        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: previewRef,
+        NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
+        NEXT_PUBLIC_SUPABASE_URL: `https://${previewRef}.supabase.co`,
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      },
+      "requires local identity",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      },
+      "explicit loopback site origin",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "yes",
+      },
+      "must be true or false",
+    );
+  });
+
+  it("fails the runtime design-preview policy closed for implicit or hosted development", () => {
+    const safe = {
+      NODE_ENV: "production",
+      OUR_DAYS_ENVIRONMENT: "local",
+      OUR_DAYS_RESOURCE_MODE: "detached",
+      NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+      OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+    } as const;
+    expect(isLocalDesignPreviewEnvironment(safe)).toBe(true);
+    expect(
+      isLocalDesignPreviewEnvironment({
+        NODE_ENV: "development",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      }),
+    ).toBe(false);
+    expect(
+      isLocalDesignPreviewEnvironment({
+        ...safe,
+        NEXT_PUBLIC_SITE_URL: "http://0.0.0.0:3100",
+      }),
+    ).toBe(false);
+    expect(
+      isLocalDesignPreviewEnvironment({
+        ...safe,
+        VERCEL_ENV: "preview",
+        OUR_DAYS_ENVIRONMENT: "preview",
+        NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
+      }),
+    ).toBe(false);
+    expect(
+      isLocalDesignPreviewEnvironment({
+        ...safe,
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(false);
+    expect(
+      isLocalDesignPreviewEnvironment({
+        ...safe,
+        NEXT_PUBLIC_SITE_URL: "http://localhost:3100/family",
+      }),
+    ).toBe(false);
   });
 
   it("accepts local Supabase only with an explicit Proof denylist", () => {

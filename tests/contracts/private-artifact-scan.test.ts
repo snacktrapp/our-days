@@ -1,4 +1,10 @@
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -95,6 +101,11 @@ describe("private artifact scanner", () => {
       "Sand Harbor",
       "All our days",
       "/sample-family.jpg",
+      "The quiet ride home was my favorite part.",
+      "I can still hear everyone laughing by the water.",
+      "I wrote this down because I knew I would miss the noise.",
+      "Those wet shoes stayed by the door for days.",
+      "That brave wave still gets me.",
     ].join("\n");
 
     const findings = scanText({
@@ -102,7 +113,7 @@ describe("private artifact scanner", () => {
       path: "browser.rsc",
       checkPrivateClientData: true,
     });
-    expect(findings).toHaveLength(9);
+    expect(findings).toHaveLength(14);
     expect(
       findings.every(({ ruleId }) => ruleId === "private-client-fixture"),
     ).toBe(true);
@@ -176,6 +187,21 @@ describe("private artifact scanner", () => {
         path: "untracked.ts",
       }),
     ]);
+  });
+
+  it("scans the current worktree while tolerating an intentional tracked deletion", () => {
+    const root = mkdtempSync(join(tmpdir(), "our-days-artifact-repo-"));
+    mkdirSync(join(root, ".next"));
+    writeFileSync(join(root, ".next", "BUILD_ID"), "fixture-build");
+    writeFileSync(join(root, ".gitignore"), ".next\n");
+    writeFileSync(join(root, "removed.ts"), "safe");
+    expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("git", ["add", "removed.ts"], { cwd: root }).status).toBe(
+      0,
+    );
+    unlinkSync(join(root, "removed.ts"));
+
+    expect(scanRepository(root)).toEqual([]);
   });
 
   it.each([

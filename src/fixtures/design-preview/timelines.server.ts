@@ -1,6 +1,8 @@
 import "server-only";
 
 import type {
+  MomentConversationViewModel,
+  MomentInteractionViewModel,
   TimelineEntryViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
@@ -23,6 +25,25 @@ const familyMark = [
   { id: "brian", initial: "B", accent: "teal" },
   { id: "molly", initial: "M", accent: "clay" },
 ] as const;
+
+const timelineInteraction = {
+  currentPerson: {
+    name: "Brian",
+    initial: "B",
+    accent: "teal",
+  },
+  reactionOptions: [
+    { id: "held-close", label: "Hold close", symbol: "♡" },
+    { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
+    { id: "remember-this", label: "I remember", symbol: "↺" },
+  ],
+} as const satisfies MomentInteractionViewModel;
+
+function momentDetail(
+  detail: MomentConversationViewModel,
+): MomentConversationViewModel {
+  return detail;
+}
 
 const composerPeople = [
   {
@@ -98,7 +119,35 @@ const familyEntries = [
       occurredOn: "2026-08-28",
       kicker: "An ordinary Friday",
       text: "We stayed until the light disappeared. Nobody wanted to be the first one back in the car.",
-      noteCount: 2,
+      conversation: momentDetail({
+        notes: [
+          {
+            id: "sunset-note-molly",
+            authorName: "Molly",
+            authorInitial: "M",
+            authorAccent: "clay",
+            body: "The quiet ride home was my favorite part.",
+            displayDate: "Aug 29, 2026",
+          },
+          {
+            id: "sunset-note-brian",
+            authorName: "Brian",
+            authorInitial: "B",
+            authorAccent: "teal",
+            body: "I can still hear everyone laughing by the water.",
+            displayDate: "Aug 30, 2026",
+          },
+        ],
+        reactions: [
+          {
+            id: "sunset-reaction-molly",
+            personName: "Molly",
+            personInitial: "M",
+            personAccent: "clay",
+            reactionId: "held-close",
+          },
+        ],
+      }),
       image: {
         src: "/sample-family.jpg",
         alt: "A child laughing outside in warm evening light",
@@ -126,7 +175,19 @@ const familyEntries = [
       occurredOn: "2026-08-14",
       kicker: "A thought",
       text: "Tonight the kitchen was loud, the floor was a mess, and I wished I could keep all of it.",
-      noteCount: 4,
+      conversation: momentDetail({
+        notes: [
+          {
+            id: "kitchen-note-brian",
+            authorName: "Brian",
+            authorInitial: "B",
+            authorAccent: "teal",
+            body: "I wrote this down because I knew I would miss the noise.",
+            displayDate: "Aug 15, 2026",
+          },
+        ],
+        reactions: [],
+      }),
     },
   },
   {
@@ -148,7 +209,19 @@ const familyEntries = [
       occurredOn: "2026-07-06",
       kicker: "A place we’ll remember",
       text: "The small beach past the pine trees, where Avery finally put both feet in the water.",
-      noteCount: 1,
+      conversation: momentDetail({
+        notes: [
+          {
+            id: "lake-note-brian",
+            authorName: "Brian",
+            authorInitial: "B",
+            authorAccent: "teal",
+            body: "Those wet shoes stayed by the door for days.",
+            displayDate: "Jul 7, 2026",
+          },
+        ],
+        reactions: [],
+      }),
       place: "Sand Harbor · Lake Tahoe",
       mapLabel: "TAHOE",
       taggedPeopleLabel: "Avery",
@@ -174,7 +247,27 @@ const familyEntries = [
       occurredOn: "2023-08-21",
       kicker: "Milestone",
       text: "A backpack almost as big as Avery, one brave wave, and then straight through the blue door.",
-      noteCount: 6,
+      conversation: momentDetail({
+        notes: [
+          {
+            id: "first-day-note-brian",
+            authorName: "Brian",
+            authorInitial: "B",
+            authorAccent: "teal",
+            body: "That brave wave still gets me.",
+            displayDate: "Aug 21, 2023",
+          },
+        ],
+        reactions: [
+          {
+            id: "first-day-reaction-molly",
+            personName: "Molly",
+            personInitial: "M",
+            personAccent: "clay",
+            reactionId: "made-me-smile",
+          },
+        ],
+      }),
       milestone: "First day of school",
       ageLabel: "Age 5",
       yearLabel: "2023",
@@ -200,7 +293,7 @@ const familyEntries = [
       occurredOn: "2022-08-28",
       kicker: "A late-summer afternoon",
       text: "Peaches on the porch, grass-stained knees, and the last warm hour before dinner.",
-      noteCount: 0,
+      conversation: momentDetail({ notes: [], reactions: [] }),
       image: {
         src: "/sample-family.jpg",
         alt: "A child laughing outside in late-summer light",
@@ -229,7 +322,7 @@ const familyEntries = [
       occurredOn: "2019-08-28",
       kicker: "A thought",
       text: "The porch light came on before anyone noticed summer was getting shorter.",
-      noteCount: 0,
+      conversation: momentDetail({ notes: [], reactions: [] }),
     },
   },
   {
@@ -243,6 +336,7 @@ const familyEntries = [
 export function getFamilyTimelineFixture(): TimelineViewModel {
   return {
     chrome: chrome("teal", "All our days"),
+    interaction: timelineInteraction,
     switcher: [
       { label: "Family", href: "/family", current: true },
       { label: "Molly", href: "/people/molly", current: false },
@@ -258,6 +352,7 @@ export function getPersonalTimelineFixture(
 
   return {
     chrome: chrome("clay", "Molly’s days"),
+    interaction: timelineInteraction,
     switcher: [
       { label: "Family", href: "/family", current: false },
       { label: "Molly", href: "/people/molly", current: true },
@@ -444,6 +539,7 @@ export function getOnThisDayFixture(
     state: "moments",
     timeline: {
       chrome: memoriesChrome,
+      interaction: timelineInteraction,
       switcher: [],
       entries,
     },
@@ -496,6 +592,11 @@ export function getYearMemoriesFixture(
     title: year,
     description: `${moments.length} ${momentWord} from this chapter of family life.`,
     state: "moments",
-    timeline: { chrome: memoriesChrome, switcher: [], entries },
+    timeline: {
+      chrome: memoriesChrome,
+      interaction: timelineInteraction,
+      switcher: [],
+      entries,
+    },
   };
 }

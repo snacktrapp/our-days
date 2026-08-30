@@ -3,6 +3,39 @@ import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
 export type MomentKind = "photo" | "thought" | "milestone" | "location";
 
+export type MomentReactionId = "held-close" | "made-me-smile" | "remember-this";
+
+export type MomentInteractionViewModel = Readonly<{
+  currentPerson: Readonly<{
+    name: string;
+    initial: string;
+    accent: AccentToken;
+  }>;
+  reactionOptions: readonly Readonly<{
+    id: MomentReactionId;
+    label: string;
+    symbol: string;
+  }>[];
+}>;
+
+export type MomentConversationViewModel = Readonly<{
+  notes: readonly Readonly<{
+    id: string;
+    authorName: string;
+    authorInitial: string;
+    authorAccent: AccentToken;
+    body: string;
+    displayDate: string;
+  }>[];
+  reactions: readonly Readonly<{
+    id: string;
+    personName: string;
+    personInitial: string;
+    personAccent: AccentToken;
+    reactionId: MomentReactionId;
+  }>[];
+}>;
+
 type TimelineMomentBase = Readonly<{
   id: string;
   personName: string;
@@ -13,7 +46,7 @@ type TimelineMomentBase = Readonly<{
   occurredOn: string;
   kicker: string;
   text: string;
-  noteCount: number;
+  conversation: MomentConversationViewModel;
   taggedPeopleLabel?: string;
 }>;
 
@@ -47,6 +80,31 @@ export type TimelineMomentViewModel =
   | LocationMomentViewModel
   | MilestoneMomentViewModel;
 
+type MomentDetailBase = Readonly<{
+  id: string;
+  personName: string;
+  personAccent: AccentToken;
+  displayDate: string;
+  kicker: string;
+  text: string;
+  conversation: MomentConversationViewModel;
+  taggedPeopleLabel?: string;
+}>;
+
+export type MomentDetailViewModel =
+  | (MomentDetailBase & Readonly<{ kind: "photo" }>)
+  | (MomentDetailBase & Readonly<{ kind: "thought" }>)
+  | (MomentDetailBase &
+      Readonly<{
+        kind: "location";
+        place: string;
+      }>)
+  | (MomentDetailBase &
+      Readonly<{
+        kind: "milestone";
+        milestone: string;
+      }>);
+
 export type TimelineEntryViewModel =
   | Readonly<{
       id: string;
@@ -69,6 +127,7 @@ export type TimelineEntryViewModel =
 
 export type TimelineViewModel = Readonly<{
   chrome: JournalChromeViewModel;
+  interaction: MomentInteractionViewModel;
   switcher: readonly Readonly<{
     label: string;
     href: string;

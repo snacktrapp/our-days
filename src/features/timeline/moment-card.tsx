@@ -1,32 +1,46 @@
 import { CspPublicImage } from "@/components/csp-image";
-import { MomentReactionControl } from "./moment-reaction-control";
-import type { TimelineMomentViewModel } from "./timeline-view-model";
+import { MomentConversationControl } from "./moment-conversation-control";
+import type {
+  MomentDetailViewModel,
+  MomentInteractionViewModel,
+  TimelineMomentViewModel,
+} from "./timeline-view-model";
 
-function MomentActions({ moment }: { moment: TimelineMomentViewModel }) {
-  return (
-    <div className="soft-actions">
-      <MomentReactionControl
-        kicker={moment.kicker}
-        personName={moment.personName}
-      />
-      <button
-        aria-label={`Open ${moment.noteCount} notes for ${moment.kicker} by ${moment.personName}`}
-      >
-        Notes
-      </button>
-      {moment.taggedPeopleLabel && (
-        <span className="tagged">with {moment.taggedPeopleLabel}</span>
-      )}
-    </div>
-  );
+function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
+  const base = {
+    id: moment.id,
+    personName: moment.personName,
+    personAccent: moment.personAccent,
+    displayDate: moment.displayDate,
+    kicker: moment.kicker,
+    text: moment.text,
+    conversation: moment.conversation,
+    taggedPeopleLabel: moment.taggedPeopleLabel,
+  };
+
+  if (moment.kind === "photo") {
+    return { ...base, kind: moment.kind };
+  }
+  if (moment.kind === "location") {
+    return { ...base, kind: moment.kind, place: moment.place };
+  }
+  if (moment.kind === "milestone") {
+    return { ...base, kind: moment.kind, milestone: moment.milestone };
+  }
+  return { ...base, kind: moment.kind };
 }
 
 type MomentCardProps = Readonly<{
+  interaction: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   preload?: boolean;
 }>;
 
-export function MomentCard({ moment, preload = false }: MomentCardProps) {
+export function MomentCard({
+  interaction,
+  moment,
+  preload = false,
+}: MomentCardProps) {
   if (moment.kind === "photo") {
     return (
       <div className="moment-card photo-card">
@@ -44,7 +58,10 @@ export function MomentCard({ moment, preload = false }: MomentCardProps) {
         <div className="card-copy">
           <p className="moment-kicker">{moment.kicker}</p>
           <p>{moment.text}</p>
-          <MomentActions moment={moment} />
+          <MomentConversationControl
+            interaction={interaction}
+            model={detailModel(moment)}
+          />
         </div>
       </div>
     );
@@ -55,7 +72,10 @@ export function MomentCard({ moment, preload = false }: MomentCardProps) {
       <div className="moment-card thought-card">
         <span className="thought-label">{moment.kicker}</span>
         <blockquote>“{moment.text}”</blockquote>
-        <MomentActions moment={moment} />
+        <MomentConversationControl
+          interaction={interaction}
+          model={detailModel(moment)}
+        />
       </div>
     );
   }
@@ -76,7 +96,10 @@ export function MomentCard({ moment, preload = false }: MomentCardProps) {
           <p className="moment-kicker">{moment.kicker}</p>
           <h3>{moment.place}</h3>
           <p>{moment.text}</p>
-          <MomentActions moment={moment} />
+          <MomentConversationControl
+            interaction={interaction}
+            model={detailModel(moment)}
+          />
         </div>
       </div>
     );
@@ -93,7 +116,10 @@ export function MomentCard({ moment, preload = false }: MomentCardProps) {
         <span>{moment.kicker}</span>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
-        <MomentActions moment={moment} />
+        <MomentConversationControl
+          interaction={interaction}
+          model={detailModel(moment)}
+        />
       </div>
     </div>
   );

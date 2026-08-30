@@ -10,6 +10,8 @@ Status: local contract implemented. No Supabase, GitHub, or Vercel resource has 
 
 Unmanaged local commands may default to `local` plus `detached`, which contains no Supabase connection values. GitHub CI declares the same synthetic mode explicitly. Detached mode is rejected for Preview and Production.
 
+The fixture design-preview bypass is separately fail-closed. It requires `OUR_DAYS_ENABLE_DESIGN_PREVIEW=true`, local identity, detached resources, and an explicit clean loopback site origin. There is no implicit `NODE_ENV=development` exception. Startup validation and the runtime route guard share the same pure policy, and direct tests deny missing identity/origin, non-loopback binding, hosted Preview, Supabase mode, and origin paths.
+
 When `OUR_DAYS_RESOURCE_MODE=supabase` is eventually enabled, the contract requires:
 
 - `OUR_DAYS_ENVIRONMENT` matching `VERCEL_ENV` when Vercel declares one;
@@ -47,6 +49,7 @@ The ordinary web process fails if it contains alternate/legacy Supabase connecti
 - canonical and prefixed privileged credential variable classes;
 - privileged values hidden behind arbitrary variable names;
 - secret-value redaction from validation errors.
+- explicit local design-preview success and hosted/non-loopback/implicit-development denial.
 
 The CI workflow contract additionally pins `OUR_DAYS_ENVIRONMENT=local` and `OUR_DAYS_RESOURCE_MODE=detached`. A metadata integration test proves that the shared validator and root metadata accept the same loopback origins and fail closed together. Every CI build also runs the independent source/build scan described in `PRIVATE_ARTIFACT_SCAN_REPORT.md`.
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 
@@ -61,46 +62,6 @@ const previewImageTypes = new Set([
   "image/png",
   "image/webp",
 ]);
-
-const focusableSelector = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])',
-].join(",");
-
-function containDialogFocus(event: React.KeyboardEvent<HTMLDialogElement>) {
-  if (event.key !== "Tab") return;
-
-  const dialog = event.currentTarget;
-  const controls = [
-    ...dialog.querySelectorAll<HTMLElement>(focusableSelector),
-  ].filter((control) => {
-    const style = window.getComputedStyle(control);
-    return (
-      control.tabIndex >= 0 &&
-      !control.matches(":disabled") &&
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.visibility !== "collapse" &&
-      control.getClientRects().length > 0
-    );
-  });
-  const first = controls[0];
-  const last = controls.at(-1);
-  if (!first || !last) return;
-
-  const active = document.activeElement;
-  if (event.shiftKey && (active === first || !dialog.contains(active))) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-    event.preventDefault();
-    first.focus();
-  }
-}
 
 function plainDateLabel(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);

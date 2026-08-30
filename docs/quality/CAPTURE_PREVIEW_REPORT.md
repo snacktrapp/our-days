@@ -53,14 +53,14 @@ The capture privacy test starts after the compiled page and service worker are i
 - the complete ordered timeline kind/text snapshot is unchanged;
 - written and photo drafts disappear after reload.
 
-The locked document and genuine RSC replay tests include every composer-only family-name canary. The production artifact scanner now covers tracked plus untracked non-ignored source, the complete build, browser-deliverable outputs, and nine fixture canaries including Sam and June.
+The locked document and genuine RSC replay tests include every composer-only family-name canary. The production artifact scanner now covers tracked plus untracked non-ignored source, the complete build, browser-deliverable outputs, and 14 fixture canaries including Sam, June, and all five synthetic note bodies.
 
 ## Verification snapshot
 
-- `npm run check`: formatting, ESLint, TypeScript, and 168 tests across 14 files passed.
+- `npm run check`: formatting, ESLint, TypeScript, and 178 tests across 15 files passed.
 - `npm run build:webpack`: production compilation and the redacting credential/private-fixture scan passed.
-- `npm run test:e2e`: the atomic production build and scan passed, followed by 79 browser checks passed, 29 intentional project-specific skips, and no failures.
-- The local Playwright inventory contains 108 checks across seven files; the prepared CI inventory contains 142 when WebKit is enabled.
+- `npm run test:e2e`: the atomic production build and scan passed, followed by 96 browser checks passed, 41 intentional project-specific skips, and no failures.
+- The local Playwright inventory contains 137 checks across eight files; the prepared CI inventory contains 180 when WebKit is enabled.
 - Focused compiled Chromium covered all modes, whitespace/future-date denial, no-network/no-persistence proof, axe, and 320×350 reachability. The complete composer visual suite and its short-screen case each passed five consecutive repeat runs after the final native-control stabilization.
 - Independent UX/accessibility, privacy/adversarial, and test-gap reviewers each returned **GO** with no current-tree blocker. Their last nonblocking gaps—Cache Storage mutation instrumentation and review-image failure recovery—were added before the final matrix.
 

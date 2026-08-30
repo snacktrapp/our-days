@@ -26,14 +26,26 @@ export default defineConfig({
     {
       command: "npm run start -- --hostname 127.0.0.1 --port 3100",
       url: previewURL,
-      env: { ...process.env, OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true" },
+      env: {
+        ...process.env,
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: previewURL,
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
     {
       command: "npm run start -- --hostname 127.0.0.1 --port 3101",
       url: "http://127.0.0.1:3101",
-      env: { ...process.env, OUR_DAYS_ENABLE_DESIGN_PREVIEW: "false" },
+      env: {
+        ...process.env,
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3101",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "false",
+      },
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

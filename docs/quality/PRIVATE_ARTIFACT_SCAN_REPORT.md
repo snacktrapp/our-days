@@ -17,7 +17,7 @@ The credential rules currently recognize:
 - PEM private keys;
 - prefixed GitHub access tokens.
 
-The browser-deliverable scan also rejects nine canaries from the local design fixture: all five preview family names, distinctive prose, a location label, the journal phrase, and the media path. Sam and June are composer-only canaries, preventing a future client hardcode of the extended roster from bypassing the gate. That scope covers `public/**`, `.next/static`, standalone copies of either directory, App Router prerendered `.html`, `.rsc`, `.body`, `.meta`, `.txt`, and `.xml` output, and Pages Router `server/pages/**/*.json` data. The values may exist in the server-only JavaScript fixture bundle and its server source maps for local design review, but not in a browser-deliverable payload. The checked-in `public/sample-family.jpg` is documented non-personal stock imagery; its filename is safe, while serialization of its path into a client payload still trips the canary.
+The browser-deliverable scan also rejects 14 canaries from the local design fixture: all five preview family names, four earlier distinctive values, and all five synthetic private note bodies. Sam and June are composer-only canaries, preventing a future client hardcode of the extended roster from bypassing the gate. That scope covers `public/**`, `.next/static`, standalone copies of either directory, App Router prerendered `.html`, `.rsc`, `.body`, `.meta`, `.txt`, and `.xml` output, and Pages Router `server/pages/**/*.json` data. The values may exist in the server-only JavaScript fixture bundle and its server source maps for local design review, but not in a browser-deliverable payload. The checked-in `public/sample-family.jpg` is documented non-personal stock imagery; its filename is safe, while serialization of its path into a client payload still trips the canary.
 
 The scanner fails closed when the build root, build ID, or a source/build leaf is a symlink or non-regular file; when a path escapes the repository, exceeds 64 MiB, or cannot be read; or when `.next/BUILD_ID` is absent. The cap accommodates current Next compiler caches while preventing an unexpected artifact from consuming unbounded memory. It is deterministic and honors `.gitignore`, so a legitimate ignored `.env.local` does not make the repository check unusable. Startup validation separately rejects privileged values in the ordinary web process.
 
@@ -34,11 +34,12 @@ The scanner fails closed when the build root, build ID, or a source/build leaf i
 - neither structured findings, credential-bearing filenames, control characters, nor command errors expose the detected value;
 - public files, prerendered RSC, root manifests, and standalone client output are covered;
 - untracked non-ignored source and the composer-only roster canaries are covered;
+- a deliberately deleted tracked path does not abort or weaken the source scan;
 - leaf and build-root symlink inputs fail closed.
 
 `tests/contracts/ci-workflow.test.ts` requires all three independent CI builds—quality, functional browser, and visual—to use the atomic scanned build script. It also locks the default and webpack build-script composition and requires the browser jobs to build/scan immediately before Playwright. The workflow does not upload build or browser artifacts.
 
-This checkpoint passed 168 Vitest checks across 14 files, an atomic local webpack production build plus artifact scan, and the current browser matrix with 79 passes and 29 intentional project-specific skips. The default Turbopack build reached its known restricted-environment worker-port limitation locally; its managed CI path passed in the preceding environment-isolation checkpoint and remains required in every hosted CI job.
+This checkpoint passed 178 Vitest checks across 15 files, an atomic local webpack production build plus artifact scan, and the current browser matrix with 96 passes and 41 intentional project-specific skips. The default Turbopack build reached its known restricted-environment worker-port limitation locally; its managed CI path passed in the preceding environment-isolation checkpoint and remains required in every hosted CI job.
 
 ## Limits and later gates
 

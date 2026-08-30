@@ -47,9 +47,10 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
 - `docs/quality/MEMORIES_PREVIEW_REPORT.md` — date browsing preview evidence and production limits
 - `docs/quality/CAPTURE_PREVIEW_REPORT.md` — local capture contract, privacy proof, and production limits
+- `docs/quality/MOMENT_DETAIL_PREVIEW_REPORT.md` — count-free notes/responses contract and privacy proof
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 
 ## Deployment boundary
 
-Do not link or deploy this repository until Brian approves creation of the dedicated GitHub, Supabase, and Vercel resources. Preview environments must never point at production family data. Until invitation auth exists, any external preview also requires Vercel Deployment Protection; the default production route is fail-closed and does not render the fixture timeline.
+Do not link or deploy this repository until Brian approves creation of the dedicated GitHub, Supabase, and Vercel resources. Preview environments must never point at production family data. Until invitation auth exists, any external preview also requires Vercel Deployment Protection; the default production route is fail-closed and does not render the fixture timeline. The local fixture bypass is accepted only with an explicit flag, local/detached identity, and a loopback site origin.

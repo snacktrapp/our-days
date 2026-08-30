@@ -31,6 +31,15 @@ const chrome = {
   familyMark: [{ id: "person", initial: "P", accent: "teal" }],
 } as const;
 
+const interaction = {
+  currentPerson: { name: "Person", initial: "P", accent: "teal" },
+  reactionOptions: [
+    { id: "held-close", label: "Hold close", symbol: "♡" },
+    { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
+    { id: "remember-this", label: "I remember", symbol: "↺" },
+  ],
+} as const;
+
 const memories = {
   chrome,
   heading: "On this day",
@@ -62,6 +71,7 @@ const journey = {
   state: "moments",
   timeline: {
     chrome,
+    interaction,
     switcher: [],
     entries: [
       { id: "marker", entryType: "date-marker", label: "2026" },
@@ -79,7 +89,7 @@ const journey = {
           occurredOn: "2026-08-01",
           kicker: "A thought",
           text: "Worth remembering.",
-          noteCount: 0,
+          conversation: { notes: [], reactions: [] },
         },
       },
     ],

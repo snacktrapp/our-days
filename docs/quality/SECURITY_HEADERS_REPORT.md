@@ -41,8 +41,8 @@ The local photo preview uses `blob:` without an HTTP origin. `img-src blob:` is 
 
 ## Latest local gate
 
-- `npm run check`: 14 test files and 168 unit, component, proxy, environment, service-worker, workflow, and header-contract tests passed; formatting, ESLint, and TypeScript passed with no warnings.
-- `npm run test:e2e`: the atomic webpack build and complete private-artifact scan passed, followed by 79 browser tests passed and 29 intentional project-specific skips with no failures.
+- `npm run check`: 15 test files and 178 unit, component, proxy, environment, service-worker, workflow, and header-contract tests passed; formatting, ESLint, and TypeScript passed with no warnings.
+- `npm run test:e2e`: the atomic webpack build and complete private-artifact scan passed, followed by 96 browser tests passed and 41 intentional project-specific skips with no failures.
 - Covered projects: Chromium iPhone-sized, Chromium 320px short-screen, Firefox mobile, and pinned Chromium 430px visual. The expanded Family and Memories baselines were regenerated, individually inspected, and then passed without update in the final matrix.
 - Browser execution is serialized through one worker. Fresh nonce rendering makes every protected document request-time; concurrent local browser workers intermittently saturated the single Next test server and stalled Firefox's first full-page load event. The serialized full matrix is deterministic while still covering every configured local project.
 

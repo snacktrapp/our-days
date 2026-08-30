@@ -17,6 +17,15 @@ const composer = {
   taggablePeople: [],
 } as const;
 
+const interaction = {
+  currentPerson: { name: "Person", initial: "P", accent: "teal" },
+  reactionOptions: [
+    { id: "held-close", label: "Hold close", symbol: "♡" },
+    { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
+    { id: "remember-this", label: "I remember", symbol: "↺" },
+  ],
+} as const;
+
 const model = {
   chrome: {
     accent: "teal",
@@ -25,6 +34,7 @@ const model = {
     composer,
     familyMark: [{ id: "person", initial: "P", accent: "teal" }],
   },
+  interaction,
   switcher: [{ label: "Family", href: "/family", current: true }],
   entries: [
     { id: "start", entryType: "date-marker", label: "Today" },
@@ -42,7 +52,7 @@ const model = {
         occurredOn: "2026-08-01",
         kicker: "A thought",
         text: "A quiet moment.",
-        noteCount: 0,
+        conversation: { notes: [], reactions: [] },
       },
     },
     {

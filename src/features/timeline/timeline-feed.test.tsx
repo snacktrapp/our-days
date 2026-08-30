@@ -13,7 +13,28 @@ const shared = {
   occurredOn: "2026-08-01",
   kicker: "Memory",
   text: "Worth keeping.",
-  noteCount: 2,
+  conversation: {
+    notes: [
+      {
+        id: "note",
+        authorName: "Other person",
+        authorInitial: "O",
+        authorAccent: "clay",
+        body: "A private detail.",
+        displayDate: "Aug 2, 2026",
+      },
+    ],
+    reactions: [],
+  },
+} as const;
+
+const interaction = {
+  currentPerson: { name: "Person", initial: "P", accent: "teal" },
+  reactionOptions: [
+    { id: "held-close", label: "Hold close", symbol: "♡" },
+    { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
+    { id: "remember-this", label: "I remember", symbol: "↺" },
+  ],
 } as const;
 
 const composer = {
@@ -40,6 +61,7 @@ const model = {
     composer,
     familyMark: [{ id: "person", initial: "P", accent: "teal" }],
   },
+  interaction,
   switcher: [{ label: "Family", href: "/family", current: true }],
   entries: [
     { id: "marker", entryType: "date-marker", label: "Today" },
@@ -115,16 +137,20 @@ describe("TimelineFeed", () => {
     expect(screen.getByAltText("Family outside")).toBeInTheDocument();
   });
 
-  it("keeps the reaction private and pressed-state based", async () => {
+  it("opens the one private response surface without card totals", async () => {
     const user = userEvent.setup();
     render(<TimelineFeed model={model} />);
-    const hold = screen.getAllByRole("button", {
-      name: "Hold Memory by Person",
+    expect(screen.queryByText("A private detail.")).toBeNull();
+    expect(screen.queryByText(/2 notes/u)).toBeNull();
+
+    const respond = screen.getAllByRole("button", {
+      name: "Respond to Memory by Person",
     })[0];
-    expect(hold).toHaveAttribute("aria-pressed", "false");
-    await user.click(hold);
+    await user.click(respond);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("A private detail.")).toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: "Release Memory by Person" })[0],
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByText(/Notes and reactions are not saved/u),
+    ).toBeInTheDocument();
   });
 });

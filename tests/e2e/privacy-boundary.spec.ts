@@ -6,6 +6,8 @@ test.skip(
 );
 
 const lockedURL = "http://127.0.0.1:3101";
+const previewURL = "http://127.0.0.1:3100";
+const detailCanary = "The quiet ride home was my favorite part.";
 const fixtureText = [
   "Brian",
   "Molly",
@@ -17,6 +19,11 @@ const fixtureText = [
   "Nothing from this day yet",
   "March 4",
   "/sample-family.jpg",
+  detailCanary,
+  "I can still hear everyone laughing by the water.",
+  "I wrote this down because I knew I would miss the noise.",
+  "Those wet shoes stayed by the door for days.",
+  "That brave wave still gets me.",
 ];
 const privateRoutes = [
   "/family",
@@ -147,6 +154,17 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     "/quality/memories-empty",
     capturedRequests.get("/family")!,
   );
+
+  const previewFamilyRequest = capturedRequests.get("/family")!;
+  const previewResponse = await request.get(
+    `${previewURL}/family${previewFamilyRequest.search}`,
+    { headers: previewFamilyRequest.headers },
+  );
+  expect(previewResponse.status()).toBe(200);
+  expect(previewResponse.headers()["content-type"]).toContain(
+    "text/x-component",
+  );
+  expect(await previewResponse.text()).toContain(detailCanary);
 
   for (const path of privateRoutes) {
     const capturedRequest = capturedRequests.get(path)!;

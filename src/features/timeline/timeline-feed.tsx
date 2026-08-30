@@ -30,9 +30,14 @@ function assertNever(entry: never): never {
 type TimelineEntryProps = Readonly<{
   entry: TimelineEntryViewModel;
   firstMomentId?: string;
+  interaction: TimelineViewModel["interaction"];
 }>;
 
-function TimelineEntry({ entry, firstMomentId }: TimelineEntryProps) {
+function TimelineEntry({
+  entry,
+  firstMomentId,
+  interaction,
+}: TimelineEntryProps) {
   switch (entry.entryType) {
     case "date-marker":
       return (
@@ -55,6 +60,7 @@ function TimelineEntry({ entry, firstMomentId }: TimelineEntryProps) {
         >
           <Connection moment={entry.moment} />
           <MomentCard
+            interaction={interaction}
             moment={entry.moment}
             preload={entry.moment.id === firstMomentId}
           />
@@ -122,6 +128,7 @@ export function TimelineFeed({ model }: { model: TimelineViewModel }) {
             key={entry.id}
             entry={entry}
             firstMomentId={firstMomentId}
+            interaction={model.interaction}
           />
         ))}
       </section>
