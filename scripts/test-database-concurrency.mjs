@@ -221,10 +221,15 @@ function resetDatabase() {
 const ORGANIZER_B = "10000000-0000-4000-8000-000000000006";
 const DUAL_ORGANIZER_B = "10000000-0000-4000-8000-000000000005";
 const ORGANIZER_A = "10000000-0000-4000-8000-000000000001";
+const ORGANIZER_A_TWO = "10000000-0000-4000-8000-000000000002";
 const CIRCLE_A = "20000000-0000-4000-8000-000000000001";
 const CIRCLE_B = "20000000-0000-4000-8000-000000000002";
 const ORGANIZER_B_MEMBERSHIP = "40000000-0000-4000-8000-000000000006";
 const DUAL_ORGANIZER_B_MEMBERSHIP = "40000000-0000-4000-8000-000000000007";
+const ORGANIZER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000001";
+const ORGANIZER_A_TWO_MEMBERSHIP = "40000000-0000-4000-8000-000000000002";
+const MEMBER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000003";
+const MANAGED_CHILD_A = "30000000-0000-4000-8000-000000000008";
 
 let shouldRestoreFixtures = false;
 let primaryError = null;
@@ -245,6 +250,7 @@ try {
   const organizerToken = createLocalUserToken(ORGANIZER_B, jwtSecret);
   const dualOrganizerToken = createLocalUserToken(DUAL_ORGANIZER_B, jwtSecret);
   const organizerAToken = createLocalUserToken(ORGANIZER_A, jwtSecret);
+  const organizerATwoToken = createLocalUserToken(ORGANIZER_A_TWO, jwtSecret);
 
   shouldRestoreFixtures = true;
   runDatabaseQuery(`
@@ -1049,8 +1055,253 @@ try {
     throw new Error("A revocation race left descendant rows readable.");
   }
 
+  const guardianResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "set_person_guardian",
+    requests: [organizerAToken, organizerATwoToken].map(
+      (token) => () =>
+        jsonRequest(apiUrl, apiKey, token, "rpc/set_person_guardian", {
+          body: JSON.stringify({
+            managed_person_id: MANAGED_CHILD_A,
+            guardian_membership_id: MEMBER_A_MEMBERSHIP,
+            grant_access: true,
+          }),
+          method: "POST",
+        }),
+    ),
+    serviceKey,
+  });
+  if (
+    guardianResults.some(({ response }) => !response.ok) ||
+    !uuid.test(guardianResults[0].body) ||
+    guardianResults[0].body !== guardianResults[1].body
+  ) {
+    throw new Error(
+      `Concurrent guardian grants were not idempotent (${guardianResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $guardian_audit$
+    declare
+      active_grant_count integer;
+      added_audit_count integer;
+    begin
+      select count(*)::integer into active_grant_count
+        from public.person_guardians
+       where circle_id = '${CIRCLE_A}'::uuid
+         and managed_person_id = '${MANAGED_CHILD_A}'::uuid
+         and guardian_membership_id = '${MEMBER_A_MEMBERSHIP}'::uuid
+         and revoked_at is null;
+      select count(*)::integer into added_audit_count
+        from private.audit_events
+       where event_type = 'guardian_added'
+         and subject_id = '${guardianResults[0].body}'::uuid;
+
+      if active_grant_count <> 1 or added_audit_count <> 1 then
+        raise exception 'Concurrent guardian grants left duplicate durable state or audit history';
+      end if;
+    end
+    $guardian_audit$;
+  `);
+
+  const clearGuardianBeforeRevocationRace = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/set_person_guardian",
+    {
+      body: JSON.stringify({
+        managed_person_id: MANAGED_CHILD_A,
+        guardian_membership_id: MEMBER_A_MEMBERSHIP,
+        grant_access: false,
+      }),
+      method: "POST",
+    },
+  );
+  if (!clearGuardianBeforeRevocationRace.response.ok) {
+    throw new Error(
+      "Guardian/revocation race setup could not clear the grant.",
+    );
+  }
+
+  const guardianRevocationResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "guardian grant/membership revocation",
+    operationNames: ["set_person_guardian", "revoke_membership"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/set_person_guardian",
+          {
+            body: JSON.stringify({
+              managed_person_id: MANAGED_CHILD_A,
+              guardian_membership_id: MEMBER_A_MEMBERSHIP,
+              grant_access: true,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerATwoToken,
+          "rpc/revoke_membership",
+          {
+            body: JSON.stringify({ membership_id: MEMBER_A_MEMBERSHIP }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  const [guardianRaceGrant, guardianRaceRevocation] = guardianRevocationResults;
+  if (
+    !guardianRaceRevocation.response.ok ||
+    (!guardianRaceGrant.response.ok &&
+      (guardianRaceGrant.body?.code !== "22023" ||
+        guardianRaceGrant.body?.message !==
+          "Guardian access could not be changed"))
+  ) {
+    throw new Error(
+      `Guardian/revocation race did not use a safe serialized path (${guardianRaceGrant.response.status}, ${guardianRaceRevocation.response.status}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $guardian_revocation_audit$
+    declare
+      membership_status text;
+      active_grant_count integer;
+      revocation_audit_count integer;
+    begin
+      select status into membership_status
+        from public.circle_memberships
+       where id = '${MEMBER_A_MEMBERSHIP}'::uuid;
+      select count(*)::integer into active_grant_count
+        from public.person_guardians
+       where circle_id = '${CIRCLE_A}'::uuid
+         and guardian_membership_id = '${MEMBER_A_MEMBERSHIP}'::uuid
+         and revoked_at is null;
+      select count(*)::integer into revocation_audit_count
+        from private.audit_events
+       where event_type = 'membership_revoked'
+         and subject_id = '${MEMBER_A_MEMBERSHIP}'::uuid;
+
+      if membership_status <> 'revoked'
+        or active_grant_count <> 0
+        or revocation_audit_count <> 1 then
+        raise exception 'Guardian/revocation race left stale care authority or audit state';
+      end if;
+    end
+    $guardian_revocation_audit$;
+  `);
+
+  const roleResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "set_membership_role",
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/set_membership_role",
+          {
+            body: JSON.stringify({
+              membership_id: ORGANIZER_A_TWO_MEMBERSHIP,
+              role: "member",
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerATwoToken,
+          "rpc/set_membership_role",
+          {
+            body: JSON.stringify({
+              membership_id: ORGANIZER_A_MEMBERSHIP,
+              role: "member",
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  const roleSuccesses = roleResults.filter(({ response }) => response.ok);
+  const roleDenials = roleResults.filter(({ response }) => !response.ok);
+  if (
+    roleSuccesses.length !== 1 ||
+    roleDenials.length !== 1 ||
+    roleDenials[0].body?.code !== "22023" ||
+    roleDenials[0].body?.message !== "Role could not be changed"
+  ) {
+    throw new Error(
+      `Concurrent organizer demotions did not retain exactly one organizer (${roleResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $role_audit$
+    declare
+      organizer_count integer;
+      active_account_count integer;
+      role_audit_count integer;
+    begin
+      select count(*) filter (where role = 'organizer')::integer,
+             count(*)::integer
+        into organizer_count, active_account_count
+        from public.circle_memberships
+       where circle_id = '${CIRCLE_A}'::uuid
+         and id in (
+           '${ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         )
+         and status = 'active';
+      select count(*)::integer into role_audit_count
+        from private.audit_events
+       where event_type in ('membership_promoted', 'membership_demoted')
+         and subject_id in (
+           '${ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         );
+
+      if organizer_count <> 1
+        or active_account_count <> 2
+        or role_audit_count <> 1 then
+        raise exception 'Concurrent organizer demotions left invalid role or audit state';
+      end if;
+    end
+    $role_audit$;
+  `);
+
   process.stdout.write(
-    "Overlapping organizer revocation, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, and member revocation serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, and member revocation serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

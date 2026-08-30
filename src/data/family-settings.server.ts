@@ -25,6 +25,10 @@ type FamilyAccessData = Readonly<{
     personId: string;
     role: string;
   }>[];
+  guardians: readonly Readonly<{
+    managedPersonId: string;
+    guardianMembershipId: string;
+  }>[];
   pendingInvitations: readonly Readonly<{
     invitationId: string;
     displayName: string;
@@ -56,22 +60,35 @@ export async function loadConnectedFamilyAccess(
           circle_id: access.circleId,
         })
       : Promise.resolve({ data: [], error: null });
-  const [peopleResult, membershipsResult, pendingResult] = await Promise.all([
-    supabase
-      .from("people")
-      .select("id, display_name, profile_kind, accent_token")
-      .eq("circle_id", access.circleId)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("circle_memberships")
-      .select("id, person_id, role")
-      .eq("circle_id", access.circleId)
-      .eq("status", "active")
-      .order("joined_at", { ascending: true }),
-    pendingPromise,
-  ]);
+  const guardiansPromise =
+    access.role === "organizer"
+      ? supabase
+          .from("person_guardians")
+          .select("managed_person_id, guardian_membership_id")
+          .eq("circle_id", access.circleId)
+          .is("revoked_at", null)
+      : Promise.resolve({ data: [], error: null });
+  const [peopleResult, membershipsResult, guardiansResult, pendingResult] =
+    await Promise.all([
+      supabase
+        .from("people")
+        .select("id, display_name, profile_kind, accent_token")
+        .eq("circle_id", access.circleId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("circle_memberships")
+        .select("id, person_id, role")
+        .eq("circle_id", access.circleId)
+        .eq("status", "active")
+        .order("joined_at", { ascending: true }),
+      guardiansPromise,
+      pendingPromise,
+    ]);
   const error =
-    peopleResult.error ?? membershipsResult.error ?? pendingResult.error;
+    peopleResult.error ??
+    membershipsResult.error ??
+    guardiansResult.error ??
+    pendingResult.error;
   if (error) throw error;
 
   return {
@@ -85,6 +102,10 @@ export async function loadConnectedFamilyAccess(
       id: membership.id,
       personId: membership.person_id,
       role: membership.role,
+    })),
+    guardians: (guardiansResult.data ?? []).map((guardian) => ({
+      managedPersonId: guardian.managed_person_id,
+      guardianMembershipId: guardian.guardian_membership_id,
     })),
     pendingInvitations: (pendingResult.data ?? []).map((invitation) => ({
       invitationId: invitation.invitation_id,
@@ -104,6 +125,13 @@ export function buildConnectedFamilySettingsModel(
     data.memberships.map((membership) => [membership.personId, membership]),
   );
   const canManageAccess = access.role === "organizer";
+  const guardianMembershipIdsByPerson = new Map<string, string[]>();
+  for (const guardian of data.guardians) {
+    const ids =
+      guardianMembershipIdsByPerson.get(guardian.managedPersonId) ?? [];
+    ids.push(guardian.guardianMembershipId);
+    guardianMembershipIdsByPerson.set(guardian.managedPersonId, ids);
+  }
   const members: ConnectedFamilySettingsPanelViewModel["members"] =
     data.people.flatMap((person) => {
       const membership = membershipByPerson.get(person.id);
@@ -113,6 +141,13 @@ export function buildConnectedFamilySettingsModel(
         {
           id: person.id,
           membershipId: membership?.id ?? null,
+          profileKind: isManaged ? "managed" : "account",
+          role:
+            membership?.role === "organizer"
+              ? "organizer"
+              : isManaged
+                ? null
+                : "member",
           name: person.displayName,
           initial: initialFor(person.displayName),
           accent: mapDatabaseAccent(person.accentToken),
@@ -124,6 +159,13 @@ export function buildConnectedFamilySettingsModel(
           accessLabel: isManaged
             ? "Managed profile · No sign-in"
             : "Account · Can sign in",
+          guardianMembershipIds:
+            guardianMembershipIdsByPerson.get(person.id) ?? [],
+          canManageRole:
+            canManageAccess &&
+            membership !== undefined &&
+            membership.id !== access.membershipId,
+          canManageJournal: canManageAccess && isManaged,
           canReviewRemoval:
             canManageAccess &&
             membership !== undefined &&
@@ -145,6 +187,22 @@ export function buildConnectedFamilySettingsModel(
       currentMemberId: access.personId,
       canManageAccess,
       members,
+      guardianOptions: canManageAccess
+        ? data.memberships.flatMap((membership) => {
+            const person = data.people.find(
+              (candidate) => candidate.id === membership.personId,
+            );
+            if (!person || person.profileKind !== "account") return [];
+            return [
+              {
+                membershipId: membership.id,
+                personId: person.id,
+                name: person.displayName,
+                role: membership.role === "organizer" ? "organizer" : "member",
+              } as const,
+            ];
+          })
+        : [],
       pendingInvitations: data.pendingInvitations.map((invitation) => ({
         id: invitation.invitationId,
         displayName: invitation.displayName,

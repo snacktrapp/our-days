@@ -99,15 +99,32 @@ function queryResult(data: unknown[], error: unknown = null) {
   return chain;
 }
 
+function guardianQueryResult(data: unknown[], error: unknown = null) {
+  const chain = {
+    eq: vi.fn(),
+    is: vi.fn(),
+    select: vi.fn(),
+  };
+  chain.select.mockReturnValue(chain);
+  chain.eq.mockReturnValue(chain);
+  chain.is.mockResolvedValue({ data, error });
+  return chain;
+}
+
 function connectedClient({
   pending = [],
   pendingError = null,
+  guardians = [],
+  guardiansError = null,
 }: {
   pending?: unknown[];
   pendingError?: unknown;
+  guardians?: unknown[];
+  guardiansError?: unknown;
 } = {}) {
   const peopleQuery = queryResult(people);
   const membershipQuery = queryResult(memberships);
+  const guardianQuery = guardianQueryResult(guardians, guardiansError);
   const rpc = vi.fn().mockResolvedValue({
     data: pending,
     error: pendingError,
@@ -115,13 +132,14 @@ function connectedClient({
   const from = vi.fn((table: string) => {
     if (table === "people") return peopleQuery;
     if (table === "circle_memberships") return membershipQuery;
+    if (table === "person_guardians") return guardianQuery;
     throw new Error(`Unexpected table: ${table}`);
   });
   vi.mocked(createOurDaysServerClient).mockResolvedValue({
     from,
     rpc,
   } as never);
-  return { from, membershipQuery, peopleQuery, rpc };
+  return { from, guardianQuery, membershipQuery, peopleQuery, rpc };
 }
 
 afterEach(() => {
@@ -138,7 +156,13 @@ describe("connected family settings data", () => {
         expires_at: "2026-09-01T06:30:00.000Z",
       },
     ];
-    const { rpc } = connectedClient({ pending });
+    const guardians = [
+      {
+        managed_person_id: "30000000-0000-4000-8000-000000000003",
+        guardian_membership_id: memberAccess.membershipId,
+      },
+    ];
+    const { rpc } = connectedClient({ pending, guardians });
 
     const data = await loadConnectedFamilyAccess(organizerAccess);
 
@@ -155,15 +179,23 @@ describe("connected family settings data", () => {
     ]);
     expect(data.pendingInvitations[0]).not.toHaveProperty("email");
     expect(data.pendingInvitations[0]).not.toHaveProperty("rawToken");
+    expect(data.guardians).toEqual([
+      {
+        managedPersonId: guardians[0].managed_person_id,
+        guardianMembershipId: guardians[0].guardian_membership_id,
+      },
+    ]);
   });
 
   it("does not call the organizer-only invitation RPC for a member", async () => {
-    const { rpc } = connectedClient();
+    const { from, rpc } = connectedClient();
 
     const data = await loadConnectedFamilyAccess(memberAccess);
 
     expect(rpc).not.toHaveBeenCalled();
+    expect(from).not.toHaveBeenCalledWith("person_guardians");
     expect(data.pendingInvitations).toEqual([]);
+    expect(data.guardians).toEqual([]);
   });
 
   it("builds organizer controls without allowing self or managed-profile removal", () => {
@@ -179,6 +211,12 @@ describe("connected family settings data", () => {
         personId: membership.person_id,
         role: membership.role,
       })),
+      guardians: [
+        {
+          managedPersonId: "30000000-0000-4000-8000-000000000003",
+          guardianMembershipId: memberAccess.membershipId,
+        },
+      ],
       pendingInvitations: [
         {
           invitationId: "90000000-0000-4000-8000-000000000001",
@@ -206,18 +244,22 @@ describe("connected family settings data", () => {
         id: organizerAccess.personId,
         membershipId: organizerAccess.membershipId,
         relationshipLabel: "Organizer",
+        canManageRole: false,
         canReviewRemoval: false,
       }),
       expect.objectContaining({
         id: memberAccess.personId,
         membershipId: memberAccess.membershipId,
         relationshipLabel: "Family member",
+        canManageRole: true,
         canReviewRemoval: true,
       }),
       expect.objectContaining({
         name: "Child",
         membershipId: null,
         relationshipLabel: "Managed journal",
+        guardianMembershipIds: [memberAccess.membershipId],
+        canManageJournal: true,
         canReviewRemoval: false,
       }),
     ]);
@@ -228,6 +270,16 @@ describe("connected family settings data", () => {
         createdLabel: "Invited Aug 29, 2026",
         expiresLabel: "Expires Aug 31, 2026",
       },
+    ]);
+    expect(model.panel.guardianOptions).toEqual([
+      expect.objectContaining({
+        membershipId: organizerAccess.membershipId,
+        role: "organizer",
+      }),
+      expect.objectContaining({
+        membershipId: memberAccess.membershipId,
+        role: "member",
+      }),
     ]);
   });
 
@@ -244,6 +296,7 @@ describe("connected family settings data", () => {
         personId: membership.person_id,
         role: membership.role,
       })),
+      guardians: [],
       pendingInvitations: [],
     });
 
@@ -256,8 +309,14 @@ describe("connected family settings data", () => {
       throw new Error("Expected connected family settings");
     }
     expect(
-      model.panel.members.every((member) => !member.canReviewRemoval),
+      model.panel.members.every(
+        (member) =>
+          !member.canReviewRemoval &&
+          !member.canManageRole &&
+          !member.canManageJournal,
+      ),
     ).toBe(true);
+    expect(model.panel.guardianOptions).toEqual([]);
   });
 
   it("does not turn a pending-invitation RPC failure into an empty list", async () => {
@@ -265,6 +324,14 @@ describe("connected family settings data", () => {
 
     await expect(loadConnectedFamilyAccess(organizerAccess)).rejects.toThrow(
       "private list unavailable",
+    );
+  });
+
+  it("does not turn a guardian-query failure into an empty assignment list", async () => {
+    connectedClient({ guardiansError: new Error("guardian list unavailable") });
+
+    await expect(loadConnectedFamilyAccess(organizerAccess)).rejects.toThrow(
+      "guardian list unavailable",
     );
   });
 });

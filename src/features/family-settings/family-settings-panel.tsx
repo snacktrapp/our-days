@@ -11,7 +11,9 @@ import {
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import type {
   ConnectedFamilySettingsPanelViewModel,
+  FamilyAccessMemberViewModel,
   FamilySettingsPanelViewModel,
+  GuardianOptionViewModel,
   PreviewFamilySettingsPanelViewModel,
 } from "./family-settings-view-model";
 
@@ -23,6 +25,15 @@ type ConnectedActions = Readonly<{
   }) => Promise<FamilySettingsActionResult>;
   revokeInvitation: (input: {
     invitationId: string;
+  }) => Promise<FamilySettingsActionResult>;
+  setMembershipRole: (input: {
+    membershipId: string;
+    role: "member" | "organizer";
+  }) => Promise<FamilySettingsActionResult>;
+  setGuardian: (input: {
+    managedPersonId: string;
+    guardianMembershipId: string;
+    grantAccess: boolean;
   }) => Promise<FamilySettingsActionResult>;
 }>;
 
@@ -73,10 +84,18 @@ function MemberList({
             <small>{member.relationshipLabel}</small>
             <span>{member.accessLabel}</span>
           </span>
-          {member.canReviewRemoval ? (
+          {member.canReviewRemoval ||
+          (model.mode === "connected" &&
+            (member.canManageRole || member.canManageJournal)) ? (
             <button
               type="button"
-              aria-label={`Review access for ${member.name}`}
+              aria-label={
+                model.mode === "connected"
+                  ? member.profileKind === "managed"
+                    ? `Manage journal for ${member.name}`
+                    : `Manage role and access for ${member.name}`
+                  : `Review access for ${member.name}`
+              }
               disabled={disabled}
               aria-expanded={reviewId === member.id}
               aria-controls="access-review"
@@ -85,7 +104,11 @@ function MemberList({
                 setReviewId(reviewId === member.id ? null : member.id);
               }}
             >
-              Review access
+              {model.mode === "connected"
+                ? member.profileKind === "managed"
+                  ? "Manage journal"
+                  : "Manage"
+                : "Review access"}
             </button>
           ) : null}
         </li>
@@ -291,6 +314,8 @@ function ConnectedFamilySettingsPanel({
   const invitation = model.pendingInvitations.find(
     (item) => item.id === invitationReviewId,
   );
+  const journalCareSuccess =
+    result?.ok && accessReviewMember?.profileKind === "managed";
 
   useEffect(() => {
     if (accessReviewId) accessHeadingRef.current?.focus();
@@ -321,12 +346,85 @@ function ConnectedFamilySettingsPanel({
     startTransition(async () => {
       try {
         const nextResult = await actions.revokeMembership({ membershipId });
-        setResult(nextResult);
+        setResult(
+          nextResult.ok
+            ? {
+                ok: true,
+                message: `${accessReviewMember.name} can no longer open this family.`,
+              }
+            : nextResult,
+        );
         if (nextResult.ok) setAccessReviewId(null);
       } catch {
         setResult({
           ok: false,
           message: "That access could not be removed. Try again.",
+        });
+      }
+    });
+  }
+
+  function changeRole(role: "member" | "organizer") {
+    const membershipId = accessReviewMember?.membershipId;
+    if (!membershipId) return;
+    setResult(null);
+    startTransition(async () => {
+      try {
+        const nextResult = await actions.setMembershipRole({
+          membershipId,
+          role,
+        });
+        setResult(
+          nextResult.ok
+            ? {
+                ok: true,
+                message:
+                  role === "organizer"
+                    ? `${accessReviewMember.name} is now an organizer.`
+                    : `${accessReviewMember.name} is now a family member.`,
+              }
+            : nextResult,
+        );
+        if (nextResult.ok) setAccessReviewId(null);
+      } catch {
+        setResult({
+          ok: false,
+          message: "That role could not be changed. Try again.",
+        });
+      }
+    });
+  }
+
+  function changeGuardian(guardianMembershipId: string, grantAccess: boolean) {
+    const managedPersonId = accessReviewMember?.id;
+    if (!managedPersonId || accessReviewMember.profileKind !== "managed") {
+      return;
+    }
+    setResult(null);
+    startTransition(async () => {
+      try {
+        const guardianName = model.guardianOptions.find(
+          (guardian) => guardian.membershipId === guardianMembershipId,
+        )?.name;
+        const nextResult = await actions.setGuardian({
+          managedPersonId,
+          guardianMembershipId,
+          grantAccess,
+        });
+        setResult(
+          nextResult.ok && guardianName
+            ? {
+                ok: true,
+                message: grantAccess
+                  ? `${guardianName} can now care for ${accessReviewMember.name}’s journal.`
+                  : `${guardianName} no longer has care access to ${accessReviewMember.name}’s journal.`,
+              }
+            : nextResult,
+        );
+      } catch {
+        setResult({
+          ok: false,
+          message: "That journal care could not be changed. Try again.",
         });
       }
     });
@@ -339,7 +437,14 @@ function ConnectedFamilySettingsPanel({
     startTransition(async () => {
       try {
         const nextResult = await actions.revokeInvitation({ invitationId });
-        setResult(nextResult);
+        setResult(
+          nextResult.ok
+            ? {
+                ok: true,
+                message: `${invitation.displayName}’s invitation was withdrawn.`,
+              }
+            : nextResult,
+        );
         if (nextResult.ok) setInvitationReviewId(null);
       } catch {
         setResult({
@@ -356,7 +461,7 @@ function ConnectedFamilySettingsPanel({
       <p className="settings-live-banner">
         Private circle · Access changes take effect at the next request
       </p>
-      {result?.ok ? (
+      {result?.ok && !journalCareSuccess ? (
         <p
           ref={resultRef}
           className={`settings-action-message${result.ok ? "" : " settings-action-error"}`}
@@ -386,15 +491,43 @@ function ConnectedFamilySettingsPanel({
             className="access-review"
             aria-labelledby="access-review-heading"
           >
-            <span>Remove access</span>
+            <span>
+              {accessReviewMember.profileKind === "managed"
+                ? "Child journal care"
+                : "Role and access"}
+            </span>
             <h3 ref={accessHeadingRef} id="access-review-heading" tabIndex={-1}>
-              Review {accessReviewMember.name}’s access
+              {accessReviewMember.profileKind === "managed"
+                ? `Care for ${accessReviewMember.name}’s journal`
+                : `Manage ${accessReviewMember.name}`}
             </h3>
-            <RemovalConsequences />
-            <p className="settings-confirmation-copy">
-              This change is immediate and will also end any guardian authority
-              tied to this account.
-            </p>
+            {accessReviewMember.profileKind === "managed" ? (
+              <JournalCareReview
+                member={accessReviewMember}
+                guardianOptions={model.guardianOptions}
+                disabled={isPending}
+                onChange={changeGuardian}
+              />
+            ) : (
+              <AccountRoleReview
+                member={accessReviewMember}
+                managedProfiles={model.members.filter(
+                  (member) => member.profileKind === "managed",
+                )}
+                disabled={isPending}
+                onChangeRole={changeRole}
+              />
+            )}
+            {journalCareSuccess ? (
+              <p
+                ref={resultRef}
+                className="settings-action-message settings-inline-message"
+                role="status"
+                tabIndex={-1}
+              >
+                {result.message}
+              </p>
+            ) : null}
             {result && !result.ok ? (
               <p
                 ref={resultRef}
@@ -405,22 +538,32 @@ function ConnectedFamilySettingsPanel({
                 {result.message}
               </p>
             ) : null}
-            <div className="settings-review-actions">
+            {accessReviewMember.profileKind === "account" ? (
+              <div className="settings-removal-zone">
+                <RemovalConsequences />
+                <p className="settings-confirmation-copy">
+                  This change is immediate and will also end any guardian
+                  authority tied to this account.
+                </p>
+                <button
+                  type="button"
+                  aria-label={`Remove access for ${accessReviewMember.name}`}
+                  aria-busy={isPending || undefined}
+                  className="settings-danger-button"
+                  disabled={isPending}
+                  onClick={removeAccess}
+                >
+                  Remove access
+                </button>
+              </div>
+            ) : null}
+            <div className="settings-review-actions settings-review-close">
               <button
                 type="button"
                 disabled={isPending}
                 onClick={closeAccessReview}
               >
-                Keep access
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove ${accessReviewMember.name}’s access`}
-                className="settings-danger-button"
-                disabled={isPending}
-                onClick={removeAccess}
-              >
-                {isPending ? "Removing…" : "Remove access"}
+                Done
               </button>
             </div>
           </aside>
@@ -454,7 +597,7 @@ function ConnectedFamilySettingsPanel({
                     </span>
                     <button
                       type="button"
-                      aria-label={`Review invitation for ${item.displayName}`}
+                      aria-label={`Review invite for ${item.displayName}`}
                       disabled={isPending}
                       aria-expanded={invitationReviewId === item.id}
                       aria-controls="invitation-review"
@@ -513,12 +656,13 @@ function ConnectedFamilySettingsPanel({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Withdraw ${invitation.displayName}’s invitation`}
+                    aria-label={`Withdraw invitation for ${invitation.displayName}`}
+                    aria-busy={isPending || undefined}
                     className="settings-danger-button"
                     disabled={isPending}
                     onClick={withdrawInvitation}
                   >
-                    {isPending ? "Withdrawing…" : "Withdraw invitation"}
+                    Withdraw invitation
                   </button>
                 </div>
               </aside>
@@ -543,14 +687,128 @@ function ConnectedFamilySettingsPanel({
   );
 }
 
+function AccountRoleReview({
+  member,
+  managedProfiles,
+  disabled,
+  onChangeRole,
+}: Readonly<{
+  member: FamilyAccessMemberViewModel;
+  managedProfiles: readonly FamilyAccessMemberViewModel[];
+  disabled: boolean;
+  onChangeRole: (role: "member" | "organizer") => void;
+}>) {
+  if (!member.membershipId || !member.role) return null;
+  const membershipId = member.membershipId;
+  const assignedJournals = managedProfiles.filter((profile) =>
+    profile.guardianMembershipIds.includes(membershipId),
+  );
+  const nextRole = member.role === "organizer" ? "member" : "organizer";
+
+  return (
+    <div className="settings-role-card">
+      <strong>
+        Current role:{" "}
+        {member.role === "organizer" ? "Organizer" : "Family member"}
+      </strong>
+      {nextRole === "organizer" ? (
+        <p>
+          Organizers can invite and remove people, change roles and journal
+          care, export the family archive, and care for every child journal.
+          This does not let them edit another adult’s moments.
+        </p>
+      ) : (
+        <p>
+          As a family member, {member.name} will keep sign-in access but lose
+          organizer controls and automatic care access for every child journal.
+          {assignedJournals.length
+            ? ` Explicit care for ${assignedJournals.map((profile) => profile.name).join(", ")} will remain.`
+            : " They do not have an explicit assignment, so they will lose care access to every child journal."}
+        </p>
+      )}
+      <button
+        type="button"
+        aria-label={
+          nextRole === "organizer"
+            ? `Make organizer: ${member.name}`
+            : `Change to family member: ${member.name}`
+        }
+        aria-busy={disabled || undefined}
+        disabled={disabled}
+        onClick={() => onChangeRole(nextRole)}
+      >
+        {nextRole === "organizer"
+          ? "Make organizer"
+          : "Change to family member"}
+      </button>
+    </div>
+  );
+}
+
+function JournalCareReview({
+  member,
+  guardianOptions,
+  disabled,
+  onChange,
+}: Readonly<{
+  member: FamilyAccessMemberViewModel;
+  guardianOptions: readonly GuardianOptionViewModel[];
+  disabled: boolean;
+  onChange: (membershipId: string, grantAccess: boolean) => void;
+}>) {
+  return (
+    <>
+      <p className="settings-confirmation-copy">
+        Organizers can care for every child journal. An assigned guardian keeps
+        care access as a family member, even without organizer controls.
+      </p>
+      <fieldset className="guardian-options">
+        <legend>Assigned guardians</legend>
+        <ul>
+          {guardianOptions.map((guardian) => {
+            const assigned = member.guardianMembershipIds.includes(
+              guardian.membershipId,
+            );
+            return (
+              <li key={guardian.membershipId}>
+                <span>
+                  <strong>{guardian.name}</strong>
+                  <small>
+                    {guardian.role === "organizer"
+                      ? assigned
+                        ? "Organizer · assignment stays if their role changes"
+                        : "Organizer · already has care access"
+                      : assigned
+                        ? "Family member · assigned guardian"
+                        : "Family member · no care access"}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  aria-label={`${assigned ? "Remove" : "Assign"} ${guardian.name} as guardian for ${member.name}`}
+                  aria-busy={disabled || undefined}
+                  disabled={disabled}
+                  onClick={() => onChange(guardian.membershipId, !assigned)}
+                >
+                  {assigned ? "Remove" : "Assign"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </fieldset>
+    </>
+  );
+}
+
 function SettingsAccessHeading() {
   return (
     <div className="settings-heading">
       <span>Private circle</span>
-      <h2 id="access-heading">Who can open Our Days</h2>
+      <h2 id="access-heading">People and access</h2>
       <p>
-        Accounts can sign in. Managed profiles hold a child’s journal but cannot
-        open the app themselves.
+        Accounts can sign in. Child journals have no sign-in and are cared for
+        by organizers and assigned guardians.
       </p>
     </div>
   );

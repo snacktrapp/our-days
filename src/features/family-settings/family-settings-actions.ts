@@ -17,6 +17,22 @@ function readUuid(input: unknown, field: string) {
   return typeof value === "string" && uuidPattern.test(value) ? value : null;
 }
 
+function readRole(input: unknown) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const value = (input as Record<string, unknown>).role;
+  return value === "member" || value === "organizer" ? value : null;
+}
+
+function readBoolean(input: unknown, field: string) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const value = (input as Record<string, unknown>)[field];
+  return typeof value === "boolean" ? value : null;
+}
+
 export type FamilySettingsActionResult = Readonly<
   { ok: true; message: string } | { ok: false; message: string }
 >;
@@ -38,10 +54,129 @@ async function requireOrganizer() {
   return access;
 }
 
-function refreshFamilyAccessSurfaces() {
+function refreshFamilyAccessSurfaces(personId?: string) {
   revalidatePath("/settings/family");
   revalidatePath("/people");
   revalidatePath("/family");
+  if (personId) revalidatePath(`/people/${personId}`);
+}
+
+export async function setFamilyMembershipRoleAction(
+  input: unknown,
+): Promise<FamilySettingsActionResult> {
+  const access = await requireOrganizer();
+  const membershipId = readUuid(input, "membershipId");
+  const role = readRole(input);
+  if (
+    !access ||
+    !membershipId ||
+    !role ||
+    membershipId === access.membershipId
+  ) {
+    return { ok: false, message: "That role change was not allowed." };
+  }
+  const supabase = await createOurDaysServerClient();
+  const membershipResult = await supabase
+    .from("circle_memberships")
+    .select("id, person_id, role")
+    .eq("id", membershipId)
+    .eq("circle_id", access.circleId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipResult.error || !membershipResult.data) {
+    return { ok: false, message: "That role change was not allowed." };
+  }
+  if (membershipResult.data.role === role) {
+    refreshFamilyAccessSurfaces(membershipResult.data.person_id);
+    return {
+      ok: true,
+      message:
+        role === "organizer"
+          ? "That person is already an organizer."
+          : "That person is already a family member.",
+    };
+  }
+  const { error } = await supabase.rpc("set_membership_role", {
+    membership_id: membershipId,
+    role,
+  });
+  if (error) {
+    return {
+      ok: false,
+      message:
+        error.code === "23514"
+          ? "This circle must keep at least one organizer."
+          : "That role could not be changed. Try again.",
+    };
+  }
+  refreshFamilyAccessSurfaces(membershipResult.data.person_id);
+  return {
+    ok: true,
+    message:
+      role === "organizer"
+        ? "Organizer access granted."
+        : "Organizer access removed.",
+  };
+}
+
+export async function setManagedProfileGuardianAction(
+  input: unknown,
+): Promise<FamilySettingsActionResult> {
+  const access = await requireOrganizer();
+  const managedPersonId = readUuid(input, "managedPersonId");
+  const guardianMembershipId = readUuid(input, "guardianMembershipId");
+  const grantAccess = readBoolean(input, "grantAccess");
+  if (
+    !access ||
+    !managedPersonId ||
+    !guardianMembershipId ||
+    grantAccess === null
+  ) {
+    return { ok: false, message: "That journal care change was not allowed." };
+  }
+  const supabase = await createOurDaysServerClient();
+  const [personResult, membershipResult] = await Promise.all([
+    supabase
+      .from("people")
+      .select("id")
+      .eq("id", managedPersonId)
+      .eq("circle_id", access.circleId)
+      .eq("profile_kind", "managed")
+      .maybeSingle(),
+    supabase
+      .from("circle_memberships")
+      .select("id")
+      .eq("id", guardianMembershipId)
+      .eq("circle_id", access.circleId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
+  if (
+    personResult.error ||
+    membershipResult.error ||
+    !personResult.data ||
+    !membershipResult.data
+  ) {
+    return { ok: false, message: "That journal care change was not allowed." };
+  }
+  const { error } = await supabase.rpc("set_person_guardian", {
+    managed_person_id: managedPersonId,
+    guardian_membership_id: guardianMembershipId,
+    grant_access: grantAccess,
+  });
+  if (error) {
+    return {
+      ok: false,
+      message: "That journal care could not be changed. Try again.",
+    };
+  }
+  refreshFamilyAccessSurfaces(managedPersonId);
+  return {
+    ok: true,
+    message: grantAccess
+      ? "Journal guardian assigned."
+      : "Journal guardian removed.",
+  };
 }
 
 export async function revokeFamilyMembershipAction(
@@ -58,12 +193,18 @@ export async function revokeFamilyMembershipAction(
   const supabase = await createOurDaysServerClient();
   const membershipResult = await supabase
     .from("circle_memberships")
-    .select("id")
+    .select("id, person_id, status")
     .eq("id", membershipId)
     .eq("circle_id", access.circleId)
-    .eq("status", "active")
     .maybeSingle();
   if (membershipResult.error || !membershipResult.data) {
+    return { ok: false, message: "That access change was not allowed." };
+  }
+  if (membershipResult.data.status === "revoked") {
+    refreshFamilyAccessSurfaces(membershipResult.data.person_id);
+    return { ok: true, message: "Family access was already removed." };
+  }
+  if (membershipResult.data.status !== "active") {
     return { ok: false, message: "That access change was not allowed." };
   }
   const { error } = await supabase.rpc("revoke_membership", {
@@ -78,7 +219,7 @@ export async function revokeFamilyMembershipAction(
           : "That access could not be removed. Try again.",
     };
   }
-  refreshFamilyAccessSurfaces();
+  refreshFamilyAccessSurfaces(membershipResult.data.person_id);
   return { ok: true, message: "Family access removed." };
 }
 

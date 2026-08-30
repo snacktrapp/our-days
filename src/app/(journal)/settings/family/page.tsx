@@ -10,6 +10,8 @@ import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import {
   revokeFamilyInvitationAction,
   revokeFamilyMembershipAction,
+  setFamilyMembershipRoleAction,
+  setManagedProfileGuardianAction,
 } from "@/features/family-settings/family-settings-actions";
 
 export default async function FamilySettingsPage() {
@@ -40,6 +42,8 @@ export default async function FamilySettingsPage() {
         actions={{
           revokeMembership: revokeFamilyMembershipAction,
           revokeInvitation: revokeFamilyInvitationAction,
+          setMembershipRole: setFamilyMembershipRoleAction,
+          setGuardian: setManagedProfileGuardianAction,
         }}
       />
     </JournalChrome>

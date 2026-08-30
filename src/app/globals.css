@@ -1165,6 +1165,10 @@ textarea:focus-visible,
   background: rgba(132, 71, 64, 0.06);
   color: #844740;
 }
+.settings-inline-message {
+  margin: 12px 0 0;
+  text-align: left;
+}
 .settings-section {
   overflow: hidden;
   border: 1px solid var(--hairline);
@@ -1310,6 +1314,116 @@ textarea:focus-visible,
   border-color: rgba(132, 71, 64, 0.28);
   background: #844740;
   color: #fffaf0;
+}
+.settings-role-card {
+  margin-top: 12px;
+  padding: 13px;
+  display: grid;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--teal) 24%, var(--hairline));
+  border-radius: 15px;
+  background: rgba(255, 253, 248, 0.56);
+}
+.settings-role-card strong {
+  overflow-wrap: anywhere;
+  font-family: Georgia, serif;
+  font-size: 14px;
+  font-weight: 500;
+}
+.settings-role-card p {
+  overflow-wrap: anywhere;
+}
+.settings-role-card button,
+.guardian-options button,
+.settings-removal-zone > button {
+  min-height: 44px;
+  padding: 8px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--cream);
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.settings-role-card button:disabled,
+.guardian-options button:disabled,
+.settings-removal-zone > button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+.guardian-options {
+  min-width: 0;
+  margin: 13px 0 0;
+  padding: 0;
+  border: 0;
+}
+.guardian-options legend {
+  padding: 0;
+  color: var(--teal);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.guardian-options ul {
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--hairline);
+  border-radius: 15px;
+  list-style: none;
+  overflow: hidden;
+}
+.guardian-options li {
+  min-width: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--hairline);
+  background: rgba(255, 253, 248, 0.42);
+}
+.guardian-options li:last-child {
+  border-bottom: 0;
+}
+.guardian-options li > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.guardian-options strong,
+.guardian-options small {
+  overflow-wrap: anywhere;
+}
+.guardian-options strong {
+  font-family: Georgia, serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+.guardian-options small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+.settings-removal-zone {
+  margin-top: 14px;
+  padding-top: 14px;
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid rgba(132, 71, 64, 0.22);
+}
+.settings-removal-zone > p {
+  overflow-wrap: anywhere;
+}
+.settings-removal-zone > button.settings-danger-button {
+  border-color: rgba(132, 71, 64, 0.28);
+  background: #844740;
+  color: #fffaf0;
+}
+.settings-review-close {
+  grid-template-columns: 1fr;
 }
 .preview-honesty {
   margin-top: 10px !important;
@@ -1485,6 +1599,14 @@ textarea:focus-visible,
   .settings-review-actions,
   .connected-invite-review > div {
     grid-template-columns: 1fr;
+  }
+  .guardian-options li {
+    grid-template-columns: 1fr;
+  }
+  .settings-role-card button,
+  .guardian-options button,
+  .settings-removal-zone > button {
+    width: 100%;
   }
 }
 

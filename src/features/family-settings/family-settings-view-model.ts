@@ -4,12 +4,24 @@ import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 export type FamilyAccessMemberViewModel = Readonly<{
   id: string;
   membershipId: string | null;
+  profileKind: "account" | "managed";
+  role: "member" | "organizer" | null;
   name: string;
   initial: string;
   accent: AccentToken;
   relationshipLabel: string;
   accessLabel: string;
+  guardianMembershipIds: readonly string[];
+  canManageRole: boolean;
+  canManageJournal: boolean;
   canReviewRemoval: boolean;
+}>;
+
+export type GuardianOptionViewModel = Readonly<{
+  membershipId: string;
+  personId: string;
+  name: string;
+  role: "member" | "organizer";
 }>;
 
 export type PendingFamilyInvitationViewModel = Readonly<{
@@ -32,6 +44,7 @@ export type ConnectedFamilySettingsPanelViewModel = Readonly<{
   currentMemberId: string;
   canManageAccess: boolean;
   members: readonly FamilyAccessMemberViewModel[];
+  guardianOptions: readonly GuardianOptionViewModel[];
   pendingInvitations: readonly PendingFamilyInvitationViewModel[];
   invitationDelivery: "worker-required";
 }>;

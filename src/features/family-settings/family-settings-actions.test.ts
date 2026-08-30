@@ -24,11 +24,14 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   revokeFamilyInvitationAction,
   revokeFamilyMembershipAction,
+  setFamilyMembershipRoleAction,
+  setManagedProfileGuardianAction,
 } from "./family-settings-actions";
 
 const organizerMembershipId = "40000000-0000-4000-8000-000000000001";
 const otherMembershipId = "40000000-0000-4000-8000-000000000002";
 const invitationId = "90000000-0000-4000-8000-000000000001";
+const managedPersonId = "30000000-0000-4000-8000-000000000008";
 
 describe("family settings actions", () => {
   beforeEach(() => {
@@ -44,7 +47,12 @@ describe("family settings actions", () => {
       role: "organizer",
     });
     mocks.membershipMaybeSingle.mockResolvedValue({
-      data: { id: otherMembershipId },
+      data: {
+        id: otherMembershipId,
+        person_id: "30000000-0000-4000-8000-000000000002",
+        role: "member",
+        status: "active",
+      },
       error: null,
     });
     const membershipQuery = {
@@ -103,6 +111,42 @@ describe("family settings actions", () => {
     });
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [
+      "role changes",
+      () =>
+        setFamilyMembershipRoleAction({
+          membershipId: organizerMembershipId,
+          role: "member",
+        }),
+      "That role change was not allowed.",
+    ],
+    [
+      "journal-care changes",
+      () =>
+        setManagedProfileGuardianAction({
+          managedPersonId,
+          guardianMembershipId: organizerMembershipId,
+          grantAccess: true,
+        }),
+      "That journal care change was not allowed.",
+    ],
+  ])(
+    "denies ordinary-member %s before opening Supabase",
+    async (_label, action, message) => {
+      mocks.requireAccess.mockResolvedValue({
+        mode: "authenticated",
+        membershipId: otherMembershipId,
+        circleId: "20000000-0000-4000-8000-000000000001",
+        personId: "30000000-0000-4000-8000-000000000002",
+        role: "member",
+      });
+
+      await expect(action()).resolves.toEqual({ ok: false, message });
+      expect(mocks.createClient).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["a malformed membership ID", "not-a-uuid"],
@@ -198,6 +242,7 @@ describe("family settings actions", () => {
       ["/settings/family"],
       ["/people"],
       ["/family"],
+      ["/people/30000000-0000-4000-8000-000000000002"],
     ]);
   });
 
@@ -249,4 +294,234 @@ describe("family settings actions", () => {
     );
     expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
+
+  it("changes another active member role through the narrow RPC", async () => {
+    mocks.membershipMaybeSingle.mockResolvedValueOnce({
+      data: {
+        id: otherMembershipId,
+        person_id: "30000000-0000-4000-8000-000000000002",
+        role: "member",
+      },
+      error: null,
+    });
+
+    await expect(
+      setFamilyMembershipRoleAction({
+        membershipId: otherMembershipId,
+        role: "organizer",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Organizer access granted.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith("set_membership_role", {
+      membership_id: otherMembershipId,
+      role: "organizer",
+    });
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/people"],
+      ["/family"],
+      ["/people/30000000-0000-4000-8000-000000000002"],
+    ]);
+  });
+
+  it.each([
+    [{ membershipId: organizerMembershipId, role: "member" }],
+    [{ membershipId: otherMembershipId, role: "owner" }],
+    [{ membershipId: "not-a-uuid", role: "organizer" }],
+  ])("rejects malformed or self role input %#", async (input) => {
+    await expect(setFamilyMembershipRoleAction(input)).resolves.toEqual({
+      ok: false,
+      message: "That role change was not allowed.",
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it("maps the last-organizer role invariant without refreshing", async () => {
+    mocks.membershipMaybeSingle.mockResolvedValueOnce({
+      data: {
+        id: otherMembershipId,
+        person_id: "30000000-0000-4000-8000-000000000002",
+        role: "organizer",
+      },
+      error: null,
+    });
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "23514", message: "last organizer" },
+    });
+    await expect(
+      setFamilyMembershipRoleAction({
+        membershipId: otherMembershipId,
+        role: "member",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "This circle must keep at least one organizer.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a repeated role request without calling the mutation RPC", async () => {
+    await expect(
+      setFamilyMembershipRoleAction({
+        membershipId: otherMembershipId,
+        role: "member",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "That person is already a family member.",
+    });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/people"],
+      ["/family"],
+      ["/people/30000000-0000-4000-8000-000000000002"],
+    ]);
+  });
+
+  it("rejects a role target outside the active circle before mutation", async () => {
+    mocks.membershipMaybeSingle.mockResolvedValueOnce({
+      data: null,
+      error: null,
+    });
+    await expect(
+      setFamilyMembershipRoleAction({
+        membershipId: otherMembershipId,
+        role: "organizer",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "That role change was not allowed.",
+    });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("reconciles an already-revoked same-circle membership after a lost response", async () => {
+    mocks.membershipMaybeSingle.mockResolvedValueOnce({
+      data: {
+        id: otherMembershipId,
+        person_id: "30000000-0000-4000-8000-000000000002",
+        status: "revoked",
+      },
+      error: null,
+    });
+
+    await expect(
+      revokeFamilyMembershipAction({ membershipId: otherMembershipId }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Family access was already removed.",
+    });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/people"],
+      ["/family"],
+      ["/people/30000000-0000-4000-8000-000000000002"],
+    ]);
+  });
+
+  it("assigns journal care only after same-circle profile and membership preflights", async () => {
+    await expect(
+      setManagedProfileGuardianAction({
+        managedPersonId,
+        guardianMembershipId: otherMembershipId,
+        grantAccess: true,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Journal guardian assigned.",
+    });
+    expect(mocks.from).toHaveBeenCalledWith("people");
+    expect(mocks.from).toHaveBeenCalledWith("circle_memberships");
+    expect(mocks.rpc).toHaveBeenCalledWith("set_person_guardian", {
+      managed_person_id: managedPersonId,
+      guardian_membership_id: otherMembershipId,
+      grant_access: true,
+    });
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/people"],
+      ["/family"],
+      [`/people/${managedPersonId}`],
+    ]);
+  });
+
+  it.each([
+    [{ managedPersonId, guardianMembershipId: otherMembershipId }],
+    [
+      {
+        managedPersonId,
+        guardianMembershipId: "not-a-uuid",
+        grantAccess: true,
+      },
+    ],
+    [
+      {
+        managedPersonId: "not-a-uuid",
+        guardianMembershipId: otherMembershipId,
+        grantAccess: false,
+      },
+    ],
+  ])("rejects malformed journal care input %#", async (input) => {
+    await expect(setManagedProfileGuardianAction(input)).resolves.toEqual({
+      ok: false,
+      message: "That journal care change was not allowed.",
+    });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it("keeps journal care RPC failures generic and recoverable", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "22023", message: "wrong circle" },
+    });
+    await expect(
+      setManagedProfileGuardianAction({
+        managedPersonId,
+        guardianMembershipId: otherMembershipId,
+        grantAccess: false,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "That journal care could not be changed. Try again.",
+    });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["managed journal", 1],
+    ["guardian membership", 2],
+  ])(
+    "rejects an out-of-circle %s before journal-care mutation",
+    async (_label, missingResult) => {
+      if (missingResult === 1) {
+        mocks.membershipMaybeSingle
+          .mockResolvedValueOnce({ data: null, error: null })
+          .mockResolvedValueOnce({
+            data: { id: otherMembershipId },
+            error: null,
+          });
+      } else {
+        mocks.membershipMaybeSingle
+          .mockResolvedValueOnce({ data: { id: managedPersonId }, error: null })
+          .mockResolvedValueOnce({ data: null, error: null });
+      }
+
+      await expect(
+        setManagedProfileGuardianAction({
+          managedPersonId,
+          guardianMembershipId: otherMembershipId,
+          grantAccess: true,
+        }),
+      ).resolves.toEqual({
+        ok: false,
+        message: "That journal care change was not allowed.",
+      });
+      expect(mocks.rpc).not.toHaveBeenCalled();
+    },
+  );
 });

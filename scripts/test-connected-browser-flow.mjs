@@ -564,6 +564,10 @@ try {
     "10000000-0000-4000-8000-000000000006",
     jwtSecret,
   );
+  const memberAToken = createLocalUserToken(
+    "10000000-0000-4000-8000-000000000003",
+    jwtSecret,
+  );
   const invitation = await jsonRequest(
     `${apiUrl}/rest/v1/rpc/create_invitation`,
     anonKey,
@@ -771,10 +775,12 @@ try {
   }
   if (
     (await invitedPage
-      .getByRole("button", { name: /Review access for/u })
+      .getByRole("button", {
+        name: /Manage (?:role and access|journal) for/u,
+      })
       .count()) !== 0 ||
     (await invitedPage
-      .getByRole("button", { name: /Review invitation for/u })
+      .getByRole("button", { name: /Review invite for/u })
       .count()) !== 0
   ) {
     throw new Error("An ordinary member received organizer access controls.");
@@ -858,28 +864,290 @@ try {
   }
   await invitedPage.setViewportSize({ height: 350, width: 320 });
   await assertPageQuality(invitedPage, "Short connected organizer settings");
+
+  const childJournalReview = invitedPage.getByRole("button", {
+    name: "Manage journal for A Managed Child",
+  });
+  await childJournalReview.scrollIntoViewIfNeeded();
+  await childJournalReview.click();
+  const assignMemberGuardian = invitedPage.getByRole("button", {
+    name: "Assign A Member as guardian for A Managed Child",
+  });
+  await assignMemberGuardian.scrollIntoViewIfNeeded();
+  const guardianLayout = await invitedPage
+    .locator(".guardian-options li")
+    .filter({ hasText: "A Member" })
+    .evaluate((element) => {
+      const copy = element.querySelector("span")?.getBoundingClientRect();
+      const button = element.querySelector("button")?.getBoundingClientRect();
+      return copy && button
+        ? {
+            buttonTop: button.top,
+            buttonWidth: button.width,
+            copyBottom: copy.bottom,
+          }
+        : null;
+    });
+  if (
+    !guardianLayout ||
+    guardianLayout.buttonTop < guardianLayout.copyBottom ||
+    guardianLayout.buttonWidth < 200
+  ) {
+    throw new Error("Guardian controls did not reflow at 320px.");
+  }
+  const guardianRequestPromise = invitedPage.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "POST" &&
+      url.pathname === "/settings/family" &&
+      Boolean(request.headers()["next-action"])
+    );
+  });
+  await assignMemberGuardian.click();
+  const guardianRequest = await guardianRequestPromise;
+  const assignedGuardianStatus = invitedPage
+    .getByRole("status")
+    .getByText("A Member can now care for A Managed Child’s journal.");
+  await assignedGuardianStatus.waitFor();
+  const assignedGuardianStatusRect = await assignedGuardianStatus.evaluate(
+    (element) => {
+      const rect = element.getBoundingClientRect();
+      return { bottom: rect.bottom, top: rect.top };
+    },
+  );
+  if (
+    assignedGuardianStatusRect.top < 0 ||
+    assignedGuardianStatusRect.bottom > 350
+  ) {
+    throw new Error(
+      "Guardian success did not remain in the 320px editor view.",
+    );
+  }
+  const guardianAuthorityMoment = `Guardian authority proof ${suffix}`;
+  serverCanaries.push(guardianAuthorityMoment);
+  const guardianAuthorizedWrite = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_family_moment`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: "20000000-0000-4000-8000-000000000001",
+        journal_person_id: "30000000-0000-4000-8000-000000000008",
+        moment_kind: "thought",
+        moment_title: null,
+        moment_body: guardianAuthorityMoment,
+        place_name: null,
+        tagged_person_ids: [],
+        occurred_on: circleToday,
+      }),
+      headers: { authorization: `Bearer ${memberAToken}` },
+      method: "POST",
+    },
+  );
+  if (!guardianAuthorizedWrite.response.ok) {
+    throw new Error(
+      "Assigned guardian authority did not reach moment creation.",
+    );
+  }
+  await assertCrossOriginActionRejected({
+    actionRequest: guardianRequest,
+    canaries: [settingsPendingEmail, settingsPendingToken],
+    mailpitUrl,
+    recipient: email,
+  });
+  await assertServerActionReplayDenied({
+    actionRequest: guardianRequest,
+    replacements: [
+      [
+        "30000000-0000-4000-8000-000000000008",
+        "30000000-0000-4000-8000-000000000009",
+      ],
+      [
+        "40000000-0000-4000-8000-000000000003",
+        "40000000-0000-4000-8000-000000000007",
+      ],
+    ],
+    canaries: [settingsPendingEmail, settingsPendingToken],
+  });
+  const harborGuardianReplayCheck = await jsonRequest(
+    `${apiUrl}/rest/v1/person_guardians?select=id&managed_person_id=eq.30000000-0000-4000-8000-000000000009&guardian_membership_id=eq.40000000-0000-4000-8000-000000000007&revoked_at=is.null`,
+    anonKey,
+    { headers: { authorization: `Bearer ${harborOrganizerToken}` } },
+  );
+  if (
+    !harborGuardianReplayCheck.response.ok ||
+    (harborGuardianReplayCheck.body ?? []).length !== 0
+  ) {
+    throw new Error("A wrong-circle guardian replay changed Harbor care.");
+  }
+  await invitedPage.getByRole("button", { name: "Done" }).click();
+
   const memberReview = invitedPage.getByRole("button", {
-    name: "Review access for A Member",
+    name: "Manage role and access for A Member",
   });
   await memberReview.scrollIntoViewIfNeeded();
   await memberReview.click();
+  await invitedPage.getByText("Current role: Family member").waitFor();
+  const makeOrganizer = invitedPage.getByRole("button", {
+    name: "Make organizer: A Member",
+  });
+  const roleLayout = await invitedPage
+    .locator(".settings-role-card")
+    .evaluate((card) => {
+      const button = card.querySelector("button")?.getBoundingClientRect();
+      const style = window.getComputedStyle(card);
+      const availableWidth =
+        card.clientWidth -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight);
+      return button ? { availableWidth, buttonWidth: button.width } : null;
+    });
+  if (!roleLayout || roleLayout.buttonWidth + 1 < roleLayout.availableWidth) {
+    throw new Error("Role controls did not reflow at 320px.");
+  }
+  const roleRequestPromise = invitedPage.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === "POST" &&
+      url.pathname === "/settings/family" &&
+      Boolean(request.headers()["next-action"])
+    );
+  });
+  await makeOrganizer.click();
+  const roleRequest = await roleRequestPromise;
+  await invitedPage
+    .getByRole("status")
+    .getByText("A Member is now an organizer.")
+    .waitFor();
+  const promotedOrganizerMutation = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/set_person_guardian`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        managed_person_id: "30000000-0000-4000-8000-000000000008",
+        guardian_membership_id: "40000000-0000-4000-8000-000000000005",
+        grant_access: true,
+      }),
+      headers: { authorization: `Bearer ${memberAToken}` },
+      method: "POST",
+    },
+  );
+  if (!promotedOrganizerMutation.response.ok) {
+    throw new Error("A promoted target did not gain organizer authority.");
+  }
+  await assertServerActionReplayDenied({
+    actionRequest: roleRequest,
+    replacements: [
+      [
+        "40000000-0000-4000-8000-000000000003",
+        "40000000-0000-4000-8000-000000000006",
+      ],
+    ],
+    canaries: [settingsPendingEmail, settingsPendingToken],
+  });
+
+  await memberReview.click();
+  await invitedPage.getByText("Current role: Organizer").waitFor();
+  await invitedPage
+    .getByText(/Explicit care for A Managed Child will remain/u)
+    .waitFor();
+  await invitedPage
+    .getByRole("button", { name: "Change to family member: A Member" })
+    .click();
+  await invitedPage
+    .getByRole("status")
+    .getByText("A Member is now a family member.")
+    .waitFor();
+  const demotedOrganizerMutation = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/set_person_guardian`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        managed_person_id: "30000000-0000-4000-8000-000000000008",
+        guardian_membership_id: "40000000-0000-4000-8000-000000000005",
+        grant_access: false,
+      }),
+      headers: { authorization: `Bearer ${memberAToken}` },
+      method: "POST",
+    },
+  );
+  if (
+    demotedOrganizerMutation.response.ok ||
+    demotedOrganizerMutation.body?.code !== "22023"
+  ) {
+    throw new Error("A demoted target retained organizer authority.");
+  }
+
+  await childJournalReview.click();
+  await invitedPage
+    .locator(".guardian-options li")
+    .filter({ hasText: "A Member" })
+    .getByText("Family member · assigned guardian")
+    .waitFor();
+  await invitedPage
+    .getByRole("button", {
+      name: "Remove A Member as guardian for A Managed Child",
+    })
+    .click();
+  await invitedPage
+    .getByRole("status")
+    .getByText(
+      "A Member no longer has care access to A Managed Child’s journal.",
+    )
+    .waitFor();
+  const guardianDeniedWrite = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_family_moment`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: "20000000-0000-4000-8000-000000000001",
+        journal_person_id: "30000000-0000-4000-8000-000000000008",
+        moment_kind: "thought",
+        moment_title: null,
+        moment_body: `Denied guardian write ${suffix}`,
+        place_name: null,
+        tagged_person_ids: [],
+        occurred_on: circleToday,
+      }),
+      headers: { authorization: `Bearer ${memberAToken}` },
+      method: "POST",
+    },
+  );
+  if (
+    guardianDeniedWrite.response.ok ||
+    guardianDeniedWrite.body?.code !== "42501"
+  ) {
+    throw new Error("Removed guardian authority remained usable.");
+  }
+  await invitedPage.getByRole("button", { name: "Done" }).click();
+
+  await memberReview.click();
   const removeMember = invitedPage.getByRole("button", {
-    name: "Remove A Member’s access",
+    name: "Remove access for A Member",
   });
   await removeMember.scrollIntoViewIfNeeded();
   const actionLayout = await invitedPage
-    .locator(".access-review .settings-review-actions")
+    .locator(".access-review")
     .evaluate((element) => {
-      const buttons = Array.from(element.querySelectorAll("button"));
-      return buttons.map((button) => {
-        const rect = button.getBoundingClientRect();
-        return { bottom: rect.bottom, top: rect.top, width: rect.width };
-      });
+      const danger = element
+        .querySelector(".settings-removal-zone > button")
+        ?.getBoundingClientRect();
+      const done = element
+        .querySelector(".settings-review-close button")
+        ?.getBoundingClientRect();
+      return danger && done
+        ? {
+            dangerBottom: danger.bottom,
+            dangerWidth: danger.width,
+            doneTop: done.top,
+            doneWidth: done.width,
+          }
+        : null;
     });
   if (
-    actionLayout.length !== 2 ||
-    actionLayout[1].top < actionLayout[0].bottom ||
-    actionLayout.some(({ width }) => width < 200)
+    !actionLayout ||
+    actionLayout.doneTop < actionLayout.dangerBottom ||
+    actionLayout.dangerWidth < 200 ||
+    actionLayout.doneWidth < 200
   ) {
     throw new Error("Connected organizer actions did not reflow at 320px.");
   }
@@ -895,9 +1163,11 @@ try {
   const removalRequest = await removalRequestPromise;
   await invitedPage
     .getByRole("status")
-    .getByText("Family access removed.")
+    .getByText("A Member can no longer open this family.")
     .waitFor();
-  await invitedPage.getByText("A Member").waitFor({ state: "detached" });
+  await invitedPage
+    .getByText("A Member", { exact: true })
+    .waitFor({ state: "detached" });
   await assertCrossOriginActionRejected({
     actionRequest: removalRequest,
     canaries: [settingsPendingEmail, settingsPendingToken],
@@ -914,14 +1184,10 @@ try {
     ],
     canaries: [settingsPendingEmail, settingsPendingToken],
   });
-  const removedMemberToken = createLocalUserToken(
-    "10000000-0000-4000-8000-000000000003",
-    jwtSecret,
-  );
   const removedMemberCircles = await jsonRequest(
     `${apiUrl}/rest/v1/circles?select=id`,
     anonKey,
-    { headers: { authorization: `Bearer ${removedMemberToken}` } },
+    { headers: { authorization: `Bearer ${memberAToken}` } },
   );
   if (
     !removedMemberCircles.response.ok ||
@@ -942,20 +1208,22 @@ try {
   }
 
   const invitationReview = invitedPage.getByRole("button", {
-    name: "Review invitation for Browser Pending",
+    name: "Review invite for Browser Pending",
   });
   await invitationReview.scrollIntoViewIfNeeded();
   await invitationReview.click();
   const withdrawInvitation = invitedPage.getByRole("button", {
-    name: "Withdraw Browser Pending’s invitation",
+    name: "Withdraw invitation for Browser Pending",
   });
   await withdrawInvitation.scrollIntoViewIfNeeded();
   await withdrawInvitation.click();
   await invitedPage
     .getByRole("status")
-    .getByText("Invitation withdrawn.")
+    .getByText("Browser Pending’s invitation was withdrawn.")
     .waitFor();
-  await invitedPage.getByText("Browser Pending").waitFor({ state: "detached" });
+  await invitedPage
+    .getByText("Browser Pending", { exact: true })
+    .waitFor({ state: "detached" });
   await assertPageQuality(invitedPage, "Mutated connected organizer settings");
 
   const demotedSettingsMember = await jsonRequest(
@@ -986,7 +1254,9 @@ try {
   await invitedPage.reload();
   if (
     (await invitedPage
-      .getByRole("button", { name: /Review access for/u })
+      .getByRole("button", {
+        name: /Manage (?:role and access|journal) for/u,
+      })
       .count()) !== 0
   ) {
     throw new Error("A demoted organizer retained connected access controls.");

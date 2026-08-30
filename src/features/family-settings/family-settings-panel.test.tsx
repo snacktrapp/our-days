@@ -11,31 +11,46 @@ const model = {
     {
       id: "current",
       membershipId: "current-membership",
+      profileKind: "account",
+      role: "organizer",
       name: "Current person",
       initial: "C",
       accent: "teal",
       relationshipLabel: "Co-organizer",
       accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
       canReviewRemoval: false,
     },
     {
       id: "other",
       membershipId: "other-membership",
+      profileKind: "account",
+      role: "organizer",
       name: "Other organizer",
       initial: "O",
       accent: "clay",
       relationshipLabel: "Co-organizer",
       accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
       canReviewRemoval: true,
     },
     {
       id: "child",
       membershipId: null,
+      profileKind: "managed",
+      role: null,
       name: "Child profile",
       initial: "C",
       accent: "ochre",
       relationshipLabel: "Child journal",
       accessLabel: "Managed profile · No sign-in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
       canReviewRemoval: false,
     },
   ],
@@ -46,7 +61,29 @@ const connectedOrganizerModel = {
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
   canManageAccess: true,
-  members: model.members,
+  members: model.members.map((member) => ({
+    ...member,
+    guardianMembershipIds:
+      member.profileKind === "managed"
+        ? ["current-membership", "other-membership"]
+        : [],
+    canManageRole: member.profileKind === "account" && member.id !== "current",
+    canManageJournal: member.profileKind === "managed",
+  })),
+  guardianOptions: [
+    {
+      membershipId: "current-membership",
+      personId: "current",
+      name: "Current person",
+      role: "organizer",
+    },
+    {
+      membershipId: "other-membership",
+      personId: "other",
+      name: "Other organizer",
+      role: "organizer",
+    },
+  ],
   pendingInvitations: [
     {
       id: "11111111-1111-4111-8111-111111111111",
@@ -63,8 +100,11 @@ const connectedMemberModel = {
   canManageAccess: false,
   members: connectedOrganizerModel.members.map((member) => ({
     ...member,
+    canManageRole: false,
+    canManageJournal: false,
     canReviewRemoval: false,
   })),
+  guardianOptions: [],
   pendingInvitations: [],
 } as const;
 
@@ -79,9 +119,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getAllByText("Account · Can sign in")).toHaveLength(2);
     expect(screen.getByText("Managed profile · No sign-in")).toBeVisible();
-    expect(
-      screen.getByText(/Managed profiles hold a child’s journal/u),
-    ).toBeVisible();
+    expect(screen.getByText(/Child journals have no sign-in/u)).toBeVisible();
     expect(
       screen.getByText(/no accounts or permissions are active/u),
     ).toBeVisible();
@@ -233,6 +271,8 @@ describe("FamilySettingsPanel", () => {
         actions={{
           revokeMembership,
           revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
         }}
       />,
     );
@@ -240,15 +280,17 @@ describe("FamilySettingsPanel", () => {
     expect(screen.queryByText(/Local design preview/u)).toBeNull();
     expect(screen.getByText(/Access changes take effect/u)).toBeVisible();
     await user.click(
-      screen.getByRole("button", { name: "Review access for Other organizer" }),
+      screen.getByRole("button", {
+        name: "Manage role and access for Other organizer",
+      }),
     );
     expect(
-      screen.getByRole("heading", { name: "Review Other organizer’s access" }),
+      screen.getByRole("heading", { name: "Manage Other organizer" }),
     ).toHaveFocus();
     expect(screen.getByText(/guardian authority/u)).toBeVisible();
 
     await user.click(
-      screen.getByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.getByRole("button", { name: "Remove access for Other organizer" }),
     );
     expect(revokeMembership).toHaveBeenLastCalledWith({
       membershipId: "other-membership",
@@ -257,17 +299,21 @@ describe("FamilySettingsPanel", () => {
     expect(error).toHaveTextContent("Try again.");
     expect(error).toHaveFocus();
     expect(
-      screen.getByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.getByRole("button", { name: "Remove access for Other organizer" }),
     ).toBeVisible();
 
     await user.click(
-      screen.getByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.getByRole("button", { name: "Remove access for Other organizer" }),
     );
     const success = await screen.findByRole("status");
-    expect(success).toHaveTextContent("Family access removed.");
+    expect(success).toHaveTextContent(
+      "Other organizer can no longer open this family.",
+    );
     expect(success).toHaveFocus();
     expect(
-      screen.queryByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.queryByRole("button", {
+        name: "Remove access for Other organizer",
+      }),
     ).toBeNull();
   });
 
@@ -280,7 +326,12 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
-        actions={{ revokeMembership: vi.fn(), revokeInvitation }}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation,
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
       />,
     );
 
@@ -292,7 +343,7 @@ describe("FamilySettingsPanel", () => {
       screen.getByText(/New invitations are not connected yet/u),
     ).toBeVisible();
     await user.click(
-      screen.getByRole("button", { name: "Review invitation for Grandma" }),
+      screen.getByRole("button", { name: "Review invite for Grandma" }),
     );
     expect(
       screen.getByRole("heading", {
@@ -300,14 +351,14 @@ describe("FamilySettingsPanel", () => {
       }),
     ).toHaveFocus();
     await user.click(
-      screen.getByRole("button", { name: "Withdraw Grandma’s invitation" }),
+      screen.getByRole("button", { name: "Withdraw invitation for Grandma" }),
     );
 
     expect(revokeInvitation).toHaveBeenCalledWith({
       invitationId: "11111111-1111-4111-8111-111111111111",
     });
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Invitation withdrawn.",
+      "Grandma’s invitation was withdrawn.",
     );
   });
 
@@ -319,15 +370,22 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
-        actions={{ revokeMembership, revokeInvitation: vi.fn() }}
+        actions={{
+          revokeMembership,
+          revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
       />,
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Review access for Other organizer" }),
+      screen.getByRole("button", {
+        name: "Manage role and access for Other organizer",
+      }),
     );
     await user.click(
-      screen.getByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.getByRole("button", { name: "Remove access for Other organizer" }),
     );
 
     const alert = await screen.findByRole("alert");
@@ -336,15 +394,159 @@ describe("FamilySettingsPanel", () => {
     );
     expect(alert).toHaveFocus();
     expect(
-      screen.getByRole("button", { name: "Remove Other organizer’s access" }),
+      screen.getByRole("button", { name: "Remove access for Other organizer" }),
     ).toBeEnabled();
+  });
+
+  it("explains and applies a reviewed role change with exact target identity", async () => {
+    const user = userEvent.setup();
+    const setMembershipRole = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, message: "Role stayed the same." })
+      .mockResolvedValueOnce({
+        ok: true,
+        message: "Organizer access removed.",
+      });
+    render(
+      <FamilySettingsPanel
+        model={connectedOrganizerModel}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation: vi.fn(),
+          setMembershipRole,
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Manage role and access for Other organizer",
+      }),
+    );
+    expect(screen.getByText(/Current role: Organizer/u)).toBeVisible();
+    expect(
+      screen.getByText(/Explicit care for Child profile will remain/u),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Change to family member: Other organizer",
+      }),
+    );
+    expect(setMembershipRole).toHaveBeenLastCalledWith({
+      membershipId: "other-membership",
+      role: "member",
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Role stayed the same.",
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Change to family member: Other organizer",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Other organizer is now a family member.",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Manage Other organizer" }),
+    ).toBeNull();
+  });
+
+  it("shows effective child-journal care and changes one explicit guardian at a time", async () => {
+    const user = userEvent.setup();
+    const setGuardian = vi.fn().mockResolvedValue({
+      ok: true,
+      message: "Journal guardian removed.",
+    });
+    render(
+      <FamilySettingsPanel
+        model={connectedOrganizerModel}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian,
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Manage journal for Child profile",
+      }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Care for Child profile’s journal" }),
+    ).toHaveFocus();
+    expect(
+      screen.getByText(/Organizers can care for every child journal/u),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("group", { name: "Assigned guardians" }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Remove Other organizer as guardian for Child profile",
+      }),
+    );
+    expect(setGuardian).toHaveBeenCalledWith({
+      managedPersonId: "child",
+      guardianMembershipId: "other-membership",
+      grantAccess: false,
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(
+      "Other organizer no longer has care access to Child profile’s journal.",
+    );
+    expect(status).toHaveFocus();
+    expect(status.closest(".access-review")).not.toBeNull();
+  });
+
+  it("keeps a rejected journal-care transport beside its retry control", async () => {
+    const user = userEvent.setup();
+    const setGuardian = vi.fn().mockRejectedValue(new Error("offline"));
+    render(
+      <FamilySettingsPanel
+        model={connectedOrganizerModel}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian,
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Manage journal for Child profile",
+      }),
+    );
+    const retry = screen.getByRole("button", {
+      name: "Remove Other organizer as guardian for Child profile",
+    });
+    await user.click(retry);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "That journal care could not be changed. Try again.",
+    );
+    expect(alert).toHaveFocus();
+    expect(retry).toBeEnabled();
   });
 
   it("shows ordinary members the access list without organizer controls or pending invitations", () => {
     render(
       <FamilySettingsPanel
         model={connectedMemberModel}
-        actions={{ revokeMembership: vi.fn(), revokeInvitation: vi.fn() }}
+        actions={{
+          revokeMembership: vi.fn(),
+          revokeInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
       />,
     );
 
@@ -353,7 +555,12 @@ describe("FamilySettingsPanel", () => {
       screen.queryByRole("button", { name: /Review access for/u }),
     ).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /Review invitation for/u }),
+      screen.queryByRole("button", {
+        name: /Manage (?:role and access|journal) for/u,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Review invite for/u }),
     ).toBeNull();
     expect(
       screen.getByText(/An organizer can withdraw pending invitations/u),
