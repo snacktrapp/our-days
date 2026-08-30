@@ -9,23 +9,42 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:webpack": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:webpack && playwright test",
+    "test:e2e:update": "npm run build:webpack && playwright test --update-snapshots",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
     "next": "16.3.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "0.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "4.3.3",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.6",
     "@types/node": "20.19.43",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "axe-core": "4.13.0",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
+    "jsdom": "29.1.1",
+    "prettier": "3.9.6",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }

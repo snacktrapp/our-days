@@ -2,7 +2,7 @@
 
 Our Days is a private, mobile-first family journal built around a chronological center-line timeline. This is the isolated production repository; it must never share Proof's GitHub, Supabase, Vercel, environment variables, domains, or data.
 
-The current screen is the approved interactive design baseline. Backend/auth work intentionally follows the privacy and acceptance gates in `docs/`.
+The current route-based shell preserves the approved interactive design baseline. Backend/auth work intentionally follows the privacy and acceptance gates in `docs/`.
 
 ## Local development
 
@@ -12,7 +12,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>; local development redirects the locked root to `/family` for design work.
 
 Requires Node.js 22 or newer. The checked-in package lock is authoritative.
 
@@ -23,9 +23,11 @@ npm run lint
 npm run typecheck
 npm run build
 npm audit
+npm run check
+npm run test:e2e
 ```
 
-In this restricted development environment, Turbopack cannot bind its internal CSS worker port; use `npm run build -- --webpack` for the local production-build check. CI and Vercel must still run the default build.
+In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for the local production-build check. CI and Vercel must still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; unrestricted CI always includes it.
 
 ## Durable project documents
 
@@ -34,6 +36,7 @@ In this restricted development environment, Turbopack cannot bind its internal C
 - `docs/architecture/PHASES.md` — small delivery slices and their gates
 - `docs/architecture/ACCEPTANCE_CRITERIA.md` — release-blocking requirements
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
+- `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
 
 ## Deployment boundary
 

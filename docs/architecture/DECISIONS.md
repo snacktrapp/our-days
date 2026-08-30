@@ -25,6 +25,9 @@ This log separates decisions already justified by evidence from decisions that n
 | ADR-017 | Every environment declares `OUR_DAYS_ENVIRONMENT` and its expected Supabase project reference; startup/build checks reject Preview→Production, Proof, or mismatched resource references. | Resource separation should fail closed rather than rely on a README promise. |
 | ADR-018 | Until real auth exists, production `/` is a locked invitation-only screen. The approved fixture timeline is available only in development or an explicit local design-review process; external previews require deployment protection. | `robots.txt` and `noindex` are not access control. |
 | ADR-019 | The auth phase introduces a nonce-based CSP in the same Next 16 `src/proxy.ts` boundary, narrow origin directives, same-origin mutation tests, and per-action identity/membership/input validation. | XSS, CSRF, and hostile direct Server Action/Route Handler calls can expose an otherwise private session. |
+| ADR-020 | Every protected page performs its own fail-closed server check before producing a view model; a parent layout repeats the check but is not trusted as the only boundary. | Next may begin rendering child Server Components before an ancestor redirect resolves, which can place child RSC data in a redirect response. |
+| ADR-021 | Journal links set `prefetch={false}` until authenticated cache-isolation tests prove prefetch safe. | Private RSC prefetches add browser-resident family payloads and revocation/account-switch cases without enough value for this small app. |
+| ADR-022 | The service worker installs atomically, caches only a fixed versioned public allowlist plus a static locked offline document, never caches runtime navigation responses, and does not call `skipWaiting`. | A failed update leaves the previous worker intact, an open draft cannot be silently reloaded, and offline behavior cannot expose journal data. |
 
 ## Recommended defaults awaiting explicit approval
 
