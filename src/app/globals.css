@@ -1024,12 +1024,16 @@ textarea:focus-visible,
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.milestone-copy {
+  min-width: 0;
+}
 .milestone-copy h3 {
   margin: 6px 0 7px;
   font-family: Georgia, serif;
   font-size: 23px;
   font-weight: 500;
   line-height: 1.08;
+  overflow-wrap: anywhere;
 }
 .milestone-copy > p {
   margin: 0;
@@ -1629,6 +1633,64 @@ textarea:focus-visible,
   border-radius: 50%;
   background: var(--teal);
   box-shadow: 0 0 0 1px var(--line);
+}
+.memory-collections {
+  margin-top: 20px;
+}
+.memory-collections > h2 {
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.memory-collections > a {
+  min-height: 66px;
+  padding: 10px 13px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--ink);
+  text-decoration: none;
+}
+.memory-collections > a > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.memory-collection-node {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 5px solid var(--paper);
+  border-radius: 50%;
+  background: var(--ochre);
+  color: white;
+  font-size: 10px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.memory-collections strong {
+  overflow-wrap: anywhere;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-weight: 500;
+}
+.memory-collections small {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.memory-collections > a > span:last-child {
+  color: var(--teal);
+  font-size: 14px;
+  text-align: center;
 }
 .browse-years {
   margin-top: 25px;

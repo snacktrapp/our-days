@@ -54,6 +54,13 @@ const memories = {
     title: "A late-summer afternoon",
     actionLabel: "See 3 moments from this day →",
   },
+  collections: [
+    {
+      href: "/memories/milestones",
+      label: "The days we chose to mark",
+      description: "Firsts and changes.",
+    },
+  ],
   years: [
     {
       year: "2026",
@@ -109,6 +116,9 @@ describe("Memories browsing", () => {
     expect(
       screen.getByRole("link", { name: "Browse memories from 2026" }),
     ).toHaveAttribute("href", "/memories/years/2026");
+    expect(
+      screen.getByRole("link", { name: /The days we chose to mark/u }),
+    ).toHaveAttribute("href", "/memories/milestones");
     expect(screen.queryByRole("button", { name: "2026" })).toBeNull();
   });
 

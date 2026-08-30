@@ -680,6 +680,14 @@ export function getMemoriesFixture(): MemoriesViewModel {
       title: featured.kicker,
       actionLabel: `See ${anniversaryMoments.length} moments from this day →`,
     },
+    collections: [
+      {
+        href: "/memories/milestones",
+        label: "The days we chose to mark",
+        description:
+          "Firsts, changes, and new chapters, kept in their true order.",
+      },
+    ],
     years: availableMemoryYears().map((year) => ({
       year,
       href: `/memories/years/${year}`,
@@ -756,6 +764,71 @@ export function getOnThisDayFixture(
 
 export function getDesignPreviewOnThisDayFixture() {
   return getOnThisDayFixture(designPreviewAnniversary);
+}
+
+export function getMilestoneMemoriesFixture(): MemoryJourneyViewModel {
+  const memoriesChrome = chrome("teal", "Memories");
+  const moments = archiveMoments.filter(
+    (entry) => entry.moment.kind === "milestone",
+  );
+  const base = {
+    chrome: memoriesChrome,
+    returnHref: "/memories",
+    returnLabel: "All memories",
+    eyebrow: "Family milestones",
+    title: "Milestones",
+    description: "Firsts, changes, and new chapters, held in their true order.",
+  } as const;
+
+  if (moments.length === 0) {
+    return {
+      ...base,
+      state: "empty",
+      emptyState: {
+        title: "No milestones have been marked yet",
+        description:
+          "Milestones added to the family journal will gather here in their true order.",
+      },
+    };
+  }
+
+  const entries: TimelineEntryViewModel[] = [];
+  moments.forEach((moment, index) => {
+    if (index > 0) {
+      entries.push({
+        id: `milestones-gap-${index}`,
+        entryType: "elapsed-gap",
+        label: elapsedCalendarLabel(
+          moments[index - 1].moment.occurredOn,
+          moment.moment.occurredOn,
+        ),
+      });
+    }
+    entries.push({
+      id: `milestones-${moment.moment.id}`,
+      entryType: "date-marker",
+      label: moment.moment.displayDate,
+    });
+    entries.push(moment);
+  });
+  entries.push({
+    id: "milestones-end",
+    entryType: "end-message",
+    markerLabel: "Milestones through the years",
+    message: "Turning points, held beside all the ordinary days.",
+  });
+
+  return {
+    ...base,
+    state: "moments",
+    timeline: {
+      chrome: memoriesChrome,
+      interaction: timelineInteraction,
+      switcher: [],
+      timelineLabel: "Family milestones in reverse chronological order",
+      entries,
+    },
+  };
 }
 
 export function getYearMemoriesFixture(

@@ -80,6 +80,15 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page).toHaveURL(/\/memories\/on-this-day$/u);
 
   await page.getByRole("link", { name: /All memories/u }).click();
+  await page.getByRole("link", { name: /The days we chose to mark/u }).click();
+  await expect(page).toHaveURL(/\/memories\/milestones$/u);
+  await expect(page).toHaveTitle("Milestones — Our Days");
+  await expect(page.getByRole("heading", { name: "Milestones" })).toBeVisible();
+  await expect(page.locator("[data-moment-kind]")).toHaveCount(1);
+  await expect(page.locator('[data-moment-kind="milestone"]')).toHaveCount(1);
+  await expect(page.getByText("First day of school")).toBeVisible();
+
+  await page.getByRole("link", { name: /All memories/u }).click();
   await page.getByRole("link", { name: "Browse memories from 2023" }).click();
   await expect(page).toHaveURL(/\/memories\/years\/2023$/u);
   await expect(page).toHaveTitle("2023 memories — Our Days");
@@ -149,6 +158,7 @@ test("primary screens and composer states have no serious axe violations", async
     "/settings/family",
     "/memories",
     "/memories/on-this-day",
+    "/memories/milestones",
     "/memories/years/2023",
     "/quality/memories-empty",
     "/quality/video-feasibility",

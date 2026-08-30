@@ -4,73 +4,87 @@ import type { MemoriesViewModel } from "./memories-view-model";
 
 export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
   return (
-    <section
-      className="section-panel memories-panel"
-      aria-labelledby="on-this-day-heading"
-    >
-      <div className="memory-heading">
-        <span>{model.heading}</span>
-        <h2 id="on-this-day-heading">{model.subheading}</h2>
-      </div>
-      <div className="memory-portal-connection" aria-hidden="true">
-        <span />
-      </div>
-      {model.feature.state === "photo" ? (
-        <Link
-          className="memory-feature"
-          href={model.feature.href}
-          prefetch={false}
-        >
-          <div className="memory-photo">
-            <CspPublicImage
-              src={model.feature.imageSrc}
-              alt={model.feature.imageAlt}
-              width={1200}
-              height={801}
-              sizes="360px"
-            />
-          </div>
-          <div>
-            <span>{model.feature.dateLabel}</span>
-            <h3>{model.feature.title}</h3>
-            <small>{model.feature.actionLabel}</small>
-          </div>
-        </Link>
-      ) : model.feature.state === "moment" ? (
-        <Link
-          className="memory-feature memory-feature-written"
-          href={model.feature.href}
-          prefetch={false}
-        >
-          <span
-            className={`memory-feature-avatar dot-${model.feature.personAccent}`}
-            aria-hidden="true"
+    <div className="section-panel memories-panel">
+      <section aria-labelledby="on-this-day-heading">
+        <div className="memory-heading">
+          <span>{model.heading}</span>
+          <h2 id="on-this-day-heading">{model.subheading}</h2>
+        </div>
+        <div className="memory-portal-connection" aria-hidden="true">
+          <span />
+        </div>
+        {model.feature.state === "photo" ? (
+          <Link
+            className="memory-feature"
+            href={model.feature.href}
+            prefetch={false}
           >
-            {model.feature.personInitial}
-          </span>
-          <div>
-            <span>
-              {model.feature.dateLabel} · {model.feature.kindLabel}
+            <div className="memory-photo">
+              <CspPublicImage
+                src={model.feature.imageSrc}
+                alt={model.feature.imageAlt}
+                width={1200}
+                height={801}
+                sizes="360px"
+              />
+            </div>
+            <div>
+              <span>{model.feature.dateLabel}</span>
+              <h3>{model.feature.title}</h3>
+              <small>{model.feature.actionLabel}</small>
+            </div>
+          </Link>
+        ) : model.feature.state === "moment" ? (
+          <Link
+            className="memory-feature memory-feature-written"
+            href={model.feature.href}
+            prefetch={false}
+          >
+            <span
+              className={`memory-feature-avatar dot-${model.feature.personAccent}`}
+              aria-hidden="true"
+            >
+              {model.feature.personInitial}
             </span>
-            <h3>{model.feature.personName}</h3>
-            <p>{model.feature.summary}</p>
-            <small>{model.feature.actionLabel}</small>
-          </div>
-        </Link>
-      ) : (
-        <Link
-          className="memory-feature memory-feature-empty"
-          href={model.feature.href}
-          prefetch={false}
-        >
-          <span className="memory-feature-empty-node" aria-hidden="true" />
-          <div>
-            <h3>{model.feature.title}</h3>
-            <p>{model.feature.description}</p>
-            <small>{model.feature.actionLabel}</small>
-          </div>
-        </Link>
-      )}
+            <div>
+              <span>
+                {model.feature.dateLabel} · {model.feature.kindLabel}
+              </span>
+              <h3>{model.feature.personName}</h3>
+              <p>{model.feature.summary}</p>
+              <small>{model.feature.actionLabel}</small>
+            </div>
+          </Link>
+        ) : (
+          <Link
+            className="memory-feature memory-feature-empty"
+            href={model.feature.href}
+            prefetch={false}
+          >
+            <span className="memory-feature-empty-node" aria-hidden="true" />
+            <div>
+              <h3>{model.feature.title}</h3>
+              <p>{model.feature.description}</p>
+              <small>{model.feature.actionLabel}</small>
+            </div>
+          </Link>
+        )}
+      </section>
+      <nav className="memory-collections" aria-labelledby="collections-heading">
+        <h2 id="collections-heading">Milestones</h2>
+        {model.collections.map((collection) => (
+          <Link key={collection.href} href={collection.href} prefetch={false}>
+            <span className="memory-collection-node" aria-hidden="true">
+              ✦
+            </span>
+            <span>
+              <strong>{collection.label}</strong>
+              <small>{collection.description}</small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ))}
+      </nav>
       <nav className="browse-years" aria-labelledby="browse-years-heading">
         <h2 id="browse-years-heading">Browse by year</h2>
         {model.years.length > 0 ? (
@@ -107,6 +121,6 @@ export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
           </div>
         ) : null}
       </nav>
-    </section>
+    </div>
   );
 }

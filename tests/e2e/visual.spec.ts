@@ -301,6 +301,7 @@ test(
     for (const [path, name] of [
       ["/memories", "memories-landing-chromium-mobile.png"],
       ["/memories/on-this-day", "memories-on-this-day-chromium-mobile.png"],
+      ["/memories/milestones", "memories-milestones-chromium-mobile.png"],
       ["/memories/years/2023", "memories-year-chromium-mobile.png"],
       ["/quality/memories-empty", "memories-empty-chromium-mobile.png"],
     ] as const) {

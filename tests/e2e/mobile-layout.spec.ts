@@ -11,6 +11,7 @@ const routes = [
   "/settings/family",
   "/memories",
   "/memories/on-this-day",
+  "/memories/milestones",
   "/memories/years/2023",
   "/quality/memories-empty",
   "/quality/video-feasibility",
@@ -145,10 +146,44 @@ test("maximum-length family names wrap inside the Memories portal", async ({
   });
 });
 
+test("an unbroken milestone title wraps beside the timeline", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/memories/milestones");
+  const geometry = await page
+    .locator(".milestone-copy h3")
+    .evaluate((heading) => {
+      heading.textContent = "M".repeat(80);
+      const card = heading.closest(".moment-card")!.getBoundingClientRect();
+      const label = heading.getBoundingClientRect();
+      const style = getComputedStyle(heading);
+      return {
+        documentFits:
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+        insideCard: label.right <= card.right,
+        overflowWrap: style.overflowWrap,
+        textFits: heading.scrollWidth <= heading.clientWidth,
+      };
+    });
+
+  expect(geometry).toEqual({
+    documentFits: true,
+    insideCard: true,
+    overflowWrap: "anywhere",
+    textFits: true,
+  });
+});
+
 test("deep memory actions can scroll above the fixed navigation", async ({
   page,
 }) => {
-  for (const path of ["/memories/on-this-day", "/memories/years/2023"]) {
+  for (const path of [
+    "/memories/on-this-day",
+    "/memories/milestones",
+    "/memories/years/2023",
+  ]) {
     await page.goto(path);
     const action = page
       .locator("[data-moment-kind]")
@@ -188,6 +223,7 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   for (const route of [
     "/family",
     "/memories/on-this-day",
+    "/memories/milestones",
     "/memories/years/2023",
     "/settings/family",
   ]) {

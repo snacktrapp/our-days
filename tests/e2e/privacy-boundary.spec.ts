@@ -24,6 +24,7 @@ const fixtureText = [
   "I wrote this down because I knew I would miss the noise.",
   "Those wet shoes stayed by the door for days.",
   "That brave wave still gets me.",
+  "First day of school",
 ];
 const privateRoutes = [
   "/family",
@@ -38,6 +39,7 @@ const privateRoutes = [
   "/settings/family",
   "/memories",
   "/memories/on-this-day",
+  "/memories/milestones",
   "/memories/years/2023",
   "/memories/years/1900",
   "/journal",
@@ -146,6 +148,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     [
       "/memories/on-this-day",
       await captureNavigation("/memories", "/memories/on-this-day"),
+    ],
+    [
+      "/memories/milestones",
+      await captureNavigation("/memories", "/memories/milestones"),
     ],
     [
       "/memories/years/2023",

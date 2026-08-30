@@ -1075,6 +1075,7 @@ try {
 
   const milestoneMoment = `A connected milestone ${suffix}`;
   const editedMilestoneMoment = `${milestoneMoment} remembered`;
+  const archivedMilestoneMoment = `${editedMilestoneMoment} in the archive`;
   const locationMoment = `A connected place ${suffix}`;
   serverCanaries.push(milestoneMoment, locationMoment);
   process.stdout.write("Checking connected milestone and place creation.\n");
@@ -1263,6 +1264,61 @@ try {
   await invitedPage.setViewportSize({ height: 350, width: 320 });
   await assertPageQuality(invitedPage, "Short connected Memories landing");
   await invitedPage.setViewportSize({ height: 844, width: 390 });
+
+  const milestoneArchiveResponse = await invitedPage.goto(
+    `${appUrl}/memories/milestones`,
+  );
+  assertPrivateResponse(
+    milestoneArchiveResponse,
+    "Connected milestone memories",
+  );
+  await invitedPage.getByRole("heading", { name: "Milestones" }).waitFor();
+  await invitedPage.getByText(editedMilestoneMoment).waitFor();
+  const connectedMilestoneKinds = await invitedPage
+    .locator("[data-moment-kind]")
+    .evaluateAll((moments) =>
+      moments.map((moment) => moment.getAttribute("data-moment-kind")),
+    );
+  if (
+    connectedMilestoneKinds.length === 0 ||
+    connectedMilestoneKinds.some((kind) => kind !== "milestone")
+  ) {
+    throw new Error(
+      `Connected milestone browsing leaked another kind: ${JSON.stringify(connectedMilestoneKinds)}.`,
+    );
+  }
+  if (
+    (await invitedPage.getByText(locationMoment).count()) !== 0 ||
+    (await invitedPage.getByText(writtenMoment).count()) !== 0
+  ) {
+    throw new Error(
+      "Connected milestone browsing included a thought or place moment.",
+    );
+  }
+  const archiveMilestoneCard = invitedPage
+    .locator("article")
+    .filter({ hasText: editedMilestoneMoment });
+  await archiveMilestoneCard.getByRole("button", { name: /^Edit/u }).click();
+  await invitedPage
+    .getByRole("textbox", { exact: true, name: "Milestone" })
+    .fill(archivedMilestoneMoment);
+  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
+  await invitedPage.getByText(archivedMilestoneMoment).waitFor();
+  await invitedPage.reload();
+  await invitedPage.getByText(archivedMilestoneMoment).waitFor();
+  await invitedPage
+    .locator("article")
+    .filter({ hasText: archivedMilestoneMoment })
+    .getByRole("button", { name: /^Open private notes/u })
+    .click();
+  await invitedPage.getByRole("dialog").waitFor();
+  await invitedPage.getByRole("button", { exact: true, name: "Close" }).click();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected milestone memories");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+
+  await invitedPage.goto(`${appUrl}/memories`);
   await invitedPage
     .getByRole("link", { name: /Open moments from this day/u })
     .click();

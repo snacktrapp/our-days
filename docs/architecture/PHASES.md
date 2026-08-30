@@ -84,6 +84,8 @@ Gate: immutable tenant/author fields, parent visibility, descendant soft-delete 
 
 The decision-independent functional preview for years and On This Day is recorded in `docs/quality/MEMORIES_PREVIEW_REPORT.md`. It validates the emotional and mobile interaction direction only; this phase remains incomplete until production date queries, authorization, scale, timezone, and external-device gates pass.
 
+The connected Milestones archive checkpoint is recorded in `docs/quality/PHASE_6_MILESTONES_CHECKPOINT_REPORT.md`. It adds a count-free landing doorway and dedicated circle-authorized journey while preserving the central timeline, stable traversal, and existing moment actions.
+
 The isolated local short-video preview is recorded in `docs/quality/VIDEO_FEASIBILITY_REPORT.md`. It establishes a quiet timeline treatment, bounded on-device inspection, and a no-upload/no-persistence lifecycle only. Video remains absent from Add Moment, PD-004 remains pending, and upload/transcode/playback/export/deletion work remains deferred.
 
 Deliver:

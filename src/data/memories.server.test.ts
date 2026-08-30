@@ -286,6 +286,143 @@ describe("connected Memories data", () => {
     );
   });
 
+  it("builds the private milestone archive with stable keyset navigation", async () => {
+    const milestoneRows = Array.from({ length: 21 }, (_, index) =>
+      row({
+        moment_id: `milestone-${String(99 - index).padStart(2, "0")}`,
+        moment_kind: "milestone",
+        moment_title: `Chapter ${index + 1}`,
+        occurred_on: "2018-02-03",
+      }),
+    );
+    const rpc = vi.fn().mockResolvedValue({ data: milestoneRows, error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const model = await loadConnectedMemoryJourney(access, context, {
+      mode: "milestones",
+      pages: 1,
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      "list_milestone_memories",
+      expect.objectContaining({
+        circle_id: "circle",
+        page_size: 21,
+        snapshot_at: undefined,
+      }),
+    );
+    expect(model).toMatchObject({
+      state: "moments",
+      eyebrow: "Family milestones",
+      title: "Milestones",
+    });
+    if (model.state !== "moments") throw new Error("Expected milestones");
+    expect(model.timeline.timelineLabel).toBe(
+      "Family milestones in reverse chronological order",
+    );
+    expect(model.timeline.pagination).toEqual({
+      nextHref:
+        "/memories/milestones?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+      label: "Show earlier milestones",
+    });
+    expect(
+      model.timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(20);
+  });
+
+  it("returns a truthful empty milestone archive", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const model = await loadConnectedMemoryJourney(access, context, {
+      mode: "milestones",
+      pages: 1,
+    });
+
+    expect(model).toMatchObject({
+      state: "empty",
+      title: "Milestones",
+      emptyState: { title: "No milestones have been marked yet" },
+    });
+  });
+
+  it("carries the milestone cursor and snapshot across a requested continuation", async () => {
+    const firstPage = Array.from({ length: 21 }, (_, index) =>
+      row({
+        moment_id: `milestone-${String(99 - index).padStart(2, "0")}`,
+        moment_kind: "milestone",
+        moment_title: `Milestone ${index + 1}`,
+        occurred_on: "2010-01-01",
+      }),
+    );
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({
+        data: [
+          row({
+            moment_id: "milestone-79",
+            moment_kind: "milestone",
+            moment_title: "The last milestone",
+            occurred_on: "2010-01-01",
+          }),
+        ],
+        error: null,
+      });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const model = await loadConnectedMemoryJourney(access, context, {
+      mode: "milestones",
+      pages: 2,
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(2, "list_milestone_memories", {
+      circle_id: "circle",
+      cursor_occurred_on: "2010-01-01",
+      cursor_has_precise_time: false,
+      cursor_occurred_at: undefined,
+      cursor_moment_id: "milestone-80",
+      page_size: 21,
+      snapshot_at: "2026-08-30T10:00:01Z",
+    });
+    expect(model.state).toBe("moments");
+    if (model.state !== "moments") throw new Error("Expected milestones");
+    expect(model.timeline.pagination).toBeUndefined();
+    expect(
+      model.timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(21);
+  });
+
+  it("keeps milestone pages and offers an in-route retry after a later RPC error", async () => {
+    const firstPage = Array.from({ length: 21 }, (_, index) =>
+      row({
+        moment_id: `milestone-${String(99 - index).padStart(2, "0")}`,
+        moment_kind: "milestone",
+        moment_title: `Milestone ${index + 1}`,
+        occurred_on: "2010-01-01",
+      }),
+    );
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({ data: firstPage, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: new Error("private detail"),
+      });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const model = await loadConnectedMemoryJourney(access, context, {
+      mode: "milestones",
+      pages: 2,
+    });
+
+    expect(model.state).toBe("moments");
+    if (model.state !== "moments") throw new Error("Expected milestones");
+    expect(model.timeline.paginationError?.retryHref).toBe(
+      "/memories/milestones?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+    );
+  });
+
   it("rejects abusive cumulative page counts before making a database call", async () => {
     const rpc = vi.fn();
     vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);

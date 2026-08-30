@@ -631,7 +631,11 @@ test("the detail sheet opens without entrance motion", async ({ page }) => {
 test("personal and memory timelines open the same identity-safe detail without navigation drift", async ({
   page,
 }) => {
-  for (const path of ["/people/molly", "/memories/on-this-day"] as const) {
+  for (const path of [
+    "/people/molly",
+    "/memories/on-this-day",
+    "/memories/milestones",
+  ] as const) {
     await page.goto(path);
     const card = page.locator("[data-moment-kind]").first();
     const trigger = card.getByRole("button", { name: /Open private notes/u });

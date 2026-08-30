@@ -45,6 +45,25 @@ type MemoryRow = Omit<
     | "place_name"
   >;
 
+type MilestoneRow = Omit<
+  Database["public"]["Functions"]["list_milestone_memories"]["Returns"][number],
+  | "occurred_at"
+  | "occurred_timezone"
+  | "tagged_people"
+  | "moment_kind"
+  | "moment_title"
+  | "place_name"
+> &
+  Pick<
+    TimelineRow,
+    | "occurred_at"
+    | "occurred_timezone"
+    | "tagged_people"
+    | "moment_kind"
+    | "moment_title"
+    | "place_name"
+  >;
+
 const pageSize = 20;
 const yearPageSize = 40;
 
@@ -161,6 +180,14 @@ export async function loadConnectedMemories(
             "As the journal grows, moments from this date will gather here.",
           actionLabel: "Open this day →",
         },
+    collections: [
+      {
+        href: "/memories/milestones",
+        label: "The days we chose to mark",
+        description:
+          "Firsts, changes, and new chapters, kept in their true order.",
+      },
+    ],
     years: visibleYears.map(({ memory_year: year }) => ({
       year: String(year),
       href: `/memories/years/${year}`,
@@ -194,6 +221,11 @@ type MemoryJourneyOptions =
       pages: number;
       snapshotAt?: string;
       anniversaryKey?: string;
+    }>
+  | Readonly<{
+      mode: "milestones";
+      pages: number;
+      snapshotAt?: string;
     }>;
 
 export async function loadConnectedMemoryJourney(
@@ -213,39 +245,51 @@ export async function loadConnectedMemoryJourney(
       ? plainToday(context.circleTimeZone, new Date(snapshotAt))
       : context.today;
   const anniversary =
-    carriedAnniversary ?? anniversaryFromToday(anniversaryDate);
-  const anniversaryKey = `${String(anniversary.month).padStart(2, "0")}-${String(anniversary.day).padStart(2, "0")}`;
-  const rows: MemoryRow[] = [];
+    options.mode === "milestones"
+      ? undefined
+      : (carriedAnniversary ?? anniversaryFromToday(anniversaryDate));
+  const anniversaryKey = anniversary
+    ? `${String(anniversary.month).padStart(2, "0")}-${String(anniversary.day).padStart(2, "0")}`
+    : undefined;
+  const rows: (MemoryRow | MilestoneRow)[] = [];
   const queryPrefix =
     options.mode === "year"
       ? `/memories/years/${options.year}`
-      : "/memories/on-this-day";
-  let cursor: MemoryRow | undefined;
+      : options.mode === "milestones"
+        ? "/memories/milestones"
+        : "/memories/on-this-day";
+  let cursor: MemoryRow | MilestoneRow | undefined;
   let hasMore = false;
   let paginationFailed = false;
 
   for (let page = 0; page < pageCount; page += 1) {
-    const { data, error } = await supabase.rpc("list_memory_moments", {
+    const cursorArguments = {
       circle_id: access.circleId,
-      memory_year: options.mode === "year" ? options.year : undefined,
-      anniversary_month:
-        options.mode === "anniversary" ? anniversary.month : undefined,
-      anniversary_day:
-        options.mode === "anniversary" ? anniversary.day : undefined,
       cursor_occurred_on: cursor?.occurred_on,
       cursor_has_precise_time: cursor ? cursor.occurred_at !== null : undefined,
       cursor_occurred_at: cursor?.occurred_at ?? undefined,
       cursor_moment_id: cursor?.moment_id,
       page_size: pageSize + 1,
       snapshot_at: snapshotAt,
-    });
+    };
+    const { data, error } =
+      options.mode === "milestones"
+        ? await supabase.rpc("list_milestone_memories", cursorArguments)
+        : await supabase.rpc("list_memory_moments", {
+            ...cursorArguments,
+            memory_year: options.mode === "year" ? options.year : undefined,
+            anniversary_month:
+              options.mode === "anniversary" ? anniversary!.month : undefined,
+            anniversary_day:
+              options.mode === "anniversary" ? anniversary!.day : undefined,
+          });
     if (error) {
       if (page === 0) throw error;
       hasMore = true;
       paginationFailed = true;
       break;
     }
-    const pageRows = (data ?? []) as MemoryRow[];
+    const pageRows = (data ?? []) as (MemoryRow | MilestoneRow)[];
     hasMore = pageRows.length > pageSize;
     const visibleRows = pageRows.slice(0, pageSize);
     rows.push(...visibleRows);
@@ -259,7 +303,9 @@ export async function loadConnectedMemoryJourney(
   const title =
     options.mode === "year"
       ? String(options.year)
-      : formatAnniversaryLabel(anniversaryKey);
+      : options.mode === "milestones"
+        ? "Milestones"
+        : formatAnniversaryLabel(anniversaryKey!);
   const base = {
     chrome,
     returnHref: "/memories",
@@ -267,12 +313,16 @@ export async function loadConnectedMemoryJourney(
     eyebrow:
       options.mode === "year"
         ? "Browse by year"
-        : "On this day · Across the years",
+        : options.mode === "milestones"
+          ? "Family milestones"
+          : "On this day · Across the years",
     title,
     description:
       options.mode === "year"
         ? "A chapter of family life, held in its true order."
-        : "Ordinary moments returning quietly from the family archive.",
+        : options.mode === "milestones"
+          ? "Firsts, changes, and new chapters, held in their true order."
+          : "Ordinary moments returning quietly from the family archive.",
   } as const;
 
   if (moments.length === 0) {
@@ -293,17 +343,23 @@ export async function loadConnectedMemoryJourney(
               description:
                 "If an older memory belongs here, you can add it with its true date.",
             }
-          : {
-              title: "Nothing from this day yet",
-              description:
-                "As the journal grows, moments from this date will gather here.",
-            },
+          : options.mode === "milestones"
+            ? {
+                title: "No milestones have been marked yet",
+                description:
+                  "Milestones added to the family journal will gather here in their true order.",
+              }
+            : {
+                title: "Nothing from this day yet",
+                description:
+                  "As the journal grows, moments from this date will gather here.",
+              },
     };
   }
 
   const anniversaryQuery =
     options.mode === "anniversary"
-      ? `&anniversary=${encodeURIComponent(anniversaryKey)}`
+      ? `&anniversary=${encodeURIComponent(anniversaryKey!)}`
       : "";
   const pageQuery = `pages=${pageCount + 1}&snapshot=${encodeURIComponent(snapshotAt!)}${anniversaryQuery}`;
   const retryQuery = `pages=${pageCount}&snapshot=${encodeURIComponent(snapshotAt!)}${anniversaryQuery}`;
@@ -316,7 +372,9 @@ export async function loadConnectedMemoryJourney(
       timelineLabel:
         options.mode === "year"
           ? `Family moments from ${options.year}`
-          : `Family moments from ${title} across the years`,
+          : options.mode === "milestones"
+            ? "Family milestones in reverse chronological order"
+            : `Family moments from ${title} across the years`,
       interaction: connectedTimelineInteraction(access, context),
       entries: buildTimelineEntries(
         moments,
@@ -328,16 +386,24 @@ export async function loadConnectedMemoryJourney(
               markerLabel: `End of ${options.year}`,
               message: "Every year becomes a chapter in the family’s story.",
             }
-          : {
-              markerLabel: "Across the years",
-              message: "Small days, held here for the years ahead.",
-            },
+          : options.mode === "milestones"
+            ? {
+                markerLabel: "Milestones through the years",
+                message: "Turning points, held beside all the ordinary days.",
+              }
+            : {
+                markerLabel: "Across the years",
+                message: "Small days, held here for the years ahead.",
+              },
       ),
       pagination:
         hasMore && !paginationFailed
           ? {
               nextHref: `${queryPrefix}?${pageQuery}`,
-              label: "Show earlier days",
+              label:
+                options.mode === "milestones"
+                  ? "Show earlier milestones"
+                  : "Show earlier days",
             }
           : undefined,
       paginationError: paginationFailed

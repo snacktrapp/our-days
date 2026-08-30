@@ -78,6 +78,7 @@ describe("written moment actions", () => {
       occurred_timezone: undefined,
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/people/${personId}`);
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/memories/milestones");
   });
 
   it("fails cross-origin requests before reading access or touching Supabase", async () => {
