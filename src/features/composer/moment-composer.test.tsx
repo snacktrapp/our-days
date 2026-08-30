@@ -32,7 +32,8 @@ const journalPeople = [people[0], people[2]] as const;
 
 const model = {
   previewToday: "2026-08-28",
-  currentJournalPersonId: "brian",
+  defaultJournalPersonId: "brian",
+  recorderPersonId: "brian",
   recordedByName: "Brian",
   journalPeople,
   taggablePeople: people,

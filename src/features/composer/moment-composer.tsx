@@ -112,7 +112,7 @@ export function MomentComposer({
   const [title, setTitle] = useState("");
   const [occurredOn, setOccurredOn] = useState(model.previewToday);
   const [journalPersonId, setJournalPersonId] = useState(
-    model.currentJournalPersonId,
+    model.defaultJournalPersonId,
   );
   const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>([]);
   const [placeName, setPlaceName] = useState("");
@@ -145,7 +145,7 @@ export function MomentComposer({
     photoFile ||
     taggedPersonIds.length ||
     occurredOn !== model.previewToday ||
-    journalPersonId !== model.currentJournalPersonId,
+    journalPersonId !== model.defaultJournalPersonId,
   );
 
   const revokeCurrentPhotoUrl = useCallback(() => {
@@ -184,7 +184,7 @@ export function MomentComposer({
       setBody("");
       setTitle("");
       setOccurredOn(model.previewToday);
-      setJournalPersonId(model.currentJournalPersonId);
+      setJournalPersonId(model.defaultJournalPersonId);
       setTaggedPersonIds([]);
       setPlaceName("");
       setPhotoFile(null);
@@ -192,7 +192,7 @@ export function MomentComposer({
       setPhotoError(null);
       setContentError(null);
     },
-    [clearPhotoPreview, model.currentJournalPersonId, model.previewToday],
+    [clearPhotoPreview, model.defaultJournalPersonId, model.previewToday],
   );
 
   const close = useCallback(
@@ -489,7 +489,7 @@ export function MomentComposer({
                 </div>
               ) : null}
             </dl>
-            {journalPersonId !== model.currentJournalPersonId ? (
+            {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <div className="composer-review-actions">
@@ -735,7 +735,7 @@ export function MomentComposer({
               ) : null}
             </div>
 
-            {journalPersonId !== model.currentJournalPersonId ? (
+            {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <p className="composer-preview-note">

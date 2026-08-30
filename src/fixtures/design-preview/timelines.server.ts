@@ -88,7 +88,11 @@ const composerJournalPeople = composerPeople.filter(
   (person) => person.id !== "molly",
 );
 
-function chrome(accent: AccentToken, title: string): JournalChromeViewModel {
+function chrome(
+  accent: AccentToken,
+  title: string,
+  defaultJournalPersonId = "brian",
+): JournalChromeViewModel {
   return {
     accent,
     title,
@@ -96,7 +100,8 @@ function chrome(accent: AccentToken, title: string): JournalChromeViewModel {
     familyMark,
     composer: {
       previewToday: "2026-08-28",
-      currentJournalPersonId: "brian",
+      defaultJournalPersonId,
+      recorderPersonId: "brian",
       recordedByName: "Brian",
       journalPeople: composerJournalPeople,
       taggablePeople: composerPeople,
@@ -111,6 +116,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "sunset",
+      journalPersonId: "brian",
       kind: "photo",
       personName: "Brian",
       personInitial: "B",
@@ -167,6 +173,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "kitchen",
+      journalPersonId: "molly",
       kind: "thought",
       personName: "Molly",
       personInitial: "M",
@@ -201,6 +208,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "lake",
+      journalPersonId: "molly",
       kind: "location",
       personName: "Molly",
       personInitial: "M",
@@ -239,6 +247,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "first-day",
+      journalPersonId: "avery",
       kind: "milestone",
       personName: "Avery",
       personInitial: "A",
@@ -285,6 +294,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "late-summer-2022",
+      journalPersonId: "brian",
       kind: "photo",
       personName: "Brian",
       personInitial: "B",
@@ -314,6 +324,7 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "porch-light-2019",
+      journalPersonId: "molly",
       kind: "thought",
       personName: "Molly",
       personInitial: "M",
@@ -346,37 +357,164 @@ export function getFamilyTimelineFixture(): TimelineViewModel {
   };
 }
 
+const personalJournals = [
+  {
+    id: "brian",
+    name: "Brian",
+    initial: "B",
+    accent: "teal",
+    composerJournalPersonId: "brian",
+  },
+  {
+    id: "molly",
+    name: "Molly",
+    initial: "M",
+    accent: "clay",
+    composerJournalPersonId: "brian",
+  },
+  {
+    id: "avery",
+    name: "Avery",
+    initial: "A",
+    accent: "ochre",
+    composerJournalPersonId: "avery",
+  },
+  {
+    id: "sam",
+    name: "Sam",
+    initial: "S",
+    accent: "slate",
+    composerJournalPersonId: "sam",
+  },
+  {
+    id: "june",
+    name: "June",
+    initial: "J",
+    accent: "moss",
+    composerJournalPersonId: "june",
+  },
+] as const satisfies readonly Readonly<{
+  id: string;
+  name: string;
+  initial: string;
+  accent: AccentToken;
+  composerJournalPersonId: string;
+}>[];
+
+type PersonalJournal = (typeof personalJournals)[number];
+
+function personalTimelineEntries(
+  person: PersonalJournal,
+): readonly TimelineEntryViewModel[] {
+  const moments = (familyEntries as readonly TimelineEntryViewModel[])
+    .filter(isMomentEntry)
+    .filter((entry) => entry.moment.journalPersonId === person.id)
+    .toSorted((left, right) =>
+      compareMemoryDatesDescending(left.moment, right.moment),
+    );
+
+  if (moments.length === 0) {
+    return [
+      {
+        id: `${person.id}-ready`,
+        entryType: "end-message",
+        markerLabel: "A story ready to begin",
+        message: `The first moment your family keeps for ${person.name} will begin this timeline.`,
+      },
+    ];
+  }
+
+  const entries: TimelineEntryViewModel[] = [];
+  const latestYear = moments[0].moment.occurredOn.slice(0, 4);
+  entries.push({
+    id: `${person.id}-latest`,
+    entryType: "date-marker",
+    label: latestYear === "2026" ? "Summer 2026" : latestYear,
+  });
+
+  moments.forEach((entry, index) => {
+    const previous = moments[index - 1];
+    if (previous) {
+      entries.push({
+        id: `${person.id}-gap-${previous.moment.id}-${entry.moment.id}`,
+        entryType: "elapsed-gap",
+        label: elapsedCalendarLabel(
+          previous.moment.occurredOn,
+          entry.moment.occurredOn,
+        ),
+      });
+      const year = entry.moment.occurredOn.slice(0, 4);
+      if (year !== previous.moment.occurredOn.slice(0, 4)) {
+        entries.push({
+          id: `${person.id}-year-${year}`,
+          entryType: "date-marker",
+          label: year,
+          divider: true,
+        });
+      }
+    }
+    entries.push(entry);
+  });
+  entries.push(
+    moments.length === 1
+      ? {
+          id: `${person.id}-story-so-far`,
+          entryType: "end-message",
+          markerLabel: "The story so far",
+          message: `This is the earliest moment kept for ${person.name}.`,
+        }
+      : {
+          id: `${person.id}-earlier-years`,
+          entryType: "end-message",
+          markerLabel: "Earlier years",
+          message: "Keep scrolling to travel back through this life.",
+        },
+  );
+  return entries;
+}
+
+function personalSummary(entries: readonly TimelineEntryViewModel[]): string {
+  const moments = entries.filter(isMomentEntry);
+  if (moments.length === 0) return "No moments yet";
+  const newestYear = moments[0].moment.occurredOn.slice(0, 4);
+  const oldestYear = moments[moments.length - 1].moment.occurredOn.slice(0, 4);
+  const years =
+    newestYear === oldestYear ? newestYear : `${oldestYear}–${newestYear}`;
+  return `${moments.length} ${moments.length === 1 ? "moment" : "moments"} · ${years}`;
+}
+
 export function getPersonalTimelineFixture(
   personId: string,
 ): TimelineViewModel | null {
-  if (personId !== "molly") return null;
+  const person = personalJournals.find(
+    (candidate) => candidate.id === personId,
+  );
+  if (!person) return null;
+  const entries = personalTimelineEntries(person);
 
   return {
-    chrome: chrome("clay", "Molly’s days"),
+    chrome: chrome(
+      person.accent,
+      `${person.name}’s days`,
+      person.composerJournalPersonId,
+    ),
     interaction: timelineInteraction,
     switcher: [
       { label: "Family", href: "/family", current: false },
-      { label: "Molly", href: "/people/molly", current: true },
-    ],
-    personalIntro: {
-      initial: "M",
-      accent: "clay",
-      title: "Molly’s journal",
-      summary: "104 moments · 2012–2026",
-    },
-    entries: [
-      { id: "summer-2026", entryType: "date-marker", label: "Summer 2026" },
-      ...familyEntries.filter(
-        (entry) =>
-          entry.entryType === "moment" && entry.moment.personName === "Molly",
-      ),
       {
-        id: "earlier-years",
-        entryType: "end-message",
-        markerLabel: "Earlier years",
-        message: "Keep scrolling to travel back through this life.",
+        label: person.name,
+        href: `/people/${person.id}`,
+        current: true,
       },
     ],
+    timelineLabel: `Chronological moments for ${person.name}`,
+    personalIntro: {
+      initial: person.initial,
+      accent: person.accent,
+      title: `${person.name}’s journal`,
+      summary: personalSummary(entries),
+    },
+    entries,
   };
 }
 
@@ -391,6 +529,7 @@ export function getPeopleFixture(): PeopleViewModel {
         initial: "B",
         accent: "teal",
         roleLabel: "Co-organizer",
+        journalHref: "/people/brian",
       },
       {
         id: "molly",
@@ -406,6 +545,7 @@ export function getPeopleFixture(): PeopleViewModel {
         initial: "A",
         accent: "ochre",
         roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/avery",
       },
       {
         id: "sam",
@@ -413,6 +553,7 @@ export function getPeopleFixture(): PeopleViewModel {
         initial: "S",
         accent: "slate",
         roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/sam",
       },
       {
         id: "june",
@@ -420,6 +561,7 @@ export function getPeopleFixture(): PeopleViewModel {
         initial: "J",
         accent: "moss",
         roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/june",
       },
     ],
   };

@@ -62,6 +62,7 @@ export function PrimaryNavigation({
         </Link>
       </nav>
       <MomentComposer
+        key={`${composer.recorderPersonId}:${composer.defaultJournalPersonId}`}
         model={composer}
         open={composerOpen}
         returnFocusRef={addMomentRef}

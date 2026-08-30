@@ -28,7 +28,12 @@ const fixtureText = [
 const privateRoutes = [
   "/family",
   "/people",
+  "/people/brian",
   "/people/molly",
+  "/people/avery",
+  "/people/sam",
+  "/people/june",
+  "/people/not-in-this-family",
   "/settings/family",
   "/memories",
   "/memories/on-this-day",
@@ -126,7 +131,11 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   const capturedRequests = new Map([
     ["/family", await captureNavigation("/people", "/family")],
     ["/people", await captureNavigation("/family", "/people")],
-    ["/people/molly", await captureNavigation("/family", "/people/molly")],
+    ["/people/brian", await captureNavigation("/people", "/people/brian")],
+    ["/people/molly", await captureNavigation("/people", "/people/molly")],
+    ["/people/avery", await captureNavigation("/people", "/people/avery")],
+    ["/people/sam", await captureNavigation("/people", "/people/sam")],
+    ["/people/june", await captureNavigation("/people", "/people/june")],
     [
       "/settings/family",
       await captureNavigation("/family", "/settings/family"),
@@ -146,6 +155,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   capturedRequests.set(
     "/memories/years/1900",
     capturedRequests.get("/memories/years/2023")!,
+  );
+  capturedRequests.set(
+    "/people/not-in-this-family",
+    capturedRequests.get("/people/molly")!,
   );
   // `/journal` is a guarded compatibility redirect and intentionally has no
   // visible link. Reuse the genuine browser-generated envelope captured from
@@ -170,6 +183,29 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     "text/x-component",
   );
   expect(await previewResponse.text()).toContain(detailCanary);
+
+  const previewUnknownRequest = capturedRequests.get(
+    "/people/not-in-this-family",
+  )!;
+  const previewUnknownResponse = await request.get(
+    `${previewURL}/people/not-in-this-family${previewUnknownRequest.search}`,
+    { headers: previewUnknownRequest.headers },
+  );
+  expect(previewUnknownResponse.status()).toBe(200);
+  expect(previewUnknownResponse.headers()["content-type"]).toContain(
+    "text/x-component",
+  );
+  expect(previewUnknownResponse.headers()["cache-control"]).toContain(
+    "private",
+  );
+  expect(previewUnknownResponse.headers()["cache-control"]).toContain(
+    "no-store",
+  );
+  expect(previewUnknownResponse.headers()["x-robots-tag"]).toContain("noindex");
+  const previewUnknownBody = await previewUnknownResponse.text();
+  expect(previewUnknownBody).toContain("NEXT_HTTP_ERROR_FALLBACK;404");
+  for (const value of fixtureText)
+    expect(previewUnknownBody).not.toContain(value);
 
   for (const path of privateRoutes) {
     const capturedRequest = capturedRequests.get(path)!;

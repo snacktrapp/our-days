@@ -140,7 +140,11 @@ test("primary screens and composer states have no serious axe violations", async
 
   for (const path of [
     "/family",
+    "/people/brian",
     "/people/molly",
+    "/people/avery",
+    "/people/sam",
+    "/people/june",
     "/people",
     "/settings/family",
     "/memories",

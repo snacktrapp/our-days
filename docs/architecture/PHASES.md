@@ -43,6 +43,8 @@ Gate: member success plus anonymous, no-circle, wrong-circle, dual-circle, stale
 
 Entry prerequisite: PD-001 and PD-002 are accepted.
 
+The decision-independent personal-journals preview is recorded in `docs/quality/PERSONAL_JOURNALS_PREVIEW_REPORT.md`. It establishes stable journal ownership, all five individual routes, truthful managed-profile attribution, chronological gaps, and honest empty states without implying that production authorization or persistence exists.
+
 Deliver:
 
 - Combined and personal feeds, thought creation, backdating, managed-person selection, edit, trash, restore, loading/error/empty/end states, and stable cursor pagination.

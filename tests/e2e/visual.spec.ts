@@ -33,10 +33,36 @@ test(
     test.skip(testInfo.project.name !== "chromium-mobile");
     await page.goto("/people/molly");
     await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await expect(page).toHaveScreenshot("personal-chromium-mobile.png", {
-      fullPage: true,
       animations: "disabled",
     });
+  },
+);
+
+test(
+  "managed personal journals preserve populated and first-moment states",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile");
+    for (const [path, name] of [
+      ["/people/avery", "personal-avery-chromium-mobile.png"],
+      ["/people/sam", "personal-sam-empty-chromium-mobile.png"],
+    ] as const) {
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(page).toHaveScreenshot(name, {
+        animations: "disabled",
+      });
+      if (path === "/people/avery") {
+        await page.getByText("The story so far").scrollIntoViewIfNeeded();
+        await expect(page).toHaveScreenshot(
+          "personal-avery-ending-chromium-mobile.png",
+          { animations: "disabled" },
+        );
+      }
+    }
   },
 );
 

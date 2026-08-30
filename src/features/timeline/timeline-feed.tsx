@@ -121,7 +121,10 @@ export function TimelineFeed({ model }: { model: TimelineViewModel }) {
         </div>
       )}
 
-      <section className="timeline" aria-label="Chronological family moments">
+      <section
+        className="timeline"
+        aria-label={model.timelineLabel ?? "Chronological family moments"}
+      >
         <div className="time-rail" aria-hidden="true" />
         {model.entries.map((entry) => (
           <TimelineEntry

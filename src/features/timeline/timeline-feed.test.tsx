@@ -5,6 +5,7 @@ import { TimelineFeed } from "./timeline-feed";
 import type { TimelineViewModel } from "./timeline-view-model";
 
 const shared = {
+  journalPersonId: "person",
   personName: "Person",
   personInitial: "P",
   personAccent: "teal",
@@ -39,7 +40,8 @@ const interaction = {
 
 const composer = {
   previewToday: "2026-08-28",
-  currentJournalPersonId: "person",
+  defaultJournalPersonId: "person",
+  recorderPersonId: "person",
   recordedByName: "Person",
   journalPeople: [
     {
@@ -63,6 +65,7 @@ const model = {
   },
   interaction,
   switcher: [{ label: "Family", href: "/family", current: true }],
+  timelineLabel: "Chronological moments for Person",
   entries: [
     { id: "marker", entryType: "date-marker", label: "Today" },
     {
@@ -121,7 +124,7 @@ describe("TimelineFeed", () => {
   it("renders the rail sequence and all four moment treatments semantically", () => {
     const { container } = render(<TimelineFeed model={model} />);
     expect(
-      screen.getByLabelText("Chronological family moments"),
+      screen.getByLabelText("Chronological moments for Person"),
     ).toBeInTheDocument();
     expect(container.querySelector(".time-rail")).toBeInTheDocument();
     expect(container.querySelectorAll("article")).toHaveLength(4);

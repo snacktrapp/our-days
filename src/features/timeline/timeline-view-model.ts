@@ -38,6 +38,7 @@ export type MomentConversationViewModel = Readonly<{
 
 type TimelineMomentBase = Readonly<{
   id: string;
+  journalPersonId: string;
   personName: string;
   personInitial: string;
   personAccent: AccentToken;
@@ -133,6 +134,7 @@ export type TimelineViewModel = Readonly<{
     href: string;
     current: boolean;
   }>[];
+  timelineLabel?: string;
   personalIntro?: Readonly<{
     initial: string;
     accent: AccentToken;

@@ -3,6 +3,10 @@ import { expect, test } from "./test";
 const routes = [
   "/family",
   "/people/molly",
+  "/people/brian",
+  "/people/avery",
+  "/people/sam",
+  "/people/june",
   "/people",
   "/settings/family",
   "/memories",

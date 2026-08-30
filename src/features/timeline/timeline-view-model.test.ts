@@ -3,7 +3,8 @@ import type { TimelineViewModel } from "./timeline-view-model";
 
 const composer = {
   previewToday: "2026-08-28",
-  currentJournalPersonId: "person",
+  defaultJournalPersonId: "person",
+  recorderPersonId: "person",
   recordedByName: "Person",
   journalPeople: [
     {
@@ -43,6 +44,7 @@ const model = {
       entryType: "moment",
       moment: {
         id: "thought",
+        journalPersonId: "person",
         kind: "thought",
         personName: "Person",
         personInitial: "P",

@@ -10,7 +10,8 @@ export type ComposerPersonOption = Readonly<{
 
 export type MomentComposerViewModel = Readonly<{
   previewToday: string;
-  currentJournalPersonId: string;
+  defaultJournalPersonId: string;
+  recorderPersonId: string;
   recordedByName: string;
   journalPeople: readonly ComposerPersonOption[];
   taggablePeople: readonly ComposerPersonOption[];
