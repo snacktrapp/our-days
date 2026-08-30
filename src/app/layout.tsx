@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
@@ -34,11 +35,13 @@ export const viewport: Viewport = {
   themeColor: "#f3eee4",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
+
   return (
     <html lang="en">
       <body>

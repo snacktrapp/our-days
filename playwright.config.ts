@@ -8,6 +8,10 @@ const includeWebKit = Boolean(
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  // Nonce-protected pages render per request. A single browser worker keeps
+  // the local production server deterministic across engines; two workers
+  // can starve Firefox's first full-page navigation under local CI load.
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "list",

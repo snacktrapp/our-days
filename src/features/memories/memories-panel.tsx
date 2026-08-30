@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { CspPublicImage } from "@/components/csp-image";
 import type { MemoriesViewModel } from "./memories-view-model";
 
 export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
@@ -15,10 +15,11 @@ export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
         prefetch={false}
       >
         <div className="memory-photo">
-          <Image
+          <CspPublicImage
             src={model.feature.imageSrc}
             alt={model.feature.imageAlt}
-            fill
+            width={1200}
+            height={801}
             sizes="360px"
           />
         </div>

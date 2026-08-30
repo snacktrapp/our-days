@@ -20,6 +20,7 @@ const privateRoutes = [
   "/people/molly",
   "/memories",
   "/journal",
+  "/quality/global-error",
 ];
 
 function isRscNavigationRequest(url: string, headers: Record<string, string>) {
@@ -116,6 +117,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   // visible link. Reuse the genuine browser-generated envelope captured from
   // a sibling private route while targeting `/journal` on the locked server.
   capturedRequests.set("/journal", capturedRequests.get("/family")!);
+  capturedRequests.set(
+    "/quality/global-error",
+    capturedRequests.get("/family")!,
+  );
 
   for (const path of privateRoutes) {
     const capturedRequest = capturedRequests.get(path)!;

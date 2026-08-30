@@ -86,6 +86,21 @@ describe("Our Days environment isolation", () => {
     ).toMatchObject({ identity: "local", supabaseProjectRef: "local" });
   });
 
+  it("accepts a local Supabase subdomain through the shared origin resolver", () => {
+    expect(
+      validateOurDaysEnvironment({
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+        NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
+        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: "local",
+        OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS: proofRef,
+        NEXT_PUBLIC_SUPABASE_URL: "http://journal.localhost:54321",
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+          "sb_publishable_local_contract_fixture",
+      }),
+    ).toMatchObject({ identity: "local", supabaseProjectRef: "local" });
+  });
+
   it("accepts Preview only when it is isolated from Production", () => {
     expect(
       validateOurDaysEnvironment({

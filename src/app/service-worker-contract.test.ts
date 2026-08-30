@@ -62,8 +62,9 @@ function createLifecycleHarness(
 describe("public service worker contract", () => {
   it("caches only the explicit public shell and never runtime journal responses", async () => {
     const source = await readWorkerSource();
-    expect(source).toContain("const CACHE_NAME = `${CACHE_PREFIX}v1`");
+    expect(source).toContain("const CACHE_NAME = `${CACHE_PREFIX}v2`");
     expect(source).toContain("'/offline.html'");
+    expect(source).toContain("'/offline.css'");
     expect(source).toContain("'/manifest.webmanifest'");
     expect(source).not.toContain("'/'");
     expect(source).not.toContain("cache.put");
@@ -73,10 +74,7 @@ describe("public service worker contract", () => {
   });
 
   it("leaves the active cache untouched when a required update asset fails", async () => {
-    const source = (await readWorkerSource()).replace(
-      "`${CACHE_PREFIX}v1`",
-      "`${CACHE_PREFIX}v2`",
-    );
+    const source = await readWorkerSource();
     const harness = createLifecycleHarness(source, {
       existingCaches: ["our-days-public-shell-v1"],
       failInstall: true,
@@ -91,10 +89,7 @@ describe("public service worker contract", () => {
   });
 
   it("installs a complete update before activating and purges only old app caches", async () => {
-    const source = (await readWorkerSource()).replace(
-      "`${CACHE_PREFIX}v1`",
-      "`${CACHE_PREFIX}v2`",
-    );
+    const source = await readWorkerSource();
     const harness = createLifecycleHarness(source, {
       existingCaches: ["our-days-public-shell-v1", "another-app-cache"],
     });
@@ -102,6 +97,7 @@ describe("public service worker contract", () => {
     await harness.dispatch("install");
     expect(harness.addAll).toHaveBeenCalledWith([
       "/offline.html",
+      "/offline.css",
       "/manifest.webmanifest",
       "/icon-192.png",
       "/icon-512.png",

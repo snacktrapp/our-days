@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { resolveSupabaseOrigin, SupabaseOriginError } from "./supabase-origin";
 
 type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -196,47 +197,41 @@ function projectRefFromSupabaseUrl(
 ) {
   if (!value) return undefined;
 
-  let url: URL;
+  let resolved;
   try {
-    url = new URL(value);
-  } catch {
-    issues.push("NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL");
+    resolved = resolveSupabaseOrigin(value);
+  } catch (error) {
+    if (
+      error instanceof SupabaseOriginError &&
+      error.code === "not-base-origin"
+    ) {
+      issues.push(
+        "NEXT_PUBLIC_SUPABASE_URL must be a base origin without credentials, path, query, or fragment",
+      );
+    } else if (
+      error instanceof SupabaseOriginError &&
+      error.code === "invalid-url"
+    ) {
+      issues.push("NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL");
+    } else {
+      issues.push(
+        "hosted NEXT_PUBLIC_SUPABASE_URL must be the HTTPS base origin for the expected Supabase project",
+      );
+    }
     return undefined;
   }
 
-  if (
-    url.username ||
-    url.password ||
-    url.pathname !== "/" ||
-    url.search ||
-    url.hash
-  ) {
-    issues.push(
-      "NEXT_PUBLIC_SUPABASE_URL must be a base origin without credentials, path, query, or fragment",
-    );
-  }
-
-  const loopback =
-    url.hostname === "localhost" ||
-    url.hostname.endsWith(".localhost") ||
-    url.hostname === "127.0.0.1" ||
-    url.hostname === "[::1]";
-  if (
-    identity === "local" &&
-    loopback &&
-    ["http:", "https:"].includes(url.protocol)
-  ) {
+  if (identity === "local" && resolved.local) {
     return "local";
   }
 
-  const hostedMatch = /^([a-z0-9]{20})\.supabase\.co$/.exec(url.hostname);
-  if (url.protocol !== "https:" || url.port !== "" || !hostedMatch) {
+  if (resolved.local) {
     issues.push(
       "hosted NEXT_PUBLIC_SUPABASE_URL must be the HTTPS base origin for the expected Supabase project",
     );
     return undefined;
   }
-  return hostedMatch[1];
+  return resolved.projectRef;
 }
 
 function configuredForbiddenRefs(

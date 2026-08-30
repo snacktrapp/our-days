@@ -30,14 +30,14 @@ describe("MomentComposer", () => {
     expect(
       screen.getByRole("button", { name: /Photo or video/ }),
     ).toHaveFocus();
-    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.body).toHaveClass("composer-scroll-locked");
 
     await user.click(
       screen.getByRole("button", { name: "Close moment composer" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open composer" })).toHaveFocus();
-    expect(document.body.style.overflow).toBe("");
+    expect(document.body).not.toHaveClass("composer-scroll-locked");
   });
 
   it("preserves a draft when dismissal is declined and discards it when accepted", async () => {

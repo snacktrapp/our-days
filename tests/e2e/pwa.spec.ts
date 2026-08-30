@@ -7,6 +7,7 @@ test.skip(
 
 const allowedCachePaths = [
   "/offline.html",
+  "/offline.css",
   "/manifest.webmanifest",
   "/icon-192.png",
   "/icon-512.png",
@@ -38,7 +39,7 @@ test("manifest is installable and service worker caches only the public allowlis
       .sort();
     return { names, urls };
   });
-  expect(cacheState.names).toEqual(["our-days-public-shell-v1"]);
+  expect(cacheState.names).toEqual(["our-days-public-shell-v2"]);
   expect(cacheState.urls).toEqual([...allowedCachePaths].sort());
   expect(cacheState.urls).not.toContain("/family");
 
@@ -64,6 +65,12 @@ test("manifest is installable and service worker caches only the public allowlis
   await expect(
     page.getByRole("heading", { name: "You’re offline." }),
   ).toBeVisible();
+  await expect(page.locator("body")).toHaveCSS("display", "grid");
+  await expect(page.locator(".card")).toHaveCSS("border-radius", "28px");
+  await expect(page.locator(".card")).toHaveCSS(
+    "background-color",
+    "rgb(255, 253, 248)",
+  );
   await expect(page.getByText("All our days")).toHaveCount(0);
   await context.setOffline(false);
 });

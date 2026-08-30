@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { CspPublicImage } from "@/components/csp-image";
 import { MomentReactionControl } from "./moment-reaction-control";
 import type { TimelineMomentViewModel } from "./timeline-view-model";
 
@@ -31,11 +31,12 @@ export function MomentCard({ moment, preload = false }: MomentCardProps) {
     return (
       <div className="moment-card photo-card">
         <div className="photo-frame">
-          <Image
+          <CspPublicImage
             src={moment.image.src}
             alt={moment.image.alt}
-            fill
-            preload={preload}
+            width={1200}
+            height={801}
+            highPriority={preload}
             sizes="(max-width: 520px) 92vw, 410px"
           />
           <span className="photo-date">{moment.image.badgeLabel}</span>

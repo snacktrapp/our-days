@@ -81,8 +81,10 @@ export function MomentComposer({
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const bodyWasLocked = document.body.classList.contains(
+      "composer-scroll-locked",
+    );
+    document.body.classList.add("composer-scroll-locked");
     if (!dialog.open) dialog.showModal();
     const focusFrame = window.requestAnimationFrame(() =>
       firstChoiceRef.current?.focus(),
@@ -90,7 +92,8 @@ export function MomentComposer({
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.body.style.overflow = previousOverflow;
+      if (!bodyWasLocked)
+        document.body.classList.remove("composer-scroll-locked");
       if (dialog.open) dialog.close();
     };
   }, [open]);

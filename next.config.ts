@@ -3,8 +3,11 @@ import {
   environmentForNextConfig,
   validateOurDaysEnvironment,
 } from "./config/our-days-environment";
+import { httpSecurityHeaders } from "./config/http-security";
 
-validateOurDaysEnvironment(environmentForNextConfig(process.env));
+const environment = validateOurDaysEnvironment(
+  environmentForNextConfig(process.env),
+);
 
 const privateRoutes = [
   "/",
@@ -14,6 +17,7 @@ const privateRoutes = [
   "/people",
   "/people/:path*",
   "/memories",
+  "/quality/:path*",
 ];
 const privateHeaders = [
   { key: "Cache-Control", value: "private, no-store, max-age=0" },
@@ -33,15 +37,7 @@ const nextConfig: NextConfig = {
       ...privateRoutes.map((source) => ({ source, headers: privateHeaders })),
       {
         source: "/(.*)",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "no-referrer" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(self), microphone=(), geolocation=(self)",
-          },
-        ],
+        headers: httpSecurityHeaders(environment.identity),
       },
     ];
   },

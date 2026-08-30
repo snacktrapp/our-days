@@ -35,6 +35,8 @@ In this restricted development environment, Turbopack can be prevented from bind
 
 `npm run verify:artifacts` requires a completed production build, scans Git-tracked source plus the complete `.next` tree, and emits only redacted findings. It also checks tracked public files, static assets, standalone client assets, and prerendered browser responses for local design-fixture canaries. See `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` for coverage and limitations.
 
+Rendered pages use a fresh nonce CSP and request-time rendering. Production allows no unauthorized inline script, event handler, style attribute, frame, plugin, wildcard Supabase host, analytics origin, or third-party reporting collector. Known public assets stay outside the nonce proxy but retain the static isolation-header baseline; HSTS is Production-only. See `docs/quality/SECURITY_HEADERS_REPORT.md`.
+
 ## Durable project documents
 
 - `docs/product/PRODUCT_BRIEF.md` — product promise, MVP, flows, model, and initial technical direction
@@ -44,6 +46,7 @@ In this restricted development environment, Turbopack can be prevented from bind
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
+- `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 
 ## Deployment boundary
 

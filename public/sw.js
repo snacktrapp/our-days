@@ -1,7 +1,8 @@
 const CACHE_PREFIX = 'our-days-public-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const PUBLIC_SHELL = Object.freeze([
   '/offline.html',
+  '/offline.css',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png',

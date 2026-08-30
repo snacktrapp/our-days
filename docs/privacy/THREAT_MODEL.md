@@ -46,7 +46,7 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 - Descendant policies join to a visible live parent; purge uses an immutable request plus idempotent ledger/tombstone.
 - Export workers load immutable authorized job records, recheck requester membership, generate safe filenames, validate circle counts/checksums, and expire artifacts.
 - Authenticated routes render per request with private/no-store headers; proxy refresh responses preserve cookie/cache controls; two-browser isolation tests cover refresh, prefetch, sign-out, and account switch.
-- A nonce CSP, narrow origin/redirect allowlists, same-origin mutation controls, and per-action identity/membership/input validation constrain browser-session attacks.
+- A fresh per-request nonce CSP forbids inline handlers/style attributes and constrains scripts, frames, forms, workers, media, and connections to reviewed exact origins; narrow redirect allowlists, same-origin mutation controls, and per-action identity/membership/input validation constrain the remaining browser-session attacks.
 - Fail-closed environment identity/project-reference validation rejects Preview→Production, Proof references, and wildcard/caller-controlled redirects; external previews remain deployment-protected until app auth passes.
 - Membership removal and Auth-account deletion are separate workflows; family rows do not cascade from `auth.users`, and owned Storage objects are cleared or reassigned before Auth deletion.
 - No advertising IDs, session replay, cross-site analytics, public profiles, or third-party family-media hosts.
