@@ -1,16 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
+import type { SaveWrittenMomentAction } from "@/features/moments/moment-action-types";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
   open: boolean;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
   onRequestClose: () => void;
+  saveWrittenMoment?: SaveWrittenMomentAction;
 }>;
+
+export type { SaveWrittenMomentAction };
 
 type ModeCopy = Readonly<{
   kindLabel: string;
@@ -103,7 +108,10 @@ export function MomentComposer({
   open,
   returnFocusRef,
   onRequestClose,
+  saveWrittenMoment,
 }: MomentComposerProps) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<MomentKind | null>(null);
   const [choosingMode, setChoosingMode] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -111,6 +119,7 @@ export function MomentComposer({
   const [body, setBody] = useState("");
   const [title, setTitle] = useState("");
   const [occurredOn, setOccurredOn] = useState(model.previewToday);
+  const [occurredTime, setOccurredTime] = useState("");
   const [journalPersonId, setJournalPersonId] = useState(
     model.defaultJournalPersonId,
   );
@@ -122,11 +131,14 @@ export function MomentComposer({
     useState<PhotoDecodeState>("empty");
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const firstChoiceRef = useRef<HTMLButtonElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const savedDoneRef = useRef<HTMLButtonElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewUrlRef = useRef<string | null>(null);
 
@@ -137,6 +149,7 @@ export function MomentComposer({
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
+  const connectedWritten = model.experience === "connected-written";
   const resolvedPlaceName = mode === "location" ? title : placeName;
   const isDirty = Boolean(
     body.length ||
@@ -145,6 +158,7 @@ export function MomentComposer({
     photoFile ||
     taggedPersonIds.length ||
     occurredOn !== model.previewToday ||
+    occurredTime.length > 0 ||
     journalPersonId !== model.defaultJournalPersonId,
   );
 
@@ -184,6 +198,7 @@ export function MomentComposer({
       setBody("");
       setTitle("");
       setOccurredOn(model.previewToday);
+      setOccurredTime("");
       setJournalPersonId(model.defaultJournalPersonId);
       setTaggedPersonIds([]);
       setPlaceName("");
@@ -191,12 +206,15 @@ export function MomentComposer({
       setPhotoDecodeState("empty");
       setPhotoError(null);
       setContentError(null);
+      setSaveError(null);
+      setSavedMessage(null);
     },
     [clearPhotoPreview, model.defaultJournalPersonId, model.previewToday],
   );
 
   const close = useCallback(
     (discardDraft = false) => {
+      if (saving) return;
       if (
         !discardDraft &&
         isDirty &&
@@ -209,7 +227,7 @@ export function MomentComposer({
       onRequestClose();
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
     },
-    [isDirty, onRequestClose, resetDraft, returnFocusRef],
+    [isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
   );
 
   useEffect(() => () => revokeCurrentPhotoUrl(), [revokeCurrentPhotoUrl]);
@@ -234,7 +252,8 @@ export function MomentComposer({
   useEffect(() => {
     if (!open) return;
     const focusFrame = window.requestAnimationFrame(() => {
-      if (reviewing) reviewHeadingRef.current?.focus();
+      if (savedMessage) savedDoneRef.current?.focus();
+      else if (reviewing) reviewHeadingRef.current?.focus();
       else if (mode && !choosingMode) {
         if (mode === "photo") photoInputRef.current?.focus();
         else if (mode === "thought") bodyTextareaRef.current?.focus();
@@ -242,7 +261,7 @@ export function MomentComposer({
       } else firstChoiceRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(focusFrame);
-  }, [choosingMode, mode, open, reviewing]);
+  }, [choosingMode, mode, open, reviewing, savedMessage]);
 
   const replacePhoto = (file: File | null) => {
     clearPhotoPreview();
@@ -340,7 +359,43 @@ export function MomentComposer({
       return;
     }
     setContentError(null);
+    setSaveError(null);
     setReviewing(true);
+  };
+
+  const saveConnectedMoment = async () => {
+    if (saving || !saveWrittenMoment || mode !== "thought") return;
+    let occurredAt: string | null = null;
+    let occurredTimezone: string | null = null;
+    if (occurredTime) {
+      const localMoment = new Date(`${occurredOn}T${occurredTime}:00`);
+      if (Number.isNaN(localMoment.getTime())) {
+        setSaveError("Check the time and try again.");
+        return;
+      }
+      occurredAt = localMoment.toISOString();
+      occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const result = await saveWrittenMoment({
+        journalPersonId,
+        body,
+        occurredOn,
+        occurredAt,
+        occurredTimezone,
+      });
+      if (!result.ok) {
+        setSaveError(result.message);
+        return;
+      }
+      setSavedMessage(
+        `Saved to ${journalPerson.name}’s journal on ${plainDateLabel(occurredOn)}.`,
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const previewTitle = resolvePreviewTitle(
@@ -372,15 +427,38 @@ export function MomentComposer({
         <button
           className="sheet-close"
           aria-label="Close moment composer"
+          disabled={saving}
           onClick={() => close()}
         >
           ×
         </button>
 
-        {!mode || choosingMode ? (
+        {savedMessage ? (
+          <div className="composer-review composer-saved" role="status">
+            <span id="composer-privacy" className="private-label">
+              Private to this family
+            </span>
+            <h2 id="composer-title">Moment saved</h2>
+            <p>{savedMessage}</p>
+            <button
+              ref={savedDoneRef}
+              className="save-moment"
+              type="button"
+              onClick={() => {
+                close(true);
+                router.replace("/family");
+                router.refresh();
+              }}
+            >
+              Done
+            </button>
+          </div>
+        ) : !mode || choosingMode ? (
           <>
             <span id="composer-privacy" className="private-label">
-              Local design preview · Nothing is saved
+              {connectedWritten
+                ? "Private to this family"
+                : "Local design preview · Nothing is saved"}
             </span>
             <h2 id="composer-title">
               {mode
@@ -393,46 +471,60 @@ export function MomentComposer({
               </p>
             ) : null}
             <div className="moment-choices">
-              <button ref={firstChoiceRef} onClick={() => chooseMode("photo")}>
-                <span className="choice-icon photo-choice" aria-hidden="true">
-                  ▣
-                </span>
-                <strong>Photo</strong>
-                <small>A glimpse of the day</small>
-              </button>
-              <button onClick={() => chooseMode("thought")}>
+              {!connectedWritten ? (
+                <button
+                  ref={firstChoiceRef}
+                  onClick={() => chooseMode("photo")}
+                >
+                  <span className="choice-icon photo-choice" aria-hidden="true">
+                    ▣
+                  </span>
+                  <strong>Photo</strong>
+                  <small>A glimpse of the day</small>
+                </button>
+              ) : null}
+              <button
+                ref={connectedWritten ? firstChoiceRef : undefined}
+                onClick={() => chooseMode("thought")}
+              >
                 <span className="choice-icon thought-choice" aria-hidden="true">
                   “
                 </span>
                 <strong>A thought</strong>
                 <small>A few words to keep</small>
               </button>
-              <button onClick={() => chooseMode("milestone")}>
-                <span
-                  className="choice-icon milestone-choice"
-                  aria-hidden="true"
-                >
-                  ✦
-                </span>
-                <strong>Milestone</strong>
-                <small>A meaningful first</small>
-              </button>
-              <button onClick={() => chooseMode("location")}>
-                <span
-                  className="choice-icon location-choice"
-                  aria-hidden="true"
-                >
-                  ⌖
-                </span>
-                <strong>A place</strong>
-                <small>Somewhere worth returning to</small>
-              </button>
+              {!connectedWritten ? (
+                <button onClick={() => chooseMode("milestone")}>
+                  <span
+                    className="choice-icon milestone-choice"
+                    aria-hidden="true"
+                  >
+                    ✦
+                  </span>
+                  <strong>Milestone</strong>
+                  <small>A meaningful first</small>
+                </button>
+              ) : null}
+              {!connectedWritten ? (
+                <button onClick={() => chooseMode("location")}>
+                  <span
+                    className="choice-icon location-choice"
+                    aria-hidden="true"
+                  >
+                    ⌖
+                  </span>
+                  <strong>A place</strong>
+                  <small>Somewhere worth returning to</small>
+                </button>
+              ) : null}
             </div>
           </>
         ) : reviewing && copy ? (
           <div className="composer-review">
             <span id="composer-privacy" className="private-label">
-              Design preview · Nothing was saved
+              {connectedWritten
+                ? "Private to this family"
+                : "Design preview · Nothing was saved"}
             </span>
             <h2 ref={reviewHeadingRef} id="composer-title" tabIndex={-1}>
               A preview of this moment
@@ -474,6 +566,12 @@ export function MomentComposer({
                 <dt>Date</dt>
                 <dd>{plainDateLabel(occurredOn)}</dd>
               </div>
+              {occurredTime ? (
+                <div>
+                  <dt>Time</dt>
+                  <dd>{occurredTime}</dd>
+                </div>
+              ) : null}
               {taggedPeople.length ? (
                 <div>
                   <dt>With</dt>
@@ -496,6 +594,7 @@ export function MomentComposer({
               <button
                 className="secondary-composer-action"
                 type="button"
+                disabled={saving}
                 onClick={() => setReviewing(false)}
               >
                 Back to edit
@@ -503,11 +602,23 @@ export function MomentComposer({
               <button
                 className="save-moment"
                 type="button"
-                onClick={() => close(true)}
+                disabled={saving}
+                onClick={
+                  connectedWritten ? saveConnectedMoment : () => close(true)
+                }
               >
-                Close preview
+                {connectedWritten
+                  ? saving
+                    ? "Saving…"
+                    : "Save moment"
+                  : "Close preview"}
               </button>
             </div>
+            {saveError ? (
+              <p className="composer-error" role="alert">
+                {saveError}
+              </p>
+            ) : null}
           </div>
         ) : copy ? (
           <form
@@ -525,7 +636,9 @@ export function MomentComposer({
               ← Choose another
             </button>
             <span id="composer-privacy" className="private-label">
-              Local {copy.kindLabel.toLowerCase()} preview
+              {connectedWritten
+                ? "Private to this family"
+                : `Local ${copy.kindLabel.toLowerCase()} preview`}
             </span>
             <h2 id="composer-title">{copy.title}</h2>
 
@@ -662,6 +775,18 @@ export function MomentComposer({
                   onChange={(event) => setOccurredOn(event.target.value)}
                 />
               </label>
+              {connectedWritten ? (
+                <label className="composer-field">
+                  <span>
+                    Time <small>Optional</small>
+                  </span>
+                  <input
+                    type="time"
+                    value={occurredTime}
+                    onChange={(event) => setOccurredTime(event.target.value)}
+                  />
+                </label>
+              ) : null}
               <div className="composer-field composer-select-field">
                 <label htmlFor="composer-journal-person">Journal</label>
                 <select
@@ -681,68 +806,72 @@ export function MomentComposer({
               </div>
             </div>
 
-            <div className="composer-optional">
-              <button
-                className="composer-optional-toggle"
-                type="button"
-                aria-expanded={optionalDetailsOpen}
-                aria-controls="composer-optional-fields"
-                onClick={() => setOptionalDetailsOpen((current) => !current)}
-              >
-                People and place <span>Optional</span>
-              </button>
-              {optionalDetailsOpen ? (
-                <div id="composer-optional-fields">
-                  <fieldset className="people-tags">
-                    <legend>Who was there?</legend>
-                    <div>
-                      {model.taggablePeople.map((person) => {
-                        const isJournalPerson = person.id === journalPersonId;
-                        return (
-                          <label key={person.id}>
-                            <input
-                              type="checkbox"
-                              checked={taggedPersonIds.includes(person.id)}
-                              disabled={isJournalPerson}
-                              onChange={() => toggleTaggedPerson(person.id)}
-                            />
-                            <span
-                              className={`tag-person-dot dot-${person.accent}`}
-                              aria-hidden="true"
-                            >
-                              {person.initial}
-                            </span>
-                            {person.name}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                  {mode !== "location" ? (
-                    <label className="composer-field">
-                      <span>Place</span>
-                      <input
-                        type="text"
-                        value={placeName}
-                        maxLength={160}
-                        placeholder="Add a place by hand"
-                        onChange={(event) => setPlaceName(event.target.value)}
-                      />
-                      <small>No location is read from your photo.</small>
-                    </label>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            {!connectedWritten ? (
+              <div className="composer-optional">
+                <button
+                  className="composer-optional-toggle"
+                  type="button"
+                  aria-expanded={optionalDetailsOpen}
+                  aria-controls="composer-optional-fields"
+                  onClick={() => setOptionalDetailsOpen((current) => !current)}
+                >
+                  People and place <span>Optional</span>
+                </button>
+                {optionalDetailsOpen ? (
+                  <div id="composer-optional-fields">
+                    <fieldset className="people-tags">
+                      <legend>Who was there?</legend>
+                      <div>
+                        {model.taggablePeople.map((person) => {
+                          const isJournalPerson = person.id === journalPersonId;
+                          return (
+                            <label key={person.id}>
+                              <input
+                                type="checkbox"
+                                checked={taggedPersonIds.includes(person.id)}
+                                disabled={isJournalPerson}
+                                onChange={() => toggleTaggedPerson(person.id)}
+                              />
+                              <span
+                                className={`tag-person-dot dot-${person.accent}`}
+                                aria-hidden="true"
+                              >
+                                {person.initial}
+                              </span>
+                              {person.name}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                    {mode !== "location" ? (
+                      <label className="composer-field">
+                        <span>Place</span>
+                        <input
+                          type="text"
+                          value={placeName}
+                          maxLength={160}
+                          placeholder="Add a place by hand"
+                          onChange={(event) => setPlaceName(event.target.value)}
+                        />
+                        <small>No location is read from your photo.</small>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <p className="composer-preview-note">
-              Preview only. Nothing will be uploaded or saved.
+              {connectedWritten
+                ? "This will appear in its true chronological place."
+                : "Preview only. Nothing will be uploaded or saved."}
             </p>
             <button className="save-moment" type="submit">
-              Preview moment
+              {connectedWritten ? "Review moment" : "Preview moment"}
             </button>
           </form>
         ) : null}

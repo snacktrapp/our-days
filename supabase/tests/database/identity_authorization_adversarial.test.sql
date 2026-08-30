@@ -23,10 +23,11 @@ select is(
   array[
     'circle_memberships:r',
     'circles:r',
+    'moments:r',
     'people:r',
     'person_guardians:r'
   ]::text[],
-  'the exposed family relation catalog exactly matches the four-table allowlist'
+  'the exposed family relation catalog exactly matches the reviewed allowlist'
 );
 
 select is(
@@ -42,6 +43,7 @@ select is(
   array[
     'circle_memberships:authenticated:SELECT',
     'circles:authenticated:SELECT',
+    'moments:authenticated:SELECT',
     'people:authenticated:SELECT',
     'person_guardians:authenticated:SELECT'
   ]::text[],
@@ -67,12 +69,17 @@ select is(
     'accept_invitation(token text)',
     'create_invitation(circle_id uuid, display_name text, email text, reinvite_membership_id uuid)',
     'create_managed_person(circle_id uuid, display_name text, accent_token text)',
+    'create_written_moment(circle_id uuid, journal_person_id uuid, body text, occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)',
+    'list_manageable_trashed_written_moments(circle_id uuid)',
     'list_pending_invitations(circle_id uuid)',
+    'list_timeline_moments(circle_id uuid, journal_person_id uuid, cursor_occurred_on date, cursor_has_precise_time boolean, cursor_occurred_at timestamp with time zone, cursor_moment_id uuid, page_size integer, snapshot_at timestamp with time zone)',
     'preflight_invitation(token text, email text)',
     'revoke_invitation(invitation_id uuid)',
     'revoke_membership(membership_id uuid)',
     'set_membership_role(membership_id uuid, role text)',
-    'set_person_guardian(managed_person_id uuid, guardian_membership_id uuid, grant_access boolean)'
+    'set_person_guardian(managed_person_id uuid, guardian_membership_id uuid, grant_access boolean)',
+    'set_written_moment_trashed(moment_id uuid, expected_revision bigint, trashed boolean)',
+    'update_written_moment(moment_id uuid, expected_revision bigint, body text, occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)'
   ]::text[],
   'the public RPC catalog exactly matches the reviewed signatures'
 );
@@ -91,13 +98,18 @@ select is(
     'accept_invitation:authenticated:EXECUTE',
     'create_invitation:authenticated:EXECUTE',
     'create_managed_person:authenticated:EXECUTE',
+    'create_written_moment:authenticated:EXECUTE',
+    'list_manageable_trashed_written_moments:authenticated:EXECUTE',
     'list_pending_invitations:authenticated:EXECUTE',
+    'list_timeline_moments:authenticated:EXECUTE',
     'preflight_invitation:anon:EXECUTE',
     'preflight_invitation:authenticated:EXECUTE',
     'revoke_invitation:authenticated:EXECUTE',
     'revoke_membership:authenticated:EXECUTE',
     'set_membership_role:authenticated:EXECUTE',
-    'set_person_guardian:authenticated:EXECUTE'
+    'set_person_guardian:authenticated:EXECUTE',
+    'set_written_moment_trashed:authenticated:EXECUTE',
+    'update_written_moment:authenticated:EXECUTE'
   ]::text[],
   'browser-facing public RPC ACLs exactly match the reviewed allowlist'
 );
@@ -137,17 +149,21 @@ select is(
     'can_view_person(requested_circle_id uuid, requested_person_id uuid)',
     'create_invitation(requested_circle_id uuid, invited_display_name text, invited_email text, reinvite_membership_id uuid)',
     'create_managed_person(requested_circle_id uuid, requested_display_name text, requested_accent_token text)',
+    'create_written_moment(requested_circle_id uuid, requested_journal_person_id uuid, requested_body text, requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)',
     'current_membership_id(requested_circle_id uuid)',
     'enforce_guardian_integrity()',
     'enforce_membership_integrity()',
     'is_active_circle_member(requested_circle_id uuid)',
     'is_circle_organizer(requested_circle_id uuid)',
+    'list_manageable_trashed_written_moments(requested_circle_id uuid)',
     'list_pending_invitations(requested_circle_id uuid)',
     'preflight_invitation(invitation_token text, invited_email text)',
     'revoke_invitation(target_invitation_id uuid)',
     'revoke_membership(target_membership_id uuid)',
     'set_membership_role(target_membership_id uuid, requested_role text)',
-    'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)'
+    'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)',
+    'set_written_moment_trashed(target_moment_id uuid, expected_revision bigint, requested_trashed boolean)',
+    'update_written_moment(target_moment_id uuid, expected_revision bigint, requested_body text, requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)'
   ]::text[],
   'the private security-definer catalog exactly matches the reviewed signatures'
 );

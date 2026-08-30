@@ -27,6 +27,7 @@ const fixtureText = [
 ];
 const privateRoutes = [
   "/family",
+  "/trash",
   "/people",
   "/people/brian",
   "/people/molly",
@@ -165,6 +166,7 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   // visible link. Reuse the genuine browser-generated envelope captured from
   // a sibling private route while targeting `/journal` on the locked server.
   capturedRequests.set("/journal", capturedRequests.get("/family")!);
+  capturedRequests.set("/trash", capturedRequests.get("/family")!);
   capturedRequests.set(
     "/quality/global-error",
     capturedRequests.get("/family")!,

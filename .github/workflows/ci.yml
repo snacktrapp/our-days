@@ -85,8 +85,8 @@ jobs:
           package-manager-cache: false
       - name: Install the exact dependency tree
         run: npm ci
-      - name: Install pinned Chromium and system libraries
-        run: npx playwright install --with-deps chromium
+      - name: Install pinned Chromium, Firefox, WebKit, and system libraries
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Start the isolated local Supabase stack
         run: npm run supabase:start
       - name: Prove migrations and seeds reset reproducibly
@@ -95,12 +95,12 @@ jobs:
         run: npm run test:db
       - name: Run real local Auth, OTP, invite, and revocation flow
         run: npm run test:auth:integration
-      - name: Race organizer revocations across independent sessions
+      - name: Race organizer revocations and same-revision moment edits
         run: npm run test:db:concurrency
       - name: Detect generated database type drift
         run: npm run types:db:check
-      - name: Build, scan, and run the connected production browser flow
-        run: npm run test:browser:connected
+      - name: Build, scan, and run connected production browser flows
+        run: npm run test:browser:connected:all
       - name: Lint database functions and schemas
         run: npm run db:lint
       - name: Stop only the Our Days local stack

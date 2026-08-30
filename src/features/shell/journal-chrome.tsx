@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { SaveWrittenMomentAction } from "@/features/composer/moment-composer";
 import { PrimaryNavigation } from "./primary-navigation";
 import type {
   JournalSection,
@@ -10,12 +11,14 @@ type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
   section: JournalSection;
   children: ReactNode;
+  createMomentAction?: SaveWrittenMomentAction;
 }>;
 
 export function JournalChrome({
   model,
   section,
   children,
+  createMomentAction,
 }: JournalChromeProps) {
   const familyBadges = model.familyMark.map((badge) => (
     <span
@@ -32,8 +35,14 @@ export function JournalChrome({
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <section className="phone-stage" aria-label="Family journal">
+        <p
+          id="journal-live-region"
+          className="sr-only"
+          aria-live="assertive"
+          aria-atomic="true"
+        />
         <header className="topbar">
-          {section === "settings" ? (
+          {section === "settings" || model.settingsHref === null ? (
             <span className="family-mark" aria-hidden="true">
               {familyBadges}
             </span>
@@ -41,7 +50,7 @@ export function JournalChrome({
             <Link
               className="family-mark"
               aria-label="Open family settings"
-              href="/settings/family"
+              href={model.settingsHref ?? "/settings/family"}
               prefetch={false}
             >
               {familyBadges}
@@ -49,7 +58,9 @@ export function JournalChrome({
           )}
           <div className="title-lockup">
             <span className="eyebrow">{model.eyebrow}</span>
-            <h1>{model.title}</h1>
+            <h1 id="journal-focus-target" tabIndex={-1}>
+              {model.title}
+            </h1>
           </div>
           {section === "settings" ? (
             <Link
@@ -60,6 +71,24 @@ export function JournalChrome({
             >
               ←
             </Link>
+          ) : section === "trash" ? (
+            <Link
+              className="quiet-button settings-close-link"
+              aria-label="Back to Family"
+              href="/family"
+              prefetch={false}
+            >
+              ←
+            </Link>
+          ) : model.timelineOptionsHref ? (
+            <Link
+              className="quiet-button"
+              aria-label="Open timeline options"
+              href={model.timelineOptionsHref}
+              prefetch={false}
+            >
+              •••
+            </Link>
           ) : (
             <button className="quiet-button" aria-label="Timeline options">
               •••
@@ -67,7 +96,12 @@ export function JournalChrome({
           )}
         </header>
         {children}
-        <PrimaryNavigation composer={model.composer} section={section} />
+        <PrimaryNavigation
+          composer={model.composer}
+          section={section}
+          createMomentAction={createMomentAction}
+          memoriesHref={model.memoriesHref}
+        />
       </section>
     </main>
   );

@@ -538,8 +538,111 @@ try {
     $audit$;
   `);
 
+  const acceptedMembership = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    `circle_memberships?id=eq.${acceptedMembershipId}&select=person_id`,
+  );
+  const acceptedPersonId = acceptedMembership.body?.[0]?.person_id;
+  if (!acceptedMembership.response.ok || !uuid.test(acceptedPersonId)) {
+    throw new Error("Concurrent edit membership lookup failed.");
+  }
+
+  const createdMoment = await jsonRequest(
+    apiUrl,
+    apiKey,
+    firstAcceptanceToken,
+    "rpc/create_written_moment",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        journal_person_id: acceptedPersonId,
+        body: "Concurrent edit starting value.",
+        occurred_on: "2026-08-29",
+      }),
+      method: "POST",
+    },
+  );
+  if (!createdMoment.response.ok || !uuid.test(createdMoment.body)) {
+    throw new Error(
+      `Concurrent edit setup failed with ${createdMoment.response.status}.`,
+    );
+  }
+
+  const editBodies = [
+    "First concurrent edit wins alone.",
+    "Second concurrent edit wins alone.",
+  ];
+  const editResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "update_written_moment",
+    requests: [firstAcceptanceToken, secondAcceptanceToken].map(
+      (token, index) => () =>
+        jsonRequest(apiUrl, apiKey, token, "rpc/update_written_moment", {
+          body: JSON.stringify({
+            moment_id: createdMoment.body,
+            expected_revision: 1,
+            body: editBodies[index],
+            occurred_on: "2026-08-29",
+          }),
+          method: "POST",
+        }),
+    ),
+    serviceKey,
+  });
+  const editSuccesses = editResults.filter(({ response }) => response.ok);
+  const editConflicts = editResults.filter(({ response }) => !response.ok);
+  if (
+    editSuccesses.length !== 1 ||
+    editSuccesses[0].body !== 2 ||
+    editConflicts.length !== 1 ||
+    editConflicts[0].body?.code !== "40001" ||
+    editConflicts[0].body?.message !== "Moment changed elsewhere"
+  ) {
+    throw new Error(
+      `Expected one concurrent edit and one revision conflict; received statuses ${editResults
+        .map(({ response }) => response.status)
+        .join(", ")}.`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $moment_audit$
+    declare
+      durable_body text;
+      durable_revision bigint;
+      edit_audit_count integer;
+    begin
+      select body, revision
+        into durable_body, durable_revision
+        from public.moments
+       where id = '${createdMoment.body}'::uuid;
+
+      select count(*)::integer
+        into edit_audit_count
+        from private.audit_events
+       where event_type = 'moment_updated'
+         and subject_type = 'moment'
+         and subject_id = '${createdMoment.body}'::uuid;
+
+      if durable_body not in (
+          'First concurrent edit wins alone.',
+          'Second concurrent edit wins alone.'
+        )
+        or durable_revision <> 2
+        or edit_audit_count <> 1 then
+        raise exception 'Concurrent moment edits left invalid durable state';
+      end if;
+    end
+    $moment_audit$;
+  `);
+
   process.stdout.write(
-    "Overlapping organizer revocation and invitation acceptance serialized correctly; one membership, one consumption, and one acceptance audit remain.\n",
+    "Overlapping organizer revocation, invitation acceptance, and same-revision moment edits serialized correctly with one durable winner each.\n",
   );
 } catch (error) {
   primaryError = error;

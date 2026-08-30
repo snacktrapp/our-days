@@ -5,6 +5,8 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "./timeline-view-model";
+import type { ConnectedMomentActions } from "@/features/moments/moment-action-types";
+import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   return (
@@ -17,7 +19,7 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
       </span>
       <span className="moment-meta">
         <strong>{moment.personName}</strong>
-        <span>{moment.displayTime}</span>
+        {moment.displayTime ? <span>{moment.displayTime}</span> : null}
       </span>
     </div>
   );
@@ -31,12 +33,18 @@ type TimelineEntryProps = Readonly<{
   entry: TimelineEntryViewModel;
   firstMomentId?: string;
   interaction: TimelineViewModel["interaction"];
+  connectedActions?: ConnectedMomentActions;
+  connectedPosition?: number;
+  connectedTotal?: number;
 }>;
 
 function TimelineEntry({
   entry,
   firstMomentId,
   interaction,
+  connectedActions,
+  connectedPosition,
+  connectedTotal,
 }: TimelineEntryProps) {
   switch (entry.entryType) {
     case "date-marker":
@@ -63,6 +71,9 @@ function TimelineEntry({
             interaction={interaction}
             moment={entry.moment}
             preload={entry.moment.id === firstMomentId}
+            connectedActions={connectedActions}
+            connectedPosition={connectedPosition}
+            connectedTotal={connectedTotal}
           />
           <time dateTime={entry.moment.occurredOn}>
             {entry.moment.displayDate}
@@ -78,18 +89,48 @@ function TimelineEntry({
           <p className="timeline-whisper">{entry.message}</p>
         </>
       );
+    case "empty-state":
+      return (
+        <div className="timeline-empty-state">
+          <strong>{entry.title}</strong>
+          <span>{entry.message}</span>
+        </div>
+      );
     default:
       return assertNever(entry);
   }
 }
 
-export function TimelineFeed({ model }: { model: TimelineViewModel }) {
+export function TimelineFeed({
+  model,
+  connectedActions,
+}: {
+  model: TimelineViewModel;
+  connectedActions?: ConnectedMomentActions;
+}) {
   const firstMomentId = model.entries.find(
     (entry) => entry.entryType === "moment",
   )?.moment.id;
+  const connectedMomentIds = model.entries.flatMap((entry) =>
+    entry.entryType === "moment" && entry.moment.kind === "thought"
+      ? [entry.moment.id]
+      : [],
+  );
+  const connectedPositionById = new Map(
+    connectedMomentIds.map((id, index) => [id, index + 1]),
+  );
 
   return (
     <>
+      {connectedActions ? (
+        <TimelineScrollMemory
+          key={
+            model.pagination?.nextHref ??
+            model.paginationError?.retryHref ??
+            `complete-${model.entries.length}`
+          }
+        />
+      ) : null}
       {model.switcher.length > 0 && (
         <div className="view-switch" role="group" aria-label="Timeline view">
           {model.switcher.map((item) => (
@@ -124,6 +165,7 @@ export function TimelineFeed({ model }: { model: TimelineViewModel }) {
       <section
         className="timeline"
         aria-label={model.timelineLabel ?? "Chronological family moments"}
+        tabIndex={-1}
       >
         <div className="time-rail" aria-hidden="true" />
         {model.entries.map((entry) => (
@@ -132,8 +174,40 @@ export function TimelineFeed({ model }: { model: TimelineViewModel }) {
             entry={entry}
             firstMomentId={firstMomentId}
             interaction={model.interaction}
+            connectedActions={connectedActions}
+            connectedPosition={
+              entry.entryType === "moment"
+                ? connectedPositionById.get(entry.moment.id)
+                : undefined
+            }
+            connectedTotal={connectedMomentIds.length}
           />
         ))}
+        {model.pagination ? (
+          <div className="timeline-pagination">
+            <Link
+              href={model.pagination.nextHref}
+              prefetch={false}
+              replace
+              scroll={false}
+            >
+              {model.pagination.label}
+            </Link>
+          </div>
+        ) : null}
+        {model.paginationError ? (
+          <div className="timeline-pagination-error" role="alert">
+            <span>{model.paginationError.message}</span>
+            <Link
+              href={model.paginationError.retryHref}
+              prefetch={false}
+              replace
+              scroll={false}
+            >
+              {model.paginationError.label}
+            </Link>
+          </div>
+        ) : null}
       </section>
     </>
   );

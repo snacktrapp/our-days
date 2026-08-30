@@ -42,12 +42,19 @@ type TimelineMomentBase = Readonly<{
   personName: string;
   personInitial: string;
   personAccent: AccentToken;
-  displayTime: string;
+  displayTime?: string;
   displayDate: string;
   occurredOn: string;
+  maxOccurredOn?: string;
   kicker: string;
   text: string;
   conversation: MomentConversationViewModel;
+  canChange?: boolean;
+  revision?: number;
+  editOccurrence?: Readonly<{
+    occurredAt: string | null;
+    timeZone: string | null;
+  }>;
   taggedPeopleLabel?: string;
 }>;
 
@@ -124,11 +131,17 @@ export type TimelineEntryViewModel =
       entryType: "end-message";
       markerLabel: string;
       message: string;
+    }>
+  | Readonly<{
+      id: string;
+      entryType: "empty-state";
+      title: string;
+      message: string;
     }>;
 
 export type TimelineViewModel = Readonly<{
   chrome: JournalChromeViewModel;
-  interaction: MomentInteractionViewModel;
+  interaction?: MomentInteractionViewModel;
   switcher: readonly Readonly<{
     label: string;
     href: string;
@@ -142,4 +155,13 @@ export type TimelineViewModel = Readonly<{
     summary: string;
   }>;
   entries: readonly TimelineEntryViewModel[];
+  pagination?: Readonly<{
+    nextHref: string;
+    label: string;
+  }>;
+  paginationError?: Readonly<{
+    retryHref: string;
+    message: string;
+    label: string;
+  }>;
 }>;

@@ -1,5 +1,7 @@
 import { CspPublicImage } from "@/components/csp-image";
 import { MomentConversationControl } from "./moment-conversation-control";
+import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
+import type { ConnectedMomentActions } from "@/features/moments/moment-action-types";
 import type {
   MomentDetailViewModel,
   MomentInteractionViewModel,
@@ -31,15 +33,21 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
 }
 
 type MomentCardProps = Readonly<{
-  interaction: MomentInteractionViewModel;
+  interaction?: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   preload?: boolean;
+  connectedActions?: ConnectedMomentActions;
+  connectedPosition?: number;
+  connectedTotal?: number;
 }>;
 
 export function MomentCard({
   interaction,
   moment,
   preload = false,
+  connectedActions,
+  connectedPosition,
+  connectedTotal,
 }: MomentCardProps) {
   if (moment.kind === "photo") {
     return (
@@ -58,10 +66,12 @@ export function MomentCard({
         <div className="card-copy">
           <p className="moment-kicker">{moment.kicker}</p>
           <p>{moment.text}</p>
-          <MomentConversationControl
-            interaction={interaction}
-            model={detailModel(moment)}
-          />
+          {interaction ? (
+            <MomentConversationControl
+              interaction={interaction}
+              model={detailModel(moment)}
+            />
+          ) : null}
         </div>
       </div>
     );
@@ -72,10 +82,19 @@ export function MomentCard({
       <div className="moment-card thought-card">
         <span className="thought-label">{moment.kicker}</span>
         <blockquote>“{moment.text}”</blockquote>
-        <MomentConversationControl
-          interaction={interaction}
-          model={detailModel(moment)}
-        />
+        {interaction ? (
+          <MomentConversationControl
+            interaction={interaction}
+            model={detailModel(moment)}
+          />
+        ) : connectedActions ? (
+          <ConnectedMomentControl
+            moment={moment}
+            actions={connectedActions}
+            position={connectedPosition}
+            total={connectedTotal}
+          />
+        ) : null}
       </div>
     );
   }
@@ -96,10 +115,12 @@ export function MomentCard({
           <p className="moment-kicker">{moment.kicker}</p>
           <h3>{moment.place}</h3>
           <p>{moment.text}</p>
-          <MomentConversationControl
-            interaction={interaction}
-            model={detailModel(moment)}
-          />
+          {interaction ? (
+            <MomentConversationControl
+              interaction={interaction}
+              model={detailModel(moment)}
+            />
+          ) : null}
         </div>
       </div>
     );
@@ -116,10 +137,12 @@ export function MomentCard({
         <span>{moment.kicker}</span>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
-        <MomentConversationControl
-          interaction={interaction}
-          model={detailModel(moment)}
-        />
+        {interaction ? (
+          <MomentConversationControl
+            interaction={interaction}
+            model={detailModel(moment)}
+          />
+        ) : null}
       </div>
     </div>
   );

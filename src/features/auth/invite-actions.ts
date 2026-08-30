@@ -1,7 +1,6 @@
 "use server";
 
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import {
   clearInvitationIntent,
   readInvitationIntent,
@@ -16,7 +15,7 @@ const OTP = /^\d{6}$/u;
 const INVITATION_TOKEN = /^[A-Za-z0-9_-]{40,64}$/u;
 
 export type InviteActionState = Readonly<{
-  status: "idle" | "invalid" | "sent" | "denied" | "unavailable";
+  status: "idle" | "invalid" | "sent" | "accepted" | "denied" | "unavailable";
   message?: string;
   email?: string;
   clearBrowserState?: boolean;
@@ -242,5 +241,5 @@ export async function verifyAndAcceptInvitation(
   }
 
   await clearInvitationIntent();
-  redirect("/family");
+  return { status: "accepted", email, revision };
 }

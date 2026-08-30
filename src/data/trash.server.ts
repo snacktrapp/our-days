@@ -1,0 +1,35 @@
+import "server-only";
+
+import type { JournalAccess } from "@/lib/auth/journal-access";
+import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { mapDatabaseAccent } from "./journal-context.server";
+
+type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
+
+export type TrashedMomentViewModel = Readonly<{
+  id: string;
+  journalPersonName: string;
+  journalPersonAccent: ReturnType<typeof mapDatabaseAccent>;
+  body: string;
+  occurredOn: string;
+  revision: number;
+}>;
+
+export async function loadManageableTrash(
+  access: AuthenticatedAccess,
+): Promise<readonly TrashedMomentViewModel[]> {
+  const supabase = await createOurDaysServerClient();
+  const { data, error } = await supabase.rpc(
+    "list_manageable_trashed_written_moments",
+    { circle_id: access.circleId },
+  );
+  if (error) throw error;
+  return (data ?? []).map((moment) => ({
+    id: moment.moment_id,
+    journalPersonName: moment.journal_person_name,
+    journalPersonAccent: mapDatabaseAccent(moment.journal_person_accent),
+    body: moment.body,
+    occurredOn: moment.occurred_on,
+    revision: moment.revision,
+  }));
+}

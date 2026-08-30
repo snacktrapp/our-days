@@ -19,6 +19,7 @@ const privateRoutes = [
   "/api/auth/:path*",
   "/journal",
   "/family",
+  "/trash",
   "/people",
   "/people/:path*",
   "/settings/:path*",

@@ -14,4 +14,5 @@ export type PeopleViewModel = Readonly<{
   chrome: JournalChromeViewModel;
   intro: string;
   people: readonly PersonSummaryViewModel[];
+  familySettingsHref?: string | null;
 }>;

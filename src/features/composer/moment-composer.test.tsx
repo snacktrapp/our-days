@@ -1,8 +1,16 @@
-import { useRef, useState } from "react";
+import { type ComponentProps, useRef, useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "./moment-composer";
+
+const navigation = vi.hoisted(() => ({
+  refresh: vi.fn(),
+  replace: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigation,
+}));
 
 const people = [
   {
@@ -57,6 +65,29 @@ function Harness() {
   );
 }
 
+function ConnectedHarness({
+  save,
+}: {
+  save: NonNullable<ComponentProps<typeof MomentComposer>["saveWrittenMoment"]>;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button ref={triggerRef} onClick={() => setOpen(true)}>
+        Open connected composer
+      </button>
+      <MomentComposer
+        model={{ ...model, experience: "connected-written" }}
+        open={open}
+        returnFocusRef={triggerRef}
+        onRequestClose={() => setOpen(false)}
+        saveWrittenMoment={save}
+      />
+    </>
+  );
+}
+
 let createdUrlCount = 0;
 const createObjectURL = vi.fn(
   () => `blob:composer-preview-${++createdUrlCount}`,
@@ -67,6 +98,8 @@ beforeEach(() => {
   createdUrlCount = 0;
   createObjectURL.mockClear();
   revokeObjectURL.mockClear();
+  navigation.refresh.mockClear();
+  navigation.replace.mockClear();
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: createObjectURL,
@@ -89,6 +122,98 @@ async function openComposer() {
 }
 
 describe("MomentComposer", () => {
+  it("offers only the production-ready written path in a connected journal", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConnectedHarness
+        save={vi.fn().mockResolvedValue({ ok: true, message: "Saved" })}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Open connected composer" }),
+    );
+    expect(screen.getByText("Private to this family")).toBeVisible();
+    expect(screen.getByRole("button", { name: /A thought/ })).toHaveFocus();
+    expect(screen.queryByRole("button", { name: /Photo/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Milestone/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /A place/ })).toBeNull();
+  });
+
+  it("keeps a connected draft after failure and announces confirmed success", async () => {
+    const save = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, message: "Try again safely." })
+      .mockResolvedValueOnce({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.type(screen.getByLabelText("Your thought"), "Kept draft");
+    fireEvent.change(screen.getByLabelText("Moment date"), {
+      target: { value: "2023-08-21" },
+    });
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Try again safely.",
+    );
+    expect(screen.getByText("Kept draft")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    expect(
+      await screen.findByRole("heading", { name: "Moment saved" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Saved to Brian’s journal on Aug 21, 2023."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Done" })).toHaveFocus();
+    expect(save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        body: "Kept draft",
+        journalPersonId: "brian",
+        occurredOn: "2023-08-21",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(navigation.refresh).toHaveBeenCalledOnce();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
+  });
+
+  it("keeps every dismissal path unavailable while a save is in flight", async () => {
+    let finishSave: (value: { ok: true; message: string }) => void = () => {
+      throw new Error("The save promise was not started.");
+    };
+    const save = vi.fn(
+      () =>
+        new Promise<{ ok: true; message: string }>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(<ConnectedHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.type(screen.getByLabelText("Your thought"), "Still saving");
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+
+    expect(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back to edit" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("dialog"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    finishSave({ ok: true, message: "Saved" });
+    expect(
+      await screen.findByRole("heading", { name: "Moment saved" }),
+    ).toBeVisible();
+  });
+
   it("opens honestly as a modal, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
     expect(screen.getByRole("dialog")).toHaveAttribute("open");

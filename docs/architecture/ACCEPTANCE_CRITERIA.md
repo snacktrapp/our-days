@@ -83,6 +83,7 @@ Every PR runs all checks introduced by the current phase, and later phases canno
 | Phase 0 | lint, typecheck, default production build in unrestricted CI, dependency audit, browser/error smoke, and clean visual evidence |
 | Phase 1 | formatting check, unit/component tests, Chromium/WebKit/Firefox E2E, axe smoke, and visual regression |
 | Phase 2 | RLS/grant/function/catalog pgTAP tests, invite/auth integration tests, cached-session/two-browser isolation, CSP/CSRF/direct-action tests, stale-token and wrong-circle denial suite, environment-boundary checks, and secret scan |
+| Phase 3 | written-moment RLS/RPC tests, adult/managed-child authority denials, equal-time cursor pagination, optimistic edit races, backdating, reversible trash/restore, connected browser persistence, scroll stability, and lifecycle accessibility states |
 | Phase 4 | Storage HTTP policy tests, private-cache inspection, media retry/idempotency, checksum, and EXIF tests |
 | Phase 7 | export/deletion/worker partial-failure and recovery tests |
 

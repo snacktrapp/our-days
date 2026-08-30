@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
-import { chromium } from "@playwright/test";
+import { chromium, firefox, webkit } from "@playwright/test";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const supabaseBinary = fileURLToPath(
@@ -12,6 +12,14 @@ const nextBinary = fileURLToPath(
   new URL("../node_modules/next/dist/bin/next", import.meta.url),
 );
 const appUrl = "http://127.0.0.1:3100";
+const connectedBrowserName =
+  process.env.OUR_DAYS_CONNECTED_BROWSER ?? "chromium";
+const connectedBrowserType = { chromium, firefox, webkit }[
+  connectedBrowserName
+];
+if (!connectedBrowserType) {
+  throw new Error(`Unsupported connected browser: ${connectedBrowserName}`);
+}
 const fixtureCanaries = [
   "All our days",
   "Avery",
@@ -150,13 +158,48 @@ async function assertPageQuality(page, label) {
   }
 }
 
+async function readStableDocument(page, read) {
+  let lastError;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      return await read();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        !message.includes("Execution context was destroyed") &&
+        !message.includes("page is navigating")
+      ) {
+        throw error;
+      }
+      await page.waitForTimeout(100);
+    }
+  }
+  throw lastError;
+}
+
 async function assertNoCanaries(page, canaries, label) {
-  const content = await page.content();
+  const content = await readStableDocument(page, () => page.content());
   for (const canary of canaries) {
     if (content.includes(canary)) {
       throw new Error(`${label} exposed a private canary.`);
     }
   }
+}
+
+async function traverseHistoryBy(page, delta) {
+  try {
+    await page.evaluate((distance) => window.history.go(distance), delta);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !error.message.includes("Execution context was destroyed")
+    ) {
+      throw error;
+    }
+  }
+  await page.waitForTimeout(750);
+  await page.waitForLoadState("networkidle").catch(() => undefined);
 }
 
 function assertPrivateResponse(response, label) {
@@ -210,19 +253,47 @@ function attachPrivateLeakMonitor(page, evidence, responseReads) {
 }
 
 async function browserPrivateState(page) {
-  return page.evaluate(async () => ({
-    cacheNames: "caches" in window ? await window.caches.keys() : [],
-    cookie: document.cookie,
-    databaseNames:
-      "indexedDB" in window && typeof window.indexedDB.databases === "function"
-        ? (await window.indexedDB.databases()).map(({ name }) => name ?? "")
-        : [],
-    dom: document.documentElement.outerHTML,
-    historyState: JSON.stringify(window.history.state),
-    localStorage: { ...window.localStorage },
-    sessionStorage: { ...window.sessionStorage },
-    url: window.location.href,
-  }));
+  return readStableDocument(page, () =>
+    page.evaluate(async () => {
+      let cacheNames = [];
+      let cookie = "";
+      let databaseNames = [];
+      let localStorage = {};
+      let sessionStorage = {};
+      try {
+        if ("caches" in window) cacheNames = await window.caches.keys();
+      } catch {}
+      try {
+        cookie = document.cookie;
+      } catch {}
+      try {
+        if (
+          "indexedDB" in window &&
+          typeof window.indexedDB.databases === "function"
+        ) {
+          databaseNames = (await window.indexedDB.databases()).map(
+            ({ name }) => name ?? "",
+          );
+        }
+      } catch {}
+      try {
+        localStorage = { ...window.localStorage };
+      } catch {}
+      try {
+        sessionStorage = { ...window.sessionStorage };
+      } catch {}
+      return {
+        cacheNames,
+        cookie,
+        databaseNames,
+        dom: document.documentElement.outerHTML,
+        historyState: JSON.stringify(window.history.state),
+        localStorage,
+        sessionStorage,
+        url: window.location.href,
+      };
+    }),
+  );
 }
 
 function assertEvidenceExcludes(evidence, canaries, label) {
@@ -413,6 +484,10 @@ try {
     "10000000-0000-4000-8000-000000000001",
     jwtSecret,
   );
+  const harborOrganizerToken = createLocalUserToken(
+    "10000000-0000-4000-8000-000000000006",
+    jwtSecret,
+  );
   const invitation = await jsonRequest(
     `${apiUrl}/rest/v1/rpc/create_invitation`,
     anonKey,
@@ -434,23 +509,59 @@ try {
   }
   serverCanaries.push(email, invitationToken);
 
-  browser = await chromium.launch({ headless: true });
+  browser = await connectedBrowserType.launch({ headless: true });
   const invitedContext = await browser.newContext({
     viewport: { height: 844, width: 390 },
   });
   const invitedPage = await invitedContext.newPage();
   const browserErrors = [];
+  const consoleErrorReads = [];
+  let browserPhase = "invitation entry";
+  const recordConsoleError = (message) => {
+    if (message.type() !== "error") return;
+    consoleErrorReads.push(
+      Promise.all(
+        message.args().map(async (argument) => {
+          try {
+            return await argument.evaluate((value) => {
+              if (typeof value === "string") return value;
+              const details = {
+                json: (() => {
+                  try {
+                    return JSON.stringify(value);
+                  } catch {
+                    return undefined;
+                  }
+                })(),
+                message: value?.message,
+                name: value?.name,
+                stack: value?.stack,
+                string: String(value),
+              };
+              return JSON.stringify(details);
+            });
+          } catch {
+            return argument.toString();
+          }
+        }),
+      ).then((values) => {
+        const location = message.location();
+        browserErrors.push(
+          `${browserPhase}: ${values.join(" ") || message.text()} @ ${location.url}:${location.lineNumber}`,
+        );
+      }),
+    );
+  };
   const networkEvidence = [];
   const responseReads = [];
   attachPrivateLeakMonitor(invitedPage, networkEvidence, responseReads);
-  invitedPage.on("console", (message) => {
-    if (message.type() === "error") browserErrors.push(message.text());
-  });
+  invitedPage.on("console", recordConsoleError);
   invitedPage.on("pageerror", (error) => browserErrors.push(error.message));
   const invitationResponse = await invitedPage.goto(
     `${appUrl}/invite#${invitationToken}`,
   );
   await invitedPage.getByLabel("Email address").waitFor();
+  await invitedPage.waitForLoadState("networkidle");
   assertPrivateResponse(invitationResponse, "Invitation entry");
   await invitedPage.waitForFunction(() => window.location.hash === "");
   await assertPageQuality(invitedPage, "Invitation entry");
@@ -480,9 +591,18 @@ try {
     const url = new URL(request.url());
     return request.method() === "POST" && url.pathname === "/invite";
   });
+  const actionResponsePromise = invitedPage.waitForResponse((response) => {
+    const request = response.request();
+    const url = new URL(request.url());
+    return request.method() === "POST" && url.pathname === "/invite";
+  });
   await invitedPage.getByRole("button", { name: "Email me a code" }).click();
-  const actionRequest = await actionRequestPromise;
+  const [actionRequest, actionResponse] = await Promise.all([
+    actionRequestPromise,
+    actionResponsePromise,
+  ]);
   await invitedPage.getByLabel("Six-digit code").waitFor();
+  await actionResponse.finished();
   const firstOtp = await findOtp(mailpitUrl, email);
   await assertCrossOriginActionRejected({
     actionRequest,
@@ -491,6 +611,7 @@ try {
     recipient: email,
   });
 
+  await invitedPage.waitForLoadState("networkidle");
   const reloadedInvitationResponse = await invitedPage.reload();
   assertPrivateResponse(reloadedInvitationResponse, "Reloaded invitation");
   await invitedPage.getByLabel("Email address").waitFor();
@@ -509,22 +630,24 @@ try {
   }
 
   await invitedPage.getByLabel("Email address").fill(email);
+  const secondCodeResponsePromise = invitedPage.waitForResponse((response) => {
+    const request = response.request();
+    const url = new URL(request.url());
+    return request.method() === "POST" && url.pathname === "/invite";
+  });
   await invitedPage.getByRole("button", { name: "Email me a code" }).click();
   await invitedPage.getByLabel("Six-digit code").waitFor();
+  await (await secondCodeResponsePromise).finished();
   const otp = await findOtp(mailpitUrl, email);
   serverCanaries.push(otp);
   await invitedPage.getByLabel("Six-digit code").fill(otp);
   await invitedPage
     .getByRole("button", { name: "Join family journal" })
     .click();
-  await invitedPage.waitForURL(`${appUrl}/access-unavailable`);
-  await invitedPage.locator("main").waitFor();
-  await assertPageQuality(invitedPage, "Authenticated preparation state");
-  await assertNoCanaries(
-    invitedPage,
-    [...fixtureCanaries, email, invitationToken, otp],
-    "Authenticated preparation state",
-  );
+  await invitedPage.waitForURL(`${appUrl}/family`);
+  await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
+  browserPhase = "accepted family and creation";
+  await assertPageQuality(invitedPage, "Connected family timeline");
   if (authCookies(await invitedContext.cookies()).length === 0) {
     throw new Error("Invitation acceptance did not establish an Auth cookie.");
   }
@@ -534,8 +657,282 @@ try {
     );
   }
   await invitedPage.setViewportSize({ height: 350, width: 320 });
-  await assertPageQuality(invitedPage, "Short authenticated preparation state");
+  await assertPageQuality(invitedPage, "Short connected family timeline");
   await invitedPage.setViewportSize({ height: 844, width: 390 });
+
+  const writtenMoment = `A connected browser moment ${suffix}`;
+  const editedMoment = `An edited connected browser moment ${suffix}`;
+  serverCanaries.push(writtenMoment, editedMoment);
+  await invitedPage.getByRole("button", { name: "Add moment" }).click();
+  await invitedPage.getByRole("button", { name: "A thought" }).click();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected moment composer");
+  await invitedPage.getByLabel("Your thought").fill(writtenMoment);
+  await invitedPage.getByRole("button", { name: "Review moment" }).click();
+  await assertPageQuality(invitedPage, "Short connected moment review");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage.getByRole("button", { name: "Save moment" }).click();
+  await invitedPage.getByRole("heading", { name: "Moment saved" }).waitFor();
+  const doneButton = invitedPage.getByRole("button", { name: "Done" });
+  if (
+    !(await doneButton.evaluate(
+      (element) => element === document.activeElement,
+    ))
+  ) {
+    throw new Error(
+      "Successful creation did not focus its completion control.",
+    );
+  }
+  await doneButton.click();
+  await invitedPage.getByText(writtenMoment).waitFor();
+
+  await invitedPage.getByRole("link", { name: "People" }).click();
+  browserPhase = "personal edit and trash";
+  await invitedPage.getByRole("link", { name: /Browser Invite/u }).click();
+  await invitedPage.getByText(writtenMoment).waitFor();
+  const personalJournalUrl = invitedPage.url();
+  await invitedPage
+    .getByRole("button", { name: /^Edit .* moment from/u })
+    .click();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected moment editor");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage.getByLabel("Your thought").fill(editedMoment);
+  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
+  await invitedPage.getByText(editedMoment).waitFor();
+  await invitedPage.waitForFunction(
+    () => document.activeElement?.id === "journal-focus-target",
+  );
+  await invitedPage
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link", { name: "Family" })
+    .click();
+  await invitedPage.getByText(editedMoment).waitFor();
+  invitedPage.once("dialog", (dialog) => dialog.accept());
+  await invitedPage.getByRole("button", { name: /^Move to trash/u }).click();
+  await invitedPage.getByText(editedMoment).waitFor({ state: "detached" });
+  await invitedPage.waitForFunction(
+    () => document.activeElement?.id === "journal-focus-target",
+  );
+  await invitedPage.goto(personalJournalUrl);
+  if ((await invitedPage.getByText(editedMoment).count()) !== 0) {
+    throw new Error("A trashed moment remained in its personal journal.");
+  }
+  const trashResponse = await invitedPage.goto(`${appUrl}/trash`);
+  assertPrivateResponse(trashResponse, "Connected trash");
+  await invitedPage.getByText(editedMoment).waitFor();
+  await invitedPage.setViewportSize({ height: 350, width: 320 });
+  await assertPageQuality(invitedPage, "Short connected trash");
+  await invitedPage.setViewportSize({ height: 844, width: 390 });
+  await invitedPage
+    .getByRole("button", { name: /^Restore .* moment from/u })
+    .click();
+  await invitedPage.getByText(editedMoment).waitFor({ state: "detached" });
+  await invitedPage.waitForFunction(
+    () => document.activeElement?.id === "journal-focus-target",
+  );
+  await invitedPage.goto(personalJournalUrl);
+  await invitedPage.getByText(editedMoment).waitFor();
+  await invitedPage.goto(`${appUrl}/family`);
+  await invitedPage.getByText(editedMoment).waitFor();
+  browserPhase = "pagination traversal";
+
+  const invitedUserToken = createLocalUserToken(createdUser.body.id, jwtSecret);
+  const membershipLookup = await jsonRequest(
+    `${apiUrl}/rest/v1/circle_memberships?select=id,person_id&user_id=eq.${createdUser.body.id}`,
+    anonKey,
+    { headers: { authorization: `Bearer ${invitedUserToken}` } },
+  );
+  const invitedPersonId = membershipLookup.body?.[0]?.person_id;
+  const invitedMembershipId = membershipLookup.body?.[0]?.id;
+  if (
+    !membershipLookup.response.ok ||
+    !invitedPersonId ||
+    !invitedMembershipId
+  ) {
+    throw new Error("Connected pagination member lookup failed.");
+  }
+  const paginationPrefix = `Browser pagination ${suffix}`;
+  const paginationWrites = await Promise.all(
+    Array.from({ length: 42 }, (_, index) =>
+      jsonRequest(`${apiUrl}/rest/v1/rpc/create_written_moment`, anonKey, {
+        body: JSON.stringify({
+          circle_id: "20000000-0000-4000-8000-000000000001",
+          journal_person_id: invitedPersonId,
+          body: `${paginationPrefix} ${String(index + 1).padStart(2, "0")}`,
+          occurred_on: "2010-01-01",
+          occurred_at: null,
+          occurred_timezone: null,
+        }),
+        headers: { authorization: `Bearer ${invitedUserToken}` },
+        method: "POST",
+      }),
+    ),
+  );
+  if (paginationWrites.some(({ response }) => !response.ok)) {
+    throw new Error("Connected pagination fixtures could not be created.");
+  }
+  serverCanaries.push(paginationPrefix);
+  await invitedPage.goto(`${appUrl}/family`);
+  const firstEarlierLink = invitedPage.getByRole("link", {
+    name: "Show earlier days",
+  });
+  await firstEarlierLink.waitFor();
+  const firstEarlierHref = await firstEarlierLink.getAttribute("href");
+  const firstSnapshot = new URL(firstEarlierHref, appUrl).searchParams.get(
+    "snapshot",
+  );
+  if (!firstSnapshot) {
+    throw new Error("The first continuation did not preserve a feed snapshot.");
+  }
+
+  const lateHistoricalMoment = `Late historical insertion ${suffix}`;
+  const lateWrite = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_written_moment`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: "20000000-0000-4000-8000-000000000001",
+        journal_person_id: invitedPersonId,
+        body: lateHistoricalMoment,
+        occurred_on: "2025-01-01",
+        occurred_at: null,
+        occurred_timezone: null,
+      }),
+      headers: { authorization: `Bearer ${invitedUserToken}` },
+      method: "POST",
+    },
+  );
+  if (!lateWrite.response.ok) {
+    throw new Error(
+      "The post-snapshot historical fixture could not be created.",
+    );
+  }
+  serverCanaries.push(lateHistoricalMoment);
+
+  await firstEarlierLink.scrollIntoViewIfNeeded();
+  const anchor = invitedPage.locator("article").last();
+  const anchorId = await anchor.getAttribute("id");
+  const anchorTopBefore = await anchor.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  await firstEarlierLink.click();
+  await invitedPage.waitForURL(/\/family\?pages=2&snapshot=/u);
+  const secondSnapshot = new URL(invitedPage.url()).searchParams.get(
+    "snapshot",
+  );
+  if (secondSnapshot !== firstSnapshot) {
+    throw new Error("Loading older days replaced the original feed snapshot.");
+  }
+  if (!anchorId) throw new Error("The pagination anchor had no stable ID.");
+  const anchorTopAfter = await invitedPage
+    .locator(`[id="${anchorId}"]`)
+    .evaluate((element) => element.getBoundingClientRect().top);
+  if (Math.abs(anchorTopAfter - anchorTopBefore) > 2) {
+    throw new Error("Loading older days shifted the visible timeline anchor.");
+  }
+  if ((await invitedPage.getByText(lateHistoricalMoment).count()) !== 0) {
+    throw new Error("A post-snapshot historical insert entered the traversal.");
+  }
+
+  const secondEarlierLink = invitedPage.getByRole("link", {
+    name: "Show earlier days",
+  });
+  await secondEarlierLink.click();
+  await invitedPage.waitForURL(/\/family\?pages=3&snapshot=/u);
+  if (
+    new URL(invitedPage.url()).searchParams.get("snapshot") !== firstSnapshot
+  ) {
+    throw new Error("The final continuation lost the original feed snapshot.");
+  }
+  await invitedPage.getByText(`${paginationPrefix} 01`).waitFor();
+  if (
+    (await invitedPage
+      .getByRole("link", { name: "Show earlier days" })
+      .count()) !== 0
+  ) {
+    throw new Error("The completed traversal still offered another page.");
+  }
+  await assertPageQuality(invitedPage, "Connected timeline end state");
+  const connectedActionNames = await invitedPage
+    .locator(".connected-moment-actions button[aria-label]")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getAttribute("aria-label")),
+    );
+  if (new Set(connectedActionNames).size !== connectedActionNames.length) {
+    const duplicates = connectedActionNames.filter(
+      (name, index) => connectedActionNames.indexOf(name) !== index,
+    );
+    throw new Error(
+      `Repeated timeline actions did not have unique names: ${JSON.stringify([...new Set(duplicates)])}.`,
+    );
+  }
+  const deepSnapshotUrl = invitedPage.url();
+  browserPhase = "deep-snapshot mutations";
+  const deepCreatedMoment = `Created from a deep snapshot ${suffix}`;
+  const deepEditedMoment = `Edited from a deep snapshot ${suffix}`;
+  serverCanaries.push(deepCreatedMoment, deepEditedMoment);
+  await invitedPage.getByRole("button", { name: "Add moment" }).click();
+  await invitedPage.getByRole("button", { name: "A thought" }).click();
+  await invitedPage.getByLabel("Your thought").fill(deepCreatedMoment);
+  await invitedPage.getByRole("button", { name: "Review moment" }).click();
+  await invitedPage.getByRole("button", { name: "Save moment" }).click();
+  await invitedPage.getByRole("heading", { name: "Moment saved" }).waitFor();
+  await invitedPage.getByRole("button", { name: "Done" }).click();
+  await invitedPage.waitForURL(`${appUrl}/family`);
+  await invitedPage.getByText(deepCreatedMoment).waitFor();
+
+  await invitedPage.goto(deepSnapshotUrl);
+  const deepEditArticle = invitedPage
+    .locator("article")
+    .filter({ hasText: editedMoment });
+  await deepEditArticle.getByRole("button", { name: /^Edit/u }).click();
+  await invitedPage.getByLabel("Your thought").fill(deepEditedMoment);
+  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.waitForURL(`${appUrl}/family`);
+  await invitedPage.getByText(deepEditedMoment).waitFor();
+
+  const journalErrorPage = await invitedContext.newPage();
+  await journalErrorPage.goto(`${appUrl}/family?pages=10001`);
+  await journalErrorPage.getByText("Something interrupted the story").waitFor();
+  if ((await journalErrorPage.locator(".time-rail").count()) !== 1) {
+    throw new Error("Journal error state did not retain the timeline rail.");
+  }
+  await assertPageQuality(journalErrorPage, "Connected journal error state");
+  await journalErrorPage.close();
+  const restorationPage = await invitedContext.newPage();
+  browserPhase = "scroll restoration";
+  restorationPage.on("console", recordConsoleError);
+  restorationPage.on("pageerror", (error) => browserErrors.push(error.message));
+  await restorationPage.goto(`${appUrl}/family`);
+  await restorationPage
+    .getByRole("link", { name: "Show earlier days" })
+    .click();
+  await restorationPage.waitForURL(/\/family\?pages=2&snapshot=/u);
+  await restorationPage
+    .getByRole("link", { name: "Show earlier days" })
+    .click();
+  await restorationPage.waitForURL(/\/family\?pages=3&snapshot=/u);
+  await restorationPage.getByText(`${paginationPrefix} 01`).waitFor();
+  await restorationPage.evaluate(() =>
+    window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.62)),
+  );
+  const deepScrollY = await restorationPage.evaluate(() => window.scrollY);
+  await restorationPage.getByRole("link", { name: "People" }).click();
+  await restorationPage.waitForURL(`${appUrl}/people`);
+  await restorationPage.goBack();
+  await restorationPage.waitForURL(/\/family\?pages=3&snapshot=/u);
+  await restorationPage.waitForFunction(
+    (expected) => Math.abs(window.scrollY - expected) <= 2,
+    deepScrollY,
+  );
+  const restoredScrollY = await restorationPage.evaluate(() => window.scrollY);
+  if (Math.abs(restoredScrollY - deepScrollY) > 2) {
+    throw new Error("Browser Back did not restore the deep timeline position.");
+  }
+  await restorationPage.getByText(`${paginationPrefix} 01`).waitFor();
+  await restorationPage.close();
 
   const firstAccountCookie = authCookies(await invitedContext.cookies())
     .map(({ value }) => value)
@@ -546,9 +943,10 @@ try {
   });
   const retainedAccountPage = await retainedAccountContext.newPage();
   await retainedAccountPage.goto(`${appUrl}/family`);
-  await retainedAccountPage.waitForURL(`${appUrl}/access-unavailable`);
+  await retainedAccountPage.getByText(deepEditedMoment).waitFor();
 
   const switchedEmail = `browser-switch-${suffix}@example.test`;
+  browserPhase = "account switch acceptance";
   const switchedUser = await jsonRequest(
     `${apiUrl}/auth/v1/admin/users`,
     serviceKey,
@@ -564,11 +962,11 @@ try {
     anonKey,
     {
       body: JSON.stringify({
-        circle_id: "20000000-0000-4000-8000-000000000001",
+        circle_id: "20000000-0000-4000-8000-000000000002",
         display_name: "Browser Account Switch",
         email: switchedEmail,
       }),
-      headers: { authorization: `Bearer ${organizerToken}` },
+      headers: { authorization: `Bearer ${harborOrganizerToken}` },
       method: "POST",
     },
   );
@@ -614,7 +1012,55 @@ try {
   await invitedPage
     .getByRole("button", { name: "Join family journal" })
     .click();
-  await invitedPage.waitForURL(`${appUrl}/access-unavailable`);
+  await invitedPage.waitForURL(`${appUrl}/family`);
+  await invitedPage.getByRole("heading", { name: "Harbor Circle" }).waitFor();
+  const harborMoment = "A harbor-circle moment stays in its own family.";
+  await invitedPage.getByText(harborMoment).waitFor();
+  const firstCircleCanaries = [
+    writtenMoment,
+    editedMoment,
+    paginationPrefix,
+    lateHistoricalMoment,
+    deepCreatedMoment,
+    deepEditedMoment,
+  ];
+  await assertNoCanaries(
+    invitedPage,
+    firstCircleCanaries,
+    "Cross-family account switch",
+  );
+  assertEvidenceExcludes(
+    await browserPrivateState(invitedPage),
+    firstCircleCanaries,
+    "Cross-family account-switch browser state",
+  );
+  browserPhase = "cross-family history probe";
+  await traverseHistoryBy(invitedPage, -2);
+  await assertNoCanaries(
+    invitedPage,
+    firstCircleCanaries,
+    "Cross-family Back history",
+  );
+  assertEvidenceExcludes(
+    await browserPrivateState(invitedPage),
+    firstCircleCanaries,
+    "Cross-family Back browser state",
+  );
+  await traverseHistoryBy(invitedPage, 2);
+  await assertNoCanaries(
+    invitedPage,
+    firstCircleCanaries,
+    "Cross-family Forward history",
+  );
+  assertEvidenceExcludes(
+    await browserPrivateState(invitedPage),
+    firstCircleCanaries,
+    "Cross-family Forward browser state",
+  );
+  browserPhase = "post-switch family";
+  await invitedPage.goto(`${appUrl}/family`);
+  await invitedPage.getByRole("heading", { name: "Harbor Circle" }).waitFor();
+  await invitedPage.getByText(harborMoment).waitFor();
   const switchedAccountCookie = authCookies(await invitedContext.cookies())
     .map(({ value }) => value)
     .join("");
@@ -624,6 +1070,55 @@ try {
   if (authCookies(await retainedAccountContext.cookies()).length === 0) {
     throw new Error("The isolated first-account browser lost its own session.");
   }
+  const revokedMembership = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/revoke_membership`,
+    anonKey,
+    {
+      body: JSON.stringify({ membership_id: invitedMembershipId }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!revokedMembership.response.ok) {
+    throw new Error("The connected membership could not be revoked.");
+  }
+  await retainedAccountPage.setViewportSize({ height: 350, width: 320 });
+  await retainedAccountPage.goto(`${appUrl}/family`);
+  await retainedAccountPage.waitForURL(`${appUrl}/access-unavailable`);
+  await retainedAccountPage
+    .getByText("This account does not have family access")
+    .waitFor();
+  if ((await retainedAccountPage.locator(".time-rail").count()) !== 1) {
+    throw new Error("Permission-lost state did not retain the timeline rail.");
+  }
+  await assertPageQuality(
+    retainedAccountPage,
+    "Short connected permission-lost state",
+  );
+  await traverseHistoryBy(retainedAccountPage, -1);
+  await assertNoCanaries(
+    retainedAccountPage,
+    firstCircleCanaries,
+    "Revoked-member Back history",
+  );
+  assertEvidenceExcludes(
+    await browserPrivateState(retainedAccountPage),
+    firstCircleCanaries,
+    "Revoked-member Back browser state",
+  );
+  await traverseHistoryBy(retainedAccountPage, 1);
+  await assertNoCanaries(
+    retainedAccountPage,
+    firstCircleCanaries,
+    "Revoked-member Forward history",
+  );
+  assertEvidenceExcludes(
+    await browserPrivateState(retainedAccountPage),
+    firstCircleCanaries,
+    "Revoked-member Forward browser state",
+  );
+  await retainedAccountPage.goto(`${appUrl}/family`);
+  await retainedAccountPage.waitForURL(`${appUrl}/access-unavailable`);
   const acceptedPrivateCanaries = [
     ...fixtureCanaries,
     email,
@@ -632,6 +1127,13 @@ try {
     switchedEmail,
     switchedToken,
     switchedOtp,
+    writtenMoment,
+    editedMoment,
+    harborMoment,
+    paginationPrefix,
+    lateHistoricalMoment,
+    deepCreatedMoment,
+    deepEditedMoment,
   ];
   const acceptedSecretCanaries = [
     ...fixtureCanaries,
@@ -645,9 +1147,8 @@ try {
     viewport: { height: 844, width: 390 },
   });
   const unrelatedPage = await unrelatedContext.newPage();
-  unrelatedPage.on("console", (message) => {
-    if (message.type() === "error") browserErrors.push(message.text());
-  });
+  browserPhase = "unrelated browser";
+  unrelatedPage.on("console", recordConsoleError);
   unrelatedPage.on("pageerror", (error) => browserErrors.push(error.message));
   const directUnavailableResponse = await unrelatedPage.goto(
     `${appUrl}/access-unavailable`,
@@ -678,8 +1179,11 @@ try {
     throw new Error("The unrelated browser received an Auth cookie.");
   }
 
-  await invitedPage.goto(`${appUrl}/family`);
-  await invitedPage.waitForURL(`${appUrl}/access-unavailable`);
+  await invitedPage.goto(`${appUrl}/trash`);
+  browserPhase = "sign-out cleanup";
+  await invitedPage
+    .getByRole("heading", { name: "Recently removed" })
+    .waitFor();
   await invitedPage.evaluate(async () => {
     window.localStorage.setItem("our-days:browser-test-private", "remove-me");
     window.localStorage.setItem("proof:browser-test-unrelated", "keep-me");
@@ -738,6 +1242,7 @@ try {
   );
 
   await invitedPage.goBack();
+  browserPhase = "signed-out history";
   await invitedPage.waitForURL(`${appUrl}/sign-in`);
   await assertNoCanaries(
     invitedPage,
@@ -765,6 +1270,7 @@ try {
   );
 
   const rejectedEmail = `browser-rejected-${suffix}@example.test`;
+  browserPhase = "revoked invitation";
   const rejectedUser = await jsonRequest(
     `${apiUrl}/auth/v1/admin/users`,
     serviceKey,
@@ -811,9 +1317,7 @@ try {
     rejectedEvidence,
     rejectedResponseReads,
   );
-  rejectedPage.on("console", (message) => {
-    if (message.type() === "error") browserErrors.push(message.text());
-  });
+  rejectedPage.on("console", recordConsoleError);
   rejectedPage.on("pageerror", (error) => browserErrors.push(error.message));
   await rejectedPage.goto(`${appUrl}/invite#${rejectedToken}`);
   await rejectedPage.getByLabel("Email address").fill(rejectedEmail);
@@ -902,6 +1406,7 @@ try {
   );
   await rejectedContext.close();
 
+  await Promise.allSettled(consoleErrorReads);
   if (browserErrors.length > 0) {
     throw new Error(
       `Connected browser console errors: ${browserErrors.join(" | ")}`,
@@ -915,7 +1420,7 @@ try {
   await retainedAccountContext.close();
   await invitedContext.close();
   process.stdout.write(
-    "Connected staged invite, OTP, cross-origin denial, A-to-B account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in Chromium.\n",
+    `Connected staged invite, OTP, written create/edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
   );
 } finally {
   if (browser) await browser.close();

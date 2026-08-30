@@ -6,33 +6,38 @@ export default async function AccessUnavailablePage() {
   const access = await readJournalAccessState();
   if (access.mode === "anonymous") redirect("/sign-in");
   if (access.mode === "preview") redirect("/family");
+  if (access.mode === "authenticated") redirect("/family");
 
-  const isActiveMember = access.mode === "authenticated";
   return (
-    <main className="private-entry-shell">
-      <section
-        className="private-entry-card"
-        aria-labelledby="access-unavailable-title"
-      >
-        <span className="private-entry-mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <p>Private family journal</p>
-        <h1 id="access-unavailable-title">
-          {isActiveMember
-            ? "Your journal is still being prepared."
-            : "This account does not have family access."}
-        </h1>
-        <div className="private-entry-content">
-          <p>
-            {isActiveMember
-              ? "Your membership is active. The connected family timeline is not available in this checkpoint yet."
-              : "Ask a family organizer for a current invitation if you should have access."}
-          </p>
-          <SignOutButton />
-        </div>
+    <main className="app-shell journal-error-shell">
+      <section className="phone-stage" aria-label="Private family journal">
+        <header className="topbar journal-error-topbar">
+          <span className="family-mark" aria-hidden="true">
+            <span className="family-mark-dot dot-teal">O</span>
+          </span>
+          <div className="title-lockup">
+            <span className="eyebrow">Private family journal</span>
+            <h1 id="access-unavailable-title">Our Days</h1>
+          </div>
+          <span className="quiet-button" aria-hidden="true" />
+        </header>
+        <section
+          className="timeline journal-error-timeline"
+          aria-labelledby="access-unavailable-title"
+        >
+          <div className="time-rail" aria-hidden="true" />
+          <div className="date-marker">
+            <span>Private boundary</span>
+          </div>
+          <div className="timeline-empty-state" role="alert">
+            <strong>This account does not have family access</strong>
+            <span>
+              Ask a family organizer for a current invitation if you should have
+              access.
+            </span>
+            <SignOutButton />
+          </div>
+        </section>
       </section>
     </main>
   );

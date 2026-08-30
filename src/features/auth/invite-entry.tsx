@@ -76,8 +76,12 @@ export function InviteEntry({
       .catch(() => ({ ready: false as const }))
       .then(({ ready }) => {
         if (ready) {
-          window.location.replace(
-            `${window.location.pathname}${window.location.search}`,
+          window.setTimeout(
+            () =>
+              window.location.replace(
+                `${window.location.pathname}${window.location.search}`,
+              ),
+            50,
           );
           return;
         }
@@ -108,6 +112,16 @@ export function InviteEntry({
     codeInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [browserStateReady, codeRequested]);
 
+  useEffect(() => {
+    if (verifyState.status === "accepted") {
+      const timeout = window.setTimeout(
+        () => window.location.replace("/family"),
+        50,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+  }, [verifyState.status]);
+
   const requestIsError =
     !emailEdited &&
     ["invalid", "denied", "unavailable"].includes(requestState.status);
@@ -115,7 +129,8 @@ export function InviteEntry({
     verifyState.revision === codeRevision &&
     ["invalid", "denied", "unavailable"].includes(verifyState.status);
   const submittedEmail = requestState.email ?? email.trim().toLowerCase();
-  const busy = requestPending || verifyPending;
+  const busy =
+    requestPending || verifyPending || verifyState.status === "accepted";
 
   return (
     <main className="private-entry-shell">

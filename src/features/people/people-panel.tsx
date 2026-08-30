@@ -39,9 +39,15 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
           );
         })}
       </div>
-      <Link className="invite-button" href="/settings/family" prefetch={false}>
-        Family access &amp; invitations
-      </Link>
+      {model.familySettingsHref !== null ? (
+        <Link
+          className="invite-button"
+          href={model.familySettingsHref ?? "/settings/family"}
+          prefetch={false}
+        >
+          Family access &amp; invitations
+        </Link>
+      ) : null}
     </section>
   );
 }

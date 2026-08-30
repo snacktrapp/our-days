@@ -156,4 +156,29 @@ describe("TimelineFeed", () => {
       screen.getByText(/Notes and reactions are not saved/u),
     ).toBeInTheDocument();
   });
+
+  it("keeps the timeline rail and loaded moments when an older page fails", () => {
+    const failureModel: TimelineViewModel = {
+      ...model,
+      paginationError: {
+        retryHref: "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+        message:
+          "Earlier days couldn’t be opened. The moments already here are still safe.",
+        label: "Try opening earlier days again",
+      },
+    };
+    const { container } = render(<TimelineFeed model={failureModel} />);
+
+    expect(container.querySelector(".time-rail")).toBeInTheDocument();
+    expect(container.querySelectorAll("article")).toHaveLength(4);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The moments already here are still safe.",
+    );
+    expect(
+      screen.getByRole("link", { name: "Try opening earlier days again" }),
+    ).toHaveAttribute(
+      "href",
+      "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+    );
+  });
 });

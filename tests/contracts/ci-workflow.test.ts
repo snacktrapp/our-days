@@ -87,7 +87,10 @@ describe("CI workflow privacy and supply-chain contract", () => {
     expect(workflow).toContain("run: npm run test:auth:integration");
     expect(workflow).toContain("run: npm run test:db:concurrency");
     expect(workflow).toContain("run: npm run types:db:check");
-    expect(workflow).toContain("run: npm run test:browser:connected");
+    expect(workflow).toContain("run: npm run test:browser:connected:all");
+    expect(workflow).toContain(
+      "playwright install --with-deps chromium firefox webkit",
+    );
     expect(workflow).toContain("run: npm run db:lint");
     expect(workflow).toContain("if: always()");
     expect(workflow).toContain("run: npm run supabase:stop");

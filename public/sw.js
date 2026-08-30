@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'our-days-public-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const PUBLIC_SHELL = Object.freeze([
   '/offline.html',
   '/offline.css',
@@ -36,6 +36,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (PUBLIC_SHELL.includes(url.pathname)) {
-    event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request)));
+    event.respondWith(
+      caches.match(request).then(
+        (cached) => cached ?? fetch(request).catch(() => new Response('', {
+          status: 503,
+          statusText: 'Public shell asset temporarily unavailable',
+        })),
+      ),
+    );
   }
 });

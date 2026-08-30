@@ -62,7 +62,7 @@ function createLifecycleHarness(
 describe("public service worker contract", () => {
   it("caches only the explicit public shell and never runtime journal responses", async () => {
     const source = await readWorkerSource();
-    expect(source).toContain("const CACHE_NAME = `${CACHE_PREFIX}v2`");
+    expect(source).toContain("const CACHE_NAME = `${CACHE_PREFIX}v3`");
     expect(source).toContain("'/offline.html'");
     expect(source).toContain("'/offline.css'");
     expect(source).toContain("'/manifest.webmanifest'");
@@ -76,14 +76,14 @@ describe("public service worker contract", () => {
   it("leaves the active cache untouched when a required update asset fails", async () => {
     const source = await readWorkerSource();
     const harness = createLifecycleHarness(source, {
-      existingCaches: ["our-days-public-shell-v1"],
+      existingCaches: ["our-days-public-shell-v2"],
       failInstall: true,
     });
 
     await expect(harness.dispatch("install")).rejects.toThrow(
       "shell asset unavailable",
     );
-    expect(harness.cacheNames).toContain("our-days-public-shell-v1");
+    expect(harness.cacheNames).toContain("our-days-public-shell-v2");
     expect(harness.deleteCache).not.toHaveBeenCalled();
     expect(harness.claim).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe("public service worker contract", () => {
   it("installs a complete update before activating and purges only old app caches", async () => {
     const source = await readWorkerSource();
     const harness = createLifecycleHarness(source, {
-      existingCaches: ["our-days-public-shell-v1", "another-app-cache"],
+      existingCaches: ["our-days-public-shell-v2", "another-app-cache"],
     });
 
     await harness.dispatch("install");
@@ -105,10 +105,10 @@ describe("public service worker contract", () => {
     ]);
     await harness.dispatch("activate");
     expect(harness.deleteCache).toHaveBeenCalledWith(
-      "our-days-public-shell-v1",
+      "our-days-public-shell-v2",
     );
     expect(harness.deleteCache).not.toHaveBeenCalledWith("another-app-cache");
-    expect(harness.cacheNames).toContain("our-days-public-shell-v2");
+    expect(harness.cacheNames).toContain("our-days-public-shell-v3");
     expect(harness.claim).toHaveBeenCalledOnce();
   });
 });

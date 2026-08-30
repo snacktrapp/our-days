@@ -6,9 +6,6 @@ const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   getHeaders: vi.fn(),
   getClaims: vi.fn(),
-  redirect: vi.fn(() => {
-    throw new Error("NEXT_REDIRECT");
-  }),
   rpc: vi.fn(),
   clearIntent: vi.fn(),
   expireAuthCookies: vi.fn(),
@@ -20,7 +17,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
-vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
@@ -132,7 +128,10 @@ describe("invitation acceptance actions", () => {
           email: "invited@example.com",
         }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT");
+    ).resolves.toEqual({
+      status: "accepted",
+      email: "invited@example.com",
+    });
 
     expect(mocks.verifyOtp).toHaveBeenCalledWith({
       email: "invited@example.com",
@@ -142,7 +141,7 @@ describe("invitation acceptance actions", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("accept_invitation", {
       token: validToken,
     });
-    expect(mocks.redirect).toHaveBeenCalledWith("/family");
+    expect(mocks.clearIntent).toHaveBeenCalledOnce();
   });
 
   it("does not call Auth with a malformed secret or code", async () => {

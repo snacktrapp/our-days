@@ -681,6 +681,205 @@ textarea:focus-visible,
   text-align: center;
 }
 
+.timeline-empty-state,
+.timeline-pagination,
+.timeline-pagination-error {
+  position: relative;
+  z-index: 2;
+  width: min(88%, 390px);
+  margin: 1.4rem auto;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 1.1rem;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  text-align: center;
+}
+
+.timeline-empty-state {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.timeline-empty-state strong {
+  font-family: var(--font-serif);
+  font-size: 1.18rem;
+}
+
+.timeline-empty-state span,
+.connected-moment-message,
+.trash-error {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.journal-error-shell .phone-stage {
+  min-height: 100dvh;
+}
+
+.journal-error-topbar {
+  grid-template-columns: 72px 1fr 72px;
+}
+
+.journal-error-timeline {
+  min-height: 65dvh;
+  padding-top: 1.5rem;
+}
+
+.journal-error-timeline .timeline-empty-state {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.journal-error-timeline .timeline-empty-state > button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--cream);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.timeline-pagination {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.timeline-pagination-error {
+  display: grid;
+  gap: 0.7rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.timeline-pagination-error a {
+  min-height: 44px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.timeline-pagination a {
+  display: inline-grid;
+  min-height: 44px;
+  place-items: center;
+  padding: 0.65rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.connected-moment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.connected-moment-actions button {
+  min-height: 44px;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.connected-edit-sheet {
+  display: grid;
+  gap: 1rem;
+}
+
+.composer-saved {
+  min-height: 14rem;
+  align-content: center;
+  text-align: center;
+}
+
+.nav-item-unavailable {
+  pointer-events: none;
+}
+
+.trash-panel {
+  padding-bottom: 8rem;
+}
+
+.trash-empty {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  padding: 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+}
+
+.trash-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trash-list li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+}
+
+.trash-list li > div {
+  min-width: 0;
+}
+
+.trash-list li span,
+.trash-list li p {
+  overflow-wrap: anywhere;
+}
+
+.trash-list li > div > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.trash-list p {
+  margin: 0.45rem 0 0.75rem;
+}
+
+.trash-list button {
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.trash-error {
+  display: block;
+  margin-top: 0.4rem;
+}
+
+.trash-sign-out {
+  margin: -6.5rem 1.25rem 8rem;
+}
+
+.trash-sign-out button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .location-card {
   background: #fffaf0;
 }

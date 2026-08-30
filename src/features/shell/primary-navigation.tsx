@@ -2,16 +2,23 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { MomentComposer } from "@/features/composer/moment-composer";
+import {
+  MomentComposer,
+  type SaveWrittenMomentAction,
+} from "@/features/composer/moment-composer";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { JournalSection } from "./shell-view-model";
 
 export function PrimaryNavigation({
   composer,
   section,
+  createMomentAction,
+  memoriesHref,
 }: {
   composer: MomentComposerViewModel;
   section: JournalSection;
+  createMomentAction?: SaveWrittenMomentAction;
+  memoriesHref?: string | null;
 }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const addMomentRef = useRef<HTMLButtonElement>(null);
@@ -49,17 +56,21 @@ export function PrimaryNavigation({
         >
           +
         </button>
-        <Link
-          className={`nav-item ${section === "memories" ? "active" : ""}`}
-          aria-current={section === "memories" ? "page" : undefined}
-          href="/memories"
-          prefetch={false}
-        >
-          <span className="nav-symbol" aria-hidden="true">
-            ⌁
-          </span>
-          <span>Memories</span>
-        </Link>
+        {memoriesHref === null ? (
+          <span className="nav-item nav-item-unavailable" aria-hidden="true" />
+        ) : (
+          <Link
+            className={`nav-item ${section === "memories" ? "active" : ""}`}
+            aria-current={section === "memories" ? "page" : undefined}
+            href={memoriesHref ?? "/memories"}
+            prefetch={false}
+          >
+            <span className="nav-symbol" aria-hidden="true">
+              ⌁
+            </span>
+            <span>Memories</span>
+          </Link>
+        )}
       </nav>
       <MomentComposer
         key={`${composer.recorderPersonId}:${composer.defaultJournalPersonId}`}
@@ -67,6 +78,7 @@ export function PrimaryNavigation({
         open={composerOpen}
         returnFocusRef={addMomentRef}
         onRequestClose={() => setComposerOpen(false)}
+        saveWrittenMoment={createMomentAction}
       />
     </>
   );

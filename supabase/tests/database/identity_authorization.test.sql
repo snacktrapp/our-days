@@ -8,7 +8,7 @@ select ok(
       from pg_catalog.pg_class as class
       join pg_catalog.pg_namespace as namespace on namespace.oid = class.relnamespace
      where namespace.nspname = 'public'
-       and class.relname in ('circles', 'people', 'circle_memberships', 'person_guardians')
+       and class.relname in ('circles', 'people', 'circle_memberships', 'person_guardians', 'moments')
   ),
   'every exposed family table has RLS enabled'
 );
@@ -18,7 +18,7 @@ select is(
     select count(*)::bigint
       from information_schema.role_table_grants
      where table_schema = 'public'
-       and table_name in ('circles', 'people', 'circle_memberships', 'person_guardians')
+       and table_name in ('circles', 'people', 'circle_memberships', 'person_guardians', 'moments')
        and grantee in ('anon', 'authenticated', 'PUBLIC')
        and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER')
   ),

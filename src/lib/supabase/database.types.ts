@@ -76,6 +76,7 @@ export type Database = {
           created_by_membership_id: string;
           id: string;
           name: string;
+          time_zone: string;
           updated_at: string;
         };
         Insert: {
@@ -83,6 +84,7 @@ export type Database = {
           created_by_membership_id: string;
           id?: string;
           name: string;
+          time_zone?: string;
           updated_at?: string;
         };
         Update: {
@@ -90,6 +92,7 @@ export type Database = {
           created_by_membership_id?: string;
           id?: string;
           name?: string;
+          time_zone?: string;
           updated_at?: string;
         };
         Relationships: [
@@ -99,6 +102,89 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "circle_memberships";
             referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
+      moments: {
+        Row: {
+          body: string;
+          circle_id: string;
+          created_at: string;
+          id: string;
+          journal_person_id: string;
+          kind: string;
+          occurred_at: string | null;
+          occurred_on: string;
+          occurred_timezone: string | null;
+          recorded_by_user_id: string;
+          revision: number;
+          time_precision: string;
+          trashed_at: string | null;
+          trashed_by_user_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          body: string;
+          circle_id: string;
+          created_at?: string;
+          id?: string;
+          journal_person_id: string;
+          kind?: string;
+          occurred_at?: string | null;
+          occurred_on: string;
+          occurred_timezone?: string | null;
+          recorded_by_user_id: string;
+          revision?: number;
+          time_precision?: string;
+          trashed_at?: string | null;
+          trashed_by_user_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          circle_id?: string;
+          created_at?: string;
+          id?: string;
+          journal_person_id?: string;
+          kind?: string;
+          occurred_at?: string | null;
+          occurred_on?: string;
+          occurred_timezone?: string | null;
+          recorded_by_user_id?: string;
+          revision?: number;
+          time_precision?: string;
+          trashed_at?: string | null;
+          trashed_by_user_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moments_circle_id_fkey";
+            columns: ["circle_id"];
+            isOneToOne: false;
+            referencedRelation: "circles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moments_journal_person_fkey";
+            columns: ["circle_id", "journal_person_id"];
+            isOneToOne: false;
+            referencedRelation: "people";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moments_recorder_fkey";
+            columns: ["circle_id", "recorded_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "user_id"];
+          },
+          {
+            foreignKeyName: "moments_trashed_by_fkey";
+            columns: ["circle_id", "trashed_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "user_id"];
           },
         ];
       };
@@ -239,6 +325,30 @@ export type Database = {
         };
         Returns: string;
       };
+      create_written_moment: {
+        Args: {
+          body: string;
+          circle_id: string;
+          journal_person_id: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+        };
+        Returns: string;
+      };
+      list_manageable_trashed_written_moments: {
+        Args: { circle_id: string };
+        Returns: {
+          body: string;
+          journal_person_accent: string;
+          journal_person_id: string;
+          journal_person_name: string;
+          moment_id: string;
+          occurred_on: string;
+          revision: number;
+          trashed_at: string;
+        }[];
+      };
       list_pending_invitations: {
         Args: { circle_id: string };
         Returns: {
@@ -246,6 +356,38 @@ export type Database = {
           display_name: string;
           expires_at: string;
           invitation_id: string;
+        }[];
+      };
+      list_timeline_moments: {
+        Args: {
+          circle_id: string;
+          cursor_has_precise_time?: boolean;
+          cursor_moment_id?: string;
+          cursor_occurred_at?: string;
+          cursor_occurred_on?: string;
+          journal_person_id?: string;
+          page_size?: number;
+          snapshot_at?: string;
+        };
+        Returns: {
+          body: string;
+          can_change: boolean;
+          created_at: string;
+          feed_snapshot_at: string;
+          journal_person_accent: string;
+          journal_person_kind: string;
+          journal_person_name: string;
+          moment_circle_id: string;
+          moment_id: string;
+          moment_journal_person_id: string;
+          occurred_at: string;
+          occurred_on: string;
+          occurred_timezone: string;
+          recorder_person_id: string;
+          recorder_person_name: string;
+          revision: number;
+          time_precision: string;
+          updated_at: string;
         }[];
       };
       preflight_invitation: {
@@ -271,6 +413,25 @@ export type Database = {
           managed_person_id: string;
         };
         Returns: string;
+      };
+      set_written_moment_trashed: {
+        Args: {
+          expected_revision: number;
+          moment_id: string;
+          trashed: boolean;
+        };
+        Returns: number;
+      };
+      update_written_moment: {
+        Args: {
+          body: string;
+          expected_revision: number;
+          moment_id: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+        };
+        Returns: number;
       };
     };
     Enums: {

@@ -2,6 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { cache } from "react";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -20,7 +21,7 @@ export type JournalAccessState =
   | Readonly<{ mode: "anonymous" }>
   | Readonly<{ mode: "no-access" }>;
 
-export async function readJournalAccessState(): Promise<JournalAccessState> {
+async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
   await connection();
 
   if (isDesignPreviewEnabled()) return { mode: "preview" };
@@ -54,6 +55,8 @@ export async function readJournalAccessState(): Promise<JournalAccessState> {
     role: membership.role,
   };
 }
+
+export const readJournalAccessState = cache(readJournalAccessStateUncached);
 
 export async function requireJournalAccess(): Promise<JournalAccess> {
   const access = await readJournalAccessState();
