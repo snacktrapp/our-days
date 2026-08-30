@@ -17,6 +17,8 @@ concurrency:
 env:
   CI: "true"
   NEXT_TELEMETRY_DISABLED: "1"
+  OUR_DAYS_ENVIRONMENT: local
+  OUR_DAYS_RESOURCE_MODE: detached
 
 jobs:
   quality:

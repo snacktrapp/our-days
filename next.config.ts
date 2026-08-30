@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import {
+  environmentForNextConfig,
+  validateOurDaysEnvironment,
+} from "./config/our-days-environment";
+
+validateOurDaysEnvironment(environmentForNextConfig(process.env));
 
 const privateRoutes = [
   "/",

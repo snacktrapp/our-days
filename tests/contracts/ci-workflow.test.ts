@@ -29,6 +29,8 @@ describe("CI workflow privacy and supply-chain contract", () => {
     expect(workflow).not.toContain("pull_request_target:");
     expect(workflow).not.toContain("workflow_run:");
     expect(workflow.toLowerCase()).not.toContain("secrets");
+    expect(workflow).toContain("OUR_DAYS_ENVIRONMENT: local");
+    expect(workflow).toContain("OUR_DAYS_RESOURCE_MODE: detached");
 
     const actionReferences = [...workflow.matchAll(/uses:\s+(\S+)/g)].map(
       ([, reference]) => reference,

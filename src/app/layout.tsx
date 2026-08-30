@@ -1,34 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { resolveMetadataBase } from "@/lib/metadata-base.server";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
-
-function resolveMetadataBase() {
-  const value =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000");
-  const url = new URL(value);
-
-  if (
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    (url.pathname !== "/" && url.pathname !== "")
-  ) {
-    throw new Error(
-      "NEXT_PUBLIC_SITE_URL must be an origin without credentials, path, query, or hash.",
-    );
-  }
-  if (url.protocol !== "https:" && url.hostname !== "localhost") {
-    throw new Error(
-      "NEXT_PUBLIC_SITE_URL must use HTTPS outside local development.",
-    );
-  }
-
-  return url;
-}
 
 const metadataBase = resolveMetadataBase();
 
