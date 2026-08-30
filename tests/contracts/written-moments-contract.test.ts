@@ -10,6 +10,13 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const attributionMigration = readFileSync(
+  resolve(
+    root,
+    "supabase/migrations/20260831000000_phase_7b_membership_attribution_foundation.sql",
+  ),
+  "utf8",
+);
 
 describe("written moments database contract", () => {
   it("keeps the browser read-only and the live feed RLS-backed", () => {
@@ -31,17 +38,73 @@ describe("written moments database contract", () => {
     expect(migration).toContain(
       "foreign key (circle_id, journal_person_id)\n    references public.people (circle_id, id)",
     );
-    expect(migration).toContain(
-      "foreign key (circle_id, recorded_by_user_id)\n    references public.circle_memberships (circle_id, user_id)",
+    expect(attributionMigration).toMatch(
+      /foreign key \(\s*circle_id,\s*recorded_by_membership_id\s*\) references public\.circle_memberships \(circle_id, id\)/u,
     );
-    expect(migration).toContain(
-      "foreign key (circle_id, trashed_by_user_id)\n    references public.circle_memberships (circle_id, user_id)",
+    expect(attributionMigration).toMatch(
+      /foreign key \(\s*circle_id,\s*trashed_by_membership_id\s*\) references public\.circle_memberships \(circle_id, id\)/u,
     );
   });
 
   it("makes journal, recorder, kind, and creation identity immutable", () => {
-    expect(migration).toMatch(
-      /new\.journal_person_id <> old\.journal_person_id[\s\S]*new\.recorded_by_user_id <> old\.recorded_by_user_id[\s\S]*new\.kind <> old\.kind[\s\S]*new\.created_at <> old\.created_at/u,
+    expect(attributionMigration).toMatch(
+      /new\.journal_person_id <> old\.journal_person_id[\s\S]*new\.recorded_by_membership_id <> old\.recorded_by_membership_id[\s\S]*new\.kind <> old\.kind[\s\S]*new\.created_at <> old\.created_at/u,
+    );
+  });
+
+  it("backfills both attribution columns before validating membership foreign keys", () => {
+    const recorderBackfill = attributionMigration.indexOf(
+      "set recorded_by_membership_id = membership.id",
+    );
+    const trashBackfill = attributionMigration.indexOf(
+      "set trashed_by_membership_id = membership.id",
+    );
+    const recorderValidation = attributionMigration.indexOf(
+      "validate constraint moments_recorded_by_membership_fkey",
+    );
+    const trashValidation = attributionMigration.indexOf(
+      "validate constraint moments_trashed_by_membership_fkey",
+    );
+
+    expect(recorderBackfill).toBeGreaterThan(-1);
+    expect(trashBackfill).toBeGreaterThan(-1);
+    expect(recorderValidation).toBeGreaterThan(recorderBackfill);
+    expect(trashValidation).toBeGreaterThan(trashBackfill);
+  });
+
+  it("derives recorder and trash attribution from the active caller membership", () => {
+    expect(attributionMigration).toMatch(
+      /select membership\.id\s+into actor_membership_id[\s\S]*membership\.user_id = current_user_id[\s\S]*membership\.status = 'active'/u,
+    );
+    expect(attributionMigration).toMatch(
+      /insert into public\.moments \([\s\S]*recorded_by_membership_id[\s\S]*\) values \([\s\S]*actor_membership_id/u,
+    );
+    expect(attributionMigration).toContain(
+      "trashed_by_membership_id = actor_membership_id",
+    );
+  });
+
+  it("rewrites stable readers narrowly and fails if their reviewed join drifts", () => {
+    expect(attributionMigration).toContain(
+      "recorder_membership.user_id = moment.recorded_by_user_id",
+    );
+    expect(attributionMigration).toContain(
+      "recorder_membership.id = moment.recorded_by_membership_id",
+    );
+    expect(attributionMigration).toContain(
+      "if legacy_occurrences <> expected_occurrences then",
+    );
+    expect(attributionMigration).toContain(
+      "or membership_occurrences <> expected_occurrences then",
+    );
+    expect(attributionMigration).toContain(
+      "Recorder attribution reader could not be migrated",
+    );
+  });
+
+  it("does not yet weaken the Auth-user deletion boundary", () => {
+    expect(attributionMigration).not.toMatch(
+      /alter table public\.circle_memberships[\s\S]*(?:drop constraint circle_memberships_user_id_fkey|alter column user_id drop not null|on delete set null)/iu,
     );
   });
 

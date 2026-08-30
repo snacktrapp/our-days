@@ -348,7 +348,7 @@ insert into public.moments (
   id,
   circle_id,
   journal_person_id,
-  recorded_by_user_id,
+  recorded_by_membership_id,
   body,
   occurred_on,
   occurred_at,
@@ -359,7 +359,7 @@ select
   ('70000000-0000-4000-8000-' || lpad(sequence::text, 12, '0'))::uuid,
   '20000000-0000-4000-8000-000000000001'::uuid,
   '30000000-0000-4000-8000-000000000001'::uuid,
-  '10000000-0000-4000-8000-000000000001'::uuid,
+  '40000000-0000-4000-8000-000000000001'::uuid,
   format('Pagination fixture %s', sequence),
   '2018-02-03'::date,
   '2018-02-03 18:00:00+00'::timestamptz,
@@ -379,7 +379,7 @@ insert into public.moments (
   id,
   circle_id,
   journal_person_id,
-  recorded_by_user_id,
+  recorded_by_membership_id,
   body,
   occurred_on,
   created_at,
@@ -389,7 +389,7 @@ select
   '70000000-0000-4000-8000-999999999999'::uuid,
   '20000000-0000-4000-8000-000000000001'::uuid,
   '30000000-0000-4000-8000-000000000001'::uuid,
-  '10000000-0000-4000-8000-000000000001'::uuid,
+  '40000000-0000-4000-8000-000000000001'::uuid,
   'Inserted after the feed snapshot',
   '2018-02-03'::date,
   feed_snapshot_at + interval '1 second',
@@ -576,11 +576,11 @@ select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001
 
 select throws_ok(
   $$insert into public.moments (
-    circle_id, journal_person_id, recorded_by_user_id, body, occurred_on
+    circle_id, journal_person_id, recorded_by_membership_id, body, occurred_on
   ) values (
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
-    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
     'Direct browser insert.',
     '2026-08-29'
   )$$,

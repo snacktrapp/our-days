@@ -261,10 +261,10 @@ select throws_ok(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, body, occurred_on
+  id, circle_id, journal_person_id, recorded_by_membership_id, body, occurred_on
 ) values
-  ('61000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Leap day exact', '2024-02-29'),
-  ('61000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'February twenty-eight exact', '2023-02-28');
+  ('61000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'Leap day exact', '2024-02-29'),
+  ('61000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'February twenty-eight exact', '2023-02-28');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -369,13 +369,13 @@ select is(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, body, occurred_on
+  id, circle_id, journal_person_id, recorded_by_membership_id, body, occurred_on
 )
 select
   ('63000000-0000-4000-8000-' || lpad(sequence::text, 12, '0'))::uuid,
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
   format('Year catalog fixture %s', sequence),
   pg_catalog.make_date(999 + sequence, 1, 1)
 from generate_series(1, 205) as sequence;
@@ -412,14 +412,14 @@ select is(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, body, occurred_on,
+  id, circle_id, journal_person_id, recorded_by_membership_id, body, occurred_on,
   occurred_at, occurred_timezone, time_precision
 )
 select
   ('62000000-0000-4000-8000-' || lpad(sequence::text, 12, '0'))::uuid,
   '20000000-0000-4000-8000-000000000001'::uuid,
   '30000000-0000-4000-8000-000000000001'::uuid,
-  '10000000-0000-4000-8000-000000000001'::uuid,
+  '40000000-0000-4000-8000-000000000001'::uuid,
   format('Memory pagination fixture %s', sequence),
   '2018-02-03'::date,
   '2018-02-03 18:00:00+00'::timestamptz,
@@ -439,14 +439,14 @@ select * from public.list_memory_moments(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, body, occurred_on,
+  id, circle_id, journal_person_id, recorded_by_membership_id, body, occurred_on,
   created_at, updated_at
 )
 select
   '62000000-0000-4000-8000-999999999999',
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
   'Inserted after the memory snapshot',
   '2018-02-03',
   feed_snapshot_at + interval '1 second',

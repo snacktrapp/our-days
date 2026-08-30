@@ -74,7 +74,7 @@ insert into public.moments (
   id,
   circle_id,
   journal_person_id,
-  recorded_by_user_id,
+  recorded_by_membership_id,
   kind,
   title,
   body,
@@ -84,16 +84,16 @@ insert into public.moments (
   occurred_timezone,
   time_precision,
   trashed_at,
-  trashed_by_user_id
+  trashed_by_membership_id
 )
 values
-  ('60000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'thought', null, 'A small ordinary morning worth keeping.', null, '2026-08-28', null, null, 'date', null, null),
-  ('60000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000008', '10000000-0000-4000-8000-000000000001', 'thought', null, 'A managed child found a new favorite word.', null, '2026-08-27', '2026-08-27 17:15:00+00', 'America/Los_Angeles', 'minute', null, null),
-  ('60000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'location', null, 'The late light reached all the way across the kitchen.', 'Home kitchen', '2026-08-27', '2026-08-27 17:15:00+00', 'America/Los_Angeles', 'minute', null, null),
-  ('60000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'thought', null, 'An older page added on the day it really happened.', null, '2021-04-03', null, null, 'date', null, null),
-  ('60000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'thought', null, 'A reversible discarded draft.', null, '2026-08-20', null, null, 'date', statement_timestamp(), '10000000-0000-4000-8000-000000000001'),
-  ('60000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000006', 'thought', null, 'A harbor-circle moment stays in its own family.', null, '2026-08-28', null, null, 'date', null, null),
-  ('60000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'milestone', 'A new favorite word', 'A family phrase worth carrying forward.', null, '2020-03-14', null, null, 'date', null, null);
+  ('60000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'thought', null, 'A small ordinary morning worth keeping.', null, '2026-08-28', null, null, 'date', null, null),
+  ('60000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000008', '40000000-0000-4000-8000-000000000001', 'thought', null, 'A managed child found a new favorite word.', null, '2026-08-27', '2026-08-27 17:15:00+00', 'America/Los_Angeles', 'minute', null, null),
+  ('60000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000002', '40000000-0000-4000-8000-000000000002', 'location', null, 'The late light reached all the way across the kitchen.', 'Home kitchen', '2026-08-27', '2026-08-27 17:15:00+00', 'America/Los_Angeles', 'minute', null, null),
+  ('60000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000003', '40000000-0000-4000-8000-000000000003', 'thought', null, 'An older page added on the day it really happened.', null, '2021-04-03', null, null, 'date', null, null),
+  ('60000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '40000000-0000-4000-8000-000000000001', 'thought', null, 'A reversible discarded draft.', null, '2026-08-20', null, null, 'date', statement_timestamp(), '40000000-0000-4000-8000-000000000001'),
+  ('60000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000006', '40000000-0000-4000-8000-000000000006', 'thought', null, 'A harbor-circle moment stays in its own family.', null, '2026-08-28', null, null, 'date', null, null),
+  ('60000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000003', '40000000-0000-4000-8000-000000000003', 'milestone', 'A new favorite word', 'A family phrase worth carrying forward.', null, '2020-03-14', null, null, 'date', null, null);
 
 insert into public.moment_people (
   circle_id, moment_id, person_id, tagged_by_membership_id

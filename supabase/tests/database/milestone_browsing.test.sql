@@ -64,7 +64,7 @@ select ok(
 );
 
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, kind, title, body,
+  id, circle_id, journal_person_id, recorded_by_membership_id, kind, title, body,
   occurred_on, occurred_at, occurred_timezone, time_precision
 )
 values
@@ -72,7 +72,7 @@ values
     '60000000-0000-4000-8000-000000000081',
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
-    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
     'milestone', 'A later milestone', 'Held in its true order.',
     '2024-05-01', null, null, 'date'
   ),
@@ -80,7 +80,7 @@ values
     '60000000-0000-4000-8000-000000000082',
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000002',
-    '10000000-0000-4000-8000-000000000002',
+    '40000000-0000-4000-8000-000000000002',
     'milestone', 'An earlier milestone', '',
     '2018-02-03', '2018-02-03 18:00:00+00', 'America/Los_Angeles', 'minute'
   ),
@@ -88,14 +88,14 @@ values
     '60000000-0000-4000-8000-000000000083',
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
-    '10000000-0000-4000-8000-000000000001',
+    '40000000-0000-4000-8000-000000000001',
     'milestone', 'A trashed milestone', '',
     '2025-01-01', null, null, 'date'
   );
 
 update public.moments
    set trashed_at = statement_timestamp(),
-       trashed_by_user_id = '10000000-0000-4000-8000-000000000001'
+       trashed_by_membership_id = '40000000-0000-4000-8000-000000000001'
  where id = '60000000-0000-4000-8000-000000000083';
 
 set local role authenticated;
@@ -246,14 +246,14 @@ select ok(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, kind, title, body,
+  id, circle_id, journal_person_id, recorded_by_membership_id, kind, title, body,
   occurred_on
 )
 select
   ('63000000-0000-4000-8000-' || lpad(sequence::text, 12, '0'))::uuid,
   '20000000-0000-4000-8000-000000000001'::uuid,
   '30000000-0000-4000-8000-000000000001'::uuid,
-  '10000000-0000-4000-8000-000000000001'::uuid,
+  '40000000-0000-4000-8000-000000000001'::uuid,
   'milestone',
   format('Equal-date milestone %s', sequence),
   '',
@@ -270,14 +270,14 @@ select * from public.list_milestone_memories(
 
 reset role;
 insert into public.moments (
-  id, circle_id, journal_person_id, recorded_by_user_id, kind, title, body,
+  id, circle_id, journal_person_id, recorded_by_membership_id, kind, title, body,
   occurred_on, created_at, updated_at
 )
 select
   '63000000-0000-4000-8000-999999999999',
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
-  '10000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
   'milestone',
   'Inserted after the milestone snapshot',
   '',

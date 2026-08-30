@@ -69,6 +69,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/PERSONAL_JOURNALS_PREVIEW_REPORT.md` — individual journal ownership, empty-state, and route privacy evidence
 - `docs/quality/VIDEO_FEASIBILITY_REPORT.md` — isolated local short-video treatment, lifecycle evidence, and production stop/defer gates
 - `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md` — private export-request ledger, zero-media archive contract, adversarial review, and remaining worker gates
+- `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md` — durable membership-based moment attribution, upgrade rehearsal, and remaining account-closure gates
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 

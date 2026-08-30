@@ -268,12 +268,12 @@ export type Database = {
           occurred_on: string;
           occurred_timezone: string | null;
           place_name: string | null;
-          recorded_by_user_id: string;
+          recorded_by_membership_id: string;
           revision: number;
           time_precision: string;
           title: string | null;
           trashed_at: string | null;
-          trashed_by_user_id: string | null;
+          trashed_by_membership_id: string | null;
           updated_at: string;
         };
         Insert: {
@@ -287,12 +287,12 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string | null;
           place_name?: string | null;
-          recorded_by_user_id: string;
+          recorded_by_membership_id: string;
           revision?: number;
           time_precision?: string;
           title?: string | null;
           trashed_at?: string | null;
-          trashed_by_user_id?: string | null;
+          trashed_by_membership_id?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -306,12 +306,12 @@ export type Database = {
           occurred_on?: string;
           occurred_timezone?: string | null;
           place_name?: string | null;
-          recorded_by_user_id?: string;
+          recorded_by_membership_id?: string;
           revision?: number;
           time_precision?: string;
           title?: string | null;
           trashed_at?: string | null;
-          trashed_by_user_id?: string | null;
+          trashed_by_membership_id?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -330,18 +330,18 @@ export type Database = {
             referencedColumns: ["circle_id", "id"];
           },
           {
-            foreignKeyName: "moments_recorder_fkey";
-            columns: ["circle_id", "recorded_by_user_id"];
+            foreignKeyName: "moments_recorded_by_membership_fkey";
+            columns: ["circle_id", "recorded_by_membership_id"];
             isOneToOne: false;
             referencedRelation: "circle_memberships";
-            referencedColumns: ["circle_id", "user_id"];
+            referencedColumns: ["circle_id", "id"];
           },
           {
-            foreignKeyName: "moments_trashed_by_fkey";
-            columns: ["circle_id", "trashed_by_user_id"];
+            foreignKeyName: "moments_trashed_by_membership_fkey";
+            columns: ["circle_id", "trashed_by_membership_id"];
             isOneToOne: false;
             referencedRelation: "circle_memberships";
-            referencedColumns: ["circle_id", "user_id"];
+            referencedColumns: ["circle_id", "id"];
           },
         ];
       };

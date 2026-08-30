@@ -105,6 +105,8 @@ Entry prerequisite: PD-005 is accepted.
 
 The decision-independent export-request and archive-contract groundwork is recorded in `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md`. It is not a Phase 7 entry or completion claim: the request ledger is bounded and private, the structured-data harness is pure and unconnected, and no worker, media, artifact delivery, retention duration, purge behavior, or user-facing export action exists.
 
+The membership-attribution prerequisite is recorded in `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md`. Moment recorder and trash history now use durable same-circle membership IDs instead of Auth user IDs, with unchanged public feed responses. It does not yet make membership Auth attachments nullable, request account closure, reconcile Storage, delete an Auth user, or expose account-deletion UI.
+
 Deliver:
 
 - Trash/restore, idempotent purge ledger, immutable deletion requests, audit events, export jobs, safe archive names, structured manifest, originals, and checksums.
