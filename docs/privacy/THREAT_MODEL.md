@@ -35,6 +35,10 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 18. An unprotected preview or production fixture route exposes names, moments, counts, locations, or media without membership.
 19. Preview/Production is miswired to the wrong Supabase project, a Proof resource, or an unvalidated redirect origin.
 20. Auth-account deletion cascades family history or fails because the user still owns Storage objects.
+21. A resumed video upload identifier, temporary object path, filename, or container metadata leaks a family identity or precise location across accounts.
+22. A malformed, oversized, highly complex, or adversarial video exhausts browser, worker, storage, or transcoder resources.
+23. Video Range delivery, a long-lived signed URL, CDN cache, poster, or transcoded derivative remains usable after membership revocation or deletion.
+24. Partial video processing/export/purge removes the database row but leaves an original, derivative, poster, resumable upload, cache entry, or archive copy behind.
 
 ## Core mitigations
 
@@ -50,12 +54,14 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 - Fail-closed environment identity/project-reference validation rejects Preview→Production, Proof references, and wildcard/caller-controlled redirects; external previews remain deployment-protected until app auth passes.
 - Membership removal and Auth-account deletion are separate workflows; family rows do not cascade from `auth.users`, and owned Storage objects are cleared or reassigned before Auth deletion.
 - No advertising IDs, session replay, cross-site analytics, public profiles, or third-party family-media hosts.
+- Any future video path uses a circle-scoped reserved asset, direct resumable upload to a private bucket, opaque/account-scoped resume state, server-side content verification, bounded isolated transcoding, immutable checksummed original, stripped derivatives/posters, controlled Range delivery, and an idempotent purge ledger. The local feasibility preview provides none of these production guarantees.
 
 ## Residual decisions
 
 - Signed derivative URLs have residual access until expiry; PD-006 chooses the window versus an authenticated media proxy.
 - Trash retention and immediate purge authority require PD-002/PD-005 approval.
 - Backup region/retention and paid recovery features require infrastructure approval.
+- Video duration/size/codec, upload/transcode provider, playback/revocation, and MVP inclusion remain pending under PD-004 and its measured production spike.
 
 ## Required adversarial actors
 

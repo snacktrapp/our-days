@@ -42,6 +42,7 @@ const privateRoutes = [
   "/journal",
   "/quality/global-error",
   "/quality/memories-empty",
+  "/quality/video-feasibility",
 ];
 
 function isRscNavigationRequest(url: string, headers: Record<string, string>) {
@@ -170,6 +171,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   );
   capturedRequests.set(
     "/quality/memories-empty",
+    capturedRequests.get("/family")!,
+  );
+  capturedRequests.set(
+    "/quality/video-feasibility",
     capturedRequests.get("/family")!,
   );
 

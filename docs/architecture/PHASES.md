@@ -78,12 +78,14 @@ Gate: immutable tenant/author fields, parent visibility, descendant soft-delete 
 
 The decision-independent functional preview for years and On This Day is recorded in `docs/quality/MEMORIES_PREVIEW_REPORT.md`. It validates the emotional and mobile interaction direction only; this phase remains incomplete until production date queries, authorization, scale, timezone, and external-device gates pass.
 
+The isolated local short-video preview is recorded in `docs/quality/VIDEO_FEASIBILITY_REPORT.md`. It establishes a quiet timeline treatment, bounded on-device inspection, and a no-upload/no-persistence lifecycle only. Video remains absent from Add Moment, PD-004 remains pending, and upload/transcode/playback/export/deletion work remains deferred.
+
 Deliver:
 
 - Years, dates, milestones, and On This Day based on `occurred_on`.
-- Measured video spike for iPhone PWA upload, transcoding, playback, storage, and export. Ship the capped feature only if it meets the same retry/privacy bar.
+- After PD-004 is accepted, a measured production video spike for iPhone PWA upload, transcoding, playback, storage, export, and purge. Ship the capped feature only if it meets the same retry/privacy bar.
 
-Entry prerequisite for shipping video (not for the spike): PD-004 is accepted.
+Entry prerequisite for production media work or shipping video (not for the completed local-only preview): PD-004 is accepted.
 
 Gate: timezone/date-only fixtures pass; video has a recorded ship/defer decision with evidence.
 

@@ -151,6 +151,7 @@ test("primary screens and composer states have no serious axe violations", async
     "/memories/on-this-day",
     "/memories/years/2023",
     "/quality/memories-empty",
+    "/quality/video-feasibility",
   ]) {
     await page.goto(path);
     await scan();

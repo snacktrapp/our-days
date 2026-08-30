@@ -360,6 +360,26 @@ test(
 );
 
 test(
+  "video feasibility stays isolated and quiet",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile");
+    await page.goto("/quality/video-feasibility");
+    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page).toHaveScreenshot(
+      "video-feasibility-chromium-mobile.png",
+      { animations: "disabled" },
+    );
+    await page.getByRole("button", { name: "Try a short video" }).click();
+    await expect(page).toHaveScreenshot(
+      "video-feasibility-dialog-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);
+
+test(
   "family invitation review stays usable with the software keyboard",
   { tag: "@visual" },
   async ({ page }, testInfo) => {

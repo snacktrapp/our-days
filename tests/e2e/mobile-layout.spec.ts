@@ -13,6 +13,7 @@ const routes = [
   "/memories/on-this-day",
   "/memories/years/2023",
   "/quality/memories-empty",
+  "/quality/video-feasibility",
 ];
 
 for (const route of routes) {
