@@ -12,6 +12,8 @@ const fixtureText = [
   "Avery",
   "Sand Harbor",
   "All our days",
+  "Nothing from this day yet",
+  "March 4",
   "/sample-family.jpg",
 ];
 const privateRoutes = [
@@ -19,8 +21,12 @@ const privateRoutes = [
   "/people",
   "/people/molly",
   "/memories",
+  "/memories/on-this-day",
+  "/memories/years/2023",
+  "/memories/years/1900",
   "/journal",
   "/quality/global-error",
+  "/quality/memories-empty",
 ];
 
 function isRscNavigationRequest(url: string, headers: Record<string, string>) {
@@ -112,13 +118,31 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     ["/people", await captureNavigation("/family", "/people")],
     ["/people/molly", await captureNavigation("/family", "/people/molly")],
     ["/memories", await captureNavigation("/family", "/memories")],
+    [
+      "/memories/on-this-day",
+      await captureNavigation("/memories", "/memories/on-this-day"),
+    ],
+    [
+      "/memories/years/2023",
+      await captureNavigation("/memories", "/memories/years/2023"),
+    ],
   ]);
+  // Reuse the genuine browser envelope captured for the valid dynamic route
+  // against an invalid year. The locked server must guard before validation.
+  capturedRequests.set(
+    "/memories/years/1900",
+    capturedRequests.get("/memories/years/2023")!,
+  );
   // `/journal` is a guarded compatibility redirect and intentionally has no
   // visible link. Reuse the genuine browser-generated envelope captured from
   // a sibling private route while targeting `/journal` on the locked server.
   capturedRequests.set("/journal", capturedRequests.get("/family")!);
   capturedRequests.set(
     "/quality/global-error",
+    capturedRequests.get("/family")!,
+  );
+  capturedRequests.set(
+    "/quality/memories-empty",
     capturedRequests.get("/family")!,
   );
 

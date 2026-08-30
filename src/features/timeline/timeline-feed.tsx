@@ -49,6 +49,7 @@ function TimelineEntry({ entry, firstMomentId }: TimelineEntryProps) {
     case "moment":
       return (
         <article
+          id={`moment-${entry.moment.id}`}
           className={`moment moment-${entry.moment.kind}`}
           data-moment-kind={entry.moment.kind}
         >
@@ -83,19 +84,21 @@ export function TimelineFeed({ model }: { model: TimelineViewModel }) {
 
   return (
     <>
-      <div className="view-switch" role="group" aria-label="Timeline view">
-        {model.switcher.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={false}
-            aria-current={item.current ? "page" : undefined}
-            className={item.current ? "active" : ""}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
+      {model.switcher.length > 0 && (
+        <div className="view-switch" role="group" aria-label="Timeline view">
+          {model.switcher.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              aria-current={item.current ? "page" : undefined}
+              className={item.current ? "active" : ""}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {model.personalIntro && (
         <div className="personal-intro">

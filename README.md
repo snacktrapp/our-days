@@ -45,6 +45,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/architecture/ACCEPTANCE_CRITERIA.md` — release-blocking requirements
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
+- `docs/quality/MEMORIES_PREVIEW_REPORT.md` — date browsing preview evidence and production limits
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 

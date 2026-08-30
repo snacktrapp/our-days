@@ -4,10 +4,16 @@ import type { MemoriesViewModel } from "./memories-view-model";
 
 export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
   return (
-    <section className="section-panel memories-panel">
+    <section
+      className="section-panel memories-panel"
+      aria-labelledby="on-this-day-heading"
+    >
       <div className="memory-heading">
         <span>{model.heading}</span>
-        <strong>{model.subheading}</strong>
+        <h2 id="on-this-day-heading">{model.subheading}</h2>
+      </div>
+      <div className="memory-portal-connection" aria-hidden="true">
+        <span />
       </div>
       <Link
         className="memory-feature"
@@ -25,18 +31,25 @@ export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
         </div>
         <div>
           <span>{model.feature.dateLabel}</span>
-          <strong>{model.feature.title}</strong>
+          <h3>{model.feature.title}</h3>
           <small>{model.feature.actionLabel}</small>
         </div>
       </Link>
-      <div className="browse-years">
-        <span>Browse by year</span>
+      <nav className="browse-years" aria-labelledby="browse-years-heading">
+        <h2 id="browse-years-heading">Browse by year</h2>
         <div>
           {model.years.map((year) => (
-            <button key={year}>{year}</button>
+            <Link
+              key={year.year}
+              href={year.href}
+              prefetch={false}
+              aria-label={year.ariaLabel}
+            >
+              {year.year}
+            </Link>
           ))}
         </div>
-      </div>
+      </nav>
     </section>
   );
 }

@@ -20,6 +20,7 @@
 }
 html {
   background: #d9d0c3;
+  scroll-padding-bottom: calc(98px + env(safe-area-inset-bottom));
 }
 body {
   margin: 0;
@@ -820,14 +821,40 @@ textarea:focus-visible,
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
-.memory-heading strong {
+.memory-heading h2 {
   margin-top: 3px;
+  margin-bottom: 0;
   color: var(--ink);
   font-family: Georgia, serif;
   font-size: 21px;
   font-weight: 500;
   letter-spacing: normal;
   text-transform: none;
+}
+.memory-portal-connection {
+  width: 28px;
+  height: 34px;
+  margin: -4px auto 0;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+.memory-portal-connection::before {
+  content: "";
+  width: 1px;
+  position: absolute;
+  inset-block: 0;
+  background: var(--line);
+}
+.memory-portal-connection span {
+  width: 16px;
+  height: 16px;
+  position: relative;
+  z-index: 1;
+  border: 4px solid var(--paper);
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 0 1px rgba(49, 95, 99, 0.2);
 }
 .memory-feature {
   width: 100%;
@@ -864,7 +891,7 @@ textarea:focus-visible,
   color: var(--muted);
   font-size: 9px;
 }
-.memory-feature strong {
+.memory-feature h3 {
   margin: 4px 0 11px;
   font-family: Georgia, serif;
   font-size: 19px;
@@ -877,7 +904,8 @@ textarea:focus-visible,
 .browse-years {
   margin-top: 25px;
 }
-.browse-years > span {
+.browse-years > h2 {
+  margin: 0;
   color: var(--muted);
   font-size: 9px;
   font-weight: 700;
@@ -887,16 +915,125 @@ textarea:focus-visible,
 .browse-years div {
   margin-top: 9px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 7px;
 }
-.browse-years button {
+.browse-years a {
   min-height: 44px;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--hairline);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.32);
   color: #514a43;
+  font-size: 12px;
+  text-decoration: none;
   cursor: pointer;
+}
+
+.memory-journey {
+  padding-top: 2px;
+}
+.memory-return {
+  width: fit-content;
+  min-height: 44px;
+  margin-left: 14px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  text-decoration: none;
+}
+.memory-return span {
+  color: var(--teal);
+  font-size: 15px;
+}
+.memory-journey-heading {
+  margin: 2px 24px 18px;
+  text-align: center;
+}
+.memory-journey-heading > span {
+  color: var(--teal);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.memory-journey-heading h2 {
+  margin: 5px 0 7px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.memory-journey-heading p {
+  max-width: 300px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.memory-empty {
+  width: calc(100% - 28px);
+  min-height: 260px;
+  margin: 0 14px 80px;
+  padding: 48px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  background: rgba(255, 253, 248, 0.5);
+  text-align: center;
+}
+.memory-empty::before {
+  content: "";
+  width: 1px;
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  background: linear-gradient(
+    to bottom,
+    var(--line) 0 66px,
+    transparent 66px calc(100% - 48px),
+    var(--line) calc(100% - 48px)
+  );
+}
+.memory-empty > * {
+  position: relative;
+  z-index: 1;
+}
+.memory-empty-node {
+  width: 16px;
+  height: 16px;
+  position: relative;
+  border: 4px solid var(--paper);
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 9px 0 -7px var(--line),
+    0 18px 0 -7px var(--line);
+}
+.memory-empty h3 {
+  margin: 22px 0 7px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  font-weight: 500;
+}
+.memory-empty p {
+  max-width: 260px;
+  margin: 0;
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .composer-dialog {

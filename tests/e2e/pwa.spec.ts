@@ -88,5 +88,5 @@ test("a failed media request leaves the timeline stable without leaking errors",
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
   await expect(page.locator(".time-rail")).toBeVisible();
-  await expect(page.locator('[data-moment-kind="thought"]')).toBeVisible();
+  await expect(page.locator("#moment-kitchen")).toBeVisible();
 });

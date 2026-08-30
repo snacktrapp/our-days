@@ -1,6 +1,14 @@
 import { expect, test } from "./test";
 
-const routes = ["/family", "/people/molly", "/people", "/memories"];
+const routes = [
+  "/family",
+  "/people/molly",
+  "/people",
+  "/memories",
+  "/memories/on-this-day",
+  "/memories/years/2023",
+  "/quality/memories-empty",
+];
 
 for (const route of routes) {
   test(`${route} reflows without horizontal overflow or undersized actions`, async ({
@@ -64,6 +72,35 @@ test("reduced-motion preference removes entrance animations", async ({
   );
 });
 
+test("deep memory actions can scroll above the fixed navigation", async ({
+  page,
+}) => {
+  for (const path of ["/memories/on-this-day", "/memories/years/2023"]) {
+    await page.goto(path);
+    const action = page
+      .locator("[data-moment-kind]")
+      .last()
+      .getByRole("button", { name: /notes/u });
+    await action.focus();
+    await action.evaluate((element) =>
+      element.scrollIntoView({ block: "end", behavior: "instant" }),
+    );
+    const geometry = await action.evaluate((element) => {
+      const actionRect = element.getBoundingClientRect();
+      const navigationRect = document
+        .querySelector(".bottom-nav")!
+        .getBoundingClientRect();
+      return {
+        actionBottom: actionRect.bottom,
+        navigationTop: navigationRect.top,
+      };
+    });
+    expect(geometry.actionBottom).toBeLessThanOrEqual(
+      geometry.navigationTop - 4,
+    );
+  }
+});
+
 test("200 percent zoom-equivalent viewport retains one-dimensional reflow", async ({
   page,
   browserName,
@@ -75,13 +112,20 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   // the deterministic reflow equivalent of a 1280×900 window at 200% zoom;
   // the real headed-browser zoom check remains a release gate.
   await page.setViewportSize({ width: 640, height: 450 });
-  await page.goto("/family");
+  for (const route of [
+    "/family",
+    "/memories/on-this-day",
+    "/memories/years/2023",
+  ]) {
+    await page.goto(route);
+    const geometry = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  }
 
-  const geometry = await page.evaluate(() => ({
-    clientWidth: document.documentElement.clientWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  await page.goto("/family");
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeInViewport();

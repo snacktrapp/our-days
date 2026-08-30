@@ -72,6 +72,8 @@ Gate: immutable tenant/author fields, parent visibility, descendant soft-delete 
 
 ## 6. Memories and video decision
 
+The decision-independent functional preview for years and On This Day is recorded in `docs/quality/MEMORIES_PREVIEW_REPORT.md`. It validates the emotional and mobile interaction direction only; this phase remains incomplete until production date queries, authorization, scale, timezone, and external-device gates pass.
+
 Deliver:
 
 - Years, dates, milestones, and On This Day based on `occurred_on`.

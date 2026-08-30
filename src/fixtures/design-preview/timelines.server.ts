@@ -4,12 +4,22 @@ import type {
   TimelineEntryViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
-import type { MemoriesViewModel } from "@/features/memories/memories-view-model";
+import type {
+  MemoriesViewModel,
+  MemoryJourneyViewModel,
+} from "@/features/memories/memories-view-model";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type {
   AccentToken,
   JournalChromeViewModel,
 } from "@/features/shell/shell-view-model";
+import {
+  anniversaryKey,
+  compareMemoryDatesDescending,
+  elapsedCalendarLabel,
+  formatAnniversaryLabel,
+  matchesAnniversary,
+} from "@/features/memories/memory-date";
 
 const familyMark = [
   { id: "brian", initial: "B", accent: "teal" },
@@ -45,7 +55,11 @@ const familyEntries = [
       taggedPeopleLabel: "Molly + 3",
     },
   },
-  { id: "two-weeks", entryType: "elapsed-gap", label: "two weeks earlier" },
+  {
+    id: "two-weeks",
+    entryType: "elapsed-gap",
+    label: elapsedCalendarLabel("2026-08-28", "2026-08-14"),
+  },
   {
     id: "kitchen",
     entryType: "moment",
@@ -63,7 +77,11 @@ const familyEntries = [
       noteCount: 4,
     },
   },
-  { id: "five-weeks", entryType: "elapsed-gap", label: "five weeks earlier" },
+  {
+    id: "five-weeks",
+    entryType: "elapsed-gap",
+    label: elapsedCalendarLabel("2026-08-14", "2026-07-06"),
+  },
   {
     id: "lake",
     entryType: "moment",
@@ -84,7 +102,11 @@ const familyEntries = [
       taggedPeopleLabel: "Avery",
     },
   },
-  { id: "three-years", entryType: "elapsed-gap", label: "three years earlier" },
+  {
+    id: "three-years",
+    entryType: "elapsed-gap",
+    label: elapsedCalendarLabel("2026-07-06", "2023-08-21"),
+  },
   { id: "year-2023", entryType: "date-marker", label: "2023", divider: true },
   {
     id: "first-day",
@@ -104,6 +126,58 @@ const familyEntries = [
       milestone: "First day of school",
       ageLabel: "Age 5",
       yearLabel: "2023",
+    },
+  },
+  {
+    id: "one-year",
+    entryType: "elapsed-gap",
+    label: elapsedCalendarLabel("2023-08-21", "2022-08-28"),
+  },
+  { id: "year-2022", entryType: "date-marker", label: "2022", divider: true },
+  {
+    id: "late-summer-2022",
+    entryType: "moment",
+    moment: {
+      id: "late-summer-2022",
+      kind: "photo",
+      personName: "Brian",
+      personInitial: "B",
+      personAccent: "teal",
+      displayTime: "6:31 pm",
+      displayDate: "Aug 28, 2022",
+      occurredOn: "2022-08-28",
+      kicker: "A late-summer afternoon",
+      text: "Peaches on the porch, grass-stained knees, and the last warm hour before dinner.",
+      noteCount: 0,
+      image: {
+        src: "/sample-family.jpg",
+        alt: "A child laughing outside in late-summer light",
+        badgeLabel: "AUG 28",
+      },
+      taggedPeopleLabel: "Molly + 3",
+    },
+  },
+  {
+    id: "three-more-years",
+    entryType: "elapsed-gap",
+    label: elapsedCalendarLabel("2022-08-28", "2019-08-28"),
+  },
+  { id: "year-2019", entryType: "date-marker", label: "2019", divider: true },
+  {
+    id: "porch-light-2019",
+    entryType: "moment",
+    moment: {
+      id: "porch-light-2019",
+      kind: "thought",
+      personName: "Molly",
+      personInitial: "M",
+      personAccent: "clay",
+      displayTime: "9:17 pm",
+      displayDate: "Aug 28, 2019",
+      occurredOn: "2019-08-28",
+      kicker: "A thought",
+      text: "The porch light came on before anyone noticed summer was getting shorter.",
+      noteCount: 0,
     },
   },
   {
@@ -203,19 +277,173 @@ export function getPeopleFixture(): PeopleViewModel {
   };
 }
 
+type MomentEntry = Extract<
+  TimelineEntryViewModel,
+  Readonly<{ entryType: "moment" }>
+>;
+
+function isMomentEntry(entry: TimelineEntryViewModel): entry is MomentEntry {
+  return entry.entryType === "moment";
+}
+
+const archiveMoments = (familyEntries as readonly TimelineEntryViewModel[])
+  .filter(isMomentEntry)
+  .sort((left, right) =>
+    compareMemoryDatesDescending(left.moment, right.moment),
+  );
+const designPreviewToday = "2026-08-28";
+const designPreviewAnniversary = anniversaryKey(designPreviewToday);
+
+function availableMemoryYears() {
+  return [
+    ...new Set(
+      archiveMoments.map((entry) => entry.moment.occurredOn.slice(0, 4)),
+    ),
+  ];
+}
+
 export function getMemoriesFixture(): MemoriesViewModel {
+  const anniversaryMoments = archiveMoments.filter((entry) =>
+    matchesAnniversary(entry.moment.occurredOn, designPreviewAnniversary),
+  );
+  const featured = anniversaryMoments.find(
+    (entry) => entry.moment.id === "late-summer-2022",
+  )?.moment;
+  if (!featured || featured.kind !== "photo") {
+    throw new Error("The Memories design preview requires its featured photo.");
+  }
+
   return {
     chrome: chrome("teal", "Memories"),
     heading: "On this day",
-    subheading: "4 years ago",
+    subheading: "Across the years",
     feature: {
-      href: "/family",
-      imageSrc: "/sample-family.jpg",
-      imageAlt: "A child laughing outside",
-      dateLabel: "August 28, 2022",
-      title: "A late-summer afternoon",
-      actionLabel: "See this moment in the timeline →",
+      href: "/memories/on-this-day",
+      imageSrc: featured.image.src,
+      imageAlt: featured.image.alt,
+      dateLabel: featured.displayDate,
+      title: featured.kicker,
+      actionLabel: `See ${anniversaryMoments.length} moments from this day →`,
     },
-    years: ["2026", "2025", "2024", "2023"],
+    years: availableMemoryYears().map((year) => ({
+      year,
+      href: `/memories/years/${year}`,
+      ariaLabel: `Browse memories from ${year}`,
+    })),
+  };
+}
+
+export function getOnThisDayFixture(
+  monthAndDay: string,
+): MemoryJourneyViewModel {
+  const memoriesChrome = chrome("teal", "Memories");
+  const moments = archiveMoments.filter((entry) =>
+    matchesAnniversary(entry.moment.occurredOn, monthAndDay),
+  );
+  const base = {
+    chrome: memoriesChrome,
+    returnHref: "/memories",
+    returnLabel: "All memories",
+    eyebrow: "On this day · Across the years",
+    title: formatAnniversaryLabel(monthAndDay),
+    description: "Ordinary moments returning quietly from the family archive.",
+  } as const;
+
+  if (moments.length === 0) {
+    return {
+      ...base,
+      state: "empty",
+      emptyState: {
+        title: "Nothing from this day yet",
+        description:
+          "As the journal grows, moments from this date will gather here.",
+      },
+    };
+  }
+
+  const entries: TimelineEntryViewModel[] = [];
+  moments.forEach((moment, index) => {
+    if (index > 0) {
+      entries.push({
+        id: `on-this-day-gap-${index}`,
+        entryType: "elapsed-gap",
+        label: elapsedCalendarLabel(
+          moments[index - 1].moment.occurredOn,
+          moment.moment.occurredOn,
+        ),
+      });
+    }
+    entries.push({
+      id: `on-this-day-${moment.moment.id}`,
+      entryType: "date-marker",
+      label: moment.moment.displayDate,
+    });
+    entries.push(moment);
+  });
+  entries.push({
+    id: "on-this-day-end",
+    entryType: "end-message",
+    markerLabel: "Across the years",
+    message: "Small days, held here for the years ahead.",
+  });
+
+  return {
+    ...base,
+    state: "moments",
+    timeline: {
+      chrome: memoriesChrome,
+      switcher: [],
+      entries,
+    },
+  };
+}
+
+export function getDesignPreviewOnThisDayFixture() {
+  return getOnThisDayFixture(designPreviewAnniversary);
+}
+
+export function getYearMemoriesFixture(
+  year: string,
+): MemoryJourneyViewModel | null {
+  if (!availableMemoryYears().includes(year)) return null;
+
+  const memoriesChrome = chrome("teal", "Memories");
+  const moments = archiveMoments.filter((entry) =>
+    entry.moment.occurredOn.startsWith(`${year}-`),
+  );
+  const entries: TimelineEntryViewModel[] = [
+    { id: `year-${year}`, entryType: "date-marker", label: year },
+  ];
+
+  moments.forEach((moment, index) => {
+    if (index > 0) {
+      entries.push({
+        id: `${year}-gap-${index}`,
+        entryType: "elapsed-gap",
+        label: elapsedCalendarLabel(
+          moments[index - 1].moment.occurredOn,
+          moment.moment.occurredOn,
+        ),
+      });
+    }
+    entries.push(moment);
+  });
+  entries.push({
+    id: `${year}-end`,
+    entryType: "end-message",
+    markerLabel: `End of ${year}`,
+    message: "Every year becomes a chapter in the family’s story.",
+  });
+
+  const momentWord = moments.length === 1 ? "moment" : "moments";
+  return {
+    chrome: memoriesChrome,
+    returnHref: "/memories",
+    returnLabel: "All memories",
+    eyebrow: "Browse by year",
+    title: year,
+    description: `${moments.length} ${momentWord} from this chapter of family life.`,
+    state: "moments",
+    timeline: { chrome: memoriesChrome, switcher: [], entries },
   };
 }

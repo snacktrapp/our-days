@@ -64,3 +64,38 @@ test(
     );
   },
 );
+
+test(
+  "memory journeys preserve the timeline identity",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-mobile");
+    for (const [path, name] of [
+      ["/memories", "memories-landing-chromium-mobile.png"],
+      ["/memories/on-this-day", "memories-on-this-day-chromium-mobile.png"],
+      ["/memories/years/2023", "memories-year-chromium-mobile.png"],
+      ["/quality/memories-empty", "memories-empty-chromium-mobile.png"],
+    ] as const) {
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page).toHaveScreenshot(name, {
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+  },
+);
+
+test(
+  "Memories landing remains inviting on a short phone",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-short");
+    await page.goto("/memories");
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page).toHaveScreenshot(
+      "memories-landing-viewport-chromium-short.png",
+      { animations: "disabled" },
+    );
+  },
+);

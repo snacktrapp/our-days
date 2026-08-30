@@ -2,11 +2,11 @@
 
 Date: 2026-08-29 (America/Los_Angeles)
 
-Status: candidate checkpoint. The local implementation, default production build, and supported-browser suite pass. Final Phase 1 completion still requires WebKit on a compatible host and the documented manual zoom/device checks.
+Status: candidate checkpoint. The local implementation, webpack production build, and supported-browser suite pass. Final Phase 1 completion still requires the default Turbopack build in unrestricted CI or Vercel, WebKit on a compatible host, and the documented manual zoom/device checks.
 
 ## Delivered
 
-- Server-first route group and pages for `/family`, `/people`, `/people/[personId]`, `/memories`, `/journal`, and `/sign-in`.
+- Server-first route group and pages for `/family`, `/people`, `/people/[personId]`, `/memories`, `/memories/on-this-day`, `/memories/years/[year]`, `/journal`, and `/sign-in`.
 - A deeply readonly, JSON-serializable presentation contract with explicit date-marker, elapsed-gap, moment, and end-message entries plus discriminated photo, thought, location, and milestone variants.
 - Fixture copy isolated in `src/fixtures/design-preview/timelines.server.ts`; an ESLint rule prevents components/features from importing fixtures.
 - Neutral visual tokens (`teal`, `clay`, `ochre`, `slate`, and `moss`) instead of fixture-person contracts.
@@ -18,15 +18,15 @@ Status: candidate checkpoint. The local implementation, default production build
 
 | Check                                                         | Result                                                                                                                                                                                                                                                                                     |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Formatting, ESLint, TypeScript, unit/component/contract suite | `npm run check`: pass; 12 files and 141 tests                                                                                                                                                                                                                                               |
+| Formatting, ESLint, TypeScript, unit/component/contract suite | `npm run check`: pass; 14 files and 148 tests                                                                                                                                                                                                                                               |
 | Dependency audit                                              | `npm audit --json`: 0 vulnerabilities                                                                                                                                                                                                                                                      |
-| Production compilation                                        | `npm run build`: pass with default Turbopack; `npm run build:webpack`: pass; protected journal pages are dynamic                                                                                                                                                                           |
-| Local browser matrix                                          | `npm run test:e2e`: atomic webpack build and private-artifact scan passed; 54 browser checks passed, 18 intentional project-specific skips, 0 failures                                                                                                                                       |
+| Production compilation                                        | `npm run build:webpack`: pass with private-artifact scan; protected journal pages are dynamic. The latest managed `npm run build` attempt reached Turbopack but could not bind its internal CSS worker port (`Operation not permitted`), so the default build remains an explicit unrestricted CI/Vercel gate.                         |
+| Local browser matrix                                          | `npm run test:e2e`: atomic webpack build and private-artifact scan passed; 68 browser checks passed, 24 intentional project-specific skips, 0 failures                                                                                                                                       |
 | Engines covered locally                                       | Chromium mobile/short/wide-visual and Firefox mobile functional, composer, 320px, reduced-motion, axe, console, request-failure, navigation, and visual checks                                                                                                                             |
 | Privacy boundary                                              | Preview-disabled `/`, `/sign-in`, and every journal route contain no fixture names, places, or timeline payload; responses are private/no-store/noindex                                                                                                                                    |
 | PWA/cache                                                     | Cache contains exactly six approved public paths, including the CSP-compatible offline stylesheet; `/family`, RSC payloads, fixture content, and runtime media are absent; offline navigation shows the locked document                                                                   |
-| Accessibility                                                 | Serious/critical axe findings: 0 in Family, personal, People, Memories, chooser, written composer, and global-error states                                                                                                                                                                  |
-| Mobile layout                                                 | No horizontal overflow and no visible target below 44 CSS px at 320×568 in all primary screens; 320×350 composer controls remain reachable; the 640×450 CSS viewport equivalent of a 1280×900 window at 200% browser zoom reflows in one dimension                                         |
+| Accessibility                                                 | Serious/critical axe findings: 0 in Family, personal, People, Memories landing, On This Day, year, empty-memory, chooser, written composer, and global-error states                                                                                                                          |
+| Mobile layout                                                 | No horizontal overflow and no visible target below 44 CSS px at 320×568 in all primary and Memories screens; deep timeline actions clear the fixed navigation; 320×350 composer controls remain reachable; the 640×450 CSS viewport equivalent of a 1280×900 window at 200% reflows in one dimension |
 | Runtime health                                                | No unexpected console errors, page errors, or request failures in the passing matrix                                                                                                                                                                                                       |
 | Prepared CI contract                                          | Workflow contract checks pass; the read-only workflow lists all functional projects including WebKit and keeps x64 macOS 15 pixel checks separate. Its first hosted visual run is a reviewed calibration gate, and it remains unexecuted until the isolated GitHub repository is approved. |
 
@@ -36,12 +36,17 @@ The first adversarial browser run exposed a real Next streaming issue: an ancest
 
 | Screenshot                                                    | SHA-256                                                            |
 | ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `family-chromium-mobile-chromium-mobile-darwin.png`           | `3d8ed52cf71afa71365818074cf3616fde5b65871cae1e830e16c7e894bd614d` |
-| `family-chromium-short-chromium-short-darwin.png`             | `dc261da60f90a5ff475abad6022dcdfa0473ab2826d5a5e6028b45fe97187852` |
-| `family-chromium-wide-visual-chromium-wide-visual-darwin.png` | `2c531778866027465c43f5e830ca4bd0fe363bcd6acd752d3abfd2db8b647972` |
-| `personal-chromium-mobile-chromium-mobile-darwin.png`         | `f0aad9e6a38ccd36d0132aa652590a0a1d7ed97f735d564d7c7435ce2fad01ec` |
+| `family-chromium-mobile-chromium-mobile-darwin.png`           | `b000532682bece41635194ce920fe012adf223c7c0e300c97da9d7060fefd004` |
+| `family-chromium-short-chromium-short-darwin.png`             | `9cf39cb6ff1dd46d64e2cfb645aa2689b63f4775f06ec5aea6f4d3f3b7cb0d02` |
+| `family-chromium-wide-visual-chromium-wide-visual-darwin.png` | `cf366b79e65c639a66fde0496d1da54c14a1395f0ddd9356c42d9ba43b7ee72b` |
+| `personal-chromium-mobile-chromium-mobile-darwin.png`         | `1ddb26e08fa40bb455c6d9e7eb7e0eaf2f98d6efca63bd79be51290f813e54dd` |
 | `composer-chooser-chromium-mobile-chromium-mobile-darwin.png` | `8040cdef49f3aca00fbcc8790ce67d540d5d13755bc8dadd060baf1bc099e88d` |
 | `composer-written-chromium-mobile-chromium-mobile-darwin.png` | `cb2185638c5d8313c1c5c62bf436fedf353e9c83b44a81393e2e15ef98e2727a` |
+| `memories-empty-chromium-mobile-chromium-mobile-darwin.png` | `64074336fb9e0900a11b565009550ef2a795c672d2c49bae40bf265522a62a56` |
+| `memories-landing-chromium-mobile-chromium-mobile-darwin.png` | `1c4d2615049b16cd1ae9376c15bd69aa18305f456e29b744ed2470721e48819e` |
+| `memories-landing-viewport-chromium-short-chromium-short-darwin.png` | `d3ca8e7942a562ed1b368e981564d2540334f5cd6a747305f265d9dba29f1b24` |
+| `memories-on-this-day-chromium-mobile-chromium-mobile-darwin.png` | `b7261eaddaf1e2a9065b5cfa860b77a317a94c7526f5acd257ca05bb2557f482` |
+| `memories-year-chromium-mobile-chromium-mobile-darwin.png` | `2bc3742129a963a05b3269d6bc209638558f3918434ee7c44514efbc90dfef62` |
 
 They live in `tests/e2e/visual.spec.ts-snapshots/` and are compared by the pinned Chromium projects.
 
@@ -66,7 +71,7 @@ WebKit execution, true browser zoom, and physical iPhone behavior remain explici
 ## Open evidence, not hidden passes
 
 - Playwright WebKit 2251 is a frozen macOS 14 build on this host and exits before page creation with `Bus error: 10` (exit 138). The project is retained and mandatory in CI; local opt-in is `PLAYWRIGHT_INCLUDE_WEBKIT=1`.
-- The first isolated GitHub run must execute the 80 listed functional browser checks and calibrate the reviewed local snapshots against the x64 macOS 15 host. The complete CI list contains 95 checks including project-specific visual cases. Baseline differences must be inspected and approved; CI never updates them automatically.
+- The first isolated GitHub run must execute the prepared functional browser projects and calibrate the reviewed local snapshots against the x64 macOS 15 host. The complete CI list contains 121 checks across 7 files, including WebKit and project-specific visual cases. Baseline differences must be inspected and approved; CI never updates them automatically.
 - The clean install warns that ESLint 9.39.5 is outside its upstream support window. ESLint 10.9.1 was evaluated, but `eslint-config-next` 16.3.3's bundled import, React, and JSX accessibility plugins still declare ESLint 9 as their maximum supported major. The candidate therefore retains the exact-pinned, zero-advisory ESLint 9 release rather than using peer overrides; upgrade when the complete Next lint stack supports 10.
 - Desktop browser 200% zoom/large-text review, nonzero iOS safe areas, real software keyboard/predictive text, VoiceOver, standalone foreground/background, and update behavior require the documented headed/real-device passes.
 - The current service worker deliberately provides only a public locked offline experience. Authenticated state purge and two-account isolation belong to Phase 2, when account-scoped state exists.

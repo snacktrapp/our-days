@@ -1,14 +1,24 @@
 import { expect, test as base } from "@playwright/test";
 
 export const test = base.extend<{
+  allowedConsoleErrors: string[];
   expectedConsoleErrors: string[];
   expectedRequestFailures: string[];
   pageHealth: void;
 }>({
+  allowedConsoleErrors: async ({}, provide) => provide([]),
   expectedConsoleErrors: async ({}, provide) => provide([]),
   expectedRequestFailures: async ({}, provide) => provide([]),
   pageHealth: [
-    async ({ page, expectedConsoleErrors, expectedRequestFailures }, use) => {
+    async (
+      {
+        page,
+        allowedConsoleErrors,
+        expectedConsoleErrors,
+        expectedRequestFailures,
+      },
+      use,
+    ) => {
       const errors: string[] = [];
       const requestFailures: string[] = [];
       page.on("pageerror", (error) =>
@@ -33,6 +43,9 @@ export const test = base.extend<{
         (error) =>
           !expectedConsoleErrors.some((expectedError) =>
             error.includes(expectedError),
+          ) &&
+          !allowedConsoleErrors.some((allowedError) =>
+            error.includes(allowedError),
           ),
       );
       expect(
