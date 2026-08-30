@@ -1211,6 +1211,120 @@ try {
     $guardian_revocation_audit$;
   `);
 
+  const invitationJobSuffix = randomUUID();
+  const invitationJobTarget = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: `invitation-job-${invitationJobSuffix}@example.test`,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !invitationJobTarget.response.ok ||
+    !uuid.test(invitationJobTarget.body?.id)
+  ) {
+    throw new Error(
+      `Invitation-job concurrency target creation failed with ${invitationJobTarget.response.status}.`,
+    );
+  }
+
+  const invitationJobRequestKeys = [randomUUID(), randomUUID()];
+  const invitationJobDisplayName = `Invitation Job ${invitationJobSuffix}`;
+  const duplicateInvitationJobResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "request_invitation_job",
+    requests: invitationJobRequestKeys.map(
+      (requestKey) => () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/request_invitation_job",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              target_auth_user_id: invitationJobTarget.body.id,
+              display_name: invitationJobDisplayName,
+              request_key: requestKey,
+            }),
+            method: "POST",
+          },
+        ),
+    ),
+    serviceKey,
+  });
+  if (
+    duplicateInvitationJobResults.some(({ response }) => !response.ok) ||
+    !uuid.test(duplicateInvitationJobResults[0].body) ||
+    duplicateInvitationJobResults[0].body !==
+      duplicateInvitationJobResults[1].body
+  ) {
+    throw new Error(
+      `Distinct invitation-job request keys did not converge on one job (${duplicateInvitationJobResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $duplicate_invitation_job_audit$
+    declare
+      job_count integer;
+      queued_job_count integer;
+      authorized_job_count integer;
+      audit_count integer;
+      durable_job_id uuid;
+      durable_request_key uuid;
+    begin
+      select count(*)::integer,
+             count(*) filter (where state = 'queued')::integer,
+             count(*) filter (
+               where private.invitation_job_requester_is_authorized(id)
+             )::integer,
+             min(id::text)::uuid,
+             min(request_key::text)::uuid
+        into job_count,
+             queued_job_count,
+             authorized_job_count,
+             durable_job_id,
+             durable_request_key
+        from private.invitation_jobs
+       where circle_id = '${CIRCLE_A}'::uuid
+         and target_auth_user_id = '${invitationJobTarget.body.id}'::uuid;
+
+      select count(*)::integer into audit_count
+        from private.audit_events
+       where circle_id = '${CIRCLE_A}'::uuid
+         and event_type = 'invitation_job_requested'
+         and subject_type = 'invitation_job'
+         and subject_id = '${duplicateInvitationJobResults[0].body}'::uuid;
+
+      if job_count <> 1
+        or queued_job_count <> 1
+        or authorized_job_count <> 1
+        or audit_count <> 1
+        or durable_job_id <> '${duplicateInvitationJobResults[0].body}'::uuid
+        or durable_request_key not in (
+          '${invitationJobRequestKeys[0]}'::uuid,
+          '${invitationJobRequestKeys[1]}'::uuid
+        ) then
+        raise exception 'Distinct invitation-job request keys created duplicate or unauthorized durable state';
+      end if;
+    end
+    $duplicate_invitation_job_audit$;
+  `);
+
   const duplicateExportRequestKey = randomUUID();
   const duplicateExportResults = await runOverlappedCircleRace({
     apiKey,
@@ -1504,8 +1618,327 @@ try {
     $export_demotion_audit$;
   `);
 
+  runDatabaseQuery(`
+    update public.circle_memberships
+       set role = 'organizer'
+     where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
+  `);
+
+  const invitationAuthoritySuffix = randomUUID();
+  const invitationAuthorityTarget = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: `invitation-authority-${invitationAuthoritySuffix}@example.test`,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !invitationAuthorityTarget.response.ok ||
+    !uuid.test(invitationAuthorityTarget.body?.id)
+  ) {
+    throw new Error(
+      `Invitation authority-race target creation failed with ${invitationAuthorityTarget.response.status}.`,
+    );
+  }
+
+  const invitationAuthorityRequestKey = randomUUID();
+  const invitationAuthorityResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "invitation request and organizer demotion",
+    operationNames: ["request_invitation_job", "set_membership_role"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerATwoToken,
+          "rpc/request_invitation_job",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              target_auth_user_id: invitationAuthorityTarget.body.id,
+              display_name: `Authority Race ${invitationAuthoritySuffix}`,
+              request_key: invitationAuthorityRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/set_membership_role",
+          {
+            body: JSON.stringify({
+              membership_id: ORGANIZER_A_TWO_MEMBERSHIP,
+              role: "member",
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  const [invitationRaceRequest, invitationRaceDemotion] =
+    invitationAuthorityResults;
+  if (
+    !invitationRaceDemotion.response.ok ||
+    (!invitationRaceRequest.response.ok &&
+      (invitationRaceRequest.body?.code !== "42501" ||
+        invitationRaceRequest.body?.message !==
+          "Invitation delivery could not be requested"))
+  ) {
+    throw new Error(
+      `Invitation request/demotion race did not use a safe serialized path (${invitationAuthorityResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $invitation_authority_race_audit$
+    declare
+      requester_role text;
+      job_count integer;
+      queued_job_count integer;
+      authorized_job_count integer;
+      request_audit_count integer;
+      invalidation_audit_count integer;
+    begin
+      select role into requester_role
+        from public.circle_memberships
+       where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
+
+      select count(*)::integer,
+             count(*) filter (where state = 'queued')::integer,
+             count(*) filter (
+               where private.invitation_job_requester_is_authorized(id)
+             )::integer
+        into job_count, queued_job_count, authorized_job_count
+        from private.invitation_jobs
+       where circle_id = '${CIRCLE_A}'::uuid
+         and requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and request_key = '${invitationAuthorityRequestKey}'::uuid;
+
+      select count(*)::integer into request_audit_count
+        from private.audit_events as audit
+        join private.invitation_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and job.request_key = '${invitationAuthorityRequestKey}'::uuid
+         and audit.event_type = 'invitation_job_requested';
+
+      select count(*)::integer into invalidation_audit_count
+        from private.audit_events as audit
+        join private.invitation_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and job.request_key = '${invitationAuthorityRequestKey}'::uuid
+         and audit.event_type = 'invitation_job_invalidated';
+
+      if requester_role <> 'member'
+        or job_count not in (0, 1)
+        or queued_job_count <> 0
+        or authorized_job_count <> 0
+        or request_audit_count <> job_count
+        or invalidation_audit_count <> job_count then
+        raise exception 'Invitation request/demotion race left an eligible, duplicate, or unaudited job';
+      end if;
+    end
+    $invitation_authority_race_audit$;
+  `);
+
+  const invitationActivationSuffix = randomUUID();
+  const invitationActivationEmail = `invitation-activation-${invitationActivationSuffix}@example.test`;
+  const invitationActivationTarget = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: invitationActivationEmail,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !invitationActivationTarget.response.ok ||
+    !uuid.test(invitationActivationTarget.body?.id)
+  ) {
+    throw new Error(
+      `Invitation activation-race target creation failed with ${invitationActivationTarget.response.status}.`,
+    );
+  }
+
+  const activationInvitation = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/create_invitation",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        display_name: `Activation Race ${invitationActivationSuffix}`,
+        email: invitationActivationEmail,
+      }),
+      method: "POST",
+    },
+  );
+  const activationInvitationResult = activationInvitation.body?.[0];
+  if (
+    !activationInvitation.response.ok ||
+    !uuid.test(activationInvitationResult?.invitation_id) ||
+    typeof activationInvitationResult?.raw_token !== "string"
+  ) {
+    throw new Error(
+      `Invitation activation-race setup failed with ${activationInvitation.response.status}.`,
+    );
+  }
+
+  const invitationActivationToken = createLocalUserToken(
+    invitationActivationTarget.body.id,
+    jwtSecret,
+  );
+  const invitationActivationRequestKey = randomUUID();
+  const invitationActivationResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    holderToken: organizerAToken,
+    operationName: "invitation job request and target activation",
+    operationNames: ["request_invitation_job", "accept_invitation"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/request_invitation_job",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              target_auth_user_id: invitationActivationTarget.body.id,
+              display_name: `Activation Race ${invitationActivationSuffix}`,
+              request_key: invitationActivationRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          invitationActivationToken,
+          "rpc/accept_invitation",
+          {
+            body: JSON.stringify({
+              token: activationInvitationResult.raw_token,
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+  });
+  const [activationRaceRequest, activationRaceAcceptance] =
+    invitationActivationResults;
+  if (
+    !activationRaceAcceptance.response.ok ||
+    !uuid.test(activationRaceAcceptance.body) ||
+    (activationRaceRequest.response.ok
+      ? !uuid.test(activationRaceRequest.body)
+      : activationRaceRequest.body?.code !== "42501" ||
+        activationRaceRequest.body?.message !==
+          "Invitation delivery could not be requested")
+  ) {
+    throw new Error(
+      `Invitation request/activation race did not use a safe serialized path (${invitationActivationResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  runDatabaseQuery(`
+    do $invitation_activation_race_audit$
+    declare
+      active_membership_count integer;
+      job_count integer;
+      queued_job_count integer;
+      authorized_job_count integer;
+      request_audit_count integer;
+      invalidation_audit_count integer;
+    begin
+      select count(*)::integer into active_membership_count
+        from public.circle_memberships
+       where circle_id = '${CIRCLE_A}'::uuid
+         and user_id = '${invitationActivationTarget.body.id}'::uuid
+         and status = 'active';
+
+      select count(*)::integer,
+             count(*) filter (where state = 'queued')::integer,
+             count(*) filter (
+               where private.invitation_job_requester_is_authorized(id)
+             )::integer
+        into job_count, queued_job_count, authorized_job_count
+        from private.invitation_jobs
+       where circle_id = '${CIRCLE_A}'::uuid
+         and target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
+         and request_key = '${invitationActivationRequestKey}'::uuid;
+
+      select count(*)::integer into request_audit_count
+        from private.audit_events as audit
+        join private.invitation_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
+         and job.request_key = '${invitationActivationRequestKey}'::uuid
+         and audit.event_type = 'invitation_job_requested';
+
+      select count(*)::integer into invalidation_audit_count
+        from private.audit_events as audit
+        join private.invitation_jobs as job
+          on job.circle_id = audit.circle_id
+         and job.id = audit.subject_id
+       where job.circle_id = '${CIRCLE_A}'::uuid
+         and job.target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
+         and job.request_key = '${invitationActivationRequestKey}'::uuid
+         and audit.event_type = 'invitation_job_invalidated';
+
+      if active_membership_count <> 1
+        or job_count not in (0, 1)
+        or queued_job_count <> 0
+        or authorized_job_count <> 0
+        or request_audit_count <> job_count
+        or invalidation_audit_count <> job_count then
+        raise exception 'Invitation request/activation race left an eligible, duplicate, or unaudited job';
+      end if;
+    end
+    $invitation_activation_race_audit$;
+  `);
+
   process.stdout.write(
-    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance, moment/tag edits, note edits, reversible responses, parent trash, member revocation, and export requests serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance and job requests including target activation, moment/tag edits, note edits, reversible responses, parent trash, member revocation, and export requests serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

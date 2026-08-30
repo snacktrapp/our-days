@@ -37,6 +37,8 @@ Deliver:
 - Invite creation, one-time acceptance, verified-email binding, `shouldCreateUser: false` ordinary OTP, and membership revocation.
 - Sign-out/account-switch purges account-scoped state and hard-transitions to the locked route; two-browser tests reject cached cookies, RSC payloads, names, or timelines.
 
+The invitation-job foundation is recorded in `docs/quality/PHASE_2B_INVITATION_JOB_FOUNDATION_REPORT.md`. It adds a private, idempotent organizer request ledger and a disabled pure worker contract without exposing invitation sending. Production activation still requires a target-account-bound invitation schema, atomic materialization/delivery state, a separate trusted coordinator, a proven email-provider idempotency window, and removal of the legacy raw-token/preflight RPC exposure.
+
 Gate: member success plus anonymous, no-circle, wrong-circle, dual-circle, stale-token revoked-member, invite replay, wrong-email, and concurrent-acceptance denials pass.
 
 ## 3. Written moments end to end

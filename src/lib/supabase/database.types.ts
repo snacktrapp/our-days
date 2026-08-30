@@ -667,6 +667,15 @@ export type Database = {
         Args: { circle_id: string; request_key: string };
         Returns: string;
       };
+      request_invitation_job: {
+        Args: {
+          circle_id: string;
+          display_name: string;
+          request_key: string;
+          target_auth_user_id: string;
+        };
+        Returns: string;
+      };
       revoke_invitation: {
         Args: { invitation_id: string };
         Returns: undefined;

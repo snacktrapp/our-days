@@ -61,6 +61,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
 - `docs/quality/PHASE_2_CHECKPOINT_REPORT.md` — executable local Auth/database/browser evidence and remaining production gates
+- `docs/quality/PHASE_2B_INVITATION_JOB_FOUNDATION_REPORT.md` — private invitation-job ledger, disabled worker contract, adversarial review, and remaining delivery gates
 - `docs/quality/MEMORIES_PREVIEW_REPORT.md` — date browsing preview evidence and production limits
 - `docs/quality/CAPTURE_PREVIEW_REPORT.md` — local capture contract, privacy proof, and production limits
 - `docs/quality/MOMENT_DETAIL_PREVIEW_REPORT.md` — count-free notes/responses contract and privacy proof
