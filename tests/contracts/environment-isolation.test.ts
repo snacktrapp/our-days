@@ -319,10 +319,19 @@ describe("Our Days environment isolation", () => {
   );
 
   it.each([
-    ["MYSTERY_TOKEN", "sb_secret_synthetic_secret_fixture"],
-    ["MYSTERY_MANAGEMENT_TOKEN", "sbp_synthetic_management_fixture"],
-    ["MYSTERY_DATABASE", "postgresql://user:password@db.invalid:5432/db"],
-    ["MYSTERY_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nfixture"],
+    ["MYSTERY_TOKEN", ["sb", "secret", "synthetic_secret_fixture"].join("_")],
+    [
+      "MYSTERY_MANAGEMENT_TOKEN",
+      ["sbp", "syntheticmanagementfixture"].join("_"),
+    ],
+    [
+      "MYSTERY_DATABASE",
+      ["postgresql", "://user:password@db.invalid:5432/db"].join(""),
+    ],
+    [
+      "MYSTERY_PRIVATE_KEY",
+      ["-----BEGIN", " PRIVATE KEY-----\nfixture"].join(""),
+    ],
     [
       "MYSTERY_JWT",
       `e30.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.fixture`,

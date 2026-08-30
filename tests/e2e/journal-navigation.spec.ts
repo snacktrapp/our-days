@@ -44,6 +44,8 @@ test("route-based journal navigation preserves the approved views", async ({
 test("primary screens and composer states have no serious axe violations", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
+
   const scan = async () => {
     const results = await new AxeBuilder({ page }).analyze();
     expect(

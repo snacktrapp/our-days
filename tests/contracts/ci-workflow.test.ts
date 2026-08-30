@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import packageJson from "../../package.json";
 
 const workflow = readFileSync(
   resolve(process.cwd(), ".github/workflows/ci.yml"),
@@ -63,5 +64,21 @@ describe("CI workflow privacy and supply-chain contract", () => {
     expect(workflow).not.toContain("upload-artifact");
     expect(workflow).not.toContain("download-artifact");
     expect(workflow).not.toContain("playwright-report/");
+    const steps = workflow.split(/^      - name:/gm).slice(1);
+    const buildStepIndexes = steps
+      .map((step, index) =>
+        /^\s*run: npm run build\s*$/m.test(step) ? index : -1,
+      )
+      .filter((index) => index !== -1);
+    expect(buildStepIndexes).toHaveLength(3);
+    expect(packageJson.scripts.build).toMatch(
+      /^next build && npm run verify:artifacts$/,
+    );
+    expect(packageJson.scripts["build:webpack"]).toMatch(
+      /^next build --webpack && npm run verify:artifacts$/,
+    );
+    for (const index of buildStepIndexes.slice(1)) {
+      expect(steps[index + 1]).toContain("playwright test");
+    }
   });
 });

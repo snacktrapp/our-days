@@ -8,17 +8,18 @@
   "packageManager": "npm@11.9.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:webpack": "next build --webpack",
+    "build": "next build && npm run verify:artifacts",
+    "build:webpack": "next build --webpack && npm run verify:artifacts",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"config/**/*.ts\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
-    "format:check": "prettier --check \"config/**/*.ts\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
+    "format": "prettier --write \"config/**/*.ts\" \"scripts/**/*.mjs\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
+    "format:check": "prettier --check \"config/**/*.ts\" \"scripts/**/*.mjs\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build:webpack && playwright test",
     "test:e2e:update": "npm run build:webpack && playwright test --update-snapshots",
+    "verify:artifacts": "node scripts/verify-private-artifacts.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {

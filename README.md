@@ -29,9 +29,11 @@ npm run test:e2e
 
 In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for a fallback local production-build check. CI and Vercel still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
 
-`.github/workflows/ci.yml` is committed locally but cannot run until the separate GitHub repository is explicitly approved and created. It uses a read-only token, immutable GitHub-owned action SHAs, no secrets or dependency cache, Linux functional checks across Chromium/Firefox/WebKit, and x64 macOS 15 visual comparisons. The first hosted visual run is a calibration gate because screenshot rendering can differ by host OS; any new baseline must be reviewed rather than automatically accepted. Browser traces, screenshots, and HTML reports are intentionally not uploaded because future authenticated runs may contain private family data.
+`.github/workflows/ci.yml` is committed locally but cannot run until the separate GitHub repository is explicitly approved and created. It uses a read-only token, immutable GitHub-owned action SHAs, no secrets or dependency cache, Linux functional checks across Chromium/Firefox/WebKit, and x64 macOS 15 visual comparisons. Each repository production-build script atomically follows compilation with a redacting credential/private-fixture scan. The first hosted visual run is a calibration gate because screenshot rendering can differ by host OS; any new baseline must be reviewed rather than automatically accepted. Browser traces, screenshots, and HTML reports are intentionally not uploaded because future authenticated runs may contain private family data.
 
 `next.config.ts` validates the resource identity before Next starts or builds. Unmanaged local commands default to a resource-free local mode; CI declares that mode explicitly. Any future Preview or Production deployment must declare its environment, HTTPS site origin, trusted Production origin, expected and Production Supabase project references, known forbidden Proof references, matching Supabase base URL, and current publishable key. Preview cannot use the Production origin or project. The web process rejects legacy/alternate Supabase connection variables, management tokens, secret/service-role credentials, JWT secrets, and direct database credentials by both name and sensitive value pattern. See `docs/quality/ENVIRONMENT_ISOLATION_REPORT.md`.
+
+`npm run verify:artifacts` requires a completed production build, scans Git-tracked source plus the complete `.next` tree, and emits only redacted findings. It also checks tracked public files, static assets, standalone client assets, and prerendered browser responses for local design-fixture canaries. See `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` for coverage and limitations.
 
 ## Durable project documents
 
@@ -41,6 +43,7 @@ In this restricted development environment, Turbopack can be prevented from bind
 - `docs/architecture/ACCEPTANCE_CRITERIA.md` — release-blocking requirements
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
+- `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 
 ## Deployment boundary
 
