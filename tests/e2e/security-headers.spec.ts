@@ -143,7 +143,16 @@ test("timeline, memories, and composer render without application style attribut
 
   await page.goto("/family");
   await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: /^Photo/u }).click();
+  await page
+    .getByLabel(/Choose photo/u)
+    .setInputFiles("public/sample-family.jpg");
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByAltText("Selected photo preview")).toBeVisible();
+  await expect(page.getByAltText("Selected photo preview")).toHaveAttribute(
+    "src",
+    /^blob:/u,
+  );
   const applicationStyles = await page
     .locator("[style]")
     .evaluateAll((elements) =>

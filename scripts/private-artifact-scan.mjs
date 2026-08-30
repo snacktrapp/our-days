@@ -42,6 +42,8 @@ const privateClientCanaries = [
   "Brian",
   "Molly",
   "Avery",
+  "Sam",
+  "June",
   "The small beach past the pine trees",
   "Sand Harbor",
   "All our days",
@@ -253,11 +255,15 @@ export function isBrowserDeliverableArtifact(path) {
 }
 
 export function trackedFiles(root) {
-  const result = spawnSync("git", ["ls-files", "-z"], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const result = spawnSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
   if (result.status !== 0) {
     throw new Error("Could not enumerate tracked files for the privacy scan.");
   }

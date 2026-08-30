@@ -89,6 +89,8 @@ describe("private artifact scanner", () => {
       "Brian",
       "Molly",
       "Avery",
+      "Sam",
+      "June",
       "The small beach past the pine trees",
       "Sand Harbor",
       "All our days",
@@ -100,7 +102,7 @@ describe("private artifact scanner", () => {
       path: "browser.rsc",
       checkPrivateClientData: true,
     });
-    expect(findings).toHaveLength(7);
+    expect(findings).toHaveLength(9);
     expect(
       findings.every(({ ruleId }) => ruleId === "private-client-fixture"),
     ).toBe(true);
@@ -158,6 +160,22 @@ describe("private artifact scanner", () => {
     expect(() => scanRepository(root)).toThrow(
       "A completed production build (.next/BUILD_ID) is required.",
     );
+  });
+
+  it("includes untracked, non-ignored source in the credential scan", () => {
+    const root = mkdtempSync(join(tmpdir(), "our-days-artifact-repo-"));
+    mkdirSync(join(root, ".next"));
+    writeFileSync(join(root, ".next", "BUILD_ID"), "fixture-build");
+    writeFileSync(join(root, ".gitignore"), ".next\n");
+    writeFileSync(join(root, "untracked.ts"), secretKey);
+    expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
+
+    expect(scanRepository(root)).toEqual([
+      expect.objectContaining({
+        ruleId: "supabase-secret-key",
+        path: "untracked.ts",
+      }),
+    ]);
   });
 
   it.each([

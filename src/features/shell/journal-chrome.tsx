@@ -48,7 +48,7 @@ export function JournalChrome({
           </button>
         </header>
         {children}
-        <PrimaryNavigation section={section} />
+        <PrimaryNavigation composer={model.composer} section={section} />
       </section>
     </main>
   );

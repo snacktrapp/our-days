@@ -46,10 +46,11 @@ test(
   async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium-mobile");
     await page.goto("/family");
+    await page.evaluate(() => document.fonts.ready);
     await page.getByRole("button", { name: "Add moment" }).click();
     await expect(page).toHaveScreenshot(
       "composer-chooser-chromium-mobile.png",
-      { animations: "disabled" },
+      { animations: "disabled", caret: "hide" },
     );
     await page
       .getByRole("dialog")
@@ -58,10 +59,116 @@ test(
         exact: true,
       })
       .click();
+    await page
+      .getByRole("textbox", { name: "Your thought" })
+      .fill("A backpack almost as big as Avery, and one brave wave goodbye.");
+    await page.getByLabel("Moment date").fill("2023-08-21");
+    await page
+      .getByRole("dialog")
+      .getByRole("combobox", { name: "Journal", exact: true })
+      .selectOption("avery");
+    await page.getByRole("button", { name: /People and place/u }).click();
+    await page.getByRole("checkbox", { name: /Molly/u }).check();
+    await page.getByLabel(/^Place/u).fill("Oak Street School");
     await expect(page).toHaveScreenshot(
       "composer-written-chromium-mobile.png",
-      { animations: "disabled" },
+      { animations: "disabled", caret: "hide" },
     );
+    await page.getByRole("button", { name: "Preview moment" }).click();
+    await expect(page).toHaveScreenshot("composer-review-chromium-mobile.png", {
+      animations: "disabled",
+      caret: "hide",
+    });
+    await page.getByRole("button", { name: "Close preview" }).click();
+
+    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: /^Photo/u }).click();
+    await page
+      .getByLabel(/Choose photo/u)
+      .setInputFiles("public/sample-family.jpg");
+    await expect(
+      page.getByText("Photo ready for this local preview."),
+    ).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "A few words" })
+      .fill("The last warm hour before dinner.");
+    await expect(page).toHaveScreenshot("composer-photo-chromium-mobile.png", {
+      animations: "disabled",
+      caret: "hide",
+    });
+    await page.getByRole("button", { name: "Preview moment" }).click();
+    await expect(page).toHaveScreenshot(
+      "composer-photo-review-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page.getByRole("button", { name: "Close preview" }).click();
+
+    await page.getByRole("button", { name: "Add moment" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Milestone/u })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("textbox", { name: "Milestone", exact: true })
+      .fill("First day of school");
+    await page
+      .getByRole("textbox", { name: "What made it meaningful?" })
+      .fill("One brave wave, then straight through the blue door.");
+    await expect(page).toHaveScreenshot(
+      "composer-milestone-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+    await page.getByRole("button", { name: "Preview moment" }).click();
+    await page.getByRole("button", { name: "Close preview" }).click();
+
+    await page.getByRole("button", { name: "Add moment" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /A place/u })
+      .click();
+    await page.getByLabel("Place name").fill("The little beach");
+    await page
+      .getByRole("textbox", { name: "What happened here?" })
+      .fill("Avery finally put both feet in the water.");
+    await expect(page).toHaveScreenshot("composer-place-chromium-mobile.png", {
+      animations: "disabled",
+      caret: "hide",
+    });
+    await page.getByRole("button", { name: "Preview moment" }).click();
+    await expect(page).toHaveScreenshot(
+      "composer-place-review-chromium-mobile.png",
+      { animations: "disabled", caret: "hide" },
+    );
+  },
+);
+
+test(
+  "composer remains calm on a keyboard-sized phone",
+  { tag: "@visual" },
+  async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "chromium-short");
+    await page.setViewportSize({ width: 320, height: 350 });
+    await page.goto("/family");
+    await page.evaluate(() => document.fonts.ready);
+    await page.getByRole("button", { name: "Add moment" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /A place/u })
+      .click();
+    await page.getByLabel("Place name").fill("The little beach");
+    await page.locator(".composer-sheet").evaluate((sheet) => {
+      sheet.scrollTop = 0;
+    });
+    await expect
+      .poll(() =>
+        page.locator(".composer-sheet").evaluate((sheet) => sheet.scrollTop),
+      )
+      .toBe(0);
+    await expect(page).toHaveScreenshot("composer-place-short.png", {
+      animations: "disabled",
+      caret: "hide",
+    });
   },
 );
 

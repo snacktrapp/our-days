@@ -10,7 +10,7 @@ try {
     process.exitCode = 1;
   } else {
     console.log(
-      "Private artifact scan passed: tracked source and the complete production build contain no recognized privileged credentials; browser-deliverable artifacts contain no private design fixtures.",
+      "Private artifact scan passed: tracked plus untracked non-ignored source and the complete production build contain no recognized privileged credentials; browser-deliverable artifacts contain no private design fixtures.",
     );
   }
 } catch {

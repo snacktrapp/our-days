@@ -33,7 +33,7 @@ In this restricted development environment, Turbopack can be prevented from bind
 
 `next.config.ts` validates the resource identity before Next starts or builds. Unmanaged local commands default to a resource-free local mode; CI declares that mode explicitly. Any future Preview or Production deployment must declare its environment, HTTPS site origin, trusted Production origin, expected and Production Supabase project references, known forbidden Proof references, matching Supabase base URL, and current publishable key. Preview cannot use the Production origin or project. The web process rejects legacy/alternate Supabase connection variables, management tokens, secret/service-role credentials, JWT secrets, and direct database credentials by both name and sensitive value pattern. See `docs/quality/ENVIRONMENT_ISOLATION_REPORT.md`.
 
-`npm run verify:artifacts` requires a completed production build, scans Git-tracked source plus the complete `.next` tree, and emits only redacted findings. It also checks tracked public files, static assets, standalone client assets, and prerendered browser responses for local design-fixture canaries. See `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` for coverage and limitations.
+`npm run verify:artifacts` requires a completed production build, scans tracked plus untracked non-ignored source and the complete `.next` tree, and emits only redacted findings. It also checks public files, static assets, standalone client assets, and prerendered browser responses for local design-fixture canaries. See `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` for coverage and limitations.
 
 Rendered pages use a fresh nonce CSP and request-time rendering. Production allows no unauthorized inline script, event handler, style attribute, frame, plugin, wildcard Supabase host, analytics origin, or third-party reporting collector. Known public assets stay outside the nonce proxy but retain the static isolation-header baseline; HSTS is Production-only. See `docs/quality/SECURITY_HEADERS_REPORT.md`.
 
@@ -46,6 +46,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/privacy/THREAT_MODEL.md` — assets, adversaries, boundaries, and mitigations
 - `docs/quality/PHASE_1_REPORT.md` — current component/browser evidence and open device/CI gates
 - `docs/quality/MEMORIES_PREVIEW_REPORT.md` — date browsing preview evidence and production limits
+- `docs/quality/CAPTURE_PREVIEW_REPORT.md` — local capture contract, privacy proof, and production limits
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 

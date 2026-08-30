@@ -10,6 +10,8 @@ const fixtureText = [
   "Brian",
   "Molly",
   "Avery",
+  "Sam",
+  "June",
   "Sand Harbor",
   "All our days",
   "Nothing from this day yet",

@@ -1,6 +1,6 @@
 # Browser security boundary
 
-Date: 2026-08-29 (America/Los_Angeles)
+Date: 2026-08-30 (America/Los_Angeles)
 
 Status: local security boundary implemented. Invitation auth and external Supabase/Vercel resources are not connected.
 
@@ -37,10 +37,12 @@ The browser suite verifies real production responses have fresh distinct nonces,
 
 The first full enforcement run caught two genuine self-violations. Next's `Image` component emitted a style attribute for fill sizing, so the public design-preview renderer now retains Next's responsive optimizer URLs through `getImageProps` while discarding the generated style and applying dimensions through reviewed classes. The composer now locks body scrolling with a class instead of mutating `body.style`. A browser regression requires Family, Memories, and the open composer to contain no application-owned style attributes. The cached offline document also moved its CSS into the explicit public-shell allowlist; service-worker cache version 2 installs the HTML and stylesheet atomically and leaves version 1 active if installation fails.
 
+The local photo preview uses `blob:` without an HTTP origin. `img-src blob:` is required for the native private-preview image. Compiled Chromium additionally emitted a `connect-src` violation for the React/blob rendering path until `connect-src blob:` was present, so that local-only scheme is retained there as the narrow empirically required capability. The browser regression renders a selected blob photo, requires no application style attribute or page-health error, and the capture privacy test simultaneously requires zero HTTP(S) requests.
+
 ## Latest local gate
 
-- `npm run check`: 14 test files and 148 unit, component, proxy, environment, service-worker, workflow, and header-contract tests passed; formatting, ESLint, and TypeScript passed with no warnings.
-- `npm run test:e2e`: the atomic webpack build and complete private-artifact scan passed, followed by 68 browser tests passed and 24 intentional project-specific skips with no failures.
+- `npm run check`: 14 test files and 168 unit, component, proxy, environment, service-worker, workflow, and header-contract tests passed; formatting, ESLint, and TypeScript passed with no warnings.
+- `npm run test:e2e`: the atomic webpack build and complete private-artifact scan passed, followed by 79 browser tests passed and 29 intentional project-specific skips with no failures.
 - Covered projects: Chromium iPhone-sized, Chromium 320px short-screen, Firefox mobile, and pinned Chromium 430px visual. The expanded Family and Memories baselines were regenerated, individually inspected, and then passed without update in the final matrix.
 - Browser execution is serialized through one worker. Fresh nonce rendering makes every protected document request-time; concurrent local browser workers intermittently saturated the single Next test server and stalled Firefox's first full-page load event. The serialized full matrix is deterministic while still covering every configured local project.
 

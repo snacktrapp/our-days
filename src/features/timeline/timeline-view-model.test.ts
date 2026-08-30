@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineViewModel } from "./timeline-view-model";
 
+const composer = {
+  previewToday: "2026-08-28",
+  currentJournalPersonId: "person",
+  recordedByName: "Person",
+  journalPeople: [
+    {
+      id: "person",
+      name: "Person",
+      initial: "P",
+      accent: "teal",
+      contextLabel: "You",
+    },
+  ],
+  taggablePeople: [],
+} as const;
+
 const model = {
   chrome: {
     accent: "teal",
     title: "A timeline",
     eyebrow: "A family",
+    composer,
     familyMark: [{ id: "person", initial: "P", accent: "teal" }],
   },
   switcher: [{ label: "Family", href: "/family", current: true }],

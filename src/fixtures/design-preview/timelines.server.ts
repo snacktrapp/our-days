@@ -9,10 +9,8 @@ import type {
   MemoryJourneyViewModel,
 } from "@/features/memories/memories-view-model";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
-import type {
-  AccentToken,
-  JournalChromeViewModel,
-} from "@/features/shell/shell-view-model";
+import type { AccentToken } from "@/features/accent-token";
+import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import {
   anniversaryKey,
   compareMemoryDatesDescending,
@@ -26,8 +24,62 @@ const familyMark = [
   { id: "molly", initial: "M", accent: "clay" },
 ] as const;
 
+const composerPeople = [
+  {
+    id: "brian",
+    name: "Brian",
+    initial: "B",
+    accent: "teal",
+    contextLabel: "You",
+  },
+  {
+    id: "molly",
+    name: "Molly",
+    initial: "M",
+    accent: "clay",
+    contextLabel: "Co-organizer",
+  },
+  {
+    id: "avery",
+    name: "Avery",
+    initial: "A",
+    accent: "ochre",
+    contextLabel: "Child",
+  },
+  {
+    id: "sam",
+    name: "Sam",
+    initial: "S",
+    accent: "slate",
+    contextLabel: "Child",
+  },
+  {
+    id: "june",
+    name: "June",
+    initial: "J",
+    accent: "moss",
+    contextLabel: "Child",
+  },
+] as const;
+
+const composerJournalPeople = composerPeople.filter(
+  (person) => person.id !== "molly",
+);
+
 function chrome(accent: AccentToken, title: string): JournalChromeViewModel {
-  return { accent, title, eyebrow: "Our family", familyMark };
+  return {
+    accent,
+    title,
+    eyebrow: "Our family",
+    familyMark,
+    composer: {
+      previewToday: "2026-08-28",
+      currentJournalPersonId: "brian",
+      recordedByName: "Brian",
+      journalPeople: composerJournalPeople,
+      taggablePeople: composerPeople,
+    },
+  };
 }
 
 const familyEntries = [

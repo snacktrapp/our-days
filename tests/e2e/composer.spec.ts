@@ -1,3 +1,5 @@
+import AxeBuilder from "@axe-core/playwright";
+import { readFileSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 
@@ -16,23 +18,53 @@ async function expectReachable(control: Locator) {
 }
 
 async function expectMinimumTargets(dialog: Locator) {
-  const undersized = await dialog.locator("button").evaluateAll((buttons) =>
-    buttons
-      .filter((button) => {
-        const rect = button.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      })
-      .map((button) => {
-        const rect = button.getBoundingClientRect();
-        return {
-          label: button.textContent?.trim(),
-          width: rect.width,
-          height: rect.height,
-        };
-      })
-      .filter(({ width, height }) => width < 43.9 || height < 43.9),
-  );
+  const targetSelector = [
+    "button",
+    'input:not([type="checkbox"]):not([type="file"])',
+    "select",
+    "textarea",
+    ".photo-input",
+    ".people-tags label",
+  ].join(",");
+  const undersized = await dialog
+    .locator(targetSelector)
+    .evaluateAll((targets) =>
+      targets
+        .filter((target) => {
+          const rect = target.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })
+        .map((target) => {
+          const rect = target.getBoundingClientRect();
+          return {
+            label:
+              target.getAttribute("aria-label") || target.textContent?.trim(),
+            width: rect.width,
+            height: rect.height,
+          };
+        })
+        .filter(({ width, height }) => width < 43.9 || height < 43.9),
+    );
   expect(undersized).toEqual([]);
+}
+
+async function expectReadableInputType(dialog: Locator) {
+  const undersizedText = await dialog
+    .locator(
+      'input:not([type="checkbox"]):not([type="file"]), select, textarea',
+    )
+    .evaluateAll((controls) =>
+      controls
+        .filter((control) => control.getClientRects().length > 0)
+        .map((control) => ({
+          label:
+            control.getAttribute("aria-label") ||
+            control.parentElement?.textContent?.trim(),
+          fontSize: Number.parseFloat(getComputedStyle(control).fontSize),
+        }))
+        .filter(({ fontSize }) => fontSize < 16),
+    );
+  expect(undersizedText).toEqual([]);
 }
 
 async function collectContainedFocusCycle(
@@ -99,21 +131,26 @@ async function expectCompleteFocusTraversal(
   );
 }
 
-test("composer is modal, contains focus, confirms drafts, and restores focus", async ({
+async function openComposer(page: Page) {
+  await page.getByRole("button", { name: "Add moment" }).click();
+  return page.getByRole("dialog");
+}
+
+test("composer is modal, contains focus, protects every draft, and restores focus", async ({
   page,
 }) => {
   await page.goto("/family");
   const trigger = page.getByRole("button", { name: "Add moment" });
-  await trigger.click();
+  const dialog = await openComposer(page);
 
-  const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
     true,
   );
+  await expect(page.getByRole("button", { name: /^Photo/u })).toBeFocused();
   await expect(
-    page.getByRole("button", { name: /Photo or video/ }),
-  ).toBeFocused();
+    page.getByText(/Local design preview · Nothing is saved/u),
+  ).toBeVisible();
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
   await expectMinimumTargets(dialog);
 
@@ -128,20 +165,44 @@ test("composer is modal, contains focus, confirms drafts, and restores focus", a
   }
   expect(backgroundBlocked).toBe(true);
 
-  const firstChoice = page.getByRole("button", { name: /Photo or video/ });
+  const firstChoice = page.getByRole("button", { name: /^Photo/u });
   await expectCompleteFocusTraversal(page, dialog, firstChoice, "chooser");
 
   await dialog
     .getByRole("button", { name: "A thought A few words to keep", exact: true })
     .click();
-  await expectMinimumTargets(dialog);
-  const text = page.getByRole("textbox", { name: "Moment text" });
+  const text = page.getByRole("textbox", { name: "Your thought" });
   await text.fill("A draft worth keeping");
-  await expectCompleteFocusTraversal(page, dialog, text, "written composer");
+  await page.getByLabel("Moment date").fill("2023-08-21");
+  const journal = dialog.getByRole("combobox", {
+    name: "Journal",
+    exact: true,
+  });
+  await expect(journal.locator('option[value="molly"]')).toHaveCount(0);
+  await page.getByRole("button", { name: /People and place/u }).click();
+  const averyTag = page.getByRole("checkbox", { name: /Avery/u });
+  await averyTag.check();
+  await expect(averyTag).toBeChecked();
+  await journal.selectOption("avery");
+  await expect(averyTag).not.toBeChecked();
+  await expect(averyTag).toBeDisabled();
+  await page.getByRole("checkbox", { name: /Molly/u }).check();
+  await page.getByLabel(/^Place/u).fill("Oak Street School");
+  await expectMinimumTargets(dialog);
+  await expectReadableInputType(dialog);
+  await expectCompleteFocusTraversal(
+    page,
+    dialog,
+    text,
+    "expanded written composer",
+  );
 
   page.once("dialog", async (confirmation) => confirmation.dismiss());
   await page.getByRole("button", { name: "Close moment composer" }).click();
   await expect(text).toHaveValue("A draft worth keeping");
+  await expect(page.getByLabel("Moment date")).toHaveValue("2023-08-21");
+  await expect(journal).toHaveValue("avery");
+  await expect(page.getByRole("checkbox", { name: /Molly/u })).toBeChecked();
 
   page.once("dialog", async (confirmation) => confirmation.accept());
   await page.getByRole("button", { name: "Close moment composer" }).click();
@@ -150,49 +211,431 @@ test("composer is modal, contains focus, confirms drafts, and restores focus", a
   await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
 });
 
+test("required content rejects whitespace and future dates before review", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const cases = [
+    { choice: /A thought/u, field: "Your thought", error: "Write a thought" },
+    { choice: /Milestone/u, field: "Milestone", error: "Name the milestone" },
+    { choice: /A place/u, field: "Place name", error: "Name the place" },
+  ] as const;
+
+  for (const testCase of cases) {
+    const dialog = await openComposer(page);
+    await dialog.getByRole("button", { name: testCase.choice }).click();
+    const field = dialog.getByLabel(testCase.field);
+    await field.fill(" \n ");
+    await dialog.getByRole("button", { name: "Preview moment" }).click();
+    await expect(dialog.getByRole("alert")).toContainText(testCase.error);
+    await expect(field).toBeFocused();
+    await expect(
+      dialog.getByRole("heading", { name: "A preview of this moment" }),
+    ).toHaveCount(0);
+    page.once("dialog", (confirmation) => confirmation.accept());
+    await dialog.getByRole("button", { name: "Close moment composer" }).click();
+  }
+
+  const dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /A thought/u }).click();
+  await dialog.getByRole("textbox", { name: "Your thought" }).fill("Later");
+  const date = dialog.getByLabel("Moment date");
+  await date.fill("2026-08-29");
+  expect(
+    await date.evaluate((input: HTMLInputElement) => input.checkValidity()),
+  ).toBe(false);
+  await dialog.getByRole("button", { name: "Preview moment" }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "A preview of this moment" }),
+  ).toHaveCount(0);
+});
+
 test("Escape and backdrop dismissal restore focus without a draft", async ({
   page,
 }) => {
   await page.goto("/family");
   const trigger = page.getByRole("button", { name: "Add moment" });
 
-  await trigger.click();
+  await openComposer(page);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(trigger).toBeFocused();
 
-  await trigger.click();
-  const dialog = page.getByRole("dialog");
+  const dialog = await openComposer(page);
   await dialog.click({ position: { x: 5, y: 5 } });
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 });
 
-test("keyboard-sized viewport keeps focused and scrolled controls reachable", async ({
+test("all four capture modes produce honest, non-durable previews", async ({
+  page,
+}) => {
+  await page.goto("/family");
+
+  let dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /^Photo/u }).click();
+  const photoInput = page.getByLabel(/Choose photo/u);
+  await photoInput.setInputFiles({
+    name: "invalid.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from("not really an image"),
+  });
+  await expect(page.locator(".composer-error")).toContainText(
+    "could not be shown",
+  );
+  await photoInput.setInputFiles("public/sample-family.jpg");
+  const photoPreview = page.getByAltText("Selected photo preview");
+  await expect(photoPreview).toBeVisible();
+  await expect(photoPreview).toHaveJSProperty("complete", true);
+  expect(
+    await photoPreview.evaluate(
+      (image: HTMLImageElement) => image.naturalWidth,
+    ),
+  ).toBeGreaterThan(0);
+  await expect(
+    page.getByText("Photo ready for this local preview."),
+  ).toBeVisible();
+  await expect(photoPreview).not.toHaveAttribute("style");
+  await page
+    .getByRole("textbox", { name: "A few words" })
+    .fill("The last warm hour.");
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await expect(
+    page.getByText("Design preview · Nothing was saved"),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "A preview of this moment" }),
+  ).toBeFocused();
+  await expect(page.getByText("The last warm hour.")).toBeVisible();
+  await expectCompleteFocusTraversal(
+    page,
+    dialog,
+    page.getByRole("button", { name: "Back to edit" }),
+    "photo preview",
+  );
+  await page.getByRole("button", { name: "Back to edit" }).click();
+  await expect(page.getByAltText("Selected photo preview")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "A few words" })).toHaveValue(
+    "The last warm hour.",
+  );
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await page.getByRole("button", { name: "Close preview" }).click();
+
+  dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /A thought/u }).click();
+  await page
+    .getByRole("textbox", { name: "Your thought" })
+    .fill("The kitchen was loud.");
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await expect(dialog.getByText("The kitchen was loud.")).toBeVisible();
+  await page.getByRole("button", { name: "Close preview" }).click();
+
+  dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /Milestone/u }).click();
+  await expect(
+    dialog.getByRole("textbox", { name: "What made it meaningful?" }),
+  ).toBeVisible();
+  await dialog
+    .getByRole("textbox", { name: "Milestone", exact: true })
+    .fill("First day of school");
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await expect(dialog.getByText("First day of school")).toBeVisible();
+  await page.getByRole("button", { name: "Close preview" }).click();
+
+  dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /A place/u }).click();
+  await expect(
+    dialog.getByRole("textbox", { name: "What happened here?" }),
+  ).toBeVisible();
+  await page.getByLabel("Place name").fill("Sand Harbor");
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await expect(
+    dialog.locator(".composer-preview-copy > span").filter({
+      hasText: /^Place$/u,
+    }),
+  ).toBeVisible();
+  await expect(dialog.getByText("Sand Harbor", { exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Close preview" }).click();
+});
+
+test("previewing emits no mutation, persistence, history, or timeline change", async ({
+  browserName,
+  page,
+}) => {
+  test.skip(browserName !== "chromium", "Browser storage inventory runs once.");
+  await page.goto("/family", { waitUntil: "networkidle" });
+  await page.evaluate(async () => {
+    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
+  });
+  await page.evaluate(() => {
+    const auditWindow = window as typeof window & {
+      __composerCacheMutations?: string[];
+      __composerIdbOperations?: string[];
+    };
+    auditWindow.__composerCacheMutations = [];
+    auditWindow.__composerIdbOperations = [];
+    const originalCachePut = Cache.prototype.put;
+    const originalCacheAdd = Cache.prototype.add;
+    const originalCacheAddAll = Cache.prototype.addAll;
+    const originalCacheDelete = Cache.prototype.delete;
+    Cache.prototype.put = function (request, response) {
+      auditWindow.__composerCacheMutations?.push("put");
+      return originalCachePut.call(this, request, response);
+    };
+    Cache.prototype.add = function (request) {
+      auditWindow.__composerCacheMutations?.push("add");
+      return originalCacheAdd.call(this, request);
+    };
+    Cache.prototype.addAll = function (requests) {
+      auditWindow.__composerCacheMutations?.push("addAll");
+      return originalCacheAddAll.call(this, requests);
+    };
+    Cache.prototype.delete = function (request, options) {
+      auditWindow.__composerCacheMutations?.push("delete");
+      return originalCacheDelete.call(this, request, options);
+    };
+    const originalOpen = indexedDB.open.bind(indexedDB);
+    const originalDelete = indexedDB.deleteDatabase.bind(indexedDB);
+    Object.defineProperty(indexedDB, "open", {
+      configurable: true,
+      value: (name: string, version?: number) => {
+        auditWindow.__composerIdbOperations?.push(`open:${name}`);
+        return version === undefined
+          ? originalOpen(name)
+          : originalOpen(name, version);
+      },
+    });
+    Object.defineProperty(indexedDB, "deleteDatabase", {
+      configurable: true,
+      value: (name: string) => {
+        auditWindow.__composerIdbOperations?.push(`delete:${name}`);
+        return originalDelete(name);
+      },
+    });
+  });
+  const browserInventory = () =>
+    page.evaluate(async () => {
+      const cacheInventory: Array<{
+        name: string;
+        requests: Array<{ method: string; url: string }>;
+      }> = [];
+      if ("caches" in window) {
+        for (const name of await caches.keys()) {
+          const cache = await caches.open(name);
+          cacheInventory.push({
+            name,
+            requests: (await cache.keys()).map((request) => ({
+              method: request.method,
+              url: request.url,
+            })),
+          });
+        }
+      }
+      return {
+        local: Object.entries(localStorage),
+        session: Object.entries(sessionStorage),
+        cookies: document.cookie,
+        databases:
+          "databases" in indexedDB
+            ? (await indexedDB.databases()).map(
+                (database) => database.name ?? "",
+              )
+            : [],
+        caches: cacheInventory,
+        historyLength: history.length,
+        historyState: JSON.stringify(history.state),
+        url: location.href,
+        title: document.title,
+      };
+    });
+  const baseline = await browserInventory();
+  const timeline = page.locator("[data-moment-kind]");
+  const timelineBaseline = await timeline.evaluateAll((moments) =>
+    moments.map((moment) => ({
+      kind: moment.getAttribute("data-moment-kind"),
+      text: moment.textContent,
+    })),
+  );
+  const interactionRequests: Array<{
+    method: string;
+    resourceType: string;
+    url: string;
+  }> = [];
+  page.on("request", (request) => {
+    interactionRequests.push({
+      method: request.method(),
+      resourceType: request.resourceType(),
+      url: request.url(),
+    });
+  });
+
+  const malicious =
+    '<img src=x onerror="window.__composerInjected=true"><script>bad()</script>';
+  const privateFilenameMarker = "PRIVATE-FAMILY-FILENAME-7821.jpg";
+  const dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /^Photo/u }).click();
+  await dialog.getByLabel(/Choose photo/u).setInputFiles({
+    name: privateFilenameMarker,
+    mimeType: "image/jpeg",
+    buffer: readFileSync("public/sample-family.jpg"),
+  });
+  const privatePhoto = dialog.getByAltText("Selected photo preview");
+  await expect(privatePhoto).toBeVisible();
+  await expect(
+    dialog.getByText("Photo ready for this local preview."),
+  ).toBeVisible();
+  await dialog.getByRole("textbox", { name: "A few words" }).fill(malicious);
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await expect(page.getByText(malicious)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { __composerInjected?: boolean })
+          .__composerInjected,
+    ),
+  ).toBeUndefined();
+  await expect(page.locator(".composer-preview-card script")).toHaveCount(0);
+  await expect(page.locator(".composer-preview-card img")).toHaveCount(1);
+  await expect(page.locator("body")).not.toContainText(privateFilenameMarker);
+  await page.getByRole("button", { name: "Close preview" }).click();
+
+  expect(
+    await timeline.evaluateAll((moments) =>
+      moments.map((moment) => ({
+        kind: moment.getAttribute("data-moment-kind"),
+        text: moment.textContent,
+      })),
+    ),
+  ).toEqual(timelineBaseline);
+  const after = await browserInventory();
+  expect(after).toEqual(baseline);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { __composerIdbOperations?: string[] })
+          .__composerIdbOperations,
+    ),
+  ).toEqual([]);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { __composerCacheMutations?: string[] })
+          .__composerCacheMutations,
+    ),
+  ).toEqual([]);
+  expect(
+    interactionRequests.filter((request) => /^https?:/u.test(request.url)),
+  ).toEqual([]);
+  expect(JSON.stringify(interactionRequests)).not.toContain(
+    privateFilenameMarker,
+  );
+
+  let draftDialog = await openComposer(page);
+  await draftDialog
+    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Your thought" })
+    .fill("Never persist this draft");
+  await page.reload();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  draftDialog = await openComposer(page);
+  await draftDialog
+    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .click();
+  await expect(page.getByRole("textbox", { name: "Your thought" })).toHaveValue(
+    "",
+  );
+
+  await page.getByRole("button", { name: "Close moment composer" }).click();
+  draftDialog = await openComposer(page);
+  await draftDialog.getByRole("button", { name: /^Photo/u }).click();
+  await draftDialog.getByLabel(/Choose photo/u).setInputFiles({
+    name: privateFilenameMarker,
+    mimeType: "image/jpeg",
+    buffer: readFileSync("public/sample-family.jpg"),
+  });
+  await expect(
+    draftDialog.getByText("Photo ready for this local preview."),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  draftDialog = await openComposer(page);
+  await draftDialog.getByRole("button", { name: /^Photo/u }).click();
+  await expect(draftDialog.getByAltText("Selected photo preview")).toHaveCount(
+    0,
+  );
+  await expect(page.locator("body")).not.toContainText(privateFilenameMarker);
+});
+
+test("expanded capture states have no serious axe violations", async ({
+  browserName,
+  page,
+}) => {
+  test.skip(browserName !== "chromium", "Axe coverage runs once in Chromium.");
+  await page.goto("/family");
+  const scan = async () => {
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(
+      results.violations.filter((violation) =>
+        ["serious", "critical"].includes(violation.impact ?? ""),
+      ),
+    ).toEqual([]);
+  };
+
+  const dialog = await openComposer(page);
+  await scan();
+  await dialog.getByRole("button", { name: /Milestone/u }).click();
+  await dialog
+    .getByRole("textbox", { name: "Milestone", exact: true })
+    .fill("First day of school");
+  await page.getByRole("button", { name: /People and place/u }).click();
+  await scan();
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  await scan();
+});
+
+test("keyboard-sized viewport keeps every capture and review control reachable", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/family");
   const backgroundScroll = await page.evaluate(() => window.scrollY);
-  await page.getByRole("button", { name: "Add moment" }).click();
-  await page
-    .getByRole("dialog")
+  const dialog = await openComposer(page);
+  await dialog
     .getByRole("button", { name: "A thought A few words to keep", exact: true })
     .click();
-  const text = page.getByRole("textbox", { name: "Moment text" });
+  const text = page.getByRole("textbox", { name: "Your thought" });
   await text.fill("Short screen");
-  await expect(text).toBeFocused();
+  await page.getByRole("button", { name: /People and place/u }).click();
 
   await page.setViewportSize({ width: 320, height: 350 });
-  await expect(text).toBeFocused();
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
-
+  const mollyTag = dialog
+    .locator(".people-tags label")
+    .filter({ hasText: "Molly" });
   for (const control of [
+    page.getByRole("button", { name: "Close moment composer" }),
     text,
-    page.getByRole("button", { name: /Today/ }),
-    page.getByRole("button", { name: /Mine/ }),
-    page.getByRole("button", { name: "Save moment" }),
+    page.getByLabel("Moment date"),
+    dialog.getByRole("combobox", { name: "Journal", exact: true }),
+    page.getByRole("button", { name: /People and place/u }),
+    mollyTag,
+    page.getByLabel(/^Place/u),
+    page.getByRole("button", { name: "Preview moment" }),
   ]) {
     await expectReachable(control);
   }
+  await expectMinimumTargets(dialog);
+  await expectReadableInputType(dialog);
+
+  await page.getByRole("button", { name: "Preview moment" }).click();
+  for (const control of [
+    page.getByRole("button", { name: "Close moment composer" }),
+    page.getByRole("button", { name: "Back to edit" }),
+    page.getByRole("button", { name: "Close preview" }),
+  ]) {
+    await expectReachable(control);
+  }
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
 });

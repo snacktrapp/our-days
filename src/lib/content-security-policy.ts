@@ -46,6 +46,7 @@ export function buildContentSecurityPolicy({
     [
       "connect-src",
       "'self'",
+      "blob:",
       ...(development ? ["ws:"] : []),
       supabase.http,
       supabase.websocket,

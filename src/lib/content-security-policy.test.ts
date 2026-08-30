@@ -32,7 +32,7 @@ describe("content security policy", () => {
     });
 
     expect(policy).toContain(
-      "connect-src 'self' https://aaaaaaaaaaaaaaaaaaaa.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co",
     );
     expect(policy).toContain(
       "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
@@ -53,7 +53,7 @@ describe("content security policy", () => {
     expect(policy).toContain("'unsafe-eval'");
     expect(policy).toContain("style-src 'self' 'unsafe-inline'");
     expect(policy).toContain(
-      "connect-src 'self' ws: http://127.0.0.1:54321 ws://127.0.0.1:54321",
+      "connect-src 'self' blob: ws: http://127.0.0.1:54321 ws://127.0.0.1:54321",
     );
     expect(policy).not.toContain("upgrade-insecure-requests");
   });
@@ -66,7 +66,7 @@ describe("content security policy", () => {
     });
 
     expect(policy).toContain(
-      "connect-src 'self' http://journal.localhost:54321 ws://journal.localhost:54321",
+      "connect-src 'self' blob: http://journal.localhost:54321 ws://journal.localhost:54321",
     );
   });
 

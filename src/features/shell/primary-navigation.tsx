@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { MomentComposer } from "@/features/composer/moment-composer";
+import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { JournalSection } from "./shell-view-model";
 
-export function PrimaryNavigation({ section }: { section: JournalSection }) {
+export function PrimaryNavigation({
+  composer,
+  section,
+}: {
+  composer: MomentComposerViewModel;
+  section: JournalSection;
+}) {
   const [composerOpen, setComposerOpen] = useState(false);
   const addMomentRef = useRef<HTMLButtonElement>(null);
 
@@ -55,6 +62,7 @@ export function PrimaryNavigation({ section }: { section: JournalSection }) {
         </Link>
       </nav>
       <MomentComposer
+        model={composer}
         open={composerOpen}
         returnFocusRef={addMomentRef}
         onRequestClose={() => setComposerOpen(false)}

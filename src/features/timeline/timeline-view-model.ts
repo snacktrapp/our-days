@@ -1,7 +1,5 @@
-import type {
-  AccentToken,
-  JournalChromeViewModel,
-} from "@/features/shell/shell-view-model";
+import type { AccentToken } from "@/features/accent-token";
+import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
 export type MomentKind = "photo" | "thought" | "milestone" | "location";
 

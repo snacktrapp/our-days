@@ -7,10 +7,27 @@ import type {
   MemoryJourneyViewModel,
 } from "./memories-view-model";
 
+const composer = {
+  previewToday: "2026-08-28",
+  currentJournalPersonId: "person",
+  recordedByName: "Person",
+  journalPeople: [
+    {
+      id: "person",
+      name: "Person",
+      initial: "P",
+      accent: "teal",
+      contextLabel: "You",
+    },
+  ],
+  taggablePeople: [],
+} as const;
+
 const chrome = {
   accent: "teal",
   title: "Memories",
   eyebrow: "Our family",
+  composer,
   familyMark: [{ id: "person", initial: "P", accent: "teal" }],
 } as const;
 

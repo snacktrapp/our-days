@@ -131,7 +131,7 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   ).toBeInViewport();
   await page.getByRole("button", { name: "Add moment" }).click();
   const dialog = page.getByRole("dialog");
-  const photoChoice = page.getByRole("button", { name: /Photo or video/ });
+  const photoChoice = page.getByRole("button", { name: /^Photo/u });
   await expect(dialog).toBeVisible();
 
   const dialogGeometry = await dialog.evaluate((element) => ({

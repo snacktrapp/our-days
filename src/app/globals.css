@@ -1082,9 +1082,12 @@ textarea:focus-visible,
 .sheet-close {
   width: 44px;
   height: 44px;
-  position: absolute;
-  top: 14px;
-  right: 13px;
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  margin: -18px -5px -44px auto;
+  display: grid;
+  place-items: center;
   border: 0;
   border-radius: 50%;
   background: rgba(85, 70, 55, 0.08);
@@ -1095,7 +1098,7 @@ textarea:focus-visible,
 .private-label {
   display: block;
   color: #526047;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1107,6 +1110,12 @@ textarea:focus-visible,
   font-size: 26px;
   font-weight: 500;
   line-height: 1.15;
+}
+.composer-draft-held {
+  margin: -11px 0 17px;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-size: 13px;
 }
 .moment-choices {
   display: grid;
@@ -1163,43 +1172,270 @@ textarea:focus-visible,
   font-size: 9px;
   line-height: 1.35;
 }
+.composer-back {
+  min-height: 44px;
+  margin: -8px 0 9px -8px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.composer-field,
+.photo-input {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+.composer-field > span,
+.composer-field > label,
+.photo-input > span {
+  color: #60574e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.composer-field small,
+.photo-input small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.composer-field input,
+.composer-field select,
+.photo-input input,
 .quick-compose textarea {
   width: 100%;
-  height: 120px;
-  padding: 15px;
-  resize: none;
+  min-height: 48px;
+  padding: 12px 13px;
   border: 1px solid var(--hairline);
-  border-radius: 17px;
+  border-radius: 14px;
   outline: none;
   background: var(--cream);
   color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+}
+.photo-input {
+  min-height: 82px;
+  padding: 14px;
+  position: relative;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--cream));
+  cursor: pointer;
+}
+.photo-input input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  left: 0;
+  bottom: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+}
+.photo-input:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 2px;
+}
+.quick-compose textarea {
+  width: 100%;
+  height: 120px;
+  padding: 14px;
+  resize: none;
   font-family: Georgia, serif;
   font-size: 17px;
+  line-height: 1.45;
 }
+.composer-field input:focus,
+.composer-field select:focus,
+.photo-input input:focus,
 .quick-compose textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.compose-row {
-  min-height: 47px;
+.composer-core-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.composer-select-field {
+  position: relative;
+}
+.composer-select-field select {
+  padding-right: 34px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.composer-select-field > .composer-select-arrow {
+  position: absolute;
+  right: 14px;
+  bottom: 15px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: none;
+}
+.composer-optional {
+  margin-top: 13px;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+.composer-optional-toggle {
+  width: 100%;
+  min-height: 44px;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--hairline);
-  font-size: 11px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
 }
-.compose-row button {
+.composer-optional-toggle::after {
+  content: "+";
+  margin-left: 9px;
+  color: var(--teal);
+  font-size: 17px;
+}
+.composer-optional-toggle[aria-expanded="true"]::after {
+  content: "−";
+}
+.composer-optional-toggle span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+#composer-optional-fields {
+  padding: 2px 0 13px;
+}
+.people-tags {
+  margin: 10px 0 2px;
+  padding: 0;
+  border: 0;
+}
+.people-tags legend {
+  margin-bottom: 7px;
+  color: #60574e;
+  font-size: 11px;
+  font-weight: 700;
+}
+.people-tags > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.people-tags label {
+  min-height: 44px;
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background: var(--cream);
+  font-size: 12px;
+  cursor: pointer;
+}
+.people-tags label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--teal) 46%, var(--hairline));
+  background: color-mix(in srgb, var(--teal) 7%, var(--cream));
+}
+.people-tags label:has(input:focus-visible) {
+  outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 1px;
+}
+.people-tags label:has(input:disabled) {
+  cursor: default;
+  opacity: 0.52;
+}
+.people-tags input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.tag-person-dot {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fffdf8;
+  font-size: 9px;
+  font-weight: 800;
+}
+.composer-photo-preview {
+  margin-top: 11px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 16px;
+  background: #e9e2d7;
+  aspect-ratio: 4 / 3;
+}
+.composer-photo-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.composer-photo-preview button {
   min-width: 44px;
   min-height: 44px;
-  margin-left: auto;
-  padding: 0 4px;
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 0 12px;
   border: 0;
-  background: none;
-  color: var(--muted);
+  border-radius: 999px;
+  background: rgba(36, 31, 27, 0.88);
+  color: #fffaf0;
+  font-size: 11px;
   cursor: pointer;
+}
+.composer-error {
+  margin: 8px 0 0;
+  color: #8b3e36;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.composer-selection-status {
+  min-height: 1px;
+  margin: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.recorded-by,
+.composer-preview-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.recorded-by {
+  color: var(--teal);
+  font-weight: 650;
 }
 .save-moment {
   width: 100%;
-  height: 50px;
+  min-height: 50px;
   margin-top: 17px;
   border: 0;
   border-radius: 16px;
@@ -1207,6 +1443,84 @@ textarea:focus-visible,
   color: #fffaf0;
   font-weight: 650;
   cursor: pointer;
+}
+.composer-preview-card {
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 19px;
+  background: var(--cream);
+  box-shadow: 0 12px 30px rgba(78, 59, 40, 0.08);
+}
+.composer-preview-card .composer-photo-preview {
+  margin: 0;
+  border-radius: 0;
+}
+.composer-preview-copy {
+  padding: 15px;
+  display: grid;
+  gap: 6px;
+}
+.composer-preview-copy > span {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.composer-preview-copy strong {
+  font-family: Georgia, serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.composer-preview-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.composer-review-details {
+  margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--hairline);
+}
+.composer-review-details div {
+  min-height: 52px;
+  padding: 9px 3px;
+  border-bottom: 1px solid var(--hairline);
+}
+.composer-review-details dt {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.composer-review-details dd {
+  margin: 3px 0 0;
+  font-family: Georgia, serif;
+  font-size: 13px;
+}
+.composer-review-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 9px;
+}
+.secondary-composer-action {
+  min-height: 50px;
+  margin-top: 17px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--cream);
+  color: var(--ink);
+  font-weight: 650;
+  cursor: pointer;
+}
+@media (max-width: 359px) {
+  .composer-core-fields {
+    grid-template-columns: 1fr;
+  }
 }
 @keyframes sheet-up {
   from {
