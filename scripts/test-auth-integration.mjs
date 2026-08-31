@@ -209,8 +209,150 @@ function runDatabaseQuery(sql) {
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
-    throw new Error("Local database query failed.", { cause: error });
+    const diagnostic = [error.stdout, error.stderr]
+      .map((value) => value?.toString().trim())
+      .filter(Boolean)
+      .join("\n");
+    throw new Error(
+      `Local database query failed${diagnostic ? `: ${diagnostic}` : "."}`,
+      { cause: error },
+    );
   }
+}
+
+const PHASE_2D_PROVISIONER = "10000000-0000-4000-8000-000000000091";
+const PHASE_2D_PROVISIONER_SESSION = "71000000-0000-4000-8000-000000000091";
+const PHASE_2D_DELIVERY_WORKER = "10000000-0000-4000-8000-000000000092";
+const PHASE_2D_DELIVERY_SESSION = "71000000-0000-4000-8000-000000000092";
+
+function installPhase2dTestWorkers() {
+  runDatabaseQuery(`
+    do $phase_2d_workers$
+    begin
+    insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+    values
+      ('${PHASE_2D_PROVISIONER}'::uuid, 'auth-harness-provisioner@example.test', statement_timestamp(), '{}'),
+      ('${PHASE_2D_DELIVERY_WORKER}'::uuid, 'auth-harness-delivery@example.test', statement_timestamp(), '{}')
+    on conflict (id) do nothing;
+
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values
+      ('${PHASE_2D_PROVISIONER_SESSION}'::uuid, '${PHASE_2D_PROVISIONER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+      ('${PHASE_2D_DELIVERY_SESSION}'::uuid, '${PHASE_2D_DELIVERY_WORKER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day')
+    on conflict (id) do nothing;
+
+    insert into private.invitation_provisioner_allowlist (auth_user_id)
+    values ('${PHASE_2D_PROVISIONER}'::uuid)
+    on conflict (auth_user_id) do nothing;
+    insert into private.invitation_delivery_worker_allowlist (auth_user_id)
+    values ('${PHASE_2D_DELIVERY_WORKER}'::uuid)
+    on conflict (auth_user_id) do nothing;
+
+    update private.invitation_delivery_capabilities
+       set enabled = true, updated_at = statement_timestamp()
+     where capability = 'email_delivery';
+    end
+    $phase_2d_workers$;
+  `);
+}
+
+function materializeDeliveredPhase2dInvitation({
+  emailRequestId,
+  rawToken,
+  targetAuthUserId,
+}) {
+  runDatabaseQuery(`
+    do $phase_2d_fixture$
+    declare
+      target_job_id uuid;
+      target_invitation_id uuid;
+      target_delivery_version integer;
+      target_token_sha256 text := encode(
+        extensions.digest('${rawToken}', 'sha256'), 'hex'
+      );
+      target_binding text;
+    begin
+      perform set_config(
+        'request.jwt.claims',
+        '{"sub":"${PHASE_2D_PROVISIONER}","session_id":"${PHASE_2D_PROVISIONER_SESSION}"}',
+        true
+      );
+      select invitation_job_id into target_job_id
+        from private.complete_invitation_email_provisioning(
+          '${emailRequestId}'::uuid,
+          '${targetAuthUserId}'::uuid
+        );
+      if target_job_id is null then
+        raise exception 'Phase 2D fixture provisioning returned no job';
+      end if;
+
+      perform set_config(
+        'request.jwt.claims',
+        '{"sub":"${PHASE_2D_DELIVERY_WORKER}","session_id":"${PHASE_2D_DELIVERY_SESSION}"}',
+        true
+      );
+      select invitation_id, delivery_version
+        into target_invitation_id, target_delivery_version
+        from private.materialize_invitation_delivery_job(
+          target_job_id, 1, target_token_sha256
+        );
+      select recipient_binding_hex into target_binding
+        from private.read_invitation_delivery_auth(target_job_id);
+      if target_invitation_id is null or target_binding is null then
+        raise exception 'Phase 2D fixture materialization was incomplete';
+      end if;
+      perform private.complete_invitation_delivery(
+        target_job_id,
+        target_invitation_id,
+        target_delivery_version,
+        target_token_sha256,
+        target_binding,
+        'local-harness',
+        'auth-harness-' || target_job_id::text,
+        'auth-harness/' || target_job_id::text,
+        repeat('a', 64),
+        statement_timestamp()
+      );
+    end
+    $phase_2d_fixture$;
+  `);
+}
+
+async function createDeliveredPhase2dInvitation({
+  apiUrl,
+  circleId,
+  displayName,
+  email,
+  organizerToken,
+  publishableKey,
+  targetAuthUserId,
+}) {
+  const requested = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
+    publishableKey,
+    {
+      body: JSON.stringify({
+        circle_id: circleId,
+        display_name: displayName,
+        email,
+        request_key: randomUUID(),
+      }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!requested.response.ok || typeof requested.body !== "string") {
+    throw new Error(
+      `Phase 2D invitation request failed with ${requested.response.status}.`,
+    );
+  }
+  const rawToken = `invite-${randomUUID()}`;
+  materializeDeliveredPhase2dInvitation({
+    emailRequestId: requested.body,
+    rawToken,
+    targetAuthUserId,
+  });
+  return { emailRequestId: requested.body, rawToken };
 }
 
 const CIRCLE_A = "20000000-0000-4000-8000-000000000001";
@@ -238,6 +380,7 @@ try {
   }
 
   shouldRestoreFixtures = true;
+  installPhase2dTestWorkers();
   const suffix = randomUUID();
   const invitedEmail = `auth-invite-${suffix}@example.test`;
   const rawSignupEmail = `raw-signup-${suffix}@example.test`;
@@ -302,25 +445,15 @@ try {
   }
 
   const organizerToken = createLocalUserToken(ORGANIZER_A, jwtSecret);
-  const invitation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
-    anonKey,
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: "Auth Integration Invite",
-        email: invitedEmail,
-      }),
-      headers: { authorization: `Bearer ${organizerToken}` },
-      method: "POST",
-    },
-  );
-  const invitationResult = invitation.body?.[0];
-  if (!invitation.response.ok || !invitationResult?.raw_token) {
-    throw new Error(
-      `Invitation creation failed with ${invitation.response.status}.`,
-    );
-  }
+  const invitation = await createDeliveredPhase2dInvitation({
+    apiUrl,
+    circleId: CIRCLE_A,
+    displayName: "Auth Integration Invite",
+    email: invitedEmail,
+    organizerToken,
+    publishableKey: anonKey,
+    targetAuthUserId: createdUser.body.id,
+  });
 
   const otpRequest = await jsonRequest(`${apiUrl}/auth/v1/otp`, anonKey, {
     body: JSON.stringify({ create_user: false, email: invitedEmail }),
@@ -356,11 +489,26 @@ try {
     );
   }
 
+  const wrongUserAcceptance = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/accept_invitation`,
+    anonKey,
+    {
+      body: JSON.stringify({ token: invitation.rawToken }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!wrongUserAcceptance.response.ok || wrongUserAcceptance.body !== null) {
+    throw new Error(
+      "A wrong Auth identity could consume a target-bound invite.",
+    );
+  }
+
   const accepted = await jsonRequest(
     `${apiUrl}/rest/v1/rpc/accept_invitation`,
     anonKey,
     {
-      body: JSON.stringify({ token: invitationResult.raw_token }),
+      body: JSON.stringify({ token: invitation.rawToken }),
       headers: userHeaders,
       method: "POST",
     },
@@ -369,6 +517,19 @@ try {
     throw new Error(
       `Invitation acceptance failed with ${accepted.response.status}.`,
     );
+  }
+
+  const acceptanceReplay = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/accept_invitation`,
+    anonKey,
+    {
+      body: JSON.stringify({ token: invitation.rawToken }),
+      headers: userHeaders,
+      method: "POST",
+    },
+  );
+  if (!acceptanceReplay.response.ok || acceptanceReplay.body !== null) {
+    throw new Error("Invitation acceptance replay created another membership.");
   }
 
   const afterAcceptance = await jsonRequest(
@@ -403,19 +564,23 @@ try {
 
   const preRevocationMarker = `Pre-revocation authority ${suffix}`;
   const preRevocationMutation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
     anonKey,
     {
       body: JSON.stringify({
         circle_id: CIRCLE_A,
         display_name: preRevocationMarker,
         email: `pre-revocation-${suffix}@example.test`,
+        request_key: randomUUID(),
       }),
       headers: userHeaders,
       method: "POST",
     },
   );
-  if (!preRevocationMutation.response.ok) {
+  if (
+    !preRevocationMutation.response.ok ||
+    !uuid.test(preRevocationMutation.body)
+  ) {
     throw new Error(
       `The live token lacked expected organizer authority before revocation (${preRevocationMutation.response.status}).`,
     );
@@ -536,13 +701,14 @@ try {
 
   const postRevocationMarker = `Post-revocation denial ${suffix}`;
   const staleMutation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
     anonKey,
     {
       body: JSON.stringify({
         circle_id: CIRCLE_A,
         display_name: postRevocationMarker,
         email: `post-revocation-${suffix}@example.test`,
+        request_key: randomUUID(),
       }),
       headers: userHeaders,
       method: "POST",
@@ -551,7 +717,7 @@ try {
   if (
     staleMutation.response.ok ||
     staleMutation.body?.code !== "42501" ||
-    staleMutation.body?.message !== "Invitation could not be created"
+    staleMutation.body?.message !== "Invitation email could not be requested"
   ) {
     throw new Error(
       `A stale organizer token did not follow the generic mutation-denial path (${staleMutation.response.status}).`,
@@ -559,7 +725,7 @@ try {
   }
 
   const pendingInvitations = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/list_pending_invitations`,
+    `${apiUrl}/rest/v1/rpc/list_pending_invitation_email_requests`,
     anonKey,
     {
       body: JSON.stringify({ circle_id: CIRCLE_A }),
@@ -569,17 +735,33 @@ try {
   );
   if (
     !pendingInvitations.response.ok ||
-    !pendingInvitations.body?.some(
-      (invitation) => invitation.display_name === preRevocationMarker,
+    pendingInvitations.body?.some(
+      (invitation) => invitation.invited_display_name === preRevocationMarker,
     ) ||
     pendingInvitations.body?.some(
-      (invitation) => invitation.display_name === postRevocationMarker,
+      (invitation) => invitation.invited_display_name === postRevocationMarker,
     )
   ) {
     throw new Error(
-      "The stale-token mutation boundary did not preserve the expected invitation state.",
+      `The stale-token mutation boundary did not preserve the expected invitation state (${pendingInvitations.response.status}: ${JSON.stringify(pendingInvitations.body)}).`,
     );
   }
+  runDatabaseQuery(`
+    do $stale_invitation_audit$
+    begin
+      if not exists (
+        select 1
+          from private.invitation_email_requests as request
+         where request.id = '${preRevocationMutation.body}'::uuid
+           and request.state = 'invalidated'
+           and request.invalidation_reason = 'requester_authority_lost'
+           and request.normalized_email is null
+      ) then
+        raise exception 'Requester revocation did not invalidate queued invitation work';
+      end if;
+    end
+    $stale_invitation_audit$;
+  `);
 
   for (const { bucket, deniedUploadPath, seededPath } of storageObjects) {
     await assertStorageDenied(
@@ -620,13 +802,14 @@ try {
     throw new Error("Revoking circle A also damaged the live circle B grant.");
   }
   const deniedDualCircleA = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
     anonKey,
     {
       body: JSON.stringify({
         circle_id: CIRCLE_A,
         display_name: "Revoked A must fail",
         email: `dual-a-${suffix}@example.test`,
+        request_key: randomUUID(),
       }),
       headers: dualCircleHeaders,
       method: "POST",
@@ -636,13 +819,14 @@ try {
     throw new Error("The dual-circle stale token retained circle A authority.");
   }
   const allowedDualCircleB = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
     anonKey,
     {
       body: JSON.stringify({
         circle_id: CIRCLE_B,
         display_name: "Circle B remains live",
         email: `dual-b-${suffix}@example.test`,
+        request_key: randomUUID(),
       }),
       headers: dualCircleHeaders,
       method: "POST",
@@ -709,13 +893,14 @@ try {
   }
 
   const preparedClosureMutation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
     anonKey,
     {
       body: JSON.stringify({
         circle_id: CIRCLE_B,
         display_name: "Prepared closure must fail",
         email: `prepared-closure-${suffix}@example.test`,
+        request_key: randomUUID(),
       }),
       headers: dualCircleHeaders,
       method: "POST",
@@ -724,7 +909,8 @@ try {
   if (
     preparedClosureMutation.response.ok ||
     preparedClosureMutation.body?.code !== "42501" ||
-    preparedClosureMutation.body?.message !== "Invitation could not be created"
+    preparedClosureMutation.body?.message !==
+      "Invitation email could not be requested"
   ) {
     throw new Error(
       `A captured access token did not follow the generic post-closure mutation-denial path (${preparedClosureMutation.response.status}).`,

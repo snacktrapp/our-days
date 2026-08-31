@@ -5,15 +5,17 @@ import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requestCode: vi.fn(),
+  purgeState: vi.fn(),
   stageIntent: vi.fn(),
   verifyInvite: vi.fn(),
 }));
 
 vi.mock("./invite-actions", () => ({
-  requestInviteCode: mocks.requestCode,
   stageInvitationIntent: mocks.stageIntent,
   verifyAndAcceptInvitation: mocks.verifyInvite,
+}));
+vi.mock("@/lib/auth/browser-private-state", () => ({
+  purgeOurDaysBrowserState: mocks.purgeState,
 }));
 
 import { InviteEntry } from "./invite-entry";
@@ -22,6 +24,22 @@ describe("invitation entry recovery", () => {
   afterEach(() => {
     window.history.replaceState(null, "", "/");
     vi.clearAllMocks();
+  });
+
+  it("asks for the admin invitation code directly without a legacy resend step", async () => {
+    mocks.purgeState.mockResolvedValueOnce(true);
+    window.history.replaceState(null, "", "/invite");
+    render(createElement(InviteEntry, { hasStagedIntent: true }));
+
+    expect(
+      await screen.findByText(/organizer sent two private emails/iu),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Email address")).toBeVisible();
+    expect(screen.getByLabelText("Six-digit invitation code")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Join family journal" }),
+    ).toBeEnabled();
+    expect(screen.queryByText("Email me a code")).not.toBeInTheDocument();
   });
 
   it("turns a bare invite route into actionable incomplete-link guidance", async () => {

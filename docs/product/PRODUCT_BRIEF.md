@@ -50,7 +50,7 @@ No public identity, follower graph, discovery, recommendations, ads, streaks, en
 - Private original media plus display derivatives
 - Invite, revoke, and role management
 - Full export of structured data and original media
-- Short video only after the photo pipeline is proven; recommended first limit is 60 seconds
+- Clear reversible deletion behavior; irreversible purge automation may follow
 
 ### Wait
 
@@ -63,6 +63,32 @@ No public identity, follower graph, discovery, recommendations, ads, streaks, en
 - Photo books, printing, collaborative albums, and external sharing links
 - Granular per-post audiences inside a circle
 - Imports from legacy social networks or camera-roll backfills
+- Short video; if later approved, begin with one clip per moment and a
+  60-second limit
+- Automated large-family onboarding and sophisticated notifications
+- Deep archival formats and elaborate deletion automation beyond the MVP's
+  understandable export and deletion guarantees
+- Exhaustive device coverage beyond current iPhone Safari/installed PWA and
+  one secondary browser at the first release gate
+
+### Release sequencing
+
+Brian approved this narrower first-release boundary on 2026-08-31 while
+retaining the complete product vision as the ultimate goal. Work is therefore
+tracked in two durable milestones:
+
+1. **Revised MVP:** the focused five-person private journal, core timeline and
+   moment types, household access, private photos, family context, basic
+   Memories, member removal, clear deletion behavior, and complete basic
+   export.
+2. **Complete build:** the deferred capabilities above, broader relative
+   onboarding, multiple-circle interface, richer places and memory discovery,
+   deeper archival/purge automation, native options, and wider device
+   hardening.
+
+Deferral changes sequence, not intent. The complete-build items remain in the
+roadmap and must not be silently removed from the architecture or acceptance
+criteria.
 
 ## Screen map
 
@@ -75,7 +101,7 @@ Invite / sign in
     ├── People
     │   └── Person timeline
     ├── Add Moment (bottom sheet)
-    │   ├── Photo / short video
+    │   ├── Photo
     │   ├── Thought
     │   ├── Milestone
     │   └── Place
@@ -92,8 +118,8 @@ Invite / sign in
 
 ## Key user flows
 
-1. **Join safely:** Organizer creates an invite for one email → recipient uses a single-use link or code before expiry → auth identity is created or verified → membership becomes active → recipient lands in the family timeline.
-2. **Add quickly:** Tap the central add button → choose photo/video, thought, milestone, or place → optionally choose the journal person, actual date, people, and location → save → moment appears by its occurrence date/time, not upload time.
+1. **Join safely:** Organizer requests an invite for one address → the isolated provisioner creates or locates the exact Auth identity and sends its appropriate invite or no-create sign-in code → the recipient opens the target-bound family link and enters that separate six-digit Auth code before expiry → both bindings are verified → membership becomes active → recipient lands in the family timeline.
+2. **Add quickly:** Tap the central add button → choose photo, thought, milestone, or place → optionally choose the journal person, actual date, people, and location → save → moment appears by its occurrence date/time, not upload time.
 3. **Backfill a child’s memory:** Parent chooses a child’s journal → adds the old date and source media → the card appears at the right historical point and records who added it.
 4. **Travel through one life:** People → Molly → scroll through only Molly’s journal with Molly’s color and visual tone → switch back to the combined family view without losing chronological context.
 5. **Revoke access:** Co-organizer revokes a membership → database, original-media, and newly authorized derivative requests fail immediately → any previously issued derivative URL has only its explicitly approved residual lifetime → refresh sessions are revoked → audit entry records the action.
@@ -118,20 +144,21 @@ Build a mobile-first PWA first. It can install cleanly on iPhone and cover the c
 
 The key modeling choice is to separate a **person whose journal this is about** from the **authenticated user who recorded it**. That lets parents preserve a young child’s life without pretending the child had an account.
 
-| Table                | Purpose and important fields                                                                                                                                                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `circles`            | `id`, `name`, circle-bound creator membership, timestamps. Multiple circles are supported even while the UI exposes one.                                                                                                                                                              |
-| `people`             | A human journal identity: `id`, `circle_id`, display name, avatar/color, account-or-managed profile kind, and circle-bound creator membership. A managed profile has no login.                                                                                                        |
-| `circle_memberships` | Access principal: `circle_id`, `user_id`, linked `person_id`, `role` (`organizer`, `member`), `status`, `revoked_at`. Unique circle/user pair.                                                                                                                                        |
-| `person_guardians`   | Revocable grants recording which active members may add to or manage a child/managed person journal. Revoking membership also revokes these grants so reinvitation never silently restores guardian authority.                                                                        |
-| `invitations`        | Private table with `circle_id`, target person, salted email hash, `token_hash`, expiry, inviter membership, and accepted/revoked timestamps. Raw tokens and plaintext addresses are never stored; invitations grant member access only, and organizer promotion is a separate action. |
-| `moments`            | `id`, `circle_id`, `journal_person_id`, `recorded_by_membership_id`, immutable type, optional title, body, explicit manual place label, authoritative `occurred_on`, optional `occurred_at`/time/timezone, date precision, and lifecycle timestamps.                                  |
-| `moment_people`      | Tagged people; unique moment/person pair.                                                                                                                                                                                                                                             |
-| `media_assets`       | Moment link, private bucket/path, original filename, MIME, bytes, dimensions/duration, SHA-256, derivative relationship, upload state.                                                                                                                                                |
-| `moment_notes`       | Circle and moment IDs, immutable author membership, plain-text body, optimistic revision, timestamps, and soft-deletion metadata. Notes are visible to the family but mutable only by their author.                                                                                   |
-| `moment_reactions`   | Moment, immutable author membership, one constrained reaction per member, revision, and soft-removal timestamp. The UI shows no aggregate totals.                                                                                                                                     |
-| `export_jobs`        | Requester, circle, state, output path, expiry, manifest checksum, timestamps.                                                                                                                                                                                                         |
-| `audit_events`       | Private, circle-bound security events attributed through an actor membership: invite, role change, revoke, export, destructive delete. No address, token, moment text, or location is copied into logs.                                                                               |
+| Table                       | Purpose and important fields                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `circles`                   | `id`, `name`, circle-bound creator membership, timestamps. Multiple circles are supported even while the UI exposes one.                                                                                                                                                                                            |
+| `people`                    | A human journal identity: `id`, `circle_id`, display name, avatar/color, account-or-managed profile kind, and circle-bound creator membership. A managed profile has no login.                                                                                                                                      |
+| `circle_memberships`        | Access principal: `circle_id`, `user_id`, linked `person_id`, `role` (`organizer`, `member`), `status`, `revoked_at`. Unique circle/user pair.                                                                                                                                                                      |
+| `person_guardians`          | Revocable grants recording which active members may add to or manage a child/managed person journal. Revoking membership also revokes these grants so reinvitation never silently restores guardian authority.                                                                                                      |
+| `invitation_email_requests` | Private delivery ledger. A live request temporarily holds the normalized recipient address so only the isolated provisioner can create or locate the exact Auth account; terminalization and the scheduled expiry sweep scrub that plaintext. Web status responses never return it.                                 |
+| `invitations`               | Private table with `circle_id`, exact target Auth user, salted email hash, `token_hash`, expiry, inviter membership, and accepted/revoked timestamps. Raw tokens and plaintext addresses are never stored in this grant ledger; invitations grant member access only, and organizer promotion is a separate action. |
+| `moments`                   | `id`, `circle_id`, `journal_person_id`, `recorded_by_membership_id`, immutable type, optional title, body, explicit manual place label, authoritative `occurred_on`, optional `occurred_at`/time/timezone, date precision, and lifecycle timestamps.                                                                |
+| `moment_people`             | Tagged people; unique moment/person pair.                                                                                                                                                                                                                                                                           |
+| `media_assets`              | Moment link, private bucket/path, original filename, MIME, bytes, dimensions/duration, SHA-256, derivative relationship, upload state.                                                                                                                                                                              |
+| `moment_notes`              | Circle and moment IDs, immutable author membership, plain-text body, optimistic revision, timestamps, and soft-deletion metadata. Notes are visible to the family but mutable only by their author.                                                                                                                 |
+| `moment_reactions`          | Moment, immutable author membership, one constrained reaction per member, revision, and soft-removal timestamp. The UI shows no aggregate totals.                                                                                                                                                                   |
+| `export_jobs`               | Requester, circle, state, output path, expiry, manifest checksum, timestamps.                                                                                                                                                                                                                                       |
+| `audit_events`              | Private, circle-bound security events attributed through an actor membership: invite, role change, revoke, export, destructive delete. No address, token, moment text, or location is copied into logs.                                                                                                             |
 
 Important indexes: moments on `(circle_id, occurred_on desc, occurred_at desc, id desc)`, moments on `(circle_id, journal_person_id, occurred_on desc, occurred_at desc, id desc)`, active memberships on `(user_id, circle_id)`, comments on `(circle_id, moment_id, created_at)`, and media on `(circle_id, moment_id)`.
 

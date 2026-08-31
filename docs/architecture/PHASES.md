@@ -2,6 +2,13 @@
 
 Each phase is deliberately vertical and testable. A phase is complete only when its automated checks pass, its negative authorization cases pass where applicable, and review findings are either fixed or explicitly accepted by Brian.
 
+The 2026-08-31 release sequence has two milestones. The **revised MVP** ships
+the focused five-person private journal first. The **complete build** retains
+video, broader relative onboarding, multiple-circle UI, richer places and
+memory discovery, deeper archive/purge automation, native options, and wider
+device hardening after that release. These phases preserve both milestones;
+an item marked post-MVP is deferred, not cancelled.
+
 ## 0. Approved baseline and production foundation
 
 Deliver:
@@ -34,12 +41,16 @@ Deliver:
 - Local Supabase configuration, migrations, generated types, deterministic two-circle fixtures, explicit grants, RLS, Storage policies, and pgTAP catalog audits.
 - Per-request server clients; caller-scoped unprivileged browser clients; service credentials absent from the web deployment and isolated in a separate worker.
 - Next 16 `src/proxy.ts` handles nonce CSP plus session refresh/optimistic `getClaims` checks only. Protected routes are request-rendered, private/no-store, and authorized by RLS/current membership.
-- Invite creation, one-time acceptance, verified-email binding, `shouldCreateUser: false` ordinary OTP, and membership revocation.
+- Admin-only account provisioning, a fresh invite or no-create sign-in code for
+  the exact Auth account, target-bound family acceptance, verified-email
+  binding, disabled public signup, and membership revocation.
 - Sign-out/account-switch purges account-scoped state and hard-transitions to the locked route; two-browser tests reject cached cookies, RSC payloads, names, or timelines.
 
 The invitation-job foundation is recorded in `docs/quality/PHASE_2B_INVITATION_JOB_FOUNDATION_REPORT.md`. It adds a private, idempotent organizer request ledger and a disabled pure worker contract without exposing invitation sending. Production activation still requires a target-account-bound invitation schema, atomic materialization/delivery state, a separate trusted coordinator, a proven email-provider idempotency window, and removal of the legacy raw-token/preflight RPC exposure.
 
 The local-only Phase 2C target-bound materialization checkpoint is recorded in `docs/quality/PHASE_2C_TARGET_BOUND_INVITATION_MATERIALIZATION_REPORT.md`. It links one immutable job to one invitation and makes the intended Auth UUID authoritative at acceptance, while keeping every new coordinator function private and ungranted. It does not provision an account, read a recipient address for delivery, send email, select a provider, enable the worker, expose Send, or remove the still-required legacy local acceptance harness.
+
+The Phase 2D local coordination checkpoint is recorded in `docs/quality/PHASE_2D_PRIVATE_INVITATION_COORDINATION_REPORT.md`. It retires every executable legacy invite route; adds default-off database and application capability gates; proves new, confirmed-existing, and orphaned-unconfirmed target-bound journeys through separate live worker sessions and Mailpit; and pins the six private relations in logical recovery. Production activation still requires a durable idempotent provider, scheduled expiry sweeps, a hosted iPhone rehearsal, and an explicit retention policy.
 
 Gate: member success plus anonymous, no-circle, wrong-circle, dual-circle, stale-token revoked-member, invite replay, wrong-email, and concurrent-acceptance denials pass.
 
@@ -90,7 +101,7 @@ Deliver:
 
 Gate: immutable tenant/author fields, parent visibility, descendant soft-delete visibility, non-author comment/reaction denial, organizer invariants, and accessibility pass.
 
-## 6. Memories and video decision
+## 6. Memories and post-MVP video decision
 
 The decision-independent functional preview for years and On This Day is recorded in `docs/quality/MEMORIES_PREVIEW_REPORT.md`. It validates the emotional and mobile interaction direction only; this phase remains incomplete until production date queries, authorization, scale, timezone, and external-device gates pass.
 
@@ -103,7 +114,7 @@ Deliver:
 - Years, dates, milestones, and On This Day based on `occurred_on`.
 - After PD-004 is accepted, a measured production video spike for iPhone PWA upload, transcoding, playback, storage, export, and purge. Ship the capped feature only if it meets the same retry/privacy bar.
 
-Entry prerequisite for production media work or shipping video (not for the completed local-only preview): PD-004 is accepted.
+Entry prerequisite for post-MVP production video work (not for the completed local-only preview): PD-004 is accepted.
 
 Gate: timezone/date-only fixtures pass; video has a recorded ship/defer decision with evidence.
 

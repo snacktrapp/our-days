@@ -5,9 +5,12 @@ import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { invitationDeliveryIsEnabled } from "../../../config/our-days-environment";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const simpleEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const controlCharacter = /[\u0000-\u001f\u007f]/u;
 
 function readUuid(input: unknown, field: string) {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -31,6 +34,14 @@ function readBoolean(input: unknown, field: string) {
   }
   const value = (input as Record<string, unknown>)[field];
   return typeof value === "boolean" ? value : null;
+}
+
+function readText(input: unknown, field: string) {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const value = (input as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : null;
 }
 
 export type FamilySettingsActionResult = Readonly<
@@ -223,28 +234,54 @@ export async function revokeFamilyMembershipAction(
   return { ok: true, message: "Family access removed." };
 }
 
-export async function revokeFamilyInvitationAction(
+export async function requestFamilyInvitationAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
   const access = await requireOrganizer();
-  const invitationId = readUuid(input, "invitationId");
-  if (!access || !invitationId) {
+  const displayName = readText(input, "displayName")?.trim() ?? "";
+  const email = readText(input, "email")?.trim().toLowerCase() ?? "";
+  const requestKey = readUuid(input, "requestKey");
+  if (
+    !access ||
+    !invitationDeliveryIsEnabled() ||
+    !requestKey ||
+    displayName.length < 1 ||
+    Array.from(displayName).length > 80 ||
+    controlCharacter.test(displayName) ||
+    email.length > 254 ||
+    !simpleEmail.test(email) ||
+    controlCharacter.test(email)
+  ) {
+    return { ok: false, message: "That invitation could not be sent." };
+  }
+  const supabase = await createOurDaysServerClient();
+  const { data, error } = await supabase.rpc("request_invitation_email", {
+    circle_id: access.circleId,
+    display_name: displayName,
+    email,
+    request_key: requestKey,
+  });
+  if (error || typeof data !== "string" || !uuidPattern.test(data)) {
+    return {
+      ok: false,
+      message: "That invitation could not be sent. Try again.",
+    };
+  }
+  revalidatePath("/settings/family");
+  return { ok: true, message: "Private invitation requested." };
+}
+
+export async function withdrawFamilyInvitationEmailRequestAction(
+  input: unknown,
+): Promise<FamilySettingsActionResult> {
+  const access = await requireOrganizer();
+  const emailRequestId = readUuid(input, "emailRequestId");
+  if (!access || !emailRequestId) {
     return { ok: false, message: "That invitation change was not allowed." };
   }
   const supabase = await createOurDaysServerClient();
-  const pendingResult = await supabase.rpc("list_pending_invitations", {
-    circle_id: access.circleId,
-  });
-  if (
-    pendingResult.error ||
-    !(pendingResult.data ?? []).some(
-      (invitation) => invitation.invitation_id === invitationId,
-    )
-  ) {
-    return { ok: false, message: "That invitation change was not allowed." };
-  }
-  const { error } = await supabase.rpc("revoke_invitation", {
-    invitation_id: invitationId,
+  const { error } = await supabase.rpc("withdraw_invitation_email_request", {
+    email_request_id: emailRequestId,
   });
   if (error) {
     return {

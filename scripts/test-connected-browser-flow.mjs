@@ -326,7 +326,7 @@ async function assertCrossOriginActionRejected({
   const requestBody = actionRequest.postDataBuffer();
   if (!requestBody || !requestHeaders["next-action"]) {
     throw new Error(
-      "The invitation code request did not use the expected Server Action wire format.",
+      "The invitation acceptance did not use the expected Server Action wire format.",
     );
   }
 
@@ -350,14 +350,10 @@ async function assertCrossOriginActionRejected({
     signal: AbortSignal.timeout(10_000),
   });
   const responseBody = await response.text();
-  const explicitlyDenied =
-    !response.ok ||
-    responseBody.includes("This invitation is unavailable.") ||
-    responseBody.includes("was not allowed") ||
-    responseBody.includes("could not be removed") ||
-    responseBody.includes('"status":"denied"');
-  if (!explicitlyDenied) {
-    throw new Error("A cross-origin Server Action wire replay was not denied.");
+  if (response.ok || ![403, 500].includes(response.status)) {
+    throw new Error(
+      `A cross-origin Server Action wire replay did not use the framework denial path (${response.status}).`,
+    );
   }
   for (const canary of canaries) {
     if (responseBody.includes(canary)) {
@@ -460,6 +456,155 @@ function resetDatabase() {
   });
 }
 
+function runDatabaseQuery(sql) {
+  try {
+    execFileSync(supabaseBinary, ["db", "query", "--local", sql], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error("Local browser fixture query failed.", { cause: error });
+  }
+}
+
+const PHASE_2D_PROVISIONER = "10000000-0000-4000-8000-000000000091";
+const PHASE_2D_PROVISIONER_SESSION = "71000000-0000-4000-8000-000000000091";
+const PHASE_2D_DELIVERY_WORKER = "10000000-0000-4000-8000-000000000092";
+const PHASE_2D_DELIVERY_SESSION = "71000000-0000-4000-8000-000000000092";
+
+function installPhase2dTestWorkers() {
+  runDatabaseQuery(`
+    do $phase_2d_workers$
+    begin
+    insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+    values
+      ('${PHASE_2D_PROVISIONER}'::uuid, 'browser-harness-provisioner@example.test', statement_timestamp(), '{}'),
+      ('${PHASE_2D_DELIVERY_WORKER}'::uuid, 'browser-harness-delivery@example.test', statement_timestamp(), '{}')
+    on conflict (id) do nothing;
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values
+      ('${PHASE_2D_PROVISIONER_SESSION}'::uuid, '${PHASE_2D_PROVISIONER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+      ('${PHASE_2D_DELIVERY_SESSION}'::uuid, '${PHASE_2D_DELIVERY_WORKER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day')
+    on conflict (id) do nothing;
+    insert into private.invitation_provisioner_allowlist (auth_user_id)
+    values ('${PHASE_2D_PROVISIONER}'::uuid)
+    on conflict (auth_user_id) do nothing;
+    insert into private.invitation_delivery_worker_allowlist (auth_user_id)
+    values ('${PHASE_2D_DELIVERY_WORKER}'::uuid)
+    on conflict (auth_user_id) do nothing;
+    update private.invitation_delivery_capabilities
+       set enabled = true, updated_at = statement_timestamp()
+     where capability = 'email_delivery';
+    end
+    $phase_2d_workers$;
+  `);
+}
+
+function materializeDeliveredPhase2dInvitation({
+  emailRequestId,
+  rawToken,
+  targetAuthUserId,
+}) {
+  runDatabaseQuery(`
+    do $phase_2d_fixture$
+    declare
+      target_job_id uuid;
+      target_invitation_id uuid;
+      target_delivery_version integer;
+      target_token_sha256 text := encode(
+        extensions.digest('${rawToken}', 'sha256'), 'hex'
+      );
+      target_binding text;
+    begin
+      perform set_config(
+        'request.jwt.claims',
+        '{"sub":"${PHASE_2D_PROVISIONER}","session_id":"${PHASE_2D_PROVISIONER_SESSION}"}',
+        true
+      );
+      select invitation_job_id into target_job_id
+        from private.complete_invitation_email_provisioning(
+          '${emailRequestId}'::uuid, '${targetAuthUserId}'::uuid
+        );
+      if target_job_id is null then
+        raise exception 'Phase 2D browser fixture provisioning returned no job';
+      end if;
+      perform set_config(
+        'request.jwt.claims',
+        '{"sub":"${PHASE_2D_DELIVERY_WORKER}","session_id":"${PHASE_2D_DELIVERY_SESSION}"}',
+        true
+      );
+      select invitation_id, delivery_version
+        into target_invitation_id, target_delivery_version
+        from private.materialize_invitation_delivery_job(
+          target_job_id, 1, target_token_sha256
+        );
+      select recipient_binding_hex into target_binding
+        from private.read_invitation_delivery_auth(target_job_id);
+      if target_invitation_id is null or target_binding is null then
+        raise exception 'Phase 2D browser fixture materialization was incomplete';
+      end if;
+      perform private.complete_invitation_delivery(
+        target_job_id, target_invitation_id, target_delivery_version,
+        target_token_sha256, target_binding, 'local-harness',
+        'browser-harness-' || target_job_id::text,
+        'browser-harness/' || target_job_id::text,
+        repeat('b', 64), statement_timestamp()
+      );
+    end
+    $phase_2d_fixture$;
+  `);
+}
+
+async function requestPhase2dInvitation({
+  circleId,
+  displayName,
+  email,
+  organizerToken,
+}) {
+  const requested = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/request_invitation_email`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: circleId,
+        display_name: displayName,
+        email,
+        request_key: randomUUID(),
+      }),
+      headers: { authorization: `Bearer ${organizerToken}` },
+      method: "POST",
+    },
+  );
+  if (!requested.response.ok || typeof requested.body !== "string") {
+    throw new Error(
+      `Phase 2D browser invitation request failed (${requested.response.status}).`,
+    );
+  }
+  return requested.body;
+}
+
+async function createDeliveredPhase2dInvitation({
+  circleId,
+  displayName,
+  email,
+  organizerToken,
+  targetAuthUserId,
+}) {
+  const emailRequestId = await requestPhase2dInvitation({
+    circleId,
+    displayName,
+    email,
+    organizerToken,
+  });
+  const rawToken = `invite-${randomUUID()}`;
+  materializeDeliveredPhase2dInvitation({
+    emailRequestId,
+    rawToken,
+    targetAuthUserId,
+  });
+  return { emailRequestId, rawToken };
+}
+
 const status = readLocalStatus();
 const apiUrl = status.API_URL;
 const anonKey = status.ANON_KEY ?? status.PUBLISHABLE_KEY;
@@ -487,6 +632,7 @@ const connectedEnvironment = {
   OUR_DAYS_ENVIRONMENT: "local",
   OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: "local",
   OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS: "zzzzzzzzzzzzzzzzzzzz",
+  OUR_DAYS_INVITATION_DELIVERY_MODE: "enabled",
   OUR_DAYS_RESOURCE_MODE: "supabase",
 };
 const npmCli = process.env.npm_execpath;
@@ -531,6 +677,7 @@ let shouldRestoreFixtures = false;
 try {
   await waitForServer(server, () => serverLog);
   shouldRestoreFixtures = true;
+  installPhase2dTestWorkers();
 
   const suffix = randomUUID();
   const circleTimeZone = "America/Los_Angeles";
@@ -542,10 +689,10 @@ try {
   const email = `browser-invite-${suffix}@example.test`;
   const adminHeaders = { authorization: `Bearer ${serviceKey}` };
   const createdUser = await jsonRequest(
-    `${apiUrl}/auth/v1/admin/users`,
+    `${apiUrl}/auth/v1/invite`,
     serviceKey,
     {
-      body: JSON.stringify({ email, email_confirm: true }),
+      body: JSON.stringify({ email }),
       headers: adminHeaders,
       method: "POST",
     },
@@ -568,25 +715,14 @@ try {
     "10000000-0000-4000-8000-000000000003",
     jwtSecret,
   );
-  const invitation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
-    anonKey,
-    {
-      body: JSON.stringify({
-        circle_id: "20000000-0000-4000-8000-000000000001",
-        display_name: "Browser Invite",
-        email,
-      }),
-      headers: { authorization: `Bearer ${organizerToken}` },
-      method: "POST",
-    },
-  );
-  const invitationToken = invitation.body?.[0]?.raw_token;
-  if (!invitation.response.ok || !invitationToken) {
-    throw new Error(
-      `Browser test invitation failed (${invitation.response.status}).`,
-    );
-  }
+  const invitation = await createDeliveredPhase2dInvitation({
+    circleId: "20000000-0000-4000-8000-000000000001",
+    displayName: "Browser Invite",
+    email,
+    organizerToken,
+    targetAuthUserId: createdUser.body.id,
+  });
+  const invitationToken = invitation.rawToken;
   serverCanaries.push(email, invitationToken);
 
   browser = await connectedBrowserType.launch({ headless: true });
@@ -672,35 +808,8 @@ try {
   }
 
   await invitedPage.getByLabel("Email address").fill(email);
-  const actionRequestPromise = invitedPage.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return request.method() === "POST" && url.pathname === "/invite";
-  });
-  const actionResponsePromise = invitedPage.waitForResponse((response) => {
-    const request = response.request();
-    const url = new URL(request.url());
-    return request.method() === "POST" && url.pathname === "/invite";
-  });
-  await invitedPage.getByRole("button", { name: "Email me a code" }).click();
-  const [actionRequest, actionResponse] = await Promise.all([
-    actionRequestPromise,
-    actionResponsePromise,
-  ]);
-  await invitedPage.getByLabel("Six-digit code").waitFor();
-  if (!actionResponse.ok()) {
-    throw new Error(
-      `The first sign-in code action failed (${actionResponse.status()}).`,
-    );
-  }
-  const firstOtp = await findOtp(mailpitUrl, email);
-  process.stdout.write("Received the first local sign-in code.\n");
-  await assertCrossOriginActionRejected({
-    actionRequest,
-    canaries: [...fixtureCanaries, email, invitationToken, firstOtp],
-    mailpitUrl,
-    recipient: email,
-  });
-  process.stdout.write("Rejected the cross-origin action replay.\n");
+  const invitationOtp = await findOtp(mailpitUrl, email);
+  process.stdout.write("Received the local invitation code.\n");
 
   await invitedPage.waitForLoadState("networkidle");
   const reloadedInvitationResponse = await invitedPage.reload();
@@ -713,7 +822,7 @@ try {
   }
   await assertNoCanaries(
     invitedPage,
-    [...fixtureCanaries, invitationToken, firstOtp],
+    [...fixtureCanaries, invitationToken, invitationOtp],
     "Reloaded invitation",
   );
   if (invitationIntentCookies(await invitedContext.cookies()).length !== 1) {
@@ -722,26 +831,63 @@ try {
   process.stdout.write("Preserved the staged invitation across reload.\n");
 
   await invitedPage.getByLabel("Email address").fill(email);
-  const secondCodeResponsePromise = invitedPage.waitForResponse((response) => {
+  const originProbePage = await invitedContext.newPage();
+  await originProbePage.goto(`${appUrl}/invite`);
+  await originProbePage.getByLabel("Email address").fill(email);
+  await originProbePage
+    .getByLabel("Six-digit invitation code")
+    .fill(invitationOtp);
+  const blockedActionRequestPromise = originProbePage.waitForRequest(
+    (request) => {
+      const url = new URL(request.url());
+      return request.method() === "POST" && url.pathname === "/invite";
+    },
+  );
+  const abortAcceptanceAction = async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (
+      request.method() === "POST" &&
+      url.pathname === "/invite" &&
+      request.headers()["next-action"]
+    ) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await route.continue();
+  };
+  await originProbePage.route("**/invite", abortAcceptanceAction);
+  serverCanaries.push(invitationOtp);
+  await originProbePage
+    .getByRole("button", { name: "Join family journal" })
+    .click();
+  const blockedActionRequest = await blockedActionRequestPromise;
+  await assertCrossOriginActionRejected({
+    actionRequest: blockedActionRequest,
+    canaries: [...fixtureCanaries, email, invitationToken, invitationOtp],
+    mailpitUrl,
+    recipient: email,
+  });
+  await originProbePage.close();
+  process.stdout.write(
+    "Rejected the cross-origin action while its invitation remained live.\n",
+  );
+
+  await invitedPage.getByLabel("Six-digit invitation code").fill(invitationOtp);
+  const actionResponsePromise = invitedPage.waitForResponse((response) => {
     const request = response.request();
     const url = new URL(request.url());
     return request.method() === "POST" && url.pathname === "/invite";
   });
-  await invitedPage.getByRole("button", { name: "Email me a code" }).click();
-  await invitedPage.getByLabel("Six-digit code").waitFor();
-  const secondCodeResponse = await secondCodeResponsePromise;
-  if (!secondCodeResponse.ok()) {
-    throw new Error(
-      `The replacement sign-in code action failed (${secondCodeResponse.status()}).`,
-    );
-  }
-  const otp = await findOtp(mailpitUrl, email);
-  process.stdout.write("Received the replacement local sign-in code.\n");
-  serverCanaries.push(otp);
-  await invitedPage.getByLabel("Six-digit code").fill(otp);
   await invitedPage
     .getByRole("button", { name: "Join family journal" })
     .click();
+  const actionResponse = await actionResponsePromise;
+  if (!actionResponse.ok()) {
+    throw new Error(
+      `The invitation acceptance action failed (${actionResponse.status()}).`,
+    );
+  }
   await invitedPage.waitForURL(`${appUrl}/family`);
   await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
   process.stdout.write("Accepted the invitation into Cedar Circle.\n");
@@ -827,24 +973,13 @@ try {
     throw new Error("The connected settings member could not be promoted.");
   }
   const settingsPendingEmail = `settings-pending-${suffix}@example.test`;
-  const settingsPendingInvitation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
-    anonKey,
-    {
-      body: JSON.stringify({
-        circle_id: "20000000-0000-4000-8000-000000000001",
-        display_name: "Browser Pending",
-        email: settingsPendingEmail,
-      }),
-      headers: { authorization: `Bearer ${organizerToken}` },
-      method: "POST",
-    },
-  );
-  const settingsPendingToken = settingsPendingInvitation.body?.[0]?.raw_token;
-  if (!settingsPendingInvitation.response.ok || !settingsPendingToken) {
-    throw new Error("The connected pending invitation could not be created.");
-  }
-  serverCanaries.push(settingsPendingEmail, settingsPendingToken);
+  await requestPhase2dInvitation({
+    circleId: "20000000-0000-4000-8000-000000000001",
+    displayName: "Browser Pending",
+    email: settingsPendingEmail,
+    organizerToken,
+  });
+  serverCanaries.push(settingsPendingEmail);
 
   const organizerSettingsResponse = await invitedPage.goto(
     `${appUrl}/settings/family`,
@@ -854,10 +989,7 @@ try {
     "Connected organizer family settings",
   );
   await invitedPage.getByText("Browser Pending").waitFor();
-  if (
-    (await invitedPage.content()).includes(settingsPendingEmail) ||
-    (await invitedPage.content()).includes(settingsPendingToken)
-  ) {
+  if ((await invitedPage.content()).includes(settingsPendingEmail)) {
     throw new Error(
       "Connected settings exposed invitation email or secret data.",
     );
@@ -950,7 +1082,7 @@ try {
   }
   await assertCrossOriginActionRejected({
     actionRequest: guardianRequest,
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
     mailpitUrl,
     recipient: email,
   });
@@ -966,7 +1098,7 @@ try {
         "40000000-0000-4000-8000-000000000007",
       ],
     ],
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
   });
   const harborGuardianReplayCheck = await jsonRequest(
     `${apiUrl}/rest/v1/person_guardians?select=id&managed_person_id=eq.30000000-0000-4000-8000-000000000009&guardian_membership_id=eq.40000000-0000-4000-8000-000000000007&revoked_at=is.null`,
@@ -1042,7 +1174,7 @@ try {
         "40000000-0000-4000-8000-000000000006",
       ],
     ],
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
   });
 
   await memberReview.click();
@@ -1170,7 +1302,7 @@ try {
     .waitFor({ state: "detached" });
   await assertCrossOriginActionRejected({
     actionRequest: removalRequest,
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
     mailpitUrl,
     recipient: email,
   });
@@ -1182,7 +1314,7 @@ try {
         "40000000-0000-4000-8000-000000000006",
       ],
     ],
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
   });
   const removedMemberCircles = await jsonRequest(
     `${apiUrl}/rest/v1/circles?select=id`,
@@ -1249,7 +1381,7 @@ try {
         "40000000-0000-4000-8000-000000000002",
       ],
     ],
-    canaries: [settingsPendingEmail, settingsPendingToken],
+    canaries: [settingsPendingEmail],
   });
   await invitedPage.reload();
   if (
@@ -1865,32 +1997,23 @@ try {
   const switchedEmail = `browser-switch-${suffix}@example.test`;
   browserPhase = "account switch acceptance";
   const switchedUser = await jsonRequest(
-    `${apiUrl}/auth/v1/admin/users`,
+    `${apiUrl}/auth/v1/invite`,
     serviceKey,
     {
-      body: JSON.stringify({ email: switchedEmail, email_confirm: true }),
+      body: JSON.stringify({ email: switchedEmail }),
       headers: adminHeaders,
       method: "POST",
     },
   );
   if (!switchedUser.response.ok) throw new Error("Switch user setup failed.");
-  const switchedInvitation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
-    anonKey,
-    {
-      body: JSON.stringify({
-        circle_id: "20000000-0000-4000-8000-000000000002",
-        display_name: "Browser Account Switch",
-        email: switchedEmail,
-      }),
-      headers: { authorization: `Bearer ${harborOrganizerToken}` },
-      method: "POST",
-    },
-  );
-  const switchedToken = switchedInvitation.body?.[0]?.raw_token;
-  if (!switchedInvitation.response.ok || !switchedToken) {
-    throw new Error("Switch invitation setup failed.");
-  }
+  const switchedInvitation = await createDeliveredPhase2dInvitation({
+    circleId: "20000000-0000-4000-8000-000000000002",
+    displayName: "Browser Account Switch",
+    email: switchedEmail,
+    organizerToken: harborOrganizerToken,
+    targetAuthUserId: switchedUser.body.id,
+  });
+  const switchedToken = switchedInvitation.rawToken;
   serverCanaries.push(switchedEmail, switchedToken);
   await invitedPage.evaluate(async () => {
     window.localStorage.setItem("our-days:account-a-canary", "account-a");
@@ -1915,8 +2038,7 @@ try {
   });
   await invitedPage.goto(`${appUrl}/invite#${switchedToken}`);
   await invitedPage.getByLabel("Email address").fill(switchedEmail);
-  await invitedPage.getByRole("button", { name: "Email me a code" }).click();
-  const switchedCodeInput = invitedPage.getByLabel("Six-digit code");
+  const switchedCodeInput = invitedPage.getByLabel("Six-digit invitation code");
   await switchedCodeInput.fill(await findOtp(mailpitUrl, switchedEmail));
   const switchedOtp = await switchedCodeInput.inputValue();
   serverCanaries.push(switchedOtp);
@@ -2051,9 +2173,8 @@ try {
     ...fixtureCanaries,
     email,
     invitationToken,
-    otp,
+    invitationOtp,
     settingsPendingEmail,
-    settingsPendingToken,
     switchedEmail,
     switchedToken,
     switchedOtp,
@@ -2072,8 +2193,7 @@ try {
   const acceptedSecretCanaries = [
     ...fixtureCanaries,
     invitationToken,
-    otp,
-    settingsPendingToken,
+    invitationOtp,
     switchedToken,
     switchedOtp,
   ];
@@ -2207,10 +2327,10 @@ try {
   const rejectedEmail = `browser-rejected-${suffix}@example.test`;
   browserPhase = "revoked invitation";
   const rejectedUser = await jsonRequest(
-    `${apiUrl}/auth/v1/admin/users`,
+    `${apiUrl}/auth/v1/invite`,
     serviceKey,
     {
-      body: JSON.stringify({ email: rejectedEmail, email_confirm: true }),
+      body: JSON.stringify({ email: rejectedEmail }),
       headers: adminHeaders,
       method: "POST",
     },
@@ -2218,28 +2338,14 @@ try {
   if (!rejectedUser.response.ok) {
     throw new Error("Rejected-invitation user provisioning failed.");
   }
-  const rejectedInvitation = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/create_invitation`,
-    anonKey,
-    {
-      body: JSON.stringify({
-        circle_id: "20000000-0000-4000-8000-000000000001",
-        display_name: "Rejected Browser Invite",
-        email: rejectedEmail,
-      }),
-      headers: { authorization: `Bearer ${organizerToken}` },
-      method: "POST",
-    },
-  );
-  const rejectedToken = rejectedInvitation.body?.[0]?.raw_token;
-  const rejectedInvitationId = rejectedInvitation.body?.[0]?.invitation_id;
-  if (
-    !rejectedInvitation.response.ok ||
-    !rejectedToken ||
-    !rejectedInvitationId
-  ) {
-    throw new Error("Rejected-invitation setup failed.");
-  }
+  const rejectedInvitation = await createDeliveredPhase2dInvitation({
+    circleId: "20000000-0000-4000-8000-000000000001",
+    displayName: "Rejected Browser Invite",
+    email: rejectedEmail,
+    organizerToken,
+    targetAuthUserId: rejectedUser.body.id,
+  });
+  const rejectedToken = rejectedInvitation.rawToken;
 
   const rejectedContext = await browser.newContext({
     viewport: { height: 350, width: 320 },
@@ -2255,25 +2361,29 @@ try {
   rejectedPage.on("console", recordConsoleError);
   rejectedPage.on("pageerror", (error) => browserErrors.push(error.message));
   await rejectedPage.goto(`${appUrl}/invite#${rejectedToken}`);
-  await rejectedPage.getByLabel("Email address").fill(rejectedEmail);
-  await rejectedPage.getByRole("button", { name: "Email me a code" }).click();
-  const rejectedCodeInput = rejectedPage.getByLabel("Six-digit code");
+  const rejectedEmailInput = rejectedPage.getByLabel("Email address");
+  await rejectedEmailInput.fill(rejectedEmail);
+  const rejectedCodeInput = rejectedPage.getByLabel(
+    "Six-digit invitation code",
+  );
   await rejectedCodeInput.waitFor();
   if (
-    !(await rejectedCodeInput.evaluate(
+    !(await rejectedEmailInput.evaluate(
       (element) => element === document.activeElement,
     ))
   ) {
     throw new Error(
-      "The short-screen invitation code input did not receive focus.",
+      "The short-screen invitation email input did not receive focus.",
     );
   }
   const rejectedOtp = await findOtp(mailpitUrl, rejectedEmail);
   const revoked = await jsonRequest(
-    `${apiUrl}/rest/v1/rpc/revoke_invitation`,
+    `${apiUrl}/rest/v1/rpc/withdraw_invitation_email_request`,
     anonKey,
     {
-      body: JSON.stringify({ invitation_id: rejectedInvitationId }),
+      body: JSON.stringify({
+        email_request_id: rejectedInvitation.emailRequestId,
+      }),
       headers: { authorization: `Bearer ${organizerToken}` },
       method: "POST",
     },
@@ -2321,10 +2431,7 @@ try {
       "Rejected invitation acceptance retained a session or intent.",
     );
   }
-  const switchEmailLink = rejectedPage.getByRole("link", {
-    name: "Use a different email",
-  });
-  if (await switchEmailLink.isVisible()) await switchEmailLink.click();
+  await rejectedPage.reload();
   await rejectedPage
     .getByText("This invitation link is incomplete.", { exact: false })
     .waitFor();

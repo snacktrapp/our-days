@@ -81,12 +81,12 @@ select is(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.request_invitation_job(uuid,uuid,text,uuid)',
     'EXECUTE'
   ),
-  'authenticated callers can reach only the guarded request seam'
+  'the superseded public request seam is retired for authenticated callers'
 );
 
 select ok(
@@ -183,6 +183,11 @@ values
     statement_timestamp(),
     '{}'
   );
+
+-- Historical foundation journeys run through a transaction-local grant. The
+-- production ACL above remains the asserted contract and this grant rolls back.
+grant execute on function public.request_invitation_job(uuid, uuid, text, uuid)
+  to authenticated;
 
 set local role authenticated;
 select set_config(

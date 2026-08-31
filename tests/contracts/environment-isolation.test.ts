@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isLocalDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import {
   environmentForNextConfig,
+  invitationDeliveryIsEnabled,
   OurDaysEnvironmentError,
   validateOurDaysEnvironment,
 } from "../../config/our-days-environment";
@@ -38,6 +39,41 @@ function expectUnsafe(
 }
 
 describe("Our Days environment isolation", () => {
+  it("keeps invitation delivery disabled unless both the capability and Supabase mode are explicit", () => {
+    expect(invitationDeliveryIsEnabled({})).toBe(false);
+    expect(
+      invitationDeliveryIsEnabled({
+        OUR_DAYS_INVITATION_DELIVERY_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+      }),
+    ).toBe(false);
+    expect(
+      invitationDeliveryIsEnabled({
+        OUR_DAYS_INVITATION_DELIVERY_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects malformed or detached invitation-delivery activation", () => {
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_INVITATION_DELIVERY_MODE: "sometimes",
+      },
+      "must be disabled or enabled",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_INVITATION_DELIVERY_MODE: "enabled",
+      },
+      "requires supabase resource mode",
+    );
+  });
+
   it("permits an explicit local detached build without resource credentials", () => {
     expect(
       validateOurDaysEnvironment({

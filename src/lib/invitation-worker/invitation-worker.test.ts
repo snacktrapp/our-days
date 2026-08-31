@@ -232,6 +232,29 @@ describe("invitation worker fail-closed boundary", () => {
     expect(provider.sends).toBe(1);
   });
 
+  it("delivers to an exact provisioned account before its email is confirmed", async () => {
+    const coordinator = new InMemoryInvitationCoordinator(
+      job(),
+      recipient({ confirmedAt: null }),
+      "auth-user-email-unconfirmed:1",
+    );
+    const keyring = new InMemoryInvitationTokenKeyring([[1, workerKey]]);
+    const provider = new InMemoryInvitationDeliveryProvider();
+
+    await expect(
+      runInvitationWorker(ids.job, {
+        enabled: true,
+        coordinator,
+        keyring,
+        provider,
+      }),
+    ).resolves.toMatchObject({ state: "delivered" });
+    expect(provider.lastInput?.recipientEmail).toBe(recipientEmail);
+    expect(coordinator.lastCompletionInput?.recipientBinding).toBe(
+      "auth-user-email-unconfirmed:1",
+    );
+  });
+
   it("maps dependency errors to a stable message without leaking private values", async () => {
     const privateValues = [
       recipientEmail,
@@ -478,6 +501,7 @@ describe("invitation worker runtime validation", () => {
     ["empty message ID", { messageId: "" }],
     ["noncanonical acceptance time", { acceptedAt: "2026-08-30T20:00:02Z" }],
     ["wrong idempotency key", { idempotencyKey: "wrong" }],
+    ["invalid payload checksum", { payloadSha256: "A".repeat(64) }],
   ] as const)(
     "rejects a provider receipt with %s",
     async (_label, override) => {
@@ -488,6 +512,7 @@ describe("invitation worker runtime validation", () => {
           messageId: "message-1",
           acceptedAt: "2026-08-30T20:00:02.000Z",
           idempotencyKey: expectedKey,
+          payloadSha256: "a".repeat(64),
           ...override,
         }),
       };
@@ -504,6 +529,7 @@ describe("invitation worker runtime validation", () => {
         messageId: "message-1",
         acceptedAt: "2026-08-30T20:00:02.000Z",
         idempotencyKey: invitationDeliveryIdempotencyKey(ids.job, 1),
+        payloadSha256: "a".repeat(64),
         recipientEmail,
       }),
     };
@@ -839,6 +865,7 @@ describe("invitation worker retries and authorization races", () => {
       messageId: "message-1",
       acceptedAt: "2026-08-30T20:00:02.000Z",
       idempotencyKey: invitationDeliveryIdempotencyKey(ids.job, 1),
+      payloadSha256: "a".repeat(64),
     };
     await expect(
       first.coordinator.completeDeliveryAtomically({

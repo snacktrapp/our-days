@@ -5,14 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   getHeaders: vi.fn(),
-  getClaims: vi.fn(),
   rpc: vi.fn(),
   clearIntent: vi.fn(),
   expireAuthCookies: vi.fn(),
   readIntent: vi.fn(),
   writeIntent: vi.fn(),
   signOut: vi.fn(),
-  signInWithOtp: vi.fn(),
   verifyOtp: vi.fn(),
 }));
 
@@ -30,7 +28,6 @@ vi.mock("@/lib/auth/session-cookies.server", () => ({
 }));
 
 import {
-  requestInviteCode,
   stageInvitationIntent,
   verifyAndAcceptInvitation,
 } from "./invite-actions";
@@ -50,17 +47,16 @@ describe("invitation acceptance actions", () => {
     mocks.getHeaders.mockResolvedValue(
       new Headers({ origin: "https://journal.example.com" }),
     );
-    mocks.rpc.mockResolvedValue({ data: "membership-a", error: null });
+    mocks.rpc.mockResolvedValue({
+      data: "40000000-0000-4000-8000-000000000071",
+      error: null,
+    });
     mocks.readIntent.mockResolvedValue(validToken);
-    mocks.getClaims.mockResolvedValue({ data: { claims: {} }, error: null });
     mocks.signOut.mockResolvedValue({ error: null });
     mocks.expireAuthCookies.mockResolvedValue(undefined);
-    mocks.signInWithOtp.mockResolvedValue({ error: null });
     mocks.verifyOtp.mockResolvedValue({ error: null });
     mocks.createClient.mockResolvedValue({
       auth: {
-        signInWithOtp: mocks.signInWithOtp,
-        getClaims: mocks.getClaims,
         signOut: mocks.signOut,
         verifyOtp: mocks.verifyOtp,
       },
@@ -73,50 +69,11 @@ describe("invitation acceptance actions", () => {
     vi.clearAllMocks();
   });
 
-  it("requests a code without allowing the browser to create an account", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: true, error: null });
-    await expect(
-      requestInviteCode(
-        initialInviteActionState,
-        form({ email: " INVITED@EXAMPLE.COM " }),
-      ),
-    ).resolves.toMatchObject({ status: "sent" });
-
-    expect(mocks.signInWithOtp).toHaveBeenCalledWith({
-      email: "invited@example.com",
-      options: { shouldCreateUser: false },
-    });
-    expect(mocks.rpc).toHaveBeenCalledWith("preflight_invitation", {
-      email: "invited@example.com",
-      token: validToken,
-    });
-  });
-
   it("stages a valid fragment in the server-only intent", async () => {
     await expect(stageInvitationIntent(validToken)).resolves.toEqual({
       ready: true,
     });
     expect(mocks.writeIntent).toHaveBeenCalledWith(validToken);
-  });
-
-  it("clears a different current account before emailing a matched invite", async () => {
-    mocks.rpc.mockResolvedValueOnce({ data: true, error: null });
-    mocks.getClaims.mockResolvedValueOnce({
-      data: { claims: { sub: "current-user" } },
-      error: null,
-    });
-
-    await expect(
-      requestInviteCode(
-        initialInviteActionState,
-        form({ email: "invited@example.com" }),
-      ),
-    ).resolves.toMatchObject({ clearBrowserState: true, status: "sent" });
-
-    expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
-    expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.signInWithOtp.mock.invocationCallOrder[0],
-    );
   });
 
   it("verifies identity before atomically consuming the matching invite", async () => {
@@ -136,12 +93,57 @@ describe("invitation acceptance actions", () => {
     expect(mocks.verifyOtp).toHaveBeenCalledWith({
       email: "invited@example.com",
       token: "123456",
-      type: "email",
+      type: "invite",
     });
     expect(mocks.rpc).toHaveBeenCalledWith("accept_invitation", {
       token: validToken,
     });
     expect(mocks.clearIntent).toHaveBeenCalledOnce();
+    expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.verifyOtp.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("accepts a no-create sign-in code for an existing confirmed account", async () => {
+    mocks.verifyOtp
+      .mockResolvedValueOnce({ error: { code: "otp_expired" } })
+      .mockResolvedValueOnce({ error: null });
+
+    await expect(
+      verifyAndAcceptInvitation(
+        initialInviteActionState,
+        form({ code: "654321", email: "returning@example.com" }),
+      ),
+    ).resolves.toMatchObject({
+      status: "accepted",
+      email: "returning@example.com",
+    });
+
+    expect(mocks.verifyOtp).toHaveBeenNthCalledWith(1, {
+      email: "returning@example.com",
+      token: "654321",
+      type: "invite",
+    });
+    expect(mocks.verifyOtp).toHaveBeenNthCalledWith(2, {
+      email: "returning@example.com",
+      token: "654321",
+      type: "email",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+  });
+
+  it("does not consume the family invitation when both Auth code types fail", async () => {
+    mocks.verifyOtp.mockResolvedValue({ error: { code: "otp_expired" } });
+
+    await expect(
+      verifyAndAcceptInvitation(
+        initialInviteActionState,
+        form({ code: "654321", email: "invited@example.com" }),
+      ),
+    ).resolves.toMatchObject({ status: "denied" });
+
+    expect(mocks.verifyOtp).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it("does not call Auth with a malformed secret or code", async () => {
@@ -182,6 +184,23 @@ describe("invitation acceptance actions", () => {
     expect(mocks.clearIntent).toHaveBeenCalled();
   });
 
+  it.each([null, "membership-a", {}, []])(
+    "rejects a non-membership acceptance result %j and clears the new session",
+    async (data) => {
+      mocks.rpc.mockResolvedValueOnce({ data, error: null });
+
+      await expect(
+        verifyAndAcceptInvitation(
+          initialInviteActionState,
+          form({ code: "123456", email: "invited@example.com" }),
+        ),
+      ).resolves.toMatchObject({ status: "denied" });
+
+      expect(mocks.signOut).toHaveBeenCalledTimes(2);
+      expect(mocks.clearIntent).toHaveBeenCalledOnce();
+    },
+  );
+
   it("expires Auth cookies when a thrown acceptance cannot sign out through Auth", async () => {
     mocks.rpc.mockRejectedValueOnce(new Error("network failed"));
     mocks.signOut.mockRejectedValueOnce(new Error("network failed"));
@@ -193,7 +212,7 @@ describe("invitation acceptance actions", () => {
       ),
     ).resolves.toMatchObject({ status: "unavailable" });
 
-    expect(mocks.expireAuthCookies).toHaveBeenCalledOnce();
+    expect(mocks.expireAuthCookies).toHaveBeenCalledTimes(2);
   });
 
   it("gives explicit safety recovery if both cleanup mechanisms fail", async () => {
@@ -218,9 +237,9 @@ describe("invitation acceptance actions", () => {
     );
 
     await expect(
-      requestInviteCode(
+      verifyAndAcceptInvitation(
         initialInviteActionState,
-        form({ email: "invited@example.com" }),
+        form({ code: "123456", email: "invited@example.com" }),
       ),
     ).resolves.toMatchObject({ status: "denied" });
     expect(mocks.createClient).not.toHaveBeenCalled();

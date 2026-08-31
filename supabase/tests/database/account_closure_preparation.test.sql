@@ -224,6 +224,17 @@ select throws_ok(
 );
 reset role;
 
+-- Historical closure fixtures still exercise legacy job/invitation cleanup.
+-- These transaction-local grants roll back and do not weaken production ACLs.
+grant execute on function public.request_invitation_job(uuid, uuid, text, uuid)
+  to authenticated;
+grant execute on function public.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function private.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function private.accept_invitation(text)
+  to authenticated;
+
 select ok(
   (
     select procedure.prosecdef
@@ -431,7 +442,7 @@ select throws_ok(
 );
 select throws_ok(
   format(
-    'select public.accept_invitation(%L)',
+    'select private.accept_invitation(%L)',
     :'legacy_raw_token'
   ),
   '22023',
@@ -691,8 +702,8 @@ select throws_ok(
        set user_id = '10000000-0000-4000-8000-000000000002'
      where id = '40000000-0000-4000-8000-000000000002'$$,
   '42501',
-  'Membership Auth attachment is immutable',
-  'a detached membership can never be reattached'
+  'Invitation worker identity separation failed',
+  'a detached membership still cannot be reattached after worker separation hardening'
 );
 select is(
   private.prepare_account_closure(:'coorganizer_closure_id'::uuid),
@@ -723,7 +734,7 @@ select throws_ok(
 );
 select throws_ok(
   format(
-    'select public.accept_invitation(%L)',
+    'select private.accept_invitation(%L)',
     :'legacy_raw_token'
   ),
   '22023',
@@ -807,7 +818,7 @@ select set_config(
   true
 );
 select throws_ok(
-  $$select public.accept_invitation(
+  $$select private.accept_invitation(
     'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
   )$$,
   '22023',

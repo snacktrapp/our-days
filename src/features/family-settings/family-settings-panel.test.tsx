@@ -86,13 +86,20 @@ const connectedOrganizerModel = {
   ],
   pendingInvitations: [
     {
-      id: "11111111-1111-4111-8111-111111111111",
+      emailRequestId: "11111111-1111-4111-8111-111111111111",
       displayName: "Grandma",
+      state: "delivered",
+      statusLabel: "Sent",
       createdLabel: "Invited Aug 20, 2026",
       expiresLabel: "Expires Sep 3, 2026",
     },
   ],
-  invitationDelivery: "worker-required",
+  invitationDelivery: "disabled",
+} as const;
+
+const connectedInvitationModel = {
+  ...connectedOrganizerModel,
+  invitationDelivery: "enabled",
 } as const;
 
 const connectedMemberModel = {
@@ -270,7 +277,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership,
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian: vi.fn(),
         }}
@@ -319,7 +326,7 @@ describe("FamilySettingsPanel", () => {
 
   it("withdraws only the reviewed invitation and exposes no invitation-creation control", async () => {
     const user = userEvent.setup();
-    const revokeInvitation = vi.fn().mockResolvedValue({
+    const withdrawInvitation = vi.fn().mockResolvedValue({
       ok: true,
       message: "Invitation withdrawn.",
     });
@@ -328,7 +335,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation,
+          withdrawInvitation,
           setMembershipRole: vi.fn(),
           setGuardian: vi.fn(),
         }}
@@ -354,11 +361,133 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("button", { name: "Withdraw invitation for Grandma" }),
     );
 
-    expect(revokeInvitation).toHaveBeenCalledWith({
-      invitationId: "11111111-1111-4111-8111-111111111111",
+    expect(withdrawInvitation).toHaveBeenCalledWith({
+      emailRequestId: "11111111-1111-4111-8111-111111111111",
     });
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Grandma’s invitation was withdrawn.",
+    );
+  });
+
+  it("reviews a private name and address, keeps one request key across retry, and clears both after success", async () => {
+    const user = userEvent.setup();
+    const requestInvitation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        message: "That invitation could not be sent. Try again.",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        message: "Private invitation requested.",
+      });
+    render(
+      <FamilySettingsPanel
+        model={connectedInvitationModel}
+        actions={{
+          requestInvitation,
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Sent")).toBeVisible();
+    const name = screen.getByRole("textbox", {
+      name: "Family member’s name",
+    });
+    const email = screen.getByRole("textbox", { name: "Email address" });
+    await user.type(name, "  Aunt June  ");
+    await user.type(email, " JUNE@EXAMPLE.COM ");
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Invite Aunt June" }),
+    ).toHaveFocus();
+    expect(screen.getByText("june@example.com")).toBeVisible();
+    const send = screen.getByRole("button", {
+      name: "Send private invitation",
+    });
+    await user.click(send);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That invitation could not be sent. Try again.",
+    );
+    await user.click(send);
+
+    expect(requestInvitation).toHaveBeenCalledTimes(2);
+    expect(requestInvitation.mock.calls[0]?.[0]).toMatchObject({
+      displayName: "Aunt June",
+      email: "june@example.com",
+    });
+    expect(requestInvitation.mock.calls[1]?.[0].requestKey).toBe(
+      requestInvitation.mock.calls[0]?.[0].requestKey,
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Private invitation requested for Aunt June.",
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+    ).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Email address" })).toHaveValue(
+      "",
+    );
+  });
+
+  it("uses a new request key after returning to edit invitation identity", async () => {
+    const user = userEvent.setup();
+    const requestInvitation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        message: "That invitation could not be sent. Try again.",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        message: "Private invitation requested.",
+      });
+    render(
+      <FamilySettingsPanel
+        model={connectedInvitationModel}
+        actions={{
+          requestInvitation,
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    const name = screen.getByRole("textbox", {
+      name: "Family member’s name",
+    });
+    await user.type(name, "Aunt June");
+    await user.type(
+      screen.getByRole("textbox", { name: "Email address" }),
+      "june@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
+    expect(await screen.findByRole("alert")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Back to edit" }));
+    const editedName = screen.getByRole("textbox", {
+      name: "Family member’s name",
+    });
+    await user.clear(editedName);
+    await user.type(editedName, "Uncle Theo");
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
+
+    expect(requestInvitation).toHaveBeenCalledTimes(2);
+    expect(requestInvitation.mock.calls[1]?.[0].requestKey).not.toBe(
+      requestInvitation.mock.calls[0]?.[0].requestKey,
     );
   });
 
@@ -372,7 +501,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership,
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian: vi.fn(),
         }}
@@ -416,7 +545,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole,
           setGuardian: vi.fn(),
         }}
@@ -478,7 +607,7 @@ describe("FamilySettingsPanel", () => {
         model={promotionModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian: vi.fn(),
         }}
@@ -510,7 +639,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian,
         }}
@@ -557,7 +686,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedOrganizerModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian,
         }}
@@ -588,7 +717,7 @@ describe("FamilySettingsPanel", () => {
         model={connectedMemberModel}
         actions={{
           revokeMembership: vi.fn(),
-          revokeInvitation: vi.fn(),
+          withdrawInvitation: vi.fn(),
           setMembershipRole: vi.fn(),
           setGuardian: vi.fn(),
         }}

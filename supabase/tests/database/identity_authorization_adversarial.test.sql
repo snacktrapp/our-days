@@ -77,6 +77,8 @@ select is(
     'claim_photo_display_derivative(original_id uuid, lease_key uuid)',
     'claim_photo_intake_upload(intake_id uuid, upload_request_key uuid, expected_mime_type text, expected_size_bytes bigint, expected_sha256_hex text)',
     'claim_photo_validation(intake_id uuid, lease_key uuid)',
+    'complete_invitation_delivery(invitation_job_id uuid, invitation_id uuid, delivery_version integer, token_sha256_hex text, recipient_binding_hex text, provider text, provider_message_id text, provider_idempotency_key text, payload_sha256_hex text, provider_accepted_at timestamp with time zone)',
+    'complete_invitation_email_provisioning(email_request_id uuid, target_auth_user_id uuid)',
     'complete_photo_display_derivative(derivative_job_id uuid, lease_key uuid, storage_object_id uuid, storage_object_version text, output_size_bytes bigint, output_sha256_hex text, output_width integer, output_height integer, output_channels integer, output_pages integer)',
     'complete_photo_validation(validation_job_id uuid, lease_key uuid, storage_object_id uuid, storage_object_version text, verified_mime_type text, verified_size_bytes bigint, verified_sha256_hex text, verified_width integer, verified_height integer, verified_channels integer, verified_pages integer)',
     'create_family_moment(circle_id uuid, journal_person_id uuid, moment_kind text, moment_title text, moment_body text, place_name text, tagged_person_ids uuid[], occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)',
@@ -91,13 +93,20 @@ select is(
     'list_memory_moments(circle_id uuid, memory_year integer, anniversary_month integer, anniversary_day integer, cursor_occurred_on date, cursor_has_precise_time boolean, cursor_occurred_at timestamp with time zone, cursor_moment_id uuid, page_size integer, snapshot_at timestamp with time zone)',
     'list_memory_years(circle_id uuid, before_year integer, page_size integer)',
     'list_milestone_memories(circle_id uuid, cursor_occurred_on date, cursor_has_precise_time boolean, cursor_occurred_at timestamp with time zone, cursor_moment_id uuid, page_size integer, snapshot_at timestamp with time zone)',
+    'list_pending_invitation_email_requests(circle_id uuid)',
     'list_pending_invitations(circle_id uuid)',
     'list_timeline_moments(circle_id uuid, journal_person_id uuid, cursor_occurred_on date, cursor_has_precise_time boolean, cursor_occurred_at timestamp with time zone, cursor_moment_id uuid, page_size integer, snapshot_at timestamp with time zone)',
+    'load_invitation_delivery_job(invitation_job_id uuid)',
+    'load_invitation_email_request(email_request_id uuid)',
+    'materialize_invitation_delivery_job(invitation_job_id uuid, delivery_version integer, token_sha256_hex text)',
     'preflight_invitation(token text, email text)',
+    'read_delivered_invitation(invitation_job_id uuid)',
+    'read_invitation_delivery_auth(invitation_job_id uuid)',
     'reject_photo_display_derivative(derivative_job_id uuid, lease_key uuid, rejection_reason text)',
     'reject_photo_validation(validation_job_id uuid, lease_key uuid, rejection_reason text)',
     'request_account_closure(request_key uuid)',
     'request_family_export(circle_id uuid, request_key uuid)',
+    'request_invitation_email(circle_id uuid, email text, display_name text, request_key uuid)',
     'request_invitation_job(circle_id uuid, target_auth_user_id uuid, display_name text, request_key uuid)',
     'reserve_photo_intake(circle_id uuid, journal_person_id uuid, request_key uuid)',
     'revoke_invitation(invitation_id uuid)',
@@ -106,10 +115,12 @@ select is(
     'set_moment_reaction(moment_id uuid, reaction_type text)',
     'set_person_guardian(managed_person_id uuid, guardian_membership_id uuid, grant_access boolean)',
     'set_written_moment_trashed(moment_id uuid, expected_revision bigint, trashed boolean)',
+    'sweep_expired_invitation_email_requests(batch_limit integer)',
     'trash_moment_note(note_id uuid, expected_revision bigint)',
     'update_family_moment(moment_id uuid, expected_revision bigint, moment_title text, moment_body text, place_name text, tagged_person_ids uuid[], occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)',
     'update_moment_note(note_id uuid, expected_revision bigint, body text)',
-    'update_written_moment(moment_id uuid, expected_revision bigint, body text, occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)'
+    'update_written_moment(moment_id uuid, expected_revision bigint, body text, occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)',
+    'withdraw_invitation_email_request(email_request_id uuid)'
   ]::text[],
   'the public RPC catalog exactly matches the reviewed signatures'
 );
@@ -130,10 +141,11 @@ select is(
     'claim_photo_display_derivative:authenticated:EXECUTE',
     'claim_photo_intake_upload:authenticated:EXECUTE',
     'claim_photo_validation:authenticated:EXECUTE',
+    'complete_invitation_delivery:authenticated:EXECUTE',
+    'complete_invitation_email_provisioning:authenticated:EXECUTE',
     'complete_photo_display_derivative:authenticated:EXECUTE',
     'complete_photo_validation:authenticated:EXECUTE',
     'create_family_moment:authenticated:EXECUTE',
-    'create_invitation:authenticated:EXECUTE',
     'create_managed_person:authenticated:EXECUTE',
     'create_moment_note:authenticated:EXECUTE',
     'create_written_moment:authenticated:EXECUTE',
@@ -144,15 +156,19 @@ select is(
     'list_memory_moments:authenticated:EXECUTE',
     'list_memory_years:authenticated:EXECUTE',
     'list_milestone_memories:authenticated:EXECUTE',
+    'list_pending_invitation_email_requests:authenticated:EXECUTE',
     'list_pending_invitations:authenticated:EXECUTE',
     'list_timeline_moments:authenticated:EXECUTE',
-    'preflight_invitation:anon:EXECUTE',
-    'preflight_invitation:authenticated:EXECUTE',
+    'load_invitation_delivery_job:authenticated:EXECUTE',
+    'load_invitation_email_request:authenticated:EXECUTE',
+    'materialize_invitation_delivery_job:authenticated:EXECUTE',
+    'read_delivered_invitation:authenticated:EXECUTE',
+    'read_invitation_delivery_auth:authenticated:EXECUTE',
     'reject_photo_display_derivative:authenticated:EXECUTE',
     'reject_photo_validation:authenticated:EXECUTE',
     'request_account_closure:authenticated:EXECUTE',
     'request_family_export:authenticated:EXECUTE',
-    'request_invitation_job:authenticated:EXECUTE',
+    'request_invitation_email:authenticated:EXECUTE',
     'reserve_photo_intake:authenticated:EXECUTE',
     'revoke_invitation:authenticated:EXECUTE',
     'revoke_membership:authenticated:EXECUTE',
@@ -160,10 +176,12 @@ select is(
     'set_moment_reaction:authenticated:EXECUTE',
     'set_person_guardian:authenticated:EXECUTE',
     'set_written_moment_trashed:authenticated:EXECUTE',
+    'sweep_expired_invitation_email_requests:authenticated:EXECUTE',
     'trash_moment_note:authenticated:EXECUTE',
     'update_family_moment:authenticated:EXECUTE',
     'update_moment_note:authenticated:EXECUTE',
-    'update_written_moment:authenticated:EXECUTE'
+    'update_written_moment:authenticated:EXECUTE',
+    'withdraw_invitation_email_request:authenticated:EXECUTE'
   ]::text[],
   'browser-facing public RPC ACLs exactly match the reviewed allowlist'
 );
@@ -199,6 +217,8 @@ select is(
   ),
   array[
     'accept_invitation(invitation_token text)',
+    'accept_invitation_dispatch(invitation_token text)',
+    'accept_phase_2d_invitation(invitation_token text)',
     'account_closure_is_blocking(target_auth_user_id uuid)',
     'acknowledge_photo_intake(requested_intake_id uuid)',
     'can_manage_person(requested_circle_id uuid, requested_person_id uuid)',
@@ -206,6 +226,8 @@ select is(
     'claim_photo_display_derivative(requested_original_id uuid, requested_lease_key uuid)',
     'claim_photo_intake_upload(requested_intake_id uuid, requested_upload_request_key uuid, requested_expected_mime_type text, requested_expected_size_bytes bigint, requested_expected_sha256_hex text)',
     'claim_photo_validation(requested_intake_id uuid, requested_lease_key uuid)',
+    'complete_invitation_delivery(requested_invitation_job_id uuid, requested_invitation_id uuid, requested_delivery_version integer, requested_token_sha256_hex text, requested_recipient_binding_hex text, requested_provider text, requested_provider_message_id text, requested_provider_idempotency_key text, requested_payload_sha256_hex text, requested_provider_accepted_at timestamp with time zone)',
+    'complete_invitation_email_provisioning(requested_email_request_id uuid, requested_target_auth_user_id uuid)',
     'complete_photo_display_derivative(requested_derivative_job_id uuid, requested_lease_key uuid, requested_storage_object_id uuid, requested_storage_object_version text, requested_output_size_bytes bigint, requested_output_sha256_hex text, requested_output_width integer, requested_output_height integer, requested_output_channels integer, requested_output_pages integer)',
     'complete_photo_validation(requested_validation_job_id uuid, requested_lease_key uuid, requested_storage_object_id uuid, requested_storage_object_version text, requested_verified_mime_type text, requested_verified_size_bytes bigint, requested_verified_sha256_hex text, requested_verified_width integer, requested_verified_height integer, requested_verified_channels integer, requested_verified_pages integer)',
     'create_family_moment(requested_circle_id uuid, requested_journal_person_id uuid, requested_kind text, requested_title text, requested_body text, requested_place_name text, requested_tagged_person_ids uuid[], requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)',
@@ -216,6 +238,7 @@ select is(
     'current_membership_id(requested_circle_id uuid)',
     'enforce_guardian_integrity()',
     'enforce_invitation_integrity()',
+    'enforce_invitation_worker_identity_separation()',
     'enforce_membership_integrity()',
     'enforce_photo_validator_family_separation()',
     'enforce_verified_photo_derivative_consistency()',
@@ -224,6 +247,10 @@ select is(
     'enqueue_photo_validation_job()',
     'flag_photo_display_derivative_for_review(requested_derivative_job_id uuid, requested_lease_key uuid, requested_review_reason text)',
     'flag_photo_validation_for_review(requested_validation_job_id uuid, requested_lease_key uuid, requested_review_reason text)',
+    'invalidate_email_requests_after_account_closure()',
+    'invalidate_email_requests_after_membership_change()',
+    'invalidate_email_requests_after_worker_revocation()',
+    'invalidate_invitation_email_request(requested_email_request_id uuid, requested_reason text, requested_invalidator_membership_id uuid, requested_invalidator_closure_request_id uuid)',
     'invalidate_invitation_jobs_after_authority_loss()',
     'invalidate_photo_derivatives_after_authority_change()',
     'invalidate_photo_intakes_after_guardian_revocation()',
@@ -233,9 +260,15 @@ select is(
     'is_active_circle_member(requested_circle_id uuid)',
     'is_circle_organizer(requested_circle_id uuid)',
     'list_manageable_trashed_written_moments(requested_circle_id uuid)',
+    'list_pending_invitation_email_requests(requested_circle_id uuid)',
     'list_pending_invitations(requested_circle_id uuid)',
+    'load_invitation_delivery_job(requested_invitation_job_id uuid)',
+    'load_invitation_email_request(requested_email_request_id uuid)',
     'load_target_bound_invitation_job(requested_job_id uuid)',
+    'lock_invitation_delivery_worker_if_allowed(requested_auth_user_id uuid)',
+    'lock_invitation_provisioner_if_allowed(requested_auth_user_id uuid)',
     'lock_photo_validator_if_allowed(requested_auth_user_id uuid)',
+    'materialize_invitation_delivery_job(requested_invitation_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
     'materialize_target_bound_invitation_job(requested_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
     'photo_derivative_source_is_readable(requested_object_path text, requested_storage_object_id uuid, requested_storage_object_version text)',
     'photo_display_path_is_readable(requested_object_path text)',
@@ -248,9 +281,14 @@ select is(
     'photo_validator_is_allowed(requested_auth_user_id uuid)',
     'preflight_invitation(invitation_token text, invited_email text)',
     'prepare_account_closure(closure_request_id uuid)',
+    'read_delivered_invitation(requested_invitation_job_id uuid)',
+    'read_invitation_delivery_auth(requested_invitation_job_id uuid)',
+    'record_invitation_coordination_audit(requested_circle_id uuid, requested_email_request_id uuid, requested_invitation_job_id uuid, requested_actor_membership_id uuid, requested_worker_auth_user_id uuid, requested_event_type text)',
+    'refresh_phase_2d_invitation_job(requested_invitation_job_id uuid)',
     'reject_photo_display_derivative(requested_derivative_job_id uuid, requested_lease_key uuid, requested_rejection_reason text)',
     'reject_photo_validation(requested_validation_job_id uuid, requested_lease_key uuid, requested_rejection_reason text)',
     'request_family_export(requested_circle_id uuid, requested_request_key uuid)',
+    'request_invitation_email(requested_circle_id uuid, requested_email text, invited_display_name text, requested_request_key uuid)',
     'request_invitation_job(requested_circle_id uuid, requested_target_auth_user_id uuid, invited_display_name text, requested_request_key uuid)',
     'reserve_photo_intake(requested_circle_id uuid, requested_journal_person_id uuid, requested_request_key uuid)',
     'revoke_invitation(target_invitation_id uuid)',
@@ -260,11 +298,14 @@ select is(
     'set_moment_reaction(target_moment_id uuid, requested_reaction_type text)',
     'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)',
     'set_written_moment_trashed(target_moment_id uuid, expected_revision bigint, requested_trashed boolean)',
+    'sweep_expired_invitation_email_requests(requested_limit integer)',
+    'sync_invitation_email_request_after_job_invalidation()',
     'tags_are_valid(requested_circle_id uuid, requested_journal_person_id uuid, requested_tagged_person_ids uuid[])',
     'trash_moment_note(target_note_id uuid, expected_revision bigint)',
     'update_family_moment(target_moment_id uuid, expected_revision bigint, requested_title text, requested_body text, requested_place_name text, requested_tagged_person_ids uuid[], requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)',
     'update_moment_note(target_note_id uuid, expected_revision bigint, requested_body text)',
-    'update_written_moment(target_moment_id uuid, expected_revision bigint, requested_body text, requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)'
+    'update_written_moment(target_moment_id uuid, expected_revision bigint, requested_body text, requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text)',
+    'withdraw_invitation_email_request(requested_email_request_id uuid)'
   ]::text[],
   'the private security-definer catalog exactly matches the reviewed signatures'
 );
@@ -279,8 +320,8 @@ select throws_ok(
     'forbidden@example.test'
   )$$,
   '42501',
-  'Invitation could not be created',
-  'ordinary members cannot create invitations'
+  'permission denied for function create_invitation',
+  'the retired legacy creation RPC is unreachable to ordinary members'
 );
 
 select throws_ok(
@@ -434,6 +475,19 @@ select ok(
   'the same dual-circle identity can use the real organizer RPC inside circle B with correct attribution'
 );
 
+-- The remaining historical invitation scenarios use transaction-local grants
+-- so their data-integrity coverage survives while production stays v2-only.
+grant execute on function public.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function public.preflight_invitation(text, text)
+  to anon, authenticated;
+grant execute on function private.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function private.preflight_invitation(text, text)
+  to anon, authenticated;
+grant execute on function private.accept_invitation(text)
+  to authenticated;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 
@@ -532,7 +586,7 @@ select is(
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000011', true);
-select public.accept_invitation(:'valid_raw_token') as membership_id \gset accepted_
+select private.accept_invitation(:'valid_raw_token') as membership_id \gset accepted_
 
 select is(
   (select status from public.circle_memberships where id = :'accepted_membership_id'),
@@ -558,7 +612,7 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000011', true);
 select throws_ok(
-  format('select public.accept_invitation(%L)', :'valid_raw_token'),
+  format('select private.accept_invitation(%L)', :'valid_raw_token'),
   '22023',
   'Invitation is not available',
   'an accepted invitation cannot be reused'
@@ -573,7 +627,7 @@ select * from public.create_invitation(
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000012', true);
 select throws_ok(
-  format('select public.accept_invitation(%L)', :'wrong_raw_token'),
+  format('select private.accept_invitation(%L)', :'wrong_raw_token'),
   '22023',
   'Invitation is not available',
   'a confirmed user with the wrong email cannot accept an invite'
@@ -631,7 +685,7 @@ returning id as invitation_id \gset expired_
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000013', true);
 select throws_ok(
-  format('select public.accept_invitation(%L)', :'expired_raw_token'),
+  format('select private.accept_invitation(%L)', :'expired_raw_token'),
   '22023',
   'Invitation is not available',
   'expired invitations cannot be accepted'
@@ -647,7 +701,7 @@ select public.revoke_invitation(:'revoked_invitation_id');
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000014', true);
 select throws_ok(
-  format('select public.accept_invitation(%L)', :'revoked_raw_token'),
+  format('select private.accept_invitation(%L)', :'revoked_raw_token'),
   '22023',
   'Invitation is not available',
   'revoked invitations cannot be accepted'
@@ -662,7 +716,7 @@ select * from public.create_invitation(
 ) \gset reinvite_
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000004', true);
-select public.accept_invitation(:'reinvite_raw_token') as membership_id \gset reaccepted_
+select private.accept_invitation(:'reinvite_raw_token') as membership_id \gset reaccepted_
 
 select is(
   :'reaccepted_membership_id'::uuid,

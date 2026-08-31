@@ -30,10 +30,11 @@
     "test:db:restore": "node scripts/test-local-logical-restore.mjs",
     "test:db:restore:self": "node scripts/test-local-logical-restore.mjs --self-test",
     "test:auth:integration": "node scripts/test-auth-integration.mjs",
+    "test:invitation:integration": "OUR_DAYS_LOCAL_INVITATION_INTEGRATION=1 vitest run tests/integration/invitation-delivery.local.test.ts --testTimeout=120000 --hookTimeout=120000",
     "test:photo:integration": "node scripts/test-photo-intake-integration.mjs",
     "test:browser:connected": "node scripts/test-connected-browser-flow.mjs",
     "test:browser:connected:all": "node scripts/test-connected-browser-matrix.mjs",
-    "types:db": "supabase gen types --local --lang typescript --schema public",
+    "types:db": "supabase gen types --local --lang typescript --schema public | prettier --parser typescript > src/lib/supabase/database.types.ts",
     "types:db:check": "node scripts/verify-database-types.mjs",
     "verify:artifacts": "node scripts/verify-private-artifacts.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:db:restore:self"

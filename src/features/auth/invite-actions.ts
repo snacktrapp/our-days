@@ -13,12 +13,13 @@ import { createOurDaysServerClient } from "@/lib/supabase/server";
 const SIMPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const OTP = /^\d{6}$/u;
 const INVITATION_TOKEN = /^[A-Za-z0-9_-]{40,64}$/u;
+const MEMBERSHIP_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 export type InviteActionState = Readonly<{
-  status: "idle" | "invalid" | "sent" | "accepted" | "denied" | "unavailable";
+  status: "idle" | "invalid" | "accepted" | "denied" | "unavailable";
   message?: string;
   email?: string;
-  clearBrowserState?: boolean;
   revision?: number;
 }>;
 
@@ -51,6 +52,26 @@ async function clearLocalSession(
   }
 }
 
+async function verifyInvitationAuthenticationCode(
+  supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
+  email: string,
+  code: string,
+) {
+  const inviteResult = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: "invite",
+  });
+  if (!inviteResult.error) return null;
+
+  const emailResult = await supabase.auth.verifyOtp({
+    email,
+    token: code,
+    type: "email",
+  });
+  return emailResult.error;
+}
+
 export async function stageInvitationIntent(token: string) {
   if (!(await hasExpectedOrigin()) || !INVITATION_TOKEN.test(token)) {
     await clearInvitationIntent();
@@ -59,63 +80,6 @@ export async function stageInvitationIntent(token: string) {
 
   await writeInvitationIntent(token);
   return { ready: true } as const;
-}
-
-export async function requestInviteCode(
-  _previousState: InviteActionState,
-  formData: FormData,
-): Promise<InviteActionState> {
-  const email = normalizedEmail(formData);
-  if (!SIMPLE_EMAIL.test(email) || email.length > 254) {
-    return { status: "invalid", message: "Enter a complete email address." };
-  }
-  if (!(await hasExpectedOrigin())) {
-    return { status: "denied", message: "This invitation is unavailable." };
-  }
-
-  try {
-    const invitationToken = await readInvitationIntent();
-    if (!invitationToken || !INVITATION_TOKEN.test(invitationToken)) {
-      return { status: "denied", message: "This invitation is unavailable." };
-    }
-
-    const supabase = await createOurDaysServerClient();
-    const { data: invitationMatches, error: preflightError } =
-      await supabase.rpc("preflight_invitation", {
-        token: invitationToken,
-        email,
-      });
-    if (preflightError || invitationMatches !== true) {
-      return {
-        status: "sent",
-        email,
-        message: "If this invitation matches, we sent a six-digit code.",
-      };
-    }
-
-    const { data: claimsData } = await supabase.auth.getClaims();
-    if (typeof claimsData?.claims?.sub === "string") {
-      const { error: signOutError } = await supabase.auth.signOut({
-        scope: "local",
-      });
-      if (signOutError) throw signOutError;
-    }
-
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    if (otpError) throw otpError;
-  } catch {
-    // Keep unknown accounts, provider failures, and rate limits indistinguishable.
-  }
-
-  return {
-    status: "sent",
-    email,
-    clearBrowserState: true,
-    message: "If this invitation matches, we sent a six-digit code.",
-  };
 }
 
 export async function verifyAndAcceptInvitation(
@@ -156,26 +120,37 @@ export async function verifyAndAcceptInvitation(
     null;
   try {
     supabase = await createOurDaysServerClient();
-    const { error: verificationError } = await supabase.auth.verifyOtp({
+    if (!(await clearLocalSession(supabase))) {
+      return {
+        status: "unavailable",
+        email,
+        revision,
+        message:
+          "For safety, clear this site's browser data before continuing.",
+      };
+    }
+    const verificationError = await verifyInvitationAuthenticationCode(
+      supabase,
       email,
-      token: code,
-      type: "email",
-    });
+      code,
+    );
     if (verificationError) {
       return {
         status: "denied",
         email,
         revision,
         message:
-          "That code is not available. Request a new code and try again.",
+          "That invitation code is not available. Check both fields or ask your organizer for a fresh invitation.",
       };
     }
 
+    let membershipId: unknown;
     let acceptanceError: { code?: string } | null;
     try {
-      ({ error: acceptanceError } = await supabase.rpc("accept_invitation", {
-        token: invitationToken,
-      }));
+      ({ data: membershipId, error: acceptanceError } = await supabase.rpc(
+        "accept_invitation",
+        { token: invitationToken },
+      ));
     } catch {
       if (!(await clearLocalSession(supabase))) {
         return {
@@ -194,7 +169,7 @@ export async function verifyAndAcceptInvitation(
       };
     }
 
-    if (acceptanceError) {
+    if (acceptanceError || !MEMBERSHIP_ID.test(String(membershipId))) {
       if (!(await clearLocalSession(supabase))) {
         return {
           status: "unavailable",
@@ -205,7 +180,7 @@ export async function verifyAndAcceptInvitation(
         };
       }
 
-      if (acceptanceError.code === "22023") {
+      if (!acceptanceError || acceptanceError.code === "22023") {
         await clearInvitationIntent();
         return {
           status: "denied",

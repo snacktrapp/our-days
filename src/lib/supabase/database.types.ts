@@ -531,6 +531,31 @@ export type Database = {
           verification_profile_version: number;
         }[];
       };
+      complete_invitation_delivery: {
+        Args: {
+          delivery_version: number;
+          invitation_id: string;
+          invitation_job_id: string;
+          payload_sha256_hex: string;
+          provider: string;
+          provider_accepted_at: string;
+          provider_idempotency_key: string;
+          provider_message_id: string;
+          recipient_binding_hex: string;
+          token_sha256_hex: string;
+        };
+        Returns: string;
+      };
+      complete_invitation_email_provisioning: {
+        Args: { email_request_id: string; target_auth_user_id: string };
+        Returns: {
+          email_request_id: string;
+          expires_at: string;
+          invitation_job_id: string;
+          target_auth_user_id: string;
+          target_email_confirmed: boolean;
+        }[];
+      };
       complete_photo_display_derivative: {
         Args: {
           derivative_job_id: string;
@@ -731,6 +756,16 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_pending_invitation_email_requests: {
+        Args: { circle_id: string };
+        Returns: {
+          email_request_id: string;
+          expires_at: string;
+          invited_display_name: string;
+          requested_at: string;
+          state: string;
+        }[];
+      };
       list_pending_invitations: {
         Args: { circle_id: string };
         Returns: {
@@ -776,9 +811,89 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      load_invitation_delivery_job: {
+        Args: { invitation_job_id: string };
+        Returns: {
+          circle_id: string;
+          delivery_version: number;
+          email_request_id: string;
+          expires_at: string;
+          invitation_job_id: string;
+          invited_display_name: string;
+          request_key: string;
+          requested_at: string;
+          requester_authorization_version: string;
+          requester_membership_id: string;
+          state: string;
+          target_auth_user_id: string;
+          token_key_version: number;
+        }[];
+      };
+      load_invitation_email_request: {
+        Args: { email_request_id: string };
+        Returns: {
+          circle_id: string;
+          email_request_id: string;
+          expires_at: string;
+          invitation_job_id: string;
+          invited_display_name: string;
+          normalized_email: string;
+          requested_at: string;
+          requester_authorization_version: string;
+          requester_membership_id: string;
+          state: string;
+        }[];
+      };
+      materialize_invitation_delivery_job: {
+        Args: {
+          delivery_version: number;
+          invitation_job_id: string;
+          token_sha256_hex: string;
+        };
+        Returns: {
+          delivery_version: number;
+          expires_at: string;
+          invitation_id: string;
+          invitation_job_id: string;
+          state: string;
+        }[];
+      };
       preflight_invitation: {
         Args: { email: string; token: string };
         Returns: boolean;
+      };
+      read_delivered_invitation: {
+        Args: { invitation_job_id: string };
+        Returns: {
+          circle_id: string;
+          delivery_version: number;
+          delivery_worker_auth_user_id: string;
+          email_request_id: string;
+          invitation_id: string;
+          invitation_job_id: string;
+          payload_sha256_hex: string;
+          provider: string;
+          provider_accepted_at: string;
+          provider_idempotency_key: string;
+          provider_message_id: string;
+          receipt_id: string;
+          recipient_binding_hex: string;
+          recorded_at: string;
+          token_sha256_hex: string;
+        }[];
+      };
+      read_invitation_delivery_auth: {
+        Args: { invitation_job_id: string };
+        Returns: {
+          delivery_version: number;
+          email_confirmed_at: string;
+          invitation_id: string;
+          invitation_job_id: string;
+          normalized_email: string;
+          recipient_binding_hex: string;
+          target_auth_user_id: string;
+          token_sha256_hex: string;
+        }[];
       };
       reject_photo_display_derivative: {
         Args: {
@@ -802,6 +917,15 @@ export type Database = {
       };
       request_family_export: {
         Args: { circle_id: string; request_key: string };
+        Returns: string;
+      };
+      request_invitation_email: {
+        Args: {
+          circle_id: string;
+          display_name: string;
+          email: string;
+          request_key: string;
+        };
         Returns: string;
       };
       request_invitation_job: {
@@ -859,6 +983,10 @@ export type Database = {
         };
         Returns: number;
       };
+      sweep_expired_invitation_email_requests: {
+        Args: { batch_limit: number };
+        Returns: number;
+      };
       trash_moment_note: {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
@@ -891,6 +1019,10 @@ export type Database = {
           occurred_timezone?: string;
         };
         Returns: number;
+      };
+      withdraw_invitation_email_request: {
+        Args: { email_request_id: string };
+        Returns: undefined;
       };
     };
     Enums: {

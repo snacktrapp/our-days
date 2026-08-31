@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "3b3d3516b9aeddc3f6d61eeafa802c34a35c688a96cc6284f6162b102260d319";
+  "86330d24d5262a814725f7cf8fb9a594c981d7dc4f14a64b58fb1199e1df2383";
 const expectedCanonicalCatalogFingerprint =
-  "78f2d8c51132f2bcb51ed171f98286ceabcb030ac80a648cfca2a7773f80b537";
+  "bac16822939634c47aac18816fa1179cdcdb4e36f033b503ff091cd9e24184a3";
 const expectedRestoredSchemaFingerprint =
-  "4a23878a1d569e759a3cfde233daa69aa418ff29b1df28780fcaea3d4c17598a";
+  "e6ed8c3f626cca9dc084e64cc25edbd3d5740e93ddf0d41f815d4b08530dab78";
 const expectedCanonicalDataFingerprint =
-  "c2a7d3e9c7687b67ee44368b23808734a4a2450117a9142dccb3ffdecbed36eb";
+  "f4faaa26d4bc50220ea4a254f0e5a7d4e9645ba5670830a15b791e284ce3cce1";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "c581a5fede40ea0baa9105a51edcca9e0e9f80efe9cd874f780e2a09ea8bdf89";
+  "ff9d2434ce3a2471ebfe9087085ee6eacbaf3bf14e73e63dd76a9604cdb2af57";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: ["image/webp"],
@@ -155,6 +155,15 @@ const volatileFixtureTimestampColumns = new Map([
     ]),
   ],
   ["private.photo_validator_allowlist", new Set(["allowed_at", "revoked_at"])],
+  ["private.invitation_delivery_capabilities", new Set(["updated_at"])],
+  [
+    "private.invitation_delivery_worker_allowlist",
+    new Set(["allowed_at", "revoked_at"]),
+  ],
+  [
+    "private.invitation_provisioner_allowlist",
+    new Set(["allowed_at", "revoked_at"]),
+  ],
   ["storage.buckets", new Set(["created_at", "updated_at"])],
   ["storage.migrations", new Set(["executed_at"])],
   ["supabase_functions.migrations", new Set(["inserted_at"])],
@@ -174,6 +183,7 @@ const expectedMigrationFiles = [
   "20260831030000_phase_2c_target_bound_invitation_materialization.sql",
   "20260831040000_phase_4b_immutable_photo_promotion.sql",
   "20260831103811_phase_4c_private_photo_display_derivatives.sql",
+  "20260831124636_phase_2d_private_invitation_coordination.sql",
 ];
 
 class DrillError extends Error {
@@ -804,6 +814,17 @@ select (
   and (select count(*) = 0 from private.audit_events)
   and (select count(*) = 0 from private.export_jobs)
   and (select count(*) = 0 from private.invitation_jobs)
+  and (select count(*) = 0 from private.invitation_coordination_audit_events)
+  and (
+    select count(*) = 1
+      from private.invitation_delivery_capabilities
+     where capability = 'email_delivery'
+       and enabled is false
+  )
+  and (select count(*) = 0 from private.invitation_delivery_receipts)
+  and (select count(*) = 0 from private.invitation_delivery_worker_allowlist)
+  and (select count(*) = 0 from private.invitation_email_requests)
+  and (select count(*) = 0 from private.invitation_provisioner_allowlist)
   and (select count(*) = 0 from private.photo_intakes)
   and (select count(*) = 0 from private.photo_derivative_jobs)
   and (select count(*) = 0 from private.photo_display_derivatives)
@@ -899,7 +920,13 @@ select (
       'private.account_closure_requests',
       'private.audit_events',
       'private.export_jobs',
+      'private.invitation_coordination_audit_events',
+      'private.invitation_delivery_capabilities',
+      'private.invitation_delivery_receipts',
+      'private.invitation_delivery_worker_allowlist',
+      'private.invitation_email_requests',
       'private.invitation_jobs',
+      'private.invitation_provisioner_allowlist',
       'private.invitations',
       'private.photo_derivative_jobs',
       'private.photo_display_derivatives',
@@ -1107,7 +1134,8 @@ select (
         '20260831020000',
         '20260831030000',
         '20260831040000',
-        '20260831103811'
+        '20260831103811',
+        '20260831124636'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
@@ -1142,6 +1170,55 @@ select (
        and relation.relname in (
          'photo_derivative_jobs', 'photo_display_derivatives'
        )
+  )
+)::text;
+`;
+
+const canonicalPhase2dFixtureSql = String.raw`
+select (
+  not exists (select 1 from private.invitation_coordination_audit_events)
+  and (
+    select count(*) = 1
+      from private.invitation_delivery_capabilities
+     where capability = 'email_delivery'
+       and enabled is false
+  )
+  and not exists (select 1 from private.invitation_delivery_receipts)
+  and not exists (select 1 from private.invitation_delivery_worker_allowlist)
+  and not exists (select 1 from private.invitation_email_requests)
+  and not exists (select 1 from private.invitation_provisioner_allowlist)
+  and (
+    select count(*) = 6
+      from pg_catalog.pg_class as relation
+      join pg_catalog.pg_namespace as namespace
+        on namespace.oid = relation.relnamespace
+     where namespace.nspname = 'private'
+       and relation.relkind in ('r', 'p')
+       and relation.relname in (
+         'invitation_coordination_audit_events',
+         'invitation_delivery_capabilities',
+         'invitation_delivery_receipts',
+         'invitation_delivery_worker_allowlist',
+         'invitation_email_requests',
+         'invitation_provisioner_allowlist'
+       )
+       and relation.relrowsecurity
+       and relation.relforcerowsecurity
+  )
+  and not pg_catalog.has_table_privilege(
+    'anon',
+    'private.invitation_delivery_capabilities',
+    'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+  )
+  and not pg_catalog.has_table_privilege(
+    'authenticated',
+    'private.invitation_delivery_capabilities',
+    'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+  )
+  and not pg_catalog.has_table_privilege(
+    'service_role',
+    'private.invitation_delivery_capabilities',
+    'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
   )
 )::text;
 `;
@@ -1712,7 +1789,13 @@ select pg_catalog.jsonb_build_array(
      'audit_events',
      'audit_events_id_seq',
      'export_jobs',
+     'invitation_coordination_audit_events',
+     'invitation_delivery_capabilities',
+     'invitation_delivery_receipts',
+     'invitation_delivery_worker_allowlist',
+     'invitation_email_requests',
      'invitation_jobs',
+     'invitation_provisioner_allowlist',
      'invitations',
      'photo_derivative_jobs',
      'photo_display_derivatives',
@@ -2162,7 +2245,13 @@ const allowedOwnerAclDisappearance = new Map([
   ["private.audit_events", tableOwnerPrivileges],
   ["private.audit_events_id_seq", new Set(["SELECT", "UPDATE", "USAGE"])],
   ["private.export_jobs", tableOwnerPrivileges],
+  ["private.invitation_coordination_audit_events", tableOwnerPrivileges],
+  ["private.invitation_delivery_capabilities", tableOwnerPrivileges],
+  ["private.invitation_delivery_receipts", tableOwnerPrivileges],
+  ["private.invitation_delivery_worker_allowlist", tableOwnerPrivileges],
+  ["private.invitation_email_requests", tableOwnerPrivileges],
   ["private.invitation_jobs", tableOwnerPrivileges],
+  ["private.invitation_provisioner_allowlist", tableOwnerPrivileges],
   ["private.invitations", tableOwnerPrivileges],
   ["private.photo_derivative_jobs", tableOwnerPrivileges],
   ["private.photo_display_derivatives", tableOwnerPrivileges],
@@ -2635,6 +2724,60 @@ select (
   assertDatabaseBoolean(
     database,
     String.raw`
+with enabled(routine) as (
+  select unnest(array[
+    'public.request_invitation_email(uuid,text,text,uuid)',
+    'public.withdraw_invitation_email_request(uuid)',
+    'public.list_pending_invitation_email_requests(uuid)',
+    'public.sweep_expired_invitation_email_requests(integer)',
+    'public.load_invitation_email_request(uuid)',
+    'public.complete_invitation_email_provisioning(uuid,uuid)',
+    'public.load_invitation_delivery_job(uuid)',
+    'public.materialize_invitation_delivery_job(uuid,integer,text)',
+    'public.read_invitation_delivery_auth(uuid)',
+    'public.complete_invitation_delivery(uuid,uuid,integer,text,text,text,text,text,text,timestamp with time zone)',
+    'public.read_delivered_invitation(uuid)',
+    'public.accept_invitation(text)'
+  ]::text[])
+), retired(routine) as (
+  select unnest(array[
+    'public.create_invitation(uuid,text,text,uuid)',
+    'public.preflight_invitation(text,text)',
+    'public.request_invitation_job(uuid,uuid,text,uuid)'
+  ]::text[])
+)
+select (
+  not exists (
+    select 1 from enabled
+     where not pg_catalog.has_function_privilege(
+       'authenticated', enabled.routine, 'EXECUTE'
+     )
+        or pg_catalog.has_function_privilege('anon', enabled.routine, 'EXECUTE')
+  )
+  and not exists (
+    select 1 from retired
+     where pg_catalog.has_function_privilege(
+       'authenticated', retired.routine, 'EXECUTE'
+     )
+        or pg_catalog.has_function_privilege('anon', retired.routine, 'EXECUTE')
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated', 'private.accept_phase_2d_invitation(text)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated', 'private.load_invitation_email_request(uuid)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated', 'private.load_invitation_delivery_job(uuid)', 'EXECUTE'
+  )
+)::text;
+`,
+    "invitation coordinator routine authorization fidelity",
+  );
+
+  assertDatabaseBoolean(
+    database,
+    String.raw`
 select (
   pg_catalog.has_function_privilege(
     'authenticated', 'public.claim_photo_validation(uuid,uuid)', 'EXECUTE'
@@ -2997,6 +3140,21 @@ async function runStaticSelfTest() {
     inventoryMatches([...reviewedSchemas, "unexpected_schema"], reviewedSchemas)
   ) {
     throw new DrillError("static unexpected-schema rejection");
+  }
+  if (
+    !inventoryMatches(expectedMigrationFiles, expectedMigrationFiles) ||
+    expectedMigrationFiles.at(-1) !==
+      "20260831124636_phase_2d_private_invitation_coordination.sql" ||
+    inventoryMatches(
+      expectedMigrationFiles.slice(0, -1),
+      expectedMigrationFiles,
+    ) ||
+    inventoryMatches(
+      [...expectedMigrationFiles, "20990101000000_unreviewed.sql"],
+      expectedMigrationFiles,
+    )
+  ) {
+    throw new DrillError("static migration-head rejection");
   }
   if (!bucketInventoryMatches(expectedPrivateBuckets)) {
     throw new DrillError("static exact-bucket acceptance");
@@ -3462,9 +3620,7 @@ async function performDrill() {
   const migrationFiles = readdirSync(migrationsPath)
     .filter((name) => name.endsWith(".sql"))
     .sort();
-  if (
-    JSON.stringify(migrationFiles) !== JSON.stringify(expectedMigrationFiles)
-  ) {
+  if (!inventoryMatches(migrationFiles, expectedMigrationFiles)) {
     throw new DrillError("committed fixture source guard");
   }
   console.log("PASS: committed fixture source guard");
@@ -3487,6 +3643,14 @@ async function performDrill() {
     sourceSnapshot,
   );
   console.log("PASS: canonical Phase 4C fixture");
+
+  assertDatabaseBoolean(
+    "postgres",
+    canonicalPhase2dFixtureSql,
+    "canonical Phase 2D fixture",
+    sourceSnapshot,
+  );
+  console.log("PASS: canonical Phase 2D fixture");
 
   assertDatabaseBoolean(
     "postgres",

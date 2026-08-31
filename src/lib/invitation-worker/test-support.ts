@@ -319,6 +319,9 @@ export class InMemoryInvitationDeliveryProvider implements InvitationDeliveryPro
         .slice(0, 32),
       acceptedAt: this.#acceptedAt,
       idempotencyKey: input.idempotencyKey,
+      payloadSha256: createHash("sha256")
+        .update(JSON.stringify(input))
+        .digest("hex"),
     };
     this.#accepted.set(input.idempotencyKey, {
       input: { ...input },

@@ -389,7 +389,7 @@ function requireSuccessfulOutcome(result, label) {
   rejectUnsafeOutcome(result, label);
   if (!result.response.ok) {
     throw new Error(
-      `${label} failed with ${result.response.status} (${outcomeCode(result) ?? "no code"}).`,
+      `${label} failed with ${result.response.status} (${outcomeCode(result) ?? "no code"}:${JSON.stringify(result.body)}).`,
     );
   }
   return result.body;
@@ -407,20 +407,6 @@ function requireInvitationDenial(result, label) {
   }
   throw new Error(
     `${label} did not use the generic invitation denial (${result.response.status}:${JSON.stringify(result.body)}).`,
-  );
-}
-
-function requireInvitationChangeDenial(result, label) {
-  rejectUnsafeOutcome(result, label);
-  if (
-    !result.response.ok &&
-    result.body?.code === "22023" &&
-    result.body?.message === "Invitation could not be changed"
-  ) {
-    return;
-  }
-  throw new Error(
-    `${label} did not use the generic invitation-change denial (${result.response.status}:${JSON.stringify(result.body)}).`,
   );
 }
 
@@ -446,9 +432,12 @@ function targetBoundMaterializationRow(result, label) {
 function requireEmptyMaterialization(result, label) {
   rejectUnsafeOutcome(result, label);
   if (
-    result.response.ok &&
-    Array.isArray(result.body) &&
-    result.body.length === 0
+    (result.response.ok &&
+      Array.isArray(result.body) &&
+      result.body.length === 0) ||
+    (!result.response.ok &&
+      result.body?.code === "22023" &&
+      result.body?.message === "Invitation delivery could not be materialized")
   ) {
     return;
   }
@@ -516,16 +505,17 @@ async function requestTargetBoundInvitationJob({
   organizerToken,
   targetAuthUserId,
 }) {
+  const emailRequestId = randomUUID();
   const result = await jsonRequest(
     apiUrl,
     apiKey,
     organizerToken,
-    "rpc/request_invitation_job",
+    "rpc/phase2d_test_provision_invitation",
     {
       body: JSON.stringify({
         circle_id: circleId,
         display_name: displayName,
-        request_key: randomUUID(),
+        request_key: emailRequestId,
         target_auth_user_id: targetAuthUserId,
       }),
       method: "POST",
@@ -535,7 +525,7 @@ async function requestTargetBoundInvitationJob({
   if (!uuidPattern.test(result.body)) {
     throw new Error(`${displayName} job request did not return an ID.`);
   }
-  return result.body;
+  return { emailRequestId, jobId: result.body };
 }
 
 function materializeTargetBoundInvitation(apiUrl, serviceKey, jobId, rawToken) {
@@ -581,15 +571,15 @@ function acceptInvitation(
   });
 }
 
-function revokeInvitation(
+function withdrawInvitationEmailRequest(
   apiUrl,
   apiKey,
   organizerToken,
-  invitationId,
-  rpcName = "revoke_invitation",
+  emailRequestId,
+  rpcName = "withdraw_invitation_email_request",
 ) {
   return jsonRequest(apiUrl, apiKey, organizerToken, `rpc/${rpcName}`, {
-    body: JSON.stringify({ invitation_id: invitationId }),
+    body: JSON.stringify({ email_request_id: emailRequestId }),
     method: "POST",
   });
 }
@@ -604,7 +594,7 @@ async function createTargetBoundJobFixture({
   serviceKey,
 }) {
   const target = await createSyntheticAuthUser(apiUrl, serviceKey, label);
-  const jobId = await requestTargetBoundInvitationJob({
+  const { emailRequestId, jobId } = await requestTargetBoundInvitationJob({
     apiKey,
     apiUrl,
     circleId,
@@ -613,10 +603,41 @@ async function createTargetBoundJobFixture({
     targetAuthUserId: target.id,
   });
   return {
+    emailRequestId,
     jobId,
     rawToken: invitationToken(),
     target,
     targetToken: createLocalUserToken(target.id, jwtSecret),
+  };
+}
+
+async function createDeliveredInvitationFixture({
+  apiKey,
+  apiUrl,
+  circleId,
+  displayName,
+  organizerToken,
+  serviceKey,
+  targetAuthUserId,
+}) {
+  const { emailRequestId, jobId } = await requestTargetBoundInvitationJob({
+    apiKey,
+    apiUrl,
+    circleId,
+    displayName,
+    organizerToken,
+    targetAuthUserId,
+  });
+  const rawToken = invitationToken();
+  const materialized = targetBoundMaterializationRow(
+    await materializeTargetBoundInvitation(apiUrl, serviceKey, jobId, rawToken),
+    `${displayName} materialization`,
+  );
+  return {
+    email_request_id: emailRequestId,
+    invitation_id: materialized.invitation_id,
+    invitation_job_id: jobId,
+    raw_token: rawToken,
   };
 }
 
@@ -666,6 +687,26 @@ try {
   runDatabaseQuery(`
     do $install$
     begin
+    insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+    values
+      ('10000000-0000-4000-8000-000000000091', 'concurrency-provisioner@example.test', statement_timestamp(), '{}'),
+      ('10000000-0000-4000-8000-000000000092', 'concurrency-delivery@example.test', statement_timestamp(), '{}')
+    on conflict (id) do nothing;
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values
+      ('71000000-0000-4000-8000-000000000091', '10000000-0000-4000-8000-000000000091', statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+      ('71000000-0000-4000-8000-000000000092', '10000000-0000-4000-8000-000000000092', statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day')
+    on conflict (id) do nothing;
+    insert into private.invitation_provisioner_allowlist (auth_user_id)
+    values ('10000000-0000-4000-8000-000000000091')
+    on conflict (auth_user_id) do nothing;
+    insert into private.invitation_delivery_worker_allowlist (auth_user_id)
+    values ('10000000-0000-4000-8000-000000000092')
+    on conflict (auth_user_id) do nothing;
+    update private.invitation_delivery_capabilities
+       set enabled = true, updated_at = statement_timestamp()
+     where capability = 'email_delivery';
+
       execute $definition$
         create function public.phase2_test_hold_circle_lock(
           circle_id uuid,
@@ -895,6 +936,108 @@ try {
       execute 'grant execute on function public.phase2c_test_hold_invitation_chain(uuid, integer) to service_role';
 
       execute $definition$
+        create function public.phase2d_test_provision_invitation(
+          circle_id uuid,
+          target_auth_user_id uuid,
+          display_name text,
+          request_key uuid
+        )
+        returns uuid
+        language plpgsql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+        #variable_conflict use_variable
+        declare
+          current_user_id uuid := (select auth.uid());
+          target_email text;
+          actor public.circle_memberships%rowtype;
+          existing private.invitation_email_requests%rowtype;
+          email_request_id uuid;
+          target_job_id uuid;
+          generated_salt bytea;
+        begin
+          if current_user_id is null then
+            raise exception using errcode = '42501',
+              message = 'Invitation email could not be requested';
+          end if;
+          select lower(btrim(auth_user.email)) into target_email
+            from auth.users as auth_user
+           where auth_user.id = target_auth_user_id
+             and auth_user.deleted_at is null;
+          if target_email is null then
+            raise exception using errcode = '42501',
+              message = 'Invitation email could not be requested';
+          end if;
+          perform 1 from auth.users where id = current_user_id for update;
+          perform 1 from public.circles where id = circle_id for update;
+          select membership.* into actor
+            from public.circle_memberships as membership
+           where membership.circle_id = circle_id
+             and membership.user_id = current_user_id
+           for update;
+          if actor.id is null or actor.status <> 'active'
+            or actor.role <> 'organizer'
+            or private.account_closure_is_blocking(current_user_id) then
+            raise exception using errcode = '42501',
+              message = 'Invitation email could not be requested';
+          end if;
+          select request.* into existing
+            from private.invitation_email_requests as request
+           where request.circle_id = circle_id
+             and request.requested_by_membership_id = actor.id
+             and request.request_key = request_key
+           for update;
+          if existing.id is not null then
+            if existing.state not in ('queued', 'provisioned', 'delivered')
+              or existing.target_auth_user_id is distinct from target_auth_user_id
+              or existing.invited_display_name is distinct from btrim(display_name)
+              or existing.invitation_job_id is null then
+              raise exception using errcode = '42501',
+                message = 'Invitation email could not be requested';
+            end if;
+            return existing.invitation_job_id;
+          end if;
+          generated_salt := extensions.gen_random_bytes(16);
+          insert into private.invitation_email_requests (
+            id, circle_id, requested_by_membership_id,
+            requester_authorization_version, normalized_email,
+            email_salt, email_hash, invited_display_name, request_key
+          ) values (
+            request_key, circle_id, actor.id, actor.updated_at, target_email,
+            generated_salt,
+            extensions.digest(
+              pg_catalog.convert_to(target_email, 'UTF8') || generated_salt,
+              'sha256'
+            ),
+            btrim(display_name), request_key
+          ) returning id into email_request_id;
+          perform private.record_invitation_coordination_audit(
+            circle_id, email_request_id, null, actor.id, null,
+            'email_request_created'
+          );
+          perform set_config(
+            'request.jwt.claims',
+            '{"sub":"10000000-0000-4000-8000-000000000091","session_id":"71000000-0000-4000-8000-000000000091"}',
+            true
+          );
+          select invitation_job_id into target_job_id
+            from private.complete_invitation_email_provisioning(
+              email_request_id, target_auth_user_id
+            );
+          return target_job_id;
+        exception
+          when unique_violation then
+            raise exception using errcode = '22023',
+              message = 'Invitation email could not be requested';
+        end
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2d_test_provision_invitation(uuid, uuid, text, uuid) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2d_test_provision_invitation(uuid, uuid, text, uuid) to authenticated';
+
+      execute $definition$
         create function public.phase2c_test_materialize_target_bound_invitation_job(
           requested_job_id uuid,
           requested_delivery_version integer,
@@ -907,17 +1050,43 @@ try {
           delivery_version integer,
           expires_at timestamptz
         )
-        language sql
+        language plpgsql
         volatile
         security definer
         set search_path = ''
         as $body$
-          select *
-            from private.materialize_target_bound_invitation_job(
-              requested_job_id,
-              requested_delivery_version,
+        declare
+          materialized record;
+          delivery_auth record;
+          accepted_at timestamptz;
+        begin
+          perform set_config(
+            'request.jwt.claims',
+            '{"sub":"10000000-0000-4000-8000-000000000092","session_id":"71000000-0000-4000-8000-000000000092"}',
+            true
+          );
+          select * into materialized
+            from private.materialize_invitation_delivery_job(
+              requested_job_id, requested_delivery_version,
               requested_token_sha256_hex
             );
+          if materialized.invitation_job_id is null then return; end if;
+          select * into delivery_auth
+            from private.read_invitation_delivery_auth(requested_job_id);
+          select requested_at into accepted_at
+            from private.invitation_jobs where id = requested_job_id;
+          perform private.complete_invitation_delivery(
+            requested_job_id, materialized.invitation_id,
+            materialized.delivery_version, requested_token_sha256_hex,
+            delivery_auth.recipient_binding_hex, 'local-harness',
+            'concurrency-' || requested_job_id::text,
+            'concurrency/' || requested_job_id::text,
+            repeat('c', 64), accepted_at
+          );
+          return query select materialized.invitation_job_id,
+            materialized.invitation_id, materialized.state,
+            materialized.delivery_version, materialized.expires_at;
+        end
         $body$
       $definition$;
       execute 'revoke all on function public.phase2c_test_materialize_target_bound_invitation_job(uuid, integer, text) from public, anon, authenticated';
@@ -940,13 +1109,26 @@ try {
           requested_at timestamptz,
           expires_at timestamptz
         )
-        language sql
+        language plpgsql
         volatile
         security definer
         set search_path = ''
         as $body$
-          select *
-            from private.load_target_bound_invitation_job(requested_job_id);
+        begin
+          perform set_config(
+            'request.jwt.claims',
+            '{"sub":"10000000-0000-4000-8000-000000000092","session_id":"71000000-0000-4000-8000-000000000092"}',
+            true
+          );
+          return query select
+            loaded.invitation_job_id, loaded.circle_id,
+            loaded.requester_membership_id,
+            loaded.requester_authorization_version,
+            loaded.target_auth_user_id, loaded.invited_display_name,
+            loaded.state, loaded.token_key_version,
+            loaded.delivery_version, loaded.requested_at, loaded.expires_at
+          from private.load_invitation_delivery_job(requested_job_id) as loaded;
+        end
         $body$
       $definition$;
       execute 'revoke all on function public.phase2c_test_load_target_bound_invitation_job(uuid) from public, anon, authenticated';
@@ -986,22 +1168,6 @@ try {
       execute 'grant execute on function public.phase2c_test_activation_accept_target_bound(text) to authenticated';
 
       execute $definition$
-        create function public.phase2c_test_activation_accept_legacy(
-          token text
-        )
-        returns uuid
-        language sql
-        volatile
-        security invoker
-        set search_path = ''
-        as $body$
-          select public.accept_invitation(token);
-        $body$
-      $definition$;
-      execute 'revoke all on function public.phase2c_test_activation_accept_legacy(text) from public, anon, authenticated, service_role';
-      execute 'grant execute on function public.phase2c_test_activation_accept_legacy(text) to authenticated';
-
-      execute $definition$
         create function public.phase2c_test_withdrawal_accept(token text)
         returns uuid
         language sql
@@ -1017,7 +1183,7 @@ try {
 
       execute $definition$
         create function public.phase2c_test_withdrawal_revoke(
-          invitation_id uuid
+          email_request_id uuid
         )
         returns void
         language sql
@@ -1025,7 +1191,7 @@ try {
         security invoker
         set search_path = ''
         as $body$
-          select public.revoke_invitation(invitation_id);
+          select public.withdraw_invitation_email_request(email_request_id);
         $body$
       $definition$;
       execute 'revoke all on function public.phase2c_test_withdrawal_revoke(uuid) from public, anon, authenticated, service_role';
@@ -1165,30 +1331,15 @@ try {
     );
   }
 
-  const invitation = await jsonRequest(
-    apiUrl,
+  const invitationResult = await createDeliveredInvitationFixture({
     apiKey,
-    organizerAToken,
-    "rpc/create_invitation",
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: `Concurrent Invite ${suffix}`,
-        email: invitedEmail,
-      }),
-      method: "POST",
-    },
-  );
-  const invitationResult = invitation.body?.[0];
-  if (
-    !invitation.response.ok ||
-    typeof invitationResult?.invitation_id !== "string" ||
-    typeof invitationResult?.raw_token !== "string"
-  ) {
-    throw new Error(
-      `Concurrent invitation creation failed with ${invitation.response.status}.`,
-    );
-  }
+    apiUrl,
+    circleId: CIRCLE_A,
+    displayName: `Concurrent Invite ${suffix}`,
+    organizerToken: organizerAToken,
+    serviceKey,
+    targetAuthUserId: createdUser.body.id,
+  });
 
   const firstAcceptanceToken = createLocalUserToken(
     createdUser.body.id,
@@ -1218,10 +1369,14 @@ try {
     serviceKey,
   });
   const acceptanceSuccesses = acceptanceResults.filter(
-    ({ response }) => response.ok,
+    ({ body, response }) => response.ok && typeof body === "string",
   );
   const acceptanceDenials = acceptanceResults.filter(
-    ({ response }) => !response.ok,
+    ({ body, response }) =>
+      (response.ok && body === null) ||
+      (!response.ok &&
+        body?.code === "22023" &&
+        body?.message === "Invitation is not available"),
   );
   if (
     acceptanceSuccesses.length !== 1 ||
@@ -1234,15 +1389,6 @@ try {
         .join(", ")}.`,
     );
   }
-  if (
-    acceptanceDenials[0].body?.code !== "22023" ||
-    acceptanceDenials[0].body?.message !== "Invitation is not available"
-  ) {
-    throw new Error(
-      "The losing invitation acceptance did not use the generic denial path.",
-    );
-  }
-
   const uuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
   const acceptedMembershipId = acceptanceSuccesses[0].body;
@@ -1971,7 +2117,8 @@ try {
   );
   if (
     !invitationJobTarget.response.ok ||
-    !uuid.test(invitationJobTarget.body?.id)
+    !uuid.test(invitationJobTarget.body?.id) ||
+    typeof invitationJobTarget.body?.email !== "string"
   ) {
     throw new Error(
       `Invitation-job concurrency target creation failed with ${invitationJobTarget.response.status}.`,
@@ -1985,19 +2132,19 @@ try {
     apiUrl,
     circleId: CIRCLE_A,
     holderToken: organizerAToken,
-    operationName: "request_invitation_job",
+    operationName: "request_invitation_email",
     requests: invitationJobRequestKeys.map(
       (requestKey) => () =>
         jsonRequest(
           apiUrl,
           apiKey,
           organizerAToken,
-          "rpc/request_invitation_job",
+          "rpc/request_invitation_email",
           {
             body: JSON.stringify({
               circle_id: CIRCLE_A,
-              target_auth_user_id: invitationJobTarget.body.id,
               display_name: invitationJobDisplayName,
+              email: invitationJobTarget.body.email,
               request_key: requestKey,
             }),
             method: "POST",
@@ -2006,64 +2153,66 @@ try {
     ),
     serviceKey,
   });
+  const duplicateInvitationJobSuccesses = duplicateInvitationJobResults.filter(
+    ({ body, response }) => response.ok && uuid.test(body),
+  );
+  const duplicateInvitationJobDenials = duplicateInvitationJobResults.filter(
+    ({ body, response }) =>
+      !response.ok &&
+      body?.code === "22023" &&
+      body?.message === "Invitation email could not be requested",
+  );
   if (
-    duplicateInvitationJobResults.some(({ response }) => !response.ok) ||
-    !uuid.test(duplicateInvitationJobResults[0].body) ||
-    duplicateInvitationJobResults[0].body !==
-      duplicateInvitationJobResults[1].body
+    duplicateInvitationJobSuccesses.length !== 1 ||
+    duplicateInvitationJobDenials.length !== 1
   ) {
     throw new Error(
-      `Distinct invitation-job request keys did not converge on one job (${duplicateInvitationJobResults
+      `Distinct Phase 2D request keys did not select one live request (${duplicateInvitationJobResults
         .map(
           ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
         )
         .join(", ")}).`,
     );
   }
+  const duplicateEmailRequestId = duplicateInvitationJobSuccesses[0].body;
 
   runDatabaseQuery(`
     do $duplicate_invitation_job_audit$
     declare
-      job_count integer;
-      queued_job_count integer;
-      authorized_job_count integer;
-      audit_count integer;
-      durable_job_id uuid;
+      request_count integer;
+      queued_request_count integer;
+      coordination_audit_count integer;
+      durable_request_id uuid;
       durable_request_key uuid;
     begin
       select count(*)::integer,
              count(*) filter (where state = 'queued')::integer,
-             count(*) filter (
-               where private.invitation_job_requester_is_authorized(id)
-             )::integer,
              min(id::text)::uuid,
              min(request_key::text)::uuid
-        into job_count,
-             queued_job_count,
-             authorized_job_count,
-             durable_job_id,
+        into request_count,
+             queued_request_count,
+             durable_request_id,
              durable_request_key
-        from private.invitation_jobs
+        from private.invitation_email_requests
        where circle_id = '${CIRCLE_A}'::uuid
-         and target_auth_user_id = '${invitationJobTarget.body.id}'::uuid;
+         and invited_display_name = '${invitationJobDisplayName}';
 
-      select count(*)::integer into audit_count
-        from private.audit_events
+      select count(*)::integer into coordination_audit_count
+        from private.invitation_coordination_audit_events
        where circle_id = '${CIRCLE_A}'::uuid
-         and event_type = 'invitation_job_requested'
-         and subject_type = 'invitation_job'
-         and subject_id = '${duplicateInvitationJobResults[0].body}'::uuid;
+         and email_request_id = '${duplicateEmailRequestId}'::uuid
+         and invitation_job_id is null
+         and event_type = 'email_request_created';
 
-      if job_count <> 1
-        or queued_job_count <> 1
-        or authorized_job_count <> 1
-        or audit_count <> 1
-        or durable_job_id <> '${duplicateInvitationJobResults[0].body}'::uuid
+      if request_count <> 1
+        or queued_request_count <> 1
+        or coordination_audit_count <> 1
+        or durable_request_id <> '${duplicateEmailRequestId}'::uuid
         or durable_request_key not in (
           '${invitationJobRequestKeys[0]}'::uuid,
           '${invitationJobRequestKeys[1]}'::uuid
         ) then
-        raise exception 'Distinct invitation-job request keys created duplicate or unauthorized durable state';
+        raise exception 'Distinct invitation-email request keys created duplicate or unaudited durable state';
       end if;
     end
     $duplicate_invitation_job_audit$;
@@ -2384,7 +2533,8 @@ try {
   );
   if (
     !invitationAuthorityTarget.response.ok ||
-    !uuid.test(invitationAuthorityTarget.body?.id)
+    !uuid.test(invitationAuthorityTarget.body?.id) ||
+    typeof invitationAuthorityTarget.body?.email !== "string"
   ) {
     throw new Error(
       `Invitation authority-race target creation failed with ${invitationAuthorityTarget.response.status}.`,
@@ -2398,19 +2548,19 @@ try {
     circleId: CIRCLE_A,
     holderToken: organizerAToken,
     operationName: "invitation request and organizer demotion",
-    operationNames: ["request_invitation_job", "set_membership_role"],
+    operationNames: ["request_invitation_email", "set_membership_role"],
     requests: [
       () =>
         jsonRequest(
           apiUrl,
           apiKey,
           organizerATwoToken,
-          "rpc/request_invitation_job",
+          "rpc/request_invitation_email",
           {
             body: JSON.stringify({
               circle_id: CIRCLE_A,
-              target_auth_user_id: invitationAuthorityTarget.body.id,
               display_name: `Authority Race ${invitationAuthoritySuffix}`,
+              email: invitationAuthorityTarget.body.email,
               request_key: invitationAuthorityRequestKey,
             }),
             method: "POST",
@@ -2440,7 +2590,7 @@ try {
     (!invitationRaceRequest.response.ok &&
       (invitationRaceRequest.body?.code !== "42501" ||
         invitationRaceRequest.body?.message !==
-          "Invitation delivery could not be requested"))
+          "Invitation email could not be requested"))
   ) {
     throw new Error(
       `Invitation request/demotion race did not use a safe serialized path (${invitationAuthorityResults
@@ -2455,10 +2605,10 @@ try {
     do $invitation_authority_race_audit$
     declare
       requester_role text;
-      job_count integer;
-      queued_job_count integer;
-      authorized_job_count integer;
-      request_audit_count integer;
+      email_request_count integer;
+      live_email_request_count integer;
+      invalidated_email_request_count integer;
+      creation_audit_count integer;
       invalidation_audit_count integer;
     begin
       select role into requester_role
@@ -2466,219 +2616,51 @@ try {
        where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
 
       select count(*)::integer,
-             count(*) filter (where state = 'queued')::integer,
              count(*) filter (
-               where private.invitation_job_requester_is_authorized(id)
+               where state in ('queued', 'provisioned', 'delivered')
+             )::integer,
+             count(*) filter (
+               where state = 'invalidated'
+                 and invalidation_reason = 'requester_authority_lost'
+                 and normalized_email is null
              )::integer
-        into job_count, queued_job_count, authorized_job_count
-        from private.invitation_jobs
+        into email_request_count, live_email_request_count,
+             invalidated_email_request_count
+        from private.invitation_email_requests
        where circle_id = '${CIRCLE_A}'::uuid
          and requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
          and request_key = '${invitationAuthorityRequestKey}'::uuid;
 
-      select count(*)::integer into request_audit_count
-        from private.audit_events as audit
-        join private.invitation_jobs as job
-          on job.circle_id = audit.circle_id
-         and job.id = audit.subject_id
-       where job.circle_id = '${CIRCLE_A}'::uuid
-         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
-         and job.request_key = '${invitationAuthorityRequestKey}'::uuid
-         and audit.event_type = 'invitation_job_requested';
+      select count(*)::integer into creation_audit_count
+        from private.invitation_coordination_audit_events as audit
+        join private.invitation_email_requests as request
+          on request.circle_id = audit.circle_id
+         and request.id = audit.email_request_id
+       where request.requested_by_membership_id =
+               '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and request.request_key = '${invitationAuthorityRequestKey}'::uuid
+         and audit.event_type = 'email_request_created';
 
       select count(*)::integer into invalidation_audit_count
-        from private.audit_events as audit
-        join private.invitation_jobs as job
-          on job.circle_id = audit.circle_id
-         and job.id = audit.subject_id
-       where job.circle_id = '${CIRCLE_A}'::uuid
-         and job.requested_by_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
-         and job.request_key = '${invitationAuthorityRequestKey}'::uuid
-         and audit.event_type = 'invitation_job_invalidated';
+        from private.invitation_coordination_audit_events as audit
+        join private.invitation_email_requests as request
+          on request.circle_id = audit.circle_id
+         and request.id = audit.email_request_id
+       where request.requested_by_membership_id =
+               '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and request.request_key = '${invitationAuthorityRequestKey}'::uuid
+         and audit.event_type = 'email_request_invalidated';
 
       if requester_role <> 'member'
-        or job_count not in (0, 1)
-        or queued_job_count <> 0
-        or authorized_job_count <> 0
-        or request_audit_count <> job_count
-        or invalidation_audit_count <> job_count then
-        raise exception 'Invitation request/demotion race left an eligible, duplicate, or unaudited job';
+        or email_request_count not in (0, 1)
+        or live_email_request_count <> 0
+        or invalidated_email_request_count <> email_request_count
+        or creation_audit_count <> email_request_count
+        or invalidation_audit_count <> email_request_count then
+        raise exception 'Invitation request/demotion race left eligible, duplicate, or unaudited email work';
       end if;
     end
     $invitation_authority_race_audit$;
-  `);
-
-  const invitationActivationSuffix = randomUUID();
-  const invitationActivationEmail = `invitation-activation-${invitationActivationSuffix}@example.test`;
-  const invitationActivationTarget = await jsonRequest(
-    apiUrl,
-    serviceKey,
-    serviceKey,
-    "/auth/v1/admin/users",
-    {
-      body: JSON.stringify({
-        email: invitationActivationEmail,
-        email_confirm: true,
-      }),
-      method: "POST",
-    },
-  );
-  if (
-    !invitationActivationTarget.response.ok ||
-    !uuid.test(invitationActivationTarget.body?.id)
-  ) {
-    throw new Error(
-      `Invitation activation-race target creation failed with ${invitationActivationTarget.response.status}.`,
-    );
-  }
-
-  const activationInvitation = await jsonRequest(
-    apiUrl,
-    apiKey,
-    organizerAToken,
-    "rpc/create_invitation",
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: `Activation Race ${invitationActivationSuffix}`,
-        email: invitationActivationEmail,
-      }),
-      method: "POST",
-    },
-  );
-  const activationInvitationResult = activationInvitation.body?.[0];
-  if (
-    !activationInvitation.response.ok ||
-    !uuid.test(activationInvitationResult?.invitation_id) ||
-    typeof activationInvitationResult?.raw_token !== "string"
-  ) {
-    throw new Error(
-      `Invitation activation-race setup failed with ${activationInvitation.response.status}.`,
-    );
-  }
-
-  const invitationActivationToken = createLocalUserToken(
-    invitationActivationTarget.body.id,
-    jwtSecret,
-  );
-  const invitationActivationRequestKey = randomUUID();
-  const invitationActivationResults = await runOverlappedCircleRace({
-    apiKey,
-    apiUrl,
-    circleId: CIRCLE_A,
-    holderToken: organizerAToken,
-    operationName: "invitation job request and target activation",
-    operationNames: ["request_invitation_job", "accept_invitation"],
-    requests: [
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          organizerAToken,
-          "rpc/request_invitation_job",
-          {
-            body: JSON.stringify({
-              circle_id: CIRCLE_A,
-              target_auth_user_id: invitationActivationTarget.body.id,
-              display_name: `Activation Race ${invitationActivationSuffix}`,
-              request_key: invitationActivationRequestKey,
-            }),
-            method: "POST",
-          },
-        ),
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          invitationActivationToken,
-          "rpc/accept_invitation",
-          {
-            body: JSON.stringify({
-              token: activationInvitationResult.raw_token,
-            }),
-            method: "POST",
-          },
-        ),
-    ],
-    serviceKey,
-  });
-  const [activationRaceRequest, activationRaceAcceptance] =
-    invitationActivationResults;
-  if (
-    !activationRaceAcceptance.response.ok ||
-    !uuid.test(activationRaceAcceptance.body) ||
-    (activationRaceRequest.response.ok
-      ? !uuid.test(activationRaceRequest.body)
-      : activationRaceRequest.body?.code !== "42501" ||
-        activationRaceRequest.body?.message !==
-          "Invitation delivery could not be requested")
-  ) {
-    throw new Error(
-      `Invitation request/activation race did not use a safe serialized path (${invitationActivationResults
-        .map(
-          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
-        )
-        .join(", ")}).`,
-    );
-  }
-
-  runDatabaseQuery(`
-    do $invitation_activation_race_audit$
-    declare
-      active_membership_count integer;
-      job_count integer;
-      queued_job_count integer;
-      authorized_job_count integer;
-      request_audit_count integer;
-      invalidation_audit_count integer;
-    begin
-      select count(*)::integer into active_membership_count
-        from public.circle_memberships
-       where circle_id = '${CIRCLE_A}'::uuid
-         and user_id = '${invitationActivationTarget.body.id}'::uuid
-         and status = 'active';
-
-      select count(*)::integer,
-             count(*) filter (where state = 'queued')::integer,
-             count(*) filter (
-               where private.invitation_job_requester_is_authorized(id)
-             )::integer
-        into job_count, queued_job_count, authorized_job_count
-        from private.invitation_jobs
-       where circle_id = '${CIRCLE_A}'::uuid
-         and target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
-         and request_key = '${invitationActivationRequestKey}'::uuid;
-
-      select count(*)::integer into request_audit_count
-        from private.audit_events as audit
-        join private.invitation_jobs as job
-          on job.circle_id = audit.circle_id
-         and job.id = audit.subject_id
-       where job.circle_id = '${CIRCLE_A}'::uuid
-         and job.target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
-         and job.request_key = '${invitationActivationRequestKey}'::uuid
-         and audit.event_type = 'invitation_job_requested';
-
-      select count(*)::integer into invalidation_audit_count
-        from private.audit_events as audit
-        join private.invitation_jobs as job
-          on job.circle_id = audit.circle_id
-         and job.id = audit.subject_id
-       where job.circle_id = '${CIRCLE_A}'::uuid
-         and job.target_auth_user_id = '${invitationActivationTarget.body.id}'::uuid
-         and job.request_key = '${invitationActivationRequestKey}'::uuid
-         and audit.event_type = 'invitation_job_invalidated';
-
-      if active_membership_count <> 1
-        or job_count not in (0, 1)
-        or queued_job_count <> 0
-        or authorized_job_count <> 0
-        or request_audit_count <> job_count
-        or invalidation_audit_count <> job_count then
-        raise exception 'Invitation request/activation race left an eligible, duplicate, or unaudited job';
-      end if;
-    end
-    $invitation_activation_race_audit$;
   `);
 
   const exactMaterialization = await createTargetBoundJobFixture({
@@ -2776,11 +2758,11 @@ try {
     $phase2c_exact_materialization_audit$;
   `);
   requireSuccessfulOutcome(
-    await revokeInvitation(
+    await withdrawInvitationEmailRequest(
       apiUrl,
       apiKey,
       organizerAToken,
-      exactMaterializationInvitationId,
+      exactMaterialization.emailRequestId,
     ),
     "Exact materialization fixture withdrawal",
   );
@@ -2839,9 +2821,13 @@ try {
     .map((result, index) => ({ index, result }))
     .filter(
       ({ result }) =>
-        result.response.ok &&
-        Array.isArray(result.body) &&
-        result.body.length === 0,
+        (result.response.ok &&
+          Array.isArray(result.body) &&
+          result.body.length === 0) ||
+        (!result.response.ok &&
+          result.body?.code === "22023" &&
+          result.body?.message ===
+            "Invitation delivery could not be materialized"),
     );
   if (conflictingWinners.length !== 1 || conflictingLosers.length !== 1) {
     throw new Error(
@@ -2908,11 +2894,11 @@ try {
     $phase2c_conflicting_materialization_audit$;
   `);
   requireSuccessfulOutcome(
-    await revokeInvitation(
+    await withdrawInvitationEmailRequest(
       apiUrl,
       apiKey,
       organizerAToken,
-      conflictingWinnerRow.invitation_id,
+      conflictingMaterialization.emailRequestId,
     ),
     "Conflicting materialization fixture withdrawal",
   );
@@ -3117,187 +3103,6 @@ try {
     "Phase 2C materialize/requester-demotion race passed.\n",
   );
 
-  const targetActivationTarget = await createSyntheticAuthUser(
-    apiUrl,
-    serviceKey,
-    "accept-target-activation",
-  );
-  const targetActivationToken = createLocalUserToken(
-    targetActivationTarget.id,
-    jwtSecret,
-  );
-  const targetActivationLegacyInvitation = await jsonRequest(
-    apiUrl,
-    apiKey,
-    organizerAToken,
-    "rpc/create_invitation",
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: "Phase 2C alternate activation",
-        email: targetActivationTarget.email,
-      }),
-      method: "POST",
-    },
-  );
-  requireSuccessfulOutcome(
-    targetActivationLegacyInvitation,
-    "Target-activation legacy invitation setup",
-  );
-  const targetActivationLegacyRow = targetActivationLegacyInvitation.body?.[0];
-  if (
-    !uuid.test(targetActivationLegacyRow?.invitation_id) ||
-    typeof targetActivationLegacyRow?.raw_token !== "string"
-  ) {
-    throw new Error(
-      "Target-activation legacy invitation did not return its synthetic identity.",
-    );
-  }
-  const targetActivationJobId = await requestTargetBoundInvitationJob({
-    apiKey,
-    apiUrl,
-    circleId: CIRCLE_A,
-    displayName: "Phase 2C accept target activation",
-    organizerToken: organizerAToken,
-    targetAuthUserId: targetActivationTarget.id,
-  });
-  const targetActivationRawToken = invitationToken();
-  const targetActivationMaterialization = targetBoundMaterializationRow(
-    await materializeTargetBoundInvitation(
-      apiUrl,
-      serviceKey,
-      targetActivationJobId,
-      targetActivationRawToken,
-    ),
-    "Target-activation materialization setup",
-  );
-  const targetActivationAcceptanceResults = await runTargetBoundInvitationRace({
-    apiKey,
-    apiUrl,
-    expectedOperations: {
-      phase2c_test_activation_accept_legacy: 1,
-      phase2c_test_activation_accept_target_bound: 1,
-    },
-    jobId: targetActivationJobId,
-    label: "target-bound acceptance and alternate target activation",
-    requests: [
-      () =>
-        acceptInvitation(
-          apiUrl,
-          apiKey,
-          targetActivationToken,
-          targetActivationRawToken,
-          "phase2c_test_activation_accept_target_bound",
-        ),
-      () =>
-        acceptInvitation(
-          apiUrl,
-          apiKey,
-          targetActivationToken,
-          targetActivationLegacyRow.raw_token,
-          "phase2c_test_activation_accept_legacy",
-        ),
-    ],
-    serviceKey,
-  });
-  targetActivationAcceptanceResults.forEach((result, index) =>
-    rejectUnsafeOutcome(result, `Target-activation acceptance ${index + 1}`),
-  );
-  const targetActivationSuccesses = targetActivationAcceptanceResults
-    .map((result, index) => ({ index, result }))
-    .filter(({ result }) => result.response.ok && uuid.test(result.body));
-  if (targetActivationSuccesses.length !== 1) {
-    throw new Error(
-      `Target activation race did not select exactly one membership (${targetActivationAcceptanceResults
-        .map(
-          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
-        )
-        .join(" | ")}).`,
-    );
-  }
-  const targetBoundAcceptanceWon = targetActivationSuccesses[0].index === 0;
-  const targetActivationMembershipId = targetActivationSuccesses[0].result.body;
-  requireInvitationDenial(
-    targetActivationAcceptanceResults[targetBoundAcceptanceWon ? 1 : 0],
-    "Target-activation losing acceptance",
-  );
-  runDatabaseQuery(`
-    do $phase2c_accept_target_activation_audit$
-    begin
-      if (select count(*) from public.circle_memberships
-           where circle_id = '${CIRCLE_A}'::uuid
-             and user_id = '${targetActivationTarget.id}'::uuid
-             and status = 'active') <> 1
-        or not exists (
-          select 1 from private.invitation_jobs
-           where id = '${targetActivationJobId}'::uuid
-             and state = 'invalidated'
-             and invalidation_reason =
-               '${targetBoundAcceptanceWon ? "target_accepted" : "target_became_active"}'
-             and not private.invitation_job_requester_is_authorized(id)
-        )
-        or not exists (
-          select 1 from private.invitations
-           where id = '${targetActivationMaterialization.invitation_id}'::uuid
-             and invitation_job_id = '${targetActivationJobId}'::uuid
-             and (
-               (
-                 ${targetBoundAcceptanceWon ? "true" : "false"}
-                 and accepted_membership_id =
-                   '${targetActivationMembershipId}'::uuid
-                 and accepted_at is not null
-                 and revoked_at is null
-               )
-               or (
-                 ${targetBoundAcceptanceWon ? "false" : "true"}
-                 and accepted_at is null
-                 and revoked_at is not null
-                 and revocation_reason = 'target_became_active'
-               )
-             )
-        )
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_job_invalidated'
-               and subject_id = '${targetActivationJobId}'::uuid
-               and actor_membership_id =
-                 '${targetActivationMembershipId}'::uuid) <> 1
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_accepted'
-               and subject_id =
-                 '${targetBoundAcceptanceWon ? targetActivationMaterialization.invitation_id : targetActivationLegacyRow.invitation_id}'::uuid
-               and actor_membership_id =
-                 '${targetActivationMembershipId}'::uuid) <> 1 then
-        raise exception 'Acceptance/target-activation race left split or live invitation state';
-      end if;
-    end
-    $phase2c_accept_target_activation_audit$;
-  `);
-  requireEmptyMaterialization(
-    await loadTargetBoundInvitation(apiUrl, serviceKey, targetActivationJobId),
-    "Target-activation terminal load",
-  );
-  if (targetBoundAcceptanceWon) {
-    requireSuccessfulOutcome(
-      await revokeInvitation(
-        apiUrl,
-        apiKey,
-        organizerAToken,
-        targetActivationLegacyRow.invitation_id,
-      ),
-      "Target-activation losing legacy invitation cleanup",
-    );
-  }
-  for (const [label, rawToken] of [
-    ["target-bound", targetActivationRawToken],
-    ["alternate", targetActivationLegacyRow.raw_token],
-  ]) {
-    requireInvitationDenial(
-      await acceptInvitation(apiUrl, apiKey, targetActivationToken, rawToken),
-      `Target-activation ${label} token replay`,
-    );
-  }
-  process.stdout.write("Phase 2C accept/target-activation race passed.\n");
-
   const withdrawalAcceptance = await createTargetBoundJobFixture({
     apiKey,
     apiUrl,
@@ -3336,11 +3141,11 @@ try {
             "phase2c_test_withdrawal_accept",
           ),
         () =>
-          revokeInvitation(
+          withdrawInvitationEmailRequest(
             apiUrl,
             apiKey,
             organizerAToken,
-            withdrawalMaterialization.invitation_id,
+            withdrawalAcceptance.emailRequestId,
             "phase2c_test_withdrawal_revoke",
           ),
       ],
@@ -3357,18 +3162,12 @@ try {
   const withdrawalAcceptanceWon =
     racedWithdrawalAcceptance.response.ok &&
     uuid.test(racedWithdrawalAcceptance.body);
-  const organizerWithdrawalWon = racedOrganizerWithdrawal.response.ok;
-  if (withdrawalAcceptanceWon === organizerWithdrawalWon) {
+  if (!racedOrganizerWithdrawal.response.ok) {
     throw new Error(
-      `Acceptance/withdrawal race did not select one terminal action (${racedWithdrawalAcceptance.response.status}:${JSON.stringify(racedWithdrawalAcceptance.body)} | ${racedOrganizerWithdrawal.response.status}:${JSON.stringify(racedOrganizerWithdrawal.body)}).`,
+      `Phase 2D withdrawal did not complete idempotently (${racedOrganizerWithdrawal.response.status}:${JSON.stringify(racedOrganizerWithdrawal.body)}).`,
     );
   }
-  if (withdrawalAcceptanceWon) {
-    requireInvitationChangeDenial(
-      racedOrganizerWithdrawal,
-      "Withdrawal losing to acceptance",
-    );
-  } else {
+  if (!withdrawalAcceptanceWon) {
     requireInvitationDenial(
       racedWithdrawalAcceptance,
       "Acceptance losing to withdrawal",
@@ -3449,7 +3248,26 @@ try {
                  '${withdrawalMaterialization.invitation_id}'::uuid
                and actor_membership_id =
                  '${ORGANIZER_A_MEMBERSHIP}'::uuid) <>
-                   ${withdrawalAcceptanceWon ? 0 : 1} then
+                   ${withdrawalAcceptanceWon ? 0 : 1}
+        or not exists (
+          select 1 from private.invitation_email_requests
+           where id = '${withdrawalAcceptance.emailRequestId}'::uuid
+             and state =
+               '${withdrawalAcceptanceWon ? "accepted" : "invalidated"}'
+             and invalidation_reason is not distinct from
+               ${withdrawalAcceptanceWon ? "null::text" : "'organizer_withdrawn'::text"}
+             and (accepted_at is not null) =
+               ${withdrawalAcceptanceWon ? "true" : "false"}
+             and normalized_email is null
+        )
+        or (select count(*)
+              from private.invitation_coordination_audit_events
+             where email_request_id =
+                 '${withdrawalAcceptance.emailRequestId}'::uuid
+               and invitation_job_id =
+                 '${withdrawalAcceptance.jobId}'::uuid
+               and event_type =
+                 '${withdrawalAcceptanceWon ? "email_request_accepted" : "email_request_invalidated"}') <> 1 then
         raise exception 'Acceptance/withdrawal race left mismatched durable state';
       end if;
     end
@@ -4486,8 +4304,10 @@ try {
   if (
     !invitationClosureUser.response.ok ||
     !uuid.test(invitationClosureUser.body?.id) ||
+    typeof invitationClosureUser.body?.email !== "string" ||
     !invitationWorkTarget.response.ok ||
-    !uuid.test(invitationWorkTarget.body?.id)
+    !uuid.test(invitationWorkTarget.body?.id) ||
+    typeof invitationWorkTarget.body?.email !== "string"
   ) {
     throw new Error("Invitation/closure Auth setup failed.");
   }
@@ -4536,17 +4356,19 @@ try {
     invitationClosureUser.body.id,
     jwtSecret,
   );
+  const targetJobDisplayName = `Closure target ${invitationClosureSuffix}`;
+  const requesterJobDisplayName = `Closure requester ${invitationClosureSuffix}`;
   const targetJobRequestKey = randomUUID();
   const targetJob = await jsonRequest(
     apiUrl,
     apiKey,
     organizerAToken,
-    "rpc/request_invitation_job",
+    "rpc/phase2d_test_provision_invitation",
     {
       body: JSON.stringify({
         circle_id: CIRCLE_A,
         target_auth_user_id: invitationClosureUser.body.id,
-        display_name: `Closure target ${invitationClosureSuffix}`,
+        display_name: targetJobDisplayName,
         request_key: targetJobRequestKey,
       }),
       method: "POST",
@@ -4557,99 +4379,47 @@ try {
     apiUrl,
     apiKey,
     invitationClosureToken,
-    "rpc/request_invitation_job",
+    "rpc/phase2d_test_provision_invitation",
     {
       body: JSON.stringify({
         circle_id: CIRCLE_B,
         target_auth_user_id: invitationWorkTarget.body.id,
-        display_name: `Closure requester ${invitationClosureSuffix}`,
+        display_name: requesterJobDisplayName,
         request_key: requesterJobRequestKey,
       }),
       method: "POST",
     },
   );
-  const legacyClosureInvitation = await jsonRequest(
-    apiUrl,
-    apiKey,
-    organizerAToken,
-    "rpc/create_invitation",
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: `Closure legacy ${invitationClosureSuffix}`,
-        email: invitationClosureEmail,
-      }),
-      method: "POST",
-    },
+  const legacyClosureInvitationResult = targetBoundMaterializationRow(
+    await materializeTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      targetJob.body,
+      invitationToken(),
+    ),
+    "Invitation/closure materialization setup",
   );
-  const legacyClosureInvitationResult = legacyClosureInvitation.body?.[0];
   if (
     !targetJob.response.ok ||
     !uuid.test(targetJob.body) ||
     !requesterJob.response.ok ||
     !uuid.test(requesterJob.body) ||
-    !legacyClosureInvitation.response.ok ||
     !uuid.test(legacyClosureInvitationResult?.invitation_id)
   ) {
     throw new Error("Invitation/closure durable-work setup failed.");
   }
 
   const invitationClosureKey = randomUUID();
-  const invitationClosureRace = await runOverlappedAuthRace({
-    apiKey,
+  const invitationClosureRequest = await jsonRequest(
     apiUrl,
-    operationName: "invitation target/request work and closure request",
-    operationNames: ["request_invitation_job", "request_account_closure"],
-    requests: [
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          organizerAToken,
-          "rpc/request_invitation_job",
-          {
-            body: JSON.stringify({
-              circle_id: CIRCLE_A,
-              target_auth_user_id: invitationClosureUser.body.id,
-              display_name: `Closure target ${invitationClosureSuffix}`,
-              request_key: targetJobRequestKey,
-            }),
-            method: "POST",
-          },
-        ),
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          invitationClosureToken,
-          "rpc/request_invitation_job",
-          {
-            body: JSON.stringify({
-              circle_id: CIRCLE_B,
-              target_auth_user_id: invitationWorkTarget.body.id,
-              display_name: `Closure requester ${invitationClosureSuffix}`,
-              request_key: requesterJobRequestKey,
-            }),
-            method: "POST",
-          },
-        ),
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          invitationClosureToken,
-          "rpc/request_account_closure",
-          {
-            body: JSON.stringify({ request_key: invitationClosureKey }),
-            method: "POST",
-          },
-        ),
-    ],
-    serviceKey,
-    targetAuthUserId: invitationClosureUser.body.id,
-  });
-  const [targetJobReplay, requesterJobReplay, invitationClosureRequest] =
-    invitationClosureRace;
+    apiKey,
+    invitationClosureToken,
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({ request_key: invitationClosureKey }),
+      method: "POST",
+    },
+  );
   if (
     !invitationClosureRequest.response.ok ||
     !uuid.test(invitationClosureRequest.body)
@@ -4658,25 +4428,6 @@ try {
       `Invitation/closure request did not survive its valid serial outcomes (${invitationClosureRequest.response.status}).`,
     );
   }
-  for (const [jobReplay, expectedJobId] of [
-    [targetJobReplay, targetJob.body],
-    [requesterJobReplay, requesterJob.body],
-  ]) {
-    if (jobReplay.response.ok) {
-      if (jobReplay.body !== expectedJobId) {
-        throw new Error("Invitation replay changed durable job identity.");
-      }
-    } else if (
-      jobReplay.body?.code === "40P01" ||
-      jobReplay.body?.code !== "42501" ||
-      jobReplay.body?.message !== "Invitation delivery could not be requested"
-    ) {
-      throw new Error(
-        `Invitation/closure replay did not use the generic blocking path (${jobReplay.body?.code ?? "none"}).`,
-      );
-    }
-  }
-
   const invitationClosurePrepare = await jsonRequest(
     apiUrl,
     serviceKey,
@@ -4699,38 +4450,46 @@ try {
   }
 
   const blockedInvitationReplays = await Promise.all([
-    jsonRequest(apiUrl, apiKey, organizerAToken, "rpc/request_invitation_job", {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        target_auth_user_id: invitationClosureUser.body.id,
-        display_name: `Closure target ${invitationClosureSuffix}`,
-        request_key: targetJobRequestKey,
-      }),
-      method: "POST",
-    }),
+    jsonRequest(
+      apiUrl,
+      apiKey,
+      organizerAToken,
+      "rpc/request_invitation_email",
+      {
+        body: JSON.stringify({
+          circle_id: CIRCLE_A,
+          display_name: targetJobDisplayName,
+          email: invitationClosureUser.body.email,
+          request_key: targetJobRequestKey,
+        }),
+        method: "POST",
+      },
+    ),
     jsonRequest(
       apiUrl,
       apiKey,
       invitationClosureToken,
-      "rpc/request_invitation_job",
+      "rpc/request_invitation_email",
       {
         body: JSON.stringify({
           circle_id: CIRCLE_B,
-          target_auth_user_id: invitationWorkTarget.body.id,
-          display_name: `Closure requester ${invitationClosureSuffix}`,
+          display_name: requesterJobDisplayName,
+          email: invitationWorkTarget.body.email,
           request_key: requesterJobRequestKey,
         }),
         method: "POST",
       },
     ),
   ]);
+  const [targetClosureReplay, requesterClosureReplay] =
+    blockedInvitationReplays;
   if (
-    blockedInvitationReplays.some(
-      ({ response, body }) =>
-        response.ok ||
-        body?.code !== "42501" ||
-        body?.message !== "Invitation delivery could not be requested",
-    )
+    !targetClosureReplay.response.ok ||
+    targetClosureReplay.body !== targetJobRequestKey ||
+    requesterClosureReplay.response.ok ||
+    requesterClosureReplay.body?.code !== "42501" ||
+    requesterClosureReplay.body?.message !==
+      "Invitation email could not be requested"
   ) {
     throw new Error("Prepared closure allowed invitation work to resurrect.");
   }
@@ -4795,6 +4554,20 @@ try {
              and revoked_by_closure_request_id =
                '${invitationClosureRequest.body}'::uuid
              and revocation_reason = 'account_closure'
+        )
+        or not exists (
+          select 1 from private.invitation_email_requests
+           where id = '${targetJobRequestKey}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason = 'target_account_closure'
+             and normalized_email is null
+        )
+        or not exists (
+          select 1 from private.invitation_email_requests
+           where id = '${requesterJobRequestKey}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason = 'requester_account_closure'
+             and normalized_email is null
         ) then
         raise exception 'Invitation/closure race left resurrectable or falsely attributed terminal work';
       end if;
@@ -4864,29 +4637,16 @@ try {
     $acceptance_closure_setup$;
   `);
 
-  const acceptanceClosureInvitation = await jsonRequest(
-    apiUrl,
-    apiKey,
-    organizerAToken,
-    "rpc/create_invitation",
-    {
-      body: JSON.stringify({
-        circle_id: CIRCLE_A,
-        display_name: `Acceptance closure ${acceptanceClosureSuffix}`,
-        email: acceptanceClosureEmail,
-      }),
-      method: "POST",
-    },
-  );
   const acceptanceClosureInvitationResult =
-    acceptanceClosureInvitation.body?.[0];
-  if (
-    !acceptanceClosureInvitation.response.ok ||
-    !uuid.test(acceptanceClosureInvitationResult?.invitation_id) ||
-    typeof acceptanceClosureInvitationResult?.raw_token !== "string"
-  ) {
-    throw new Error("Invitation acceptance/closure invitation setup failed.");
-  }
+    await createDeliveredInvitationFixture({
+      apiKey,
+      apiUrl,
+      circleId: CIRCLE_A,
+      displayName: `Acceptance closure ${acceptanceClosureSuffix}`,
+      organizerToken: organizerAToken,
+      serviceKey,
+      targetAuthUserId: acceptanceClosureUser.body.id,
+    });
 
   const acceptanceClosureToken = createLocalUserToken(
     acceptanceClosureUser.body.id,
@@ -4939,18 +4699,17 @@ try {
     );
   }
 
-  const invitationAcceptanceWon = racedInvitationAcceptance.response.ok;
-  if (invitationAcceptanceWon) {
-    if (!uuid.test(racedInvitationAcceptance.body)) {
-      throw new Error(
-        "Invitation acceptance/closure race returned an invalid membership.",
-      );
-    }
-  } else if (
-    racedInvitationAcceptance.body?.code === "40P01" ||
-    racedInvitationAcceptance.body?.code !== "22023" ||
-    racedInvitationAcceptance.body?.message !== "Invitation is not available"
-  ) {
+  const invitationAcceptanceWon =
+    racedInvitationAcceptance.response.ok &&
+    uuid.test(racedInvitationAcceptance.body);
+  const invitationAcceptanceDenied =
+    (racedInvitationAcceptance.response.ok &&
+      racedInvitationAcceptance.body === null) ||
+    (!racedInvitationAcceptance.response.ok &&
+      racedInvitationAcceptance.body?.code === "22023" &&
+      racedInvitationAcceptance.body?.message ===
+        "Invitation is not available");
+  if (!invitationAcceptanceWon && !invitationAcceptanceDenied) {
     throw new Error(
       `Invitation acceptance/closure race did not use a valid serial denial (${racedInvitationAcceptance.body?.code ?? "none"}).`,
     );
@@ -5007,11 +4766,15 @@ try {
       method: "POST",
     },
   );
+  const acceptanceAfterClosureIsReplay =
+    acceptanceAfterClosure.response.ok && acceptanceAfterClosure.body === null;
+  const acceptanceAfterClosureIsUnavailable =
+    !acceptanceAfterClosure.response.ok &&
+    acceptanceAfterClosure.body?.code === "22023" &&
+    acceptanceAfterClosure.body?.message === "Invitation is not available";
   if (
-    acceptanceAfterClosure.response.ok ||
-    acceptanceAfterClosure.body?.code === "40P01" ||
-    acceptanceAfterClosure.body?.code !== "22023" ||
-    acceptanceAfterClosure.body?.message !== "Invitation is not available"
+    (!acceptanceAfterClosureIsReplay && !acceptanceAfterClosureIsUnavailable) ||
+    acceptanceAfterClosure.body?.code === "40P01"
   ) {
     throw new Error(
       "Prepared closure allowed its raced invitation to become available.",
@@ -5138,7 +4901,7 @@ try {
   `);
 
   process.stdout.write(
-    "Overlapping organizer revocation and role changes, guardian grants, target-bound invitation materialization and acceptance against conflicts, activation, withdrawal, demotion, and closure, legacy invitation acceptance, invitation job requests, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, Phase 2D target-bound invitation provisioning, materialization, acceptance, replay, withdrawal, demotion, and closure, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

@@ -30,10 +30,14 @@ export type InvitationLedgerJob = Readonly<{
   requestedAt: string;
 }>;
 
-export type ConfirmedInvitationRecipient = Readonly<{
+export type InvitationDeliveryRecipient = Readonly<{
   email: string;
-  confirmedAt: string;
+  /** Null only for an exact account provisioned unconfirmed for this invite. */
+  confirmedAt: string | null;
 }>;
+
+/** @deprecated Prefer InvitationDeliveryRecipient for the Phase 2D flow. */
+export type ConfirmedInvitationRecipient = InvitationDeliveryRecipient;
 
 /**
  * Opaque identity/version for the confirmed recipient snapshot. It must change
@@ -54,6 +58,8 @@ export type InvitationProviderReceipt = Readonly<{
   messageId: string;
   acceptedAt: string;
   idempotencyKey: string;
+  /** SHA-256 of the exact provider payload/body accepted for delivery. */
+  payloadSha256: string;
 }>;
 
 export type InvitationWorkerResult = Readonly<{
@@ -83,7 +89,7 @@ export type InvitationCompletionInput = InvitationMaterializationInput &
 
 export type InvitationDeliveryAuthorization = InvitationMaterialization &
   Readonly<{
-    recipient: ConfirmedInvitationRecipient;
+    recipient: InvitationDeliveryRecipient;
     recipientBinding: InvitationRecipientBinding;
   }>;
 
@@ -332,7 +338,7 @@ function validateJob(value: unknown): InvitationLedgerJob {
   return value as InvitationLedgerJob;
 }
 
-function validateRecipient(value: unknown): ConfirmedInvitationRecipient {
+function validateRecipient(value: unknown): InvitationDeliveryRecipient {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, ["email", "confirmedAt"]) ||
@@ -342,10 +348,11 @@ function validateRecipient(value: unknown): ConfirmedInvitationRecipient {
     value.email !== value.email.trim().toLowerCase() ||
     !EMAIL.test(value.email) ||
     CONTROL_CHARACTER.test(value.email) ||
-    !isBoundedRfc3339Timestamp(value.confirmedAt)
+    (value.confirmedAt !== null &&
+      !isBoundedRfc3339Timestamp(value.confirmedAt))
   )
     failed();
-  return value as ConfirmedInvitationRecipient;
+  return value as InvitationDeliveryRecipient;
 }
 
 function isOpaqueRecipientBinding(
@@ -417,6 +424,7 @@ function validateReceipt(
       "messageId",
       "acceptedAt",
       "idempotencyKey",
+      "payloadSha256",
     ]) ||
     typeof value.provider !== "string" ||
     !PROVIDER.test(value.provider) ||
@@ -425,7 +433,9 @@ function validateReceipt(
     value.messageId.length > 200 ||
     CONTROL_CHARACTER.test(value.messageId) ||
     !isCanonicalUtc(value.acceptedAt) ||
-    value.idempotencyKey !== expectedIdempotencyKey
+    value.idempotencyKey !== expectedIdempotencyKey ||
+    typeof value.payloadSha256 !== "string" ||
+    !SHA256_HEX.test(value.payloadSha256)
   )
     failed();
   return value as InvitationProviderReceipt;
@@ -564,7 +574,8 @@ async function runEnabledInvitationWorker(
     completedReceipt.provider !== providerReceipt.provider ||
     completedReceipt.messageId !== providerReceipt.messageId ||
     completedReceipt.acceptedAt !== providerReceipt.acceptedAt ||
-    completedReceipt.idempotencyKey !== providerReceipt.idempotencyKey
+    completedReceipt.idempotencyKey !== providerReceipt.idempotencyKey ||
+    completedReceipt.payloadSha256 !== providerReceipt.payloadSha256
   )
     failed();
   await runtime.injectFault?.({ stage: "after-completion" });

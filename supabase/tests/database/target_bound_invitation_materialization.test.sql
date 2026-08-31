@@ -184,17 +184,17 @@ select ok(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.create_invitation(uuid,text,text,uuid)',
     'EXECUTE'
   )
-  and has_function_privilege(
+  and not has_function_privilege(
     'anon',
     'public.preflight_invitation(text,text)',
     'EXECUTE'
   ),
-  'legacy local create and preflight ACLs remain explicitly isolated and unchanged'
+  'legacy create and preflight RPC execution is retired'
 );
 
 set local timezone to 'UTC';
@@ -234,6 +234,17 @@ values
   ('10000000-0000-4000-8000-000000000044', 'target-requester-closure@example.test', statement_timestamp(), '{}'),
   ('10000000-0000-4000-8000-000000000045', 'target-direct-expiry@example.test', statement_timestamp(), '{}'),
   ('10000000-0000-4000-8000-000000000046', 'target-load-closure@example.test', statement_timestamp(), '{}');
+
+-- Preserve the historical target-binding journeys under transaction-local
+-- fixture grants while production remains Phase 2D-only.
+grant execute on function public.request_invitation_job(uuid, uuid, text, uuid)
+  to authenticated;
+grant execute on function public.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function private.create_invitation(uuid, text, text, uuid)
+  to authenticated;
+grant execute on function private.accept_invitation(text)
+  to authenticated;
 
 select 'token-' || repeat('a', 40) as raw_token,
        encode(extensions.digest('token-' || repeat('a', 40), 'sha256'), 'hex') as token_hash
@@ -346,7 +357,7 @@ update auth.users set email = 'target-bound-one@example.test'
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000032', true);
 select is(
-  public.accept_invitation(:'target_one_raw_token'),
+  private.accept_invitation(:'target_one_raw_token'),
   null::uuid,
   'the same invited email on the wrong Auth UUID is denied generically'
 );
@@ -364,7 +375,7 @@ update auth.users set email = 'target-bound-one@example.test'
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000031', true);
-select public.accept_invitation(:'target_one_raw_token') as membership_id
+select private.accept_invitation(:'target_one_raw_token') as membership_id
   \gset accepted_
 select isnt(:'accepted_membership_id'::uuid, null::uuid,
   'the exact target Auth account can accept the target-bound invitation');
@@ -438,7 +449,7 @@ update auth.users set email = 'target-binding-changed@example.test'
  where id = '10000000-0000-4000-8000-000000000034';
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000034', true);
-select is(public.accept_invitation(:'binding_drift_raw_token'), null::uuid,
+select is(private.accept_invitation(:'binding_drift_raw_token'), null::uuid,
   'recipient-binding drift returns a generic NULL denial');
 reset role;
 select is(
@@ -487,7 +498,7 @@ insert into public.circle_memberships (
 );
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000035', true);
-select is(public.accept_invitation(:'detached_raw_token'), null::uuid,
+select is(private.accept_invitation(:'detached_raw_token'), null::uuid,
   'a detached retained-person target is denied generically');
 reset role;
 select is(
@@ -590,6 +601,7 @@ reset role;
 select * from private.materialize_target_bound_invitation_job(
   :'cross_link_job_job_id'::uuid, 1, :'cross_link_token_hash'
 ) \gset cross_link_materialized_
+set constraints all immediate;
 alter table private.invitation_jobs disable trigger invitation_jobs_integrity;
 alter table private.invitation_jobs
   drop constraint invitation_jobs_invitation_unique;
@@ -815,10 +827,10 @@ select * from private.materialize_target_bound_invitation_job(
 ) \gset accept_replay_materialized_
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000041', true);
-select public.accept_invitation(:'accept_replay_raw_token') as membership_id
+select private.accept_invitation(:'accept_replay_raw_token') as membership_id
   \gset accept_replay_result_
 select is(
-  public.accept_invitation(:'accept_replay_raw_token'),
+  private.accept_invitation(:'accept_replay_raw_token'),
   null::uuid,
   'accepted target-bound invitation replay returns generic NULL'
 );

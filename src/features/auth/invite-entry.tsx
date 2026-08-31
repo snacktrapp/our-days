@@ -10,7 +10,6 @@ import {
 } from "react";
 import { purgeOurDaysBrowserState } from "@/lib/auth/browser-private-state";
 import {
-  requestInviteCode,
   stageInvitationIntent,
   type InviteActionState,
   verifyAndAcceptInvitation,
@@ -25,20 +24,15 @@ export function InviteEntry({
   hasStagedIntent = false,
 }: Readonly<{ hasStagedIntent?: boolean }>) {
   const [email, setEmail] = useState("");
-  const [emailEdited, setEmailEdited] = useState(false);
   const [codeRevision, setCodeRevision] = useState(0);
-  const [clearedRequestEmail, setClearedRequestEmail] = useState<string | null>(
-    null,
-  );
-  const [browserCleanupFailed, setBrowserCleanupFailed] = useState(false);
+  const [cleanupState, setCleanupState] = useState<
+    "checking" | "failed" | "ready"
+  >("checking");
   const [intentState, setIntentState] = useState<IntentState>(
     hasStagedIntent ? "ready" : "opening",
   );
+  const emailInput = useRef<HTMLInputElement>(null);
   const codeInput = useRef<HTMLInputElement>(null);
-  const [requestState, requestAction, requestPending] = useActionState(
-    requestInviteCode,
-    initialInviteActionState,
-  );
   const [verifyState, verifyAction, verifyPending] = useActionState(
     verifyAndAcceptInvitation,
     initialInviteActionState,
@@ -90,27 +84,22 @@ export function InviteEntry({
       });
   }, [hasStagedIntent]);
 
-  const codeRequested = requestState.status === "sent";
-  const cleanupRequestEmail = requestState.clearBrowserState
-    ? (requestState.email ?? null)
-    : null;
-  const browserStateReady =
-    cleanupRequestEmail === null || clearedRequestEmail === cleanupRequestEmail;
   useEffect(() => {
-    if (!cleanupRequestEmail || clearedRequestEmail === cleanupRequestEmail) {
-      return;
-    }
+    if (intentState !== "ready" || cleanupState !== "checking") return;
+    let active = true;
     void purgeOurDaysBrowserState().then((cleared) => {
-      setBrowserCleanupFailed(!cleared);
-      if (cleared) setClearedRequestEmail(cleanupRequestEmail);
+      if (!active) return;
+      setCleanupState(cleared ? "ready" : "failed");
     });
-  }, [cleanupRequestEmail, clearedRequestEmail]);
+    return () => {
+      active = false;
+    };
+  }, [cleanupState, intentState]);
 
   useEffect(() => {
-    if (!codeRequested || !browserStateReady) return;
-    codeInput.current?.focus({ preventScroll: true });
-    codeInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [browserStateReady, codeRequested]);
+    if (intentState !== "ready" || cleanupState !== "ready") return;
+    emailInput.current?.focus({ preventScroll: true });
+  }, [cleanupState, intentState]);
 
   useEffect(() => {
     if (verifyState.status === "accepted") {
@@ -122,15 +111,10 @@ export function InviteEntry({
     }
   }, [verifyState.status]);
 
-  const requestIsError =
-    !emailEdited &&
-    ["invalid", "denied", "unavailable"].includes(requestState.status);
   const verifyIsError =
     verifyState.revision === codeRevision &&
     ["invalid", "denied", "unavailable"].includes(verifyState.status);
-  const submittedEmail = requestState.email ?? email.trim().toLowerCase();
-  const busy =
-    requestPending || verifyPending || verifyState.status === "accepted";
+  const busy = verifyPending || verifyState.status === "accepted";
 
   return (
     <main className="private-entry-shell">
@@ -156,22 +140,50 @@ export function InviteEntry({
               </p>
               <Link href="/sign-in">Sign in as a returning member</Link>
             </>
-          ) : codeRequested ? (
+          ) : cleanupState !== "ready" ? (
+            <>
+              <p
+                className={cleanupState === "failed" ? "auth-error" : undefined}
+                role={cleanupState === "failed" ? "alert" : "status"}
+              >
+                {cleanupState === "failed"
+                  ? "Private browser data is still open in another Our Days tab. Close it, then reload this invitation before continuing."
+                  : "Preparing a private invitation…"}
+              </p>
+              {cleanupState === "failed" ? (
+                <Link href="/sign-in">Sign in as a returning member</Link>
+              ) : null}
+            </>
+          ) : (
             <>
               <p>
-                We sent a six-digit code to <strong>{submittedEmail}</strong>.
-                You can safely return here after opening Mail.
+                Your organizer sent two private emails. Use the address they
+                invited and the newest six-digit code from the Our Days
+                invitation or sign-in message.
               </p>
-              {browserCleanupFailed ? (
-                <p className="auth-error" role="alert">
-                  Private browser data could not be cleared. Close other Our
-                  Days tabs, then use a different email and try again.
-                </p>
-              ) : null}
               <form action={verifyAction} noValidate>
-                <input type="hidden" name="email" value={submittedEmail} />
                 <input type="hidden" name="revision" value={codeRevision} />
-                <label htmlFor="invite-code">Six-digit code</label>
+                <label htmlFor="invite-email">Email address</label>
+                <input
+                  ref={emailInput}
+                  id="invite-email"
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  maxLength={254}
+                  required
+                  disabled={busy}
+                  value={email}
+                  aria-invalid={verifyIsError ? true : undefined}
+                  aria-describedby={
+                    verifyState.revision === codeRevision && verifyState.message
+                      ? "invite-verify-status"
+                      : undefined
+                  }
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+                <label htmlFor="invite-code">Six-digit invitation code</label>
                 <input
                   ref={codeInput}
                   id="invite-code"
@@ -182,7 +194,7 @@ export function InviteEntry({
                   pattern="[0-9]{6}"
                   maxLength={6}
                   required
-                  disabled={busy || !browserStateReady}
+                  disabled={busy}
                   aria-invalid={verifyIsError ? true : undefined}
                   aria-describedby={
                     verifyState.revision === codeRevision && verifyState.message
@@ -191,7 +203,7 @@ export function InviteEntry({
                   }
                   onChange={() => setCodeRevision((revision) => revision + 1)}
                 />
-                <button type="submit" disabled={busy || !browserStateReady}>
+                <button type="submit" disabled={busy}>
                   {verifyPending ? "Joining…" : "Join family journal"}
                 </button>
                 {verifyState.revision === codeRevision &&
@@ -205,54 +217,11 @@ export function InviteEntry({
                   </p>
                 ) : null}
               </form>
-              <a href="/invite">Use a different email</a>
-            </>
-          ) : (
-            <>
               <p>
-                Use the email address where your invitation arrived. If another
-                account is open on this device, continuing will sign it out.
+                Missing or expired code? Ask your organizer for a fresh private
+                invitation.
               </p>
-              <form
-                action={requestAction}
-                noValidate
-                onSubmit={() => setEmailEdited(false)}
-              >
-                <label htmlFor="invite-email">Email address</label>
-                <input
-                  id="invite-email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  maxLength={254}
-                  required
-                  disabled={busy}
-                  value={email}
-                  aria-invalid={requestIsError ? true : undefined}
-                  aria-describedby={
-                    !emailEdited && requestState.message
-                      ? "invite-request-status"
-                      : undefined
-                  }
-                  onChange={(event) => {
-                    setEmail(event.target.value);
-                    setEmailEdited(true);
-                  }}
-                />
-                <button type="submit" disabled={busy}>
-                  {requestPending ? "Sending…" : "Email me a code"}
-                </button>
-                {!emailEdited && requestState.message ? (
-                  <p
-                    id="invite-request-status"
-                    className={requestIsError ? "auth-error" : "auth-status"}
-                    role={requestIsError ? "alert" : "status"}
-                  >
-                    {requestState.message}
-                  </p>
-                ) : null}
-              </form>
+              <Link href="/sign-in">Sign in as a returning member</Link>
             </>
           )}
         </div>

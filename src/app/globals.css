@@ -1484,6 +1484,17 @@ textarea:focus-visible,
   line-height: 1.35;
   text-align: center;
 }
+.invite-section form.connected-invite-form {
+  gap: 6px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 15px;
+}
+.connected-invite-form label:not(:first-child) {
+  margin-top: 4px;
+}
+.connected-invite-form > p {
+  margin-top: 0 !important;
+}
 .invite-review > h3 {
   margin: 6px 0 9px;
   display: block;
@@ -1491,6 +1502,11 @@ textarea:focus-visible,
   font-family: Georgia, serif;
   font-size: 18px;
   font-weight: 500;
+}
+.invite-review-email {
+  overflow-wrap: anywhere;
+  color: #526047 !important;
+  font-weight: 700;
 }
 .invite-review > div {
   margin-top: 12px;
@@ -1529,6 +1545,22 @@ textarea:focus-visible,
   font-family: Georgia, serif;
   font-size: 14px;
   font-weight: 500;
+}
+.invitation-status {
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--teal) 24%, var(--hairline));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 6%, var(--cream));
+  color: #526047;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1.4;
+}
+.status-queued,
+.status-provisioned {
+  border-style: dashed;
 }
 .pending-invitation-list small {
   color: var(--muted);

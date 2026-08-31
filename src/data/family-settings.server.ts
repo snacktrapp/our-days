@@ -30,12 +30,28 @@ type FamilyAccessData = Readonly<{
     guardianMembershipId: string;
   }>[];
   pendingInvitations: readonly Readonly<{
-    invitationId: string;
+    emailRequestId: string;
     displayName: string;
+    state: "queued" | "provisioned" | "delivered";
     createdAt: string;
     expiresAt: string;
   }>[];
 }>;
+
+function invitationStatus(
+  value: string,
+): "queued" | "provisioned" | "delivered" {
+  if (value === "queued" || value === "provisioned" || value === "delivered") {
+    return value;
+  }
+  throw new Error("Invitation status is unavailable");
+}
+
+function invitationStatusLabel(state: "queued" | "provisioned" | "delivered") {
+  if (state === "queued") return "Queued";
+  if (state === "provisioned") return "Preparing";
+  return "Sent";
+}
 
 function initialFor(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
@@ -56,7 +72,7 @@ export async function loadConnectedFamilyAccess(
   const supabase = await createOurDaysServerClient();
   const pendingPromise =
     access.role === "organizer"
-      ? supabase.rpc("list_pending_invitations", {
+      ? supabase.rpc("list_pending_invitation_email_requests", {
           circle_id: access.circleId,
         })
       : Promise.resolve({ data: [], error: null });
@@ -108,9 +124,10 @@ export async function loadConnectedFamilyAccess(
       guardianMembershipId: guardian.guardian_membership_id,
     })),
     pendingInvitations: (pendingResult.data ?? []).map((invitation) => ({
-      invitationId: invitation.invitation_id,
-      displayName: invitation.display_name,
-      createdAt: invitation.created_at,
+      emailRequestId: invitation.email_request_id,
+      displayName: invitation.invited_display_name,
+      state: invitationStatus(invitation.state),
+      createdAt: invitation.requested_at,
       expiresAt: invitation.expires_at,
     })),
   };
@@ -120,6 +137,7 @@ export function buildConnectedFamilySettingsModel(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
   data: FamilyAccessData,
+  invitationDeliveryEnabled = false,
 ): FamilySettingsViewModel {
   const membershipByPerson = new Map(
     data.memberships.map((membership) => [membership.personId, membership]),
@@ -204,8 +222,10 @@ export function buildConnectedFamilySettingsModel(
           })
         : [],
       pendingInvitations: data.pendingInvitations.map((invitation) => ({
-        id: invitation.invitationId,
+        emailRequestId: invitation.emailRequestId,
         displayName: invitation.displayName,
+        state: invitation.state,
+        statusLabel: invitationStatusLabel(invitation.state),
         createdLabel: invitationDateLabel(
           invitation.createdAt,
           context.circleTimeZone,
@@ -217,7 +237,7 @@ export function buildConnectedFamilySettingsModel(
           "Expires",
         ),
       })),
-      invitationDelivery: "worker-required",
+      invitationDelivery: invitationDeliveryEnabled ? "enabled" : "disabled",
     },
   };
 }

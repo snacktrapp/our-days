@@ -150,9 +150,10 @@ describe("connected family settings data", () => {
   it("loads only minimal pending-invitation fields for an organizer", async () => {
     const pending = [
       {
-        invitation_id: "90000000-0000-4000-8000-000000000001",
-        display_name: "Grandparent",
-        created_at: "2026-08-30T06:30:00.000Z",
+        email_request_id: "90000000-0000-4000-8000-000000000001",
+        invited_display_name: "Grandparent",
+        state: "delivered",
+        requested_at: "2026-08-30T06:30:00.000Z",
         expires_at: "2026-09-01T06:30:00.000Z",
       },
     ];
@@ -166,14 +167,15 @@ describe("connected family settings data", () => {
 
     const data = await loadConnectedFamilyAccess(organizerAccess);
 
-    expect(rpc).toHaveBeenCalledWith("list_pending_invitations", {
+    expect(rpc).toHaveBeenCalledWith("list_pending_invitation_email_requests", {
       circle_id: organizerAccess.circleId,
     });
     expect(data.pendingInvitations).toEqual([
       {
-        invitationId: pending[0].invitation_id,
+        emailRequestId: pending[0].email_request_id,
         displayName: "Grandparent",
-        createdAt: pending[0].created_at,
+        state: "delivered",
+        createdAt: pending[0].requested_at,
         expiresAt: pending[0].expires_at,
       },
     ]);
@@ -219,8 +221,9 @@ describe("connected family settings data", () => {
       ],
       pendingInvitations: [
         {
-          invitationId: "90000000-0000-4000-8000-000000000001",
+          emailRequestId: "90000000-0000-4000-8000-000000000001",
           displayName: "Grandparent",
+          state: "delivered",
           createdAt: "2026-08-30T06:30:00.000Z",
           expiresAt: "2026-09-01T06:30:00.000Z",
         },
@@ -234,7 +237,7 @@ describe("connected family settings data", () => {
     expect(model.panel).toMatchObject({
       mode: "connected",
       canManageAccess: true,
-      invitationDelivery: "worker-required",
+      invitationDelivery: "disabled",
     });
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");
@@ -265,8 +268,10 @@ describe("connected family settings data", () => {
     ]);
     expect(model.panel.pendingInvitations).toEqual([
       {
-        id: "90000000-0000-4000-8000-000000000001",
+        emailRequestId: "90000000-0000-4000-8000-000000000001",
         displayName: "Grandparent",
+        state: "delivered",
+        statusLabel: "Sent",
         createdLabel: "Invited Aug 29, 2026",
         expiresLabel: "Expires Aug 31, 2026",
       },

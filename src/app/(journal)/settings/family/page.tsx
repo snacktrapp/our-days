@@ -8,11 +8,13 @@ import {
 } from "@/data/family-settings.server";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import {
-  revokeFamilyInvitationAction,
+  requestFamilyInvitationAction,
   revokeFamilyMembershipAction,
   setFamilyMembershipRoleAction,
   setManagedProfileGuardianAction,
+  withdrawFamilyInvitationEmailRequestAction,
 } from "@/features/family-settings/family-settings-actions";
+import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-environment";
 
 export default async function FamilySettingsPage() {
   const access = await requireJournalAccess();
@@ -33,6 +35,7 @@ export default async function FamilySettingsPage() {
     access,
     context,
     familyAccess,
+    invitationDeliveryIsEnabled(),
   );
 
   return (
@@ -40,10 +43,11 @@ export default async function FamilySettingsPage() {
       <FamilySettingsPanel
         model={model.panel}
         actions={{
+          requestInvitation: requestFamilyInvitationAction,
           revokeMembership: revokeFamilyMembershipAction,
-          revokeInvitation: revokeFamilyInvitationAction,
           setMembershipRole: setFamilyMembershipRoleAction,
           setGuardian: setManagedProfileGuardianAction,
+          withdrawInvitation: withdrawFamilyInvitationEmailRequestAction,
         }}
       />
     </JournalChrome>

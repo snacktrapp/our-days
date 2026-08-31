@@ -95,6 +95,8 @@ jobs:
         run: npm run test:db
       - name: Run real local Auth, OTP, invite, and revocation flow
         run: npm run test:auth:integration
+      - name: Run new, existing, and reinvited target-bound invitation flows
+        run: npm run test:invitation:integration
       - name: Run quarantined intake and immutable photo promotion
         run: npm run test:photo:integration
       - name: Race photo claims, uploads, and authority loss
@@ -103,6 +105,8 @@ jobs:
         run: npm run test:db:concurrency
       - name: Detect generated database type drift
         run: npm run types:db:check
+      - name: Prove the checked local logical database recovery contract
+        run: npm run test:db:restore
       - name: Build, scan, and run connected production browser flows
         run: npm run test:browser:connected:all
       - name: Lint database functions and schemas

@@ -18,13 +18,19 @@ import type {
 } from "./family-settings-view-model";
 
 const SIMPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 
 type ConnectedActions = Readonly<{
+  requestInvitation?: (input: {
+    displayName: string;
+    email: string;
+    requestKey: string;
+  }) => Promise<FamilySettingsActionResult>;
   revokeMembership: (input: {
     membershipId: string;
   }) => Promise<FamilySettingsActionResult>;
-  revokeInvitation: (input: {
-    invitationId: string;
+  withdrawInvitation: (input: {
+    emailRequestId: string;
   }) => Promise<FamilySettingsActionResult>;
   setMembershipRole: (input: {
     membershipId: string;
@@ -49,6 +55,9 @@ export function FamilySettingsPanel({
   }
   if (!actions)
     throw new Error("Connected family settings actions are required");
+  if (model.invitationDelivery === "enabled" && !actions.requestInvitation) {
+    throw new Error("Connected invitation delivery action is required");
+  }
   return <ConnectedFamilySettingsPanel model={model} actions={actions} />;
 }
 
@@ -301,18 +310,33 @@ function ConnectedFamilySettingsPanel({
   const [invitationReviewId, setInvitationReviewId] = useState<string | null>(
     null,
   );
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFormError, setInviteFormError] = useState("");
+  const [inviteFormErrorField, setInviteFormErrorField] = useState<
+    "name" | "email" | null
+  >(null);
+  const [inviteDraft, setInviteDraft] = useState<Readonly<{
+    displayName: string;
+    email: string;
+  }> | null>(null);
   const [result, setResult] = useState<FamilySettingsActionResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const accessTriggerRef = useRef<HTMLButtonElement>(null);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
   const accessHeadingRef = useRef<HTMLHeadingElement>(null);
   const invitationHeadingRef = useRef<HTMLHeadingElement>(null);
+  const inviteNameRef = useRef<HTMLInputElement>(null);
+  const inviteEmailRef = useRef<HTMLInputElement>(null);
+  const inviteDraftHeadingRef = useRef<HTMLHeadingElement>(null);
+  const inviteRequestKeyRef = useRef<string | null>(null);
+  const restoreInviteFormFocusRef = useRef(false);
   const resultRef = useRef<HTMLParagraphElement>(null);
   const accessReviewMember = model.members.find(
     (member) => member.id === accessReviewId,
   );
   const invitation = model.pendingInvitations.find(
-    (item) => item.id === invitationReviewId,
+    (item) => item.emailRequestId === invitationReviewId,
   );
   const journalCareSuccess =
     result?.ok && accessReviewMember?.profileKind === "managed";
@@ -326,6 +350,16 @@ function ConnectedFamilySettingsPanel({
   }, [invitationReviewId]);
 
   useEffect(() => {
+    if (inviteDraft) {
+      inviteDraftHeadingRef.current?.focus();
+      return;
+    }
+    if (!restoreInviteFormFocusRef.current) return;
+    inviteNameRef.current?.focus();
+    restoreInviteFormFocusRef.current = false;
+  }, [inviteDraft]);
+
+  useEffect(() => {
     if (result) resultRef.current?.focus();
   }, [result]);
 
@@ -337,6 +371,83 @@ function ConnectedFamilySettingsPanel({
   function closeInvitationReview() {
     setInvitationReviewId(null);
     invitationTriggerRef.current?.focus();
+  }
+
+  function reviewInvitationRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const displayName = inviteName.trim();
+    const email = inviteEmail.trim().toLowerCase();
+    if (
+      displayName.length < 1 ||
+      Array.from(displayName).length > 80 ||
+      CONTROL_CHARACTER.test(displayName)
+    ) {
+      setInviteFormError("Enter the family member’s name.");
+      setInviteFormErrorField("name");
+      inviteNameRef.current?.focus();
+      return;
+    }
+    if (
+      !SIMPLE_EMAIL.test(email) ||
+      email.length > 254 ||
+      CONTROL_CHARACTER.test(email)
+    ) {
+      setInviteFormError("Enter a complete email address.");
+      setInviteFormErrorField("email");
+      inviteEmailRef.current?.focus();
+      return;
+    }
+    setResult(null);
+    setInviteFormError("");
+    setInviteFormErrorField(null);
+    setInviteName(displayName);
+    setInviteEmail(email);
+    setAccessReviewId(null);
+    setInvitationReviewId(null);
+    setInviteDraft({ displayName, email });
+  }
+
+  function editInvitationRequest() {
+    restoreInviteFormFocusRef.current = true;
+    inviteRequestKeyRef.current = null;
+    setResult(null);
+    setInviteDraft(null);
+  }
+
+  function sendInvitationRequest() {
+    if (!inviteDraft || !actions.requestInvitation) return;
+    const requestInvitation = actions.requestInvitation;
+    const requestKey =
+      inviteRequestKeyRef.current ?? window.crypto.randomUUID();
+    inviteRequestKeyRef.current = requestKey;
+    setResult(null);
+    startTransition(async () => {
+      try {
+        const nextResult = await requestInvitation({
+          ...inviteDraft,
+          requestKey,
+        });
+        setResult(
+          nextResult.ok
+            ? {
+                ok: true,
+                message: `Private invitation requested for ${inviteDraft.displayName}.`,
+              }
+            : nextResult,
+        );
+        if (nextResult.ok) {
+          inviteRequestKeyRef.current = null;
+          setInviteDraft(null);
+          setInviteName("");
+          setInviteEmail("");
+        }
+      } catch {
+        setResult({
+          ok: false,
+          message: "That invitation could not be sent. Try again.",
+        });
+      }
+    });
   }
 
   function removeAccess() {
@@ -432,11 +543,13 @@ function ConnectedFamilySettingsPanel({
 
   function withdrawInvitation() {
     if (!invitation) return;
-    const invitationId = invitation.id;
+    const emailRequestId = invitation.emailRequestId;
     setResult(null);
     startTransition(async () => {
       try {
-        const nextResult = await actions.revokeInvitation({ invitationId });
+        const nextResult = await actions.withdrawInvitation({
+          emailRequestId,
+        });
         setResult(
           nextResult.ok
             ? {
@@ -579,18 +692,145 @@ function ConnectedFamilySettingsPanel({
           <span>Invitation only</span>
           <h2 id="invite-heading">Family invitations</h2>
           <p>
-            Only organizers can manage invitations. Invitation addresses and
-            secret links are never shown here.
+            Only organizers can manage invitations. Addresses are used for
+            private delivery and are not shown again after a request is sent.
           </p>
         </div>
         {model.canManageAccess ? (
           <>
+            {model.invitationDelivery === "enabled" ? (
+              inviteDraft ? (
+                <aside
+                  className="invite-review connected-invite-request-review"
+                  aria-labelledby="invitation-request-review-heading"
+                >
+                  <span>Review invitation</span>
+                  <h3
+                    ref={inviteDraftHeadingRef}
+                    id="invitation-request-review-heading"
+                    tabIndex={-1}
+                  >
+                    Invite {inviteDraft.displayName}
+                  </h3>
+                  <p className="invite-review-email">{inviteDraft.email}</p>
+                  <InvitationConsequences />
+                  {result && !result.ok ? (
+                    <p
+                      ref={resultRef}
+                      className="settings-action-message settings-action-error settings-inline-message"
+                      role="alert"
+                      tabIndex={-1}
+                    >
+                      {result.message}
+                    </p>
+                  ) : null}
+                  <div className="settings-review-actions">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={editInvitationRequest}
+                    >
+                      Back to edit
+                    </button>
+                    <button
+                      type="button"
+                      aria-busy={isPending || undefined}
+                      disabled={isPending}
+                      onClick={sendInvitationRequest}
+                    >
+                      {isPending ? "Sending…" : "Send private invitation"}
+                    </button>
+                  </div>
+                </aside>
+              ) : (
+                <form
+                  className="connected-invite-form"
+                  noValidate
+                  onSubmit={reviewInvitationRequest}
+                >
+                  <label htmlFor="connected-family-invite-name">
+                    Family member’s name
+                  </label>
+                  <input
+                    ref={inviteNameRef}
+                    id="connected-family-invite-name"
+                    name="displayName"
+                    type="text"
+                    autoComplete="off"
+                    maxLength={80}
+                    required
+                    disabled={isPending}
+                    value={inviteName}
+                    aria-invalid={
+                      inviteFormErrorField === "name" ? true : undefined
+                    }
+                    aria-describedby={
+                      inviteFormErrorField === "name"
+                        ? "connected-family-invite-error"
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setInviteName(event.target.value);
+                      setInviteFormError("");
+                      setInviteFormErrorField(null);
+                    }}
+                  />
+                  <label htmlFor="connected-family-invite-email">
+                    Email address
+                  </label>
+                  <input
+                    ref={inviteEmailRef}
+                    id="connected-family-invite-email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    required
+                    disabled={isPending}
+                    value={inviteEmail}
+                    aria-invalid={
+                      inviteFormErrorField === "email" ? true : undefined
+                    }
+                    aria-describedby={
+                      inviteFormErrorField === "email"
+                        ? "connected-family-invite-error"
+                        : "connected-family-invite-help"
+                    }
+                    onChange={(event) => {
+                      setInviteEmail(event.target.value);
+                      setInviteFormError("");
+                      setInviteFormErrorField(null);
+                    }}
+                  />
+                  {inviteFormError ? (
+                    <p
+                      id="connected-family-invite-error"
+                      className="field-error"
+                      role="alert"
+                    >
+                      {inviteFormError}
+                    </p>
+                  ) : (
+                    <p id="connected-family-invite-help">
+                      You can review both details before anything is sent.
+                    </p>
+                  )}
+                  <button type="submit" disabled={isPending}>
+                    Review invitation
+                  </button>
+                </form>
+              )
+            ) : null}
             {model.pendingInvitations.length ? (
               <ul className="pending-invitation-list">
                 {model.pendingInvitations.map((item) => (
-                  <li key={item.id}>
+                  <li key={item.emailRequestId}>
                     <span>
                       <strong>{item.displayName}</strong>
+                      <em className={`invitation-status status-${item.state}`}>
+                        {item.statusLabel}
+                      </em>
                       <small>
                         {item.createdLabel} · {item.expiresLabel}
                       </small>
@@ -599,14 +839,17 @@ function ConnectedFamilySettingsPanel({
                       type="button"
                       aria-label={`Review invite for ${item.displayName}`}
                       disabled={isPending}
-                      aria-expanded={invitationReviewId === item.id}
+                      aria-expanded={invitationReviewId === item.emailRequestId}
                       aria-controls="invitation-review"
                       onClick={(event) => {
                         invitationTriggerRef.current = event.currentTarget;
                         setResult(null);
+                        setInviteDraft(null);
                         setAccessReviewId(null);
                         setInvitationReviewId((current) =>
-                          current === item.id ? null : item.id,
+                          current === item.emailRequestId
+                            ? null
+                            : item.emailRequestId,
                         );
                       }}
                     >
@@ -667,14 +910,16 @@ function ConnectedFamilySettingsPanel({
                 </div>
               </aside>
             ) : null}
-            <div className="settings-delivery-boundary">
-              <strong>New invitations are not connected yet</strong>
-              <p>
-                Our Days will enable sending after its private email worker can
-                provision the account and deliver a short-lived link safely. No
-                invitation is created from this screen today.
-              </p>
-            </div>
+            {model.invitationDelivery === "disabled" ? (
+              <div className="settings-delivery-boundary">
+                <strong>New invitations are not connected yet</strong>
+                <p>
+                  Our Days will enable sending after its private email worker
+                  can provision the account and deliver a short-lived link
+                  safely. No invitation is created from this screen today.
+                </p>
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="settings-empty-copy">

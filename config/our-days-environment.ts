@@ -6,6 +6,7 @@ type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 
 export type OurDaysEnvironmentIdentity = "local" | "preview" | "production";
 export type OurDaysResourceMode = "detached" | "supabase";
+export type OurDaysInvitationDeliveryMode = "disabled" | "enabled";
 
 export type OurDaysEnvironment = Readonly<{
   identity: OurDaysEnvironmentIdentity;
@@ -20,6 +21,10 @@ const environmentIdentities = new Set<OurDaysEnvironmentIdentity>([
   "production",
 ]);
 const resourceModes = new Set<OurDaysResourceMode>(["detached", "supabase"]);
+const invitationDeliveryModes = new Set<OurDaysInvitationDeliveryMode>([
+  "disabled",
+  "enabled",
+]);
 const projectRefPattern = /^[a-z0-9]{20}$/;
 const allowedPublicSupabaseEnvironmentNames = new Set([
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
@@ -337,6 +342,26 @@ export function validateOurDaysEnvironment(
     configuredValue(environment, "OUR_DAYS_RESOURCE_MODE", issues),
     issues,
   );
+  const invitationDeliveryMode = configuredValue(
+    environment,
+    "OUR_DAYS_INVITATION_DELIVERY_MODE",
+    issues,
+  );
+  if (
+    invitationDeliveryMode &&
+    !invitationDeliveryModes.has(
+      invitationDeliveryMode as OurDaysInvitationDeliveryMode,
+    )
+  ) {
+    issues.push(
+      "OUR_DAYS_INVITATION_DELIVERY_MODE must be disabled or enabled",
+    );
+  }
+  if (invitationDeliveryMode === "enabled" && resourceMode !== "supabase") {
+    issues.push(
+      "OUR_DAYS_INVITATION_DELIVERY_MODE=enabled requires supabase resource mode",
+    );
+  }
   const designPreview = configuredValue(
     environment,
     "OUR_DAYS_ENABLE_DESIGN_PREVIEW",
@@ -537,6 +562,15 @@ export function validateOurDaysEnvironment(
     ...(siteOrigin ? { siteOrigin } : {}),
     ...(expectedRef ? { supabaseProjectRef: expectedRef } : {}),
   });
+}
+
+export function invitationDeliveryIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  return (
+    environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "enabled" &&
+    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+  );
 }
 
 export function environmentForNextConfig(

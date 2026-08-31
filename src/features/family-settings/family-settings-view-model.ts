@@ -25,8 +25,10 @@ export type GuardianOptionViewModel = Readonly<{
 }>;
 
 export type PendingFamilyInvitationViewModel = Readonly<{
-  id: string;
+  emailRequestId: string;
   displayName: string;
+  state: "queued" | "provisioned" | "delivered";
+  statusLabel: string;
   createdLabel: string;
   expiresLabel: string;
 }>;
@@ -46,7 +48,7 @@ export type ConnectedFamilySettingsPanelViewModel = Readonly<{
   members: readonly FamilyAccessMemberViewModel[];
   guardianOptions: readonly GuardianOptionViewModel[];
   pendingInvitations: readonly PendingFamilyInvitationViewModel[];
-  invitationDelivery: "worker-required";
+  invitationDelivery: "disabled" | "enabled";
 }>;
 
 export type FamilySettingsPanelViewModel =
