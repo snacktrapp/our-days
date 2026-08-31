@@ -47,24 +47,24 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "21101e9740aee26f0e88d899d3289a46795e0c64af1ac71746fcccf82cd5644f";
+  "3b3d3516b9aeddc3f6d61eeafa802c34a35c688a96cc6284f6162b102260d319";
 const expectedCanonicalCatalogFingerprint =
-  "5e5a548ea2fc096d5f1a4f858f3a879f0c3a1e89ed255aae70e1909834d15252";
+  "78f2d8c51132f2bcb51ed171f98286ceabcb030ac80a648cfca2a7773f80b537";
 const expectedRestoredSchemaFingerprint =
-  "6b421c806a9aad8819b703a33c0164efb3c26bf5b08da589e867496ad45da2da";
+  "4a23878a1d569e759a3cfde233daa69aa418ff29b1df28780fcaea3d4c17598a";
 const expectedCanonicalDataFingerprint =
-  "2750f12bfd650019ed5927ed4ab7ff761d4ac5d696c273ee88c684d82a9e8dc6";
+  "c2a7d3e9c7687b67ee44368b23808734a4a2450117a9142dccb3ffdecbed36eb";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "58985d5ad93c81110682582a19184ea677b35e317e705c9777f44f44d5dd81df";
+  "c581a5fede40ea0baa9105a51edcca9e0e9f80efe9cd874f780e2a09ea8bdf89";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
-    allowed_mime_types: null,
+    allowed_mime_types: ["image/webp"],
     avif_autodetection: false,
-    file_size_limit: 52_428_800,
+    file_size_limit: 12_582_912,
     id: "our-days-display",
     name: "our-days-display",
     owner: null,
@@ -134,6 +134,17 @@ const volatileFixtureTimestampColumns = new Map([
   ["public.person_guardians", new Set(["created_at", "revoked_at"])],
   ["private.photo_originals", new Set(["verified_at"])],
   [
+    "private.photo_derivative_jobs",
+    new Set([
+      "completed_at",
+      "invalidated_at",
+      "lease_expires_at",
+      "lease_started_at",
+      "queued_at",
+    ]),
+  ],
+  ["private.photo_display_derivatives", new Set(["generated_at"])],
+  [
     "private.photo_validation_jobs",
     new Set([
       "completed_at",
@@ -162,6 +173,7 @@ const expectedMigrationFiles = [
   "20260831020000_phase_4a_photo_intake_foundation.sql",
   "20260831030000_phase_2c_target_bound_invitation_materialization.sql",
   "20260831040000_phase_4b_immutable_photo_promotion.sql",
+  "20260831103811_phase_4c_private_photo_display_derivatives.sql",
 ];
 
 class DrillError extends Error {
@@ -793,14 +805,16 @@ select (
   and (select count(*) = 0 from private.export_jobs)
   and (select count(*) = 0 from private.invitation_jobs)
   and (select count(*) = 0 from private.photo_intakes)
+  and (select count(*) = 0 from private.photo_derivative_jobs)
+  and (select count(*) = 0 from private.photo_display_derivatives)
   and (select count(*) = 0 from private.photo_originals)
   and (select count(*) = 0 from private.photo_validation_jobs)
   and (select count(*) = 0 from private.photo_validator_allowlist)
   and (select count(*) = 3 from storage.buckets)
   and (
-    select count(*) = 2
+    select count(*) = 1
       from storage.buckets
-     where id in ('our-days-originals', 'our-days-display')
+     where id = 'our-days-originals'
        and name = id
        and public is false
        and owner is null
@@ -808,6 +822,20 @@ select (
        and avif_autodetection is false
        and file_size_limit = 52428800
        and allowed_mime_types is null
+       and type = 'STANDARD'
+       and versioning_status = 'DISABLED'
+  )
+  and (
+    select count(*) = 1
+      from storage.buckets
+     where id = 'our-days-display'
+       and name = id
+       and public is false
+       and owner is null
+       and owner_id is null
+       and avif_autodetection is false
+       and file_size_limit = 12582912
+       and allowed_mime_types = array['image/webp']::text[]
        and type = 'STANDARD'
        and versioning_status = 'DISABLED'
   )
@@ -873,6 +901,8 @@ select (
       'private.export_jobs',
       'private.invitation_jobs',
       'private.invitations',
+      'private.photo_derivative_jobs',
+      'private.photo_display_derivatives',
       'private.photo_intakes',
       'private.photo_originals',
       'private.photo_validation_jobs',
@@ -1076,9 +1106,42 @@ select (
         '20260831010000',
         '20260831020000',
         '20260831030000',
-        '20260831040000'
+        '20260831040000',
+        '20260831103811'
       ]::text[]
       from supabase_migrations.schema_migrations as history
+  )
+)::text;
+`;
+
+const canonicalPhase4cFixtureSql = String.raw`
+select (
+  not exists (select 1 from private.photo_derivative_jobs)
+  and not exists (select 1 from private.photo_display_derivatives)
+  and (
+    select count(*) = 1
+      from storage.buckets
+     where id = 'our-days-display'
+       and name = id
+       and public is false
+       and owner is null
+       and owner_id is null
+       and avif_autodetection is false
+       and file_size_limit = 12582912
+       and allowed_mime_types = array['image/webp']::text[]
+       and type = 'STANDARD'
+       and versioning_status = 'DISABLED'
+  )
+  and (
+    select count(*) = 2
+      from pg_catalog.pg_class as relation
+      join pg_catalog.pg_namespace as namespace
+        on namespace.oid = relation.relnamespace
+     where namespace.nspname = 'private'
+       and relation.relkind in ('r', 'p')
+       and relation.relname in (
+         'photo_derivative_jobs', 'photo_display_derivatives'
+       )
   )
 )::text;
 `;
@@ -1651,6 +1714,8 @@ select pg_catalog.jsonb_build_array(
      'export_jobs',
      'invitation_jobs',
      'invitations',
+     'photo_derivative_jobs',
+     'photo_display_derivatives',
      'photo_intakes',
      'photo_originals',
      'photo_validation_jobs',
@@ -2099,6 +2164,8 @@ const allowedOwnerAclDisappearance = new Map([
   ["private.export_jobs", tableOwnerPrivileges],
   ["private.invitation_jobs", tableOwnerPrivileges],
   ["private.invitations", tableOwnerPrivileges],
+  ["private.photo_derivative_jobs", tableOwnerPrivileges],
+  ["private.photo_display_derivatives", tableOwnerPrivileges],
   ["private.photo_intakes", tableOwnerPrivileges],
   ["private.photo_originals", tableOwnerPrivileges],
   ["private.photo_validation_jobs", tableOwnerPrivileges],
@@ -2632,9 +2699,84 @@ select (
     'public.flag_photo_validation_for_review(uuid,uuid,text)',
     'EXECUTE'
   )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.claim_photo_display_derivative(uuid,uuid)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.complete_photo_display_derivative(uuid,uuid,uuid,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.reject_photo_display_derivative(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.flag_photo_display_derivative_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.photo_derivative_source_is_readable(text,uuid,text)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.photo_display_path_is_uploadable(text,text,jsonb)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.photo_display_path_is_readable(text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.claim_photo_display_derivative(uuid,uuid)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.complete_photo_display_derivative(uuid,uuid,uuid,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.reject_photo_display_derivative(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.flag_photo_display_derivative_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.claim_photo_display_derivative(uuid,uuid)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.complete_photo_display_derivative(uuid,uuid,uuid,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.reject_photo_display_derivative(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.flag_photo_display_derivative_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
 )::text;
 `,
-    "photo validator routine authorization fidelity",
+    "photo worker routine authorization fidelity",
   );
 
   runDatabaseQuery(
@@ -2658,6 +2800,20 @@ begin
     raise exception using
       errcode = 'P0001',
       message = 'Storage authorization canary unexpectedly succeeded';
+  end if;
+
+  denied := false;
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('our-days-display', 'logical-restore-display-access-canary');
+  exception
+    when sqlstate '42501' then denied := true;
+  end;
+
+  if not denied then
+    raise exception using
+      errcode = 'P0001',
+      message = 'Display Storage authorization canary unexpectedly succeeded';
   end if;
 end
 $storage_denial$;
@@ -2854,6 +3010,24 @@ async function runStaticSelfTest() {
     throw new DrillError("static fourth-bucket rejection");
   }
   if (
+    bucketInventoryMatches(
+      expectedPrivateBuckets.map((bucket) =>
+        bucket.id === "our-days-display"
+          ? { ...bucket, file_size_limit: 52_428_800 }
+          : bucket,
+      ),
+    ) ||
+    bucketInventoryMatches(
+      expectedPrivateBuckets.map((bucket) =>
+        bucket.id === "our-days-display"
+          ? { ...bucket, allowed_mime_types: null }
+          : bucket,
+      ),
+    )
+  ) {
+    throw new DrillError("static display-bucket profile rejection");
+  }
+  if (
     !unsupportedDatabaseMetadataIsEmpty(null, 0) ||
     unsupportedDatabaseMetadataIsEmpty("unexpected", 0) ||
     unsupportedDatabaseMetadataIsEmpty(null, 1)
@@ -2890,6 +3064,21 @@ async function runStaticSelfTest() {
     "private.photo_originals",
     { id: "stable", verified_at: "volatile" },
   );
+  const normalizedPhotoDerivativeJob = normalizeFixtureRow(
+    "private.photo_derivative_jobs",
+    {
+      completed_at: null,
+      id: "stable",
+      invalidated_at: null,
+      lease_expires_at: "volatile",
+      lease_started_at: "volatile",
+      queued_at: "volatile",
+    },
+  );
+  const normalizedPhotoDisplayDerivative = normalizeFixtureRow(
+    "private.photo_display_derivatives",
+    { generated_at: "volatile", id: "stable" },
+  );
   if (
     normalizedStorageMigration.executed_at !== "<present>" ||
     normalizedStorageMigration.hash !== "stable" ||
@@ -2907,7 +3096,15 @@ async function runStaticSelfTest() {
     normalizedPhotoValidationJob.queued_at !== "<present>" ||
     normalizedPhotoValidationJob.id !== "stable" ||
     normalizedPhotoOriginal.verified_at !== "<present>" ||
-    normalizedPhotoOriginal.id !== "stable"
+    normalizedPhotoOriginal.id !== "stable" ||
+    normalizedPhotoDerivativeJob.completed_at !== null ||
+    normalizedPhotoDerivativeJob.invalidated_at !== null ||
+    normalizedPhotoDerivativeJob.lease_expires_at !== "<present>" ||
+    normalizedPhotoDerivativeJob.lease_started_at !== "<present>" ||
+    normalizedPhotoDerivativeJob.queued_at !== "<present>" ||
+    normalizedPhotoDerivativeJob.id !== "stable" ||
+    normalizedPhotoDisplayDerivative.generated_at !== "<present>" ||
+    normalizedPhotoDisplayDerivative.id !== "stable"
   ) {
     throw new DrillError("static fixture timestamp normalization");
   }
@@ -3282,6 +3479,14 @@ async function performDrill() {
     sourceSnapshot,
   );
   console.log("PASS: synthetic-only preflight");
+
+  assertDatabaseBoolean(
+    "postgres",
+    canonicalPhase4cFixtureSql,
+    "canonical Phase 4C fixture",
+    sourceSnapshot,
+  );
+  console.log("PASS: canonical Phase 4C fixture");
 
   assertDatabaseBoolean(
     "postgres",

@@ -67,6 +67,8 @@ The bounded Phase 4A quarantine-only foundation is recorded in `docs/quality/PHA
 
 The bounded Phase 4B validation and immutable-promotion foundation is recorded in `docs/quality/PHASE_4B_IMMUTABLE_PHOTO_PROMOTION_REPORT.md`. It adds no-family validator identities, serialized revocation, distinct lease-attempt capabilities, a bounded private spool, exact JPEG/PNG/WebP structure and full-decode checks, fresh no-upsert canonical paths, canonical re-download, and an immutable original ledger using only synthetic local bytes. It still exposes no photo moment, derivative, family media read, download, export, cleanup promise, hosted worker, HEIC support, or production-data approval. PD-005 and PD-006 remain untouched.
 
+The bounded Phase 4C private display-derivative foundation is recorded in `docs/quality/PHASE_4C_PRIVATE_PHOTO_DERIVATIVE_REPORT.md`. It revalidates one immutable original, applies EXIF orientation, removes embedded metadata, produces a bounded WebP derivative at a fresh attempt-scoped path, re-downloads and independently verifies the complete canonical output, and records an immutable private ledger using only synthetic local bytes. It still exposes no photo moment, family media read, signed URL, original download, export, cleanup promise, hosted worker, HEIC support, or production-data approval. PD-005 and PD-006 remain untouched.
+
 Deliver:
 
 - Reserved asset row, fingerprint-bound claim, direct private resumable upload, upload closure, isolated full-byte verification, immutable browser-unwritable canonical original/checksum, orientation-correct stripped derivative, idempotent promotion, controlled display, and original download.
