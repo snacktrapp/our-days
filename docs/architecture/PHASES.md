@@ -107,6 +107,8 @@ The decision-independent export-request and archive-contract groundwork is recor
 
 The membership-attribution prerequisite is recorded in `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md`. Moment recorder and trash history now use durable same-circle membership IDs instead of Auth user IDs, with unchanged public feed responses. It does not yet make membership Auth attachments nullable, request account closure, reconcile Storage, delete an Auth user, or expose account-deletion UI.
 
+The database-only account-closure preparation checkpoint is recorded in `docs/quality/PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md`. It adds an immutable private request ledger and an atomic all-circle preparation seam that preserves shared history while revoking access and detaching Auth. Account deletion is still unavailable: there is no web action or deployed worker, and Auth deletion, session handling, media reconciliation, external restore suppression, content purge, and retention policy remain later gates.
+
 Deliver:
 
 - Trash/restore, idempotent purge ledger, immutable deletion requests, audit events, export jobs, safe archive names, structured manifest, originals, and checksums.

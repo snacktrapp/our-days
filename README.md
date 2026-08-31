@@ -71,6 +71,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/VIDEO_FEASIBILITY_REPORT.md` — isolated local short-video treatment, lifecycle evidence, and production stop/defer gates
 - `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md` — private export-request ledger, zero-media archive contract, adversarial review, and remaining worker gates
 - `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md` — durable membership-based moment attribution, upgrade rehearsal, and remaining account-closure gates
+- `docs/quality/PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md` — private closure intent, atomic all-circle access detachment, and remaining external-deletion gates
 - `docs/quality/PHASE_8A_LOCAL_RECOVERY_FOUNDATION_REPORT.md` — same-container synthetic database restore evidence and remaining production recovery gates
 - `docs/operations/LOCAL_RECOVERY_DRILL.md` — destructive local-fixture drill procedure, safety boundary, and production recovery prerequisites
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate

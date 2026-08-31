@@ -211,6 +211,67 @@ async function runOverlappedCircleRace({
   return results;
 }
 
+async function runOverlappedAuthRace({
+  apiKey,
+  apiUrl,
+  operationName,
+  operationNames,
+  requests,
+  serviceKey,
+  targetAuthUserId,
+}) {
+  const holderPromise = jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_hold_auth_user_lock",
+    {
+      body: JSON.stringify({
+        target_auth_user_id: targetAuthUserId,
+        hold_ms: 5000,
+      }),
+      method: "POST",
+    },
+  );
+
+  await waitForConcurrencyProbe({
+    apiKey,
+    apiUrl,
+    expectedWaiters: 1,
+    label: `The ${operationName} Auth-user-lock holder`,
+    operationNames: ["phase7c_test_hold_auth_user_lock"],
+    requireSleep: true,
+    serviceKey,
+  });
+
+  const requestPromises = requests.map((startRequest) => startRequest());
+  try {
+    await waitForConcurrencyProbe({
+      apiKey,
+      apiUrl,
+      expectedWaiters: requests.length,
+      label: `Overlapping ${operationName} requests`,
+      operationNames,
+      serviceKey,
+    });
+  } catch (error) {
+    await Promise.allSettled([holderPromise, ...requestPromises]);
+    throw error;
+  }
+
+  const [holder, results] = await Promise.all([
+    holderPromise,
+    Promise.all(requestPromises),
+  ]);
+  if (!holder.response.ok) {
+    throw new Error(
+      `The ${operationName} Auth-user-lock holder failed with ${holder.response.status}.`,
+    );
+  }
+
+  return results;
+}
+
 function resetDatabase() {
   execFileSync(supabaseBinary, ["db", "reset", "--local"], {
     cwd: projectRoot,
@@ -229,6 +290,7 @@ const DUAL_ORGANIZER_B_MEMBERSHIP = "40000000-0000-4000-8000-000000000007";
 const ORGANIZER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000001";
 const ORGANIZER_A_TWO_MEMBERSHIP = "40000000-0000-4000-8000-000000000002";
 const MEMBER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000003";
+const DUAL_ORGANIZER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000005";
 const MANAGED_CHILD_A = "30000000-0000-4000-8000-000000000008";
 
 let shouldRestoreFixtures = false;
@@ -316,6 +378,55 @@ try {
       $definition$;
       execute 'revoke all on function public.phase2_test_concurrency_probe(text[], integer, boolean) from public, anon, authenticated';
       execute 'grant execute on function public.phase2_test_concurrency_probe(text[], integer, boolean) to service_role';
+
+      execute $definition$
+        create function public.phase7c_test_prepare_account_closure(
+          closure_request_id uuid
+        )
+        returns uuid
+        language sql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+          select private.prepare_account_closure(closure_request_id);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase7c_test_prepare_account_closure(uuid) from public, anon, authenticated';
+      execute 'grant execute on function public.phase7c_test_prepare_account_closure(uuid) to service_role';
+
+      execute $definition$
+        create function public.phase7c_test_hold_auth_user_lock(
+          target_auth_user_id uuid,
+          hold_ms integer
+        )
+        returns void
+        language plpgsql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+        begin
+          if hold_ms not between 1 and 15000
+            or not exists (
+              select 1
+                from auth.users as auth_user
+               where auth_user.id = target_auth_user_id
+                 and auth_user.email like '%@example.test'
+            ) then
+            raise exception using errcode = '42501', message = 'Test lock unavailable';
+          end if;
+
+          perform 1
+            from auth.users as auth_user
+           where auth_user.id = target_auth_user_id
+           for update;
+          perform pg_catalog.pg_sleep(hold_ms::double precision / 1000);
+        end
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase7c_test_hold_auth_user_lock(uuid, integer) from public, anon, authenticated';
+      execute 'grant execute on function public.phase7c_test_hold_auth_user_lock(uuid, integer) to service_role';
     end
     $install$;
   `);
@@ -1937,8 +2048,1365 @@ try {
     $invitation_activation_race_audit$;
   `);
 
+  const organizerClosureSuffix = randomUUID();
+  const organizerClosureCircleId = randomUUID();
+  const organizerClosurePeople = [randomUUID(), randomUUID()];
+  const organizerClosureMemberships = [randomUUID(), randomUUID()];
+  const organizerClosureUsers = await Promise.all(
+    ["one", "two"].map((label) =>
+      jsonRequest(apiUrl, serviceKey, serviceKey, "/auth/v1/admin/users", {
+        body: JSON.stringify({
+          email: `closure-organizer-${label}-${organizerClosureSuffix}@example.test`,
+          email_confirm: true,
+        }),
+        method: "POST",
+      }),
+    ),
+  );
+  if (
+    organizerClosureUsers.some(
+      ({ response, body }) => !response.ok || !uuid.test(body?.id),
+    )
+  ) {
+    throw new Error("Two-organizer closure Auth setup failed.");
+  }
+
+  runDatabaseQuery(`
+    do $two_organizer_setup$
+    begin
+
+    insert into public.circles (
+      id,
+      name,
+      time_zone,
+      created_by_membership_id
+    ) values (
+      '${organizerClosureCircleId}'::uuid,
+      'Closure concurrency circle',
+      'UTC',
+      '${organizerClosureMemberships[0]}'::uuid
+    );
+
+    insert into public.people (
+      id,
+      circle_id,
+      display_name,
+      profile_kind,
+      accent_token,
+      created_by_membership_id
+    ) values
+      (
+        '${organizerClosurePeople[0]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        'Closure organizer one',
+        'account',
+        'clay',
+        '${organizerClosureMemberships[0]}'::uuid
+      ),
+      (
+        '${organizerClosurePeople[1]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        'Closure organizer two',
+        'account',
+        'sage',
+        '${organizerClosureMemberships[0]}'::uuid
+      );
+
+    insert into public.circle_memberships (
+      id,
+      circle_id,
+      user_id,
+      person_id,
+      role,
+      status
+    ) values
+      (
+        '${organizerClosureMemberships[0]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        '${organizerClosureUsers[0].body.id}'::uuid,
+        '${organizerClosurePeople[0]}'::uuid,
+        'organizer',
+        'active'
+      ),
+      (
+        '${organizerClosureMemberships[1]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        '${organizerClosureUsers[1].body.id}'::uuid,
+        '${organizerClosurePeople[1]}'::uuid,
+        'organizer',
+        'active'
+      );
+
+    end
+    $two_organizer_setup$;
+  `);
+
+  const organizerClosureTokens = organizerClosureUsers.map(({ body }) =>
+    createLocalUserToken(body.id, jwtSecret),
+  );
+  const organizerClosureKeys = [randomUUID(), randomUUID()];
+  const organizerClosureRace = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: organizerClosureCircleId,
+    holderToken: organizerClosureTokens[0],
+    operationName: "two-organizer closure requests",
+    operationNames: ["request_account_closure"],
+    requests: organizerClosureTokens.map(
+      (token, index) => () =>
+        jsonRequest(apiUrl, apiKey, token, "rpc/request_account_closure", {
+          body: JSON.stringify({ request_key: organizerClosureKeys[index] }),
+          method: "POST",
+        }),
+    ),
+    serviceKey,
+  });
+  const organizerClosureSuccessIndexes = organizerClosureRace
+    .map(({ response }, index) => (response.ok ? index : -1))
+    .filter((index) => index >= 0);
+  if (organizerClosureSuccessIndexes.length !== 1) {
+    throw new Error(
+      `Two-organizer closure race did not select exactly one request (${organizerClosureRace
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+  const closingOrganizerIndex = organizerClosureSuccessIndexes[0];
+  const survivingOrganizerIndex = closingOrganizerIndex === 0 ? 1 : 0;
+  const organizerClosureId = organizerClosureRace[closingOrganizerIndex].body;
+  const organizerClosureDenial =
+    organizerClosureRace[survivingOrganizerIndex].body;
+  if (
+    !uuid.test(organizerClosureId) ||
+    organizerClosureDenial?.code === "40P01" ||
+    organizerClosureDenial?.code !== "23514" ||
+    organizerClosureDenial?.message !==
+      "Every family must retain an active organizer"
+  ) {
+    throw new Error(
+      `The losing organizer closure request did not use the last-viable-organizer constraint (${organizerClosureDenial?.code ?? "none"}).`,
+    );
+  }
+
+  const sameKeyClosureRace = await runOverlappedAuthRace({
+    apiKey,
+    apiUrl,
+    operationName: "same-user same-key closure replays",
+    operationNames: ["request_account_closure"],
+    requests: [0, 1].map(
+      () => () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerClosureTokens[closingOrganizerIndex],
+          "rpc/request_account_closure",
+          {
+            body: JSON.stringify({
+              request_key: organizerClosureKeys[closingOrganizerIndex],
+            }),
+            method: "POST",
+          },
+        ),
+    ),
+    serviceKey,
+    targetAuthUserId: organizerClosureUsers[closingOrganizerIndex].body.id,
+  });
+  if (
+    sameKeyClosureRace.some(
+      ({ response, body }) => !response.ok || body !== organizerClosureId,
+    )
+  ) {
+    throw new Error(
+      "Same-user same-key closure replays did not return one ID.",
+    );
+  }
+
+  const conflictingClosureRequest = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerClosureTokens[closingOrganizerIndex],
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({ request_key: randomUUID() }),
+      method: "POST",
+    },
+  );
+  if (
+    conflictingClosureRequest.response.ok ||
+    conflictingClosureRequest.body?.code !== "22023" ||
+    conflictingClosureRequest.body?.message !==
+      "Account closure could not be requested"
+  ) {
+    throw new Error("A conflicting closure request key did not fail closed.");
+  }
+
+  const survivingOrganizerExportKey = randomUUID();
+  const survivingOrganizerExport = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerClosureTokens[survivingOrganizerIndex],
+    "rpc/request_family_export",
+    {
+      body: JSON.stringify({
+        circle_id: organizerClosureCircleId,
+        request_key: survivingOrganizerExportKey,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !survivingOrganizerExport.response.ok ||
+    !uuid.test(survivingOrganizerExport.body)
+  ) {
+    throw new Error(
+      "The surviving organizer could not use organizer authority.",
+    );
+  }
+
+  runDatabaseQuery(`
+    do $two_organizer_closure_audit$
+    declare
+      closure_count integer;
+      immutable_denial_observed boolean := false;
+      viable_organizer_count integer;
+    begin
+      select count(*)::integer into closure_count
+        from private.account_closure_requests
+       where auth_user_id in (
+         '${organizerClosureUsers[0].body.id}'::uuid,
+         '${organizerClosureUsers[1].body.id}'::uuid
+       );
+
+      begin
+        update private.account_closure_requests
+           set request_key = '${randomUUID()}'::uuid
+         where id = '${organizerClosureId}'::uuid;
+      exception
+        when sqlstate '42501' then
+          immutable_denial_observed := true;
+      end;
+
+      select count(*)::integer into viable_organizer_count
+        from public.circle_memberships as membership
+       where membership.circle_id = '${organizerClosureCircleId}'::uuid
+         and membership.status = 'active'
+         and membership.role = 'organizer'
+         and membership.user_id is not null
+         and not private.account_closure_is_blocking(membership.user_id);
+
+      if closure_count <> 1
+        or not immutable_denial_observed
+        or viable_organizer_count <> 1
+        or not exists (
+          select 1
+            from private.account_closure_requests
+           where id = '${organizerClosureId}'::uuid
+             and auth_user_id =
+               '${organizerClosureUsers[closingOrganizerIndex].body.id}'::uuid
+             and request_key =
+               '${organizerClosureKeys[closingOrganizerIndex]}'::uuid
+             and state = 'requested'
+        )
+        or not exists (
+          select 1
+            from public.circle_memberships
+           where id =
+               '${organizerClosureMemberships[survivingOrganizerIndex]}'::uuid
+             and circle_id = '${organizerClosureCircleId}'::uuid
+             and user_id =
+               '${organizerClosureUsers[survivingOrganizerIndex].body.id}'::uuid
+             and status = 'active'
+             and role = 'organizer'
+        )
+        or not exists (
+          select 1
+            from private.export_jobs
+           where id = '${survivingOrganizerExport.body}'::uuid
+             and circle_id = '${organizerClosureCircleId}'::uuid
+             and requested_by_membership_id =
+               '${organizerClosureMemberships[survivingOrganizerIndex]}'::uuid
+             and request_key = '${survivingOrganizerExportKey}'::uuid
+             and state = 'queued'
+             and private.export_job_requester_is_authorized(id)
+        ) then
+        raise exception 'Two-organizer closure race left duplicate, mutable, dead, or unusable organizer state';
+      end if;
+    end
+    $two_organizer_closure_audit$;
+  `);
+
+  runDatabaseQuery(`
+    update public.circle_memberships
+       set status = 'active',
+           role = 'organizer',
+           revoked_at = null,
+           revoked_by_membership_id = null
+     where id in (
+       '${ORGANIZER_A_MEMBERSHIP}'::uuid,
+       '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid,
+       '${ORGANIZER_B_MEMBERSHIP}'::uuid,
+       '${DUAL_ORGANIZER_B_MEMBERSHIP}'::uuid
+     );
+  `);
+
+  const closureReplayKey = randomUUID();
+  const closureReplaySetup = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerATwoToken,
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({ request_key: closureReplayKey }),
+      method: "POST",
+    },
+  );
+  if (!closureReplaySetup.response.ok || !uuid.test(closureReplaySetup.body)) {
+    throw new Error(
+      `Closure request/prepare setup failed with ${closureReplaySetup.response.status}.`,
+    );
+  }
+
+  const closureReplayResults = await runOverlappedAuthRace({
+    apiKey,
+    apiUrl,
+    operationName: "closure request replay and prepare",
+    operationNames: [
+      "request_account_closure",
+      "phase7c_test_prepare_account_closure",
+    ],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerATwoToken,
+          "rpc/request_account_closure",
+          {
+            body: JSON.stringify({ request_key: closureReplayKey }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          serviceKey,
+          serviceKey,
+          "rpc/phase7c_test_prepare_account_closure",
+          {
+            body: JSON.stringify({
+              closure_request_id: closureReplaySetup.body,
+            }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+    targetAuthUserId: ORGANIZER_A_TWO,
+  });
+  if (
+    closureReplayResults.some(
+      ({ response, body }) => !response.ok || body !== closureReplaySetup.body,
+    )
+  ) {
+    throw new Error(
+      `Closure request/prepare replay did not converge (${closureReplayResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+
+  const preparedClosureReplays = await Promise.all(
+    [0, 1].map(() =>
+      jsonRequest(
+        apiUrl,
+        serviceKey,
+        serviceKey,
+        "rpc/phase7c_test_prepare_account_closure",
+        {
+          body: JSON.stringify({
+            closure_request_id: closureReplaySetup.body,
+          }),
+          method: "POST",
+        },
+      ),
+    ),
+  );
+  if (
+    preparedClosureReplays.some(
+      ({ response, body }) => !response.ok || body !== closureReplaySetup.body,
+    )
+  ) {
+    throw new Error("Prepared closure replay did not remain idempotent.");
+  }
+
+  runDatabaseQuery(`
+    do $closure_replay_audit$
+    declare
+      closure_count integer;
+      closure_membership_count integer;
+      prepared_audit_count integer;
+      organizer_count integer;
+    begin
+      select count(*)::integer into closure_count
+        from private.account_closure_requests
+       where auth_user_id = '${ORGANIZER_A_TWO}'::uuid
+         and id = '${closureReplaySetup.body}'::uuid
+         and request_key = '${closureReplayKey}'::uuid
+         and state = 'prepared';
+      select count(*)::integer into closure_membership_count
+        from private.account_closure_memberships
+       where closure_request_id = '${closureReplaySetup.body}'::uuid
+         and circle_id = '${CIRCLE_A}'::uuid
+         and membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
+      select count(*)::integer into prepared_audit_count
+        from private.audit_events
+       where circle_id = '${CIRCLE_A}'::uuid
+         and actor_membership_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+         and event_type = 'account_closure_prepared'
+         and subject_id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid;
+      select count(*)::integer into organizer_count
+        from public.circle_memberships
+       where circle_id = '${CIRCLE_A}'::uuid
+         and status = 'active'
+         and role = 'organizer';
+
+      if closure_count <> 1
+        or closure_membership_count <> 1
+        or prepared_audit_count <> 1
+        or organizer_count <> 1
+        or not exists (
+          select 1
+            from public.circle_memberships
+           where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+             and status = 'revoked'
+             and user_id is null
+             and revoked_by_membership_id = id
+        ) then
+        raise exception 'Closure request/prepare replay left duplicate, partial, or falsely attributed state';
+      end if;
+    end
+    $closure_replay_audit$;
+  `);
+
+  const topologyClosureKey = randomUUID();
+  const topologyClosureSetup = await jsonRequest(
+    apiUrl,
+    apiKey,
+    dualOrganizerToken,
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({ request_key: topologyClosureKey }),
+      method: "POST",
+    },
+  );
+  if (
+    !topologyClosureSetup.response.ok ||
+    !uuid.test(topologyClosureSetup.body)
+  ) {
+    throw new Error(
+      `Last-organizer/closure setup failed with ${topologyClosureSetup.response.status}.`,
+    );
+  }
+
+  const topologyResults = await runOverlappedCircleRace({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_B,
+    holderToken: organizerToken,
+    operationName: "last-organizer topology change and closure prepare",
+    operationNames: [
+      "set_membership_role",
+      "phase7c_test_prepare_account_closure",
+    ],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          serviceKey,
+          serviceKey,
+          "rpc/phase7c_test_prepare_account_closure",
+          {
+            body: JSON.stringify({
+              closure_request_id: topologyClosureSetup.body,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(apiUrl, apiKey, organizerToken, "rpc/set_membership_role", {
+          body: JSON.stringify({
+            membership_id: ORGANIZER_B_MEMBERSHIP,
+            role: "member",
+          }),
+          method: "POST",
+        }),
+    ],
+    serviceKey,
+  });
+  const [topologyPrepare, topologyDemotion] = topologyResults;
+  if (topologyPrepare.response.ok === topologyDemotion.response.ok) {
+    throw new Error(
+      `Last-organizer/closure race did not select exactly one valid serial outcome (${topologyResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(", ")}).`,
+    );
+  }
+  const topologyDenial = topologyPrepare.response.ok
+    ? topologyDemotion
+    : topologyPrepare;
+  if (
+    topologyDenial.body?.code === "40P01" ||
+    !new Set(["22023", "23514"]).has(topologyDenial.body?.code)
+  ) {
+    throw new Error(
+      `Last-organizer/closure race did not use a constraint denial (${topologyDenial.body?.code ?? "none"}).`,
+    );
+  }
+
+  const topologyPreparedFirst = topologyPrepare.response.ok;
+  runDatabaseQuery(`
+    do $topology_intermediate_audit$
+    declare
+      detached_count integer;
+      mapped_count integer;
+      prepared_audit_count integer;
+      closure_state text;
+      surviving_organizer_count integer;
+    begin
+      select count(*)::integer into detached_count
+        from public.circle_memberships
+       where user_id is null
+         and id in (
+           '${DUAL_ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${DUAL_ORGANIZER_B_MEMBERSHIP}'::uuid
+         );
+      select count(*)::integer into mapped_count
+        from private.account_closure_memberships
+       where closure_request_id = '${topologyClosureSetup.body}'::uuid;
+      select count(*)::integer into prepared_audit_count
+        from private.audit_events
+       where event_type = 'account_closure_prepared'
+         and subject_id in (
+           '${DUAL_ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${DUAL_ORGANIZER_B_MEMBERSHIP}'::uuid
+         );
+      select state into closure_state
+        from private.account_closure_requests
+       where id = '${topologyClosureSetup.body}'::uuid;
+      select count(*)::integer into surviving_organizer_count
+        from public.circle_memberships
+       where circle_id = '${CIRCLE_B}'::uuid
+         and status = 'active'
+         and role = 'organizer';
+
+      if ${topologyPreparedFirst ? "true" : "false"} then
+        if detached_count <> 2
+          or mapped_count <> 2
+          or prepared_audit_count <> 2
+          or closure_state <> 'prepared'
+          or surviving_organizer_count <> 1 then
+          raise exception 'Successful topology/prepare race did not detach every circle atomically';
+        end if;
+      elsif detached_count <> 0
+        or mapped_count <> 0
+        or prepared_audit_count <> 0
+        or closure_state <> 'requested'
+        or surviving_organizer_count <> 1 then
+        raise exception 'Denied topology/prepare race left partial cross-circle closure state';
+      end if;
+    end
+    $topology_intermediate_audit$;
+  `);
+
+  if (!topologyPreparedFirst) {
+    runDatabaseQuery(`
+      update public.circle_memberships
+         set role = 'organizer'
+       where id = '${ORGANIZER_B_MEMBERSHIP}'::uuid;
+    `);
+  }
+
+  const topologyFinalPrepare = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_prepare_account_closure",
+    {
+      body: JSON.stringify({
+        closure_request_id: topologyClosureSetup.body,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !topologyFinalPrepare.response.ok ||
+    topologyFinalPrepare.body !== topologyClosureSetup.body
+  ) {
+    throw new Error("A valid topology could not finish closure preparation.");
+  }
+
+  const topologyPrepareReplays = await Promise.all(
+    [0, 1].map(() =>
+      jsonRequest(
+        apiUrl,
+        serviceKey,
+        serviceKey,
+        "rpc/phase7c_test_prepare_account_closure",
+        {
+          body: JSON.stringify({
+            closure_request_id: topologyClosureSetup.body,
+          }),
+          method: "POST",
+        },
+      ),
+    ),
+  );
+  if (
+    topologyPrepareReplays.some(
+      ({ response, body }) =>
+        !response.ok || body !== topologyClosureSetup.body,
+    )
+  ) {
+    throw new Error("Concurrent prepared-closure replays did not converge.");
+  }
+
+  runDatabaseQuery(`
+    do $topology_final_audit$
+    declare
+      detached_count integer;
+      mapped_count integer;
+      prepared_audit_count integer;
+      organizer_count integer;
+    begin
+      select count(*)::integer into detached_count
+        from public.circle_memberships
+       where id in (
+           '${DUAL_ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${DUAL_ORGANIZER_B_MEMBERSHIP}'::uuid
+         )
+         and status = 'revoked'
+         and user_id is null
+         and revoked_by_membership_id = id;
+      select count(*)::integer into mapped_count
+        from private.account_closure_memberships
+       where closure_request_id = '${topologyClosureSetup.body}'::uuid;
+      select count(*)::integer into prepared_audit_count
+        from private.audit_events
+       where event_type = 'account_closure_prepared'
+         and actor_membership_id = subject_id
+         and subject_id in (
+           '${DUAL_ORGANIZER_A_MEMBERSHIP}'::uuid,
+           '${DUAL_ORGANIZER_B_MEMBERSHIP}'::uuid
+         );
+      select count(*)::integer into organizer_count
+        from public.circle_memberships
+       where circle_id = '${CIRCLE_B}'::uuid
+         and status = 'active'
+         and role = 'organizer';
+
+      if detached_count <> 2
+        or mapped_count <> 2
+        or prepared_audit_count <> 2
+        or organizer_count <> 1
+        or not exists (
+          select 1
+            from private.account_closure_requests
+           where id = '${topologyClosureSetup.body}'::uuid
+             and state = 'prepared'
+        ) then
+        raise exception 'Closure replay resurrected access or duplicated cross-circle terminal history';
+      end if;
+    end
+    $topology_final_audit$;
+  `);
+
+  const invitationClosureSuffix = randomUUID();
+  const invitationClosureEmail = `closure-invitation-${invitationClosureSuffix}@example.test`;
+  const invitationClosureUser = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: invitationClosureEmail,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  const invitationWorkTarget = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: `closure-work-target-${invitationClosureSuffix}@example.test`,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !invitationClosureUser.response.ok ||
+    !uuid.test(invitationClosureUser.body?.id) ||
+    !invitationWorkTarget.response.ok ||
+    !uuid.test(invitationWorkTarget.body?.id)
+  ) {
+    throw new Error("Invitation/closure Auth setup failed.");
+  }
+
+  const invitationClosurePersonId = randomUUID();
+  const invitationClosureMembershipId = randomUUID();
+  runDatabaseQuery(`
+    do $invitation_closure_setup$
+    begin
+    insert into public.people (
+      id,
+      circle_id,
+      display_name,
+      profile_kind,
+      accent_token,
+      created_by_membership_id
+    ) values (
+      '${invitationClosurePersonId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      'Closure invitation organizer',
+      'account',
+      'sky',
+      '${ORGANIZER_B_MEMBERSHIP}'::uuid
+    );
+
+    insert into public.circle_memberships (
+      id,
+      circle_id,
+      user_id,
+      person_id,
+      role,
+      status
+    ) values (
+      '${invitationClosureMembershipId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      '${invitationClosureUser.body.id}'::uuid,
+      '${invitationClosurePersonId}'::uuid,
+      'organizer',
+      'active'
+    );
+    end
+    $invitation_closure_setup$;
+  `);
+
+  const invitationClosureToken = createLocalUserToken(
+    invitationClosureUser.body.id,
+    jwtSecret,
+  );
+  const targetJobRequestKey = randomUUID();
+  const targetJob = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/request_invitation_job",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        target_auth_user_id: invitationClosureUser.body.id,
+        display_name: `Closure target ${invitationClosureSuffix}`,
+        request_key: targetJobRequestKey,
+      }),
+      method: "POST",
+    },
+  );
+  const requesterJobRequestKey = randomUUID();
+  const requesterJob = await jsonRequest(
+    apiUrl,
+    apiKey,
+    invitationClosureToken,
+    "rpc/request_invitation_job",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_B,
+        target_auth_user_id: invitationWorkTarget.body.id,
+        display_name: `Closure requester ${invitationClosureSuffix}`,
+        request_key: requesterJobRequestKey,
+      }),
+      method: "POST",
+    },
+  );
+  const legacyClosureInvitation = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/create_invitation",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        display_name: `Closure legacy ${invitationClosureSuffix}`,
+        email: invitationClosureEmail,
+      }),
+      method: "POST",
+    },
+  );
+  const legacyClosureInvitationResult = legacyClosureInvitation.body?.[0];
+  if (
+    !targetJob.response.ok ||
+    !uuid.test(targetJob.body) ||
+    !requesterJob.response.ok ||
+    !uuid.test(requesterJob.body) ||
+    !legacyClosureInvitation.response.ok ||
+    !uuid.test(legacyClosureInvitationResult?.invitation_id)
+  ) {
+    throw new Error("Invitation/closure durable-work setup failed.");
+  }
+
+  const invitationClosureKey = randomUUID();
+  const invitationClosureRace = await runOverlappedAuthRace({
+    apiKey,
+    apiUrl,
+    operationName: "invitation target/request work and closure request",
+    operationNames: ["request_invitation_job", "request_account_closure"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerAToken,
+          "rpc/request_invitation_job",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_A,
+              target_auth_user_id: invitationClosureUser.body.id,
+              display_name: `Closure target ${invitationClosureSuffix}`,
+              request_key: targetJobRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          invitationClosureToken,
+          "rpc/request_invitation_job",
+          {
+            body: JSON.stringify({
+              circle_id: CIRCLE_B,
+              target_auth_user_id: invitationWorkTarget.body.id,
+              display_name: `Closure requester ${invitationClosureSuffix}`,
+              request_key: requesterJobRequestKey,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          invitationClosureToken,
+          "rpc/request_account_closure",
+          {
+            body: JSON.stringify({ request_key: invitationClosureKey }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+    targetAuthUserId: invitationClosureUser.body.id,
+  });
+  const [targetJobReplay, requesterJobReplay, invitationClosureRequest] =
+    invitationClosureRace;
+  if (
+    !invitationClosureRequest.response.ok ||
+    !uuid.test(invitationClosureRequest.body)
+  ) {
+    throw new Error(
+      `Invitation/closure request did not survive its valid serial outcomes (${invitationClosureRequest.response.status}).`,
+    );
+  }
+  for (const [jobReplay, expectedJobId] of [
+    [targetJobReplay, targetJob.body],
+    [requesterJobReplay, requesterJob.body],
+  ]) {
+    if (jobReplay.response.ok) {
+      if (jobReplay.body !== expectedJobId) {
+        throw new Error("Invitation replay changed durable job identity.");
+      }
+    } else if (
+      jobReplay.body?.code === "40P01" ||
+      jobReplay.body?.code !== "42501" ||
+      jobReplay.body?.message !== "Invitation delivery could not be requested"
+    ) {
+      throw new Error(
+        `Invitation/closure replay did not use the generic blocking path (${jobReplay.body?.code ?? "none"}).`,
+      );
+    }
+  }
+
+  const invitationClosurePrepare = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_prepare_account_closure",
+    {
+      body: JSON.stringify({
+        closure_request_id: invitationClosureRequest.body,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !invitationClosurePrepare.response.ok ||
+    invitationClosurePrepare.body !== invitationClosureRequest.body
+  ) {
+    throw new Error(
+      "Invitation/closure work could not be terminally prepared.",
+    );
+  }
+
+  const blockedInvitationReplays = await Promise.all([
+    jsonRequest(apiUrl, apiKey, organizerAToken, "rpc/request_invitation_job", {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        target_auth_user_id: invitationClosureUser.body.id,
+        display_name: `Closure target ${invitationClosureSuffix}`,
+        request_key: targetJobRequestKey,
+      }),
+      method: "POST",
+    }),
+    jsonRequest(
+      apiUrl,
+      apiKey,
+      invitationClosureToken,
+      "rpc/request_invitation_job",
+      {
+        body: JSON.stringify({
+          circle_id: CIRCLE_B,
+          target_auth_user_id: invitationWorkTarget.body.id,
+          display_name: `Closure requester ${invitationClosureSuffix}`,
+          request_key: requesterJobRequestKey,
+        }),
+        method: "POST",
+      },
+    ),
+  ]);
+  if (
+    blockedInvitationReplays.some(
+      ({ response, body }) =>
+        response.ok ||
+        body?.code !== "42501" ||
+        body?.message !== "Invitation delivery could not be requested",
+    )
+  ) {
+    throw new Error("Prepared closure allowed invitation work to resurrect.");
+  }
+
+  runDatabaseQuery(`
+    do $invitation_closure_audit$
+    declare
+      closure_membership_count integer;
+      closure_audit_count integer;
+    begin
+      select count(*)::integer into closure_membership_count
+        from private.account_closure_memberships
+       where closure_request_id = '${invitationClosureRequest.body}'::uuid
+         and circle_id = '${CIRCLE_B}'::uuid
+         and membership_id = '${invitationClosureMembershipId}'::uuid;
+      select count(*)::integer into closure_audit_count
+        from private.audit_events
+       where circle_id = '${CIRCLE_B}'::uuid
+         and actor_membership_id = '${invitationClosureMembershipId}'::uuid
+         and event_type = 'account_closure_prepared'
+         and subject_id = '${invitationClosureMembershipId}'::uuid;
+
+      if closure_membership_count <> 1
+        or closure_audit_count <> 1
+        or not exists (
+          select 1
+            from public.circle_memberships
+           where id = '${invitationClosureMembershipId}'::uuid
+             and status = 'revoked'
+             and user_id is null
+             and revoked_by_membership_id = id
+        )
+        or not exists (
+          select 1
+            from private.invitation_jobs
+           where id = '${targetJob.body}'::uuid
+             and state = 'invalidated'
+             and invalidated_by_membership_id is null
+             and invalidated_by_closure_request_id =
+               '${invitationClosureRequest.body}'::uuid
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or not exists (
+          select 1
+            from private.invitation_jobs
+           where id = '${requesterJob.body}'::uuid
+             and state = 'invalidated'
+             and invalidated_by_membership_id =
+               '${invitationClosureMembershipId}'::uuid
+             and invalidated_by_closure_request_id is null
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or not exists (
+          select 1
+            from private.invitations
+           where id = '${legacyClosureInvitationResult.invitation_id}'::uuid
+             and accepted_at is null
+             and revoked_at is not null
+             and revoked_by_membership_id is null
+             and revoked_by_closure_request_id =
+               '${invitationClosureRequest.body}'::uuid
+        ) then
+        raise exception 'Invitation/closure race left resurrectable or falsely attributed terminal work';
+      end if;
+    end
+    $invitation_closure_audit$;
+  `);
+
+  const acceptanceClosureSuffix = randomUUID();
+  const acceptanceClosureEmail = `acceptance-closure-${acceptanceClosureSuffix}@example.test`;
+  const acceptanceClosureUser = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: acceptanceClosureEmail,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !acceptanceClosureUser.response.ok ||
+    !uuid.test(acceptanceClosureUser.body?.id)
+  ) {
+    throw new Error("Invitation acceptance/closure Auth setup failed.");
+  }
+
+  const acceptanceClosurePersonId = randomUUID();
+  const acceptanceClosureMembershipId = randomUUID();
+  runDatabaseQuery(`
+    do $acceptance_closure_setup$
+    begin
+    insert into public.people (
+      id,
+      circle_id,
+      display_name,
+      profile_kind,
+      accent_token,
+      created_by_membership_id
+    ) values (
+      '${acceptanceClosurePersonId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      'Acceptance closure member',
+      'account',
+      'gold',
+      '${ORGANIZER_B_MEMBERSHIP}'::uuid
+    );
+
+    insert into public.circle_memberships (
+      id,
+      circle_id,
+      user_id,
+      person_id,
+      role,
+      status
+    ) values (
+      '${acceptanceClosureMembershipId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      '${acceptanceClosureUser.body.id}'::uuid,
+      '${acceptanceClosurePersonId}'::uuid,
+      'member',
+      'active'
+    );
+    end
+    $acceptance_closure_setup$;
+  `);
+
+  const acceptanceClosureInvitation = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/create_invitation",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        display_name: `Acceptance closure ${acceptanceClosureSuffix}`,
+        email: acceptanceClosureEmail,
+      }),
+      method: "POST",
+    },
+  );
+  const acceptanceClosureInvitationResult =
+    acceptanceClosureInvitation.body?.[0];
+  if (
+    !acceptanceClosureInvitation.response.ok ||
+    !uuid.test(acceptanceClosureInvitationResult?.invitation_id) ||
+    typeof acceptanceClosureInvitationResult?.raw_token !== "string"
+  ) {
+    throw new Error("Invitation acceptance/closure invitation setup failed.");
+  }
+
+  const acceptanceClosureToken = createLocalUserToken(
+    acceptanceClosureUser.body.id,
+    jwtSecret,
+  );
+  const acceptanceClosureKey = randomUUID();
+  const acceptanceClosureRace = await runOverlappedAuthRace({
+    apiKey,
+    apiUrl,
+    operationName: "invitation acceptance and account closure request",
+    operationNames: ["accept_invitation", "request_account_closure"],
+    requests: [
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          acceptanceClosureToken,
+          "rpc/accept_invitation",
+          {
+            body: JSON.stringify({
+              token: acceptanceClosureInvitationResult.raw_token,
+            }),
+            method: "POST",
+          },
+        ),
+      () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          acceptanceClosureToken,
+          "rpc/request_account_closure",
+          {
+            body: JSON.stringify({ request_key: acceptanceClosureKey }),
+            method: "POST",
+          },
+        ),
+    ],
+    serviceKey,
+    targetAuthUserId: acceptanceClosureUser.body.id,
+  });
+  const [racedInvitationAcceptance, racedAcceptanceClosureRequest] =
+    acceptanceClosureRace;
+  if (
+    !racedAcceptanceClosureRequest.response.ok ||
+    !uuid.test(racedAcceptanceClosureRequest.body) ||
+    racedAcceptanceClosureRequest.body?.code === "40P01"
+  ) {
+    throw new Error(
+      `Invitation acceptance/closure request did not preserve closure intent (${racedAcceptanceClosureRequest.response.status}).`,
+    );
+  }
+
+  const invitationAcceptanceWon = racedInvitationAcceptance.response.ok;
+  if (invitationAcceptanceWon) {
+    if (!uuid.test(racedInvitationAcceptance.body)) {
+      throw new Error(
+        "Invitation acceptance/closure race returned an invalid membership.",
+      );
+    }
+  } else if (
+    racedInvitationAcceptance.body?.code === "40P01" ||
+    racedInvitationAcceptance.body?.code !== "22023" ||
+    racedInvitationAcceptance.body?.message !== "Invitation is not available"
+  ) {
+    throw new Error(
+      `Invitation acceptance/closure race did not use a valid serial denial (${racedInvitationAcceptance.body?.code ?? "none"}).`,
+    );
+  }
+
+  const acceptanceClosurePrepare = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_prepare_account_closure",
+    {
+      body: JSON.stringify({
+        closure_request_id: racedAcceptanceClosureRequest.body,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !acceptanceClosurePrepare.response.ok ||
+    acceptanceClosurePrepare.body !== racedAcceptanceClosureRequest.body ||
+    acceptanceClosurePrepare.body?.code === "40P01"
+  ) {
+    throw new Error("Invitation acceptance/closure preparation failed.");
+  }
+
+  const acceptanceClosurePrepareReplay = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_prepare_account_closure",
+    {
+      body: JSON.stringify({
+        closure_request_id: racedAcceptanceClosureRequest.body,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    !acceptanceClosurePrepareReplay.response.ok ||
+    acceptanceClosurePrepareReplay.body !== racedAcceptanceClosureRequest.body
+  ) {
+    throw new Error("Invitation acceptance/closure prepare replay diverged.");
+  }
+
+  const acceptanceAfterClosure = await jsonRequest(
+    apiUrl,
+    apiKey,
+    acceptanceClosureToken,
+    "rpc/accept_invitation",
+    {
+      body: JSON.stringify({
+        token: acceptanceClosureInvitationResult.raw_token,
+      }),
+      method: "POST",
+    },
+  );
+  if (
+    acceptanceAfterClosure.response.ok ||
+    acceptanceAfterClosure.body?.code === "40P01" ||
+    acceptanceAfterClosure.body?.code !== "22023" ||
+    acceptanceAfterClosure.body?.message !== "Invitation is not available"
+  ) {
+    throw new Error(
+      "Prepared closure allowed its raced invitation to become available.",
+    );
+  }
+
+  runDatabaseQuery(`
+    do $acceptance_closure_audit$
+    declare
+      closure_audit_count integer;
+      closure_map_count integer;
+      closure_map_distinct_count integer;
+      expected_membership_count integer :=
+        ${invitationAcceptanceWon ? 2 : 1};
+    begin
+      select count(*)::integer,
+             count(distinct membership_id)::integer
+        into closure_map_count, closure_map_distinct_count
+        from private.account_closure_memberships
+       where closure_request_id =
+         '${racedAcceptanceClosureRequest.body}'::uuid;
+
+      select count(*)::integer into closure_audit_count
+        from private.audit_events as audit
+        join private.account_closure_memberships as closure_membership
+          on closure_membership.circle_id = audit.circle_id
+         and closure_membership.membership_id = audit.subject_id
+         and closure_membership.membership_id = audit.actor_membership_id
+       where closure_membership.closure_request_id =
+           '${racedAcceptanceClosureRequest.body}'::uuid
+         and audit.event_type = 'account_closure_prepared';
+
+      if closure_map_count <> expected_membership_count
+        or closure_map_distinct_count <> expected_membership_count
+        or closure_audit_count <> expected_membership_count
+        or not exists (
+          select 1
+            from private.account_closure_requests
+           where id = '${racedAcceptanceClosureRequest.body}'::uuid
+             and auth_user_id = '${acceptanceClosureUser.body.id}'::uuid
+             and request_key = '${acceptanceClosureKey}'::uuid
+             and state = 'prepared'
+        )
+        or exists (
+          select 1
+            from public.circle_memberships
+           where user_id = '${acceptanceClosureUser.body.id}'::uuid
+        )
+        or not exists (
+          select 1
+            from private.account_closure_memberships as closure_membership
+            join public.circle_memberships as membership
+              on membership.circle_id = closure_membership.circle_id
+             and membership.id = closure_membership.membership_id
+           where closure_membership.closure_request_id =
+               '${racedAcceptanceClosureRequest.body}'::uuid
+             and closure_membership.circle_id = '${CIRCLE_B}'::uuid
+             and closure_membership.membership_id =
+               '${acceptanceClosureMembershipId}'::uuid
+             and membership.status = 'revoked'
+             and membership.user_id is null
+             and membership.revoked_by_membership_id = membership.id
+        ) then
+        raise exception 'Invitation acceptance/closure race left partial or duplicate closure state';
+      end if;
+
+      if ${invitationAcceptanceWon ? "true" : "false"} then
+        if not exists (
+          select 1
+            from private.account_closure_memberships as closure_membership
+            join public.circle_memberships as membership
+              on membership.circle_id = closure_membership.circle_id
+             and membership.id = closure_membership.membership_id
+           where closure_membership.closure_request_id =
+               '${racedAcceptanceClosureRequest.body}'::uuid
+             and closure_membership.circle_id = '${CIRCLE_A}'::uuid
+             and closure_membership.membership_id =
+               '${invitationAcceptanceWon ? racedInvitationAcceptance.body : acceptanceClosureMembershipId}'::uuid
+             and membership.status = 'revoked'
+             and membership.user_id is null
+             and membership.revoked_by_membership_id = membership.id
+        )
+        or not exists (
+          select 1
+            from private.invitations
+           where id =
+               '${acceptanceClosureInvitationResult.invitation_id}'::uuid
+             and accepted_membership_id =
+               '${invitationAcceptanceWon ? racedInvitationAcceptance.body : acceptanceClosureMembershipId}'::uuid
+             and accepted_at is not null
+             and revoked_at is null
+             and revoked_by_membership_id is null
+             and revoked_by_closure_request_id is null
+        ) then
+          raise exception 'Accepted invitation/closure race lost membership or terminal acceptance attribution';
+        end if;
+      elsif exists (
+          select 1
+            from public.circle_memberships
+           where circle_id = '${CIRCLE_A}'::uuid
+             and person_id = (
+               select invitation.person_id
+                 from private.invitations as invitation
+                where invitation.id =
+                  '${acceptanceClosureInvitationResult.invitation_id}'::uuid
+             )
+        )
+        or not exists (
+          select 1
+            from private.invitations
+           where id =
+               '${acceptanceClosureInvitationResult.invitation_id}'::uuid
+             and accepted_at is null
+             and accepted_membership_id is null
+             and revoked_at is not null
+             and revoked_by_membership_id is null
+             and revoked_by_closure_request_id =
+               '${racedAcceptanceClosureRequest.body}'::uuid
+        ) then
+        raise exception 'Denied invitation/closure race created membership or lost closure revocation attribution';
+      end if;
+    end
+    $acceptance_closure_audit$;
+  `);
+
   process.stdout.write(
-    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance and job requests including target activation, moment/tag edits, note edits, reversible responses, parent trash, member revocation, and export requests serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance including same-subject account closure, invitation job requests including target activation and account closure, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

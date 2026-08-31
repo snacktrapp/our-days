@@ -6,6 +6,8 @@ Status: **membership-based moment history passes locally — account closure rem
 
 This checkpoint removes a replaceable sign-in identity from durable moment history without claiming that account deletion exists. It creates no closure job, Auth Admin client, Storage cleanup, external worker, user-facing action, retention policy, or content-deletion behavior.
 
+Subsequent checkpoint: `PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md` implements the database preparation transaction described below. Auth Admin deletion, media reconciliation, external restore suppression, and user-facing account deletion remain unavailable.
+
 ## Implemented
 
 - `moments.recorded_by_membership_id` is required and `moments.trashed_by_membership_id` is optional. Both are composite same-circle foreign keys to `circle_memberships(circle_id, id)` with restrictive deletion.

@@ -478,9 +478,9 @@ select ok(
      where table_schema = 'public'
        and table_name = 'circle_memberships'
        and column_name = 'user_id'
-       and is_nullable = 'NO'
+       and is_nullable = 'YES'
   ),
-  'membership Auth attachment remains required until the closure schema exists'
+  'the closure schema permits a revoked membership to detach from Auth'
 );
 
 select throws_ok(

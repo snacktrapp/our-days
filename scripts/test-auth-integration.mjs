@@ -201,11 +201,24 @@ function resetDatabase() {
   });
 }
 
+function runDatabaseQuery(sql) {
+  try {
+    execFileSync(supabaseBinary, ["db", "query", "--local", sql], {
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    throw new Error("Local database query failed.", { cause: error });
+  }
+}
+
 const CIRCLE_A = "20000000-0000-4000-8000-000000000001";
 const CIRCLE_B = "20000000-0000-4000-8000-000000000002";
 const ORGANIZER_A = "10000000-0000-4000-8000-000000000001";
 const DUAL_CIRCLE_USER = "10000000-0000-4000-8000-000000000005";
 const DUAL_CIRCLE_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000005";
+const uuid =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 let shouldRestoreFixtures = false;
 let storageCleanup = null;
@@ -613,6 +626,97 @@ try {
     throw new Error("Revoking circle A removed valid circle B authority.");
   }
 
+  const closureRequest = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/request_account_closure`,
+    anonKey,
+    {
+      body: JSON.stringify({ request_key: randomUUID() }),
+      headers: dualCircleHeaders,
+      method: "POST",
+    },
+  );
+  if (
+    !closureRequest.response.ok ||
+    typeof closureRequest.body !== "string" ||
+    !uuid.test(closureRequest.body)
+  ) {
+    throw new Error(
+      `Account closure request failed with ${closureRequest.response.status}.`,
+    );
+  }
+
+  const requestedClosureRead = await jsonRequest(
+    `${apiUrl}/rest/v1/circles?select=id`,
+    anonKey,
+    { headers: dualCircleHeaders },
+  );
+  if (
+    !requestedClosureRead.response.ok ||
+    requestedClosureRead.body?.length !== 1 ||
+    requestedClosureRead.body[0]?.id !== CIRCLE_B
+  ) {
+    throw new Error(
+      "A requested account closure changed ordinary family reads before preparation.",
+    );
+  }
+
+  runDatabaseQuery(`
+    with role_set as materialized (
+      select pg_catalog.set_config('role', 'service_role', true)
+    )
+    select private.prepare_account_closure('${closureRequest.body}'::uuid)
+      from role_set;
+  `);
+
+  const preparedClosureRead = await jsonRequest(
+    `${apiUrl}/rest/v1/circles?select=id`,
+    anonKey,
+    { headers: dualCircleHeaders },
+  );
+  if (
+    !preparedClosureRead.response.ok ||
+    preparedClosureRead.body?.length !== 0
+  ) {
+    throw new Error(
+      "A captured access token retained family reads after closure preparation.",
+    );
+  }
+
+  const preparedClosureMutation = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/create_invitation`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_B,
+        display_name: "Prepared closure must fail",
+        email: `prepared-closure-${suffix}@example.test`,
+      }),
+      headers: dualCircleHeaders,
+      method: "POST",
+    },
+  );
+  if (
+    preparedClosureMutation.response.ok ||
+    preparedClosureMutation.body?.code !== "42501" ||
+    preparedClosureMutation.body?.message !== "Invitation could not be created"
+  ) {
+    throw new Error(
+      `A captured access token did not follow the generic post-closure mutation-denial path (${preparedClosureMutation.response.status}).`,
+    );
+  }
+
+  for (const { bucket, deniedUploadPath, seededPath } of storageObjects) {
+    await assertStorageDenied(
+      apiUrl,
+      anonKey,
+      dualCircleToken,
+      "prepared account caller with a captured token",
+      bucket,
+      seededPath,
+      deniedUploadPath,
+    );
+  }
+
   const users = await jsonRequest(
     `${apiUrl}/auth/v1/admin/users?page=1&per_page=1000`,
     serviceKey,
@@ -631,7 +735,7 @@ try {
   }
 
   process.stdout.write(
-    "Local Auth signup variants, OTP, invite acceptance, circle-scoped stale-token denial, and closed Storage HTTP paths passed.\n",
+    "Local Auth signup variants, OTP, invite acceptance, membership and prepared-closure stale-token denial, and closed Storage HTTP paths passed.\n",
   );
 } catch (error) {
   primaryError = error;

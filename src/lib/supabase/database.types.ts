@@ -20,7 +20,7 @@ export type Database = {
           role: string;
           status: string;
           updated_at: string;
-          user_id: string;
+          user_id: string | null;
         };
         Insert: {
           circle_id: string;
@@ -32,7 +32,7 @@ export type Database = {
           role?: string;
           status?: string;
           updated_at?: string;
-          user_id: string;
+          user_id?: string | null;
         };
         Update: {
           circle_id?: string;
@@ -44,7 +44,7 @@ export type Database = {
           role?: string;
           status?: string;
           updated_at?: string;
-          user_id?: string;
+          user_id?: string | null;
         };
         Relationships: [
           {
@@ -662,6 +662,10 @@ export type Database = {
       preflight_invitation: {
         Args: { email: string; token: string };
         Returns: boolean;
+      };
+      request_account_closure: {
+        Args: { request_key: string };
+        Returns: string;
       };
       request_family_export: {
         Args: { circle_id: string; request_key: string };

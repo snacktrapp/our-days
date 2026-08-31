@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "2fb71238243d106e4661d8ad2ee627a825099512943b0984294d735535f5ca85";
+  "720d1af4e114973b4ee9a514a2b48dd910538346f1363a74bfba822534f86cfa";
 const expectedCanonicalCatalogFingerprint =
-  "da064eb60c60aa7d7db3258bc0a9dda0f71c3f27645cce36e933eb4d41f5f553";
+  "36bed20862a6e83ba8632449d8d5cca8fdf6c0bb4ef71b482df6c7bd8c257893";
 const expectedRestoredSchemaFingerprint =
-  "f82c57cf6b2c5659ebb507fab601e866b751ad400558fa9c05cbfba46471c000";
+  "24c99b4b6af41f91ef4d0f3443e48524c904501530f133ac3ebbcaa29fb25fd7";
 const expectedCanonicalDataFingerprint =
-  "bf0eeed23ec6b580a30d4e7fba57186cd15641bb0be43ea405b4ab1c56725ee0";
+  "9ddd5f31d90f84865c85cb324516f2beb77152657030af591435e10e64b90856";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "07edccd1e555adda0b2cd2c9f99d9195e5b74c1fddac34bf51ac2f457f0593be";
+  "4dc89041650c5bfd8e9ef756ba5fb8485bfbc655bdcf87bff00edfbbb7718aec";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: null,
@@ -126,6 +126,7 @@ const expectedMigrationFiles = [
   "20260830233000_phase_7_export_request_foundation.sql",
   "20260830234500_phase_2b_invitation_job_foundation.sql",
   "20260831000000_phase_7b_membership_attribution_foundation.sql",
+  "20260831010000_phase_7c_account_closure_preparation.sql",
 ];
 
 class DrillError extends Error {
@@ -750,6 +751,8 @@ select (
   and (select count(*) = 1 from public.moment_people)
   and (select count(*) = 1 from public.moment_notes)
   and (select count(*) = 1 from public.moment_reactions)
+  and (select count(*) = 0 from private.account_closure_memberships)
+  and (select count(*) = 0 from private.account_closure_requests)
   and (select count(*) = 0 from private.invitations)
   and (select count(*) = 0 from private.audit_events)
   and (select count(*) = 0 from private.export_jobs)
@@ -803,6 +806,8 @@ select (
       namespace.nspname || '.' || relation.relname
       order by namespace.nspname, relation.relname
     ) = array[
+      'private.account_closure_memberships',
+      'private.account_closure_requests',
       'private.audit_events',
       'private.export_jobs',
       'private.invitation_jobs',
@@ -1002,7 +1007,8 @@ select (
         '20260830230000',
         '20260830233000',
         '20260830234500',
-        '20260831000000'
+        '20260831000000',
+        '20260831010000'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
@@ -1570,6 +1576,8 @@ select pg_catalog.jsonb_build_array(
   join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
  where namespace.nspname = 'private'
    and relation.relname in (
+     'account_closure_memberships',
+     'account_closure_requests',
      'audit_events',
      'audit_events_id_seq',
      'export_jobs',
@@ -2012,6 +2020,8 @@ const tableOwnerPrivileges = new Set([
   "UPDATE",
 ]);
 const allowedOwnerAclDisappearance = new Map([
+  ["private.account_closure_memberships", tableOwnerPrivileges],
+  ["private.account_closure_requests", tableOwnerPrivileges],
   ["private.audit_events", tableOwnerPrivileges],
   ["private.audit_events_id_seq", new Set(["SELECT", "UPDATE", "USAGE"])],
   ["private.export_jobs", tableOwnerPrivileges],
