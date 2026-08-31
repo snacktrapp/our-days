@@ -132,6 +132,18 @@ const volatileFixtureTimestampColumns = new Map([
   ["public.moments", new Set(["created_at", "trashed_at", "updated_at"])],
   ["public.people", new Set(["created_at", "updated_at"])],
   ["public.person_guardians", new Set(["created_at", "revoked_at"])],
+  ["private.photo_originals", new Set(["verified_at"])],
+  [
+    "private.photo_validation_jobs",
+    new Set([
+      "completed_at",
+      "invalidated_at",
+      "lease_expires_at",
+      "lease_started_at",
+      "queued_at",
+    ]),
+  ],
+  ["private.photo_validator_allowlist", new Set(["allowed_at", "revoked_at"])],
   ["storage.buckets", new Set(["created_at", "updated_at"])],
   ["storage.migrations", new Set(["executed_at"])],
   ["supabase_functions.migrations", new Set(["inserted_at"])],
@@ -149,6 +161,7 @@ const expectedMigrationFiles = [
   "20260831010000_phase_7c_account_closure_preparation.sql",
   "20260831020000_phase_4a_photo_intake_foundation.sql",
   "20260831030000_phase_2c_target_bound_invitation_materialization.sql",
+  "20260831040000_phase_4b_immutable_photo_promotion.sql",
 ];
 
 class DrillError extends Error {
@@ -780,6 +793,9 @@ select (
   and (select count(*) = 0 from private.export_jobs)
   and (select count(*) = 0 from private.invitation_jobs)
   and (select count(*) = 0 from private.photo_intakes)
+  and (select count(*) = 0 from private.photo_originals)
+  and (select count(*) = 0 from private.photo_validation_jobs)
+  and (select count(*) = 0 from private.photo_validator_allowlist)
   and (select count(*) = 3 from storage.buckets)
   and (
     select count(*) = 2
@@ -858,6 +874,9 @@ select (
       'private.invitation_jobs',
       'private.invitations',
       'private.photo_intakes',
+      'private.photo_originals',
+      'private.photo_validation_jobs',
+      'private.photo_validator_allowlist',
       'public.circle_memberships',
       'public.circles',
       'public.moment_notes',
@@ -1056,7 +1075,8 @@ select (
         '20260831000000',
         '20260831010000',
         '20260831020000',
-        '20260831030000'
+        '20260831030000',
+        '20260831040000'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
@@ -1631,7 +1651,10 @@ select pg_catalog.jsonb_build_array(
      'export_jobs',
      'invitation_jobs',
      'invitations',
-     'photo_intakes'
+     'photo_intakes',
+     'photo_originals',
+     'photo_validation_jobs',
+     'photo_validator_allowlist'
    )
  order by relation.relname;
 `;
@@ -2077,6 +2100,9 @@ const allowedOwnerAclDisappearance = new Map([
   ["private.invitation_jobs", tableOwnerPrivileges],
   ["private.invitations", tableOwnerPrivileges],
   ["private.photo_intakes", tableOwnerPrivileges],
+  ["private.photo_originals", tableOwnerPrivileges],
+  ["private.photo_validation_jobs", tableOwnerPrivileges],
+  ["private.photo_validator_allowlist", tableOwnerPrivileges],
 ]);
 
 function quoteIdentifier(identifier) {
@@ -2537,6 +2563,78 @@ select (
     "private table authorization fidelity",
   );
 
+  assertDatabaseBoolean(
+    database,
+    String.raw`
+select (
+  pg_catalog.has_function_privilege(
+    'authenticated', 'public.claim_photo_validation(uuid,uuid)', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.complete_photo_validation(uuid,uuid,uuid,text,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated', 'public.reject_photo_validation(uuid,uuid,text)', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.flag_photo_validation_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.photo_original_path_is_uploadable(text,text,jsonb)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated', 'private.photo_original_path_is_readable(text)', 'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.photo_validation_source_is_readable(text,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated', 'private.claim_photo_validation(uuid,uuid)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.complete_photo_validation(uuid,uuid,uuid,text,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.reject_photo_validation(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.flag_photo_validation_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon', 'public.claim_photo_validation(uuid,uuid)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.complete_photo_validation(uuid,uuid,uuid,text,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon', 'public.reject_photo_validation(uuid,uuid,text)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'public.flag_photo_validation_for_review(uuid,uuid,text)',
+    'EXECUTE'
+  )
+)::text;
+`,
+    "photo validator routine authorization fidelity",
+  );
+
   runDatabaseQuery(
     database,
     String.raw`
@@ -2763,15 +2861,45 @@ async function runStaticSelfTest() {
     "supabase_functions.migrations",
     { inserted_at: "volatile", version: "stable" },
   );
+  const normalizedPhotoValidator = normalizeFixtureRow(
+    "private.photo_validator_allowlist",
+    { allowed_at: "volatile", auth_user_id: "stable", revoked_at: null },
+  );
+  const normalizedPhotoValidationJob = normalizeFixtureRow(
+    "private.photo_validation_jobs",
+    {
+      completed_at: null,
+      id: "stable",
+      invalidated_at: null,
+      lease_expires_at: "volatile",
+      lease_started_at: "volatile",
+      queued_at: "volatile",
+    },
+  );
+  const normalizedPhotoOriginal = normalizeFixtureRow(
+    "private.photo_originals",
+    { id: "stable", verified_at: "volatile" },
+  );
   if (
     normalizedStorageMigration.executed_at !== "<present>" ||
     normalizedStorageMigration.hash !== "stable" ||
     normalizedStorageMigration.id !== 1 ||
     normalizedStorageMigration.name !== "stable" ||
     normalizedFunctionsMigration.inserted_at !== "<present>" ||
-    normalizedFunctionsMigration.version !== "stable"
+    normalizedFunctionsMigration.version !== "stable" ||
+    normalizedPhotoValidator.allowed_at !== "<present>" ||
+    normalizedPhotoValidator.revoked_at !== null ||
+    normalizedPhotoValidator.auth_user_id !== "stable" ||
+    normalizedPhotoValidationJob.completed_at !== null ||
+    normalizedPhotoValidationJob.invalidated_at !== null ||
+    normalizedPhotoValidationJob.lease_expires_at !== "<present>" ||
+    normalizedPhotoValidationJob.lease_started_at !== "<present>" ||
+    normalizedPhotoValidationJob.queued_at !== "<present>" ||
+    normalizedPhotoValidationJob.id !== "stable" ||
+    normalizedPhotoOriginal.verified_at !== "<present>" ||
+    normalizedPhotoOriginal.id !== "stable"
   ) {
-    throw new DrillError("static platform migration timestamp normalization");
+    throw new DrillError("static fixture timestamp normalization");
   }
 
   const privateMarker = "private_schema.private_table.private_column";

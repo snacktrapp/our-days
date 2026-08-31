@@ -1,6 +1,11 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
+import {
+  validatePhotoByteStream,
+  withValidatedPhotoSpool,
+} from "./lib/photo-byte-validator.mjs";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const supabaseBinary = fileURLToPath(
@@ -8,6 +13,7 @@ const supabaseBinary = fileURLToPath(
 );
 
 const INTAKE_BUCKET = "our-days-intake";
+const ORIGINALS_BUCKET = "our-days-originals";
 const PROTECTED_BUCKETS = ["our-days-originals", "our-days-display"];
 
 const CIRCLE_A = "20000000-0000-4000-8000-000000000001";
@@ -153,7 +159,9 @@ async function storageRequest(apiUrl, apiKey, token, path, init = {}) {
 function singleRpcRow(result, operation) {
   const row = Array.isArray(result.body) ? result.body[0] : result.body;
   if (!result.response.ok || !row || typeof row !== "object") {
-    throw new Error(`${operation} failed with ${result.response.status}.`);
+    throw new Error(
+      `${operation} failed with ${result.response.status} (${result.body?.code ?? result.body?.error ?? "no code"}: ${result.body?.message ?? "no message"}).`,
+    );
   }
   return row;
 }
@@ -512,6 +520,98 @@ async function uploadClaimedTus(
   return { creation, patch };
 }
 
+function validateValidationLease(row, reservation) {
+  if (
+    !row ||
+    !uuidPattern.test(row.validation_job_id) ||
+    row.intake_id !== reservation.intake_id ||
+    row.source_bucket_id !== INTAKE_BUCKET ||
+    row.source_object_path !== reservation.object_path ||
+    !uuidPattern.test(row.source_storage_object_id) ||
+    typeof row.source_storage_object_version !== "string" ||
+    row.canonical_bucket_id !== ORIGINALS_BUCKET ||
+    !/^original\/[0-9a-f-]{36}$/iu.test(row.canonical_object_path) ||
+    row.expected_mime_type !== "image/jpeg" ||
+    !sha256Pattern.test(row.expected_sha256_hex) ||
+    Number(row.verification_profile_version) !== 1 ||
+    typeof row.lease_expires_at !== "string"
+  ) {
+    throw new Error("The validator lease returned an invalid opaque contract.");
+  }
+  return row;
+}
+
+function canonicalUserMetadata(lease) {
+  const originalId = lease.canonical_object_path.slice("original/".length);
+  return {
+    expected_mime_type: lease.expected_mime_type,
+    expected_sha256: lease.expected_sha256_hex,
+    expected_size_bytes: Number(lease.expected_size_bytes),
+    intake_id: lease.intake_id,
+    original_id: originalId,
+    validation_job_id: lease.validation_job_id,
+    verification_profile_version: Number(lease.verification_profile_version),
+  };
+}
+
+async function uploadValidatedOriginal(
+  apiUrl,
+  apiKey,
+  token,
+  lease,
+  validatedStream,
+) {
+  return storageRequest(
+    apiUrl,
+    apiKey,
+    token,
+    `object/${encodeURIComponent(ORIGINALS_BUCKET)}/${encodedObjectPath(lease.canonical_object_path)}`,
+    {
+      body: validatedStream,
+      duplex: "half",
+      headers: {
+        "cache-control": "max-age=0",
+        "content-type": lease.expected_mime_type,
+        "x-metadata": Buffer.from(
+          JSON.stringify(canonicalUserMetadata(lease)),
+        ).toString("base64"),
+        "x-upsert": "false",
+      },
+      method: "POST",
+    },
+  );
+}
+
+async function authenticatedObjectRead(
+  apiUrl,
+  apiKey,
+  token,
+  bucket,
+  objectPath,
+) {
+  return storageRequest(
+    apiUrl,
+    apiKey,
+    token,
+    `object/${encodeURIComponent(bucket)}/${encodedObjectPath(objectPath)}`,
+    { headers: { "cache-control": "no-store" } },
+  );
+}
+
+async function authenticatedObjectInfo(
+  apiUrl,
+  apiKey,
+  token,
+  bucket,
+  objectPath,
+) {
+  return jsonRequest(
+    `${apiUrl}/storage/v1/object/info/${encodeURIComponent(bucket)}/${encodedObjectPath(objectPath)}`,
+    apiKey,
+    token,
+  );
+}
+
 async function deleteObjects(apiUrl, apiKey, token, bucket, objectPaths) {
   return storageRequest(
     apiUrl,
@@ -785,10 +885,16 @@ try {
     );
   }
 
-  const syntheticOriginal = Buffer.from([
-    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4f, 0x55, 0x52, 0x44, 0x41, 0x59,
-    0x53, 0x00, 0xff, 0xd9,
-  ]);
+  const syntheticOriginal = await sharp({
+    create: {
+      background: { b: 57, g: 126, r: 180 },
+      channels: 3,
+      height: 7,
+      width: 11,
+    },
+  })
+    .jpeg({ quality: 82 })
+    .toBuffer();
 
   const unauthorizedUploadCases = [
     { label: "Anonymous reserved-path upload", token: null },
@@ -958,6 +1064,13 @@ try {
     "Wrong-actor TUS creation after claim",
   );
 
+  // Phase 4A's separate concurrency harness proves that two preauthorized TUS
+  // URLs can both complete. This fault-injection byte set lets Phase 4B prove
+  // the complementary property: once exact bytes are spooled and promoted,
+  // any later quarantine replacement cannot alter or veto canonical bytes.
+  const lateQuarantineBytes = Buffer.from(syntheticOriginal);
+  lateQuarantineBytes[Math.floor(lateQuarantineBytes.length / 2)] ^= 0x01;
+
   const claimedTusUpload = await uploadClaimedTus(
     apiUrl,
     anonKey,
@@ -1121,6 +1234,253 @@ try {
       "Protected retained-media upload",
     );
   }
+
+  await expectRpcDenied(
+    rpcRequest(apiUrl, anonKey, tokens.organizerA, "claim_photo_validation", {
+      intake_id: firstReservation.intake_id,
+      lease_key: randomUUID(),
+    }),
+    "Family organizer validator claim",
+  );
+
+  // Local-only worker activation is an explicit out-of-band trusted action.
+  // This synthetic no-circle Auth identity receives no family membership and
+  // no service key; Storage RLS limits it to one live leased source/path.
+  runDatabaseAssertion(`
+    insert into private.photo_validator_allowlist (auth_user_id)
+    values ('${NO_CIRCLE_USER}'::uuid);
+  `);
+
+  const validationLeaseKey = randomUUID();
+  const validationLease = validateValidationLease(
+    singleRpcRow(
+      await rpcRequest(
+        apiUrl,
+        anonKey,
+        tokens.noCircle,
+        "claim_photo_validation",
+        {
+          intake_id: firstReservation.intake_id,
+          lease_key: validationLeaseKey,
+        },
+      ),
+      "Validator lease",
+    ),
+    firstReservation,
+  );
+  if (
+    Number(validationLease.expected_size_bytes) !== syntheticOriginal.length
+  ) {
+    throw new Error("The validator lease changed the claimed byte count.");
+  }
+
+  await expectRpcDenied(
+    rpcRequest(apiUrl, anonKey, tokens.noCircle, "claim_photo_validation", {
+      intake_id: firstReservation.intake_id,
+      lease_key: randomUUID(),
+    }),
+    "Live validator lease theft",
+  );
+  await expectStorageReadDenied(
+    storageRequest(
+      apiUrl,
+      anonKey,
+      tokens.noCircle,
+      `object/list/${encodeURIComponent(INTAKE_BUCKET)}`,
+      {
+        body: JSON.stringify({ limit: 100, offset: 0, prefix: "" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      },
+    ),
+    "Validator quarantine list",
+  );
+
+  const leasedSource = await authenticatedObjectRead(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    INTAKE_BUCKET,
+    validationLease.source_object_path,
+  );
+  if (!leasedSource.ok || !leasedSource.body) {
+    const body = await parseResponse(leasedSource);
+    throw new Error(
+      `Validator could not read its exact leased source (${leasedSource.status}, ${body?.error ?? "no error"}).`,
+    );
+  }
+
+  let promotionStep = "validate source";
+  let completedOriginalId;
+  try {
+    completedOriginalId = await withValidatedPhotoSpool(
+      leasedSource.body,
+      {
+        expectedMimeType: validationLease.expected_mime_type,
+        expectedSha256Hex: validationLease.expected_sha256_hex,
+        expectedSizeBytes: Number(validationLease.expected_size_bytes),
+      },
+      async (validated) => {
+        promotionStep = "upload canonical";
+        const uploaded = await uploadValidatedOriginal(
+          apiUrl,
+          anonKey,
+          tokens.noCircle,
+          validationLease,
+          validated.stream,
+        );
+        const uploadBody = await parseResponse(uploaded);
+        if (!uploaded.ok) {
+          throw new Error(
+            `Canonical upload failed (${uploaded.status}, ${uploadBody?.error ?? "no error"}).`,
+          );
+        }
+        cleanupEntries.push({
+          bucket: ORIGINALS_BUCKET,
+          objectPath: validationLease.canonical_object_path,
+        });
+
+        promotionStep = "deny canonical overwrite";
+        const duplicateUpload = await uploadValidatedOriginal(
+          apiUrl,
+          anonKey,
+          tokens.noCircle,
+          validationLease,
+          Buffer.from(syntheticOriginal),
+        );
+        const duplicateBody = await parseResponse(duplicateUpload);
+        if (
+          duplicateUpload.ok ||
+          !/duplicate|already exists/iu.test(
+            `${duplicateBody?.error ?? ""} ${duplicateBody?.message ?? ""}`,
+          )
+        ) {
+          throw new Error("Canonical no-upsert collision did not fail closed.");
+        }
+
+        promotionStep = "read and verify canonical";
+        const canonicalRead = await authenticatedObjectRead(
+          apiUrl,
+          anonKey,
+          tokens.noCircle,
+          ORIGINALS_BUCKET,
+          validationLease.canonical_object_path,
+        );
+        if (!canonicalRead.ok || !canonicalRead.body) {
+          throw new Error(
+            "Validator could not re-read its canonical original.",
+          );
+        }
+        const canonicalVerification = await validatePhotoByteStream(
+          canonicalRead.body,
+          {
+            expectedMimeType: validated.mimeType,
+            expectedSha256Hex: validated.sha256Hex,
+            expectedSizeBytes: validated.sizeBytes,
+          },
+        );
+        if (
+          canonicalVerification.width !== validated.width ||
+          canonicalVerification.height !== validated.height ||
+          canonicalVerification.channels !== validated.channels ||
+          canonicalVerification.pages !== validated.pages
+        ) {
+          throw new Error(
+            "Canonical read-back changed decoded photo identity.",
+          );
+        }
+
+        promotionStep = "inject late quarantine replacement";
+        const lateQuarantineReplacement = await uploadObject(
+          apiUrl,
+          serviceKey,
+          serviceKey,
+          INTAKE_BUCKET,
+          validationLease.source_object_path,
+          lateQuarantineBytes,
+          true,
+        );
+        const lateReplacementBody = await parseResponse(
+          lateQuarantineReplacement,
+        );
+        if (!lateQuarantineReplacement.ok) {
+          throw new Error(
+            `The local late-write fault injection failed (${lateQuarantineReplacement.status}, ${lateReplacementBody?.error ?? "no error"}).`,
+          );
+        }
+
+        promotionStep = "load canonical Storage evidence";
+        const objectInfo = await authenticatedObjectInfo(
+          apiUrl,
+          anonKey,
+          tokens.noCircle,
+          ORIGINALS_BUCKET,
+          validationLease.canonical_object_path,
+        );
+        if (
+          !objectInfo.response.ok ||
+          !uuidPattern.test(objectInfo.body?.id) ||
+          typeof objectInfo.body?.version !== "string"
+        ) {
+          throw new Error("Canonical Storage evidence was unavailable.");
+        }
+
+        promotionStep = "atomically complete original";
+        const completion = await rpcRequest(
+          apiUrl,
+          anonKey,
+          tokens.noCircle,
+          "complete_photo_validation",
+          {
+            lease_key: validationLeaseKey,
+            storage_object_id: objectInfo.body.id,
+            storage_object_version: objectInfo.body.version,
+            validation_job_id: validationLease.validation_job_id,
+            verified_channels: validated.channels,
+            verified_height: validated.height,
+            verified_mime_type: validated.mimeType,
+            verified_pages: validated.pages,
+            verified_sha256_hex: validated.sha256Hex,
+            verified_size_bytes: validated.sizeBytes,
+            verified_width: validated.width,
+          },
+        );
+        if (!completion.response.ok || !uuidPattern.test(completion.body)) {
+          throw new Error("Canonical original completion did not converge.");
+        }
+        return completion.body;
+      },
+    );
+  } catch (error) {
+    throw new Error(`Photo promotion failed during: ${promotionStep}.`, {
+      cause: error,
+    });
+  }
+  if (
+    completedOriginalId !==
+    validationLease.canonical_object_path.slice("original/".length)
+  ) {
+    throw new Error("Canonical path and immutable original identity diverged.");
+  }
+
+  await assertObjectOperationsDenied(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    ORIGINALS_BUCKET,
+    validationLease.canonical_object_path,
+    "Completed validator original",
+    cleanupEntries,
+  );
+  await assertObjectOperationsDenied(
+    apiUrl,
+    anonKey,
+    tokens.organizerA,
+    ORIGINALS_BUCKET,
+    validationLease.canonical_object_path,
+    "Completed family-browser original",
+    cleanupEntries,
+  );
 
   const staleRequestKey = randomUUID();
   const staleReservation = validateReservation(
@@ -1389,11 +1749,29 @@ try {
            and object.name = intake.object_path
          where intake.id = '${firstReservation.intake_id}'::uuid
            and intake.circle_id = '${CIRCLE_A}'::uuid
-           and intake.state = 'uploaded_unverified'
+           and intake.state = 'verified'
            and intake.object_path = '${firstReservation.object_path}'
            and object.owner_id = '${ORGANIZER_A}'
       ) then
-        raise exception 'quarantined Auth-owned object invariant failed';
+        raise exception 'verified intake source-evidence invariant failed';
+      end if;
+
+      if not exists (
+        select 1
+          from private.photo_originals as original
+          join private.photo_validation_jobs as job
+            on job.id = original.validation_job_id
+           and job.circle_id = original.circle_id
+         where original.id = '${completedOriginalId}'::uuid
+           and original.intake_id = '${firstReservation.intake_id}'::uuid
+           and original.bucket_id = '${ORIGINALS_BUCKET}'
+           and original.object_path = '${validationLease.canonical_object_path}'
+           and encode(original.verified_sha256, 'hex') =
+             '${sha256Hex(syntheticOriginal)}'
+           and original.verified_size_bytes = ${syntheticOriginal.length}
+           and job.state = 'verified'
+      ) then
+        raise exception 'immutable canonical-original invariant failed';
       end if;
 
       if exists (
@@ -1416,14 +1794,30 @@ try {
     `object/${encodeURIComponent(INTAKE_BUCKET)}/${encodedObjectPath(firstReservation.object_path)}`,
   );
   const retainedBytes = Buffer.from(await retained.arrayBuffer());
-  if (!retained.ok || !retainedBytes.equals(syntheticOriginal)) {
+  if (!retained.ok || !retainedBytes.equals(lateQuarantineBytes)) {
     throw new Error(
-      "The quarantined synthetic object was not retained exactly.",
+      "The late quarantine write was not isolated from canonical promotion.",
     );
   }
 
+  const retainedOriginal = await storageRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    `object/${encodeURIComponent(ORIGINALS_BUCKET)}/${encodedObjectPath(validationLease.canonical_object_path)}`,
+  );
+  const retainedOriginalBytes = Buffer.from(
+    await retainedOriginal.arrayBuffer(),
+  );
+  if (
+    !retainedOriginal.ok ||
+    !retainedOriginalBytes.equals(syntheticOriginal)
+  ) {
+    throw new Error("The canonical original was not retained byte-for-byte.");
+  }
+
   process.stdout.write(
-    "Local synthetic photo intake reservation, fingerprint claim, authenticated TUS quarantine upload, uploaded-unverified acknowledgement, and HTTP denial checks passed.\n",
+    "Local synthetic photo intake, isolated validation, exact-byte immutable original promotion, canonical read-back, and HTTP denial checks passed.\n",
   );
 } catch (error) {
   primaryError = error;

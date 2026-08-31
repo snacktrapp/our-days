@@ -13,7 +13,17 @@ const supabaseBinary = fileURLToPath(
 
 const generated = execFileSync(
   supabaseBinary,
-  ["gen", "types", "--local", "--lang", "typescript", "--schema", "public"],
+  [
+    "gen",
+    "types",
+    "--local",
+    "--network-id",
+    "supabase_network_our-days",
+    "--lang",
+    "typescript",
+    "--schema",
+    "public",
+  ],
   {
     cwd: projectRoot,
     encoding: "utf8",

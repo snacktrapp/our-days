@@ -1,6 +1,6 @@
 begin;
 
-select plan(30);
+select plan(32);
 
 select ok(
   (
@@ -34,6 +34,44 @@ select ok(
 select ok(
   has_function_privilege('authenticated', 'public.accept_invitation(text)', 'EXECUTE'),
   'authenticated callers can reach the guarded acceptance RPC'
+);
+
+select ok(
+  has_function_privilege(
+    'authenticated', 'public.claim_photo_validation(uuid,uuid)', 'EXECUTE'
+  )
+  and has_function_privilege(
+    'authenticated',
+    'public.complete_photo_validation(uuid,uuid,uuid,text,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'authenticated', 'public.reject_photo_validation(uuid,uuid,text)', 'EXECUTE'
+  )
+  and has_function_privilege(
+    'authenticated',
+    'public.flag_photo_validation_for_review(uuid,uuid,text)', 'EXECUTE'
+  ),
+  'authenticated validators can reach the four guarded validation coordinators'
+);
+
+select ok(
+  not has_function_privilege(
+    'anon', 'public.claim_photo_validation(uuid,uuid)', 'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.complete_photo_validation(uuid,uuid,uuid,text,text,bigint,text,integer,integer,integer,integer)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon', 'public.reject_photo_validation(uuid,uuid,text)', 'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.flag_photo_validation_for_review(uuid,uuid,text)', 'EXECUTE'
+  ),
+  'anonymous callers cannot execute any validation coordinator'
 );
 
 select ok(

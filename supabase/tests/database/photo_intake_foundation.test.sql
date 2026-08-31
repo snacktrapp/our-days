@@ -1,6 +1,6 @@
 begin;
 
-select plan(115);
+select plan(119);
 
 select is(
   (
@@ -356,8 +356,84 @@ select is(
        and policy.policyname like 'our_days_intake_%'
        and policy.cmd = 'SELECT'
   ),
-  0::bigint,
-  'the intake bucket has no SELECT policy for reads, listing, or signed URLs'
+  1::bigint,
+  'the intake bucket has exactly one validator-only SELECT policy'
+);
+
+select ok(
+  exists (
+    select 1
+      from pg_catalog.pg_policy as policy_row
+     where policy_row.polname =
+         'our_days_intake_select_exact_active_validator_lease'
+       and policy_row.polrelid = 'storage.objects'::regclass
+       and policy_row.polcmd = 'r'
+       and policy_row.polroles = array[
+         (select role_row.oid
+            from pg_catalog.pg_roles as role_row
+           where role_row.rolname = 'authenticated')
+       ]::oid[]
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%object.get_authenticated%object.get_authenticated_info%'
+       and pg_catalog.regexp_count(
+         pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid),
+         'object\.'
+       ) = 2
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_validation_source_is_readable(objects.name, objects.id, objects.version)%'
+       and not (
+         pg_catalog.pg_get_expr(
+           policy_row.polqual,
+           policy_row.polrelid
+         ) like any (array[
+           '%object.list%', '%object.create_signed%', '%object.get_public%',
+           '%storage.tus%', '%object.upload%'
+         ]::text[])
+       )
+  ),
+  'the sole intake SELECT policy permits only exact authenticated object reads through the validator source guard'
+);
+
+select ok(
+  (
+    select pg_catalog.pg_get_functiondef(
+      'private.photo_validation_source_is_readable(text,uuid,text)'
+        ::regprocedure
+    ) like '%intake.object_path = requested_object_path%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%job.source_storage_object_id = requested_storage_object_id%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%job.source_storage_object_version =%requested_storage_object_version%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%job.state = ''leased''%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%job.validator_auth_user_id =%auth.uid()%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%job.lease_expires_at > statement_timestamp()%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%photo_validator_is_allowed%'
+      and pg_catalog.pg_get_functiondef(
+        'private.photo_validation_source_is_readable(text,uuid,text)'
+          ::regprocedure
+      ) like '%photo_intake_requester_is_authorized%'
+  ),
+  'the intake read guard binds path, object identity, version, live lease, exact validator, and current requester authority'
 );
 
 select is(
@@ -1416,6 +1492,25 @@ select is(
 select public.request_account_closure(
   'c2000000-0000-4000-8000-000000000001'
 ) as closure_id \gset closing_request_
+reset role;
+select is(
+  (select state from private.photo_intakes
+    where id = :'closing_intake_id'::uuid),
+  'invalidated',
+  'the closure request immediately terminalizes the retained intake before preparation'
+);
+select is(
+  (select invalidation_reason from private.photo_intakes
+    where id = :'closing_intake_id'::uuid),
+  'account_closure_requested',
+  'the pre-preparation terminal state records the authoritative closure request reason'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '10000000-0000-4000-8000-000000000003',
+  true
+);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1463,13 +1558,13 @@ select is(
   (select state from private.photo_intakes
     where id = :'closing_intake_id'::uuid),
   'invalidated',
-  'closure preparation terminalizes the retained intake record'
+  'closure preparation preserves the request-terminalized intake record'
 );
 select is(
   (select invalidation_reason from private.photo_intakes
     where id = :'closing_intake_id'::uuid),
-  'membership_authority_changed',
-  'closure preparation is attributed to its membership authority change'
+  'account_closure_requested',
+  'closure preparation preserves the original closure-request attribution'
 );
 select is(
   (select user_id from public.circle_memberships

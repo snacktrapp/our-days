@@ -489,6 +489,40 @@ export type Database = {
           upload_expires_at: string;
         }[];
       };
+      claim_photo_validation: {
+        Args: { intake_id: string; lease_key: string };
+        Returns: {
+          canonical_bucket_id: string;
+          canonical_object_path: string;
+          expected_mime_type: string;
+          expected_sha256_hex: string;
+          expected_size_bytes: number;
+          intake_id: string;
+          lease_expires_at: string;
+          source_bucket_id: string;
+          source_object_path: string;
+          source_storage_object_id: string;
+          source_storage_object_version: string;
+          validation_job_id: string;
+          verification_profile_version: number;
+        }[];
+      };
+      complete_photo_validation: {
+        Args: {
+          lease_key: string;
+          storage_object_id: string;
+          storage_object_version: string;
+          validation_job_id: string;
+          verified_channels: number;
+          verified_height: number;
+          verified_mime_type: string;
+          verified_pages: number;
+          verified_sha256_hex: string;
+          verified_size_bytes: number;
+          verified_width: number;
+        };
+        Returns: string;
+      };
       create_family_moment: {
         Args: {
           circle_id: string;
@@ -537,6 +571,14 @@ export type Database = {
           occurred_at?: string;
           occurred_on: string;
           occurred_timezone?: string;
+        };
+        Returns: string;
+      };
+      flag_photo_validation_for_review: {
+        Args: {
+          lease_key: string;
+          review_reason: string;
+          validation_job_id: string;
         };
         Returns: string;
       };
@@ -690,6 +732,14 @@ export type Database = {
       preflight_invitation: {
         Args: { email: string; token: string };
         Returns: boolean;
+      };
+      reject_photo_validation: {
+        Args: {
+          lease_key: string;
+          rejection_reason: string;
+          validation_job_id: string;
+        };
+        Returns: string;
       };
       request_account_closure: {
         Args: { request_key: string };
