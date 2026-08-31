@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   PHOTO_DISPLAY_TRANSFORM_VERSION,
+  validatePhotoDisplayByteStream,
   withPhotoDisplayDerivative,
 } from "../../scripts/lib/photo-display-derivative.mjs";
 import { withValidatedPhotoSpool } from "../../scripts/lib/photo-byte-validator.mjs";
@@ -76,6 +77,30 @@ function webpChunkTypes(bytes: Buffer) {
   }
   expect(position).toBe(bytes.length);
   return types;
+}
+
+function riffChunk(type: string, data: Buffer) {
+  const header = Buffer.alloc(8);
+  header.write(type, 0, 4, "ascii");
+  header.writeUInt32LE(data.length, 4);
+  return Buffer.concat([
+    header,
+    data,
+    ...(data.length % 2 === 1 ? [Buffer.alloc(1)] : []),
+  ]);
+}
+
+function insertWebpChunkAfterFirst(bytes: Buffer, type: string, data: Buffer) {
+  const firstLength = bytes.readUInt32LE(16);
+  const firstEnd = 20 + firstLength + (firstLength % 2);
+  const inserted = riffChunk(type, data);
+  const result = Buffer.concat([
+    bytes.subarray(0, firstEnd),
+    inserted,
+    bytes.subarray(firstEnd),
+  ]);
+  result.writeUInt32LE(result.length - 8, 4);
+  return result;
 }
 
 function validationOptions(bytes: Uint8Array, mimeType: string) {
@@ -533,6 +558,54 @@ describe("photo display derivative", () => {
     await expectCode(
       deriveTrusted(evidence),
       "PHOTO_DERIVATIVE_SOURCE_MISMATCH",
+    );
+  });
+
+  it("independently revalidates canonical bytes and rejects extra RIFF chunks", async () => {
+    const source = await sharp({
+      create: {
+        background: { alpha: 0.7, b: 170, g: 95, r: 45 },
+        channels: 4,
+        height: 18,
+        width: 26,
+      },
+    })
+      .png()
+      .toBuffer();
+    const derivative = await derive(source, "image/png");
+    const canonicalOptions = {
+      expectedChannels: derivative.channels,
+      expectedHeight: derivative.height,
+      expectedPages: derivative.pages,
+      expectedSha256Hex: derivative.sha256Hex,
+      expectedSizeBytes: derivative.sizeBytes,
+      expectedWidth: derivative.width,
+      tempDirectory,
+      transformVersion: derivative.transformVersion,
+    };
+    await expect(
+      validatePhotoDisplayByteStream(
+        chunkedStream(derivative.bytes, 5),
+        canonicalOptions,
+      ),
+    ).resolves.toMatchObject({
+      mimeType: "image/webp",
+      sha256Hex: derivative.sha256Hex,
+      transformVersion: PHOTO_DISPLAY_TRANSFORM_VERSION,
+    });
+
+    const tampered = insertWebpChunkAfterFirst(
+      derivative.bytes,
+      "JUNK",
+      Buffer.from("not-allowed"),
+    );
+    await expectCode(
+      validatePhotoDisplayByteStream(chunkedStream(tampered, 11), {
+        ...canonicalOptions,
+        expectedSha256Hex: sha256Hex(tampered),
+        expectedSizeBytes: tampered.length,
+      }),
+      "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
     );
   });
 

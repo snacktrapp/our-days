@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Readable, Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import sharp from "sharp";
+import { withValidatedPhotoSpool } from "./photo-byte-validator.mjs";
 
 export const PHOTO_DISPLAY_TRANSFORM_VERSION = "photo-display-webp-v1";
 export const DEFAULT_PHOTO_DISPLAY_MAX_EDGE = 2560;
@@ -252,14 +253,14 @@ async function readExactAt(handle, length, position) {
   return buffer;
 }
 
-async function verifyExactWebpChunks(handle, sizeBytes, expectedImage) {
+async function verifyExactWebpChunks(readAt, sizeBytes, expectedImage) {
   if (sizeBytes < 20) {
     fail(
       "PHOTO_DERIVATIVE_VERIFICATION_FAILED",
       "Display bytes have an invalid WebP structure.",
     );
   }
-  const header = await readExactAt(handle, 12, 0);
+  const header = await readAt(12, 0);
   if (
     !header.subarray(0, 4).equals(Buffer.from("RIFF", "ascii")) ||
     !header.subarray(8, 12).equals(Buffer.from("WEBP", "ascii")) ||
@@ -283,7 +284,7 @@ async function verifyExactWebpChunks(handle, sizeBytes, expectedImage) {
         "Display bytes have an invalid WebP structure.",
       );
     }
-    const chunkHeader = await readExactAt(handle, 8, position);
+    const chunkHeader = await readAt(8, position);
     const type = chunkHeader.subarray(0, 4).toString("latin1");
     const dataLength = chunkHeader.readUInt32LE(4);
     const paddedLength = dataLength + (dataLength % 2);
@@ -305,7 +306,7 @@ async function verifyExactWebpChunks(handle, sizeBytes, expectedImage) {
           "Display bytes violate the safe WebP chunk profile.",
         );
       }
-      const extendedHeader = await readExactAt(handle, 10, position + 8);
+      const extendedHeader = await readAt(10, position + 8);
       const flags = extendedHeader[0];
       const canvasWidth =
         extendedHeader[4] |
@@ -350,7 +351,7 @@ async function verifyExactWebpChunks(handle, sizeBytes, expectedImage) {
       }
     }
     if (dataLength % 2 === 1) {
-      const padding = await readExactAt(handle, 1, position + 8 + dataLength);
+      const padding = await readAt(1, position + 8 + dataLength);
       if (padding[0] !== 0) {
         fail(
           "PHOTO_DERIVATIVE_VERIFICATION_FAILED",
@@ -598,7 +599,11 @@ export async function withPhotoDisplayDerivative(
       );
     }
     await verifySpool(readHandle, sizeBytes, sha256);
-    await verifyExactWebpChunks(readHandle, sizeBytes, output);
+    await verifyExactWebpChunks(
+      (length, position) => readExactAt(readHandle, length, position),
+      sizeBytes,
+      output,
+    );
     if (output.width > validated.width || output.height > validated.height) {
       fail(
         "PHOTO_DERIVATIVE_VERIFICATION_FAILED",
@@ -687,4 +692,155 @@ export async function withPhotoDisplayDerivative(
   }
   if (failure) throw failure;
   return callbackResult;
+}
+
+function validateCanonicalOptions(rawOptions) {
+  if (!rawOptions || typeof rawOptions !== "object") {
+    fail(
+      "PHOTO_DERIVATIVE_CONFIGURATION_INVALID",
+      "Canonical display evidence is required.",
+    );
+  }
+  const expectedSizeBytes = positiveInteger(
+    rawOptions.expectedSizeBytes,
+    "expectedSizeBytes",
+    MAX_PHOTO_DISPLAY_BYTES,
+  );
+  const expectedWidth = positiveInteger(
+    rawOptions.expectedWidth,
+    "expectedWidth",
+    MAX_EDGE_LIMIT,
+  );
+  const expectedHeight = positiveInteger(
+    rawOptions.expectedHeight,
+    "expectedHeight",
+    MAX_EDGE_LIMIT,
+  );
+  const expectedChannels = positiveInteger(
+    rawOptions.expectedChannels,
+    "expectedChannels",
+    4,
+  );
+  if (
+    typeof rawOptions.expectedSha256Hex !== "string" ||
+    !sha256Pattern.test(rawOptions.expectedSha256Hex) ||
+    rawOptions.expectedPages !== 1 ||
+    rawOptions.transformVersion !== PHOTO_DISPLAY_TRANSFORM_VERSION ||
+    (rawOptions.tempDirectory !== undefined &&
+      (typeof rawOptions.tempDirectory !== "string" ||
+        rawOptions.tempDirectory.length === 0))
+  ) {
+    fail(
+      "PHOTO_DERIVATIVE_CONFIGURATION_INVALID",
+      "Canonical display evidence is invalid.",
+    );
+  }
+  return {
+    expectedChannels,
+    expectedHeight,
+    expectedPages: 1,
+    expectedSha256Hex: rawOptions.expectedSha256Hex,
+    expectedSizeBytes,
+    expectedWidth,
+    tempDirectory: rawOptions.tempDirectory,
+    transformVersion: rawOptions.transformVersion,
+  };
+}
+
+/**
+ * Independently revalidates canonical display bytes after Storage upload.
+ * This deliberately re-counts, re-hashes, parses, and fully decodes the
+ * downloaded object before a database coordinator may publish its ledger row.
+ */
+export async function validatePhotoDisplayByteStream(source, rawOptions) {
+  const options = validateCanonicalOptions(rawOptions);
+  let derivativeFailure;
+  try {
+    return await withValidatedPhotoSpool(
+      source,
+      {
+        expectedMimeType: "image/webp",
+        expectedSha256Hex: options.expectedSha256Hex,
+        expectedSizeBytes: options.expectedSizeBytes,
+        maxBytes: MAX_PHOTO_DISPLAY_BYTES,
+        maxChannels: 4,
+        maxPages: 1,
+        maxPixels: MAX_EDGE_LIMIT * MAX_EDGE_LIMIT,
+        tempDirectory: options.tempDirectory,
+      },
+      async (validated) => {
+        try {
+          if (
+            validated.width !== options.expectedWidth ||
+            validated.height !== options.expectedHeight ||
+            validated.channels !== options.expectedChannels ||
+            validated.pages !== options.expectedPages
+          ) {
+            fail(
+              "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
+              "Canonical display geometry does not match its claim.",
+            );
+          }
+          const chunks = [];
+          for await (const chunk of validated.stream) {
+            chunks.push(Buffer.from(chunk));
+          }
+          const bytes = Buffer.concat(chunks, validated.sizeBytes);
+          const metadata = await sharp(bytes, {
+            animated: false,
+            failOn: "warning",
+            limitInputChannels: 4,
+            limitInputPixels: MAX_EDGE_LIMIT * MAX_EDGE_LIMIT,
+            pages: 1,
+            sequentialRead: true,
+            unlimited: false,
+          }).metadata();
+          if (
+            metadata.orientation !== undefined ||
+            metadata.exif !== undefined ||
+            metadata.icc !== undefined ||
+            metadata.iptc !== undefined ||
+            metadata.xmp !== undefined
+          ) {
+            fail(
+              "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
+              "Canonical display bytes retain forbidden metadata.",
+            );
+          }
+          await verifyExactWebpChunks(
+            async (length, position) => {
+              if (position < 0 || position + length > bytes.length) {
+                fail(
+                  "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
+                  "Canonical display bytes have an invalid structure.",
+                );
+              }
+              return bytes.subarray(position, position + length);
+            },
+            bytes.length,
+            validated,
+          );
+          return Object.freeze({
+            channels: validated.channels,
+            height: validated.height,
+            mimeType: validated.mimeType,
+            pages: validated.pages,
+            sha256Hex: validated.sha256Hex,
+            sizeBytes: validated.sizeBytes,
+            transformVersion: options.transformVersion,
+            width: validated.width,
+          });
+        } catch (error) {
+          derivativeFailure = new PhotoDisplayDerivativeError(
+            "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
+            "Canonical display bytes could not be verified safely.",
+          );
+          throw error;
+        }
+      },
+    );
+  } catch (error) {
+    if (derivativeFailure) throw derivativeFailure;
+    throw error;
+  }
 }
