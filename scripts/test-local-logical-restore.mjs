@@ -53,7 +53,7 @@ const expectedCanonicalCatalogFingerprint =
 const expectedRestoredSchemaFingerprint =
   "2cef7e3f9076c266a6fbfad1a9dbf3cc46288426314e8ca085ca11310f366d80";
 const expectedCanonicalDataFingerprint =
-  "407220247308c24d6019fafecb9ef88f520de5c3c216e773de4004c84ee40801";
+  "148f9755f87c323493b9dfa02ee97f09594fc203e91cce3a1590e7eb1da7da11";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
@@ -133,6 +133,8 @@ const volatileFixtureTimestampColumns = new Map([
   ["public.people", new Set(["created_at", "updated_at"])],
   ["public.person_guardians", new Set(["created_at", "revoked_at"])],
   ["storage.buckets", new Set(["created_at", "updated_at"])],
+  ["storage.migrations", new Set(["executed_at"])],
+  ["supabase_functions.migrations", new Set(["inserted_at"])],
 ]);
 const expectedMigrationFiles = [
   "20260830105244_phase_2_identity_authorization.sql",
@@ -2747,6 +2749,27 @@ async function runStaticSelfTest() {
     unsupportedDatabaseMetadataIsEmpty(null, 1)
   ) {
     throw new DrillError("static unsupported database metadata rejection");
+  }
+
+  const normalizedStorageMigration = normalizeFixtureRow("storage.migrations", {
+    executed_at: "volatile",
+    hash: "stable",
+    id: 1,
+    name: "stable",
+  });
+  const normalizedFunctionsMigration = normalizeFixtureRow(
+    "supabase_functions.migrations",
+    { inserted_at: "volatile", version: "stable" },
+  );
+  if (
+    normalizedStorageMigration.executed_at !== "<present>" ||
+    normalizedStorageMigration.hash !== "stable" ||
+    normalizedStorageMigration.id !== 1 ||
+    normalizedStorageMigration.name !== "stable" ||
+    normalizedFunctionsMigration.inserted_at !== "<present>" ||
+    normalizedFunctionsMigration.version !== "stable"
+  ) {
+    throw new DrillError("static platform migration timestamp normalization");
   }
 
   const privateMarker = "private_schema.private_table.private_column";
