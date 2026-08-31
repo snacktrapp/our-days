@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import sharp from "sharp";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const supabaseBinary = fileURLToPath(
@@ -420,13 +421,32 @@ try {
     );
   }
 
-  const storageObjects = ["our-days-originals", "our-days-display"].map(
-    (bucket) => ({
-      bucket,
+  const displayCanary = await sharp({
+    create: {
+      background: { alpha: 1, b: 64, g: 96, r: 128 },
+      channels: 4,
+      height: 1,
+      width: 1,
+    },
+  })
+    .webp({ effort: 0, quality: 80 })
+    .toBuffer();
+  const storageObjects = [
+    {
+      body: Buffer.from(`private storage canary ${suffix}`, "utf8"),
+      bucket: "our-days-originals",
+      contentType: "text/plain",
       deniedUploadPath: `phase-2/denied-${suffix}.txt`,
       seededPath: `phase-2/private-${suffix}.txt`,
-    }),
-  );
+    },
+    {
+      body: displayCanary,
+      bucket: "our-days-display",
+      contentType: "image/webp",
+      deniedUploadPath: `phase-2/denied-${suffix}.webp`,
+      seededPath: `phase-2/private-${suffix}.webp`,
+    },
+  ];
   storageCleanup = async () => {
     for (const { bucket, deniedUploadPath, seededPath } of storageObjects) {
       await storageRequest(apiUrl, serviceKey, serviceKey, `object/${bucket}`, {
@@ -437,15 +457,21 @@ try {
     }
   };
 
-  for (const { bucket, deniedUploadPath, seededPath } of storageObjects) {
+  for (const {
+    body,
+    bucket,
+    contentType,
+    deniedUploadPath,
+    seededPath,
+  } of storageObjects) {
     const seeded = await storageRequest(
       apiUrl,
       serviceKey,
       serviceKey,
       `object/${bucket}/${seededPath}`,
       {
-        body: Buffer.from(`private storage canary ${suffix}`, "utf8"),
-        headers: { "content-type": "text/plain", "x-upsert": "false" },
+        body,
+        headers: { "content-type": contentType, "x-upsert": "false" },
         method: "POST",
       },
     );
