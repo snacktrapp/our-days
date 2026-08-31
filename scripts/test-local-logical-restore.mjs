@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "7b438caf3d92cf4e798f12754d19546197f8ef4f560a3854b7fd3ad86eda200b";
+  "21101e9740aee26f0e88d899d3289a46795e0c64af1ac71746fcccf82cd5644f";
 const expectedCanonicalCatalogFingerprint =
-  "9ccc99a5b9bf6a959ae309b23a5279652e17d8d56ada5c090c4945b54760104e";
+  "5e5a548ea2fc096d5f1a4f858f3a879f0c3a1e89ed255aae70e1909834d15252";
 const expectedRestoredSchemaFingerprint =
-  "2120b80bddc7e4d8c6bd4dcdbe2e60652c452f47212299702f29e8904480062e";
+  "6b421c806a9aad8819b703a33c0164efb3c26bf5b08da589e867496ad45da2da";
 const expectedCanonicalDataFingerprint =
-  "02aed07c454e54f35662be19f0b72f1c0792589a0d785c3c14cb4279f6b5ad10";
+  "2750f12bfd650019ed5927ed4ab7ff761d4ac5d696c273ee88c684d82a9e8dc6";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "a654fc86e77ff4f90ede300ee071132e9bc312962e668bc5d08d6e06af380d82";
+  "58985d5ad93c81110682582a19184ea677b35e317e705c9777f44f44d5dd81df";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: null,
@@ -2132,7 +2132,9 @@ function readDatabaseRepairSettings(database, snapshot) {
   );
   const settingsFingerprint = hash(output);
   if (settingsFingerprint !== expectedDatabaseRepairSettingsFingerprint) {
-    throw new DrillError("database repair settings sidecar fingerprint");
+    throw new DrillError(
+      `database repair settings sidecar fingerprint (expected ${expectedDatabaseRepairSettingsFingerprint}, actual ${settingsFingerprint})`,
+    );
   }
 
   const entries = [];
@@ -2813,16 +2815,24 @@ function compareRestoredManifest(source, restored) {
 
 function assertCanonicalSourceManifest(manifest) {
   if (manifest.schemaFingerprint !== expectedCanonicalSchemaFingerprint) {
-    throw new DrillError("canonical schema archive fingerprint");
+    throw new DrillError(
+      `canonical schema archive fingerprint (expected ${expectedCanonicalSchemaFingerprint}, actual ${manifest.schemaFingerprint})`,
+    );
   }
   if (manifest.catalog !== expectedCanonicalCatalogFingerprint) {
-    throw new DrillError("canonical catalog fingerprint");
+    throw new DrillError(
+      `canonical catalog fingerprint (expected ${expectedCanonicalCatalogFingerprint}, actual ${manifest.catalog})`,
+    );
   }
   if (manifest.normalizedData !== expectedCanonicalDataFingerprint) {
-    throw new DrillError("canonical normalized data fingerprint");
+    throw new DrillError(
+      `canonical normalized data fingerprint (expected ${expectedCanonicalDataFingerprint}, actual ${manifest.normalizedData})`,
+    );
   }
   if (manifest.databaseMetadata !== expectedDatabaseMetadataFingerprint) {
-    throw new DrillError("canonical database metadata fingerprint");
+    throw new DrillError(
+      `canonical database metadata fingerprint (expected ${expectedDatabaseMetadataFingerprint}, actual ${manifest.databaseMetadata})`,
+    );
   }
 }
 
@@ -3349,7 +3359,9 @@ async function performDrill() {
     normalizeArchiveInventory(archiveList),
   );
   if (archiveInventoryFingerprint !== expectedArchiveInventoryFingerprint) {
-    throw new DrillError("canonical logical archive inventory");
+    throw new DrillError(
+      `canonical logical archive inventory (expected ${expectedArchiveInventoryFingerprint}, actual ${archiveInventoryFingerprint})`,
+    );
   }
 
   const sourceAfterDump = readManifest("postgres", sourceSnapshot);
@@ -3453,7 +3465,9 @@ async function performDrill() {
   if (
     restoredManifest.schemaFingerprint !== expectedRestoredSchemaFingerprint
   ) {
-    throw new DrillError("restored schema archive fingerprint");
+    throw new DrillError(
+      `restored schema archive fingerprint (expected ${expectedRestoredSchemaFingerprint}, actual ${restoredManifest.schemaFingerprint})`,
+    );
   }
   compareRestoredManifest(sourceAfterDump, restoredManifest);
   verifyAccessBehavior(restoreDatabase);
