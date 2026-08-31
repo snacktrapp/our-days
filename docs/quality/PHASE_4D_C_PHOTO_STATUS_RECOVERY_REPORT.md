@@ -43,10 +43,9 @@ photo activation.
 ## Deliberately still open
 
 - Both photo rollout gates remain off.
-- Production activation still requires central live-session enforcement,
-  removal of the legacy raw reservation grant, fixed quotas, explicit
-  cancellation and cleanup processing, hosted workers, HEIC and real-iPhone
-  proof, export/original-download inclusion, and PD-006.
+- Production activation still requires fixed quotas, explicit cancellation and
+  cleanup processing, hosted workers, HEIC and real-iPhone proof,
+  export/original-download inclusion, and PD-006.
 - Cross-tab coordination, cross-device status, background sync, push
   notifications, and richer operator-resolution UI remain after the revised
   MVP unless release evidence promotes one to a blocker.

@@ -249,7 +249,7 @@ async function reservePhoto(
   journalPersonId,
   requestKey,
 ) {
-  return rpcRequest(apiUrl, apiKey, token, "reserve_photo_intake", {
+  return rpcRequest(apiUrl, apiKey, token, "phase4_test_reserve_photo_intake", {
     circle_id: circleId,
     journal_person_id: journalPersonId,
     request_key: requestKey,
@@ -898,6 +898,29 @@ try {
        set enabled = true,
            updated_at = statement_timestamp()
      where capability = 'photo_publication';
+  `);
+  runDatabaseAssertion(`
+    do $install_raw_intake_harness$
+    begin
+      execute $definition$
+        create function public.phase4_test_reserve_photo_intake(
+          circle_id uuid, journal_person_id uuid, request_key uuid
+        )
+        returns table (
+          intake_id uuid, bucket_id text, object_path text, state text,
+          expires_at timestamptz
+        )
+        language sql volatile security definer set search_path = '' as $body$
+          select * from private.reserve_photo_intake(
+            circle_id, journal_person_id, request_key
+          );
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase4_test_reserve_photo_intake(uuid, uuid, uuid) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase4_test_reserve_photo_intake(uuid, uuid, uuid) to authenticated';
+      perform pg_catalog.pg_notify('pgrst', 'reload schema');
+    end
+    $install_raw_intake_harness$;
   `);
   shouldRestoreFixtures = true;
 

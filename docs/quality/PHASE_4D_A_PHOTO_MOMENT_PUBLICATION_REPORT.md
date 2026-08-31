@@ -93,10 +93,6 @@ This is a safe development checkpoint, not production photo activation.
   candidate; it does not authorize that delivery choice for production. Before
   activation, PD-006 must also decide whether direct ordinary-JWT Storage access
   is acceptable or whether delivery needs a distinct server-side trust boundary.
-- Timeline metadata still uses the existing membership-scoped moment query,
-  while derivative delivery additionally requires a live Auth session. Global
-  live-session enforcement for caption/date/place/tag metadata is an activation
-  blocker to resolve consistently for written and photo moments.
 - The browser still needs the direct resumable upload coordinator, incremental
   hashing, retry/cancel/progress states, and status polling wired into Add
   Moment.

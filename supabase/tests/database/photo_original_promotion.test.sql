@@ -43,6 +43,25 @@ begin
   return set_config('request.jwt.claim.sub', test_user_id::text, true);
 end;
 $$;
+
+create function pg_temp.reserve_photo_intake(
+  requested_circle_id uuid,
+  requested_journal_person_id uuid,
+  requested_request_key uuid
+)
+returns table (
+  intake_id uuid, bucket_id text, object_path text, state text,
+  expires_at timestamptz
+)
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select * from private.reserve_photo_intake(
+    requested_circle_id, requested_journal_person_id, requested_request_key
+  );
+$$;
 select ok(
   (select relrowsecurity and relforcerowsecurity
      from pg_class where oid = 'private.photo_validator_allowlist'::regclass),
@@ -384,7 +403,7 @@ reset role;
 
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
-select * from public.reserve_photo_intake(
+select * from pg_temp.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
   'c1000000-0000-4000-8000-000000000091'
@@ -608,7 +627,7 @@ select throws_ok(
 reset role;
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
-select * from public.reserve_photo_intake(
+select * from pg_temp.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
   'c1000000-0000-4000-8000-000000000093'
@@ -712,7 +731,7 @@ values ('10000000-0000-4000-8000-000000000098');
 
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
-select * from public.reserve_photo_intake(
+select * from pg_temp.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
   'c1000000-0000-4000-8000-000000000094'
@@ -820,7 +839,7 @@ select ok(
 
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
-select * from public.reserve_photo_intake(
+select * from pg_temp.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
   'c1000000-0000-4000-8000-000000000095'

@@ -43,6 +43,25 @@ begin
   return set_config('request.jwt.claim.sub', test_user_id::text, true);
 end;
 $$;
+
+create function pg_temp.reserve_photo_intake(
+  requested_circle_id uuid,
+  requested_journal_person_id uuid,
+  requested_request_key uuid
+)
+returns table (
+  intake_id uuid, bucket_id text, object_path text, state text,
+  expires_at timestamptz
+)
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select * from private.reserve_photo_intake(
+    requested_circle_id, requested_journal_person_id, requested_request_key
+  );
+$$;
 select is(
   (
     select namespace.nspname
@@ -215,12 +234,12 @@ select ok(
 );
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.reserve_photo_intake(uuid,uuid,uuid)',
     'EXECUTE'
   ),
-  'authenticated callers can reach the public reserve seam'
+  'authenticated callers cannot reach the retired raw reserve seam'
 );
 
 select ok(
@@ -509,7 +528,7 @@ set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000001'
@@ -561,7 +580,7 @@ select is(
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000001'
@@ -725,7 +744,7 @@ where membership.id = '40000000-0000-4000-8000-000000000001';
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001',
     'c1000000-0000-4000-8000-000000000013'
@@ -768,7 +787,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000008',
     'c1000000-0000-4000-8000-000000000001'
@@ -780,7 +799,7 @@ select throws_ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000006'::uuid);
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000006',
     'c1000000-0000-4000-8000-000000000002'
@@ -792,7 +811,7 @@ select throws_ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000002',
     'c1000000-0000-4000-8000-000000000003'
@@ -804,7 +823,7 @@ select throws_ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000004'::uuid);
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000004',
     'c1000000-0000-4000-8000-000000000004'
@@ -816,7 +835,7 @@ select throws_ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000008',
     'c1000000-0000-4000-8000-000000000005'
@@ -1259,7 +1278,7 @@ values (
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000008',
     'c1000000-0000-4000-8000-000000000006'
@@ -1307,7 +1326,7 @@ select is(
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000008',
     'c1000000-0000-4000-8000-000000000007'
@@ -1324,7 +1343,7 @@ select public.set_person_guardian(
   true
 );
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000008',
     'c1000000-0000-4000-8000-000000000013'
@@ -1344,7 +1363,7 @@ select is(
 );
 
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000002',
     'c1000000-0000-4000-8000-000000000008'
@@ -1412,7 +1431,7 @@ select is(
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000002',
     'c1000000-0000-4000-8000-000000000008'
@@ -1438,7 +1457,7 @@ select ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000003',
     'c1000000-0000-4000-8000-000000000009'
@@ -1475,13 +1494,14 @@ select is(
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
-  $$select * from public.reserve_photo_intake(
+  $$select * from public.reserve_photo_moment(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000003',
+    '', '', '{}'::uuid[], '2024-06-15', null, null,
     'c1000000-0000-4000-8000-000000000010'
   )$$,
   '42501',
-  'Photo intake could not be reserved',
+  'Photo moment could not be reserved',
   'a requested account closure blocks new intake reservations'
 );
 select throws_ok(
@@ -1550,13 +1570,13 @@ select throws_ok(
 
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000005'::uuid);
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000005',
     'c1000000-0000-4000-8000-000000000011'
   ) \gset dual_a_
 select *
-  from public.reserve_photo_intake(
+  from pg_temp.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000002',
     '30000000-0000-4000-8000-000000000007',
     'c1000000-0000-4000-8000-000000000012'

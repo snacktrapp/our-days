@@ -233,7 +233,8 @@ values
   ('10000000-0000-4000-8000-000000000043', 'requester-closure-organizer@example.test', statement_timestamp(), '{}'),
   ('10000000-0000-4000-8000-000000000044', 'target-requester-closure@example.test', statement_timestamp(), '{}'),
   ('10000000-0000-4000-8000-000000000045', 'target-direct-expiry@example.test', statement_timestamp(), '{}'),
-  ('10000000-0000-4000-8000-000000000046', 'target-load-closure@example.test', statement_timestamp(), '{}');
+  ('10000000-0000-4000-8000-000000000046', 'target-load-closure@example.test', statement_timestamp(), '{}'),
+  ('10000000-0000-4000-8000-000000000047', 'target-job-first-withdrawal@example.test', statement_timestamp(), '{}');
 
 -- Preserve the historical target-binding journeys under transaction-local
 -- fixture grants while production remains Phase 2D-only.
@@ -285,6 +286,9 @@ select 'token-' || repeat('l', 40) as raw_token,
 select 'token-' || repeat('m', 40) as raw_token,
        encode(extensions.digest('token-' || repeat('m', 40), 'sha256'), 'hex') as token_hash
   \gset load_closure_
+select 'token-' || repeat('n', 40) as raw_token,
+       encode(extensions.digest('token-' || repeat('n', 40), 'sha256'), 'hex') as token_hash
+  \gset job_first_withdrawal_
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -664,6 +668,74 @@ select throws_ok(
   '42501',
   'Invitation job identity is immutable',
   'a terminalized target-bound job cannot be resurrected'
+);
+
+-- Phase 2D withdraws the email request and therefore terminalizes the job
+-- before the materialized invitation. That job-first path must record the
+-- same single human-action audit as direct invitation withdrawal.
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select public.request_invitation_job(
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000047',
+  'Job-first withdrawal',
+  '92000000-0000-4000-8000-000000000017'
+) as job_id \gset job_first_withdrawal_job_
+reset role;
+select * from private.materialize_target_bound_invitation_job(
+  :'job_first_withdrawal_job_job_id'::uuid,
+  1,
+  :'job_first_withdrawal_token_hash'
+) \gset job_first_withdrawal_materialized_
+select is(
+  (select state from private.invitation_jobs
+    where id = :'job_first_withdrawal_job_job_id'::uuid),
+  'materialized',
+  'job-first organizer withdrawal begins from a materialized job'
+);
+select is(
+  (select revoked_at from private.invitations
+    where id = :'job_first_withdrawal_materialized_invitation_id'::uuid),
+  null::timestamptz,
+  'job-first organizer withdrawal begins from a live invitation'
+);
+select is(
+  private.invalidate_target_bound_invitation_job(
+    :'job_first_withdrawal_job_job_id'::uuid,
+    'organizer_withdrawn',
+    '40000000-0000-4000-8000-000000000001',
+    null
+  ),
+  true,
+  'job-first organizer withdrawal reaches one terminal invitation'
+);
+select is(
+  (select count(*)::bigint from private.audit_events
+    where event_type = 'invitation_revoked'
+      and subject_id =
+        :'job_first_withdrawal_materialized_invitation_id'::uuid
+      and actor_membership_id =
+        '40000000-0000-4000-8000-000000000001'),
+  1::bigint,
+  'job-first organizer withdrawal records exactly one human-action audit'
+);
+select is(
+  private.invalidate_target_bound_invitation_job(
+    :'job_first_withdrawal_job_job_id'::uuid,
+    'organizer_withdrawn',
+    '40000000-0000-4000-8000-000000000001',
+    null
+  ),
+  true,
+  'job-first organizer withdrawal is idempotent after terminalization'
+);
+select is(
+  (select count(*)::bigint from private.audit_events
+    where event_type = 'invitation_revoked'
+      and subject_id =
+        :'job_first_withdrawal_materialized_invitation_id'::uuid),
+  1::bigint,
+  'job-first organizer withdrawal replay does not duplicate the audit'
 );
 
 -- An expired live row is swept before idempotency lookup so a fresh key can

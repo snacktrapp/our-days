@@ -94,6 +94,7 @@ function createLocalUserToken(userId, jwtSecret, tokenId = randomUUID()) {
     iss: "supabase-demo",
     jti: tokenId,
     role: "authenticated",
+    session_id: userId,
     sub: userId,
   });
   const signature = createHmac("sha256", jwtSecret)
@@ -219,6 +220,15 @@ function installSyntheticValidators() {
         ('${VALIDATOR_AUTHORITY}'::uuid, 'phase4c-authority@example.test', statement_timestamp(), '{}'),
         ('${VALIDATOR_STALE}'::uuid, 'phase4c-stale@example.test', statement_timestamp(), '{}'),
         ('${VALIDATOR_TAKEOVER}'::uuid, 'phase4c-takeover@example.test', statement_timestamp(), '{}');
+
+      insert into auth.sessions (
+        id, user_id, created_at, updated_at, not_after
+      )
+      values
+        ('${VALIDATOR_REVOKED}'::uuid, '${VALIDATOR_REVOKED}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+        ('${VALIDATOR_AUTHORITY}'::uuid, '${VALIDATOR_AUTHORITY}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+        ('${VALIDATOR_STALE}'::uuid, '${VALIDATOR_STALE}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
+        ('${VALIDATOR_TAKEOVER}'::uuid, '${VALIDATOR_TAKEOVER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day');
 
       insert into private.photo_validator_allowlist (auth_user_id)
       values

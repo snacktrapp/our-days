@@ -139,4 +139,18 @@ describe("journal access boundary", () => {
       "database unavailable",
     );
   });
+
+  it("fails a server-revoked Auth session closed at the sign-in boundary", async () => {
+    mocks.limit.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "42501",
+        message: "Family session is unavailable",
+      },
+    });
+
+    await expect(requireJournalAccess()).rejects.toThrow(
+      "NEXT_REDIRECT:/sign-in",
+    );
+  });
 });

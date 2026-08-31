@@ -176,7 +176,6 @@ select is(
     'request_account_closure:authenticated:EXECUTE',
     'request_family_export:authenticated:EXECUTE',
     'request_invitation_email:authenticated:EXECUTE',
-    'reserve_photo_intake:authenticated:EXECUTE',
     'reserve_photo_moment:authenticated:EXECUTE',
     'revoke_invitation:authenticated:EXECUTE',
     'revoke_membership:authenticated:EXECUTE',

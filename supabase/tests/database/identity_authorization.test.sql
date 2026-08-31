@@ -111,10 +111,12 @@ select is(
      where routine_schema = 'private'
        and grantee in ('anon', 'PUBLIC')
        and privilege_type = 'EXECUTE'
-       and routine_name <> 'preflight_invitation'
+       and routine_name not in (
+         'enforce_live_data_api_session', 'preflight_invitation'
+       )
   ),
   0::bigint,
-  'only the invitation preflight may be executable anonymously in private'
+  'only pre-request and invitation preflight guards are anonymously executable'
 );
 
 select ok(

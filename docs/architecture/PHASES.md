@@ -52,6 +52,14 @@ The local-only Phase 2C target-bound materialization checkpoint is recorded in `
 
 The Phase 2D local coordination checkpoint is recorded in `docs/quality/PHASE_2D_PRIVATE_INVITATION_COORDINATION_REPORT.md`. It retires every executable legacy invite route; adds default-off database and application capability gates; proves new, confirmed-existing, and orphaned-unconfirmed target-bound journeys through separate live worker sessions and Mailpit; and pins the six private relations in logical recovery. Production activation still requires a durable idempotent provider, scheduled expiry sweeps, a hosted iPhone rehearsal, and an explicit retention policy.
 
+The Phase 2E live Data API session checkpoint is recorded in
+`docs/quality/PHASE_2E_LIVE_DATA_API_SESSION_CONTROL_REPORT.md`. A PostgREST
+pre-request guard now rejects authenticated family-table and RPC access unless
+the JWT names a matching, live Supabase Auth session and the account is not
+closing. Existing Storage policies retain their separate live-session checks;
+the app has no Realtime, Edge Function, or direct-database family-data path.
+The raw photo-intake reservation RPC is no longer callable by any API role.
+
 Gate: member success plus anonymous, no-circle, wrong-circle, dual-circle, stale-token revoked-member, invite replay, wrong-email, and concurrent-acceptance denials pass.
 
 ## 3. Written moments end to end
@@ -91,10 +99,9 @@ route also requires an explicit web rollout switch. The web switch is not an
 independent authorization boundary because an authorized ordinary-JWT session
 can use the enabled Storage policy directly. Everything remains disabled by default;
 PD-006, hosted workers, HEIC/iPhone evidence, cleanup, export inclusion, and
-production media activation remain open.
-Production activation also requires one consistent live-Auth-session boundary
-for timeline metadata, not only derivative bytes, plus the browser upload,
-worker, recovery/export, and hosted-device gates below.
+production media activation remain open. The Phase 2E pre-request guard now
+provides the live-Auth-session boundary for Data API timeline metadata, while
+Storage retains its explicit live-session policies.
 
 The Phase 4D-B default-off browser-uploader checkpoint is recorded in
 `docs/quality/PHASE_4D_B_PRIVATE_PHOTO_UPLOADER_REPORT.md`. It adds
@@ -103,9 +110,9 @@ idempotency and account-scoped recovery metadata, truthful progress/cancel and
 non-cancellable finishing states, stale-upload renewal, and live-session guards
 around upload coordination and Storage writes. Both rollout gates remain off.
 This is a mergeable development checkpoint, not production photo activation;
-HEIC/iPhone proof, global live-session enforcement, quotas, cleanup/cancellation,
-hosted workers, a durable pending/attention surface, recovery/export, and the
-PD-006 delivery decision remain required.
+HEIC/iPhone proof, quotas, cleanup/cancellation, hosted workers, a durable
+pending/attention surface, recovery/export, and the PD-006 delivery decision
+remain required.
 
 The Phase 4D-C default-off status-recovery checkpoint is recorded in
 `docs/quality/PHASE_4D_C_PHOTO_STATUS_RECOVERY_REPORT.md`. It gives the current
@@ -114,7 +121,7 @@ survives reload while processing, removes local coordination state after
 publication, refreshes the timeline, and keeps failed or interrupted work
 private and plainly described. It does not activate photo posting or replace
 the remaining quota, cancellation/cleanup, hosted-worker, HEIC/iPhone,
-cross-device, export, or live-session release gates.
+cross-device, or export release gates.
 
 Deliver:
 

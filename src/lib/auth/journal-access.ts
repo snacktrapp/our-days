@@ -21,6 +21,15 @@ export type JournalAccessState =
   | Readonly<{ mode: "anonymous" }>
   | Readonly<{ mode: "no-access" }>;
 
+function isUnavailableFamilySession(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return (
+    candidate.code === "42501" &&
+    candidate.message === "Family session is unavailable"
+  );
+}
+
 async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
   await connection();
 
@@ -43,7 +52,10 @@ async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
     .order("joined_at", { ascending: true })
     .limit(2);
 
-  if (error) throw error;
+  if (error) {
+    if (isUnavailableFamilySession(error)) return { mode: "anonymous" };
+    throw error;
+  }
   const membership = data?.[0];
   if (!membership) return { mode: "no-access" };
 

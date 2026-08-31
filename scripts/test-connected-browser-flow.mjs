@@ -30,6 +30,8 @@ const fixtureCanaries = [
   "Sand Harbor",
   "sample-family.jpg",
 ];
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -72,6 +74,7 @@ function createLocalUserToken(userId, jwtSecret) {
     iat: issuedAt,
     iss: "supabase-demo",
     role: "authenticated",
+    session_id: userId,
     sub: userId,
   });
   const signature = createHmac("sha256", jwtSecret)
@@ -105,7 +108,7 @@ async function jsonRequest(url, apiKey, init = {}) {
   return { body, response };
 }
 
-async function findOtp(mailpitUrl, recipient) {
+async function findOtp(mailpitUrl, recipient, excludedCodes = []) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const list = await (await fetch(`${mailpitUrl}/api/v1/messages`)).json();
     for (const message of list.messages ?? list.Messages ?? []) {
@@ -123,7 +126,7 @@ async function findOtp(mailpitUrl, recipient) {
         .filter((value) => typeof value === "string")
         .join("\n");
       const code = content.match(/\b\d{6}\b/u)?.[0];
-      if (code) return code;
+      if (code && !excludedCodes.includes(code)) return code;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -461,11 +464,23 @@ async function stopServer(server) {
   }
 }
 
-function resetDatabase() {
-  execFileSync(supabaseBinary, ["db", "reset", "--local"], {
-    cwd: projectRoot,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+async function resetDatabase() {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      execFileSync(supabaseBinary, ["db", "reset", "--local"], {
+        cwd: projectRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
+    }
+  }
+  throw lastError;
 }
 
 function runDatabaseQuery(sql) {
@@ -497,6 +512,11 @@ function installPhase2dTestWorkers() {
     values
       ('${PHASE_2D_PROVISIONER_SESSION}'::uuid, '${PHASE_2D_PROVISIONER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
       ('${PHASE_2D_DELIVERY_SESSION}'::uuid, '${PHASE_2D_DELIVERY_WORKER}'::uuid, statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day')
+    on conflict (id) do nothing;
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    select auth_user.id, auth_user.id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+      from auth.users as auth_user
     on conflict (id) do nothing;
     insert into private.invitation_provisioner_allowlist (auth_user_id)
     values ('${PHASE_2D_PROVISIONER}'::uuid)
@@ -685,6 +705,7 @@ server.stderr.on("data", appendServerLog);
 
 let browser;
 let shouldRestoreFixtures = false;
+let primaryError = null;
 
 try {
   await waitForServer(server, () => serverLog);
@@ -709,12 +730,11 @@ try {
       method: "POST",
     },
   );
-  if (!createdUser.response.ok) {
+  if (!createdUser.response.ok || !uuidPattern.test(createdUser.body?.id)) {
     throw new Error(
       `Browser test provisioning failed (${createdUser.response.status}).`,
     );
   }
-
   const organizerToken = createLocalUserToken(
     "10000000-0000-4000-8000-000000000001",
     jwtSecret,
@@ -903,6 +923,23 @@ try {
   await invitedPage.waitForURL(`${appUrl}/family`);
   await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
   process.stdout.write("Accepted the invitation into Cedar Circle.\n");
+  // GoTrue rotates the invited user's real sessions during OTP acceptance.
+  // Install the separate deterministic session only after that rotation for
+  // the lower-level custom-JWT checks later in this harness.
+  runDatabaseQuery(`
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values (
+      '${createdUser.body.id}'::uuid,
+      '${createdUser.body.id}'::uuid,
+      statement_timestamp(),
+      statement_timestamp(),
+      statement_timestamp() + interval '1 day'
+    )
+    on conflict (id) do update
+      set user_id = excluded.user_id,
+          updated_at = excluded.updated_at,
+          not_after = excluded.not_after;
+  `);
   browserPhase = "accepted family and creation";
   await assertPageQuality(invitedPage, "Connected family timeline");
   if (authCookies(await invitedContext.cookies()).length === 0) {
@@ -2132,6 +2169,35 @@ try {
   if (authCookies(await retainedAccountContext.cookies()).length === 0) {
     throw new Error("The isolated first-account browser lost its own session.");
   }
+  browserPhase = "same-session account-switch denial";
+  await retainedAccountPage.goto(`${appUrl}/family`);
+  await retainedAccountPage.waitForURL(`${appUrl}/sign-in`);
+  await assertNoCanaries(
+    retainedAccountPage,
+    firstCircleCanaries,
+    "Same-session account-switch denial",
+  );
+
+  browserPhase = "independent first-account sign-in";
+  await retainedAccountPage.getByLabel("Email address").fill(email);
+  await retainedAccountPage
+    .getByRole("button", { name: "Email me a code" })
+    .click();
+  const retainedCodeInput = retainedAccountPage.getByLabel("Six-digit code");
+  await retainedCodeInput.waitFor();
+  await retainedCodeInput.fill(
+    await findOtp(mailpitUrl, email, [invitationOtp]),
+  );
+  await retainedAccountPage
+    .getByRole("button", { name: "Open family journal" })
+    .click();
+  await retainedAccountPage.waitForURL(`${appUrl}/family`);
+  await retainedAccountPage
+    .getByRole("heading", { name: "Cedar Circle" })
+    .waitFor();
+  if (authCookies(await retainedAccountContext.cookies()).length === 0) {
+    throw new Error("The independent first-account sign-in did not persist.");
+  }
   const revokedMembership = await jsonRequest(
     `${apiUrl}/rest/v1/rpc/revoke_membership`,
     anonKey,
@@ -2476,8 +2542,20 @@ try {
   process.stdout.write(
     `Connected staged invite, OTP, Memories/year/anniversary browsing, stable pagination, lazy notes, reactions, thought/milestone/place creation, edit/trash/restore, cross-origin denial, cross-family account isolation, revoked-invite recovery, browser cleanup, membership gate, and local sign-out passed in ${connectedBrowserName}.\n`,
   );
+} catch (error) {
+  primaryError = error;
+  throw error;
 } finally {
   if (browser) await browser.close();
   await stopServer(server);
-  if (shouldRestoreFixtures) resetDatabase();
+  if (shouldRestoreFixtures) {
+    try {
+      await resetDatabase();
+    } catch (resetError) {
+      if (!primaryError) throw resetError;
+      process.stderr.write(
+        `Fixture reset also failed after the browser error: ${resetError.message}\n`,
+      );
+    }
+  }
 }

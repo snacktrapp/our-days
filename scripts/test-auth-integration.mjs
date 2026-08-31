@@ -50,6 +50,7 @@ function createLocalUserToken(userId, jwtSecret) {
     iat: issuedAt,
     iss: "supabase-demo",
     role: "authenticated",
+    session_id: userId,
     sub: userId,
   });
   const signature = createHmac("sha256", jwtSecret)
@@ -256,6 +257,35 @@ function installPhase2dTestWorkers() {
   `);
 }
 
+function installSyntheticFamilySessions() {
+  runDatabaseQuery(`
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    select auth_user.id, auth_user.id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+      from auth.users as auth_user
+    on conflict (id) do update
+      set user_id = excluded.user_id,
+          updated_at = excluded.updated_at,
+          not_after = excluded.not_after;
+  `);
+  runDatabaseQuery(`
+    do $install_service_canary$
+    begin
+      execute $definition$
+        create function public.phase_test_service_pre_request_canary()
+        returns boolean
+        language sql stable security invoker set search_path = '' as $body$
+          select true;
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase_test_service_pre_request_canary() from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase_test_service_pre_request_canary() to service_role';
+      perform pg_catalog.pg_notify('pgrst', 'reload schema');
+    end
+    $install_service_canary$;
+  `);
+}
+
 function materializeDeliveredPhase2dInvitation({
   emailRequestId,
   rawToken,
@@ -380,6 +410,7 @@ try {
   }
 
   shouldRestoreFixtures = true;
+  installSyntheticFamilySessions();
   installPhase2dTestWorkers();
   const suffix = randomUUID();
   const invitedEmail = `auth-invite-${suffix}@example.test`;
@@ -445,6 +476,113 @@ try {
   }
 
   const organizerToken = createLocalUserToken(ORGANIZER_A, jwtSecret);
+  const organizerHeaders = { authorization: `Bearer ${organizerToken}` };
+  const liveCircleRead = await jsonRequest(
+    `${apiUrl}/rest/v1/circles?select=id`,
+    anonKey,
+    { headers: organizerHeaders },
+  );
+  if (!liveCircleRead.response.ok || liveCircleRead.body?.length !== 1) {
+    throw new Error(
+      "A matching live session could not read its family circle.",
+    );
+  }
+
+  let serviceCanary;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    serviceCanary = await jsonRequest(
+      `${apiUrl}/rest/v1/rpc/phase_test_service_pre_request_canary`,
+      serviceKey,
+      {
+        body: "{}",
+        headers: { authorization: `Bearer ${serviceKey}` },
+        method: "POST",
+      },
+    );
+    if (serviceCanary.response.ok) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!serviceCanary?.response.ok || serviceCanary.body !== true) {
+    throw new Error("The service control plane was blocked by user sessions.");
+  }
+
+  const rawReservation = await jsonRequest(
+    `${apiUrl}/rest/v1/rpc/reserve_photo_intake`,
+    anonKey,
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        journal_person_id: "30000000-0000-4000-8000-000000000001",
+        request_key: randomUUID(),
+      }),
+      headers: organizerHeaders,
+      method: "POST",
+    },
+  );
+  if (rawReservation.response.ok || rawReservation.body?.code !== "42501") {
+    throw new Error("The retired raw reservation RPC remained executable.");
+  }
+
+  runDatabaseQuery(`
+    delete from auth.sessions where id = '${ORGANIZER_A}'::uuid;
+  `);
+  const staleSessionRequests = [
+    [
+      "direct family-table read",
+      await jsonRequest(`${apiUrl}/rest/v1/circles?select=id`, anonKey, {
+        headers: organizerHeaders,
+      }),
+    ],
+    [
+      "family read RPC",
+      await jsonRequest(`${apiUrl}/rest/v1/rpc/list_memory_years`, anonKey, {
+        body: JSON.stringify({ circle_id: CIRCLE_A }),
+        headers: organizerHeaders,
+        method: "POST",
+      }),
+    ],
+    [
+      "family mutation RPC",
+      await jsonRequest(
+        `${apiUrl}/rest/v1/rpc/request_family_export`,
+        anonKey,
+        {
+          body: JSON.stringify({
+            circle_id: CIRCLE_A,
+            request_key: randomUUID(),
+          }),
+          headers: organizerHeaders,
+          method: "POST",
+        },
+      ),
+    ],
+    [
+      "invitation acceptance RPC",
+      await jsonRequest(`${apiUrl}/rest/v1/rpc/accept_invitation`, anonKey, {
+        body: JSON.stringify({ token: "stale-session-must-stop-first" }),
+        headers: organizerHeaders,
+        method: "POST",
+      }),
+    ],
+  ];
+  for (const [label, result] of staleSessionRequests) {
+    if (
+      result.response.ok ||
+      result.body?.code !== "42501" ||
+      result.body?.message !== "Family session is unavailable"
+    ) {
+      throw new Error(`A stale session reached the ${label}.`);
+    }
+  }
+  runDatabaseQuery(`
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values (
+      '${ORGANIZER_A}'::uuid, '${ORGANIZER_A}'::uuid,
+      statement_timestamp(), statement_timestamp(),
+      statement_timestamp() + interval '1 day'
+    );
+  `);
+
   const invitation = await createDeliveredPhase2dInvitation({
     apiUrl,
     circleId: CIRCLE_A,
@@ -861,12 +999,12 @@ try {
     { headers: dualCircleHeaders },
   );
   if (
-    !requestedClosureRead.response.ok ||
-    requestedClosureRead.body?.length !== 1 ||
-    requestedClosureRead.body[0]?.id !== CIRCLE_B
+    requestedClosureRead.response.ok ||
+    requestedClosureRead.body?.code !== "42501" ||
+    requestedClosureRead.body?.message !== "Family session is unavailable"
   ) {
     throw new Error(
-      "A requested account closure changed ordinary family reads before preparation.",
+      "A requested account closure retained ordinary family reads.",
     );
   }
 
@@ -884,8 +1022,9 @@ try {
     { headers: dualCircleHeaders },
   );
   if (
-    !preparedClosureRead.response.ok ||
-    preparedClosureRead.body?.length !== 0
+    preparedClosureRead.response.ok ||
+    preparedClosureRead.body?.code !== "42501" ||
+    preparedClosureRead.body?.message !== "Family session is unavailable"
   ) {
     throw new Error(
       "A captured access token retained family reads after closure preparation.",
@@ -909,8 +1048,7 @@ try {
   if (
     preparedClosureMutation.response.ok ||
     preparedClosureMutation.body?.code !== "42501" ||
-    preparedClosureMutation.body?.message !==
-      "Invitation email could not be requested"
+    preparedClosureMutation.body?.message !== "Family session is unavailable"
   ) {
     throw new Error(
       `A captured access token did not follow the generic post-closure mutation-denial path (${preparedClosureMutation.response.status}).`,

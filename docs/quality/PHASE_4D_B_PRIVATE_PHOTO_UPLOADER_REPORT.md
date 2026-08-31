@@ -87,10 +87,6 @@ database `photo_publication` capability and the application
 ## Production activation blockers
 
 - Keep both photo-posting gates disabled.
-- Apply live-Auth-session enforcement consistently to all family metadata reads,
-  not only the new upload and derivative boundaries.
-- Remove the authenticated legacy raw-intake reservation surface before enabling
-  photo publication.
 - Add per-account/circle open-intake and byte quotas, explicit server-side
   cancellation/invalidation, and scheduled cleanup for expired reservations,
   TUS uploads, quarantine objects, and abandoned request rows.

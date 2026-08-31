@@ -493,7 +493,7 @@ async function reservePhoto(
   journalPersonId,
   requestKey,
 ) {
-  return rpcRequest(apiUrl, apiKey, token, "reserve_photo_intake", {
+  return rpcRequest(apiUrl, apiKey, token, "phase4_test_reserve_photo_intake", {
     circle_id: circleId,
     journal_person_id: journalPersonId,
     request_key: requestKey,
@@ -934,6 +934,27 @@ function installTestHelpers() {
       $definition$;
 
       execute $definition$
+        create function public.phase4_test_reserve_photo_intake(
+          circle_id uuid,
+          journal_person_id uuid,
+          request_key uuid
+        )
+        returns table (
+          intake_id uuid, bucket_id text, object_path text, state text,
+          expires_at timestamptz
+        )
+        language sql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+          select * from private.reserve_photo_intake(
+            circle_id, journal_person_id, request_key
+          );
+        $body$
+      $definition$;
+
+      execute $definition$
         create function public.phase4b_test_revoke_validator_and_hold(
           target_auth_user_id uuid,
           hold_ms integer
@@ -972,11 +993,13 @@ function installTestHelpers() {
       execute 'revoke all on function public.phase4a_test_hold_circle_lock(uuid, integer) from public, anon, authenticated';
       execute 'revoke all on function public.phase4a_test_concurrency_probe(text[], integer, boolean) from public, anon, authenticated';
       execute 'revoke all on function public.phase4a_test_prepare_account_closure(uuid) from public, anon, authenticated';
+      execute 'revoke all on function public.phase4_test_reserve_photo_intake(uuid, uuid, uuid) from public, anon, authenticated, service_role';
       execute 'revoke all on function public.phase4b_test_revoke_validator_and_hold(uuid, integer) from public, anon, authenticated';
       execute 'grant execute on function public.phase4a_test_hold_auth_user_lock(uuid, integer) to service_role';
       execute 'grant execute on function public.phase4a_test_hold_circle_lock(uuid, integer) to service_role';
       execute 'grant execute on function public.phase4a_test_concurrency_probe(text[], integer, boolean) to service_role';
       execute 'grant execute on function public.phase4a_test_prepare_account_closure(uuid) to service_role';
+      execute 'grant execute on function public.phase4_test_reserve_photo_intake(uuid, uuid, uuid) to authenticated';
       execute 'grant execute on function public.phase4b_test_revoke_validator_and_hold(uuid, integer) to service_role';
     end
     $install$;

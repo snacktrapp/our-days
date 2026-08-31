@@ -54,6 +54,7 @@ function createLocalUserToken(userId, jwtSecret, tokenId = randomUUID()) {
     iss: "supabase-demo",
     jti: tokenId,
     role: "authenticated",
+    session_id: userId,
     sub: userId,
   });
   const signature = createHmac("sha256", jwtSecret)
@@ -76,6 +77,26 @@ function runDatabaseQuery(sql) {
       { cause: error },
     );
   }
+}
+
+function installSyntheticSession(userId) {
+  if (!uuidPattern.test(userId)) {
+    throw new Error("Synthetic session user ID was invalid.");
+  }
+  runDatabaseQuery(`
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    values (
+      '${userId}'::uuid,
+      '${userId}'::uuid,
+      statement_timestamp(),
+      statement_timestamp(),
+      statement_timestamp() + interval '1 day'
+    )
+    on conflict (id) do update
+      set user_id = excluded.user_id,
+          updated_at = excluded.updated_at,
+          not_after = excluded.not_after;
+  `);
 }
 
 async function waitForConcurrencyProbe({
@@ -261,6 +282,7 @@ async function runOverlappedAuthRace({
   operationNames,
   requests,
   serviceKey,
+  stageWaiters = false,
   targetAuthUserId,
 }) {
   const holderPromise = jsonRequest(
@@ -271,7 +293,7 @@ async function runOverlappedAuthRace({
     {
       body: JSON.stringify({
         target_auth_user_id: targetAuthUserId,
-        hold_ms: 5000,
+        hold_ms: stageWaiters ? 7000 : 5000,
       }),
       method: "POST",
     },
@@ -287,19 +309,48 @@ async function runOverlappedAuthRace({
     serviceKey,
   });
 
-  const requestPromises = requests.map((startRequest) => startRequest());
+  const requestPromises = [];
   try {
-    await waitForConcurrencyProbe({
-      apiKey,
-      apiUrl,
-      expectedWaiters: requests.length,
-      label: `Overlapping ${operationName} requests`,
-      operationNames,
-      serviceKey,
-    });
+    if (stageWaiters) {
+      for (const [index, startRequest] of requests.entries()) {
+        requestPromises.push(startRequest());
+        await waitForConcurrencyProbe({
+          apiKey,
+          apiUrl,
+          expectedWaiters: index + 1,
+          label: `Overlapping ${operationName} request ${index + 1}`,
+          operationNames,
+          serviceKey,
+          timeoutMs: 3000,
+        });
+      }
+    } else {
+      requestPromises.push(...requests.map((startRequest) => startRequest()));
+      await waitForConcurrencyProbe({
+        apiKey,
+        apiUrl,
+        expectedWaiters: requests.length,
+        label: `Overlapping ${operationName} requests`,
+        operationNames,
+        serviceKey,
+      });
+    }
   } catch (error) {
-    await Promise.allSettled([holderPromise, ...requestPromises]);
-    throw error;
+    const settled = await Promise.allSettled([
+      holderPromise,
+      ...requestPromises,
+    ]);
+    const requestSummary = settled
+      .slice(1)
+      .map((result) =>
+        result.status === "fulfilled"
+          ? `${result.value.response.status}:${JSON.stringify(result.value.body)}`
+          : `rejected:${String(result.reason)}`,
+      )
+      .join(", ");
+    throw new Error(
+      `${error.message} Settled request results: ${requestSummary || "none"}.`,
+    );
   }
 
   const [holder, results] = await Promise.all([
@@ -308,7 +359,7 @@ async function runOverlappedAuthRace({
   ]);
   if (!holder.response.ok) {
     throw new Error(
-      `The ${operationName} Auth-user-lock holder failed with ${holder.response.status}.`,
+      `The ${operationName} Auth-user-lock holder failed with ${holder.response.status}:${JSON.stringify(holder.body)}.`,
     );
   }
 
@@ -410,6 +461,189 @@ function requireInvitationDenial(result, label) {
   );
 }
 
+function requireFamilySessionDenial(result, label) {
+  rejectUnsafeOutcome(result, label);
+  if (
+    !result.response.ok &&
+    result.body?.code === "42501" &&
+    result.body?.message === "Family session is unavailable"
+  ) {
+    return;
+  }
+  throw new Error(
+    `${label} did not use the generic family-session denial (${result.response.status}:${JSON.stringify(result.body)}).`,
+  );
+}
+
+function requireAcceptanceWithdrawalState({
+  acceptanceResult,
+  invitationId,
+  jobId,
+  organizerMembershipId,
+  state,
+  withdrawalResult,
+}) {
+  const violations = [];
+  const winner =
+    state?.jobInvalidationReason === "target_accepted"
+      ? "acceptance"
+      : state?.jobInvalidationReason === "organizer_withdrawn"
+        ? "withdrawal"
+        : null;
+  const acceptedMembershipId = state?.invitationAcceptedMembershipId ?? null;
+  const expectedActorId =
+    winner === "acceptance" ? acceptedMembershipId : organizerMembershipId;
+  const expectedActorIds = expectedActorId ? [expectedActorId] : [];
+
+  function requireState(condition, message) {
+    if (!condition) violations.push(message);
+  }
+
+  requireState(winner !== null, "job has no recognized durable winner");
+  requireState(state?.jobCount === 1, "job count is not one");
+  requireState(state?.jobState === "invalidated", "job is not invalidated");
+  requireState(
+    state?.jobInvalidatedByMembershipId === expectedActorId,
+    "job invalidation actor does not match its durable winner",
+  );
+  requireState(
+    state?.jobInvalidatedByClosureRequestId === null,
+    "job unexpectedly records a closure invalidator",
+  );
+  requireState(
+    state?.jobRequesterAuthorized === false,
+    "invalidated job still reports requester authority",
+  );
+  requireState(state?.invitationCount === 1, "invitation count is not one");
+  requireState(
+    state?.invitationJobId === jobId,
+    "invitation is not linked to the raced job",
+  );
+  requireState(
+    state?.jobInvalidatedAuditCount === 1,
+    "job invalidation audit count is not one",
+  );
+  requireState(
+    JSON.stringify(state?.jobInvalidatedAuditActorIds) ===
+      JSON.stringify(expectedActorIds),
+    "job invalidation audit actor does not match its durable winner",
+  );
+  requireState(
+    state?.emailRequestCount === 1,
+    "email request count is not one",
+  );
+  requireState(
+    state?.emailRequestNormalizedEmailCleared === true,
+    "terminal email request retained its normalized email",
+  );
+
+  if (winner === "acceptance") {
+    requireState(
+      uuidPattern.test(acceptedMembershipId),
+      "accepted membership is not a UUID",
+    );
+    requireState(
+      state?.invitationAccepted === true &&
+        state?.invitationRevoked === false &&
+        state?.invitationRevocationReason === null &&
+        state?.invitationRevokedByMembershipId === null &&
+        state?.invitationRevokedByClosureRequestId === null,
+      "invitation does not have the accepted terminal shape",
+    );
+    requireState(
+      state?.activeMembershipCount === 1,
+      "accepted target does not have exactly one active membership",
+    );
+    requireState(
+      state?.invitationAcceptedAuditCount === 1 &&
+        JSON.stringify(state?.invitationAcceptedAuditActorIds) ===
+          JSON.stringify([acceptedMembershipId]),
+      "acceptance audit does not exactly identify the accepted membership",
+    );
+    requireState(
+      state?.invitationRevokedAuditCount === 0 &&
+        state?.invitationRevokedAuditActorIds?.length === 0,
+      "accepted invitation has a revocation audit",
+    );
+    requireState(
+      state?.emailRequestState === "accepted" &&
+        state?.emailRequestInvalidationReason === null &&
+        state?.emailRequestAccepted === true,
+      "email request does not have the accepted terminal shape",
+    );
+    requireState(
+      state?.coordinationAcceptedAuditCount === 1 &&
+        state?.coordinationInvalidatedAuditCount === 0,
+      "coordination audit does not have one accepted event",
+    );
+    requireState(
+      acceptanceResult.response.ok &&
+        acceptanceResult.body === acceptedMembershipId,
+      "acceptance response does not match the durable accepted membership",
+    );
+  } else if (winner === "withdrawal") {
+    requireState(
+      acceptedMembershipId === null &&
+        state?.invitationAccepted === false &&
+        state?.invitationRevoked === true &&
+        state?.invitationRevocationReason === "organizer_withdrawn" &&
+        state?.invitationRevokedByMembershipId === organizerMembershipId &&
+        state?.invitationRevokedByClosureRequestId === null,
+      "invitation does not have the withdrawn terminal shape",
+    );
+    requireState(
+      state?.activeMembershipCount === 0,
+      "withdrawn target unexpectedly has an active membership",
+    );
+    requireState(
+      state?.invitationAcceptedAuditCount === 0 &&
+        state?.invitationAcceptedAuditActorIds?.length === 0,
+      "withdrawn invitation has an acceptance audit",
+    );
+    requireState(
+      state?.invitationRevokedAuditCount === 1 &&
+        JSON.stringify(state?.invitationRevokedAuditActorIds) ===
+          JSON.stringify([organizerMembershipId]),
+      "revocation audit does not exactly identify the organizer",
+    );
+    requireState(
+      state?.emailRequestState === "invalidated" &&
+        state?.emailRequestInvalidationReason === "organizer_withdrawn" &&
+        state?.emailRequestAccepted === false,
+      "email request does not have the withdrawn terminal shape",
+    );
+    requireState(
+      state?.coordinationAcceptedAuditCount === 0 &&
+        state?.coordinationInvalidatedAuditCount === 1,
+      "coordination audit does not have one invalidated event",
+    );
+    try {
+      requireInvitationDenial(
+        acceptanceResult,
+        "Acceptance losing to durable withdrawal",
+      );
+    } catch (error) {
+      violations.push(error.message);
+    }
+  }
+
+  requireState(
+    withdrawalResult.response.ok && withdrawalResult.body === null,
+    "withdrawal response was not a successful void result",
+  );
+
+  if (violations.length > 0) {
+    throw new Error(
+      `Acceptance/withdrawal race invariant failure for invitation ${invitationId}: ${violations.join("; ")}. ` +
+        `Durable state=${JSON.stringify(state)}. ` +
+        `Acceptance response=${acceptanceResult.response.status}:${JSON.stringify(acceptanceResult.body)}. ` +
+        `Withdrawal response=${withdrawalResult.response.status}:${JSON.stringify(withdrawalResult.body)}.`,
+    );
+  }
+
+  return winner;
+}
+
 function targetBoundMaterializationRow(result, label) {
   rejectUnsafeOutcome(result, label);
   const row = Array.isArray(result.body) ? result.body[0] : null;
@@ -494,6 +728,7 @@ async function createSyntheticAuthUser(apiUrl, serviceKey, label) {
   ) {
     throw new Error(`${label} Auth fixture did not return a safe identity.`);
   }
+  installSyntheticSession(result.body.id);
   return { email: result.body.email, id: result.body.id };
 }
 
@@ -553,6 +788,28 @@ function loadTargetBoundInvitation(apiUrl, serviceKey, jobId) {
     "rpc/phase2c_test_load_target_bound_invitation_job",
     {
       body: JSON.stringify({ requested_job_id: jobId }),
+      method: "POST",
+    },
+  );
+}
+
+function loadAcceptanceWithdrawalState(
+  apiUrl,
+  serviceKey,
+  { emailRequestId, invitationId, jobId, targetUserId },
+) {
+  return jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase2c_test_accept_withdrawal_state",
+    {
+      body: JSON.stringify({
+        requested_email_request_id: emailRequestId,
+        requested_invitation_id: invitationId,
+        requested_job_id: jobId,
+        requested_target_user_id: targetUserId,
+      }),
       method: "POST",
     },
   );
@@ -641,6 +898,118 @@ async function createDeliveredInvitationFixture({
   };
 }
 
+async function runAcceptanceWithdrawalRaces({
+  apiKey,
+  apiUrl,
+  jwtSecret,
+  organizerToken,
+  repeats,
+  serviceKey,
+}) {
+  for (let raceAttempt = 1; raceAttempt <= repeats; raceAttempt += 1) {
+    const withdrawalAcceptance = await createTargetBoundJobFixture({
+      apiKey,
+      apiUrl,
+      circleId: CIRCLE_A,
+      jwtSecret,
+      label: `accept-withdrawal-${raceAttempt}`,
+      organizerToken,
+      serviceKey,
+    });
+    const withdrawalMaterialization = targetBoundMaterializationRow(
+      await materializeTargetBoundInvitation(
+        apiUrl,
+        serviceKey,
+        withdrawalAcceptance.jobId,
+        withdrawalAcceptance.rawToken,
+      ),
+      `Acceptance/withdrawal materialization setup ${raceAttempt}`,
+    );
+    const [racedWithdrawalAcceptance, racedOrganizerWithdrawal] =
+      await runTargetBoundInvitationRace({
+        apiKey,
+        apiUrl,
+        expectedOperations: {
+          phase2c_test_withdrawal_accept: 1,
+          phase2c_test_withdrawal_revoke: 1,
+        },
+        jobId: withdrawalAcceptance.jobId,
+        label: `target-bound acceptance and organizer withdrawal ${raceAttempt}`,
+        requests: [
+          () =>
+            acceptInvitation(
+              apiUrl,
+              apiKey,
+              withdrawalAcceptance.targetToken,
+              withdrawalAcceptance.rawToken,
+              "phase2c_test_withdrawal_accept",
+            ),
+          () =>
+            withdrawInvitationEmailRequest(
+              apiUrl,
+              apiKey,
+              organizerToken,
+              withdrawalAcceptance.emailRequestId,
+              "phase2c_test_withdrawal_revoke",
+            ),
+        ],
+        serviceKey,
+      });
+    rejectUnsafeOutcome(
+      racedWithdrawalAcceptance,
+      "Acceptance racing organizer withdrawal",
+    );
+    rejectUnsafeOutcome(
+      racedOrganizerWithdrawal,
+      "Organizer withdrawal racing acceptance",
+    );
+
+    const durableStateResult = await loadAcceptanceWithdrawalState(
+      apiUrl,
+      serviceKey,
+      {
+        emailRequestId: withdrawalAcceptance.emailRequestId,
+        invitationId: withdrawalMaterialization.invitation_id,
+        jobId: withdrawalAcceptance.jobId,
+        targetUserId: withdrawalAcceptance.target.id,
+      },
+    );
+    const durableState = requireSuccessfulOutcome(
+      durableStateResult,
+      "Acceptance/withdrawal durable-state load",
+    );
+    const durableWinner = requireAcceptanceWithdrawalState({
+      acceptanceResult: racedWithdrawalAcceptance,
+      invitationId: withdrawalMaterialization.invitation_id,
+      jobId: withdrawalAcceptance.jobId,
+      organizerMembershipId: ORGANIZER_A_MEMBERSHIP,
+      state: durableState,
+      withdrawalResult: racedOrganizerWithdrawal,
+    });
+
+    requireEmptyMaterialization(
+      await loadTargetBoundInvitation(
+        apiUrl,
+        serviceKey,
+        withdrawalAcceptance.jobId,
+      ),
+      "Acceptance/withdrawal terminal load",
+    );
+    requireInvitationDenial(
+      await acceptInvitation(
+        apiUrl,
+        apiKey,
+        withdrawalAcceptance.targetToken,
+        withdrawalAcceptance.rawToken,
+      ),
+      "Acceptance/withdrawal token replay",
+    );
+    process.stdout.write(
+      `Phase 2C accept/organizer-withdrawal race ${raceAttempt}/${repeats} passed (${durableWinner} won).\n`,
+    );
+  }
+}
+
 function resetDatabase() {
   execFileSync(supabaseBinary, ["db", "reset", "--local"], {
     cwd: projectRoot,
@@ -661,6 +1030,8 @@ const ORGANIZER_A_TWO_MEMBERSHIP = "40000000-0000-4000-8000-000000000002";
 const MEMBER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000003";
 const DUAL_ORGANIZER_A_MEMBERSHIP = "40000000-0000-4000-8000-000000000005";
 const MANAGED_CHILD_A = "30000000-0000-4000-8000-000000000008";
+
+class FocusedRunComplete extends Error {}
 
 let shouldRestoreFixtures = false;
 let primaryError = null;
@@ -696,6 +1067,11 @@ try {
     values
       ('71000000-0000-4000-8000-000000000091', '10000000-0000-4000-8000-000000000091', statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day'),
       ('71000000-0000-4000-8000-000000000092', '10000000-0000-4000-8000-000000000092', statement_timestamp(), statement_timestamp(), statement_timestamp() + interval '1 day')
+    on conflict (id) do nothing;
+    insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+    select auth_user.id, auth_user.id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+      from auth.users as auth_user
     on conflict (id) do nothing;
     insert into private.invitation_provisioner_allowlist (auth_user_id)
     values ('10000000-0000-4000-8000-000000000091')
@@ -1135,6 +1511,179 @@ try {
       execute 'grant execute on function public.phase2c_test_load_target_bound_invitation_job(uuid) to service_role';
 
       execute $definition$
+        create function public.phase2c_test_accept_withdrawal_state(
+          requested_job_id uuid,
+          requested_invitation_id uuid,
+          requested_email_request_id uuid,
+          requested_target_user_id uuid
+        )
+        returns jsonb
+        language sql
+        stable
+        security definer
+        set search_path = ''
+        as $body$
+          select jsonb_build_object(
+            'jobCount', (
+              select count(*) from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ),
+            'jobState', (
+              select job.state from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ),
+            'jobInvalidationReason', (
+              select job.invalidation_reason
+                from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ),
+            'jobInvalidatedByMembershipId', (
+              select job.invalidated_by_membership_id
+                from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ),
+            'jobInvalidatedByClosureRequestId', (
+              select job.invalidated_by_closure_request_id
+                from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ),
+            'jobRequesterAuthorized', coalesce((
+              select private.invitation_job_requester_is_authorized(job.id)
+                from private.invitation_jobs as job
+               where job.id = requested_job_id
+            ), false),
+            'invitationCount', (
+              select count(*) from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'invitationJobId', (
+              select invitation.invitation_job_id
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'invitationAcceptedMembershipId', (
+              select invitation.accepted_membership_id
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'invitationAccepted', coalesce((
+              select invitation.accepted_at is not null
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ), false),
+            'invitationRevoked', coalesce((
+              select invitation.revoked_at is not null
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ), false),
+            'invitationRevocationReason', (
+              select invitation.revocation_reason
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'invitationRevokedByMembershipId', (
+              select invitation.revoked_by_membership_id
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'invitationRevokedByClosureRequestId', (
+              select invitation.revoked_by_closure_request_id
+                from private.invitations as invitation
+               where invitation.id = requested_invitation_id
+            ),
+            'activeMembershipCount', (
+              select count(*) from public.circle_memberships as membership
+               join private.invitation_jobs as job
+                 on job.circle_id = membership.circle_id
+              where job.id = requested_job_id
+                and membership.user_id = requested_target_user_id
+                and membership.status = 'active'
+            ),
+            'jobInvalidatedAuditCount', (
+              select count(*) from private.audit_events as audit
+               where audit.event_type = 'invitation_job_invalidated'
+                 and audit.subject_id = requested_job_id
+            ),
+            'jobInvalidatedAuditActorIds', coalesce((
+              select jsonb_agg(
+                audit.actor_membership_id::text
+                order by audit.actor_membership_id::text
+              ) from private.audit_events as audit
+               where audit.event_type = 'invitation_job_invalidated'
+                 and audit.subject_id = requested_job_id
+            ), '[]'::jsonb),
+            'invitationAcceptedAuditCount', (
+              select count(*) from private.audit_events as audit
+               where audit.event_type = 'invitation_accepted'
+                 and audit.subject_id = requested_invitation_id
+            ),
+            'invitationAcceptedAuditActorIds', coalesce((
+              select jsonb_agg(
+                audit.actor_membership_id::text
+                order by audit.actor_membership_id::text
+              ) from private.audit_events as audit
+               where audit.event_type = 'invitation_accepted'
+                 and audit.subject_id = requested_invitation_id
+            ), '[]'::jsonb),
+            'invitationRevokedAuditCount', (
+              select count(*) from private.audit_events as audit
+               where audit.event_type = 'invitation_revoked'
+                 and audit.subject_id = requested_invitation_id
+            ),
+            'invitationRevokedAuditActorIds', coalesce((
+              select jsonb_agg(
+                audit.actor_membership_id::text
+                order by audit.actor_membership_id::text
+              ) from private.audit_events as audit
+               where audit.event_type = 'invitation_revoked'
+                 and audit.subject_id = requested_invitation_id
+            ), '[]'::jsonb),
+            'emailRequestCount', (
+              select count(*)
+                from private.invitation_email_requests as email_request
+               where email_request.id = requested_email_request_id
+            ),
+            'emailRequestState', (
+              select email_request.state
+                from private.invitation_email_requests as email_request
+               where email_request.id = requested_email_request_id
+            ),
+            'emailRequestInvalidationReason', (
+              select email_request.invalidation_reason
+                from private.invitation_email_requests as email_request
+               where email_request.id = requested_email_request_id
+            ),
+            'emailRequestAccepted', coalesce((
+              select email_request.accepted_at is not null
+                from private.invitation_email_requests as email_request
+               where email_request.id = requested_email_request_id
+            ), false),
+            'emailRequestNormalizedEmailCleared', coalesce((
+              select email_request.normalized_email is null
+                from private.invitation_email_requests as email_request
+               where email_request.id = requested_email_request_id
+            ), false),
+            'coordinationAcceptedAuditCount', (
+              select count(*)
+                from private.invitation_coordination_audit_events as audit
+               where audit.email_request_id = requested_email_request_id
+                 and audit.invitation_job_id = requested_job_id
+                 and audit.event_type = 'email_request_accepted'
+            ),
+            'coordinationInvalidatedAuditCount', (
+              select count(*)
+                from private.invitation_coordination_audit_events as audit
+               where audit.email_request_id = requested_email_request_id
+                 and audit.invitation_job_id = requested_job_id
+                 and audit.event_type = 'email_request_invalidated'
+            )
+          );
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_accept_withdrawal_state(uuid, uuid, uuid, uuid) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_accept_withdrawal_state(uuid, uuid, uuid, uuid) to service_role';
+
+      execute $definition$
         create function public.phase2c_test_demotion_set_membership_role(
           membership_id uuid,
           role text
@@ -1239,6 +1788,42 @@ try {
     serviceKey,
   });
 
+  const concurrencyFocus = process.env.OUR_DAYS_CONCURRENCY_FOCUS;
+  if (
+    concurrencyFocus !== undefined &&
+    concurrencyFocus !== "accept-withdrawal"
+  ) {
+    throw new Error(
+      "OUR_DAYS_CONCURRENCY_FOCUS must be unset or accept-withdrawal.",
+    );
+  }
+
+  const acceptanceWithdrawalRaceRepeats = Number.parseInt(
+    process.env.OUR_DAYS_ACCEPT_WITHDRAWAL_RACE_REPEATS ?? "1",
+    10,
+  );
+  if (
+    !Number.isSafeInteger(acceptanceWithdrawalRaceRepeats) ||
+    acceptanceWithdrawalRaceRepeats < 1 ||
+    acceptanceWithdrawalRaceRepeats > 25
+  ) {
+    throw new Error(
+      "OUR_DAYS_ACCEPT_WITHDRAWAL_RACE_REPEATS must be an integer from 1 through 25.",
+    );
+  }
+
+  if (concurrencyFocus === "accept-withdrawal") {
+    await runAcceptanceWithdrawalRaces({
+      apiKey,
+      apiUrl,
+      jwtSecret,
+      organizerToken: organizerAToken,
+      repeats: acceptanceWithdrawalRaceRepeats,
+      serviceKey,
+    });
+    throw new FocusedRunComplete();
+  }
+
   const results = await runOverlappedCircleRace({
     apiKey,
     apiUrl,
@@ -1330,6 +1915,7 @@ try {
       `Concurrent invite test user creation failed with ${createdUser.response.status}.`,
     );
   }
+  installSyntheticSession(createdUser.body.id);
 
   const invitationResult = await createDeliveredInvitationFixture({
     apiKey,
@@ -3103,194 +3689,14 @@ try {
     "Phase 2C materialize/requester-demotion race passed.\n",
   );
 
-  const withdrawalAcceptance = await createTargetBoundJobFixture({
+  await runAcceptanceWithdrawalRaces({
     apiKey,
     apiUrl,
-    circleId: CIRCLE_A,
     jwtSecret,
-    label: "accept-withdrawal",
     organizerToken: organizerAToken,
+    repeats: acceptanceWithdrawalRaceRepeats,
     serviceKey,
   });
-  const withdrawalMaterialization = targetBoundMaterializationRow(
-    await materializeTargetBoundInvitation(
-      apiUrl,
-      serviceKey,
-      withdrawalAcceptance.jobId,
-      withdrawalAcceptance.rawToken,
-    ),
-    "Acceptance/withdrawal materialization setup",
-  );
-  const [racedWithdrawalAcceptance, racedOrganizerWithdrawal] =
-    await runTargetBoundInvitationRace({
-      apiKey,
-      apiUrl,
-      expectedOperations: {
-        phase2c_test_withdrawal_accept: 1,
-        phase2c_test_withdrawal_revoke: 1,
-      },
-      jobId: withdrawalAcceptance.jobId,
-      label: "target-bound acceptance and organizer withdrawal",
-      requests: [
-        () =>
-          acceptInvitation(
-            apiUrl,
-            apiKey,
-            withdrawalAcceptance.targetToken,
-            withdrawalAcceptance.rawToken,
-            "phase2c_test_withdrawal_accept",
-          ),
-        () =>
-          withdrawInvitationEmailRequest(
-            apiUrl,
-            apiKey,
-            organizerAToken,
-            withdrawalAcceptance.emailRequestId,
-            "phase2c_test_withdrawal_revoke",
-          ),
-      ],
-      serviceKey,
-    });
-  rejectUnsafeOutcome(
-    racedWithdrawalAcceptance,
-    "Acceptance racing organizer withdrawal",
-  );
-  rejectUnsafeOutcome(
-    racedOrganizerWithdrawal,
-    "Organizer withdrawal racing acceptance",
-  );
-  const withdrawalAcceptanceWon =
-    racedWithdrawalAcceptance.response.ok &&
-    uuid.test(racedWithdrawalAcceptance.body);
-  if (!racedOrganizerWithdrawal.response.ok) {
-    throw new Error(
-      `Phase 2D withdrawal did not complete idempotently (${racedOrganizerWithdrawal.response.status}:${JSON.stringify(racedOrganizerWithdrawal.body)}).`,
-    );
-  }
-  if (!withdrawalAcceptanceWon) {
-    requireInvitationDenial(
-      racedWithdrawalAcceptance,
-      "Acceptance losing to withdrawal",
-    );
-  }
-  runDatabaseQuery(`
-    do $phase2c_accept_withdrawal_audit$
-    begin
-      if not exists (
-          select 1 from private.invitation_jobs
-           where id = '${withdrawalAcceptance.jobId}'::uuid
-             and state = 'invalidated'
-             and invalidation_reason =
-               '${withdrawalAcceptanceWon ? "target_accepted" : "organizer_withdrawn"}'
-             and invalidated_by_membership_id =
-               '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
-             and invalidated_by_closure_request_id is null
-             and not private.invitation_job_requester_is_authorized(id)
-        )
-        or not exists (
-          select 1 from private.invitations
-           where id = '${withdrawalMaterialization.invitation_id}'::uuid
-             and invitation_job_id =
-               '${withdrawalAcceptance.jobId}'::uuid
-             and (
-               (
-                 ${withdrawalAcceptanceWon ? "true" : "false"}
-                 and accepted_membership_id =
-                   '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
-                 and accepted_at is not null
-                 and revoked_at is null
-                 and revoked_by_membership_id is null
-                 and revoked_by_closure_request_id is null
-               )
-               or (
-                 ${withdrawalAcceptanceWon ? "false" : "true"}
-                 and accepted_at is null
-                 and revoked_at is not null
-                 and revocation_reason = 'organizer_withdrawn'
-                 and revoked_by_membership_id =
-                   '${ORGANIZER_A_MEMBERSHIP}'::uuid
-               )
-             )
-        )
-        or (select count(*) from public.circle_memberships
-             where circle_id = '${CIRCLE_A}'::uuid
-               and user_id = '${withdrawalAcceptance.target.id}'::uuid
-               and status = 'active') <>
-                 ${withdrawalAcceptanceWon ? 1 : 0}
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_job_invalidated'
-               and subject_id = '${withdrawalAcceptance.jobId}'::uuid) <> 1
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_job_invalidated'
-               and subject_id = '${withdrawalAcceptance.jobId}'::uuid
-               and actor_membership_id =
-                 '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <> 1
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_accepted'
-               and subject_id =
-                 '${withdrawalMaterialization.invitation_id}'::uuid) <>
-                   ${withdrawalAcceptanceWon ? 1 : 0}
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_accepted'
-               and subject_id =
-                 '${withdrawalMaterialization.invitation_id}'::uuid
-               and actor_membership_id =
-                 '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <>
-                   ${withdrawalAcceptanceWon ? 1 : 0}
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_revoked'
-               and subject_id =
-                 '${withdrawalMaterialization.invitation_id}'::uuid) <>
-                   ${withdrawalAcceptanceWon ? 0 : 1}
-        or (select count(*) from private.audit_events
-             where event_type = 'invitation_revoked'
-               and subject_id =
-                 '${withdrawalMaterialization.invitation_id}'::uuid
-               and actor_membership_id =
-                 '${ORGANIZER_A_MEMBERSHIP}'::uuid) <>
-                   ${withdrawalAcceptanceWon ? 0 : 1}
-        or not exists (
-          select 1 from private.invitation_email_requests
-           where id = '${withdrawalAcceptance.emailRequestId}'::uuid
-             and state =
-               '${withdrawalAcceptanceWon ? "accepted" : "invalidated"}'
-             and invalidation_reason is not distinct from
-               ${withdrawalAcceptanceWon ? "null::text" : "'organizer_withdrawn'::text"}
-             and (accepted_at is not null) =
-               ${withdrawalAcceptanceWon ? "true" : "false"}
-             and normalized_email is null
-        )
-        or (select count(*)
-              from private.invitation_coordination_audit_events
-             where email_request_id =
-                 '${withdrawalAcceptance.emailRequestId}'::uuid
-               and invitation_job_id =
-                 '${withdrawalAcceptance.jobId}'::uuid
-               and event_type =
-                 '${withdrawalAcceptanceWon ? "email_request_accepted" : "email_request_invalidated"}') <> 1 then
-        raise exception 'Acceptance/withdrawal race left mismatched durable state';
-      end if;
-    end
-    $phase2c_accept_withdrawal_audit$;
-  `);
-  requireEmptyMaterialization(
-    await loadTargetBoundInvitation(
-      apiUrl,
-      serviceKey,
-      withdrawalAcceptance.jobId,
-    ),
-    "Acceptance/withdrawal terminal load",
-  );
-  requireInvitationDenial(
-    await acceptInvitation(
-      apiUrl,
-      apiKey,
-      withdrawalAcceptance.targetToken,
-      withdrawalAcceptance.rawToken,
-    ),
-    "Acceptance/withdrawal token replay",
-  );
-  process.stdout.write("Phase 2C accept/organizer-withdrawal race passed.\n");
 
   const closureAcceptance = await createTargetBoundJobFixture({
     apiKey,
@@ -3484,7 +3890,7 @@ try {
     ),
     "Acceptance/closure terminal load",
   );
-  requireInvitationDenial(
+  requireFamilySessionDenial(
     await acceptInvitation(
       apiUrl,
       apiKey,
@@ -3597,10 +4003,14 @@ try {
 
   const organizerClosureSuffix = randomUUID();
   const organizerClosureCircleId = randomUUID();
-  const organizerClosurePeople = [randomUUID(), randomUUID()];
-  const organizerClosureMemberships = [randomUUID(), randomUUID()];
+  const organizerClosurePeople = [randomUUID(), randomUUID(), randomUUID()];
+  const organizerClosureMemberships = [
+    randomUUID(),
+    randomUUID(),
+    randomUUID(),
+  ];
   const organizerClosureUsers = await Promise.all(
-    ["one", "two"].map((label) =>
+    ["one", "two", "replay"].map((label) =>
       jsonRequest(apiUrl, serviceKey, serviceKey, "/auth/v1/admin/users", {
         body: JSON.stringify({
           email: `closure-organizer-${label}-${organizerClosureSuffix}@example.test`,
@@ -3615,8 +4025,9 @@ try {
       ({ response, body }) => !response.ok || !uuid.test(body?.id),
     )
   ) {
-    throw new Error("Two-organizer closure Auth setup failed.");
+    throw new Error("Closure organizer Auth setup failed.");
   }
+  organizerClosureUsers.forEach(({ body }) => installSyntheticSession(body.id));
 
   runDatabaseQuery(`
     do $two_organizer_setup$
@@ -3657,6 +4068,14 @@ try {
         'account',
         'sage',
         '${organizerClosureMemberships[0]}'::uuid
+      ),
+      (
+        '${organizerClosurePeople[2]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        'Closure replay organizer',
+        'account',
+        'sky',
+        '${organizerClosureMemberships[0]}'::uuid
       );
 
     insert into public.circle_memberships (
@@ -3682,6 +4101,14 @@ try {
         '${organizerClosurePeople[1]}'::uuid,
         'organizer',
         'active'
+      ),
+      (
+        '${organizerClosureMemberships[2]}'::uuid,
+        '${organizerClosureCircleId}'::uuid,
+        '${organizerClosureUsers[2].body.id}'::uuid,
+        '${organizerClosurePeople[2]}'::uuid,
+        'organizer',
+        'active'
       );
 
     end
@@ -3691,7 +4118,73 @@ try {
   const organizerClosureTokens = organizerClosureUsers.map(({ body }) =>
     createLocalUserToken(body.id, jwtSecret),
   );
-  const organizerClosureKeys = [randomUUID(), randomUUID()];
+  const organizerClosureKeys = [randomUUID(), randomUUID(), randomUUID()];
+  const sameKeyClosureRace = await runOverlappedAuthRace({
+    apiKey,
+    apiUrl,
+    operationName: "same-user same-key initial closure requests",
+    operationNames: ["request_account_closure"],
+    requests: [0, 1].map(
+      () => () =>
+        jsonRequest(
+          apiUrl,
+          apiKey,
+          organizerClosureTokens[2],
+          "rpc/request_account_closure",
+          {
+            body: JSON.stringify({ request_key: organizerClosureKeys[2] }),
+            method: "POST",
+          },
+        ),
+    ),
+    serviceKey,
+    stageWaiters: true,
+    targetAuthUserId: organizerClosureUsers[2].body.id,
+  });
+  const replayClosureId = sameKeyClosureRace[0]?.body;
+  if (
+    !uuid.test(replayClosureId) ||
+    sameKeyClosureRace.some(
+      ({ response, body }) => !response.ok || body !== replayClosureId,
+    )
+  ) {
+    throw new Error(
+      "Same-user same-key initial closure requests did not converge on one ID.",
+    );
+  }
+  runDatabaseQuery(`
+    do $same_key_closure_audit$
+    begin
+      if (select count(*) from private.account_closure_requests
+           where auth_user_id = '${organizerClosureUsers[2].body.id}'::uuid) <> 1
+        or not exists (
+          select 1
+            from private.account_closure_requests
+           where id = '${replayClosureId}'::uuid
+             and auth_user_id = '${organizerClosureUsers[2].body.id}'::uuid
+             and request_key = '${organizerClosureKeys[2]}'::uuid
+             and state = 'requested'
+        ) then
+        raise exception 'Same-key initial closure race did not preserve one immutable request';
+      end if;
+    end
+    $same_key_closure_audit$;
+  `);
+  const blockedClosureReplay = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerClosureTokens[2],
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({ request_key: organizerClosureKeys[2] }),
+      method: "POST",
+    },
+  );
+  requireFamilySessionDenial(
+    blockedClosureReplay,
+    "Closing-account same-key replay",
+  );
+
   const organizerClosureRace = await runOverlappedCircleRace({
     apiKey,
     apiUrl,
@@ -3699,7 +4192,7 @@ try {
     holderToken: organizerClosureTokens[0],
     operationName: "two-organizer closure requests",
     operationNames: ["request_account_closure"],
-    requests: organizerClosureTokens.map(
+    requests: organizerClosureTokens.slice(0, 2).map(
       (token, index) => () =>
         jsonRequest(apiUrl, apiKey, token, "rpc/request_account_closure", {
           body: JSON.stringify({ request_key: organizerClosureKeys[index] }),
@@ -3737,38 +4230,22 @@ try {
     );
   }
 
-  const sameKeyClosureRace = await runOverlappedAuthRace({
-    apiKey,
+  const blockedOrganizerClosureReplay = await jsonRequest(
     apiUrl,
-    operationName: "same-user same-key closure replays",
-    operationNames: ["request_account_closure"],
-    requests: [0, 1].map(
-      () => () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          organizerClosureTokens[closingOrganizerIndex],
-          "rpc/request_account_closure",
-          {
-            body: JSON.stringify({
-              request_key: organizerClosureKeys[closingOrganizerIndex],
-            }),
-            method: "POST",
-          },
-        ),
-    ),
-    serviceKey,
-    targetAuthUserId: organizerClosureUsers[closingOrganizerIndex].body.id,
-  });
-  if (
-    sameKeyClosureRace.some(
-      ({ response, body }) => !response.ok || body !== organizerClosureId,
-    )
-  ) {
-    throw new Error(
-      "Same-user same-key closure replays did not return one ID.",
-    );
-  }
+    apiKey,
+    organizerClosureTokens[closingOrganizerIndex],
+    "rpc/request_account_closure",
+    {
+      body: JSON.stringify({
+        request_key: organizerClosureKeys[closingOrganizerIndex],
+      }),
+      method: "POST",
+    },
+  );
+  requireFamilySessionDenial(
+    blockedOrganizerClosureReplay,
+    "Closing organizer same-key replay",
+  );
 
   const conflictingClosureRequest = await jsonRequest(
     apiUrl,
@@ -3780,14 +4257,10 @@ try {
       method: "POST",
     },
   );
-  if (
-    conflictingClosureRequest.response.ok ||
-    conflictingClosureRequest.body?.code !== "22023" ||
-    conflictingClosureRequest.body?.message !==
-      "Account closure could not be requested"
-  ) {
-    throw new Error("A conflicting closure request key did not fail closed.");
-  }
+  requireFamilySessionDenial(
+    conflictingClosureRequest,
+    "Closing organizer conflicting-key replay",
+  );
 
   const survivingOrganizerExportKey = randomUUID();
   const survivingOrganizerExport = await jsonRequest(
@@ -3915,54 +4388,40 @@ try {
     );
   }
 
-  const closureReplayResults = await runOverlappedAuthRace({
-    apiKey,
-    apiUrl,
-    operationName: "closure request replay and prepare",
-    operationNames: [
-      "request_account_closure",
-      "phase7c_test_prepare_account_closure",
-    ],
-    requests: [
-      () =>
-        jsonRequest(
-          apiUrl,
-          apiKey,
-          organizerATwoToken,
-          "rpc/request_account_closure",
-          {
-            body: JSON.stringify({ request_key: closureReplayKey }),
-            method: "POST",
-          },
-        ),
-      () =>
-        jsonRequest(
-          apiUrl,
-          serviceKey,
-          serviceKey,
-          "rpc/phase7c_test_prepare_account_closure",
-          {
-            body: JSON.stringify({
-              closure_request_id: closureReplaySetup.body,
-            }),
-            method: "POST",
-          },
-        ),
-    ],
-    serviceKey,
-    targetAuthUserId: ORGANIZER_A_TWO,
-  });
+  const [blockedClosureRequestReplay, closurePrepare] = await Promise.all([
+    jsonRequest(
+      apiUrl,
+      apiKey,
+      organizerATwoToken,
+      "rpc/request_account_closure",
+      {
+        body: JSON.stringify({ request_key: closureReplayKey }),
+        method: "POST",
+      },
+    ),
+    jsonRequest(
+      apiUrl,
+      serviceKey,
+      serviceKey,
+      "rpc/phase7c_test_prepare_account_closure",
+      {
+        body: JSON.stringify({
+          closure_request_id: closureReplaySetup.body,
+        }),
+        method: "POST",
+      },
+    ),
+  ]);
+  requireFamilySessionDenial(
+    blockedClosureRequestReplay,
+    "Closing-account replay during preparation",
+  );
   if (
-    closureReplayResults.some(
-      ({ response, body }) => !response.ok || body !== closureReplaySetup.body,
-    )
+    !closurePrepare.response.ok ||
+    closurePrepare.body !== closureReplaySetup.body
   ) {
     throw new Error(
-      `Closure request/prepare replay did not converge (${closureReplayResults
-        .map(
-          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
-        )
-        .join(", ")}).`,
+      `Closure preparation did not complete after the user session closed (${closurePrepare.response.status}:${JSON.stringify(closurePrepare.body)}).`,
     );
   }
 
@@ -4311,6 +4770,7 @@ try {
   ) {
     throw new Error("Invitation/closure Auth setup failed.");
   }
+  installSyntheticSession(invitationClosureUser.body.id);
 
   const invitationClosurePersonId = randomUUID();
   const invitationClosureMembershipId = randomUUID();
@@ -4485,14 +4945,16 @@ try {
     blockedInvitationReplays;
   if (
     !targetClosureReplay.response.ok ||
-    targetClosureReplay.body !== targetJobRequestKey ||
-    requesterClosureReplay.response.ok ||
-    requesterClosureReplay.body?.code !== "42501" ||
-    requesterClosureReplay.body?.message !==
-      "Invitation email could not be requested"
+    targetClosureReplay.body !== targetJobRequestKey
   ) {
-    throw new Error("Prepared closure allowed invitation work to resurrect.");
+    throw new Error(
+      "Prepared target closure changed the organizer's idempotent invitation response.",
+    );
   }
+  requireFamilySessionDenial(
+    requesterClosureReplay,
+    "Prepared closing requester invitation replay",
+  );
 
   runDatabaseQuery(`
     do $invitation_closure_audit$
@@ -4596,6 +5058,7 @@ try {
   ) {
     throw new Error("Invitation acceptance/closure Auth setup failed.");
   }
+  installSyntheticSession(acceptanceClosureUser.body.id);
 
   const acceptanceClosurePersonId = randomUUID();
   const acceptanceClosureMembershipId = randomUUID();
@@ -4766,20 +5229,10 @@ try {
       method: "POST",
     },
   );
-  const acceptanceAfterClosureIsReplay =
-    acceptanceAfterClosure.response.ok && acceptanceAfterClosure.body === null;
-  const acceptanceAfterClosureIsUnavailable =
-    !acceptanceAfterClosure.response.ok &&
-    acceptanceAfterClosure.body?.code === "22023" &&
-    acceptanceAfterClosure.body?.message === "Invitation is not available";
-  if (
-    (!acceptanceAfterClosureIsReplay && !acceptanceAfterClosureIsUnavailable) ||
-    acceptanceAfterClosure.body?.code === "40P01"
-  ) {
-    throw new Error(
-      "Prepared closure allowed its raced invitation to become available.",
-    );
-  }
+  requireFamilySessionDenial(
+    acceptanceAfterClosure,
+    "Prepared closing account invitation replay",
+  );
 
   runDatabaseQuery(`
     do $acceptance_closure_audit$
@@ -4904,8 +5357,10 @@ try {
     "Overlapping organizer revocation and role changes, guardian grants, Phase 2D target-bound invitation provisioning, materialization, acceptance, replay, withdrawal, demotion, and closure, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
   );
 } catch (error) {
-  primaryError = error;
-  throw error;
+  if (!(error instanceof FocusedRunComplete)) {
+    primaryError = error;
+    throw error;
+  }
 } finally {
   if (shouldRestoreFixtures) {
     try {

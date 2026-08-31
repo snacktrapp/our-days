@@ -52,8 +52,8 @@ select throws_ok(
     '30000000-0000-4000-8000-000000000001',
     'd5000000-0000-4000-8000-000000000002'
   )$$,
-  '42501', 'Photo intake could not be reserved',
-  'a deleted Auth session cannot use the legacy reservation surface'
+  '42501', 'permission denied for function reserve_photo_intake',
+  'the legacy reservation surface is unavailable regardless of session state'
 );
 reset role;
 

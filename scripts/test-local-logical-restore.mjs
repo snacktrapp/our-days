@@ -156,6 +156,7 @@ const volatileFixtureTimestampColumns = new Map([
   ],
   ["private.photo_validator_allowlist", new Set(["allowed_at", "revoked_at"])],
   ["private.invitation_delivery_capabilities", new Set(["updated_at"])],
+  ["private.photo_capabilities", new Set(["updated_at"])],
   [
     "private.invitation_delivery_worker_allowlist",
     new Set(["allowed_at", "revoked_at"]),
@@ -184,6 +185,10 @@ const expectedMigrationFiles = [
   "20260831040000_phase_4b_immutable_photo_promotion.sql",
   "20260831103811_phase_4c_private_photo_display_derivatives.sql",
   "20260831124636_phase_2d_private_invitation_coordination.sql",
+  "20260831162840_phase_4d_photo_moment_publication.sql",
+  "20260831174505_phase_4db_photo_upload_guards.sql",
+  "20260831194638_centralize_live_family_sessions.sql",
+  "20260831205813_record_target_bound_withdrawal_audit.sql",
 ];
 
 class DrillError extends Error {
@@ -1799,7 +1804,10 @@ select pg_catalog.jsonb_build_array(
      'invitations',
      'photo_derivative_jobs',
      'photo_display_derivatives',
+     'photo_capabilities',
      'photo_intakes',
+     'photo_moment_request_people',
+     'photo_moment_requests',
      'photo_originals',
      'photo_validation_jobs',
      'photo_validator_allowlist'
@@ -2170,18 +2178,26 @@ select (
 
 const databaseRepairSettingsSql = String.raw`
 select pg_catalog.jsonb_build_array(
+  case when setting_row.setrole = 0 then '<all>'
+    else role_row.rolname end,
   pg_catalog.split_part(setting_value, '=', 1),
   pg_catalog.substr(setting_value, pg_catalog.strpos(setting_value, '=') + 1)
 )::text
   from pg_catalog.pg_db_role_setting as setting_row
+  left join pg_catalog.pg_roles as role_row on role_row.oid = setting_row.setrole
   cross join lateral pg_catalog.unnest(setting_row.setconfig) as setting_value
  where setting_row.setdatabase = (
    select database_row.oid
      from pg_catalog.pg_database as database_row
     where database_row.datname = current_database()
  )
-   and setting_row.setrole = 0
- order by pg_catalog.split_part(setting_value, '=', 1);
+   and (
+     setting_row.setrole = 0
+     or role_row.rolname = 'authenticator'
+   )
+order by
+  case when setting_row.setrole = 0 then '<all>' else role_row.rolname end,
+  pg_catalog.split_part(setting_value, '=', 1);
 `;
 
 const allowedIdentifier = /^[a-z_][a-z0-9_]*$/;
@@ -2255,7 +2271,10 @@ const allowedOwnerAclDisappearance = new Map([
   ["private.invitations", tableOwnerPrivileges],
   ["private.photo_derivative_jobs", tableOwnerPrivileges],
   ["private.photo_display_derivatives", tableOwnerPrivileges],
+  ["private.photo_capabilities", tableOwnerPrivileges],
   ["private.photo_intakes", tableOwnerPrivileges],
+  ["private.photo_moment_request_people", tableOwnerPrivileges],
+  ["private.photo_moment_requests", tableOwnerPrivileges],
   ["private.photo_originals", tableOwnerPrivileges],
   ["private.photo_validation_jobs", tableOwnerPrivileges],
   ["private.photo_validator_allowlist", tableOwnerPrivileges],
@@ -2303,7 +2322,7 @@ function readDatabaseRepairSettings(database, snapshot) {
     }
     if (
       !Array.isArray(entry) ||
-      entry.length !== 2 ||
+      entry.length !== 3 ||
       !entry.every((value) => typeof value === "string")
     ) {
       throw new DrillError("database repair settings sidecar");
@@ -2311,12 +2330,21 @@ function readDatabaseRepairSettings(database, snapshot) {
     entries.push(entry);
   }
 
-  const settings = new Map(entries);
+  const settings = new Map(
+    entries.map(([roleName, settingName, settingValue]) => [
+      `${roleName}:${settingName}`,
+      settingValue,
+    ]),
+  );
   if (
-    entries.length !== 2 ||
-    settings.size !== 2 ||
-    settings.get("app.settings.jwt_exp") !== "3600" ||
-    !/^[^\s]{32,256}$/.test(settings.get("app.settings.jwt_secret") ?? "")
+    entries.length !== 3 ||
+    settings.size !== 3 ||
+    settings.get("<all>:app.settings.jwt_exp") !== "3600" ||
+    !/^[^\s]{32,256}$/.test(
+      settings.get("<all>:app.settings.jwt_secret") ?? "",
+    ) ||
+    settings.get("authenticator:pgrst.db_pre_request") !==
+      "private.enforce_live_data_api_session"
   ) {
     throw new DrillError("database repair settings sidecar allowlist");
   }
@@ -2326,10 +2354,13 @@ function readDatabaseRepairSettings(database, snapshot) {
 function buildDatabaseRepairSql(database, settings) {
   const databaseIdentifier = quoteIdentifier(database);
   const jwtExpiration = encodedSqlTextExpression(
-    settings.get("app.settings.jwt_exp"),
+    settings.get("<all>:app.settings.jwt_exp"),
   );
   const jwtSecret = encodedSqlTextExpression(
-    settings.get("app.settings.jwt_secret"),
+    settings.get("<all>:app.settings.jwt_secret"),
+  );
+  const preRequest = encodedSqlTextExpression(
+    settings.get("authenticator:pgrst.db_pre_request"),
   );
   return `begin;
 grant create on database ${databaseIdentifier} to supabase_etl_admin, supabase_storage_admin;
@@ -2338,6 +2369,8 @@ select pg_catalog.set_config('app.settings.jwt_exp', ${jwtExpiration}, true);
 alter database ${databaseIdentifier} set app.settings.jwt_exp from current;
 select pg_catalog.set_config('app.settings.jwt_secret', ${jwtSecret}, true);
 alter database ${databaseIdentifier} set app.settings.jwt_secret from current;
+select pg_catalog.set_config('pgrst.db_pre_request', ${preRequest}, true);
+alter role authenticator in database ${databaseIdentifier} set pgrst.db_pre_request from current;
 commit;
 `;
 }
@@ -2672,6 +2705,29 @@ function assertDatabaseBoolean(database, sql, stage, snapshot = null) {
 }
 
 function verifyAccessBehavior(database) {
+  assertDatabaseBoolean(
+    database,
+    String.raw`
+select (
+  select setting_value = 'pgrst.db_pre_request=private.enforce_live_data_api_session'
+    from pg_catalog.pg_db_role_setting as setting_row
+    cross join lateral pg_catalog.unnest(setting_row.setconfig) as setting_value
+     where setting_row.setdatabase = (
+       select database_row.oid
+         from pg_catalog.pg_database as database_row
+        where database_row.datname = current_database()
+     )
+       and setting_row.setrole = (
+       select role_row.oid
+         from pg_catalog.pg_roles as role_row
+        where role_row.rolname = 'authenticator'
+     )
+     and setting_value like 'pgrst.db_pre_request=%'
+)::text;
+`,
+    "live Data API session pre-request fidelity",
+  );
+
   assertDatabaseBoolean(
     database,
     String.raw`
@@ -3144,7 +3200,7 @@ async function runStaticSelfTest() {
   if (
     !inventoryMatches(expectedMigrationFiles, expectedMigrationFiles) ||
     expectedMigrationFiles.at(-1) !==
-      "20260831124636_phase_2d_private_invitation_coordination.sql" ||
+      "20260831205813_record_target_bound_withdrawal_audit.sql" ||
     inventoryMatches(
       expectedMigrationFiles.slice(0, -1),
       expectedMigrationFiles,
@@ -3207,6 +3263,10 @@ async function runStaticSelfTest() {
     "private.photo_validator_allowlist",
     { allowed_at: "volatile", auth_user_id: "stable", revoked_at: null },
   );
+  const normalizedPhotoCapability = normalizeFixtureRow(
+    "private.photo_capabilities",
+    { capability: "stable", enabled: false, updated_at: "volatile" },
+  );
   const normalizedPhotoValidationJob = normalizeFixtureRow(
     "private.photo_validation_jobs",
     {
@@ -3247,6 +3307,9 @@ async function runStaticSelfTest() {
     normalizedPhotoValidator.allowed_at !== "<present>" ||
     normalizedPhotoValidator.revoked_at !== null ||
     normalizedPhotoValidator.auth_user_id !== "stable" ||
+    normalizedPhotoCapability.capability !== "stable" ||
+    normalizedPhotoCapability.enabled !== false ||
+    normalizedPhotoCapability.updated_at !== "<present>" ||
     normalizedPhotoValidationJob.completed_at !== null ||
     normalizedPhotoValidationJob.invalidated_at !== null ||
     normalizedPhotoValidationJob.lease_expires_at !== "<present>" ||
@@ -3303,8 +3366,12 @@ async function runStaticSelfTest() {
   const staticRepairSql = buildDatabaseRepairSql(
     staticDatabase,
     new Map([
-      ["app.settings.jwt_exp", "3600"],
-      ["app.settings.jwt_secret", "x".repeat(40)],
+      ["<all>:app.settings.jwt_exp", "3600"],
+      ["<all>:app.settings.jwt_secret", "x".repeat(40)],
+      [
+        "authenticator:pgrst.db_pre_request",
+        "private.enforce_live_data_api_session",
+      ],
     ]),
   );
   const staticRepairLines = staticRepairSql.trim().split("\n");
@@ -3317,6 +3384,8 @@ async function runStaticSelfTest() {
       `alter database "${staticDatabase}" set app.settings.jwt_exp from current;`,
       `select pg_catalog.set_config('app.settings.jwt_secret', ${encodedSqlTextExpression("x".repeat(40))}, true);`,
       `alter database "${staticDatabase}" set app.settings.jwt_secret from current;`,
+      `select pg_catalog.set_config('pgrst.db_pre_request', ${encodedSqlTextExpression("private.enforce_live_data_api_session")}, true);`,
+      `alter role authenticator in database "${staticDatabase}" set pgrst.db_pre_request from current;`,
       "commit;",
     ])
   ) {
@@ -3326,8 +3395,12 @@ async function runStaticSelfTest() {
   const escapedStaticSql = buildDatabaseRepairSql(
     staticDatabase,
     new Map([
-      ["app.settings.jwt_exp", "3600"],
-      ["app.settings.jwt_secret", escapedStaticSecret],
+      ["<all>:app.settings.jwt_exp", "3600"],
+      ["<all>:app.settings.jwt_secret", escapedStaticSecret],
+      [
+        "authenticator:pgrst.db_pre_request",
+        "private.enforce_live_data_api_session",
+      ],
     ]),
   );
   if (
