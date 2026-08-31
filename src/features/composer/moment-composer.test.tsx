@@ -3,13 +3,21 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "./moment-composer";
+import { PhotoUploadError } from "./photo-upload";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
   replace: vi.fn(),
 }));
+const photoUpload = vi.hoisted(() => ({
+  upload: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
+}));
+vi.mock("./photo-upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./photo-upload")>()),
+  uploadPhotoMoment: photoUpload.upload,
 }));
 
 const people = [
@@ -88,6 +96,30 @@ function ConnectedHarness({
   );
 }
 
+function ConnectedFamilyHarness() {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button ref={triggerRef} onClick={() => setOpen(true)}>
+        Open connected family composer
+      </button>
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "20000000-0000-4000-8000-000000000001",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+        }}
+        open={open}
+        returnFocusRef={triggerRef}
+        onRequestClose={() => setOpen(false)}
+        saveFamilyMoment={vi.fn()}
+      />
+    </>
+  );
+}
+
 let createdUrlCount = 0;
 const createObjectURL = vi.fn(
   () => `blob:composer-preview-${++createdUrlCount}`,
@@ -100,6 +132,7 @@ beforeEach(() => {
   revokeObjectURL.mockClear();
   navigation.refresh.mockClear();
   navigation.replace.mockClear();
+  photoUpload.upload.mockReset();
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: createObjectURL,
@@ -137,6 +170,219 @@ describe("MomentComposer", () => {
     expect(screen.queryByRole("button", { name: /Photo/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Milestone/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /A place/ })).toBeNull();
+  });
+
+  it("shows gated connected Photo and reports private processing honestly", async () => {
+    photoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        _signal: AbortSignal,
+        onStage: (stage: unknown) => void,
+      ) => {
+        onStage({ state: "uploading", progress: 0.5 });
+        onStage({ state: "processing" });
+        return {
+          state: "processing",
+          intakeId: "d6000000-0000-4000-8000-000000000001",
+          momentId: "d6000000-0000-4000-8000-000000000002",
+        };
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    const photoChoice = screen.getByRole("button", { name: /^Photo/u });
+    expect(photoChoice).toHaveFocus();
+    await user.click(photoChoice);
+    const picker = screen.getByLabelText(/Choose photo/u);
+    await user.upload(
+      picker,
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Photo received" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "Photo received for Brian’s journal. It is still being prepared privately.",
+      ),
+    ).toBeVisible();
+    expect(photoUpload.upload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        circleId: "20000000-0000-4000-8000-000000000001",
+        journalPersonId: "brian",
+      }),
+      expect.objectContaining({
+        requestKey: expect.any(String),
+        uploadRequestKey: expect.any(String),
+      }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+  });
+
+  it("rejects HEIC truthfully before a connected upload starts", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File(["heic"], "iphone.heic", { type: "image/heic" }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "For now, choose a JPEG, PNG, or WebP photo.",
+    );
+    expect(photoUpload.upload).not.toHaveBeenCalled();
+  });
+
+  it("offers an honest Stop upload control and preserves the photo draft", async () => {
+    photoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        signal: AbortSignal,
+        onStage: (stage: unknown) => void,
+      ) => {
+        onStage({ state: "uploading", progress: 0.25 });
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("stopped", "AbortError")),
+            { once: true },
+          );
+        });
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+
+    expect(
+      screen.getByRole("progressbar", { name: "Private photo upload" }),
+    ).toHaveValue(0.25);
+    await user.click(screen.getByRole("button", { name: "Stop upload" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Upload stopped. Your photo and draft are still here.",
+    );
+    expect(
+      screen.queryByRole("progressbar", { name: "Private photo upload" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Uploading…/u)).toBeNull();
+    expect(screen.getByText("A photo to remember")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Try upload again" }),
+    ).toBeVisible();
+  });
+
+  it("crosses an honest non-cancellable boundary before acknowledgement", async () => {
+    let finish: () => void = () => {
+      throw new Error("Upload was not started.");
+    };
+    photoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        _signal: AbortSignal,
+        onStage: (stage: unknown) => void,
+      ) => {
+        onStage({ state: "uploading", progress: 1 });
+        onStage({ state: "finishing" });
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        return {
+          state: "processing",
+          intakeId: "d6000000-0000-4000-8000-000000000001",
+          momentId: "d6000000-0000-4000-8000-000000000002",
+        };
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+
+    expect(screen.getByText("Finishing your private upload…")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Stop upload" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Finishing photo…" }),
+    ).toBeDisabled();
+    finish();
+    expect(
+      await screen.findByRole("heading", { name: "Photo received" }),
+    ).toBeVisible();
+  });
+
+  it("does not offer a futile retry for a non-retryable upload error", async () => {
+    photoUpload.upload.mockRejectedValue(
+      new PhotoUploadError("Your private session needs to be renewed.", false),
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Review moment" }));
+    await user.click(screen.getByRole("button", { name: "Save moment" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your private session needs to be renewed.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Try upload again" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Return to photo" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Back to edit" })).toBeNull();
   });
 
   it("keeps a connected draft after failure and announces confirmed success", async () => {

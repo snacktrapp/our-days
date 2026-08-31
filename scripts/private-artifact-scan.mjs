@@ -55,6 +55,21 @@ const privateClientCanaries = [
   "That brave wave still gets me.",
 ];
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function privateClientCanaryPattern(canary) {
+  const escapedCanary = escapeRegExp(canary);
+  if (/^[\p{L}\p{N}_]+$/u.test(canary)) {
+    return new RegExp(
+      `(?<![\\p{L}\\p{N}_])${escapedCanary}(?![\\p{L}\\p{N}_])`,
+      "gu",
+    );
+  }
+  return new RegExp(escapedCanary, "gu");
+}
+
 const jwtCandidatePattern =
   /(?<![A-Za-z0-9_-])([A-Za-z0-9_-]{2,})\.([A-Za-z0-9_-]{2,})\.([A-Za-z0-9_-]{2,})(?![A-Za-z0-9_-])/g;
 
@@ -93,7 +108,10 @@ export function redactSensitiveText(value) {
     isServiceRoleJwt(candidate) ? "[redacted]" : candidate,
   );
   for (const canary of privateClientCanaries) {
-    redacted = redacted.replaceAll(canary, "[redacted]");
+    redacted = redacted.replace(
+      privateClientCanaryPattern(canary),
+      "[redacted]",
+    );
   }
   return redacted.replace(/[\u0000-\u001f\u007f-\u009f]/gu, "[control]");
 }
@@ -136,10 +154,10 @@ export function scanText({ text, path, checkPrivateClientData = false }) {
 
   if (checkPrivateClientData) {
     for (const canary of privateClientCanaries) {
-      let index = text.indexOf(canary);
-      while (index !== -1) {
-        findings.push(finding("private-client-fixture", path, text, index));
-        index = text.indexOf(canary, index + canary.length);
+      for (const match of text.matchAll(privateClientCanaryPattern(canary))) {
+        findings.push(
+          finding("private-client-fixture", path, text, match.index),
+        );
       }
     }
   }

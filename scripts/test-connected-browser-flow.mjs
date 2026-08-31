@@ -31,6 +31,18 @@ const fixtureCanaries = [
   "sample-family.jpg",
 ];
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function containsCanary(text, canary) {
+  const escapedCanary = escapeRegExp(canary);
+  const pattern = /^[\p{L}\p{N}_]+$/u.test(canary)
+    ? new RegExp(`(?<![\\p{L}\\p{N}_])${escapedCanary}(?![\\p{L}\\p{N}_])`, "u")
+    : new RegExp(escapedCanary, "u");
+  return pattern.test(text);
+}
+
 function readLocalStatus() {
   const output = execFileSync(supabaseBinary, ["status", "-o", "env"], {
     cwd: projectRoot,
@@ -192,7 +204,7 @@ async function readStableDocument(page, read) {
 async function assertNoCanaries(page, canaries, label) {
   const content = await readStableDocument(page, () => page.content());
   for (const canary of canaries) {
-    if (content.includes(canary)) {
+    if (containsCanary(content, canary)) {
       throw new Error(`${label} exposed a private canary.`);
     }
   }
@@ -310,7 +322,7 @@ async function browserPrivateState(page) {
 function assertEvidenceExcludes(evidence, canaries, label) {
   const serialized = JSON.stringify(evidence);
   for (const canary of canaries) {
-    if (serialized.includes(canary)) {
+    if (containsCanary(serialized, canary)) {
       throw new Error(`${label} retained a private canary.`);
     }
   }

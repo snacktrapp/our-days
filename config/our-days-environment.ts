@@ -8,6 +8,7 @@ export type OurDaysEnvironmentIdentity = "local" | "preview" | "production";
 export type OurDaysResourceMode = "detached" | "supabase";
 export type OurDaysInvitationDeliveryMode = "disabled" | "enabled";
 export type OurDaysMediaDeliveryMode = "disabled" | "enabled";
+export type OurDaysPhotoPostingMode = "disabled" | "enabled";
 
 export type OurDaysEnvironment = Readonly<{
   identity: OurDaysEnvironmentIdentity;
@@ -27,6 +28,10 @@ const invitationDeliveryModes = new Set<OurDaysInvitationDeliveryMode>([
   "enabled",
 ]);
 const mediaDeliveryModes = new Set<OurDaysMediaDeliveryMode>([
+  "disabled",
+  "enabled",
+]);
+const photoPostingModes = new Set<OurDaysPhotoPostingMode>([
   "disabled",
   "enabled",
 ]);
@@ -383,6 +388,22 @@ export function validateOurDaysEnvironment(
       "OUR_DAYS_MEDIA_DELIVERY_MODE=enabled requires supabase resource mode",
     );
   }
+  const photoPostingMode = configuredValue(
+    environment,
+    "OUR_DAYS_PHOTO_POSTING_MODE",
+    issues,
+  );
+  if (
+    photoPostingMode &&
+    !photoPostingModes.has(photoPostingMode as OurDaysPhotoPostingMode)
+  ) {
+    issues.push("OUR_DAYS_PHOTO_POSTING_MODE must be disabled or enabled");
+  }
+  if (photoPostingMode === "enabled" && resourceMode !== "supabase") {
+    issues.push(
+      "OUR_DAYS_PHOTO_POSTING_MODE=enabled requires supabase resource mode",
+    );
+  }
   const designPreview = configuredValue(
     environment,
     "OUR_DAYS_ENABLE_DESIGN_PREVIEW",
@@ -599,6 +620,15 @@ export function mediaDeliveryIsEnabled(
 ) {
   return (
     environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "enabled" &&
+    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+  );
+}
+
+export function photoPostingIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  return (
+    environment.OUR_DAYS_PHOTO_POSTING_MODE === "enabled" &&
     environment.OUR_DAYS_RESOURCE_MODE === "supabase"
   );
 }

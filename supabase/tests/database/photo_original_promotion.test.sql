@@ -2,6 +2,47 @@ begin;
 
 select no_plan();
 
+update private.photo_capabilities
+   set enabled = true, updated_at = statement_timestamp()
+ where capability = 'photo_publication';
+
+insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+select extensions.gen_random_uuid(), auth_user.id, statement_timestamp(),
+  statement_timestamp(), statement_timestamp() + interval '1 day'
+from auth.users as auth_user;
+
+create function pg_temp.set_photo_test_user(test_user_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  test_session_id uuid;
+begin
+  select session.id into test_session_id
+    from auth.sessions as session
+   where session.user_id = test_user_id
+   order by session.created_at desc limit 1;
+  if test_session_id is null then
+    insert into auth.sessions (
+      id, user_id, created_at, updated_at, not_after
+    ) values (
+      extensions.gen_random_uuid(), test_user_id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+    ) returning id into test_session_id;
+  end if;
+  perform set_config(
+    'request.jwt.claims',
+    pg_catalog.jsonb_build_object(
+      'sub', test_user_id::text,
+      'session_id', test_session_id::text
+    )::text,
+    true
+  );
+  return set_config('request.jwt.claim.sub', test_user_id::text, true);
+end;
+$$;
 select ok(
   (select relrowsecurity and relforcerowsecurity
      from pg_class where oid = 'private.photo_validator_allowlist'::regclass),
@@ -228,9 +269,7 @@ select throws_ok(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select throws_ok(
   $$select * from public.claim_photo_validation(null, null)$$,
   '42501', 'Photo validation could not be claimed',
@@ -344,9 +383,7 @@ select lives_ok(
 reset role;
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select * from public.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
@@ -383,9 +420,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select throws_ok(
   format(
     'select * from public.claim_photo_validation(%L::uuid, %L::uuid)',
@@ -395,9 +430,7 @@ select throws_ok(
   'an ordinary family member cannot pose as a byte validator'
 );
 
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select * from public.claim_photo_validation(
   :'accepted_intake_id'::uuid,
   'c5000000-0000-4000-8000-000000000091'
@@ -433,9 +466,7 @@ select is(
   'the canonical path is scoped to the immutable original and current lease attempt'
 );
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select throws_ok(
   format(
     'select * from public.claim_photo_validation(%L::uuid, %L::uuid)',
@@ -550,9 +581,7 @@ select throws_ok(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select is(
   public.complete_photo_validation(
     :'accepted_validation_validation_job_id'::uuid,
@@ -578,9 +607,7 @@ select throws_ok(
 
 reset role;
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select * from public.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
@@ -607,9 +634,7 @@ insert into storage.objects (
 );
 select * from public.acknowledge_photo_intake(:'review_intake_id'::uuid)
   \gset review_ack_
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select * from public.claim_photo_validation(
   :'review_intake_id'::uuid,
   'c5000000-0000-4000-8000-000000000093'
@@ -652,9 +677,7 @@ select is(
   'operator-review audit attribution remains with the family recorder'
 );
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000099'::uuid);
 select is(
   public.flag_photo_validation_for_review(
     :'review_validation_validation_job_id'::uuid,
@@ -688,9 +711,7 @@ insert into private.photo_validator_allowlist (auth_user_id)
 values ('10000000-0000-4000-8000-000000000098');
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select * from public.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
@@ -717,9 +738,7 @@ insert into storage.objects (
 );
 select * from public.acknowledge_photo_intake(:'revoked_intake_id'::uuid)
   \gset revoked_ack_
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000098'::uuid);
 select * from public.claim_photo_validation(
   :'revoked_intake_id'::uuid,
   'c5000000-0000-4000-8000-000000000094'
@@ -731,9 +750,7 @@ update private.photo_validator_allowlist
  where auth_user_id = '10000000-0000-4000-8000-000000000098';
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000098'::uuid);
 select throws_ok(
   format(
     'select * from public.claim_photo_validation(%L::uuid,%L::uuid)',
@@ -802,9 +819,7 @@ select ok(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select * from public.reserve_photo_intake(
   '20000000-0000-4000-8000-000000000001',
   '30000000-0000-4000-8000-000000000001',
@@ -831,9 +846,7 @@ insert into storage.objects (
 );
 select * from public.acknowledge_photo_intake(:'takeover_intake_id'::uuid)
   \gset takeover_ack_
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000097'::uuid);
 select * from public.claim_photo_validation(
   :'takeover_intake_id'::uuid,
   'c5000000-0000-4000-8000-000000000095'
@@ -852,9 +865,7 @@ alter table private.photo_validation_jobs
 set constraints all deferred;
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000097'::uuid);
 select throws_ok(
   format(
     'select * from public.claim_photo_validation(%L::uuid,%L::uuid)',
@@ -864,9 +875,7 @@ select throws_ok(
   'the original validator cannot reclaim its own expired lease'
 );
 
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000096'::uuid);
 select * from public.claim_photo_validation(
   :'takeover_intake_id'::uuid,
   'c5000000-0000-4000-8000-000000000097'
@@ -921,9 +930,7 @@ select ok(
   'the replacement validator can upload only with exact attempt metadata'
 );
 
-select set_config(
-  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000097'::uuid);
 select ok(
   not private.photo_validation_source_is_readable(
     :'stale_validation_source_object_path',

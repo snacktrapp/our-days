@@ -82,6 +82,27 @@ function resetDatabase() {
   });
 }
 
+async function waitForDatabaseReady() {
+  let lastError;
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      execFileSync(supabaseBinary, ["db", "query", "--local", "select 1;"], {
+        cwd: projectRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
+  throw new Error("The local database did not become ready after reset.", {
+    cause: lastError,
+  });
+}
+
 function runDatabaseAssertion(sql) {
   try {
     execFileSync(supabaseBinary, ["db", "query", "--local", sql], {
@@ -108,6 +129,7 @@ function createLocalUserToken(userId, jwtSecret) {
     iat: issuedAt,
     iss: "supabase-demo",
     role: "authenticated",
+    session_id: userId,
     sub: userId,
   });
   const signature = createHmac("sha256", jwtSecret)
@@ -861,6 +883,22 @@ let primaryError = null;
 
 try {
   resetDatabase();
+  await waitForDatabaseReady();
+  runDatabaseAssertion(`
+    insert into auth.sessions (
+      id, user_id, created_at, updated_at, not_after
+    )
+    select auth_user.id, auth_user.id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+      from auth.users as auth_user
+    on conflict (id) do nothing;
+  `);
+  runDatabaseAssertion(`
+    update private.photo_capabilities
+       set enabled = true,
+           updated_at = statement_timestamp()
+     where capability = 'photo_publication';
+  `);
   shouldRestoreFixtures = true;
 
   const status = await readLocalStatus();

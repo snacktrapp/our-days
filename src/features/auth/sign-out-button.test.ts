@@ -61,7 +61,9 @@ describe("account-scoped browser cleanup", () => {
     ).toBeNull();
     expect(window.sessionStorage.getItem("unrelated")).toBe("keep");
     expect(deleteCache).toHaveBeenCalledExactlyOnceWith("our-days:media");
-    expect(deleteDatabase).toHaveBeenCalledExactlyOnceWith("our-days:drafts");
+    expect(deleteDatabase).toHaveBeenCalledTimes(2);
+    expect(deleteDatabase).toHaveBeenCalledWith("our-days:drafts");
+    expect(deleteDatabase).toHaveBeenCalledWith("our-days:photo-uploads");
     expect(cleared).toHaveBeenCalledOnce();
   });
 

@@ -9,6 +9,13 @@ import type {
   SaveFamilyMomentAction,
   SaveWrittenMomentAction,
 } from "@/features/moments/moment-action-types";
+import {
+  createPhotoUploadAttempt,
+  PhotoUploadError,
+  uploadPhotoMoment,
+  type PhotoUploadAttempt,
+  type PhotoUploadStage,
+} from "./photo-upload";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
@@ -71,6 +78,7 @@ const previewImageTypes = new Set([
   "image/png",
   "image/webp",
 ]);
+const connectedPhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function plainDateLabel(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
@@ -137,7 +145,11 @@ export function MomentComposer({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [photoRetryable, setPhotoRetryable] = useState(true);
+  const [savedHeading, setSavedHeading] = useState("Moment saved");
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [photoUploadStage, setPhotoUploadStage] =
+    useState<PhotoUploadStage | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const firstChoiceRef = useRef<HTMLButtonElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -146,6 +158,9 @@ export function MomentComposer({
   const savedDoneRef = useRef<HTMLButtonElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewUrlRef = useRef<string | null>(null);
+  const photoUploadAttemptRef = useRef<PhotoUploadAttempt | null>(null);
+  const photoUploadAbortRef = useRef<AbortController | null>(null);
+  const uploadInFlightRef = useRef(false);
 
   const journalPerson =
     model.journalPeople.find((person) => person.id === journalPersonId) ??
@@ -157,6 +172,9 @@ export function MomentComposer({
   const connectedFamily = model.experience === "connected-family";
   const connectedExperience =
     connectedFamily || model.experience === "connected-written";
+  const connectedPhotoAvailable = Boolean(
+    connectedFamily && model.photoPostingEnabled && model.circleId,
+  );
   const resolvedPlaceName = mode === "location" ? title : placeName;
   const isDirty =
     !savedMessage &&
@@ -216,7 +234,14 @@ export function MomentComposer({
       setPhotoError(null);
       setContentError(null);
       setSaveError(null);
+      setPhotoRetryable(true);
+      setSavedHeading("Moment saved");
       setSavedMessage(null);
+      photoUploadAbortRef.current?.abort();
+      photoUploadAbortRef.current = null;
+      photoUploadAttemptRef.current = null;
+      uploadInFlightRef.current = false;
+      setPhotoUploadStage(null);
     },
     [clearPhotoPreview, model.defaultJournalPersonId, model.previewToday],
   );
@@ -252,7 +277,13 @@ export function MomentComposer({
     ],
   );
 
-  useEffect(() => () => revokeCurrentPhotoUrl(), [revokeCurrentPhotoUrl]);
+  useEffect(
+    () => () => {
+      photoUploadAbortRef.current?.abort();
+      revokeCurrentPhotoUrl();
+    },
+    [revokeCurrentPhotoUrl],
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -286,17 +317,29 @@ export function MomentComposer({
   }, [choosingMode, mode, open, reviewing, savedMessage]);
 
   const replacePhoto = (file: File | null) => {
+    if (uploadInFlightRef.current) return;
+    photoUploadAttemptRef.current = null;
+    setPhotoUploadStage(null);
     clearPhotoPreview();
     setPhotoFile(null);
     setPhotoDecodeState("empty");
     setPhotoError(null);
+    setPhotoRetryable(true);
     if (!file) {
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
-    if (!previewImageTypes.has(file.type.toLowerCase())) {
+    const normalizedType = file.type.toLowerCase();
+    const supportedType = connectedPhotoAvailable
+      ? normalizedType === "" || connectedPhotoTypes.has(normalizedType)
+      : previewImageTypes.has(normalizedType);
+    if (!supportedType) {
       setPhotoDecodeState("error");
-      setPhotoError("Choose an image file for this preview.");
+      setPhotoError(
+        connectedPhotoAvailable
+          ? "For now, choose a JPEG, PNG, or WebP photo."
+          : "Choose an image file for this preview.",
+      );
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
@@ -388,9 +431,9 @@ export function MomentComposer({
   const saveConnectedMoment = async () => {
     if (
       saving ||
+      uploadInFlightRef.current ||
       (!saveFamilyMoment && !saveWrittenMoment) ||
-      !mode ||
-      mode === "photo"
+      !mode
     )
       return;
     let occurredAt: string | null = null;
@@ -405,8 +448,56 @@ export function MomentComposer({
       occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
     setSaveError(null);
+    setPhotoRetryable(true);
     setSaving(true);
+    uploadInFlightRef.current = true;
     try {
+      if (mode === "photo") {
+        if (
+          !connectedPhotoAvailable ||
+          !model.circleId ||
+          !photoFile ||
+          photoDecodeState !== "ready"
+        ) {
+          setSaveError("Choose the photo again and try once more.");
+          return;
+        }
+        const attempt =
+          photoUploadAttemptRef.current ?? createPhotoUploadAttempt();
+        photoUploadAttemptRef.current = attempt;
+        const controller = new AbortController();
+        photoUploadAbortRef.current = controller;
+        const result = await uploadPhotoMoment(
+          photoFile,
+          {
+            body,
+            circleId: model.circleId,
+            journalPersonId,
+            occurredAt,
+            occurredOn,
+            occurredTimezone,
+            placeName,
+            taggedPersonIds: [...taggedPersonIds],
+          },
+          attempt,
+          controller.signal,
+          (stage) => {
+            if (stage.state === "finishing" || stage.state === "processing") {
+              photoUploadAbortRef.current = null;
+            }
+            setPhotoUploadStage(stage);
+          },
+        );
+        setSavedHeading(
+          result.state === "published" ? "Moment saved" : "Photo received",
+        );
+        setSavedMessage(
+          result.state === "published"
+            ? `Saved to ${journalPerson.name}’s journal on ${plainDateLabel(occurredOn)}.`
+            : `Photo received for ${journalPerson.name}’s journal. It is still being prepared privately.`,
+        );
+        return;
+      }
       const result = saveFamilyMoment
         ? await saveFamilyMoment({
             journalPersonId,
@@ -433,10 +524,51 @@ export function MomentComposer({
       setSavedMessage(
         `Saved to ${journalPerson.name}’s journal on ${plainDateLabel(occurredOn)}.`,
       );
+    } catch (error) {
+      setPhotoUploadStage(null);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setSaveError("Upload stopped. Your photo and draft are still here.");
+      } else if (error instanceof PhotoUploadError) {
+        setPhotoRetryable(error.retryable);
+        setSaveError(error.message);
+      } else {
+        setSaveError(
+          "That photo could not be uploaded. Your draft is still here.",
+        );
+      }
     } finally {
+      uploadInFlightRef.current = false;
+      photoUploadAbortRef.current = null;
+      setPhotoUploadStage(null);
       setSaving(false);
     }
   };
+
+  const stopPhotoUpload = () => {
+    photoUploadAbortRef.current?.abort();
+  };
+
+  const returnToEditing = () => {
+    if (mode === "photo" && photoUploadAttemptRef.current) {
+      photoUploadAttemptRef.current = null;
+      setPhotoUploadStage(null);
+    }
+    setReviewing(false);
+  };
+
+  const photoUploadLabel =
+    photoUploadStage?.state === "preparing"
+      ? "Preparing your photo privately…"
+      : photoUploadStage?.state === "uploading"
+        ? `Uploading… ${Math.round(photoUploadStage.progress * 100)}%`
+        : photoUploadStage?.state === "finishing"
+          ? "Finishing your private upload…"
+          : photoUploadStage?.state === "processing"
+            ? "Photo received. Preparing it for your timeline…"
+            : null;
+  const photoRetryBlocked = Boolean(
+    mode === "photo" && saveError && !photoRetryable,
+  );
 
   const previewTitle = resolvePreviewTitle(
     title,
@@ -478,7 +610,7 @@ export function MomentComposer({
             <span id="composer-privacy" className="private-label">
               Private to this family
             </span>
-            <h2 id="composer-title">Moment saved</h2>
+            <h2 id="composer-title">{savedHeading}</h2>
             <p>{savedMessage}</p>
             <button
               ref={savedDoneRef}
@@ -507,7 +639,7 @@ export function MomentComposer({
               </p>
             ) : null}
             <div className="moment-choices">
-              {!connectedExperience ? (
+              {!connectedExperience || connectedPhotoAvailable ? (
                 <button
                   ref={firstChoiceRef}
                   onClick={() => chooseMode("photo")}
@@ -520,7 +652,11 @@ export function MomentComposer({
                 </button>
               ) : null}
               <button
-                ref={connectedExperience ? firstChoiceRef : undefined}
+                ref={
+                  connectedExperience && !connectedPhotoAvailable
+                    ? firstChoiceRef
+                    : undefined
+                }
                 onClick={() => chooseMode("thought")}
               >
                 <span className="choice-icon thought-choice" aria-hidden="true">
@@ -627,29 +763,72 @@ export function MomentComposer({
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <div className="composer-review-actions">
-              <button
-                className="secondary-composer-action"
-                type="button"
-                disabled={saving}
-                onClick={() => setReviewing(false)}
-              >
-                Back to edit
-              </button>
-              <button
-                className="save-moment"
-                type="button"
-                disabled={saving}
-                onClick={
-                  connectedExperience ? saveConnectedMoment : () => close(true)
-                }
-              >
-                {connectedExperience
-                  ? saving
-                    ? "Saving…"
-                    : "Save moment"
-                  : "Close preview"}
-              </button>
+              {mode === "photo" &&
+              saving &&
+              (photoUploadStage?.state === "preparing" ||
+                photoUploadStage?.state === "uploading") ? (
+                <button
+                  className="secondary-composer-action stop-photo-upload"
+                  type="button"
+                  onClick={stopPhotoUpload}
+                >
+                  Stop upload
+                </button>
+              ) : photoRetryBlocked ? (
+                <button
+                  className="secondary-composer-action single-composer-action"
+                  type="button"
+                  onClick={returnToEditing}
+                >
+                  Return to photo
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="secondary-composer-action"
+                    type="button"
+                    disabled={saving}
+                    onClick={returnToEditing}
+                  >
+                    Back to edit
+                  </button>
+                  <button
+                    className="save-moment"
+                    type="button"
+                    disabled={saving}
+                    onClick={
+                      connectedExperience
+                        ? saveConnectedMoment
+                        : () => close(true)
+                    }
+                  >
+                    {connectedExperience
+                      ? saving
+                        ? mode === "photo"
+                          ? photoUploadStage?.state === "finishing"
+                            ? "Finishing photo…"
+                            : "Adding photo…"
+                          : "Saving…"
+                        : mode === "photo" && saveError
+                          ? "Try upload again"
+                          : "Save moment"
+                      : "Close preview"}
+                  </button>
+                </>
+              )}
             </div>
+            {mode === "photo" && photoUploadLabel ? (
+              <div className="composer-upload-status" role="status">
+                <p>{photoUploadLabel}</p>
+                {photoUploadStage?.state === "uploading" ? (
+                  <progress
+                    aria-label="Private photo upload"
+                    max={1}
+                    value={photoUploadStage.progress}
+                  />
+                ) : null}
+              </div>
+            ) : null}
             {saveError ? (
               <p className="composer-error" role="alert">
                 {saveError}
@@ -683,7 +862,11 @@ export function MomentComposer({
                 <span>
                   {photoFile ? "Choose a different photo" : "Choose photo"}
                 </span>
-                <small>It stays on this device in the preview.</small>
+                <small>
+                  {connectedPhotoAvailable
+                    ? "The original uploads privately to this family."
+                    : "It stays on this device in the preview."}
+                </small>
                 <input
                   ref={photoInputRef}
                   type="file"
@@ -715,7 +898,9 @@ export function MomentComposer({
             >
               {photoFile
                 ? photoDecodeState === "ready"
-                  ? "Photo ready for this local preview."
+                  ? connectedPhotoAvailable
+                    ? "Photo ready to upload privately."
+                    : "Photo ready for this local preview."
                   : "Preparing this photo on your device."
                 : ""}
             </p>

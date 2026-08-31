@@ -4,6 +4,7 @@ import {
   environmentForNextConfig,
   invitationDeliveryIsEnabled,
   mediaDeliveryIsEnabled,
+  photoPostingIsEnabled,
   OurDaysEnvironmentError,
   validateOurDaysEnvironment,
 } from "../../config/our-days-environment";
@@ -107,6 +108,41 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_MEDIA_DELIVERY_MODE: "enabled",
       },
       "OUR_DAYS_MEDIA_DELIVERY_MODE=enabled requires supabase resource mode",
+    );
+  });
+
+  it("keeps photo posting disabled unless Supabase mode is explicit", () => {
+    expect(photoPostingIsEnabled({})).toBe(false);
+    expect(
+      photoPostingIsEnabled({
+        OUR_DAYS_PHOTO_POSTING_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+      }),
+    ).toBe(false);
+    expect(
+      photoPostingIsEnabled({
+        OUR_DAYS_PHOTO_POSTING_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects malformed or detached photo-posting activation", () => {
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_PHOTO_POSTING_MODE: "sometimes",
+      },
+      "OUR_DAYS_PHOTO_POSTING_MODE must be disabled or enabled",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_PHOTO_POSTING_MODE: "enabled",
+      },
+      "OUR_DAYS_PHOTO_POSTING_MODE=enabled requires supabase resource mode",
     );
   });
 

@@ -9,9 +9,14 @@ type ContentSecurityPolicyOptions = Readonly<{
 }>;
 
 function normalizedSupabaseOrigins(supabaseUrl?: string) {
-  if (!supabaseUrl) return { http: undefined, websocket: undefined };
+  if (!supabaseUrl)
+    return { http: undefined, storageHttp: undefined, websocket: undefined };
   const resolved = resolveSupabaseOrigin(supabaseUrl);
-  return { http: resolved.http, websocket: resolved.websocket };
+  return {
+    http: resolved.http,
+    storageHttp: resolved.storageHttp,
+    websocket: resolved.websocket,
+  };
 }
 
 export function buildContentSecurityPolicy({
@@ -49,6 +54,7 @@ export function buildContentSecurityPolicy({
       "blob:",
       ...(development ? ["ws:"] : []),
       supabase.http,
+      supabase.storageHttp,
       supabase.websocket,
     ],
     ["worker-src", "'self'", "blob:"],

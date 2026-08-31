@@ -2,6 +2,47 @@ begin;
 
 select plan(119);
 
+update private.photo_capabilities
+   set enabled = true, updated_at = statement_timestamp()
+ where capability = 'photo_publication';
+
+insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+select extensions.gen_random_uuid(), auth_user.id, statement_timestamp(),
+  statement_timestamp(), statement_timestamp() + interval '1 day'
+from auth.users as auth_user;
+
+create function pg_temp.set_photo_test_user(test_user_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  test_session_id uuid;
+begin
+  select session.id into test_session_id
+    from auth.sessions as session
+   where session.user_id = test_user_id
+   order by session.created_at desc limit 1;
+  if test_session_id is null then
+    insert into auth.sessions (
+      id, user_id, created_at, updated_at, not_after
+    ) values (
+      extensions.gen_random_uuid(), test_user_id, statement_timestamp(),
+      statement_timestamp(), statement_timestamp() + interval '1 day'
+    ) returning id into test_session_id;
+  end if;
+  perform set_config(
+    'request.jwt.claims',
+    pg_catalog.jsonb_build_object(
+      'sub', test_user_id::text,
+      'session_id', test_session_id::text
+    )::text,
+    true
+  );
+  return set_config('request.jwt.claim.sub', test_user_id::text, true);
+end;
+$$;
 select is(
   (
     select namespace.nspname
@@ -465,11 +506,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 
 select *
   from public.reserve_photo_intake(
@@ -522,11 +559,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -579,11 +612,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.claim_photo_intake_upload(
     :'own_intake_id'::uuid,
@@ -694,11 +723,7 @@ from public.circle_memberships as membership
 where membership.id = '40000000-0000-4000-8000-000000000001';
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -753,11 +778,7 @@ select throws_ok(
   'an idempotency key cannot silently change journals'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000006',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000006'::uuid);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -769,11 +790,7 @@ select throws_ok(
   'an organizer cannot borrow authority across family circles'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -785,11 +802,7 @@ select throws_ok(
   'an ordinary member cannot reserve another account journal'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000004',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000004'::uuid);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -801,11 +814,7 @@ select throws_ok(
   'a revoked member cannot reserve a path'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -834,11 +843,7 @@ select throws_ok(
   'a live reservation cannot mint a signed-upload bearer capability'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000002',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select public.set_person_guardian(
   '30000000-0000-4000-8000-000000000008',
   '40000000-0000-4000-8000-000000000001',
@@ -854,11 +859,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.claim_photo_intake_upload(
     :'child_intake_id'::uuid,
@@ -1095,11 +1096,7 @@ select throws_ok(
   'direct SQL cannot delete a quarantined object; HTTP policy denial is tested separately'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000002',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select throws_ok(
   format(
     'select * from public.acknowledge_photo_intake(%L::uuid)',
@@ -1110,11 +1107,7 @@ select throws_ok(
   'another family organizer cannot acknowledge the requester upload'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select *
   from public.acknowledge_photo_intake(:'own_intake_id'::uuid)
   \gset acknowledged_
@@ -1215,11 +1208,7 @@ values (
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select is(
   (
     select state
@@ -1268,11 +1257,7 @@ values (
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1298,11 +1283,7 @@ select is(
   'an active explicit guardian can bind a managed-journal upload claim'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000002',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select public.set_person_guardian(
   '30000000-0000-4000-8000-000000000008',
   '40000000-0000-4000-8000-000000000003',
@@ -1324,11 +1305,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1340,11 +1317,7 @@ select throws_ok(
   'revoked guardian authority cannot reserve another path'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000002',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select public.set_person_guardian(
   '30000000-0000-4000-8000-000000000008',
   '40000000-0000-4000-8000-000000000002',
@@ -1437,11 +1410,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000002',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000002'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1467,11 +1436,7 @@ select ok(
   'the replayed uploaded-unverified path grants no further upload capability'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1508,18 +1473,14 @@ select is(
   'the pre-preparation terminal state records the authoritative closure request reason'
 );
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
   $$select * from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000003',
     'c1000000-0000-4000-8000-000000000010'
   )$$,
-  '22023',
+  '42501',
   'Photo intake could not be reserved',
   'a requested account closure blocks new intake reservations'
 );
@@ -1576,26 +1537,18 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000003',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000003'::uuid);
 select throws_ok(
   format(
     'select * from public.acknowledge_photo_intake(%L::uuid)',
     :'closing_intake_id'
   ),
-  '22023',
+  '42501',
   'Photo intake could not be acknowledged',
   'a stale JWT cannot acknowledge after closure preparation'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000005',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000005'::uuid);
 select *
   from public.reserve_photo_intake(
     '20000000-0000-4000-8000-000000000001',
@@ -1631,11 +1584,7 @@ select isnt(
   'dual-circle reservations remain distinct family-scoped intents'
 );
 
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000001',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
 select public.revoke_membership(
   '40000000-0000-4000-8000-000000000005'
 );
@@ -1661,11 +1610,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config(
-  'request.jwt.claim.sub',
-  '10000000-0000-4000-8000-000000000005',
-  true
-);
+select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000005'::uuid);
 select ok(
   private.photo_intake_path_is_uploadable(
     :'dual_b_object_path',

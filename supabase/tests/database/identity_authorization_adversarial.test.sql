@@ -304,6 +304,7 @@ select is(
     'request_family_export(requested_circle_id uuid, requested_request_key uuid)',
     'request_invitation_email(requested_circle_id uuid, requested_email text, invited_display_name text, requested_request_key uuid)',
     'request_invitation_job(requested_circle_id uuid, requested_target_auth_user_id uuid, invited_display_name text, requested_request_key uuid)',
+    'require_photo_upload_session(error_message text)',
     'reserve_photo_intake(requested_circle_id uuid, requested_journal_person_id uuid, requested_request_key uuid)',
     'reserve_photo_moment(requested_circle_id uuid, requested_journal_person_id uuid, requested_body text, requested_place_name text, requested_tagged_person_ids uuid[], requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text, requested_request_key uuid)',
     'revoke_invitation(target_invitation_id uuid)',

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
+import { photoPostingIsEnabled } from "../../config/our-days-environment";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
@@ -130,6 +131,8 @@ export async function loadConnectedJournalContext(
   );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
+    circleId: access.circleId,
+    photoPostingEnabled: photoPostingIsEnabled(),
     previewToday: plainToday(circleResult.data.time_zone),
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,

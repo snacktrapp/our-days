@@ -15,6 +15,7 @@ export class SupabaseOriginError extends Error {
 
 export type ResolvedSupabaseOrigin = Readonly<{
   http: string;
+  storageHttp?: string;
   websocket: string;
   projectRef: "local" | string;
   local: boolean;
@@ -60,6 +61,9 @@ export function resolveSupabaseOrigin(value: string): ResolvedSupabaseOrigin {
 
   return {
     http: parsed.origin,
+    ...(local
+      ? {}
+      : { storageHttp: `https://${hostedMatch![1]}.storage.supabase.co` }),
     websocket: `${parsed.protocol === "https:" ? "wss:" : "ws:"}//${parsed.host}`,
     projectRef: local ? "local" : hostedMatch![1],
     local,

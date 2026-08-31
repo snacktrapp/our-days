@@ -96,6 +96,17 @@ Production activation also requires one consistent live-Auth-session boundary
 for timeline metadata, not only derivative bytes, plus the browser upload,
 worker, recovery/export, and hosted-device gates below.
 
+The Phase 4D-B default-off browser-uploader checkpoint is recorded in
+`docs/quality/PHASE_4D_B_PRIVATE_PHOTO_UPLOADER_REPORT.md`. It adds
+incremental worker hashing, an exact-origin resumable TUS client, stable
+idempotency and account-scoped recovery metadata, truthful progress/cancel and
+non-cancellable finishing states, stale-upload renewal, and live-session guards
+around upload coordination and Storage writes. Both rollout gates remain off.
+This is a mergeable development checkpoint, not production photo activation;
+HEIC/iPhone proof, global live-session enforcement, quotas, cleanup/cancellation,
+hosted workers, a durable pending/attention surface, recovery/export, and the
+PD-006 delivery decision remain required.
+
 Deliver:
 
 - Reserved asset row, fingerprint-bound claim, direct private resumable upload, upload closure, isolated full-byte verification, immutable browser-unwritable canonical original/checksum, orientation-correct stripped derivative, idempotent promotion, controlled display, and original download.

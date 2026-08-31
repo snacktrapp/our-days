@@ -40,6 +40,7 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:db:restore:self"
   },
   "dependencies": {
+    "@noble/hashes": "2.2.0",
     "@supabase/ssr": "0.12.5",
     "@supabase/supabase-js": "2.112.4",
     "next": "16.3.3",
@@ -62,6 +63,7 @@
     "axe-core": "4.13.0",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
+    "fake-indexeddb": "6.2.4",
     "jsdom": "29.1.1",
     "prettier": "3.9.6",
     "supabase": "2.116.0",

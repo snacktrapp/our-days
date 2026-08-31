@@ -119,6 +119,16 @@ describe("private artifact scanner", () => {
     ).toBe(true);
   });
 
+  it("does not mistake private names for substrings inside library code", () => {
+    expect(
+      scanText({
+        text: "isSamePostgresFilter respectSamplingDecision",
+        path: "client.js",
+        checkPrivateClientData: true,
+      }),
+    ).toEqual([]);
+  });
+
   it("reports line numbers and stable path order without exposing values", () => {
     const root = mkdtempSync(join(tmpdir(), "our-days-artifact-scan-"));
     writeFileSync(join(root, "z.txt"), `safe\n${secretKey}\n`);

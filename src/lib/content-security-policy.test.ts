@@ -32,7 +32,7 @@ describe("content security policy", () => {
     });
 
     expect(policy).toContain(
-      "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co",
     );
     expect(policy).toContain(
       "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
@@ -41,6 +41,7 @@ describe("content security policy", () => {
       "media-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
     );
     expect(policy).not.toContain("*.supabase.co");
+    expect(policy).not.toContain("*.storage.supabase.co");
   });
 
   it("permits only development tooling escapes and local Supabase", () => {

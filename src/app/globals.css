@@ -2900,6 +2900,23 @@ textarea:focus-visible,
   font-size: 12px;
   line-height: 1.4;
 }
+
+.composer-upload-status {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.composer-upload-status p {
+  margin: 0;
+}
+
+.composer-upload-status progress {
+  width: 100%;
+  height: 0.55rem;
+  accent-color: var(--accent);
+}
 .composer-selection-status {
   min-height: 1px;
   margin: 0;
@@ -3139,6 +3156,14 @@ textarea:focus-visible,
   color: var(--ink);
   font-weight: 650;
   cursor: pointer;
+}
+.stop-photo-upload {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.single-composer-action {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 @media (max-width: 359px) {
   .composer-core-fields {
