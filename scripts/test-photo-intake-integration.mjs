@@ -524,13 +524,17 @@ function validateValidationLease(row, reservation) {
   if (
     !row ||
     !uuidPattern.test(row.validation_job_id) ||
+    !uuidPattern.test(row.lease_attempt_id) ||
     row.intake_id !== reservation.intake_id ||
     row.source_bucket_id !== INTAKE_BUCKET ||
     row.source_object_path !== reservation.object_path ||
     !uuidPattern.test(row.source_storage_object_id) ||
     typeof row.source_storage_object_version !== "string" ||
     row.canonical_bucket_id !== ORIGINALS_BUCKET ||
-    !/^original\/[0-9a-f-]{36}$/iu.test(row.canonical_object_path) ||
+    !/^original\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/iu.test(
+      row.canonical_object_path,
+    ) ||
+    row.canonical_object_path.split("/")[2] !== row.lease_attempt_id ||
     row.expected_mime_type !== "image/jpeg" ||
     !sha256Pattern.test(row.expected_sha256_hex) ||
     Number(row.verification_profile_version) !== 1 ||
@@ -542,12 +546,13 @@ function validateValidationLease(row, reservation) {
 }
 
 function canonicalUserMetadata(lease) {
-  const originalId = lease.canonical_object_path.slice("original/".length);
+  const [, originalId] = lease.canonical_object_path.split("/");
   return {
     expected_mime_type: lease.expected_mime_type,
     expected_sha256: lease.expected_sha256_hex,
     expected_size_bytes: Number(lease.expected_size_bytes),
     intake_id: lease.intake_id,
+    lease_attempt_id: lease.lease_attempt_id,
     original_id: originalId,
     validation_job_id: lease.validation_job_id,
     verification_profile_version: Number(lease.verification_profile_version),
@@ -1457,8 +1462,7 @@ try {
     });
   }
   if (
-    completedOriginalId !==
-    validationLease.canonical_object_path.slice("original/".length)
+    completedOriginalId !== validationLease.canonical_object_path.split("/")[1]
   ) {
     throw new Error("Canonical path and immutable original identity diverged.");
   }
@@ -1481,6 +1485,257 @@ try {
     "Completed family-browser original",
     cleanupEntries,
   );
+
+  const collisionReservation = validateReservation(
+    singleRpcRow(
+      await reservePhoto(
+        apiUrl,
+        anonKey,
+        tokens.organizerA,
+        CIRCLE_A,
+        PERSON_ORGANIZER_A,
+        randomUUID(),
+      ),
+      "Canonical-collision reservation",
+    ),
+  );
+  cleanupEntries.push({
+    bucket: INTAKE_BUCKET,
+    objectPath: collisionReservation.object_path,
+  });
+  const collisionUploadClaimResult = await claimPhotoUpload(
+    apiUrl,
+    anonKey,
+    tokens.organizerA,
+    collisionReservation.intake_id,
+    syntheticOriginal,
+  );
+  const collisionUploadClaim = validateUploadClaim(
+    singleRpcRow(
+      collisionUploadClaimResult,
+      "Canonical-collision upload claim",
+    ),
+    collisionReservation,
+  );
+  const collisionTusUpload = await uploadClaimedTus(
+    apiUrl,
+    anonKey,
+    tokens.organizerA,
+    collisionUploadClaim,
+    syntheticOriginal,
+    collisionUploadClaimResult.uploadMetadata,
+  );
+  if (!collisionTusUpload.creation.ok || !collisionTusUpload.patch?.ok) {
+    throw new Error(
+      `Canonical-collision TUS upload failed with ${collisionTusUpload.creation.status}/${collisionTusUpload.patch?.status ?? "no PATCH"}.`,
+    );
+  }
+  const collisionAcknowledgement = singleRpcRow(
+    await acknowledgePhoto(
+      apiUrl,
+      anonKey,
+      tokens.organizerA,
+      collisionReservation.intake_id,
+    ),
+    "Canonical-collision acknowledgement",
+  );
+  if (
+    collisionAcknowledgement.intake_id !== collisionReservation.intake_id ||
+    collisionAcknowledgement.object_path !== collisionReservation.object_path ||
+    collisionAcknowledgement.state !== "uploaded_unverified" ||
+    collisionAcknowledgement.observed_mime_type_unverified !== "image/jpeg" ||
+    Number(collisionAcknowledgement.observed_size_bytes_unverified) !==
+      syntheticOriginal.length
+  ) {
+    throw new Error(
+      "Canonical-collision acknowledgement changed its quarantine evidence.",
+    );
+  }
+
+  const collisionLeaseKey = randomUUID();
+  const collisionLease = validateValidationLease(
+    singleRpcRow(
+      await rpcRequest(
+        apiUrl,
+        anonKey,
+        tokens.noCircle,
+        "claim_photo_validation",
+        {
+          intake_id: collisionReservation.intake_id,
+          lease_key: collisionLeaseKey,
+        },
+      ),
+      "Canonical-collision validation lease",
+    ),
+    collisionReservation,
+  );
+  const collisionSource = await authenticatedObjectRead(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    INTAKE_BUCKET,
+    collisionLease.source_object_path,
+  );
+  if (!collisionSource.ok || !collisionSource.body) {
+    throw new Error("Validator could not read the collision fixture source.");
+  }
+  const collisionSourceVerification = await validatePhotoByteStream(
+    collisionSource.body,
+    {
+      expectedMimeType: collisionLease.expected_mime_type,
+      expectedSha256Hex: collisionLease.expected_sha256_hex,
+      expectedSizeBytes: Number(collisionLease.expected_size_bytes),
+    },
+  );
+
+  const mismatchedCanonicalBytes = Buffer.from(syntheticOriginal);
+  mismatchedCanonicalBytes[Math.floor(mismatchedCanonicalBytes.length / 2)] ^=
+    0x01;
+  if (
+    mismatchedCanonicalBytes.length !== collisionSourceVerification.sizeBytes ||
+    sha256Hex(mismatchedCanonicalBytes) ===
+      collisionSourceVerification.sha256Hex
+  ) {
+    throw new Error(
+      "Canonical-collision bytes were not an exact-size mismatch.",
+    );
+  }
+  const seededCollision = await uploadObject(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    ORIGINALS_BUCKET,
+    collisionLease.canonical_object_path,
+    mismatchedCanonicalBytes,
+  );
+  const seededCollisionBody = await parseResponse(seededCollision);
+  if (!seededCollision.ok) {
+    throw new Error(
+      `Trusted mismatched-canonical fixture creation failed (${seededCollision.status}, ${seededCollisionBody?.error ?? "no error"}).`,
+    );
+  }
+  cleanupEntries.push({
+    bucket: ORIGINALS_BUCKET,
+    objectPath: collisionLease.canonical_object_path,
+  });
+
+  const collisionUpload = await uploadValidatedOriginal(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    collisionLease,
+    Buffer.from(syntheticOriginal),
+  );
+  const collisionUploadBody = await parseResponse(collisionUpload);
+  if (
+    collisionUpload.ok ||
+    !/duplicate|already exists/iu.test(
+      `${collisionUploadBody?.error ?? ""} ${collisionUploadBody?.message ?? ""}`,
+    )
+  ) {
+    throw new Error(
+      "Mismatched canonical object did not stop the validator no-upsert upload.",
+    );
+  }
+
+  const collisionCanonicalRead = await authenticatedObjectRead(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    ORIGINALS_BUCKET,
+    collisionLease.canonical_object_path,
+  );
+  if (!collisionCanonicalRead.ok || !collisionCanonicalRead.body) {
+    throw new Error(
+      "Validator could not inspect the colliding canonical object.",
+    );
+  }
+  let collisionMismatchCode;
+  try {
+    await validatePhotoByteStream(collisionCanonicalRead.body, {
+      expectedMimeType: collisionSourceVerification.mimeType,
+      expectedSha256Hex: collisionSourceVerification.sha256Hex,
+      expectedSizeBytes: collisionSourceVerification.sizeBytes,
+    });
+  } catch (error) {
+    collisionMismatchCode = error?.code;
+  }
+  if (collisionMismatchCode !== "PHOTO_HASH_MISMATCH") {
+    throw new Error(
+      `Colliding canonical bytes did not fail on the full-byte hash (${collisionMismatchCode ?? "no error"}).`,
+    );
+  }
+
+  const collisionReview = await rpcRequest(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    "flag_photo_validation_for_review",
+    {
+      lease_key: collisionLeaseKey,
+      review_reason: "canonical_collision",
+      validation_job_id: collisionLease.validation_job_id,
+    },
+  );
+  if (
+    !collisionReview.response.ok ||
+    collisionReview.body !== collisionLease.validation_job_id
+  ) {
+    throw new Error("Canonical collision did not enter operator review.");
+  }
+  await assertObjectOperationsDenied(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    ORIGINALS_BUCKET,
+    collisionLease.canonical_object_path,
+    "Operator-review colliding original",
+    cleanupEntries,
+  );
+  runDatabaseAssertion(`
+    do $assert_canonical_collision_review$
+    begin
+      if not exists (
+        select 1
+          from private.photo_intakes as intake
+          join private.photo_validation_jobs as job
+            on job.intake_id = intake.id
+         where intake.id = '${collisionReservation.intake_id}'::uuid
+           and intake.state = 'operator_review'
+           and intake.validation_rejection_reason = 'canonical_collision'
+           and job.id = '${collisionLease.validation_job_id}'::uuid
+           and job.state = 'operator_review'
+           and job.rejection_reason = 'canonical_collision'
+           and job.completed_at is not null
+      ) or exists (
+        select 1
+          from private.photo_originals
+         where validation_job_id = '${collisionLease.validation_job_id}'::uuid
+      ) or exists (
+        select 1 from public.moments where kind = 'photo'
+      ) then
+        raise exception 'canonical collision escaped terminal operator review';
+      end if;
+    end;
+    $assert_canonical_collision_review$;
+  `);
+  const retainedCollision = await storageRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    `object/${encodeURIComponent(ORIGINALS_BUCKET)}/${encodedObjectPath(collisionLease.canonical_object_path)}`,
+  );
+  const retainedCollisionBytes = Buffer.from(
+    await retainedCollision.arrayBuffer(),
+  );
+  if (
+    !retainedCollision.ok ||
+    !retainedCollisionBytes.equals(mismatchedCanonicalBytes)
+  ) {
+    throw new Error(
+      "Canonical collision review did not retain the exact quarantined mismatch.",
+    );
+  }
 
   const staleRequestKey = randomUUID();
   const staleReservation = validateReservation(
@@ -1817,7 +2072,7 @@ try {
   }
 
   process.stdout.write(
-    "Local synthetic photo intake, isolated validation, exact-byte immutable original promotion, canonical read-back, and HTTP denial checks passed.\n",
+    "Local synthetic photo intake, isolated validation, exact-byte immutable original promotion, canonical read-back, mismatched-canonical operator review, and HTTP denial checks passed.\n",
   );
 } catch (error) {
   primaryError = error;

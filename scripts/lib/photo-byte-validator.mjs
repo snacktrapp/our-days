@@ -21,6 +21,8 @@ const pngFooter = Buffer.from([
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
 const sha256Pattern = /^[0-9a-f]{64}$/u;
+const DEFAULT_INPUT_TIMEOUT_MILLISECONDS = 30_000;
+const MAX_INPUT_TIMEOUT_MILLISECONDS = 120_000;
 
 export class PhotoByteValidationError extends Error {
   constructor(code, message) {
@@ -75,6 +77,11 @@ function validateOptions(options) {
     "decodeTimeoutSeconds",
     60,
   );
+  const inputTimeoutMilliseconds = positiveInteger(
+    options.inputTimeoutMilliseconds ?? DEFAULT_INPUT_TIMEOUT_MILLISECONDS,
+    "inputTimeoutMilliseconds",
+    MAX_INPUT_TIMEOUT_MILLISECONDS,
+  );
 
   if (!allowedMimeTypes.has(options.expectedMimeType)) {
     fail(
@@ -107,6 +114,7 @@ function validateOptions(options) {
     expectedMimeType: options.expectedMimeType,
     expectedSha256: Buffer.from(options.expectedSha256Hex, "hex"),
     expectedSizeBytes,
+    inputTimeoutMilliseconds,
     maxBytes,
     maxChannels,
     maxPages,
@@ -115,13 +123,49 @@ function validateOptions(options) {
   };
 }
 
-async function* streamChunks(source) {
+function inputTimedOut() {
+  return new PhotoByteValidationError(
+    "PHOTO_INPUT_TIMEOUT",
+    "Photo input did not complete within the safe time limit.",
+  );
+}
+
+async function settleBeforeDeadline(operation, deadline) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw inputTimedOut();
+  const promise = operation();
+
+  let timeout;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(inputTimedOut()), remaining);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function cancelWithoutWaiting(cancel) {
+  try {
+    Promise.resolve(cancel()).catch(() => {});
+  } catch {
+    // Cancellation is best-effort; validation cleanup remains authoritative.
+  }
+}
+
+async function* streamChunks(source, deadline) {
   if (source && typeof source.getReader === "function") {
     const reader = source.getReader();
     let complete = false;
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await settleBeforeDeadline(
+          () => reader.read(),
+          deadline,
+        );
         if (done) {
           complete = true;
           return;
@@ -130,23 +174,157 @@ async function* streamChunks(source) {
       }
     } finally {
       if (!complete) {
-        try {
-          await reader.cancel();
-        } catch {
-          // The validation failure remains authoritative.
-        }
+        cancelWithoutWaiting(() => reader.cancel());
       }
-      reader.releaseLock();
+      try {
+        reader.releaseLock();
+      } catch {
+        // A timed-out pending read can retain the lock until cancellation.
+      }
     }
     return;
   }
 
   if (source && typeof source[Symbol.asyncIterator] === "function") {
-    for await (const chunk of source) yield chunk;
+    const iterator = source[Symbol.asyncIterator]();
+    let complete = false;
+    try {
+      while (true) {
+        const { done, value } = await settleBeforeDeadline(
+          () => iterator.next(),
+          deadline,
+        );
+        if (done) {
+          complete = true;
+          return;
+        }
+        yield value;
+      }
+    } finally {
+      if (!complete && typeof iterator.return === "function") {
+        cancelWithoutWaiting(() => iterator.return());
+      }
+    }
     return;
   }
 
   fail("PHOTO_STREAM_INVALID", "Photo input must be a readable byte stream.");
+}
+
+function jpegStructureFailure() {
+  fail(
+    "PHOTO_FORMAT_UNSUPPORTED",
+    "Photo bytes do not have a supported image structure.",
+  );
+}
+
+async function validateExactJpegCodestream(handle, sizeBytes) {
+  let phase = "soi-first";
+  let position = 0;
+  let segmentLengthHigh = 0;
+  let segmentMarker = 0;
+  let segmentRemaining = 0;
+  let sawScan = false;
+
+  const finishSegment = () => {
+    if (segmentMarker === 0xda) {
+      sawScan = true;
+      phase = "entropy";
+    } else if (segmentMarker === 0xdc && sawScan) {
+      // DNL is the only length-bearing marker that resumes the same scan.
+      phase = "entropy";
+    } else {
+      phase = "marker-prefix";
+    }
+  };
+
+  const acceptMarker = (marker) => {
+    if (marker === 0xd9) {
+      if (!sawScan || position !== sizeBytes) jpegStructureFailure();
+      phase = "complete";
+      return;
+    }
+    if (
+      marker === 0xd8 ||
+      marker === 0x01 ||
+      (marker >= 0xd0 && marker <= 0xd7)
+    ) {
+      jpegStructureFailure();
+    }
+    segmentMarker = marker;
+    phase = "length-high";
+  };
+
+  const input = handle.createReadStream({
+    autoClose: false,
+    end: sizeBytes - 1,
+    highWaterMark: 64 * 1024,
+    start: 0,
+  });
+  for await (const suppliedChunk of input) {
+    const chunk = Buffer.from(suppliedChunk);
+    let index = 0;
+    while (index < chunk.length) {
+      if (phase === "segment") {
+        const consumed = Math.min(segmentRemaining, chunk.length - index);
+        index += consumed;
+        position += consumed;
+        segmentRemaining -= consumed;
+        if (segmentRemaining === 0) finishSegment();
+        continue;
+      }
+      if (phase === "entropy") {
+        const markerIndex = chunk.indexOf(0xff, index);
+        if (markerIndex === -1) {
+          position += chunk.length - index;
+          index = chunk.length;
+        } else {
+          position += markerIndex - index + 1;
+          index = markerIndex + 1;
+          phase = "entropy-marker";
+        }
+        continue;
+      }
+
+      const value = chunk[index];
+      index += 1;
+      position += 1;
+      if (phase === "soi-first") {
+        if (value !== 0xff) jpegStructureFailure();
+        phase = "soi-second";
+      } else if (phase === "soi-second") {
+        if (value !== 0xd8) jpegStructureFailure();
+        phase = "marker-prefix";
+      } else if (phase === "marker-prefix") {
+        if (value !== 0xff) jpegStructureFailure();
+        phase = "marker";
+      } else if (phase === "marker") {
+        if (value === 0xff) continue;
+        if (value === 0x00) jpegStructureFailure();
+        acceptMarker(value);
+      } else if (phase === "entropy-marker") {
+        if (value === 0xff) continue;
+        if (value === 0x00 || (value >= 0xd0 && value <= 0xd7)) {
+          phase = "entropy";
+        } else {
+          acceptMarker(value);
+        }
+      } else if (phase === "length-high") {
+        segmentLengthHigh = value;
+        phase = "length-low";
+      } else if (phase === "length-low") {
+        const segmentLength = (segmentLengthHigh << 8) | value;
+        if (segmentLength < 2) jpegStructureFailure();
+        segmentRemaining = segmentLength - 2;
+        if (segmentRemaining === 0) finishSegment();
+        else phase = "segment";
+      } else {
+        jpegStructureFailure();
+      }
+    }
+  }
+
+  if (position !== sizeBytes || phase !== "complete") jpegStructureFailure();
 }
 
 function byteChunk(value) {
@@ -242,7 +420,9 @@ async function decodeCompletely(path, mimeType, limits) {
       pages: 1,
       sequentialRead: true,
       unlimited: false,
-    }).metadata();
+    })
+      .timeout({ seconds: limits.decodeTimeoutSeconds })
+      .metadata();
   } catch {
     fail("PHOTO_DECODE_FAILED", "Photo bytes could not be decoded safely.");
   }
@@ -368,7 +548,8 @@ async function verifySpool(handle, expectedSizeBytes, expectedSha256) {
 }
 
 function readableSpool(handle, sizeBytes) {
-  return Readable.from(
+  const state = { bytesRead: 0, hash: createHash("sha256") };
+  const stream = Readable.from(
     (async function* readVerifiedBytes() {
       const bufferSize = 64 * 1024;
       let position = 0;
@@ -389,10 +570,14 @@ function readableSpool(handle, sizeBytes) {
           );
         }
         position += bytesRead;
-        yield buffer.subarray(0, bytesRead);
+        const chunk = buffer.subarray(0, bytesRead);
+        state.bytesRead += bytesRead;
+        state.hash.update(chunk);
+        yield chunk;
       }
     })(),
   );
+  return { state, stream };
 }
 
 /**
@@ -423,10 +608,9 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
   let spoolIdentity;
 
   try {
-    if (!directory) {
-      directory = await mkdtemp(join(tmpdir(), "our-days-photo-validator-"));
-      ownedDirectory = true;
-    }
+    const tempBase = directory ?? tmpdir();
+    directory = await mkdtemp(join(tempBase, "our-days-photo-validator-"));
+    ownedDirectory = true;
     path = join(directory, `spool-${randomUUID()}`);
     handle = await open(path, "wx", 0o600);
 
@@ -435,7 +619,8 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
     let tail = Buffer.alloc(0);
     let sizeBytes = 0;
 
-    for await (const suppliedChunk of streamChunks(source)) {
+    const inputDeadline = Date.now() + options.inputTimeoutMilliseconds;
+    for await (const suppliedChunk of streamChunks(source, inputDeadline)) {
       const chunk = byteChunk(suppliedChunk);
       if (chunk.length === 0) continue;
       if (sizeBytes + chunk.length > options.maxBytes) {
@@ -466,14 +651,6 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
       fail("PHOTO_MIME_MISMATCH", "Photo type does not match its claim.");
     }
 
-    const decoded = await decodeCompletely(path, detectedMimeType, options);
-    result = Object.freeze({
-      ...decoded,
-      mimeType: detectedMimeType,
-      sha256Hex: sha256.toString("hex"),
-      sizeBytes,
-    });
-
     readHandle = await open(path, "r");
     const handoffIdentity = await readHandle.stat();
     if (
@@ -488,12 +665,24 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
       );
     }
     await verifySpool(readHandle, sizeBytes, sha256);
+    if (detectedMimeType === "image/jpeg") {
+      await validateExactJpegCodestream(readHandle, sizeBytes);
+    }
+
+    const decoded = await decodeCompletely(path, detectedMimeType, options);
+    result = Object.freeze({
+      ...decoded,
+      mimeType: detectedMimeType,
+      sha256Hex: sha256.toString("hex"),
+      sizeBytes,
+    });
 
     // The already-open descriptor retains the exact inode while removing the
     // only pathname before trusted callback code can run.
     await unlink(path);
     path = undefined;
-    verifiedStream = readableSpool(readHandle, sizeBytes);
+    const handoff = readableSpool(readHandle, sizeBytes);
+    verifiedStream = handoff.stream;
     try {
       callbackResult = await callback(
         Object.freeze({ ...result, stream: verifiedStream }),
@@ -502,6 +691,18 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
       fail(
         "PHOTO_VALIDATED_CALLBACK_FAILED",
         "Validated photo handoff did not complete.",
+      );
+    }
+    if (handoff.state.bytesRead !== sizeBytes) {
+      fail(
+        "PHOTO_VALIDATED_STREAM_INCOMPLETE",
+        "Validated photo bytes were not consumed completely.",
+      );
+    }
+    if (!sameDigest(handoff.state.hash.digest(), sha256)) {
+      fail(
+        "PHOTO_SPOOL_INTEGRITY_FAILED",
+        "Validated photo bytes changed during handoff.",
       );
     }
   } catch (error) {
@@ -557,8 +758,12 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
 }
 
 export async function validatePhotoByteStream(source, rawOptions) {
-  return withValidatedPhotoSpool(source, rawOptions, (validated) =>
-    Object.freeze({
+  return withValidatedPhotoSpool(source, rawOptions, async (validated) => {
+    for await (const chunk of validated.stream) {
+      // Metadata-only callers still consume the verified inode completely.
+      void chunk;
+    }
+    return Object.freeze({
       channels: validated.channels,
       height: validated.height,
       mimeType: validated.mimeType,
@@ -566,6 +771,6 @@ export async function validatePhotoByteStream(source, rawOptions) {
       sha256Hex: validated.sha256Hex,
       sizeBytes: validated.sizeBytes,
       width: validated.width,
-    }),
-  );
+    });
+  });
 }

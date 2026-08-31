@@ -498,6 +498,7 @@ export type Database = {
           expected_sha256_hex: string;
           expected_size_bytes: number;
           intake_id: string;
+          lease_attempt_id: string;
           lease_expires_at: string;
           source_bucket_id: string;
           source_object_path: string;

@@ -61,7 +61,7 @@ select ok(
   (select pg_get_constraintdef(oid)
      from pg_constraint
     where conname = 'photo_originals_job_identity_fkey') like
-    '%FOREIGN KEY (circle_id, validation_job_id, id, object_path, intake_id, journal_person_id, recorded_by_membership_id)%',
+    '%FOREIGN KEY (circle_id, validation_job_id, id, lease_attempt_id, object_path, intake_id, journal_person_id, recorded_by_membership_id)%',
   'the original ledger uses an exact composite job identity foreign key'
 );
 
@@ -194,8 +194,154 @@ values (
   '10000000-0000-4000-8000-000000000099',
   'photo-validator@example.test', statement_timestamp(), '{}'
 );
+
+select throws_ok(
+  $$insert into private.photo_validator_allowlist (auth_user_id)
+    values ('10000000-0000-4000-8000-000000000001')$$,
+  '42501', 'Photo validator identity separation failed',
+  'an existing family identity cannot be allowlisted as a validator'
+);
 insert into private.photo_validator_allowlist (auth_user_id)
 values ('10000000-0000-4000-8000-000000000099');
+
+insert into public.people (
+  id, circle_id, display_name, profile_kind, accent_token,
+  created_by_membership_id
+) values (
+  '30000000-0000-4000-8000-000000000099',
+  '20000000-0000-4000-8000-000000000001',
+  'Validator separation probe', 'account', 'clay',
+  '40000000-0000-4000-8000-000000000001'
+);
+select throws_ok(
+  $$insert into public.circle_memberships (
+      id, circle_id, user_id, person_id, role, status
+    ) values (
+      '40000000-0000-4000-8000-000000000099',
+      '20000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000099',
+      '30000000-0000-4000-8000-000000000099',
+      'member', 'active'
+    )$$,
+  '42501', 'Photo validator identity separation failed',
+  'an active validator identity cannot be attached to a family membership'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
+);
+select throws_ok(
+  $$select * from public.claim_photo_validation(null, null)$$,
+  '42501', 'Photo validation could not be claimed',
+  'null claim scalars fail with the safe public error contract'
+);
+select throws_ok(
+  $$select public.complete_photo_validation(
+    null, null, null, null, null, null, null, null, null, null, null
+  )$$,
+  '42501', 'Photo validation could not be completed',
+  'null completion scalars fail with the safe public error contract'
+);
+select throws_ok(
+  $$select public.reject_photo_validation(null, null, null)$$,
+  '42501', 'Photo validation could not be rejected',
+  'null rejection scalars fail with the safe public error contract'
+);
+select throws_ok(
+  $$select public.flag_photo_validation_for_review(null, null, null)$$,
+  '42501', 'Photo validation could not be flagged',
+  'null review scalars fail with the safe public error contract'
+);
+select lives_ok(
+  $outer$
+  do $null_contract$
+  declare
+    probe record;
+    caught_state text;
+    caught_message text;
+  begin
+    for probe in
+      select * from (values
+        ('claim intake',
+          $$select * from public.claim_photo_validation(null, 'e2000000-0000-4000-8000-000000000001')$$,
+          'Photo validation could not be claimed'),
+        ('claim lease',
+          $$select * from public.claim_photo_validation('e1000000-0000-4000-8000-000000000001', null)$$,
+          'Photo validation could not be claimed'),
+        ('complete job',
+          $$select public.complete_photo_validation(null, 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete lease',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', null, 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete storage object',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', null, '', 'image/jpeg', 1, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete storage version',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', null, 'image/jpeg', 1, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete mime',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', null, 1, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete size',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', null, repeat('a',64), 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete hash',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, null, 1, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete width',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), null, 1, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete height',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), 1, null, 3, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete channels',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), 1, 1, null, 1)$$,
+          'Photo validation could not be completed'),
+        ('complete pages',
+          $$select public.complete_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', '', 'image/jpeg', 1, repeat('a',64), 1, 1, 3, null)$$,
+          'Photo validation could not be completed'),
+        ('reject job',
+          $$select public.reject_photo_validation(null, 'e2000000-0000-4000-8000-000000000001', 'decode_failed')$$,
+          'Photo validation could not be rejected'),
+        ('reject lease',
+          $$select public.reject_photo_validation('e1000000-0000-4000-8000-000000000001', null, 'decode_failed')$$,
+          'Photo validation could not be rejected'),
+        ('reject reason',
+          $$select public.reject_photo_validation('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', null)$$,
+          'Photo validation could not be rejected'),
+        ('review job',
+          $$select public.flag_photo_validation_for_review(null, 'e2000000-0000-4000-8000-000000000001', 'canonical_collision')$$,
+          'Photo validation could not be flagged'),
+        ('review lease',
+          $$select public.flag_photo_validation_for_review('e1000000-0000-4000-8000-000000000001', null, 'canonical_collision')$$,
+          'Photo validation could not be flagged'),
+        ('review reason',
+          $$select public.flag_photo_validation_for_review('e1000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', null)$$,
+          'Photo validation could not be flagged')
+      ) as probes(label, statement, expected_message)
+    loop
+      begin
+        execute probe.statement;
+        raise exception 'null contract unexpectedly accepted %', probe.label;
+      exception when others then
+        get stacked diagnostics
+          caught_state = returned_sqlstate,
+          caught_message = message_text;
+        if caught_state <> '42501'
+          or caught_message <> probe.expected_message then
+          raise exception 'unsafe null contract for %: [%] %',
+            probe.label, caught_state, caught_message;
+        end if;
+      end;
+    end loop;
+  end;
+  $null_contract$;
+  $outer$,
+  'each nullable public coordinator scalar independently fails with its safe contract'
+);
+reset role;
 
 set local role authenticated;
 select set_config(
@@ -278,8 +424,13 @@ select isnt(
 select is(
   (select canonical_object_path from private.photo_validation_jobs
     where id = :'accepted_validation_validation_job_id'::uuid),
-  :'accepted_validation_canonical_object_path'::text,
-  'the canonical path is deterministic and stable on the one-to-one job'
+  format(
+    'original/%s/%s',
+    (select original_id from private.photo_validation_jobs
+      where id = :'accepted_validation_validation_job_id'::uuid),
+    :'accepted_validation_lease_attempt_id'
+  ),
+  'the canonical path is scoped to the immutable original and current lease attempt'
 );
 set local role authenticated;
 select set_config(
@@ -319,6 +470,7 @@ insert into storage.objects (
     'validation_job_id', :'accepted_validation_validation_job_id',
     'intake_id', :'accepted_intake_id',
     'original_id', split_part(:'accepted_validation_canonical_object_path', '/', 2),
+    'lease_attempt_id', :'accepted_validation_lease_attempt_id',
     'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 12,
     'expected_sha256', repeat('a', 64),
     'verification_profile_version', 1
@@ -353,6 +505,7 @@ select is(
 select is(
   (select row(
     circle_id, journal_person_id, recorded_by_membership_id,
+    lease_attempt_id,
     verified_width, verified_height, verified_channels, verified_pages
   )::text from private.photo_originals
     where id = :'accepted_original_original_id'::uuid),
@@ -360,9 +513,10 @@ select is(
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,
     '40000000-0000-4000-8000-000000000001'::uuid,
+    :'accepted_validation_lease_attempt_id'::uuid,
     4, 3, 3, 1
   )::text,
-  'the immutable ledger preserves exact circle, journal, recorder, and decode proof'
+  'the immutable ledger preserves circle, journal, recorder, lease attempt, and decode proof'
 );
 select is(
   (select count(*)::bigint from public.moments
@@ -519,6 +673,286 @@ select throws_ok(
   ),
   '42501', 'Photo validation could not be flagged',
   'operator-review replay does not become a lease-bypass capability'
+);
+
+reset role;
+
+-- Revoking an identity after it has acquired a valid lease must remove every
+-- coordinator capability, including idempotent claim and terminal actions.
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+values (
+  '10000000-0000-4000-8000-000000000098',
+  'revoked-photo-validator@example.test', statement_timestamp(), '{}'
+);
+insert into private.photo_validator_allowlist (auth_user_id)
+values ('10000000-0000-4000-8000-000000000098');
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select * from public.reserve_photo_intake(
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'c1000000-0000-4000-8000-000000000094'
+) \gset revoked_
+select * from public.claim_photo_intake_upload(
+  :'revoked_intake_id'::uuid,
+  'c4000000-0000-4000-8000-000000000094',
+  'image/jpeg', 14, repeat('c', 64)
+) \gset revoked_upload_
+select set_config('storage.operation', 'storage.tus.upload.create', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'd1000000-0000-4000-8000-000000000094', 'our-days-intake',
+  :'revoked_object_path', '10000000-0000-4000-8000-000000000001',
+  '{"mimetype":"image/jpeg","size":14}'::jsonb,
+  jsonb_build_object(
+    'intake_id', :'revoked_intake_id',
+    'upload_request_key', 'c4000000-0000-4000-8000-000000000094',
+    'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 14,
+    'expected_sha256', repeat('c', 64)
+  )
+);
+select * from public.acknowledge_photo_intake(:'revoked_intake_id'::uuid)
+  \gset revoked_ack_
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
+);
+select * from public.claim_photo_validation(
+  :'revoked_intake_id'::uuid,
+  'c5000000-0000-4000-8000-000000000094'
+) \gset revoked_validation_
+
+reset role;
+update private.photo_validator_allowlist
+   set revoked_at = statement_timestamp()
+ where auth_user_id = '10000000-0000-4000-8000-000000000098';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
+);
+select throws_ok(
+  format(
+    'select * from public.claim_photo_validation(%L::uuid,%L::uuid)',
+    :'revoked_intake_id', 'c5000000-0000-4000-8000-000000000094'
+  ),
+  '42501', 'Photo validation could not be claimed',
+  'revocation immediately blocks claim retries on a live lease'
+);
+select throws_ok(
+  format(
+    'select public.complete_photo_validation('
+      || '%L::uuid,%L::uuid,%L::uuid,%L,%L,%s,%L,%s,%s,%s,%s)',
+    :'revoked_validation_validation_job_id',
+    'c5000000-0000-4000-8000-000000000094',
+    'd2000000-0000-4000-8000-000000000094', '',
+    'image/jpeg', 14, repeat('c', 64), 7, 2, 3, 1
+  ),
+  '42501', 'Photo validation could not be completed',
+  'revocation blocks completion of a previously acquired live lease'
+);
+select throws_ok(
+  format(
+    'select public.reject_photo_validation(%L::uuid,%L::uuid,%L)',
+    :'revoked_validation_validation_job_id',
+    'c5000000-0000-4000-8000-000000000094', 'decode_failed'
+  ),
+  '42501', 'Photo validation could not be rejected',
+  'revocation blocks rejection of a previously acquired live lease'
+);
+select throws_ok(
+  format(
+    'select public.flag_photo_validation_for_review(%L::uuid,%L::uuid,%L)',
+    :'revoked_validation_validation_job_id',
+    'c5000000-0000-4000-8000-000000000094', 'validator_cleanup_failed'
+  ),
+  '42501', 'Photo validation could not be flagged',
+  'revocation blocks review terminalization of a previously acquired live lease'
+);
+reset role;
+
+-- A timed-out lease is not renewable by its original validator. A distinct,
+-- still-separated validator gets a new attempt identity and canonical path.
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+values
+  (
+    '10000000-0000-4000-8000-000000000097',
+    'stale-photo-validator@example.test', statement_timestamp(), '{}'
+  ),
+  (
+    '10000000-0000-4000-8000-000000000096',
+    'takeover-photo-validator@example.test', statement_timestamp(), '{}'
+  );
+insert into private.photo_validator_allowlist (auth_user_id)
+values
+  ('10000000-0000-4000-8000-000000000097'),
+  ('10000000-0000-4000-8000-000000000096');
+select ok(
+  private.photo_validator_is_allowed(
+    '10000000-0000-4000-8000-000000000096'
+  )
+  and not exists (
+    select 1 from public.circle_memberships
+     where user_id = '10000000-0000-4000-8000-000000000096'
+  ),
+  'the distinct takeover validator is allowlisted and has no family membership'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select * from public.reserve_photo_intake(
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'c1000000-0000-4000-8000-000000000095'
+) \gset takeover_
+select * from public.claim_photo_intake_upload(
+  :'takeover_intake_id'::uuid,
+  'c4000000-0000-4000-8000-000000000095',
+  'image/jpeg', 15, repeat('d', 64)
+) \gset takeover_upload_
+select set_config('storage.operation', 'storage.tus.upload.create', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'd1000000-0000-4000-8000-000000000095', 'our-days-intake',
+  :'takeover_object_path', '10000000-0000-4000-8000-000000000001',
+  '{"mimetype":"image/jpeg","size":15}'::jsonb,
+  jsonb_build_object(
+    'intake_id', :'takeover_intake_id',
+    'upload_request_key', 'c4000000-0000-4000-8000-000000000095',
+    'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 15,
+    'expected_sha256', repeat('d', 64)
+  )
+);
+select * from public.acknowledge_photo_intake(:'takeover_intake_id'::uuid)
+  \gset takeover_ack_
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
+);
+select * from public.claim_photo_validation(
+  :'takeover_intake_id'::uuid,
+  'c5000000-0000-4000-8000-000000000095'
+) \gset stale_validation_
+reset role;
+
+set constraints all immediate;
+alter table private.photo_validation_jobs
+  disable trigger photo_validation_jobs_integrity;
+update private.photo_validation_jobs
+   set lease_started_at = statement_timestamp() - interval '16 minutes',
+       lease_expires_at = statement_timestamp() - interval '1 minute'
+ where id = :'stale_validation_validation_job_id'::uuid;
+alter table private.photo_validation_jobs
+  enable trigger photo_validation_jobs_integrity;
+set constraints all deferred;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
+);
+select throws_ok(
+  format(
+    'select * from public.claim_photo_validation(%L::uuid,%L::uuid)',
+    :'takeover_intake_id', 'c5000000-0000-4000-8000-000000000096'
+  ),
+  '42501', 'Photo validation could not be claimed',
+  'the original validator cannot reclaim its own expired lease'
+);
+
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select * from public.claim_photo_validation(
+  :'takeover_intake_id'::uuid,
+  'c5000000-0000-4000-8000-000000000097'
+) \gset takeover_validation_
+
+select is(
+  :'takeover_validation_validation_job_id'::uuid,
+  :'stale_validation_validation_job_id'::uuid,
+  'a distinct validator takes over the same stable validation job'
+);
+select isnt(
+  :'takeover_validation_lease_attempt_id'::text,
+  :'stale_validation_lease_attempt_id'::text,
+  'takeover receives a fresh lease-attempt identity'
+);
+select isnt(
+  :'takeover_validation_canonical_object_path'::text,
+  :'stale_validation_canonical_object_path'::text,
+  'takeover receives a fresh immutable canonical path'
+);
+select is(
+  :'takeover_validation_canonical_object_path'::text,
+  format(
+    'original/%s/%s',
+    split_part(:'stale_validation_canonical_object_path', '/', 2),
+    :'takeover_validation_lease_attempt_id'
+  ),
+  'the takeover path preserves original identity while binding the new attempt'
+);
+select ok(
+  private.photo_validation_source_is_readable(
+    :'takeover_validation_source_object_path',
+    :'takeover_validation_source_storage_object_id'::uuid,
+    :'takeover_validation_source_storage_object_version'
+  ),
+  'the replacement validator can read the exact source for its active lease'
+);
+select ok(
+  private.photo_original_path_is_uploadable(
+    :'takeover_validation_canonical_object_path',
+    '10000000-0000-4000-8000-000000000096',
+    jsonb_build_object(
+      'validation_job_id', :'takeover_validation_validation_job_id',
+      'intake_id', :'takeover_intake_id',
+      'original_id', split_part(:'takeover_validation_canonical_object_path', '/', 2),
+      'lease_attempt_id', :'takeover_validation_lease_attempt_id',
+      'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 15,
+      'expected_sha256', repeat('d', 64),
+      'verification_profile_version', 1
+    )
+  ),
+  'the replacement validator can upload only with exact attempt metadata'
+);
+
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
+);
+select ok(
+  not private.photo_validation_source_is_readable(
+    :'stale_validation_source_object_path',
+    :'stale_validation_source_storage_object_id'::uuid,
+    :'stale_validation_source_storage_object_version'
+  ),
+  'the stale validator loses quarantine-source helper access after takeover'
+);
+select ok(
+  not private.photo_original_path_is_readable(
+    :'stale_validation_canonical_object_path'
+  ),
+  'the stale validator loses canonical-read helper access after takeover'
+);
+select ok(
+  not private.photo_original_path_is_uploadable(
+    :'stale_validation_canonical_object_path',
+    '10000000-0000-4000-8000-000000000097',
+    jsonb_build_object(
+      'validation_job_id', :'stale_validation_validation_job_id',
+      'intake_id', :'takeover_intake_id',
+      'original_id', split_part(:'stale_validation_canonical_object_path', '/', 2),
+      'lease_attempt_id', :'stale_validation_lease_attempt_id',
+      'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 15,
+      'expected_sha256', repeat('d', 64),
+      'verification_profile_version', 1
+    )
+  ),
+  'the stale validator loses canonical-upload helper access after takeover'
 );
 
 reset role;

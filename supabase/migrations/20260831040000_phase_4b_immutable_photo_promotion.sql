@@ -228,7 +228,8 @@ create table private.photo_validation_jobs (
   journal_person_id uuid not null,
   requested_by_membership_id uuid not null,
   original_id uuid not null unique default extensions.gen_random_uuid(),
-  canonical_object_path text not null unique,
+  lease_attempt_id uuid,
+  canonical_object_path text unique,
   verification_profile_version integer not null default 1,
   state text not null default 'queued',
   queued_at timestamptz not null default statement_timestamp(),
@@ -248,6 +249,7 @@ create table private.photo_validation_jobs (
     circle_id,
     id,
     original_id,
+    lease_attempt_id,
     canonical_object_path,
     intake_id,
     journal_person_id,
@@ -268,7 +270,11 @@ create table private.photo_validation_jobs (
     validator_auth_user_id
   ) references auth.users (id) on delete restrict,
   constraint photo_validation_jobs_path_valid check (
-    canonical_object_path = 'original/' || original_id::text
+    (
+      lease_attempt_id is null
+      and canonical_object_path is null
+    ) or canonical_object_path =
+      'original/' || original_id::text || '/' || lease_attempt_id::text
   ),
   constraint photo_validation_jobs_profile_valid check (
     verification_profile_version = 1
@@ -291,6 +297,8 @@ create table private.photo_validation_jobs (
       state = 'queued'
       and validator_auth_user_id is null
       and lease_key_hash is null
+      and lease_attempt_id is null
+      and canonical_object_path is null
       and lease_started_at is null
       and lease_expires_at is null
       and attempt_count = 0
@@ -304,6 +312,8 @@ create table private.photo_validation_jobs (
       state = 'leased'
       and validator_auth_user_id is not null
       and lease_key_hash is not null
+      and lease_attempt_id is not null
+      and canonical_object_path is not null
       and lease_started_at is not null
       and lease_expires_at is not null
       and attempt_count >= 1
@@ -317,6 +327,8 @@ create table private.photo_validation_jobs (
       state = 'verified'
       and validator_auth_user_id is not null
       and lease_key_hash is not null
+      and lease_attempt_id is not null
+      and canonical_object_path is not null
       and lease_started_at is not null
       and lease_expires_at is not null
       and attempt_count >= 1
@@ -330,6 +342,8 @@ create table private.photo_validation_jobs (
       state = 'rejected'
       and validator_auth_user_id is not null
       and lease_key_hash is not null
+      and lease_attempt_id is not null
+      and canonical_object_path is not null
       and lease_started_at is not null
       and lease_expires_at is not null
       and attempt_count >= 1
@@ -353,6 +367,8 @@ create table private.photo_validation_jobs (
       state = 'operator_review'
       and validator_auth_user_id is not null
       and lease_key_hash is not null
+      and lease_attempt_id is not null
+      and canonical_object_path is not null
       and lease_started_at is not null
       and lease_expires_at is not null
       and attempt_count >= 1
@@ -386,6 +402,7 @@ create table private.photo_originals (
   journal_person_id uuid not null,
   recorded_by_membership_id uuid not null,
   bucket_id text not null default 'our-days-originals',
+  lease_attempt_id uuid not null,
   object_path text not null unique,
   storage_object_id uuid not null unique,
   storage_object_version text not null,
@@ -403,6 +420,7 @@ create table private.photo_originals (
     circle_id,
     validation_job_id,
     id,
+    lease_attempt_id,
     object_path,
     intake_id,
     journal_person_id,
@@ -411,6 +429,7 @@ create table private.photo_originals (
     circle_id,
     id,
     original_id,
+    lease_attempt_id,
     canonical_object_path,
     intake_id,
     journal_person_id,
@@ -439,7 +458,8 @@ create table private.photo_originals (
     bucket_id = 'our-days-originals'
   ),
   constraint photo_originals_path_valid check (
-    object_path = 'original/' || id::text
+    object_path =
+      'original/' || id::text || '/' || lease_attempt_id::text
   ),
   constraint photo_originals_mime_valid check (
     verified_mime_type in (
@@ -500,6 +520,66 @@ create trigger photo_validator_allowlist_integrity
 before update or delete on private.photo_validator_allowlist
 for each row execute function private.enforce_photo_validator_allowlist_integrity();
 
+create function private.enforce_photo_validator_family_separation()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_auth_user_id uuid;
+begin
+  if tg_table_schema = 'private'
+    and tg_table_name = 'photo_validator_allowlist' then
+    if tg_op = 'UPDATE' and new.revoked_at is not null then
+      return new;
+    end if;
+    target_auth_user_id := new.auth_user_id;
+  else
+    target_auth_user_id := new.user_id;
+  end if;
+
+  if target_auth_user_id is null then
+    return new;
+  end if;
+
+  perform 1 from auth.users as auth_user
+   where auth_user.id = target_auth_user_id
+   for update;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Photo validator identity separation failed';
+  end if;
+
+  if tg_table_schema = 'private'
+    and tg_table_name = 'photo_validator_allowlist' then
+    if exists (
+      select 1 from public.circle_memberships as membership
+       where membership.user_id = target_auth_user_id
+    ) then
+      raise exception using errcode = '42501',
+        message = 'Photo validator identity separation failed';
+    end if;
+  elsif exists (
+    select 1 from private.photo_validator_allowlist as validator
+     where validator.auth_user_id = target_auth_user_id
+       and validator.revoked_at is null
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Photo validator identity separation failed';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger photo_validator_family_identity_separation
+before insert or update on private.photo_validator_allowlist
+for each row execute function private.enforce_photo_validator_family_separation();
+
+create trigger circle_membership_photo_validator_identity_separation
+before insert or update of user_id on public.circle_memberships
+for each row execute function private.enforce_photo_validator_family_separation();
+
 create function private.enforce_photo_validation_job_integrity()
 returns trigger
 language plpgsql
@@ -515,7 +595,23 @@ begin
     or new.journal_person_id is distinct from old.journal_person_id
     or new.requested_by_membership_id is distinct from old.requested_by_membership_id
     or new.original_id is distinct from old.original_id
-    or new.canonical_object_path is distinct from old.canonical_object_path
+    or (
+      (
+        new.lease_attempt_id is distinct from old.lease_attempt_id
+        or new.canonical_object_path is distinct from old.canonical_object_path
+      ) and not (
+        old.state in ('queued', 'leased')
+        and new.state = 'leased'
+        and new.attempt_count = old.attempt_count + 1
+        and new.lease_attempt_id is not null
+        and new.canonical_object_path =
+          'original/' || new.original_id::text || '/' || new.lease_attempt_id::text
+        and (
+          old.state = 'queued'
+          or old.lease_expires_at <= statement_timestamp()
+        )
+      )
+    )
     or new.verification_profile_version is distinct from old.verification_profile_version
     or new.queued_at is distinct from old.queued_at
     or old.state in ('verified', 'rejected', 'invalidated', 'operator_review') then
@@ -623,7 +719,49 @@ as $$
        and validator.revoked_at is null
        and validator.verification_profile_version = 1
        and auth_user.deleted_at is null
+       and not exists (
+         select 1 from public.circle_memberships as membership
+          where membership.user_id = validator.auth_user_id
+       )
   );
+$$;
+
+create function private.lock_photo_validator_if_allowed(
+  requested_auth_user_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+begin
+  if requested_auth_user_id is null then
+    return false;
+  end if;
+
+  perform 1 from auth.users as auth_user
+   where auth_user.id = requested_auth_user_id
+     and auth_user.deleted_at is null
+   for update;
+  if not found then
+    return false;
+  end if;
+
+  perform 1 from private.photo_validator_allowlist as validator
+   where validator.auth_user_id = requested_auth_user_id
+     and validator.revoked_at is null
+     and validator.verification_profile_version = 1
+   for update;
+  if not found then
+    return false;
+  end if;
+
+  return not exists (
+    select 1 from public.circle_memberships as membership
+     where membership.user_id = requested_auth_user_id
+  );
+end;
 $$;
 
 create function private.enqueue_photo_validation_job()
@@ -640,11 +778,10 @@ begin
     generated_original_id := extensions.gen_random_uuid();
     insert into private.photo_validation_jobs (
       circle_id, intake_id, journal_person_id, requested_by_membership_id,
-      original_id, canonical_object_path
+      original_id
     ) values (
       new.circle_id, new.id, new.journal_person_id,
-      new.requested_by_membership_id, generated_original_id,
-      'original/' || generated_original_id::text
+      new.requested_by_membership_id, generated_original_id
     ) on conflict (intake_id) do nothing;
   elsif new.state = 'invalidated' and old.state is distinct from new.state then
     update private.photo_validation_jobs as job
@@ -700,11 +837,10 @@ begin
     generated_original_id := extensions.gen_random_uuid();
     insert into private.photo_validation_jobs (
       circle_id, intake_id, journal_person_id, requested_by_membership_id,
-      original_id, canonical_object_path
+      original_id
     ) values (
       intake.circle_id, intake.id, intake.journal_person_id,
-      intake.requested_by_membership_id, generated_original_id,
-      'original/' || generated_original_id::text
+      intake.requested_by_membership_id, generated_original_id
     ) on conflict (intake_id) do nothing;
   end loop;
 end;
@@ -716,6 +852,7 @@ create function private.claim_photo_validation(
 )
 returns table (
   validation_job_id uuid,
+  lease_attempt_id uuid,
   intake_id uuid,
   source_bucket_id text,
   source_object_path text,
@@ -743,14 +880,16 @@ declare
   source_owner_id text;
   source_metadata jsonb;
   source_user_metadata jsonb;
+  new_lease_attempt_id uuid;
 begin
   if current_user_id is null or requested_intake_id is null
-    or requested_lease_key is null
-    or not (select private.photo_validator_is_allowed(current_user_id)) then
+    or requested_lease_key is null then
     raise exception using errcode = '42501', message = 'Photo validation could not be claimed';
   end if;
 
-  perform 1 from auth.users where id = current_user_id for update;
+  if not (select private.lock_photo_validator_if_allowed(current_user_id)) then
+    raise exception using errcode = '42501', message = 'Photo validation could not be claimed';
+  end if;
 
   select job.* into target_job
     from private.photo_validation_jobs as job
@@ -783,7 +922,8 @@ begin
     )
     and target_job.lease_expires_at > statement_timestamp() then
     return query select
-      target_job.id, target_intake.id, 'our-days-intake'::text,
+      target_job.id, target_job.lease_attempt_id, target_intake.id,
+      'our-days-intake'::text,
       target_intake.object_path, target_job.source_storage_object_id,
       target_job.source_storage_object_version, 'our-days-originals'::text,
       target_job.canonical_object_path, target_intake.expected_mime_type,
@@ -798,6 +938,8 @@ begin
     or target_job.state not in ('queued', 'leased')
     or (target_job.state = 'leased'
       and target_job.lease_expires_at > statement_timestamp())
+    or (target_job.state = 'leased'
+      and target_job.validator_auth_user_id = current_user_id)
     or not (select private.photo_intake_requester_is_authorized(target_intake.id)) then
     raise exception using errcode = '42501', message = 'Photo validation could not be claimed';
   end if;
@@ -829,10 +971,14 @@ begin
     raise exception using errcode = '22023', message = 'Photo validation could not be claimed';
   end if;
 
+  new_lease_attempt_id := extensions.gen_random_uuid();
   update private.photo_validation_jobs as job
      set state = 'leased',
          validator_auth_user_id = current_user_id,
          lease_key_hash = extensions.digest(requested_lease_key::text, 'sha256'),
+         lease_attempt_id = new_lease_attempt_id,
+         canonical_object_path =
+           'original/' || job.original_id::text || '/' || new_lease_attempt_id::text,
          lease_started_at = statement_timestamp(),
          lease_expires_at = statement_timestamp() + interval '15 minutes',
          attempt_count = job.attempt_count + 1,
@@ -842,7 +988,8 @@ begin
    returning * into target_job;
 
   return query select
-    target_job.id, target_intake.id, 'our-days-intake'::text,
+    target_job.id, target_job.lease_attempt_id, target_intake.id,
+    'our-days-intake'::text,
     target_intake.object_path, target_job.source_storage_object_id,
     target_job.source_storage_object_version, 'our-days-originals'::text,
     target_job.canonical_object_path, target_intake.expected_mime_type,
@@ -881,6 +1028,7 @@ as $$
          'validation_job_id', job.id::text,
          'intake_id', job.intake_id::text,
          'original_id', job.original_id::text,
+         'lease_attempt_id', job.lease_attempt_id::text,
          'expected_mime_type', intake.expected_mime_type,
          'expected_size_bytes', intake.expected_size_bytes,
          'expected_sha256', encode(intake.expected_sha256, 'hex'),
@@ -1035,6 +1183,13 @@ begin
   if current_user_id is null or requested_validation_job_id is null
     or requested_lease_key is null or requested_storage_object_id is null
     or requested_storage_object_version is null
+    or requested_verified_mime_type is null
+    or requested_verified_size_bytes is null
+    or requested_verified_sha256_hex is null
+    or requested_verified_width is null
+    or requested_verified_height is null
+    or requested_verified_channels is null
+    or requested_verified_pages is null
     or requested_verified_sha256_hex !~ '^[0-9a-f]{64}$'
     or requested_verified_mime_type not in (
       'image/jpeg', 'image/png', 'image/webp'
@@ -1043,12 +1198,13 @@ begin
     or requested_verified_height not between 1 and 100000
     or requested_verified_width::bigint * requested_verified_height::bigint > 50000000
     or requested_verified_channels not between 1 and 4
-    or requested_verified_pages <> 1
-    or not (select private.photo_validator_is_allowed(current_user_id)) then
+    or requested_verified_pages <> 1 then
     raise exception using errcode = '42501', message = 'Photo validation could not be completed';
   end if;
 
-  perform 1 from auth.users where id = current_user_id for update;
+  if not (select private.lock_photo_validator_if_allowed(current_user_id)) then
+    raise exception using errcode = '42501', message = 'Photo validation could not be completed';
+  end if;
   select job.* into target_job from private.photo_validation_jobs as job
    where job.id = requested_validation_job_id;
   if target_job.id is null then
@@ -1116,6 +1272,7 @@ begin
       'validation_job_id', target_job.id::text,
       'intake_id', target_job.intake_id::text,
       'original_id', target_job.original_id::text,
+      'lease_attempt_id', target_job.lease_attempt_id::text,
       'expected_mime_type', target_intake.expected_mime_type,
       'expected_size_bytes', target_intake.expected_size_bytes,
       'expected_sha256', encode(target_intake.expected_sha256, 'hex'),
@@ -1126,14 +1283,15 @@ begin
 
   insert into private.photo_originals (
     id, circle_id, validation_job_id, intake_id, journal_person_id,
-    recorded_by_membership_id, object_path, storage_object_id,
+    recorded_by_membership_id, lease_attempt_id, object_path, storage_object_id,
     storage_object_version, verified_mime_type, verified_size_bytes,
     verified_sha256, verified_width, verified_height, verified_channels,
     verified_pages, verification_profile_version
   ) values (
     target_job.original_id, target_job.circle_id, target_job.id,
     target_job.intake_id, target_job.journal_person_id,
-    target_job.requested_by_membership_id, target_job.canonical_object_path,
+    target_job.requested_by_membership_id, target_job.lease_attempt_id,
+    target_job.canonical_object_path,
     canonical_object.id, coalesce(canonical_object.version, ''),
     requested_verified_mime_type, requested_verified_size_bytes,
     decode(requested_verified_sha256_hex, 'hex'),
@@ -1161,7 +1319,8 @@ begin
 
   return existing_original_id;
 exception
-  when unique_violation or check_violation or foreign_key_violation then
+  when unique_violation or check_violation or foreign_key_violation
+    or not_null_violation then
     raise exception using errcode = '22023', message = 'Photo validation could not be completed';
 end;
 $$;
@@ -1184,15 +1343,17 @@ declare
 begin
   if current_user_id is null or requested_validation_job_id is null
     or requested_lease_key is null
+    or requested_rejection_reason is null
     or requested_rejection_reason not in (
       'decode_failed', 'hash_mismatch', 'mime_mismatch',
       'resource_limit', 'size_mismatch', 'source_changed',
       'unsupported_format'
-    )
-    or not (select private.photo_validator_is_allowed(current_user_id)) then
+    ) then
     raise exception using errcode = '42501', message = 'Photo validation could not be rejected';
   end if;
-  perform 1 from auth.users where id = current_user_id for update;
+  if not (select private.lock_photo_validator_if_allowed(current_user_id)) then
+    raise exception using errcode = '42501', message = 'Photo validation could not be rejected';
+  end if;
   select job.* into target_job from private.photo_validation_jobs as job
    where job.id = requested_validation_job_id;
   if target_job.id is null then
@@ -1264,14 +1425,16 @@ declare
 begin
   if current_user_id is null or requested_validation_job_id is null
     or requested_lease_key is null
+    or requested_review_reason is null
     or requested_review_reason not in (
       'canonical_collision', 'canonical_evidence_mismatch',
       'validator_cleanup_failed'
-    )
-    or not (select private.photo_validator_is_allowed(current_user_id)) then
+    ) then
     raise exception using errcode = '42501', message = 'Photo validation could not be flagged';
   end if;
-  perform 1 from auth.users where id = current_user_id for update;
+  if not (select private.lock_photo_validator_if_allowed(current_user_id)) then
+    raise exception using errcode = '42501', message = 'Photo validation could not be flagged';
+  end if;
   select job.* into target_job from private.photo_validation_jobs as job
    where job.id = requested_validation_job_id;
   if target_job.id is null then
@@ -1355,6 +1518,7 @@ create function public.claim_photo_validation(
 )
 returns table (
   validation_job_id uuid,
+  lease_attempt_id uuid,
   intake_id uuid,
   source_bucket_id text,
   source_object_path text,
@@ -1437,6 +1601,8 @@ revoke all on table private.photo_originals
 
 revoke all on function private.enforce_photo_validator_allowlist_integrity()
   from public, anon, authenticated, service_role;
+revoke all on function private.enforce_photo_validator_family_separation()
+  from public, anon, authenticated, service_role;
 revoke all on function private.enforce_photo_validation_job_integrity()
   from public, anon, authenticated, service_role;
 revoke all on function private.enforce_photo_original_integrity()
@@ -1444,6 +1610,8 @@ revoke all on function private.enforce_photo_original_integrity()
 revoke all on function private.enforce_verified_photo_promotion_consistency()
   from public, anon, authenticated, service_role;
 revoke all on function private.photo_validator_is_allowed(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function private.lock_photo_validator_if_allowed(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function private.enqueue_photo_validation_job()
   from public, anon, authenticated, service_role;

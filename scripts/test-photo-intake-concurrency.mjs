@@ -17,6 +17,7 @@ const ORGANIZER_A_TWO = "10000000-0000-4000-8000-000000000002";
 const MEMBER_A = "10000000-0000-4000-8000-000000000003";
 const DUAL_CIRCLE_USER = "10000000-0000-4000-8000-000000000005";
 const ORGANIZER_B = "10000000-0000-4000-8000-000000000006";
+const NO_CIRCLE_USER = "10000000-0000-4000-8000-000000000007";
 
 const PERSON_ORGANIZER_A = "30000000-0000-4000-8000-000000000001";
 const PERSON_MEMBER_A = "30000000-0000-4000-8000-000000000003";
@@ -372,7 +373,9 @@ function reservationRow(result, label) {
     row.state !== "reserved" ||
     typeof row.expires_at !== "string"
   ) {
-    throw new Error(`${label} returned an invalid reservation contract.`);
+    throw new Error(
+      `${label} returned an invalid reservation contract (${result.response.status}, ${JSON.stringify(result.body)}).`,
+    );
   }
   return row;
 }
@@ -409,6 +412,55 @@ function acknowledgementRow(result, reservation, expectedSize, label) {
     throw new Error(`${label} returned an invalid acknowledgement contract.`);
   }
   return row;
+}
+
+function validationLeaseRow(result, reservation, label) {
+  const row = Array.isArray(result.body) ? result.body[0] : result.body;
+  const canonicalPathParts = row?.canonical_object_path?.split("/") ?? [];
+  if (
+    !result.response.ok ||
+    !row ||
+    !uuidPattern.test(row.validation_job_id) ||
+    !uuidPattern.test(row.lease_attempt_id) ||
+    row.intake_id !== reservation.intake_id ||
+    row.source_bucket_id !== INTAKE_BUCKET ||
+    row.source_object_path !== reservation.object_path ||
+    !uuidPattern.test(row.source_storage_object_id) ||
+    row.canonical_bucket_id !== "our-days-originals" ||
+    canonicalPathParts.length !== 3 ||
+    canonicalPathParts[0] !== "original" ||
+    !uuidPattern.test(canonicalPathParts[1]) ||
+    canonicalPathParts[2] !== row.lease_attempt_id ||
+    row.expected_mime_type !== "image/jpeg" ||
+    !sha256Pattern.test(row.expected_sha256_hex) ||
+    typeof row.lease_expires_at !== "string"
+  ) {
+    throw new Error(`${label} returned an invalid validation-lease contract.`);
+  }
+  return row;
+}
+
+async function completePhotoValidation(
+  apiUrl,
+  apiKey,
+  token,
+  lease,
+  leaseKey,
+  storageObjectId,
+) {
+  return rpcRequest(apiUrl, apiKey, token, "complete_photo_validation", {
+    lease_key: leaseKey,
+    storage_object_id: storageObjectId,
+    storage_object_version: "",
+    validation_job_id: lease.validation_job_id,
+    verified_channels: 3,
+    verified_height: 2,
+    verified_mime_type: lease.expected_mime_type,
+    verified_pages: 1,
+    verified_sha256_hex: lease.expected_sha256_hex,
+    verified_size_bytes: Number(lease.expected_size_bytes),
+    verified_width: 2,
+  });
 }
 
 async function reservePhoto(
@@ -670,7 +722,7 @@ function assertClosurePrepared(closureRequestId, intakes) {
           from private.photo_intakes
          where id in (${intakeIds})
            and state = 'invalidated'
-           and invalidation_reason = 'membership_authority_changed'
+           and invalidation_reason = 'account_closure_requested'
            and invalidated_at is not null
       ) <> ${intakes.length} then
         raise exception 'closure preparation left live or partial photo intake state';
@@ -837,14 +889,51 @@ function installTestHelpers() {
         $body$
       $definition$;
 
+      execute $definition$
+        create function public.phase4b_test_revoke_validator_and_hold(
+          target_auth_user_id uuid,
+          hold_ms integer
+        )
+        returns void
+        language plpgsql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+        begin
+          if hold_ms not between 1 and 15000
+            or target_auth_user_id <>
+              '10000000-0000-4000-8000-000000000007'::uuid then
+            raise exception using
+              errcode = '42501',
+              message = 'Test validator revocation unavailable';
+          end if;
+
+          update private.photo_validator_allowlist as validator
+             set revoked_at = statement_timestamp()
+           where validator.auth_user_id = target_auth_user_id
+             and validator.revoked_at is null;
+          if not found then
+            raise exception using
+              errcode = '42501',
+              message = 'Test validator revocation unavailable';
+          end if;
+
+          perform pg_catalog.pg_sleep(hold_ms::double precision / 1000);
+        end
+        $body$
+      $definition$;
+
       execute 'revoke all on function public.phase4a_test_hold_auth_user_lock(uuid, integer) from public, anon, authenticated';
       execute 'revoke all on function public.phase4a_test_hold_circle_lock(uuid, integer) from public, anon, authenticated';
       execute 'revoke all on function public.phase4a_test_concurrency_probe(text[], integer, boolean) from public, anon, authenticated';
       execute 'revoke all on function public.phase4a_test_prepare_account_closure(uuid) from public, anon, authenticated';
+      execute 'revoke all on function public.phase4b_test_revoke_validator_and_hold(uuid, integer) from public, anon, authenticated';
       execute 'grant execute on function public.phase4a_test_hold_auth_user_lock(uuid, integer) to service_role';
       execute 'grant execute on function public.phase4a_test_hold_circle_lock(uuid, integer) to service_role';
       execute 'grant execute on function public.phase4a_test_concurrency_probe(text[], integer, boolean) to service_role';
       execute 'grant execute on function public.phase4a_test_prepare_account_closure(uuid) to service_role';
+      execute 'grant execute on function public.phase4b_test_revoke_validator_and_hold(uuid, integer) to service_role';
     end
     $install$;
   `);
@@ -886,6 +975,7 @@ try {
     organizerA: createLocalUserToken(ORGANIZER_A, jwtSecret),
     organizerATwo: createLocalUserToken(ORGANIZER_A_TWO, jwtSecret),
     organizerB: createLocalUserToken(ORGANIZER_B, jwtSecret),
+    noCircle: createLocalUserToken(NO_CIRCLE_USER, jwtSecret),
   };
 
   const duplicateRequestKey = randomUUID();
@@ -1223,6 +1313,203 @@ try {
       end if;
     end
     $assert_dual_tus_unverified$;
+  `);
+
+  const validatorRevocationReservation = reservationRow(
+    await reservePhoto(
+      apiUrl,
+      apiKey,
+      tokens.organizerB,
+      CIRCLE_B,
+      PERSON_ORGANIZER_B,
+      randomUUID(),
+    ),
+    "Validator-revocation race reservation",
+  );
+  cleanupPaths.push(validatorRevocationReservation.object_path);
+  const validatorRevocationUploadClaim = await claimPhotoUpload(
+    apiUrl,
+    apiKey,
+    tokens.organizerB,
+    validatorRevocationReservation.intake_id,
+    syntheticPhoto,
+  );
+  uploadClaimRow(
+    validatorRevocationUploadClaim,
+    validatorRevocationReservation,
+    "Validator-revocation race upload claim",
+  );
+  const validatorRevocationUpload = await uploadClaimedTus(
+    apiUrl,
+    apiKey,
+    tokens.organizerB,
+    validatorRevocationReservation.object_path,
+    syntheticPhoto,
+    validatorRevocationUploadClaim.uploadMetadata,
+  );
+  requireSuccess(
+    validatorRevocationUpload.creation,
+    "Validator-revocation race TUS creation",
+  );
+  requireSuccess(
+    validatorRevocationUpload.patch,
+    "Validator-revocation race TUS patch",
+  );
+  acknowledgementRow(
+    await acknowledgePhoto(
+      apiUrl,
+      apiKey,
+      tokens.organizerB,
+      validatorRevocationReservation.intake_id,
+    ),
+    validatorRevocationReservation,
+    syntheticPhoto.length,
+    "Validator-revocation race acknowledgement",
+  );
+
+  runDatabaseQuery(`
+    insert into private.photo_validator_allowlist (auth_user_id)
+    values ('${NO_CIRCLE_USER}'::uuid);
+  `);
+  const validatorLeaseKey = randomUUID();
+  const validatorLease = validationLeaseRow(
+    await rpcRequest(
+      apiUrl,
+      apiKey,
+      tokens.noCircle,
+      "claim_photo_validation",
+      {
+        intake_id: validatorRevocationReservation.intake_id,
+        lease_key: validatorLeaseKey,
+      },
+    ),
+    validatorRevocationReservation,
+    "Validator-revocation race validation claim",
+  );
+  const canonicalStorageObjectId = randomUUID();
+  const canonicalOriginalId =
+    validatorLease.canonical_object_path.split("/")[1];
+  runDatabaseQuery(`
+    insert into storage.objects (
+      id, bucket_id, name, owner_id, metadata, user_metadata
+    ) values (
+      '${canonicalStorageObjectId}'::uuid,
+      'our-days-originals',
+      '${validatorLease.canonical_object_path}',
+      '${NO_CIRCLE_USER}',
+      jsonb_build_object(
+        'mimetype', '${validatorLease.expected_mime_type}',
+        'size', ${Number(validatorLease.expected_size_bytes)}
+      ),
+      jsonb_build_object(
+        'validation_job_id', '${validatorLease.validation_job_id}',
+        'intake_id', '${validatorLease.intake_id}',
+        'original_id', '${canonicalOriginalId}',
+        'lease_attempt_id', '${validatorLease.lease_attempt_id}',
+        'expected_mime_type', '${validatorLease.expected_mime_type}',
+        'expected_size_bytes', ${Number(validatorLease.expected_size_bytes)},
+        'expected_sha256', '${validatorLease.expected_sha256_hex}',
+        'verification_profile_version',
+          ${Number(validatorLease.verification_profile_version)}
+      )
+    );
+  `);
+
+  const validatorRevocationPromise = rpcRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "phase4b_test_revoke_validator_and_hold",
+    { hold_ms: 5000, target_auth_user_id: NO_CIRCLE_USER },
+  );
+  await waitForConcurrencyProbe({
+    apiUrl,
+    expectedWaiters: 1,
+    label: "Validator revocation transaction",
+    operationNames: ["phase4b_test_revoke_validator_and_hold"],
+    requireSleep: true,
+    serviceKey,
+  });
+
+  const postRevocationCompletionPromise = completePhotoValidation(
+    apiUrl,
+    apiKey,
+    tokens.noCircle,
+    validatorLease,
+    validatorLeaseKey,
+    canonicalStorageObjectId,
+  );
+  try {
+    await waitForConcurrencyProbe({
+      apiUrl,
+      expectedWaiters: 1,
+      label: "Post-revocation validator completion",
+      operationNames: ["complete_photo_validation"],
+      serviceKey,
+    });
+  } catch (error) {
+    await Promise.allSettled([
+      validatorRevocationPromise,
+      postRevocationCompletionPromise,
+    ]);
+    throw error;
+  }
+
+  const [validatorRevocation, postRevocationCompletion] = await Promise.all([
+    validatorRevocationPromise,
+    postRevocationCompletionPromise,
+  ]);
+  requireSuccess(validatorRevocation, "Validator revocation transaction");
+  requireSafeDenied(
+    postRevocationCompletion,
+    "Completion queued behind validator revocation",
+  );
+  requireSafeDenied(
+    await completePhotoValidation(
+      apiUrl,
+      apiKey,
+      tokens.noCircle,
+      validatorLease,
+      validatorLeaseKey,
+      canonicalStorageObjectId,
+    ),
+    "Completion after validator revocation",
+  );
+  runDatabaseQuery(`
+    do $assert_validator_revocation_wins$
+    begin
+      if not exists (
+        select 1
+          from private.photo_validator_allowlist
+         where auth_user_id = '${NO_CIRCLE_USER}'::uuid
+           and revoked_at is not null
+      ) or not exists (
+        select 1
+          from private.photo_validation_jobs
+         where id = '${validatorLease.validation_job_id}'::uuid
+           and intake_id = '${validatorLease.intake_id}'::uuid
+           and state = 'leased'
+           and completed_at is null
+      ) or not exists (
+        select 1
+          from private.photo_intakes
+         where id = '${validatorLease.intake_id}'::uuid
+           and state = 'uploaded_unverified'
+           and validation_completed_at is null
+      ) or exists (
+        select 1
+          from private.photo_originals
+         where validation_job_id = '${validatorLease.validation_job_id}'::uuid
+      ) or exists (
+        select 1
+          from private.audit_events
+         where event_type = 'photo_original_verified'
+           and subject_id = '${canonicalOriginalId}'::uuid
+      ) then
+        raise exception 'validator revocation allowed a later completion or state change';
+      end if;
+    end
+    $assert_validator_revocation_wins$;
   `);
 
   const acknowledgementRace = reservationRow(
@@ -1793,7 +2080,7 @@ try {
   );
 
   process.stdout.write(
-    "Forced Phase 4A duplicate reservation, fingerprint-claim, deterministic same/distinct-URL TUS, claim/authority-loss, acknowledgement/revocation, ordinary-member guardian revocation, account-closure request race, and preparation-time stale-patch checks preserved only quarantined, unverified state.\n",
+    "Forced Phase 4A duplicate reservation, fingerprint-claim, deterministic same/distinct-URL TUS, claim/authority-loss, acknowledgement/revocation, ordinary-member guardian revocation, account-closure request race, and preparation-time stale-patch checks preserved only quarantined, unverified state; Phase 4B revocation-first serialization denied post-revocation completion without changing the intake, job, original, or audit ledgers.\n",
   );
 } catch (error) {
   primaryError = error;

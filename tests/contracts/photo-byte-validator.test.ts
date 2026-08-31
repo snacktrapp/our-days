@@ -114,12 +114,20 @@ describe("photo byte validator", () => {
       .jpeg()
       .toBuffer();
     let observedMode: number | undefined;
+    let observedDirectoryMode: number | undefined;
 
     async function* inspectedChunks() {
       yield bytes.subarray(0, 16);
-      const entries = await readdir(tempDirectory);
+      const childEntries = await readdir(tempDirectory);
+      expect(childEntries).toHaveLength(1);
+      const childDirectory = join(tempDirectory, childEntries[0]);
+      const childStat = await stat(childDirectory);
+      expect(childStat.isDirectory()).toBe(true);
+      observedDirectoryMode = childStat.mode & 0o777;
+      const entries = await readdir(childDirectory);
       expect(entries).toHaveLength(1);
-      observedMode = (await stat(join(tempDirectory, entries[0]))).mode & 0o777;
+      observedMode =
+        (await stat(join(childDirectory, entries[0]))).mode & 0o777;
       yield bytes.subarray(16);
     }
 
@@ -127,6 +135,7 @@ describe("photo byte validator", () => {
       inspectedChunks(),
       validationOptions(bytes, "image/jpeg"),
     );
+    expect(observedDirectoryMode).toBe(0o700);
     expect(observedMode).toBe(0o600);
   });
 
@@ -148,7 +157,9 @@ describe("photo byte validator", () => {
       async (validated: ValidatedPhotoSpool) => {
         expect(validated).not.toHaveProperty("path");
         expect(validated.stream).not.toHaveProperty("path");
-        expect(await readdir(tempDirectory)).toEqual([]);
+        const childEntries = await readdir(tempDirectory);
+        expect(childEntries).toHaveLength(1);
+        expect(await readdir(join(tempDirectory, childEntries[0]))).toEqual([]);
         const received: Buffer[] = [];
         for await (const chunk of validated.stream) {
           received.push(Buffer.from(chunk));
@@ -159,6 +170,56 @@ describe("photo byte validator", () => {
     );
 
     expect(callbackValue).toBe("promoted");
+  });
+
+  it("does not report callback success unless every lent byte is consumed", async () => {
+    const bytes = await sharp({
+      create: {
+        background: "#414f61",
+        channels: 3,
+        height: 4,
+        width: 6,
+      },
+    })
+      .png()
+      .toBuffer();
+
+    await expectCode(
+      withValidatedPhotoSpool(
+        byteStream(bytes),
+        validationOptions(bytes, "image/png"),
+        async () => "incorrect-success",
+      ),
+      "PHOTO_VALIDATED_STREAM_INCOMPLETE",
+    );
+  });
+
+  it("rejects a callback that consumes only the first handoff chunk", async () => {
+    const raw = Buffer.alloc(300 * 300 * 3);
+    for (let index = 0; index < raw.length; index += 1) {
+      raw[index] = index % 251;
+    }
+    const bytes = await sharp(raw, {
+      raw: { channels: 3, height: 300, width: 300 },
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+    expect(bytes.byteLength).toBeGreaterThan(64 * 1024);
+
+    await expectCode(
+      withValidatedPhotoSpool(
+        byteStream(bytes),
+        validationOptions(bytes, "image/png"),
+        async ({ stream }: ValidatedPhotoSpool) => {
+          const iterator = stream[Symbol.asyncIterator]();
+          const first = await iterator.next();
+          expect(first.done).toBe(false);
+          await iterator.return?.();
+          return "incorrect-partial-success";
+        },
+      ),
+      "PHOTO_VALIDATED_STREAM_INCOMPLETE",
+    );
   });
 
   it("destroys exact bytes when the trusted callback fails", async () => {
@@ -308,8 +369,93 @@ describe("photo byte validator", () => {
         byteStream(corrupt),
         validationOptions(corrupt, "image/jpeg"),
       ),
-      "PHOTO_DECODE_FAILED",
+      "PHOTO_FORMAT_UNSUPPORTED",
     );
+  });
+
+  it.each(["trailing payload", "concatenated image"] as const)(
+    "rejects a JPEG with a %s outside its first codestream",
+    async (variant) => {
+      const jpeg = await sharp({
+        create: {
+          background: "#526f82",
+          channels: 3,
+          height: 3,
+          width: 4,
+        },
+      })
+        .jpeg({ progressive: true })
+        .toBuffer();
+      const bytes =
+        variant === "trailing payload"
+          ? Buffer.concat([
+              jpeg,
+              Buffer.from("PK\u0003\u0004hidden-trailer"),
+              Buffer.from([0xff, 0xd9]),
+            ])
+          : Buffer.concat([jpeg, jpeg]);
+
+      await expectCode(
+        validatePhotoByteStream(
+          byteStream(bytes),
+          validationOptions(bytes, "image/jpeg"),
+        ),
+        "PHOTO_FORMAT_UNSUPPORTED",
+      );
+    },
+  );
+
+  it("times out a stalled web stream, cancels it, and removes its spool", async () => {
+    let cancelled = false;
+    const stalled = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelled = true;
+      },
+      pull() {
+        return new Promise(() => {});
+      },
+    });
+
+    await expectCode(
+      validatePhotoByteStream(stalled, {
+        expectedMimeType: "image/jpeg",
+        expectedSha256Hex: "0".repeat(64),
+        expectedSizeBytes: 1,
+        inputTimeoutMilliseconds: 40,
+        tempDirectory,
+      }),
+      "PHOTO_INPUT_TIMEOUT",
+    );
+    expect(cancelled).toBe(true);
+  });
+
+  it("times out infinite zero-length chunks without starving its deadline", async () => {
+    let returned = false;
+    const zeroChunks = {
+      [Symbol.asyncIterator]() {
+        return {
+          async next() {
+            return { done: false as const, value: new Uint8Array() };
+          },
+          async return() {
+            returned = true;
+            return { done: true as const, value: undefined };
+          },
+        };
+      },
+    };
+
+    await expectCode(
+      validatePhotoByteStream(zeroChunks, {
+        expectedMimeType: "image/jpeg",
+        expectedSha256Hex: "0".repeat(64),
+        expectedSizeBytes: 1,
+        inputTimeoutMilliseconds: 40,
+        tempDirectory,
+      }),
+      "PHOTO_INPUT_TIMEOUT",
+    );
+    expect(returned).toBe(true);
   });
 
   it("removes the spool when its source fails", async () => {
