@@ -61,6 +61,13 @@ select ok(
 select ok(
   (select pg_get_constraintdef(oid)
      from pg_constraint
+    where conname = 'photo_display_derivatives_shape_valid')
+      like '%2560%6553600%',
+  'profile v1 output geometry is pinned to a 2560-pixel edge'
+);
+select ok(
+  (select pg_get_constraintdef(oid)
+     from pg_constraint
     where conname = 'photo_derivative_jobs_profile_valid') like '%= 1%',
   'transform profile one is pinned in the job ledger'
 );
@@ -341,6 +348,23 @@ select is(
   'claiming returns the immutable source fingerprint and decode shape'
 );
 reset role;
+select jsonb_build_object(
+  'derivative_job_id', :'derivative_derivative_job_id',
+  'original_id', 'a5000000-0000-4000-8000-000000000001',
+  'derivative_id', split_part(:'derivative_display_object_path', '/', 2),
+  'lease_attempt_id', :'derivative_lease_attempt_id',
+  'source_storage_object_id', 'a8000000-0000-4000-8000-000000000001',
+  'source_storage_object_version', '',
+  'output_mime_type', 'image/webp',
+  'output_size_bytes', 8,
+  'output_sha256', repeat('b', 64),
+  'output_width', 2,
+  'output_height', 2,
+  'output_channels', 3,
+  'output_pages', 1,
+  'maximum_size_bytes', 12582912,
+  'transform_profile_version', 1
+)::text as derivative_upload_metadata \gset
 select is(
   :'derivative_display_object_path',
   format(
@@ -369,6 +393,158 @@ select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
 );
 select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path',
+    :'derivative_source_storage_object_id'::uuid,
+    :'derivative_source_storage_object_version'
+  ),
+  true,
+  'the active validator can read only the exact immutable source evidence'
+);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path' || '/wrong',
+    :'derivative_source_storage_object_id'::uuid,
+    :'derivative_source_storage_object_version'
+  ),
+  false,
+  'the active source-read predicate rejects a wrong object path'
+);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path',
+    'b2000000-0000-4000-8000-000000000099'::uuid,
+    :'derivative_source_storage_object_version'
+  ),
+  false,
+  'the active source-read predicate rejects a wrong Storage object identity'
+);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path',
+    :'derivative_source_storage_object_id'::uuid,
+    'wrong-version'
+  ),
+  false,
+  'the active source-read predicate rejects a wrong Storage object version'
+);
+select is(
+  private.photo_display_path_is_uploadable(
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000099',
+    :'derivative_upload_metadata'::jsonb
+  ),
+  true,
+  'the active validator upload predicate accepts only the exact output contract'
+);
+select is(
+  private.photo_display_path_is_uploadable(
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000098',
+    :'derivative_upload_metadata'::jsonb
+  ),
+  false,
+  'the upload predicate rejects a wrong object owner'
+);
+select is(
+  (
+    select bool_and(not private.photo_display_path_is_uploadable(
+      :'derivative_display_object_path',
+      '10000000-0000-4000-8000-000000000099', candidate.metadata
+    ))
+      from (values
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_size_bytes}', '"8"'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_size_bytes}', '8.5'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_size_bytes}', '1e100'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_width}', '2147483648'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_width}', '0'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_width}', '2561'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_height}', '2561'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_channels}', '[]'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_pages}', '2'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_sha256}', to_jsonb('not-a-sha256'::text))),
+        (:'derivative_upload_metadata'::jsonb || '{"extra":true}'::jsonb)
+      ) as candidate(metadata)
+  ),
+  true,
+  'malformed, fractional, overflowing, out-of-profile, and extra output metadata fail safely'
+);
+select is(
+  (
+    select bool_and(not private.photo_display_path_is_uploadable(
+      :'derivative_display_object_path',
+      '10000000-0000-4000-8000-000000000099', candidate.metadata
+    ))
+      from (values
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{derivative_job_id}', to_jsonb('b2000000-0000-4000-8000-000000000099'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{original_id}', to_jsonb('b2000000-0000-4000-8000-000000000099'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{derivative_id}', to_jsonb('b2000000-0000-4000-8000-000000000099'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{lease_attempt_id}', to_jsonb('b2000000-0000-4000-8000-000000000099'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{source_storage_object_id}', to_jsonb('b2000000-0000-4000-8000-000000000099'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{source_storage_object_version}', to_jsonb('wrong-version'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{output_mime_type}', to_jsonb('image/jpeg'::text))),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{maximum_size_bytes}', '12582911'::jsonb)),
+        (jsonb_set(:'derivative_upload_metadata'::jsonb,
+          '{transform_profile_version}', '2'::jsonb))
+      ) as candidate(metadata)
+  ),
+  true,
+  'every immutable job, source, MIME, limit, and profile fingerprint mismatch is denied'
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
+);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path',
+    :'derivative_source_storage_object_id'::uuid,
+    :'derivative_source_storage_object_version'
+  ) or private.photo_display_path_is_uploadable(
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000098',
+    :'derivative_upload_metadata'::jsonb
+  ),
+  false,
+  'a different validator cannot use another active source or display lease'
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'derivative_source_object_path',
+    :'derivative_source_storage_object_id'::uuid,
+    :'derivative_source_storage_object_version'
+  ) or private.photo_display_path_is_uploadable(
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000001',
+    :'derivative_upload_metadata'::jsonb
+  ),
+  false,
+  'a family identity cannot use validator source or display policies'
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000099', true
+);
 select throws_ok(
   $$insert into storage.objects (
       id, bucket_id, name, owner_id, metadata, user_metadata
@@ -394,6 +570,35 @@ select throws_ok(
   '42501', 'new row violates row-level security policy for table "objects"',
   'the exact leased path still rejects missing output evidence metadata'
 );
+select throws_ok(
+  format(
+    'insert into storage.objects ('
+      || 'id,bucket_id,name,owner_id,metadata,user_metadata) values ('
+      || '%L::uuid,%L,%L,%L,%L::jsonb,%L::jsonb)',
+    'b2000000-0000-4000-8000-000000000003', 'our-days-display',
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000099',
+    '{"mimetype":"image/webp","size":8}',
+    jsonb_set(:'derivative_upload_metadata'::jsonb,
+      '{output_size_bytes}', '8.5'::jsonb)::text
+  ),
+  '42501', 'new row violates row-level security policy for table "objects"',
+  'the Storage policy safely denies fractional output metadata'
+);
+select throws_ok(
+  format(
+    'insert into storage.objects ('
+      || 'id,bucket_id,name,owner_id,metadata,user_metadata) values ('
+      || '%L::uuid,%L,%L,%L,%L::jsonb,%L::jsonb)',
+    'b2000000-0000-4000-8000-000000000004', 'our-days-display',
+    :'derivative_display_object_path',
+    '10000000-0000-4000-8000-000000000098',
+    '{"mimetype":"image/webp","size":8}',
+    :'derivative_upload_metadata'
+  ),
+  '42501', 'new row violates row-level security policy for table "objects"',
+  'the Storage policy denies a wrong display-object owner'
+);
 insert into storage.objects (
   id, bucket_id, name, owner_id, metadata, user_metadata
 ) values (
@@ -413,6 +618,18 @@ insert into storage.objects (
     'output_channels', 3, 'output_pages', 1,
     'maximum_size_bytes', 12582912, 'transform_profile_version', 1
   )
+);
+select throws_ok(
+  format(
+    'select public.complete_photo_display_derivative('
+      || '%L::uuid,%L::uuid,%L::uuid,%L,%s,%L,%s,%s,%s,%s)',
+    :'derivative_derivative_job_id',
+    'b1000000-0000-4000-8000-000000000001',
+    'b2000000-0000-4000-8000-000000000001', '', 8,
+    repeat('b', 64), 2561, 2, 3, 1
+  ),
+  '42501', 'Photo derivative could not be completed',
+  'completion rejects geometry outside the fixed v1 profile'
 );
 select throws_ok(
   format(
@@ -686,6 +903,92 @@ from private.photo_originals
 where id = 'a5000000-0000-4000-8000-000000000001';
 set constraints all immediate;
 
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
+);
+update storage.objects
+   set id = 'c8000000-0000-4000-8000-000000000099'
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects a changed immutable source Storage identity'
+);
+update storage.objects
+   set id = 'c8000000-0000-4000-8000-000000000002'
+ where id = 'c8000000-0000-4000-8000-000000000099';
+update storage.objects
+   set version = 'wrong-version'
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects a changed immutable source Storage version'
+);
+update storage.objects set version = null
+ where id = 'c8000000-0000-4000-8000-000000000002';
+update storage.objects
+   set metadata = jsonb_set(metadata, '{mimetype}', '"image/png"'::jsonb)
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects a changed immutable source MIME type'
+);
+update storage.objects
+   set metadata = '{"mimetype":"image/jpeg","size":13}'::jsonb
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects a changed immutable source byte count'
+);
+update storage.objects
+   set metadata = '{"mimetype":"image/jpeg","size":12}'::jsonb,
+       user_metadata = user_metadata || '{"extra":true}'::jsonb
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects changed immutable source user metadata'
+);
+update storage.objects
+   set user_metadata = user_metadata - 'extra',
+       name = name || '/missing'
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select throws_ok(
+  $$select * from public.claim_photo_display_derivative(
+    'c5000000-0000-4000-8000-000000000002',
+    'c9000000-0000-4000-8000-000000000099'
+  )$$,
+  '22023', 'Photo derivative source evidence did not match',
+  'claim rejects a missing exact immutable source path'
+);
+update storage.objects
+   set name = 'original/c5000000-0000-4000-8000-000000000002/c6000000-0000-4000-8000-000000000002'
+ where id = 'c8000000-0000-4000-8000-000000000002';
+select is(
+  (select state from private.photo_derivative_jobs
+    where original_id = 'c5000000-0000-4000-8000-000000000002'),
+  'queued'::text,
+  'every mismatched source claim leaves the derivative job unpublished and queued'
+);
+
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000098', true
@@ -810,6 +1113,38 @@ select is(
     where derivative_job_id = :'second_attempt_derivative_job_id'::uuid),
   0::bigint,
   'operator review never publishes a display derivative'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000097', true
+);
+select is(
+  public.flag_photo_display_derivative_for_review(
+    :'second_attempt_derivative_job_id'::uuid,
+    'cb000000-0000-4000-8000-000000000002', 'display_collision'
+  ),
+  :'second_attempt_derivative_job_id'::uuid,
+  'an exact operator-review retry is idempotent'
+);
+select set_config('storage.operation', 'object.get_authenticated', true);
+select is(
+  private.photo_derivative_source_is_readable(
+    :'second_attempt_source_object_path',
+    :'second_attempt_source_storage_object_id'::uuid,
+    :'second_attempt_source_storage_object_version'
+  ) or private.photo_display_path_is_readable(
+    :'second_attempt_display_object_path'
+  ),
+  false,
+  'operator review closes both source and display read-back capabilities'
+);
+reset role;
+select is(
+  (select count(*)::bigint from private.audit_events
+    where event_type = 'photo_display_derivative_flagged_for_review'
+      and subject_id = :'second_attempt_derivative_job_id'::uuid),
+  1::bigint,
+  'operator-review retries preserve exactly one audit event'
 );
 
 select * from finish();

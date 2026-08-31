@@ -103,6 +103,103 @@ function insertWebpChunkAfterFirst(bytes: Buffer, type: string, data: Buffer) {
   return result;
 }
 
+function firstWebpChunkEnd(bytes: Buffer) {
+  const firstLength = bytes.readUInt32LE(16);
+  return 20 + firstLength + (firstLength % 2);
+}
+
+function insertHighBitWebpChunk(bytes: Buffer) {
+  const result = insertWebpChunkAfterFirst(
+    bytes,
+    "JUNK",
+    Buffer.from("opaque"),
+  );
+  result.set([0xca, 0xd5, 0xce, 0xcb], firstWebpChunkEnd(bytes));
+  return result;
+}
+
+function corruptWebpPadding(bytes: Buffer) {
+  let result = Buffer.from(bytes);
+  let position = 12;
+  while (position < result.length) {
+    const length = result.readUInt32LE(position + 4);
+    if (length % 2 === 1) {
+      result[position + 8 + length] = 1;
+      return result;
+    }
+    const type = result.subarray(position, position + 4).toString("ascii");
+    if (type === "VP8 " || type === "VP8L") {
+      const dataEnd = position + 8 + length;
+      result = Buffer.concat([
+        result.subarray(0, dataEnd),
+        Buffer.from([0, 1]),
+        result.subarray(dataEnd),
+      ]);
+      result.writeUInt32LE(length + 1, position + 4);
+      result.writeUInt32LE(result.length - 8, 4);
+      return result;
+    }
+    position += 8 + length;
+  }
+  throw new Error("Synthetic WebP did not contain an odd-length chunk");
+}
+
+function mutateVp8x(bytes: Buffer, mutate: (result: Buffer) => void) {
+  const result = Buffer.from(bytes);
+  expect(result.subarray(12, 16).toString("ascii")).toBe("VP8X");
+  mutate(result);
+  return result;
+}
+
+function webpChunkSlices(bytes: Buffer) {
+  const chunks: Array<{ bytes: Buffer; type: string }> = [];
+  let position = 12;
+  while (position < bytes.length) {
+    const length = bytes.readUInt32LE(position + 4);
+    const end = position + 8 + length + (length % 2);
+    chunks.push({
+      bytes: bytes.subarray(position, end),
+      type: bytes.subarray(position, position + 4).toString("ascii"),
+    });
+    position = end;
+  }
+  return chunks;
+}
+
+function rebuildWebp(bytes: Buffer, chunks: Buffer[]) {
+  const result = Buffer.concat([bytes.subarray(0, 12), ...chunks]);
+  result.writeUInt32LE(result.length - 8, 4);
+  return result;
+}
+
+function duplicatePrimaryWebpChunk(bytes: Buffer) {
+  const chunks = webpChunkSlices(bytes);
+  const primary = chunks.find(({ type }) => type === "VP8 " || type === "VP8L");
+  if (!primary)
+    throw new Error("Synthetic WebP did not contain an image chunk");
+  return rebuildWebp(bytes, [
+    ...chunks.map((chunk) => chunk.bytes),
+    primary.bytes,
+  ]);
+}
+
+function moveAlphaAfterPrimary(bytes: Buffer) {
+  const chunks = webpChunkSlices(bytes);
+  const alphaIndex = chunks.findIndex(({ type }) => type === "ALPH");
+  const primaryIndex = chunks.findIndex(
+    ({ type }) => type === "VP8 " || type === "VP8L",
+  );
+  if (alphaIndex < 0 || primaryIndex < 0 || alphaIndex > primaryIndex) {
+    throw new Error("Synthetic WebP did not contain ordered alpha chunks");
+  }
+  const reordered = chunks.filter((_, index) => index !== alphaIndex);
+  reordered.push(chunks[alphaIndex]);
+  return rebuildWebp(
+    bytes,
+    reordered.map((chunk) => chunk.bytes),
+  );
+}
+
 function validationOptions(bytes: Uint8Array, mimeType: string) {
   return {
     expectedMimeType: mimeType,
@@ -206,6 +303,22 @@ async function expectCode(promise: Promise<unknown>, code: string) {
     code,
     name: "PhotoDisplayDerivativeError",
   });
+}
+
+async function expectCanonicalRejected(promise: Promise<unknown>) {
+  try {
+    await promise;
+    throw new Error("Canonical tampering unexpectedly passed validation");
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    const evidence = error as Error & { code?: string };
+    expect([
+      "PhotoDisplayDerivativeError:PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
+      "PhotoByteValidationError:PHOTO_DECODE_FAILED",
+      "PhotoByteValidationError:PHOTO_FORMAT_UNSUPPORTED",
+      "PhotoByteValidationError:PHOTO_PAGE_LIMIT_EXCEEDED",
+    ]).toContain(`${evidence.name}:${evidence.code}`);
+  }
 }
 
 beforeEach(async () => {
@@ -341,15 +454,15 @@ describe("photo display derivative", () => {
       create: {
         background: "#284f68",
         channels: 3,
-        height: 600,
-        width: 1200,
+        height: 160,
+        width: 3200,
       },
     })
       .png()
       .toBuffer();
-    const reduced = await derive(large, "image/png", { maxEdge: 300 });
-    expect(reduced.width).toBe(300);
-    expect(reduced.height).toBe(150);
+    const reduced = await derive(large, "image/png");
+    expect(reduced.width).toBe(2560);
+    expect(reduced.height).toBe(128);
 
     const small = await sharp({
       create: {
@@ -361,9 +474,27 @@ describe("photo display derivative", () => {
     })
       .jpeg()
       .toBuffer();
-    const unchanged = await derive(small, "image/jpeg", { maxEdge: 300 });
+    const unchanged = await derive(small, "image/jpeg");
     expect(unchanged.width).toBe(30);
     expect(unchanged.height).toBe(20);
+  });
+
+  it("does not allow a caller to change the v1 transform geometry", async () => {
+    const source = await sharp({
+      create: {
+        background: "#284f68",
+        channels: 3,
+        height: 20,
+        width: 30,
+      },
+    })
+      .png()
+      .toBuffer();
+    const evidence = await trustedValidatedEvidence(source, "image/png");
+    await expectCode(
+      deriveTrusted(evidence, { maxEdge: 300 }),
+      "PHOTO_DERIVATIVE_CONFIGURATION_INVALID",
+    );
   });
 
   it("preserves alpha while stripping every metadata container", async () => {
@@ -607,6 +738,49 @@ describe("photo display derivative", () => {
       }),
       "PHOTO_DERIVATIVE_CANONICAL_MISMATCH",
     );
+
+    const forbiddenVariants = [
+      insertWebpChunkAfterFirst(
+        derivative.bytes,
+        "EXIF",
+        Buffer.from("forbidden-exif"),
+      ),
+      insertWebpChunkAfterFirst(
+        derivative.bytes,
+        "XMP ",
+        Buffer.from("forbidden-xmp"),
+      ),
+      insertWebpChunkAfterFirst(
+        derivative.bytes,
+        "ICCP",
+        Buffer.from("forbidden-icc"),
+      ),
+      insertWebpChunkAfterFirst(derivative.bytes, "ANIM", Buffer.alloc(6)),
+      insertWebpChunkAfterFirst(derivative.bytes, "ANMF", Buffer.alloc(16)),
+      insertHighBitWebpChunk(derivative.bytes),
+      corruptWebpPadding(derivative.bytes),
+      Buffer.concat([derivative.bytes, Buffer.from("trailer")]),
+      mutateVp8x(derivative.bytes, (bytes) => {
+        bytes[20] |= 0x08;
+      }),
+      mutateVp8x(derivative.bytes, (bytes) => {
+        bytes[20] &= ~0x10;
+      }),
+      mutateVp8x(derivative.bytes, (bytes) => {
+        bytes[24] ^= 0x01;
+      }),
+      duplicatePrimaryWebpChunk(derivative.bytes),
+      moveAlphaAfterPrimary(derivative.bytes),
+    ];
+    for (const forbidden of forbiddenVariants) {
+      await expectCanonicalRejected(
+        validatePhotoDisplayByteStream(chunkedStream(forbidden, 13), {
+          ...canonicalOptions,
+          expectedSha256Hex: sha256Hex(forbidden),
+          expectedSizeBytes: forbidden.length,
+        }),
+      );
+    }
   });
 
   it("times out a stalled source and never invokes the callback", async () => {

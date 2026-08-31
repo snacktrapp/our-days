@@ -13,7 +13,6 @@ export const MAX_PHOTO_DISPLAY_BYTES = 12 * 1024 * 1024;
 
 const MAX_SOURCE_PIXELS = 50_000_000;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
-const MAX_EDGE_LIMIT = 4096;
 const MAX_TRANSFORM_SECONDS = 60;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const supportedSourceMimeTypes = new Set([
@@ -86,6 +85,12 @@ function validateInput(validated, rawOptions, callback) {
       "Derivative options are invalid.",
     );
   }
+  if (options.maxEdge !== undefined) {
+    fail(
+      "PHOTO_DERIVATIVE_CONFIGURATION_INVALID",
+      "The v1 display geometry cannot be overridden.",
+    );
+  }
   if (
     options.tempDirectory !== undefined &&
     (typeof options.tempDirectory !== "string" ||
@@ -98,11 +103,7 @@ function validateInput(validated, rawOptions, callback) {
   }
 
   return {
-    maxEdge: positiveInteger(
-      options.maxEdge ?? DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
-      "maxEdge",
-      MAX_EDGE_LIMIT,
-    ),
+    maxEdge: DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
     maxOutputBytes: positiveInteger(
       options.maxOutputBytes ?? MAX_PHOTO_DISPLAY_BYTES,
       "maxOutputBytes",
@@ -709,12 +710,12 @@ function validateCanonicalOptions(rawOptions) {
   const expectedWidth = positiveInteger(
     rawOptions.expectedWidth,
     "expectedWidth",
-    MAX_EDGE_LIMIT,
+    DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
   );
   const expectedHeight = positiveInteger(
     rawOptions.expectedHeight,
     "expectedHeight",
-    MAX_EDGE_LIMIT,
+    DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
   );
   const expectedChannels = positiveInteger(
     rawOptions.expectedChannels,
@@ -765,7 +766,8 @@ export async function validatePhotoDisplayByteStream(source, rawOptions) {
         maxBytes: MAX_PHOTO_DISPLAY_BYTES,
         maxChannels: 4,
         maxPages: 1,
-        maxPixels: MAX_EDGE_LIMIT * MAX_EDGE_LIMIT,
+        maxPixels:
+          DEFAULT_PHOTO_DISPLAY_MAX_EDGE * DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
         tempDirectory: options.tempDirectory,
       },
       async (validated) => {
@@ -790,7 +792,8 @@ export async function validatePhotoDisplayByteStream(source, rawOptions) {
             animated: false,
             failOn: "warning",
             limitInputChannels: 4,
-            limitInputPixels: MAX_EDGE_LIMIT * MAX_EDGE_LIMIT,
+            limitInputPixels:
+              DEFAULT_PHOTO_DISPLAY_MAX_EDGE * DEFAULT_PHOTO_DISPLAY_MAX_EDGE,
             pages: 1,
             sequentialRead: true,
             unlimited: false,

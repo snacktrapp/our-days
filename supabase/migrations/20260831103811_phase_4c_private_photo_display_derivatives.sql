@@ -239,9 +239,9 @@ create table private.photo_display_derivatives (
     octet_length(output_sha256) = 32
   ),
   constraint photo_display_derivatives_shape_valid check (
-    output_width between 1 and 4096
-    and output_height between 1 and 4096
-    and output_width::bigint * output_height::bigint <= 16777216
+    output_width between 1 and 2560
+    and output_height between 1 and 2560
+    and output_width::bigint * output_height::bigint <= 6553600
     and output_channels between 1 and 4
     and output_pages = 1
   ),
@@ -664,9 +664,9 @@ begin
   end;
 
   if output_size_bytes not between 1 and 12582912
-    or output_width not between 1 and 4096
-    or output_height not between 1 and 4096
-    or output_width::bigint * output_height::bigint > 16777216
+    or output_width not between 1 and 2560
+    or output_height not between 1 and 2560
+    or output_width::bigint * output_height::bigint > 6553600
     or output_channels not between 1 and 4 then
     return false;
   end if;
@@ -849,10 +849,10 @@ begin
     or requested_output_sha256_hex is null
     or requested_output_sha256_hex !~ '^[0-9a-f]{64}$'
     or requested_output_width is null
-    or requested_output_width not between 1 and 4096
+    or requested_output_width not between 1 and 2560
     or requested_output_height is null
-    or requested_output_height not between 1 and 4096
-    or requested_output_width::bigint * requested_output_height::bigint > 16777216
+    or requested_output_height not between 1 and 2560
+    or requested_output_width::bigint * requested_output_height::bigint > 6553600
     or requested_output_channels is null
     or requested_output_channels not between 1 and 4
     or requested_output_pages is null
