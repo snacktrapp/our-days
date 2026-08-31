@@ -11,6 +11,9 @@ unprovisioned.
   database role. Authenticated requests proceed only when `session_id` belongs
   to the JWT subject, the Supabase Auth session has not expired, and account
   closure is not in progress.
+- The PostgREST setting is scoped to the current database, not the shared
+  Authenticator role globally. The logical-recovery sidecar captures,
+  allowlists, and replays that exact role/database setting.
 - The guard is security-invoker with a fixed empty search path. It relies on
   PostgREST's authoritative database role, so a forged or mismatched JWT `role`
   claim cannot bypass or opt into the check.
@@ -59,6 +62,11 @@ and audit state independently from the HTTP responses.
 - Full static, lint, TypeScript, unit, and recovery self-test gate passed: 58
   test files passed, one skipped; 691 tests passed, three skipped.
 - The production Webpack build and private-artifact scan passed.
+- The isolated logical database restore drill passed schema, normalized data,
+  metadata, migration-history, effective-ACL, session-hook replay, and restored
+  authorization checks, then removed its temporary database and archive. This
+  remains a local database-recovery test; production Auth-session recovery and
+  Storage object-byte recovery require separate operational proof.
 
 ## Boundary and remaining release work
 

@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "86330d24d5262a814725f7cf8fb9a594c981d7dc4f14a64b58fb1199e1df2383";
+  "257ba2f176ce903f57d8aef122c4990f7ae556331b0f66bc9d22c854e95947c7";
 const expectedCanonicalCatalogFingerprint =
-  "bac16822939634c47aac18816fa1179cdcdb4e36f033b503ff091cd9e24184a3";
+  "a8a8d68c3b1c6f3ea379233b09a971dae93788711a7dd2b7b326baad4eaffb79";
 const expectedRestoredSchemaFingerprint =
-  "e6ed8c3f626cca9dc084e64cc25edbd3d5740e93ddf0d41f815d4b08530dab78";
+  "65b4933838396c709977ab3f7e9279c1c1c7b1704c56fa63b3eda119f8e8906b";
 const expectedCanonicalDataFingerprint =
-  "f4faaa26d4bc50220ea4a254f0e5a7d4e9645ba5670830a15b791e284ce3cce1";
+  "7f77e3d4327515007353d2c70a6628a6950601a8cd49e1ed92ecbf576bdeb83f";
 const expectedDatabaseMetadataFingerprint =
-  "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
+  "d1f65c147c6a5d35f0f5ef2a663e3b486dad6b2a72bb06f7e6c4b0c0c5b29c22";
 const expectedDatabaseRepairSettingsFingerprint =
-  "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
+  "818e61cd97b3faf3ab3b111768b7db77d0a8b9809997b4c3a02728e59e84ee39";
 const expectedArchiveInventoryFingerprint =
-  "ff9d2434ce3a2471ebfe9087085ee6eacbaf3bf14e73e63dd76a9604cdb2af57";
+  "d4ff5669dda5f516c2e2114964736f0673a11f15cfd0220c5d7dc69f59bfdd7c";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: ["image/webp"],
@@ -811,6 +811,7 @@ select (
   and (select count(*) = 3 from public.person_guardians)
   and (select count(*) = 7 from public.moments)
   and (select count(*) = 1 from public.moment_people)
+  and (select count(*) = 0 from public.moment_photos)
   and (select count(*) = 1 from public.moment_notes)
   and (select count(*) = 1 from public.moment_reactions)
   and (select count(*) = 0 from private.account_closure_memberships)
@@ -831,8 +832,19 @@ select (
   and (select count(*) = 0 from private.invitation_email_requests)
   and (select count(*) = 0 from private.invitation_provisioner_allowlist)
   and (select count(*) = 0 from private.photo_intakes)
+  and (
+    select pg_catalog.array_agg(
+      capability || '|' || enabled::text order by capability
+    ) = array[
+      'family_derivative_delivery|false',
+      'photo_publication|false'
+    ]::text[]
+      from private.photo_capabilities
+  )
   and (select count(*) = 0 from private.photo_derivative_jobs)
   and (select count(*) = 0 from private.photo_display_derivatives)
+  and (select count(*) = 0 from private.photo_moment_request_people)
+  and (select count(*) = 0 from private.photo_moment_requests)
   and (select count(*) = 0 from private.photo_originals)
   and (select count(*) = 0 from private.photo_validation_jobs)
   and (select count(*) = 0 from private.photo_validator_allowlist)
@@ -933,9 +945,12 @@ select (
       'private.invitation_jobs',
       'private.invitation_provisioner_allowlist',
       'private.invitations',
+      'private.photo_capabilities',
       'private.photo_derivative_jobs',
       'private.photo_display_derivatives',
       'private.photo_intakes',
+      'private.photo_moment_request_people',
+      'private.photo_moment_requests',
       'private.photo_originals',
       'private.photo_validation_jobs',
       'private.photo_validator_allowlist',
@@ -943,6 +958,7 @@ select (
       'public.circles',
       'public.moment_notes',
       'public.moment_people',
+      'public.moment_photos',
       'public.moment_reactions',
       'public.moments',
       'public.people',
@@ -1140,7 +1156,11 @@ select (
         '20260831030000',
         '20260831040000',
         '20260831103811',
-        '20260831124636'
+        '20260831124636',
+        '20260831162840',
+        '20260831174505',
+        '20260831194638',
+        '20260831205813'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
