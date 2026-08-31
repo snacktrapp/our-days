@@ -23,6 +23,7 @@ npm run supabase:start
 npm run db:reset
 npm run test:db
 npm run test:auth:integration
+npm run test:photo:integration
 npm run test:db:concurrency
 npm run test:db:restore
 npm run types:db:check
@@ -30,7 +31,7 @@ npm run test:browser:connected
 npm run db:lint
 ```
 
-`supabase/config.toml` disables open signup and automatic Data API exposure. The local seed is synthetic and spans two circles, including revoked and no-circle actors. The integration commands exercise real local Auth, OTP email, invitation preflight/acceptance, revocation, private Storage denial, provably overlapping concurrency, fragment/cookie lifecycle, hostile-origin denial, browser-state cleanup, generated schema types, and same-container logical database fidelity; reset-owning integration commands restore the synthetic fixtures afterward. `test:db:restore` never resets or writes to its canonical source database: run `npm run db:reset` separately first, then the drill fails closed unless that source exactly matches the reviewed, committed synthetic fixture. It must never target a linked, hosted, or real-data project. It does not cover Storage object bytes or production disaster recovery; see `docs/operations/LOCAL_RECOVERY_DRILL.md`. The web app never receives a service-role credential; login-capable integration users are provisioned only by a test-only local bootstrap boundary.
+`supabase/config.toml` disables open signup and automatic Data API exposure. The local seed is synthetic and spans two circles, including revoked and no-circle actors. The integration commands exercise real local Auth, OTP email, invitation preflight/acceptance, revocation, private Storage denial, the bounded quarantine-only photo-intake contract, provably overlapping concurrency, fragment/cookie lifecycle, hostile-origin denial, browser-state cleanup, generated schema types, and same-container logical database fidelity; reset-owning integration commands restore the synthetic fixtures afterward. Phase 4A binds a declared SHA-256, byte count, and MIME type to an exact claimed path, then permits only ordinary-JWT TUS create/part requests in the private `our-days-intake` bucket. It provides no media read, verified or accepted original, photo moment, validator, or production media path. Concurrent TUS URLs may both complete on the pinned Storage implementation, so quarantine is never publishable; a later isolated validator must close uploads, verify the bytes, and copy them to a fresh immutable browser-unwritable canonical path. Direct TUS avoids Vercel's 4.5 MiB request-body limit for original-quality photos. `test:db:restore` never resets or writes to its canonical source database: run `npm run db:reset` separately first, then the drill fails closed unless that source exactly matches the reviewed, committed synthetic fixture. It must never target a linked, hosted, or real-data project. It does not cover Storage object bytes or production disaster recovery; see `docs/operations/LOCAL_RECOVERY_DRILL.md`. The web app never receives a service-role credential; login-capable integration users are provisioned only by a test-only local bootstrap boundary.
 
 ## Verification
 
@@ -69,6 +70,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/FAMILY_SETTINGS_PREVIEW_REPORT.md` — invitation/access preview contract and privacy proof
 - `docs/quality/PERSONAL_JOURNALS_PREVIEW_REPORT.md` — individual journal ownership, empty-state, and route privacy evidence
 - `docs/quality/VIDEO_FEASIBILITY_REPORT.md` — isolated local short-video treatment, lifecycle evidence, and production stop/defer gates
+- `docs/quality/PHASE_4A_PHOTO_INTAKE_FOUNDATION_REPORT.md` — fingerprint-bound direct-TUS quarantine contract, concurrency limitation, and immutable-promotion gates
 - `docs/quality/PHASE_7A_EXPORT_FOUNDATION_REPORT.md` — private export-request ledger, zero-media archive contract, adversarial review, and remaining worker gates
 - `docs/quality/PHASE_7B_MEMBERSHIP_ATTRIBUTION_REPORT.md` — durable membership-based moment attribution, upgrade rehearsal, and remaining account-closure gates
 - `docs/quality/PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md` — private closure intent, atomic all-circle access detachment, and remaining external-deletion gates

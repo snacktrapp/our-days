@@ -85,6 +85,8 @@ describe("CI workflow privacy and supply-chain contract", () => {
   it("runs the executable local authorization and schema-drift gates", () => {
     expect(workflow).toContain("run: npm run test:db");
     expect(workflow).toContain("run: npm run test:auth:integration");
+    expect(workflow).toContain("run: npm run test:photo:integration");
+    expect(workflow).toContain("run: npm run test:photo:concurrency");
     expect(workflow).toContain("run: npm run test:db:concurrency");
     expect(workflow).toContain("run: npm run types:db:check");
     expect(workflow).toContain("run: npm run test:browser:connected:all");

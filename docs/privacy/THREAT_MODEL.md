@@ -24,7 +24,7 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 7. Invite recipient replays, races, forwards, or changes the email/circle on an invitation.
 8. Browser bundle, source map, log, analytics tool, or error report leaks a credential or family detail.
 9. CDN, image optimizer, service worker, browser cache, or offline store reveals family content after sign-out/account switch.
-10. Media upload spoofs paths, overwrites originals, duplicates completion, embeds GPS, or fails halfway.
+10. Media upload spoofs paths or fingerprints, races two TUS upload URLs to one quarantine path, overwrites quarantine after validation starts, duplicates completion, embeds GPS, or fails halfway.
 11. Soft-deleted parent hides incompletely while comments/reactions/media remain queryable.
 12. Export archive crosses circles, traverses paths, remains downloadable after revocation, or loses originals.
 13. Purge partially fails between Postgres and Storage and falsely reports deletion.
@@ -46,7 +46,10 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 - Membership status checked from the database on every protected operation; membership revocation does not depend on JWT refresh/session revocation.
 - Invitation tokens hashed, normalized-email bound, expiring, single-use, rate-limited, and accepted atomically.
 - Private buckets; originals via authenticated download; derivatives via freshly authorized controlled delivery; no generic image-optimizer or private service-worker caching.
-- Direct idempotent uploads to reserved paths, immutable originals/checksums, stripped display derivatives, and service-side completion verification.
+- Phase 4A requires an authenticated client to commit a claim binding a server-generated opaque quarantine path to its declared SHA-256, byte count, and MIME type before upload. Storage policy admits only direct `storage.tus.upload.create` and `storage.tus.upload.part` operations for that exact live claimed path. Standard and signed uploads, upsert, S3, read/list, update, and delete are denied. Reservation, claim, TUS authorization, and acknowledgement recheck Auth, membership, account closure, and effective journal authority. A completed transfer is only `uploaded_unverified`.
+- Fingerprint binding provides one logical expected file, not one physical write. The pinned Storage implementation can let two distinct TUS URLs targeting the same path both complete, with a later completion replacing the quarantine row. Quarantine is browser-unreadable and must never be the object referenced by a moment, download, derivative, or export.
+- A later isolated validator must first close upload authority, then service-download and count/hash/decode the current quarantine bytes. Only an exact fingerprint match may be copied byte-for-byte to a fresh immutable canonical path in a separate private, browser-unwritable boundary. Publication binds that canonical object, never the quarantine path. An already-authorized late TUS completion can only change terminal quarantine and is reconciled and swept.
+- Original-quality photos bypass the ordinary Vercel web process because its 4.5 MiB request-body limit cannot support the 50 MiB intake contract. Service credentials remain confined to the later isolated validation boundary; direct TUS requests still use the member's JWT and database authorization.
 - Descendant policies join to a visible live parent; purge uses an immutable request plus idempotent ledger/tombstone.
 - Export workers load immutable authorized job records, recheck requester membership, generate safe filenames, validate circle counts/checksums, and expire artifacts.
 - Authenticated routes render per request with private/no-store headers; proxy refresh responses preserve cookie/cache controls; two-browser isolation tests cover refresh, prefetch, sign-out, and account switch.

@@ -461,6 +461,34 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { token: string }; Returns: string };
+      acknowledge_photo_intake: {
+        Args: { intake_id: string };
+        Returns: {
+          bucket_id: string;
+          expires_at: string;
+          intake_id: string;
+          object_path: string;
+          observed_mime_type_unverified: string;
+          observed_size_bytes_unverified: number;
+          state: string;
+        }[];
+      };
+      claim_photo_intake_upload: {
+        Args: {
+          expected_mime_type: string;
+          expected_sha256_hex: string;
+          expected_size_bytes: number;
+          intake_id: string;
+          upload_request_key: string;
+        };
+        Returns: {
+          bucket_id: string;
+          intake_id: string;
+          object_path: string;
+          state: string;
+          upload_expires_at: string;
+        }[];
+      };
       create_family_moment: {
         Args: {
           circle_id: string;
@@ -679,6 +707,20 @@ export type Database = {
           target_auth_user_id: string;
         };
         Returns: string;
+      };
+      reserve_photo_intake: {
+        Args: {
+          circle_id: string;
+          journal_person_id: string;
+          request_key: string;
+        };
+        Returns: {
+          bucket_id: string;
+          expires_at: string;
+          intake_id: string;
+          object_path: string;
+          state: string;
+        }[];
       };
       revoke_invitation: {
         Args: { invitation_id: string };

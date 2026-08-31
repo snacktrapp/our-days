@@ -575,7 +575,7 @@ describe("FamilySettingsPanel", () => {
       "That journal care could not be changed. Try again.",
     );
     expect(alert).toHaveFocus();
-    expect(retry).toBeEnabled();
+    await waitFor(() => expect(retry).toBeEnabled());
   });
 
   it("shows ordinary members the access list without organizer controls or pending invitations", () => {

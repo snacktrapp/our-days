@@ -61,12 +61,14 @@ Gate: equal-timestamp pagination, historical insertion, scroll stability, browse
 
 Entry prerequisite: PD-006 is accepted for the media-delivery branch.
 
+The bounded Phase 4A quarantine-only foundation is recorded in `docs/quality/PHASE_4A_PHOTO_INTAKE_FOUNDATION_REPORT.md`. It introduces a private intake ledger, a third private quarantine bucket, exact-path reservation, a fingerprint-bound claim, direct authenticated TUS create/part, and an `uploaded_unverified` acknowledgement using only local synthetic data. It is not the Phase 4 media-delivery branch: there is no browser read, standard or signed upload, upsert, worker, content verification, immutable canonical original, derivative, photo moment, download, export, byte recovery, cleanup process, deployment, or production-data approval. Pinned Storage evidence shows concurrent TUS uploads to one path can both complete, so nothing may publish from the quarantine path.
+
 Deliver:
 
-- Reserved asset row, direct private upload, immutable original/checksum, orientation-correct stripped derivative, idempotent completion, controlled display, and original download.
+- Reserved asset row, fingerprint-bound claim, direct private resumable upload, upload closure, isolated full-byte verification, immutable browser-unwritable canonical original/checksum, orientation-correct stripped derivative, idempotent promotion, controlled display, and original download.
 - HEIC/large-photo spike and interrupted/resumed upload behavior.
 
-Gate: byte-for-byte original verification, EXIF/GPS absence from derivatives, expiry/retry/duplicate/path-spoof/wrong-circle/revoked denial, cache inspection, and iPhone photo-picker checks pass.
+Gate: byte-for-byte original verification, immutable-promotion and late-quarantine-write races, EXIF/GPS absence from derivatives, expiry/retry/duplicate/path-spoof/wrong-circle/revoked denial, cache inspection, and iPhone photo-picker checks pass.
 
 ## 5. Family context
 

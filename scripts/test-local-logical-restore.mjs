@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "720d1af4e114973b4ee9a514a2b48dd910538346f1363a74bfba822534f86cfa";
+  "acc764a2c84a69743528448f8ef74dc42e0e18eca1b8f0d194b90f472772f25f";
 const expectedCanonicalCatalogFingerprint =
-  "36bed20862a6e83ba8632449d8d5cca8fdf6c0bb4ef71b482df6c7bd8c257893";
+  "0b2647fc5c9c72a615573930bbbb0ec2624ac9e14192e45ec124918f5b245c12";
 const expectedRestoredSchemaFingerprint =
-  "24c99b4b6af41f91ef4d0f3443e48524c904501530f133ac3ebbcaa29fb25fd7";
+  "2cef7e3f9076c266a6fbfad1a9dbf3cc46288426314e8ca085ca11310f366d80";
 const expectedCanonicalDataFingerprint =
-  "9ddd5f31d90f84865c85cb324516f2beb77152657030af591435e10e64b90856";
+  "407220247308c24d6019fafecb9ef88f520de5c3c216e773de4004c84ee40801";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "4dc89041650c5bfd8e9ef756ba5fb8485bfbc655bdcf87bff00edfbbb7718aec";
+  "0e88b495542e186d2f12fb5eece497ff179a189ffd92621d7b051d923d72d04f";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: null,
@@ -67,6 +67,24 @@ const expectedPrivateBuckets = Object.freeze([
     file_size_limit: 52_428_800,
     id: "our-days-display",
     name: "our-days-display",
+    owner: null,
+    owner_id: null,
+    public: false,
+    type: "STANDARD",
+    versioning_status: "DISABLED",
+  }),
+  Object.freeze({
+    allowed_mime_types: [
+      "image/heic",
+      "image/heif",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ],
+    avif_autodetection: false,
+    file_size_limit: 52_428_800,
+    id: "our-days-intake",
+    name: "our-days-intake",
     owner: null,
     owner_id: null,
     public: false,
@@ -127,6 +145,7 @@ const expectedMigrationFiles = [
   "20260830234500_phase_2b_invitation_job_foundation.sql",
   "20260831000000_phase_7b_membership_attribution_foundation.sql",
   "20260831010000_phase_7c_account_closure_preparation.sql",
+  "20260831020000_phase_4a_photo_intake_foundation.sql",
 ];
 
 class DrillError extends Error {
@@ -757,7 +776,8 @@ select (
   and (select count(*) = 0 from private.audit_events)
   and (select count(*) = 0 from private.export_jobs)
   and (select count(*) = 0 from private.invitation_jobs)
-  and (select count(*) = 2 from storage.buckets)
+  and (select count(*) = 0 from private.photo_intakes)
+  and (select count(*) = 3 from storage.buckets)
   and (
     select count(*) = 2
       from storage.buckets
@@ -772,6 +792,28 @@ select (
        and type = 'STANDARD'
        and versioning_status = 'DISABLED'
   )
+  and (
+    select count(*) = 1
+      from storage.buckets
+     where id = 'our-days-intake'
+       and name = id
+       and public is false
+       and owner is null
+       and owner_id is null
+       and avif_autodetection is false
+       and file_size_limit = 52428800
+       and allowed_mime_types = array[
+         'image/heic',
+         'image/heif',
+         'image/jpeg',
+         'image/png',
+         'image/webp'
+       ]::text[]
+       and type = 'STANDARD'
+       and versioning_status = 'DISABLED'
+  )
+  -- Logical database recovery preserves Storage metadata only. Any object row
+  -- would imply unverified byte recovery and must fail this canonical drill.
   and not exists (select 1 from storage.objects)
   and not exists (select 1 from storage.buckets_analytics)
   and not exists (select 1 from storage.buckets_vectors)
@@ -812,6 +854,7 @@ select (
       'private.export_jobs',
       'private.invitation_jobs',
       'private.invitations',
+      'private.photo_intakes',
       'public.circle_memberships',
       'public.circles',
       'public.moment_notes',
@@ -1008,7 +1051,8 @@ select (
         '20260830233000',
         '20260830234500',
         '20260831000000',
-        '20260831010000'
+        '20260831010000',
+        '20260831020000'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
@@ -1582,7 +1626,8 @@ select pg_catalog.jsonb_build_array(
      'audit_events_id_seq',
      'export_jobs',
      'invitation_jobs',
-     'invitations'
+     'invitations',
+     'photo_intakes'
    )
  order by relation.relname;
 `;
@@ -2027,6 +2072,7 @@ const allowedOwnerAclDisappearance = new Map([
   ["private.export_jobs", tableOwnerPrivileges],
   ["private.invitation_jobs", tableOwnerPrivileges],
   ["private.invitations", tableOwnerPrivileges],
+  ["private.photo_intakes", tableOwnerPrivileges],
 ]);
 
 function quoteIdentifier(identifier) {
@@ -2690,10 +2736,10 @@ async function runStaticSelfTest() {
   if (
     bucketInventoryMatches([
       ...expectedPrivateBuckets,
-      { ...expectedPrivateBuckets[0], id: "unexpected-third-bucket" },
+      { ...expectedPrivateBuckets[0], id: "unexpected-fourth-bucket" },
     ])
   ) {
-    throw new DrillError("static third-bucket rejection");
+    throw new DrillError("static fourth-bucket rejection");
   }
   if (
     !unsupportedDatabaseMetadataIsEmpty(null, 0) ||
