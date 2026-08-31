@@ -473,6 +473,29 @@ export type Database = {
           state: string;
         }[];
       };
+      claim_photo_display_derivative: {
+        Args: { lease_key: string; original_id: string };
+        Returns: {
+          derivative_job_id: string;
+          display_bucket_id: string;
+          display_object_path: string;
+          lease_attempt_id: string;
+          lease_expires_at: string;
+          original_id: string;
+          source_bucket_id: string;
+          source_channels: number;
+          source_height: number;
+          source_mime_type: string;
+          source_object_path: string;
+          source_pages: number;
+          source_sha256_hex: string;
+          source_size_bytes: number;
+          source_storage_object_id: string;
+          source_storage_object_version: string;
+          source_width: number;
+          transform_profile_version: number;
+        }[];
+      };
       claim_photo_intake_upload: {
         Args: {
           expected_mime_type: string;
@@ -507,6 +530,21 @@ export type Database = {
           validation_job_id: string;
           verification_profile_version: number;
         }[];
+      };
+      complete_photo_display_derivative: {
+        Args: {
+          derivative_job_id: string;
+          lease_key: string;
+          output_channels: number;
+          output_height: number;
+          output_pages: number;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+          storage_object_id: string;
+          storage_object_version: string;
+        };
+        Returns: string;
       };
       complete_photo_validation: {
         Args: {
@@ -572,6 +610,14 @@ export type Database = {
           occurred_at?: string;
           occurred_on: string;
           occurred_timezone?: string;
+        };
+        Returns: string;
+      };
+      flag_photo_display_derivative_for_review: {
+        Args: {
+          derivative_job_id: string;
+          lease_key: string;
+          review_reason: string;
         };
         Returns: string;
       };
@@ -733,6 +779,14 @@ export type Database = {
       preflight_invitation: {
         Args: { email: string; token: string };
         Returns: boolean;
+      };
+      reject_photo_display_derivative: {
+        Args: {
+          derivative_job_id: string;
+          lease_key: string;
+          rejection_reason: string;
+        };
+        Returns: string;
       };
       reject_photo_validation: {
         Args: {

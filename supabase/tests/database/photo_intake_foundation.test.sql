@@ -68,11 +68,13 @@ select ok(
 
 select ok(
   (
-    select not bucket.public and bucket.file_size_limit = 52428800
+    select not bucket.public
+      and bucket.file_size_limit = 12582912
+      and bucket.allowed_mime_types = array['image/webp']::text[]
       from storage.buckets as bucket
      where bucket.id = 'our-days-display'
   ),
-  'the display-media bucket remains private and unchanged'
+  'the display-media bucket is private and constrained to bounded WebP output'
 );
 
 select ok(
