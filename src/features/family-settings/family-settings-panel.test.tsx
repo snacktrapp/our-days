@@ -393,9 +393,13 @@ describe("FamilySettingsPanel", () => {
       "That access could not be removed. Try again.",
     );
     expect(alert).toHaveFocus();
-    expect(
-      screen.getByRole("button", { name: "Remove access for Other organizer" }),
-    ).toBeEnabled();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", {
+          name: "Remove access for Other organizer",
+        }),
+      ).toBeEnabled();
+    });
   });
 
   it("explains and applies a reviewed role change with exact target identity", async () => {

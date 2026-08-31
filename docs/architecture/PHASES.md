@@ -39,6 +39,8 @@ Deliver:
 
 The invitation-job foundation is recorded in `docs/quality/PHASE_2B_INVITATION_JOB_FOUNDATION_REPORT.md`. It adds a private, idempotent organizer request ledger and a disabled pure worker contract without exposing invitation sending. Production activation still requires a target-account-bound invitation schema, atomic materialization/delivery state, a separate trusted coordinator, a proven email-provider idempotency window, and removal of the legacy raw-token/preflight RPC exposure.
 
+The local-only Phase 2C target-bound materialization checkpoint is recorded in `docs/quality/PHASE_2C_TARGET_BOUND_INVITATION_MATERIALIZATION_REPORT.md`. It links one immutable job to one invitation and makes the intended Auth UUID authoritative at acceptance, while keeping every new coordinator function private and ungranted. It does not provision an account, read a recipient address for delivery, send email, select a provider, enable the worker, expose Send, or remove the still-required legacy local acceptance harness.
+
 Gate: member success plus anonymous, no-circle, wrong-circle, dual-circle, stale-token revoked-member, invite replay, wrong-email, and concurrent-acceptance denials pass.
 
 ## 3. Written moments end to end

@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -6,6 +6,8 @@ const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const supabaseBinary = fileURLToPath(
   new URL("../node_modules/.bin/supabase", import.meta.url),
 );
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 async function readLocalStatus() {
   let output;
@@ -111,6 +113,47 @@ async function waitForConcurrencyProbe({
 
   throw new Error(
     `${label} was not observed before timeout (last probe status ${lastStatus ?? "none"}).`,
+  );
+}
+
+async function waitForOperationCounts({
+  apiKey,
+  apiUrl,
+  expectedOperations,
+  label,
+  requireSleep = false,
+  serviceKey,
+  timeoutMs = 4000,
+}) {
+  const operationNames = Object.keys(expectedOperations);
+  const expectedWaiters = operationNames.map(
+    (operationName) => expectedOperations[operationName],
+  );
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus;
+
+  while (Date.now() < deadline) {
+    const probe = await jsonRequest(
+      apiUrl,
+      apiKey,
+      serviceKey,
+      "rpc/phase2c_test_concurrency_probe",
+      {
+        body: JSON.stringify({
+          expected_waiters: expectedWaiters,
+          operation_names: operationNames,
+          require_sleep: requireSleep,
+        }),
+        method: "POST",
+      },
+    );
+    lastStatus = probe.response.status;
+    if (probe.response.ok && probe.body === true) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  throw new Error(
+    `${label} was not observed with per-operation waiter counts before timeout (last probe status ${lastStatus ?? "none"}).`,
   );
 }
 
@@ -272,6 +315,311 @@ async function runOverlappedAuthRace({
   return results;
 }
 
+async function runTargetBoundInvitationRace({
+  apiKey,
+  apiUrl,
+  expectedOperations,
+  jobId,
+  label,
+  requests,
+  serviceKey,
+}) {
+  const holderPromise = jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase2c_test_hold_invitation_chain",
+    {
+      body: JSON.stringify({ hold_ms: 5000, target_job_id: jobId }),
+      method: "POST",
+    },
+  );
+
+  await waitForOperationCounts({
+    apiKey,
+    apiUrl,
+    expectedOperations: { phase2c_test_hold_invitation_chain: 1 },
+    label: `The ${label} invitation-chain holder`,
+    requireSleep: true,
+    serviceKey,
+  });
+
+  const requestPromises = requests.map((startRequest) => startRequest());
+  try {
+    await waitForOperationCounts({
+      apiKey,
+      apiUrl,
+      expectedOperations,
+      label: `Overlapping ${label} requests`,
+      serviceKey,
+    });
+  } catch (error) {
+    await Promise.allSettled([holderPromise, ...requestPromises]);
+    throw error;
+  }
+
+  const [holder, results] = await Promise.all([
+    holderPromise,
+    Promise.all(requestPromises),
+  ]);
+  rejectUnsafeOutcome(holder, `${label} invitation-chain holder`);
+  if (!holder.response.ok) {
+    throw new Error(
+      `The ${label} invitation-chain holder failed with ${holder.response.status}.`,
+    );
+  }
+
+  return results;
+}
+
+function outcomeCode(result) {
+  return result.body?.code ?? result.body?.error;
+}
+
+function rejectUnsafeOutcome(result, label) {
+  const code = outcomeCode(result);
+  if (result.response.status >= 500 || code === "40P01" || code === "40001") {
+    throw new Error(
+      `${label} used an unsafe concurrency outcome (${result.response.status}, ${code ?? "no code"}).`,
+    );
+  }
+}
+
+function requireSuccessfulOutcome(result, label) {
+  rejectUnsafeOutcome(result, label);
+  if (!result.response.ok) {
+    throw new Error(
+      `${label} failed with ${result.response.status} (${outcomeCode(result) ?? "no code"}).`,
+    );
+  }
+  return result.body;
+}
+
+function requireInvitationDenial(result, label) {
+  rejectUnsafeOutcome(result, label);
+  if (result.response.ok && result.body === null) return;
+  if (
+    !result.response.ok &&
+    result.body?.code === "22023" &&
+    result.body?.message === "Invitation is not available"
+  ) {
+    return;
+  }
+  throw new Error(
+    `${label} did not use the generic invitation denial (${result.response.status}:${JSON.stringify(result.body)}).`,
+  );
+}
+
+function requireInvitationChangeDenial(result, label) {
+  rejectUnsafeOutcome(result, label);
+  if (
+    !result.response.ok &&
+    result.body?.code === "22023" &&
+    result.body?.message === "Invitation could not be changed"
+  ) {
+    return;
+  }
+  throw new Error(
+    `${label} did not use the generic invitation-change denial (${result.response.status}:${JSON.stringify(result.body)}).`,
+  );
+}
+
+function targetBoundMaterializationRow(result, label) {
+  rejectUnsafeOutcome(result, label);
+  const row = Array.isArray(result.body) ? result.body[0] : null;
+  if (
+    !result.response.ok ||
+    !row ||
+    result.body.length !== 1 ||
+    !uuidPattern.test(row.job_id) ||
+    !uuidPattern.test(row.invitation_id) ||
+    row.state !== "materialized" ||
+    row.delivery_version !== 1
+  ) {
+    throw new Error(
+      `${label} did not return one materialized target-bound invitation (${result.response.status}:${JSON.stringify(result.body)}).`,
+    );
+  }
+  return row;
+}
+
+function requireEmptyMaterialization(result, label) {
+  rejectUnsafeOutcome(result, label);
+  if (
+    result.response.ok &&
+    Array.isArray(result.body) &&
+    result.body.length === 0
+  ) {
+    return;
+  }
+  throw new Error(
+    `${label} did not return the safe empty materialization result (${result.response.status}:${JSON.stringify(result.body)}).`,
+  );
+}
+
+function targetBoundLoadRow(result, label) {
+  rejectUnsafeOutcome(result, label);
+  const row = Array.isArray(result.body) ? result.body[0] : null;
+  if (
+    !result.response.ok ||
+    !row ||
+    result.body.length !== 1 ||
+    !uuidPattern.test(row.job_id) ||
+    row.state !== "materialized" ||
+    row.delivery_version !== 1
+  ) {
+    throw new Error(
+      `${label} did not return one live target-bound job (${result.response.status}:${JSON.stringify(result.body)}).`,
+    );
+  }
+  return row;
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function invitationToken() {
+  return `invite-${randomUUID()}`;
+}
+
+async function createSyntheticAuthUser(apiUrl, serviceKey, label) {
+  const suffix = randomUUID();
+  const result = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "/auth/v1/admin/users",
+    {
+      body: JSON.stringify({
+        email: `phase2c-${label}-${suffix}@example.test`,
+        email_confirm: true,
+      }),
+      method: "POST",
+    },
+  );
+  requireSuccessfulOutcome(result, `${label} Auth fixture creation`);
+  if (
+    !uuidPattern.test(result.body?.id) ||
+    typeof result.body?.email !== "string"
+  ) {
+    throw new Error(`${label} Auth fixture did not return a safe identity.`);
+  }
+  return { email: result.body.email, id: result.body.id };
+}
+
+async function requestTargetBoundInvitationJob({
+  apiKey,
+  apiUrl,
+  circleId,
+  displayName,
+  organizerToken,
+  targetAuthUserId,
+}) {
+  const result = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerToken,
+    "rpc/request_invitation_job",
+    {
+      body: JSON.stringify({
+        circle_id: circleId,
+        display_name: displayName,
+        request_key: randomUUID(),
+        target_auth_user_id: targetAuthUserId,
+      }),
+      method: "POST",
+    },
+  );
+  requireSuccessfulOutcome(result, `${displayName} job request`);
+  if (!uuidPattern.test(result.body)) {
+    throw new Error(`${displayName} job request did not return an ID.`);
+  }
+  return result.body;
+}
+
+function materializeTargetBoundInvitation(apiUrl, serviceKey, jobId, rawToken) {
+  return jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase2c_test_materialize_target_bound_invitation_job",
+    {
+      body: JSON.stringify({
+        requested_delivery_version: 1,
+        requested_job_id: jobId,
+        requested_token_sha256_hex: sha256Hex(rawToken),
+      }),
+      method: "POST",
+    },
+  );
+}
+
+function loadTargetBoundInvitation(apiUrl, serviceKey, jobId) {
+  return jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase2c_test_load_target_bound_invitation_job",
+    {
+      body: JSON.stringify({ requested_job_id: jobId }),
+      method: "POST",
+    },
+  );
+}
+
+function acceptInvitation(
+  apiUrl,
+  apiKey,
+  token,
+  rawInvitationToken,
+  rpcName = "accept_invitation",
+) {
+  return jsonRequest(apiUrl, apiKey, token, `rpc/${rpcName}`, {
+    body: JSON.stringify({ token: rawInvitationToken }),
+    method: "POST",
+  });
+}
+
+function revokeInvitation(
+  apiUrl,
+  apiKey,
+  organizerToken,
+  invitationId,
+  rpcName = "revoke_invitation",
+) {
+  return jsonRequest(apiUrl, apiKey, organizerToken, `rpc/${rpcName}`, {
+    body: JSON.stringify({ invitation_id: invitationId }),
+    method: "POST",
+  });
+}
+
+async function createTargetBoundJobFixture({
+  apiKey,
+  apiUrl,
+  circleId,
+  jwtSecret,
+  label,
+  organizerToken,
+  serviceKey,
+}) {
+  const target = await createSyntheticAuthUser(apiUrl, serviceKey, label);
+  const jobId = await requestTargetBoundInvitationJob({
+    apiKey,
+    apiUrl,
+    circleId,
+    displayName: `Phase 2C ${label}`,
+    organizerToken,
+    targetAuthUserId: target.id,
+  });
+  return {
+    jobId,
+    rawToken: invitationToken(),
+    target,
+    targetToken: createLocalUserToken(target.id, jwtSecret),
+  };
+}
+
 function resetDatabase() {
   execFileSync(supabaseBinary, ["db", "reset", "--local"], {
     cwd: projectRoot,
@@ -427,6 +775,291 @@ try {
       $definition$;
       execute 'revoke all on function public.phase7c_test_hold_auth_user_lock(uuid, integer) from public, anon, authenticated';
       execute 'grant execute on function public.phase7c_test_hold_auth_user_lock(uuid, integer) to service_role';
+
+      execute $definition$
+        create function public.phase2c_test_concurrency_probe(
+          operation_names text[],
+          expected_waiters integer[],
+          require_sleep boolean
+        )
+        returns boolean
+        language sql
+        stable
+        security definer
+        set search_path = ''
+        as $body$
+          select
+            pg_catalog.cardinality(operation_names) > 0
+            and pg_catalog.cardinality(operation_names) =
+              pg_catalog.cardinality(expected_waiters)
+            and not exists (
+              select 1
+                from pg_catalog.generate_subscripts(
+                  operation_names,
+                  1
+                ) as expected(position)
+               where expected_waiters[expected.position] <= 0
+                  or (
+                    select count(*)
+                      from pg_catalog.pg_stat_activity as activity
+                     where activity.pid <> pg_catalog.pg_backend_pid()
+                       and activity.state = 'active'
+                       and pg_catalog.strpos(
+                         pg_catalog.lower(activity.query),
+                         pg_catalog.lower(operation_names[expected.position])
+                       ) > 0
+                       and case
+                         when require_sleep
+                           then activity.wait_event = 'PgSleep'
+                         else activity.wait_event_type = 'Lock'
+                       end
+                  ) <> expected_waiters[expected.position]
+            );
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_concurrency_probe(text[], integer[], boolean) from public, anon, authenticated';
+      execute 'grant execute on function public.phase2c_test_concurrency_probe(text[], integer[], boolean) to service_role';
+
+      execute $definition$
+        create function public.phase2c_test_hold_invitation_chain(
+          target_job_id uuid,
+          hold_ms integer
+        )
+        returns void
+        language plpgsql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+        declare
+          target_circle_id uuid;
+          target_invitation_id uuid;
+          target_requester_auth_user_id uuid;
+          target_recipient_auth_user_id uuid;
+        begin
+          if hold_ms not between 1 and 15000 then
+            raise exception using errcode = '42501', message = 'Test lock unavailable';
+          end if;
+
+          select job.circle_id,
+                 job.invitation_id,
+                 requester.user_id,
+                 job.target_auth_user_id
+            into target_circle_id,
+                 target_invitation_id,
+                 target_requester_auth_user_id,
+                 target_recipient_auth_user_id
+            from private.invitation_jobs as job
+            join public.circle_memberships as requester
+              on requester.circle_id = job.circle_id
+             and requester.id = job.requested_by_membership_id
+           where job.id = target_job_id;
+
+          if target_circle_id is null
+            or not exists (
+              select 1
+                from auth.users as auth_user
+               where auth_user.id = target_recipient_auth_user_id
+                 and auth_user.email like '%@example.test'
+            ) then
+            raise exception using errcode = '42501', message = 'Test lock unavailable';
+          end if;
+
+          perform auth_user.id
+            from auth.users as auth_user
+           where auth_user.id in (
+             target_requester_auth_user_id,
+             target_recipient_auth_user_id
+           )
+           order by auth_user.id
+           for update;
+          perform 1
+            from public.circles as circle
+           where circle.id = target_circle_id
+           for update;
+          perform 1
+            from private.invitation_jobs as job
+           where job.id = target_job_id
+           for update;
+          if target_invitation_id is not null then
+            perform 1
+              from private.invitations as invitation
+             where invitation.id = target_invitation_id
+             for update;
+          end if;
+          perform pg_catalog.pg_sleep(hold_ms::double precision / 1000);
+        end
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_hold_invitation_chain(uuid, integer) from public, anon, authenticated';
+      execute 'grant execute on function public.phase2c_test_hold_invitation_chain(uuid, integer) to service_role';
+
+      execute $definition$
+        create function public.phase2c_test_materialize_target_bound_invitation_job(
+          requested_job_id uuid,
+          requested_delivery_version integer,
+          requested_token_sha256_hex text
+        )
+        returns table (
+          job_id uuid,
+          invitation_id uuid,
+          state text,
+          delivery_version integer,
+          expires_at timestamptz
+        )
+        language sql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+          select *
+            from private.materialize_target_bound_invitation_job(
+              requested_job_id,
+              requested_delivery_version,
+              requested_token_sha256_hex
+            );
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_materialize_target_bound_invitation_job(uuid, integer, text) from public, anon, authenticated';
+      execute 'grant execute on function public.phase2c_test_materialize_target_bound_invitation_job(uuid, integer, text) to service_role';
+
+      execute $definition$
+        create function public.phase2c_test_load_target_bound_invitation_job(
+          requested_job_id uuid
+        )
+        returns table (
+          job_id uuid,
+          circle_id uuid,
+          requester_membership_id uuid,
+          requester_authorization_version timestamptz,
+          target_auth_user_id uuid,
+          invited_display_name text,
+          state text,
+          token_key_version smallint,
+          delivery_version integer,
+          requested_at timestamptz,
+          expires_at timestamptz
+        )
+        language sql
+        volatile
+        security definer
+        set search_path = ''
+        as $body$
+          select *
+            from private.load_target_bound_invitation_job(requested_job_id);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_load_target_bound_invitation_job(uuid) from public, anon, authenticated';
+      execute 'grant execute on function public.phase2c_test_load_target_bound_invitation_job(uuid) to service_role';
+
+      execute $definition$
+        create function public.phase2c_test_demotion_set_membership_role(
+          membership_id uuid,
+          role text
+        )
+        returns void
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.set_membership_role(membership_id, role);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_demotion_set_membership_role(uuid, text) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_demotion_set_membership_role(uuid, text) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_activation_accept_target_bound(
+          token text
+        )
+        returns uuid
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.accept_invitation(token);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_activation_accept_target_bound(text) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_activation_accept_target_bound(text) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_activation_accept_legacy(
+          token text
+        )
+        returns uuid
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.accept_invitation(token);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_activation_accept_legacy(text) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_activation_accept_legacy(text) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_withdrawal_accept(token text)
+        returns uuid
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.accept_invitation(token);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_withdrawal_accept(text) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_withdrawal_accept(text) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_withdrawal_revoke(
+          invitation_id uuid
+        )
+        returns void
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.revoke_invitation(invitation_id);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_withdrawal_revoke(uuid) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_withdrawal_revoke(uuid) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_closure_accept(token text)
+        returns uuid
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.accept_invitation(token);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_closure_accept(text) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_closure_accept(text) to authenticated';
+
+      execute $definition$
+        create function public.phase2c_test_closure_request(
+          request_key uuid
+        )
+        returns uuid
+        language sql
+        volatile
+        security invoker
+        set search_path = ''
+        as $body$
+          select public.request_account_closure(request_key);
+        $body$
+      $definition$;
+      execute 'revoke all on function public.phase2c_test_closure_request(uuid) from public, anon, authenticated, service_role';
+      execute 'grant execute on function public.phase2c_test_closure_request(uuid) to authenticated';
     end
     $install$;
   `);
@@ -2048,6 +2681,1102 @@ try {
     $invitation_activation_race_audit$;
   `);
 
+  const exactMaterialization = await createTargetBoundJobFixture({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    jwtSecret,
+    label: "exact-materialization",
+    organizerToken: organizerAToken,
+    serviceKey,
+  });
+  const exactMaterializationResults = await runTargetBoundInvitationRace({
+    apiKey,
+    apiUrl,
+    expectedOperations: {
+      phase2c_test_materialize_target_bound_invitation_job: 2,
+    },
+    jobId: exactMaterialization.jobId,
+    label: "exact target-bound materialization",
+    requests: [0, 1].map(
+      () => () =>
+        materializeTargetBoundInvitation(
+          apiUrl,
+          serviceKey,
+          exactMaterialization.jobId,
+          exactMaterialization.rawToken,
+        ),
+    ),
+    serviceKey,
+  });
+  const exactMaterializationRows = exactMaterializationResults.map(
+    (result, index) =>
+      targetBoundMaterializationRow(
+        result,
+        `Exact materialization ${index + 1}`,
+      ),
+  );
+  if (
+    exactMaterializationRows[0].job_id !== exactMaterialization.jobId ||
+    exactMaterializationRows[1].job_id !== exactMaterialization.jobId ||
+    exactMaterializationRows[0].invitation_id !==
+      exactMaterializationRows[1].invitation_id
+  ) {
+    throw new Error(
+      "Exact concurrent materialization did not converge on one identity.",
+    );
+  }
+  const exactMaterializationInvitationId =
+    exactMaterializationRows[0].invitation_id;
+  const exactLoad = await loadTargetBoundInvitation(
+    apiUrl,
+    serviceKey,
+    exactMaterialization.jobId,
+  );
+  const exactLoadRow = targetBoundLoadRow(
+    exactLoad,
+    "Exact materialization load",
+  );
+  if (exactLoadRow.job_id !== exactMaterialization.jobId) {
+    throw new Error("Exact materialization load changed job identity.");
+  }
+  runDatabaseQuery(`
+    do $phase2c_exact_materialization_audit$
+    begin
+      if not exists (
+          select 1
+            from private.invitation_jobs as job
+            join private.invitations as invitation
+              on invitation.id = job.invitation_id
+             and invitation.invitation_job_id = job.id
+           where job.id = '${exactMaterialization.jobId}'::uuid
+             and job.state = 'materialized'
+             and job.delivery_version = 1
+             and job.target_auth_user_id =
+               '${exactMaterialization.target.id}'::uuid
+             and job.invitation_id =
+               '${exactMaterializationInvitationId}'::uuid
+             and invitation.target_auth_user_id =
+               '${exactMaterialization.target.id}'::uuid
+             and encode(invitation.token_hash, 'hex') =
+               '${sha256Hex(exactMaterialization.rawToken)}'
+             and invitation.accepted_at is null
+             and invitation.revoked_at is null
+        )
+        or (select count(*) from private.invitations
+             where invitation_job_id =
+               '${exactMaterialization.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_created'
+               and subject_id =
+                 '${exactMaterializationInvitationId}'::uuid) <> 1 then
+        raise exception 'Exact concurrent materialization lost singular durable identity';
+      end if;
+    end
+    $phase2c_exact_materialization_audit$;
+  `);
+  requireSuccessfulOutcome(
+    await revokeInvitation(
+      apiUrl,
+      apiKey,
+      organizerAToken,
+      exactMaterializationInvitationId,
+    ),
+    "Exact materialization fixture withdrawal",
+  );
+  requireInvitationDenial(
+    await acceptInvitation(
+      apiUrl,
+      apiKey,
+      exactMaterialization.targetToken,
+      exactMaterialization.rawToken,
+    ),
+    "Exact materialization token replay after withdrawal",
+  );
+  process.stdout.write("Phase 2C exact materialize/materialize race passed.\n");
+
+  const conflictingMaterialization = await createTargetBoundJobFixture({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    jwtSecret,
+    label: "conflicting-materialization",
+    organizerToken: organizerAToken,
+    serviceKey,
+  });
+  const conflictingTokens = [invitationToken(), invitationToken()];
+  const conflictingMaterializationResults = await runTargetBoundInvitationRace({
+    apiKey,
+    apiUrl,
+    expectedOperations: {
+      phase2c_test_materialize_target_bound_invitation_job: 2,
+    },
+    jobId: conflictingMaterialization.jobId,
+    label: "conflicting target-bound materialization",
+    requests: conflictingTokens.map(
+      (rawToken) => () =>
+        materializeTargetBoundInvitation(
+          apiUrl,
+          serviceKey,
+          conflictingMaterialization.jobId,
+          rawToken,
+        ),
+    ),
+    serviceKey,
+  });
+  conflictingMaterializationResults.forEach((result, index) =>
+    rejectUnsafeOutcome(result, `Conflicting materialization ${index + 1}`),
+  );
+  const conflictingWinners = conflictingMaterializationResults
+    .map((result, index) => ({ index, result }))
+    .filter(
+      ({ result }) =>
+        result.response.ok &&
+        Array.isArray(result.body) &&
+        result.body.length === 1,
+    );
+  const conflictingLosers = conflictingMaterializationResults
+    .map((result, index) => ({ index, result }))
+    .filter(
+      ({ result }) =>
+        result.response.ok &&
+        Array.isArray(result.body) &&
+        result.body.length === 0,
+    );
+  if (conflictingWinners.length !== 1 || conflictingLosers.length !== 1) {
+    throw new Error(
+      `Conflicting materialization did not select one digest (${conflictingMaterializationResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(" | ")}).`,
+    );
+  }
+  const conflictingWinner = conflictingWinners[0];
+  const conflictingLoser = conflictingLosers[0];
+  const conflictingWinnerRow = targetBoundMaterializationRow(
+    conflictingWinner.result,
+    "Conflicting materialization winner",
+  );
+  requireEmptyMaterialization(
+    conflictingLoser.result,
+    "Conflicting materialization loser",
+  );
+  const conflictingWinnerToken = conflictingTokens[conflictingWinner.index];
+  const conflictingLoserToken = conflictingTokens[conflictingLoser.index];
+  const conflictingLoad = targetBoundLoadRow(
+    await loadTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      conflictingMaterialization.jobId,
+    ),
+    "Conflicting materialization load",
+  );
+  if (conflictingLoad.job_id !== conflictingMaterialization.jobId) {
+    throw new Error("Conflicting materialization load changed job identity.");
+  }
+  runDatabaseQuery(`
+    do $phase2c_conflicting_materialization_audit$
+    begin
+      if not exists (
+          select 1
+            from private.invitation_jobs as job
+            join private.invitations as invitation
+              on invitation.id = job.invitation_id
+             and invitation.invitation_job_id = job.id
+           where job.id = '${conflictingMaterialization.jobId}'::uuid
+             and job.state = 'materialized'
+             and job.invitation_id =
+               '${conflictingWinnerRow.invitation_id}'::uuid
+             and encode(invitation.token_hash, 'hex') =
+               '${sha256Hex(conflictingWinnerToken)}'
+             and encode(invitation.token_hash, 'hex') <>
+               '${sha256Hex(conflictingLoserToken)}'
+             and invitation.target_auth_user_id =
+               '${conflictingMaterialization.target.id}'::uuid
+        )
+        or (select count(*) from private.invitations
+             where invitation_job_id =
+               '${conflictingMaterialization.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_created'
+               and subject_id =
+                 '${conflictingWinnerRow.invitation_id}'::uuid) <> 1 then
+        raise exception 'Conflicting materialization retained ambiguous identity';
+      end if;
+    end
+    $phase2c_conflicting_materialization_audit$;
+  `);
+  requireSuccessfulOutcome(
+    await revokeInvitation(
+      apiUrl,
+      apiKey,
+      organizerAToken,
+      conflictingWinnerRow.invitation_id,
+    ),
+    "Conflicting materialization fixture withdrawal",
+  );
+  for (const [index, rawToken] of conflictingTokens.entries()) {
+    requireInvitationDenial(
+      await acceptInvitation(
+        apiUrl,
+        apiKey,
+        conflictingMaterialization.targetToken,
+        rawToken,
+      ),
+      `Conflicting materialization token ${index + 1} replay`,
+    );
+  }
+  process.stdout.write(
+    "Phase 2C conflicting materialize/materialize race passed.\n",
+  );
+
+  requireSuccessfulOutcome(
+    await jsonRequest(
+      apiUrl,
+      apiKey,
+      organizerAToken,
+      "rpc/set_membership_role",
+      {
+        body: JSON.stringify({
+          membership_id: ORGANIZER_A_TWO_MEMBERSHIP,
+          role: "organizer",
+        }),
+        method: "POST",
+      },
+    ),
+    "Phase 2C demotion fixture promotion",
+  );
+  const demotionMaterialization = await createTargetBoundJobFixture({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    jwtSecret,
+    label: "materialization-demotion",
+    organizerToken: organizerATwoToken,
+    serviceKey,
+  });
+  const [racedDemotionMaterialization, racedRequesterDemotion] =
+    await runTargetBoundInvitationRace({
+      apiKey,
+      apiUrl,
+      expectedOperations: {
+        phase2c_test_materialize_target_bound_invitation_job: 1,
+        phase2c_test_demotion_set_membership_role: 1,
+      },
+      jobId: demotionMaterialization.jobId,
+      label: "target-bound materialization and requester demotion",
+      requests: [
+        () =>
+          materializeTargetBoundInvitation(
+            apiUrl,
+            serviceKey,
+            demotionMaterialization.jobId,
+            demotionMaterialization.rawToken,
+          ),
+        () =>
+          jsonRequest(
+            apiUrl,
+            apiKey,
+            organizerAToken,
+            "rpc/phase2c_test_demotion_set_membership_role",
+            {
+              body: JSON.stringify({
+                membership_id: ORGANIZER_A_TWO_MEMBERSHIP,
+                role: "member",
+              }),
+              method: "POST",
+            },
+          ),
+      ],
+      serviceKey,
+    });
+  requireSuccessfulOutcome(
+    racedRequesterDemotion,
+    "Target-bound requester demotion",
+  );
+  rejectUnsafeOutcome(
+    racedDemotionMaterialization,
+    "Materialization racing requester demotion",
+  );
+  if (
+    !racedDemotionMaterialization.response.ok ||
+    !Array.isArray(racedDemotionMaterialization.body) ||
+    ![0, 1].includes(racedDemotionMaterialization.body.length)
+  ) {
+    throw new Error(
+      "Materialization/demotion race did not use a valid serial materialization result.",
+    );
+  }
+  const demotionInvitationId =
+    racedDemotionMaterialization.body[0]?.invitation_id ?? null;
+  const demotionLoad = await loadTargetBoundInvitation(
+    apiUrl,
+    serviceKey,
+    demotionMaterialization.jobId,
+  );
+  requireEmptyMaterialization(
+    demotionLoad,
+    "Materialization/demotion terminal load",
+  );
+  runDatabaseQuery(`
+    do $phase2c_materialization_demotion_audit$
+    declare
+      linked_invitation_id uuid;
+    begin
+      select invitation_id into linked_invitation_id
+        from private.invitation_jobs
+       where id = '${demotionMaterialization.jobId}'::uuid;
+
+      if not exists (
+          select 1 from public.circle_memberships
+           where id = '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid
+             and role = 'member'
+             and status = 'active'
+        )
+        or not exists (
+          select 1 from private.invitation_jobs
+           where id = '${demotionMaterialization.jobId}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason = 'requester_authority_lost'
+             and invalidated_by_membership_id =
+               '${ORGANIZER_A_MEMBERSHIP}'::uuid
+             and invalidated_by_closure_request_id is null
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or (select count(*) from private.invitation_jobs
+             where id = '${demotionMaterialization.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id =
+                 '${demotionMaterialization.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id =
+                 '${demotionMaterialization.jobId}'::uuid
+               and actor_membership_id =
+                 '${ORGANIZER_A_MEMBERSHIP}'::uuid) <> 1
+        or (select count(*) from private.invitations
+             where invitation_job_id =
+               '${demotionMaterialization.jobId}'::uuid) <>
+                 ${demotionInvitationId ? 1 : 0}
+        or (select count(*)
+              from private.audit_events as audit
+              join private.invitations as invitation
+                on invitation.id = audit.subject_id
+               and invitation.invitation_job_id =
+                 '${demotionMaterialization.jobId}'::uuid
+             where audit.event_type = 'invitation_created') <>
+                 ${demotionInvitationId ? 1 : 0}
+        or (select count(*)
+              from private.audit_events as audit
+              join private.invitations as invitation
+                on invitation.id = audit.subject_id
+               and invitation.invitation_job_id =
+                 '${demotionMaterialization.jobId}'::uuid
+             where audit.event_type = 'invitation_created'
+               and audit.actor_membership_id =
+                 '${ORGANIZER_A_TWO_MEMBERSHIP}'::uuid) <>
+                 ${demotionInvitationId ? 1 : 0}
+        or (
+          linked_invitation_id is not null
+          and not exists (
+            select 1 from private.invitations
+             where id = linked_invitation_id
+               and invitation_job_id =
+                 '${demotionMaterialization.jobId}'::uuid
+               and target_auth_user_id =
+                 '${demotionMaterialization.target.id}'::uuid
+               and encode(token_hash, 'hex') =
+                 '${sha256Hex(demotionMaterialization.rawToken)}'
+               and accepted_at is null
+               and revoked_at is not null
+               and revocation_reason = 'requester_authority_lost'
+               and revoked_by_membership_id =
+                 '${ORGANIZER_A_MEMBERSHIP}'::uuid
+               and revoked_by_closure_request_id is null
+          )
+        )
+        or linked_invitation_id is distinct from
+          ${demotionInvitationId ? `'${demotionInvitationId}'::uuid` : "null::uuid"} then
+        raise exception 'Materialization/demotion race left live or ambiguous invitation authority';
+      end if;
+    end
+    $phase2c_materialization_demotion_audit$;
+  `);
+  requireInvitationDenial(
+    await acceptInvitation(
+      apiUrl,
+      apiKey,
+      demotionMaterialization.targetToken,
+      demotionMaterialization.rawToken,
+    ),
+    "Materialization/demotion token replay",
+  );
+  process.stdout.write(
+    "Phase 2C materialize/requester-demotion race passed.\n",
+  );
+
+  const targetActivationTarget = await createSyntheticAuthUser(
+    apiUrl,
+    serviceKey,
+    "accept-target-activation",
+  );
+  const targetActivationToken = createLocalUserToken(
+    targetActivationTarget.id,
+    jwtSecret,
+  );
+  const targetActivationLegacyInvitation = await jsonRequest(
+    apiUrl,
+    apiKey,
+    organizerAToken,
+    "rpc/create_invitation",
+    {
+      body: JSON.stringify({
+        circle_id: CIRCLE_A,
+        display_name: "Phase 2C alternate activation",
+        email: targetActivationTarget.email,
+      }),
+      method: "POST",
+    },
+  );
+  requireSuccessfulOutcome(
+    targetActivationLegacyInvitation,
+    "Target-activation legacy invitation setup",
+  );
+  const targetActivationLegacyRow = targetActivationLegacyInvitation.body?.[0];
+  if (
+    !uuid.test(targetActivationLegacyRow?.invitation_id) ||
+    typeof targetActivationLegacyRow?.raw_token !== "string"
+  ) {
+    throw new Error(
+      "Target-activation legacy invitation did not return its synthetic identity.",
+    );
+  }
+  const targetActivationJobId = await requestTargetBoundInvitationJob({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    displayName: "Phase 2C accept target activation",
+    organizerToken: organizerAToken,
+    targetAuthUserId: targetActivationTarget.id,
+  });
+  const targetActivationRawToken = invitationToken();
+  const targetActivationMaterialization = targetBoundMaterializationRow(
+    await materializeTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      targetActivationJobId,
+      targetActivationRawToken,
+    ),
+    "Target-activation materialization setup",
+  );
+  const targetActivationAcceptanceResults = await runTargetBoundInvitationRace({
+    apiKey,
+    apiUrl,
+    expectedOperations: {
+      phase2c_test_activation_accept_legacy: 1,
+      phase2c_test_activation_accept_target_bound: 1,
+    },
+    jobId: targetActivationJobId,
+    label: "target-bound acceptance and alternate target activation",
+    requests: [
+      () =>
+        acceptInvitation(
+          apiUrl,
+          apiKey,
+          targetActivationToken,
+          targetActivationRawToken,
+          "phase2c_test_activation_accept_target_bound",
+        ),
+      () =>
+        acceptInvitation(
+          apiUrl,
+          apiKey,
+          targetActivationToken,
+          targetActivationLegacyRow.raw_token,
+          "phase2c_test_activation_accept_legacy",
+        ),
+    ],
+    serviceKey,
+  });
+  targetActivationAcceptanceResults.forEach((result, index) =>
+    rejectUnsafeOutcome(result, `Target-activation acceptance ${index + 1}`),
+  );
+  const targetActivationSuccesses = targetActivationAcceptanceResults
+    .map((result, index) => ({ index, result }))
+    .filter(({ result }) => result.response.ok && uuid.test(result.body));
+  if (targetActivationSuccesses.length !== 1) {
+    throw new Error(
+      `Target activation race did not select exactly one membership (${targetActivationAcceptanceResults
+        .map(
+          ({ response, body }) => `${response.status}:${JSON.stringify(body)}`,
+        )
+        .join(" | ")}).`,
+    );
+  }
+  const targetBoundAcceptanceWon = targetActivationSuccesses[0].index === 0;
+  const targetActivationMembershipId = targetActivationSuccesses[0].result.body;
+  requireInvitationDenial(
+    targetActivationAcceptanceResults[targetBoundAcceptanceWon ? 1 : 0],
+    "Target-activation losing acceptance",
+  );
+  runDatabaseQuery(`
+    do $phase2c_accept_target_activation_audit$
+    begin
+      if (select count(*) from public.circle_memberships
+           where circle_id = '${CIRCLE_A}'::uuid
+             and user_id = '${targetActivationTarget.id}'::uuid
+             and status = 'active') <> 1
+        or not exists (
+          select 1 from private.invitation_jobs
+           where id = '${targetActivationJobId}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason =
+               '${targetBoundAcceptanceWon ? "target_accepted" : "target_became_active"}'
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or not exists (
+          select 1 from private.invitations
+           where id = '${targetActivationMaterialization.invitation_id}'::uuid
+             and invitation_job_id = '${targetActivationJobId}'::uuid
+             and (
+               (
+                 ${targetBoundAcceptanceWon ? "true" : "false"}
+                 and accepted_membership_id =
+                   '${targetActivationMembershipId}'::uuid
+                 and accepted_at is not null
+                 and revoked_at is null
+               )
+               or (
+                 ${targetBoundAcceptanceWon ? "false" : "true"}
+                 and accepted_at is null
+                 and revoked_at is not null
+                 and revocation_reason = 'target_became_active'
+               )
+             )
+        )
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${targetActivationJobId}'::uuid
+               and actor_membership_id =
+                 '${targetActivationMembershipId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${targetBoundAcceptanceWon ? targetActivationMaterialization.invitation_id : targetActivationLegacyRow.invitation_id}'::uuid
+               and actor_membership_id =
+                 '${targetActivationMembershipId}'::uuid) <> 1 then
+        raise exception 'Acceptance/target-activation race left split or live invitation state';
+      end if;
+    end
+    $phase2c_accept_target_activation_audit$;
+  `);
+  requireEmptyMaterialization(
+    await loadTargetBoundInvitation(apiUrl, serviceKey, targetActivationJobId),
+    "Target-activation terminal load",
+  );
+  if (targetBoundAcceptanceWon) {
+    requireSuccessfulOutcome(
+      await revokeInvitation(
+        apiUrl,
+        apiKey,
+        organizerAToken,
+        targetActivationLegacyRow.invitation_id,
+      ),
+      "Target-activation losing legacy invitation cleanup",
+    );
+  }
+  for (const [label, rawToken] of [
+    ["target-bound", targetActivationRawToken],
+    ["alternate", targetActivationLegacyRow.raw_token],
+  ]) {
+    requireInvitationDenial(
+      await acceptInvitation(apiUrl, apiKey, targetActivationToken, rawToken),
+      `Target-activation ${label} token replay`,
+    );
+  }
+  process.stdout.write("Phase 2C accept/target-activation race passed.\n");
+
+  const withdrawalAcceptance = await createTargetBoundJobFixture({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    jwtSecret,
+    label: "accept-withdrawal",
+    organizerToken: organizerAToken,
+    serviceKey,
+  });
+  const withdrawalMaterialization = targetBoundMaterializationRow(
+    await materializeTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      withdrawalAcceptance.jobId,
+      withdrawalAcceptance.rawToken,
+    ),
+    "Acceptance/withdrawal materialization setup",
+  );
+  const [racedWithdrawalAcceptance, racedOrganizerWithdrawal] =
+    await runTargetBoundInvitationRace({
+      apiKey,
+      apiUrl,
+      expectedOperations: {
+        phase2c_test_withdrawal_accept: 1,
+        phase2c_test_withdrawal_revoke: 1,
+      },
+      jobId: withdrawalAcceptance.jobId,
+      label: "target-bound acceptance and organizer withdrawal",
+      requests: [
+        () =>
+          acceptInvitation(
+            apiUrl,
+            apiKey,
+            withdrawalAcceptance.targetToken,
+            withdrawalAcceptance.rawToken,
+            "phase2c_test_withdrawal_accept",
+          ),
+        () =>
+          revokeInvitation(
+            apiUrl,
+            apiKey,
+            organizerAToken,
+            withdrawalMaterialization.invitation_id,
+            "phase2c_test_withdrawal_revoke",
+          ),
+      ],
+      serviceKey,
+    });
+  rejectUnsafeOutcome(
+    racedWithdrawalAcceptance,
+    "Acceptance racing organizer withdrawal",
+  );
+  rejectUnsafeOutcome(
+    racedOrganizerWithdrawal,
+    "Organizer withdrawal racing acceptance",
+  );
+  const withdrawalAcceptanceWon =
+    racedWithdrawalAcceptance.response.ok &&
+    uuid.test(racedWithdrawalAcceptance.body);
+  const organizerWithdrawalWon = racedOrganizerWithdrawal.response.ok;
+  if (withdrawalAcceptanceWon === organizerWithdrawalWon) {
+    throw new Error(
+      `Acceptance/withdrawal race did not select one terminal action (${racedWithdrawalAcceptance.response.status}:${JSON.stringify(racedWithdrawalAcceptance.body)} | ${racedOrganizerWithdrawal.response.status}:${JSON.stringify(racedOrganizerWithdrawal.body)}).`,
+    );
+  }
+  if (withdrawalAcceptanceWon) {
+    requireInvitationChangeDenial(
+      racedOrganizerWithdrawal,
+      "Withdrawal losing to acceptance",
+    );
+  } else {
+    requireInvitationDenial(
+      racedWithdrawalAcceptance,
+      "Acceptance losing to withdrawal",
+    );
+  }
+  runDatabaseQuery(`
+    do $phase2c_accept_withdrawal_audit$
+    begin
+      if not exists (
+          select 1 from private.invitation_jobs
+           where id = '${withdrawalAcceptance.jobId}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason =
+               '${withdrawalAcceptanceWon ? "target_accepted" : "organizer_withdrawn"}'
+             and invalidated_by_membership_id =
+               '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
+             and invalidated_by_closure_request_id is null
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or not exists (
+          select 1 from private.invitations
+           where id = '${withdrawalMaterialization.invitation_id}'::uuid
+             and invitation_job_id =
+               '${withdrawalAcceptance.jobId}'::uuid
+             and (
+               (
+                 ${withdrawalAcceptanceWon ? "true" : "false"}
+                 and accepted_membership_id =
+                   '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
+                 and accepted_at is not null
+                 and revoked_at is null
+                 and revoked_by_membership_id is null
+                 and revoked_by_closure_request_id is null
+               )
+               or (
+                 ${withdrawalAcceptanceWon ? "false" : "true"}
+                 and accepted_at is null
+                 and revoked_at is not null
+                 and revocation_reason = 'organizer_withdrawn'
+                 and revoked_by_membership_id =
+                   '${ORGANIZER_A_MEMBERSHIP}'::uuid
+               )
+             )
+        )
+        or (select count(*) from public.circle_memberships
+             where circle_id = '${CIRCLE_A}'::uuid
+               and user_id = '${withdrawalAcceptance.target.id}'::uuid
+               and status = 'active') <>
+                 ${withdrawalAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${withdrawalAcceptance.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${withdrawalAcceptance.jobId}'::uuid
+               and actor_membership_id =
+                 '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${withdrawalMaterialization.invitation_id}'::uuid) <>
+                   ${withdrawalAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${withdrawalMaterialization.invitation_id}'::uuid
+               and actor_membership_id =
+                 '${withdrawalAcceptanceWon ? racedWithdrawalAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <>
+                   ${withdrawalAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_revoked'
+               and subject_id =
+                 '${withdrawalMaterialization.invitation_id}'::uuid) <>
+                   ${withdrawalAcceptanceWon ? 0 : 1}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_revoked'
+               and subject_id =
+                 '${withdrawalMaterialization.invitation_id}'::uuid
+               and actor_membership_id =
+                 '${ORGANIZER_A_MEMBERSHIP}'::uuid) <>
+                   ${withdrawalAcceptanceWon ? 0 : 1} then
+        raise exception 'Acceptance/withdrawal race left mismatched durable state';
+      end if;
+    end
+    $phase2c_accept_withdrawal_audit$;
+  `);
+  requireEmptyMaterialization(
+    await loadTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      withdrawalAcceptance.jobId,
+    ),
+    "Acceptance/withdrawal terminal load",
+  );
+  requireInvitationDenial(
+    await acceptInvitation(
+      apiUrl,
+      apiKey,
+      withdrawalAcceptance.targetToken,
+      withdrawalAcceptance.rawToken,
+    ),
+    "Acceptance/withdrawal token replay",
+  );
+  process.stdout.write("Phase 2C accept/organizer-withdrawal race passed.\n");
+
+  const closureAcceptance = await createTargetBoundJobFixture({
+    apiKey,
+    apiUrl,
+    circleId: CIRCLE_A,
+    jwtSecret,
+    label: "accept-closure",
+    organizerToken: organizerAToken,
+    serviceKey,
+  });
+  const closureCircleBPersonId = randomUUID();
+  const closureCircleBMembershipId = randomUUID();
+  runDatabaseQuery(`
+    insert into public.people (
+      id, circle_id, display_name, profile_kind, created_by_membership_id
+    ) values (
+      '${closureCircleBPersonId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      'Phase 2C closure target',
+      'account',
+      '${ORGANIZER_B_MEMBERSHIP}'::uuid
+    )
+  `);
+  runDatabaseQuery(`
+    insert into public.circle_memberships (
+      id, circle_id, user_id, person_id, role, status
+    ) values (
+      '${closureCircleBMembershipId}'::uuid,
+      '${CIRCLE_B}'::uuid,
+      '${closureAcceptance.target.id}'::uuid,
+      '${closureCircleBPersonId}'::uuid,
+      'member',
+      'active'
+    )
+  `);
+  const closureMaterialization = targetBoundMaterializationRow(
+    await materializeTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      closureAcceptance.jobId,
+      closureAcceptance.rawToken,
+    ),
+    "Acceptance/closure materialization setup",
+  );
+  const closureRequestKey = randomUUID();
+  const [racedClosureAcceptance, racedTargetClosure] =
+    await runTargetBoundInvitationRace({
+      apiKey,
+      apiUrl,
+      expectedOperations: {
+        phase2c_test_closure_accept: 1,
+        phase2c_test_closure_request: 1,
+      },
+      jobId: closureAcceptance.jobId,
+      label: "target-bound acceptance and target closure",
+      requests: [
+        () =>
+          acceptInvitation(
+            apiUrl,
+            apiKey,
+            closureAcceptance.targetToken,
+            closureAcceptance.rawToken,
+            "phase2c_test_closure_accept",
+          ),
+        () =>
+          jsonRequest(
+            apiUrl,
+            apiKey,
+            closureAcceptance.targetToken,
+            "rpc/phase2c_test_closure_request",
+            {
+              body: JSON.stringify({ request_key: closureRequestKey }),
+              method: "POST",
+            },
+          ),
+      ],
+      serviceKey,
+    });
+  const targetClosureId = requireSuccessfulOutcome(
+    racedTargetClosure,
+    "Target closure racing invitation acceptance",
+  );
+  if (!uuid.test(targetClosureId)) {
+    throw new Error("Acceptance/closure race did not return a closure ID.");
+  }
+  rejectUnsafeOutcome(
+    racedClosureAcceptance,
+    "Invitation acceptance racing target closure",
+  );
+  const closureAcceptanceWon =
+    racedClosureAcceptance.response.ok &&
+    uuid.test(racedClosureAcceptance.body);
+  if (!closureAcceptanceWon) {
+    requireInvitationDenial(
+      racedClosureAcceptance,
+      "Acceptance losing to target closure",
+    );
+  }
+  runDatabaseQuery(`
+    do $phase2c_accept_closure_request_audit$
+    begin
+      if not private.account_closure_is_blocking(
+          '${closureAcceptance.target.id}'::uuid
+        )
+        or not exists (
+          select 1 from private.account_closure_requests
+           where id = '${targetClosureId}'::uuid
+             and auth_user_id = '${closureAcceptance.target.id}'::uuid
+             and request_key = '${closureRequestKey}'::uuid
+             and state = 'requested'
+        )
+        or not exists (
+          select 1 from private.invitation_jobs
+           where id = '${closureAcceptance.jobId}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason =
+               '${closureAcceptanceWon ? "target_accepted" : "account_closure"}'
+             and (
+               ${closureAcceptanceWon ? `invalidated_by_membership_id = '${racedClosureAcceptance.body}'::uuid` : "invalidated_by_membership_id is null"}
+             )
+             and (
+               ${closureAcceptanceWon ? "invalidated_by_closure_request_id is null" : `invalidated_by_closure_request_id = '${targetClosureId}'::uuid`}
+             )
+             and not private.invitation_job_requester_is_authorized(id)
+        )
+        or not exists (
+          select 1 from private.invitations
+           where id = '${closureMaterialization.invitation_id}'::uuid
+             and invitation_job_id = '${closureAcceptance.jobId}'::uuid
+             and (
+               (
+                 ${closureAcceptanceWon ? "true" : "false"}
+                 and accepted_membership_id =
+                   '${closureAcceptanceWon ? racedClosureAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
+                 and accepted_at is not null
+                 and revoked_at is null
+                 and revoked_by_membership_id is null
+                 and revoked_by_closure_request_id is null
+               )
+               or (
+                 ${closureAcceptanceWon ? "false" : "true"}
+                 and accepted_at is null
+                 and revoked_at is not null
+                 and revocation_reason = 'account_closure'
+                 and revoked_by_membership_id is null
+                 and revoked_by_closure_request_id =
+                   '${targetClosureId}'::uuid
+               )
+             )
+        )
+        or (select count(*) from public.circle_memberships
+             where circle_id = '${CIRCLE_A}'::uuid
+               and user_id = '${closureAcceptance.target.id}'::uuid
+               and status = 'active') <>
+                 ${closureAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${closureAcceptance.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${closureAcceptance.jobId}'::uuid
+               and (
+                 ${closureAcceptanceWon ? `actor_membership_id = '${racedClosureAcceptance.body}'::uuid` : "actor_membership_id is null"}
+               )) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid) <>
+                   ${closureAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid
+               and actor_membership_id =
+                 '${closureAcceptanceWon ? racedClosureAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <>
+                   ${closureAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_revoked'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid) <> 0 then
+        raise exception 'Acceptance/closure request race left a live or falsely attributed invitation';
+      end if;
+    end
+    $phase2c_accept_closure_request_audit$;
+  `);
+  requireEmptyMaterialization(
+    await loadTargetBoundInvitation(
+      apiUrl,
+      serviceKey,
+      closureAcceptance.jobId,
+    ),
+    "Acceptance/closure terminal load",
+  );
+  requireInvitationDenial(
+    await acceptInvitation(
+      apiUrl,
+      apiKey,
+      closureAcceptance.targetToken,
+      closureAcceptance.rawToken,
+    ),
+    "Acceptance/closure token replay",
+  );
+  const preparedTargetClosure = await jsonRequest(
+    apiUrl,
+    serviceKey,
+    serviceKey,
+    "rpc/phase7c_test_prepare_account_closure",
+    {
+      body: JSON.stringify({ closure_request_id: targetClosureId }),
+      method: "POST",
+    },
+  );
+  requireSuccessfulOutcome(
+    preparedTargetClosure,
+    "Acceptance/closure preparation",
+  );
+  if (preparedTargetClosure.body !== targetClosureId) {
+    throw new Error("Acceptance/closure preparation changed closure identity.");
+  }
+  runDatabaseQuery(`
+    do $phase2c_accept_closure_prepared_audit$
+    begin
+      if not exists (
+          select 1 from private.account_closure_requests
+           where id = '${targetClosureId}'::uuid
+             and state = 'prepared'
+        )
+        or exists (
+          select 1 from public.circle_memberships
+           where user_id = '${closureAcceptance.target.id}'::uuid
+        )
+        or (select count(*) from private.account_closure_memberships
+             where closure_request_id = '${targetClosureId}'::uuid) <>
+               ${closureAcceptanceWon ? 2 : 1}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${closureAcceptance.jobId}'::uuid) <> 1
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_job_invalidated'
+               and subject_id = '${closureAcceptance.jobId}'::uuid
+               and (
+                 ${closureAcceptanceWon ? `actor_membership_id = '${racedClosureAcceptance.body}'::uuid` : "actor_membership_id is null"}
+               )) <> 1
+        or not exists (
+          select 1 from private.invitation_jobs
+           where id = '${closureAcceptance.jobId}'::uuid
+             and state = 'invalidated'
+             and invalidation_reason =
+               '${closureAcceptanceWon ? "target_accepted" : "account_closure"}'
+             and (
+               ${closureAcceptanceWon ? `invalidated_by_membership_id = '${racedClosureAcceptance.body}'::uuid` : "invalidated_by_membership_id is null"}
+             )
+             and (
+               ${closureAcceptanceWon ? "invalidated_by_closure_request_id is null" : `invalidated_by_closure_request_id = '${targetClosureId}'::uuid`}
+             )
+        )
+        or not exists (
+          select 1 from private.invitations
+           where id = '${closureMaterialization.invitation_id}'::uuid
+             and invitation_job_id = '${closureAcceptance.jobId}'::uuid
+             and (
+               (
+                 ${closureAcceptanceWon ? "true" : "false"}
+                 and accepted_membership_id =
+                   '${closureAcceptanceWon ? racedClosureAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid
+                 and accepted_at is not null
+                 and revoked_at is null
+                 and revoked_by_membership_id is null
+                 and revoked_by_closure_request_id is null
+               )
+               or (
+                 ${closureAcceptanceWon ? "false" : "true"}
+                 and accepted_at is null
+                 and revoked_at is not null
+                 and revocation_reason = 'account_closure'
+                 and revoked_by_membership_id is null
+                 and revoked_by_closure_request_id =
+                   '${targetClosureId}'::uuid
+               )
+             )
+        )
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid) <>
+                   ${closureAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_accepted'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid
+               and actor_membership_id =
+                 '${closureAcceptanceWon ? racedClosureAcceptance.body : ORGANIZER_A_MEMBERSHIP}'::uuid) <>
+                   ${closureAcceptanceWon ? 1 : 0}
+        or (select count(*) from private.audit_events
+             where event_type = 'invitation_revoked'
+               and subject_id =
+                 '${closureMaterialization.invitation_id}'::uuid) <> 0 then
+        raise exception 'Prepared acceptance/closure race retained access or duplicate terminal history';
+      end if;
+    end
+    $phase2c_accept_closure_prepared_audit$;
+  `);
+  process.stdout.write("Phase 2C accept/target-closure race passed.\n");
+
   const organizerClosureSuffix = randomUUID();
   const organizerClosureCircleId = randomUUID();
   const organizerClosurePeople = [randomUUID(), randomUUID()];
@@ -3042,6 +4771,7 @@ try {
              and invalidated_by_membership_id is null
              and invalidated_by_closure_request_id =
                '${invitationClosureRequest.body}'::uuid
+             and invalidation_reason = 'account_closure'
              and not private.invitation_job_requester_is_authorized(id)
         )
         or not exists (
@@ -3049,9 +4779,10 @@ try {
             from private.invitation_jobs
            where id = '${requesterJob.body}'::uuid
              and state = 'invalidated'
-             and invalidated_by_membership_id =
-               '${invitationClosureMembershipId}'::uuid
-             and invalidated_by_closure_request_id is null
+             and invalidated_by_membership_id is null
+             and invalidated_by_closure_request_id =
+               '${invitationClosureRequest.body}'::uuid
+             and invalidation_reason = 'account_closure'
              and not private.invitation_job_requester_is_authorized(id)
         )
         or not exists (
@@ -3063,6 +4794,7 @@ try {
              and revoked_by_membership_id is null
              and revoked_by_closure_request_id =
                '${invitationClosureRequest.body}'::uuid
+             and revocation_reason = 'account_closure'
         ) then
         raise exception 'Invitation/closure race left resurrectable or falsely attributed terminal work';
       end if;
@@ -3406,7 +5138,7 @@ try {
   `);
 
   process.stdout.write(
-    "Overlapping organizer revocation and role changes, guardian grants, invitation acceptance including same-subject account closure, invitation job requests including target activation and account closure, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
+    "Overlapping organizer revocation and role changes, guardian grants, target-bound invitation materialization and acceptance against conflicts, activation, withdrawal, demotion, and closure, legacy invitation acceptance, invitation job requests, moment/tag edits, note edits, reversible responses, parent trash, member revocation, export requests, competing closure requests, closure replay, and cross-circle closure preparation serialized into valid durable state.\n",
   );
 } catch (error) {
   primaryError = error;

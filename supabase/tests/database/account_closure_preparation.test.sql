@@ -1,6 +1,6 @@
 begin;
 
-select plan(96);
+select plan(99);
 
 select is(
   (
@@ -444,19 +444,49 @@ select set_config(
   '10000000-0000-4000-8000-000000000006',
   true
 );
-select throws_ok(
-  $$select public.request_invitation_job(
+select is(
+  public.request_invitation_job(
     '20000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000002',
     'Blocked closing target',
     'b1000000-0000-4000-8000-000000000003'
-  )$$,
-  '42501',
-  'Invitation delivery could not be requested',
-  'another organizer cannot target a requested closer with new delivery work'
+  ),
+  null::uuid,
+  'targeting a requested closer terminalizes existing work without creating new delivery work'
 );
 
 reset role;
+select ok(
+  (
+    select state = 'invalidated'
+      and invalidation_reason = 'account_closure'
+      and invalidated_by_closure_request_id = :'coorganizer_closure_id'::uuid
+      and invalidated_by_membership_id is null
+      from private.invitation_jobs
+     where id = :'closing_target_invite_job_id'::uuid
+  ),
+  'requested-target reconciliation records the exact closure and no membership actor'
+);
+select ok(
+  (
+    select count(*) = 1
+      and pg_catalog.bool_and(actor_membership_id is null)
+      from private.audit_events
+     where event_type = 'invitation_job_invalidated'
+       and subject_type = 'invitation_job'
+       and subject_id = :'closing_target_invite_job_id'::uuid
+  ),
+  'requested-target reconciliation records exactly one actorless centralized invalidation audit'
+);
+select is(
+  (
+    select count(*)::bigint
+      from private.invitation_jobs
+     where request_key = 'b1000000-0000-4000-8000-000000000003'::uuid
+  ),
+  0::bigint,
+  'mutation-preserving denial creates no job for the new request key'
+);
 select ok(
   not private.export_job_requester_is_authorized(
     :'closing_export_job_id'::uuid
@@ -551,13 +581,13 @@ select ok(
 select ok(
   (
     select state = 'invalidated'
-      and invalidated_by_membership_id =
-        '40000000-0000-4000-8000-000000000002'
-      and invalidated_by_closure_request_id is null
+      and invalidated_by_membership_id is null
+      and invalidated_by_closure_request_id =
+        :'coorganizer_closure_id'::uuid
       from private.invitation_jobs
      where id = :'closing_requester_invite_job_id'::uuid
   ),
-  'requester invitation work keeps truthful membership attribution'
+  'requester invitation work keeps truthful closure attribution'
 );
 select ok(
   (
@@ -1135,7 +1165,9 @@ select invalidated_at::text as export_invalidated_at,
   from private.export_jobs
  where id = :'dual_export_job_id'::uuid \gset dual_snapshot_
 select invalidated_at::text as invitation_invalidated_at,
-       invalidated_by_membership_id::text as invitation_invalidator
+       coalesce(invalidated_by_membership_id::text, '') as invitation_invalidator,
+       coalesce(invalidated_by_closure_request_id::text, '')
+         as invitation_closure_invalidator
   from private.invitation_jobs
  where id = :'dual_invite_job_id'::uuid \gset dual_snapshot_
 
@@ -1144,13 +1176,9 @@ select ok(
   and :'dual_snapshot_export_invalidator' =
     '40000000-0000-4000-8000-000000000007'
   and :'dual_snapshot_invitation_invalidated_at' <> ''
-  and :'dual_snapshot_invitation_invalidator' =
-    '40000000-0000-4000-8000-000000000007'
-  and (
-    select invalidated_by_closure_request_id is null
-      from private.invitation_jobs
-     where id = :'dual_invite_job_id'::uuid
-  ),
+  and :'dual_snapshot_invitation_invalidator' = ''
+  and :'dual_snapshot_invitation_closure_invalidator' =
+    :'dual_closure_id',
   'dual-circle requester jobs are terminally and truthfully invalidated'
 );
 select lives_ok(
@@ -1206,9 +1234,10 @@ select ok(
   )
   and (
     select invalidated_at::text = :'dual_snapshot_invitation_invalidated_at'
-      and invalidated_by_membership_id::text =
+      and coalesce(invalidated_by_membership_id::text, '') =
         :'dual_snapshot_invitation_invalidator'
-      and invalidated_by_closure_request_id is null
+      and coalesce(invalidated_by_closure_request_id::text, '') =
+        :'dual_snapshot_invitation_closure_invalidator'
       from private.invitation_jobs
      where id = :'dual_invite_job_id'::uuid
   ),

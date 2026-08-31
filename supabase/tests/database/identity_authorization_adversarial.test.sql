@@ -200,10 +200,13 @@ select is(
     'invalidate_invitation_jobs_after_authority_loss()',
     'invalidate_photo_intakes_after_guardian_revocation()',
     'invalidate_photo_intakes_after_membership_change()',
+    'invalidate_target_bound_invitation_job(requested_job_id uuid, requested_reason text, requested_invalidator_membership_id uuid, requested_invalidator_closure_request_id uuid)',
     'is_active_circle_member(requested_circle_id uuid)',
     'is_circle_organizer(requested_circle_id uuid)',
     'list_manageable_trashed_written_moments(requested_circle_id uuid)',
     'list_pending_invitations(requested_circle_id uuid)',
+    'load_target_bound_invitation_job(requested_job_id uuid)',
+    'materialize_target_bound_invitation_job(requested_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
     'photo_intake_path_is_uploadable(requested_object_path text, requested_owner_id text, requested_user_metadata jsonb)',
     'photo_intake_requester_is_authorized(requested_intake_id uuid)',
     'preflight_invitation(invitation_token text, invited_email text)',
@@ -213,6 +216,7 @@ select is(
     'reserve_photo_intake(requested_circle_id uuid, requested_journal_person_id uuid, requested_request_key uuid)',
     'revoke_invitation(target_invitation_id uuid)',
     'revoke_membership(target_membership_id uuid)',
+    'revoke_target_bound_invitation_after_job_invalidation()',
     'set_membership_role(target_membership_id uuid, requested_role text)',
     'set_moment_reaction(target_moment_id uuid, requested_reaction_type text)',
     'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)',
@@ -542,19 +546,48 @@ select ok(
   'a wrong-recipient attempt does not consume the invitation'
 );
 
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
-select * from public.create_invitation(
+-- Build this legacy fixture with terminal timestamps from birth. Invitation
+-- identity is now intentionally immutable, so an expiry test must not weaken
+-- that production invariant by rewriting created_at or expires_at afterward.
+select 'expired-' || repeat('x', 40) as raw_token \gset expired_
+
+insert into public.people (
+  circle_id, display_name, profile_kind, created_by_membership_id
+) values (
   '20000000-0000-4000-8000-000000000001',
   'Expired Invite',
-  'expired-invite@example.test'
-) \gset expired_
-reset role;
+  'account',
+  '40000000-0000-4000-8000-000000000001'
+) returning id as person_id \gset expired_person_
 
-update private.invitations
-   set created_at = statement_timestamp() - interval '2 minutes',
-       expires_at = statement_timestamp() - interval '1 minute'
- where id = :'expired_invitation_id';
+with material as (
+  select extensions.gen_random_bytes(16) as email_salt
+)
+insert into private.invitations (
+  circle_id,
+  person_id,
+  created_by_membership_id,
+  token_hash,
+  email_salt,
+  email_hash,
+  created_at,
+  expires_at
+)
+select
+  '20000000-0000-4000-8000-000000000001',
+  :'expired_person_person_id'::uuid,
+  '40000000-0000-4000-8000-000000000001',
+  extensions.digest(:'expired_raw_token', 'sha256'),
+  material.email_salt,
+  extensions.digest(
+    pg_catalog.convert_to('expired-invite@example.test', 'UTF8')
+      || material.email_salt,
+    'sha256'
+  ),
+  statement_timestamp() - interval '2 minutes',
+  statement_timestamp() - interval '1 minute'
+from material
+returning id as invitation_id \gset expired_
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000013', true);

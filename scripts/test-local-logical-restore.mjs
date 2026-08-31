@@ -148,6 +148,7 @@ const expectedMigrationFiles = [
   "20260831000000_phase_7b_membership_attribution_foundation.sql",
   "20260831010000_phase_7c_account_closure_preparation.sql",
   "20260831020000_phase_4a_photo_intake_foundation.sql",
+  "20260831030000_phase_2c_target_bound_invitation_materialization.sql",
 ];
 
 class DrillError extends Error {
@@ -1054,7 +1055,8 @@ select (
         '20260830234500',
         '20260831000000',
         '20260831010000',
-        '20260831020000'
+        '20260831020000',
+        '20260831030000'
       ]::text[]
       from supabase_migrations.schema_migrations as history
   )
