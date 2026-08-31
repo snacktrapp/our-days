@@ -20,6 +20,8 @@ const pngSignature = Buffer.from([
 const pngFooter = Buffer.from([
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ]);
+const pngCriticalChunkTypes = new Set(["IHDR", "PLTE", "IDAT", "IEND"]);
+const pngAnimationChunkTypes = new Set(["acTL", "fcTL", "fdAT"]);
 const sha256Pattern = /^[0-9a-f]{64}$/u;
 const DEFAULT_INPUT_TIMEOUT_MILLISECONDS = 30_000;
 const MAX_INPUT_TIMEOUT_MILLISECONDS = 120_000;
@@ -218,6 +220,135 @@ function jpegStructureFailure() {
   );
 }
 
+const pngCrcTable = new Uint32Array(256);
+for (let index = 0; index < pngCrcTable.length; index += 1) {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  pngCrcTable[index] = value >>> 0;
+}
+
+function updatePngCrc(crc, bytes) {
+  let value = crc;
+  for (const byte of bytes) {
+    value = pngCrcTable[(value ^ byte) & 0xff] ^ (value >>> 8);
+  }
+  return value >>> 0;
+}
+
+function pngStructureFailure() {
+  fail(
+    "PHOTO_FORMAT_UNSUPPORTED",
+    "Photo bytes do not have a supported image structure.",
+  );
+}
+
+async function readExactAt(handle, length, position) {
+  const buffer = Buffer.allocUnsafe(length);
+  let offset = 0;
+  while (offset < length) {
+    const { bytesRead } = await handle.read(
+      buffer,
+      offset,
+      length - offset,
+      position + offset,
+    );
+    if (bytesRead < 1) pngStructureFailure();
+    offset += bytesRead;
+  }
+  return buffer;
+}
+
+async function validateExactPngDatastream(handle, sizeBytes) {
+  if (sizeBytes < pngSignature.length + pngFooter.length) {
+    pngStructureFailure();
+  }
+  const signature = await readExactAt(handle, pngSignature.length, 0);
+  if (!signature.equals(pngSignature)) pngStructureFailure();
+
+  let position = pngSignature.length;
+  let chunkIndex = 0;
+  let sawIdat = false;
+  let idatEnded = false;
+  let sawPalette = false;
+  let complete = false;
+
+  while (position < sizeBytes) {
+    if (sizeBytes - position < 12) pngStructureFailure();
+    const header = await readExactAt(handle, 8, position);
+    const dataLength = header.readUInt32BE(0);
+    const typeBytes = header.subarray(4, 8);
+    const type = typeBytes.toString("latin1");
+    if (
+      ![...typeBytes].every(
+        (byte) => (byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122),
+      ) ||
+      typeBytes[2] < 65 ||
+      typeBytes[2] > 90
+    ) {
+      pngStructureFailure();
+    }
+
+    const chunkEnd = position + 12 + dataLength;
+    if (!Number.isSafeInteger(chunkEnd) || chunkEnd > sizeBytes) {
+      pngStructureFailure();
+    }
+    if (pngAnimationChunkTypes.has(type)) pngStructureFailure();
+    if (
+      type.charCodeAt(0) >= 65 &&
+      type.charCodeAt(0) <= 90 &&
+      !pngCriticalChunkTypes.has(type)
+    ) {
+      pngStructureFailure();
+    }
+    if ((chunkIndex === 0) !== (type === "IHDR")) pngStructureFailure();
+    if (type === "IHDR" && dataLength !== 13) pngStructureFailure();
+    if (type === "PLTE") {
+      if (sawPalette || sawIdat || dataLength < 3 || dataLength % 3 !== 0) {
+        pngStructureFailure();
+      }
+      sawPalette = true;
+    }
+    if (type === "IDAT") {
+      if (idatEnded) pngStructureFailure();
+      sawIdat = true;
+    } else if (sawIdat) {
+      idatEnded = true;
+    }
+    if (type === "IEND") {
+      if (!sawIdat || dataLength !== 0 || chunkEnd !== sizeBytes) {
+        pngStructureFailure();
+      }
+      complete = true;
+    }
+
+    let crc = updatePngCrc(0xffffffff, typeBytes);
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let dataPosition = position + 8;
+    let remaining = dataLength;
+    while (remaining > 0) {
+      const length = Math.min(buffer.length, remaining);
+      const { bytesRead } = await handle.read(buffer, 0, length, dataPosition);
+      if (bytesRead < 1) pngStructureFailure();
+      crc = updatePngCrc(crc, buffer.subarray(0, bytesRead));
+      dataPosition += bytesRead;
+      remaining -= bytesRead;
+    }
+    const expectedCrc = (
+      await readExactAt(handle, 4, position + 8 + dataLength)
+    ).readUInt32BE(0);
+    if ((crc ^ 0xffffffff) >>> 0 !== expectedCrc) {
+      pngStructureFailure();
+    }
+
+    position = chunkEnd;
+    chunkIndex += 1;
+    if (complete) return;
+  }
+  pngStructureFailure();
+}
+
 async function validateExactJpegCodestream(handle, sizeBytes) {
   let phase = "soi-first";
   let position = 0;
@@ -372,10 +503,10 @@ function sniffMimeType(prefix, tail, sizeBytes) {
 
   if (
     prefix.length >= 16 &&
-    prefix.subarray(0, 4).toString("ascii") === "RIFF" &&
-    prefix.subarray(8, 12).toString("ascii") === "WEBP" &&
-    ["VP8 ", "VP8L", "VP8X"].includes(
-      prefix.subarray(12, 16).toString("ascii"),
+    prefix.subarray(0, 4).equals(Buffer.from("RIFF", "ascii")) &&
+    prefix.subarray(8, 12).equals(Buffer.from("WEBP", "ascii")) &&
+    ["VP8 ", "VP8L", "VP8X"].some((type) =>
+      prefix.subarray(12, 16).equals(Buffer.from(type, "ascii")),
     ) &&
     prefix.readUInt32LE(4) + 8 === sizeBytes
   ) {
@@ -667,6 +798,9 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
     await verifySpool(readHandle, sizeBytes, sha256);
     if (detectedMimeType === "image/jpeg") {
       await validateExactJpegCodestream(readHandle, sizeBytes);
+    }
+    if (detectedMimeType === "image/png") {
+      await validateExactPngDatastream(readHandle, sizeBytes);
     }
 
     const decoded = await decodeCompletely(path, detectedMimeType, options);

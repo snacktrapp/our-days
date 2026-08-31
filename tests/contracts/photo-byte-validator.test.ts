@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readdir, rmdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { deflateSync } from "node:zlib";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -49,6 +50,62 @@ function byteStream(bytes: Uint8Array) {
       controller.close();
     },
   });
+}
+
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let crc = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = (crc & 1) === 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  return crc >>> 0;
+});
+
+function crc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function u32(value: number) {
+  const bytes = Buffer.alloc(4);
+  bytes.writeUInt32BE(value);
+  return bytes;
+}
+
+function pngChunk(type: string, data = Buffer.alloc(0)) {
+  const typeBytes = Buffer.from(type, "ascii");
+  const body = Buffer.concat([typeBytes, data]);
+  return Buffer.concat([u32(data.length), body, u32(crc32(body))]);
+}
+
+function twoFrameApng() {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(1, 0);
+  ihdr.writeUInt32BE(1, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const frameControl = (sequence: number) => {
+    const bytes = Buffer.alloc(26);
+    bytes.writeUInt32BE(sequence, 0);
+    bytes.writeUInt32BE(1, 4);
+    bytes.writeUInt32BE(1, 8);
+    bytes.writeUInt16BE(1, 20);
+    bytes.writeUInt16BE(10, 22);
+    return bytes;
+  };
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("acTL", Buffer.concat([u32(2), u32(0)])),
+    pngChunk("fcTL", frameControl(0)),
+    pngChunk("IDAT", deflateSync(Buffer.from([0, 255, 0, 0, 255]))),
+    pngChunk("fcTL", frameControl(1)),
+    pngChunk(
+      "fdAT",
+      Buffer.concat([u32(2), deflateSync(Buffer.from([0, 0, 0, 255, 255]))]),
+    ),
+    pngChunk("IEND"),
+  ]);
 }
 
 async function expectCode(promise: Promise<unknown>, code: string) {
@@ -316,6 +373,106 @@ describe("photo byte validator", () => {
         validationOptions(truncated, "image/jpeg"),
       ),
       "PHOTO_FORMAT_UNSUPPORTED",
+    );
+  });
+
+  it("rejects a valid two-frame APNG before Sharp can flatten it", async () => {
+    const bytes = twoFrameApng();
+    const metadata = await sharp(bytes, {
+      animated: false,
+      pages: 1,
+    }).metadata();
+    expect(metadata.pages).toBeUndefined();
+
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/png"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+  });
+
+  it("rejects a PNG with a bad chunk CRC or unknown critical chunk", async () => {
+    const valid = await sharp({
+      create: {
+        background: "#536c7d",
+        channels: 3,
+        height: 2,
+        width: 2,
+      },
+    })
+      .png()
+      .toBuffer();
+    const badCrc = Buffer.from(valid);
+    badCrc[29] ^= 0xff;
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(badCrc),
+        validationOptions(badCrc, "image/png"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+
+    const nonAsciiAlias = Buffer.from(valid);
+    nonAsciiAlias.set([0xc9, 0xc8, 0xc4, 0xd2], 12);
+    nonAsciiAlias.writeUInt32BE(crc32(nonAsciiAlias.subarray(12, 29)), 29);
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(nonAsciiAlias),
+        validationOptions(nonAsciiAlias, "image/png"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+
+    const unknownCritical = Buffer.concat([
+      valid.subarray(0, 33),
+      pngChunk("ABCD"),
+      valid.subarray(33),
+    ]);
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(unknownCritical),
+        validationOptions(unknownCritical, "image/png"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+  });
+
+  it("rejects high-bit WebP FourCC aliases and animated WebP", async () => {
+    const still = await sharp({
+      create: {
+        background: "#724d81",
+        channels: 3,
+        height: 2,
+        width: 2,
+      },
+    })
+      .webp()
+      .toBuffer();
+    const aliased = Buffer.from(still);
+    aliased.set([0xd2, 0xc9, 0xc6, 0xc6], 0);
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(aliased),
+        validationOptions(aliased, "image/webp"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+
+    const rawFrames = Buffer.from([255, 0, 0, 255, 0, 0, 255, 255]);
+    const animated = await sharp(rawFrames, {
+      raw: { channels: 4, height: 2, pageHeight: 1, width: 1 },
+    })
+      .webp({ delay: [100, 100], loop: 0 })
+      .toBuffer();
+    expect((await sharp(animated).metadata()).pages).toBe(2);
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(animated),
+        validationOptions(animated, "image/webp"),
+      ),
+      "PHOTO_PAGE_LIMIT_EXCEEDED",
     );
   });
 
