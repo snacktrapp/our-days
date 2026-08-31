@@ -39,7 +39,7 @@ test("manifest is installable and service worker caches only the public allowlis
       .sort();
     return { names, urls };
   });
-  expect(cacheState.names).toEqual(["our-days-public-shell-v3"]);
+  expect(cacheState.names).toEqual(["our-days-public-shell-v4"]);
   expect(cacheState.urls).toEqual([...allowedCachePaths].sort());
   expect(cacheState.urls).not.toContain("/family");
 
