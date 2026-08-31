@@ -2917,6 +2917,93 @@ textarea:focus-visible,
   height: 0.55rem;
   accent-color: var(--accent);
 }
+.photo-status-shelf {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  margin: 0 18px 12px;
+}
+.photo-status-quality-preview {
+  min-height: 100svh;
+  padding: 24px 0;
+  background: var(--paper);
+}
+.photo-status-quality-preview > h1,
+.photo-status-quality-preview > p {
+  margin-inline: 18px;
+}
+.photo-status-quality-preview > h1 {
+  margin-block: 0 4px;
+  font-family: Georgia, serif;
+  font-size: 22px;
+}
+.photo-status-quality-preview > p {
+  margin-block: 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.photo-status-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--hairline));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--cream) 94%, var(--accent));
+  box-shadow: 0 8px 22px rgb(50 43 35 / 5%);
+}
+.photo-status-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, white);
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+.photo-status-item > div {
+  display: grid;
+  gap: 2px;
+}
+.photo-status-item strong {
+  font-family: Georgia, serif;
+  font-size: 13px;
+}
+.photo-status-item span:not(.photo-status-mark) {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.photo-status-item button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-dark);
+  font-weight: 750;
+  cursor: pointer;
+}
+.photo-status-item button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+@media (max-width: 359px) {
+  .photo-status-shelf {
+    margin-inline: 14px;
+  }
+  .photo-status-item {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+  .photo-status-item button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 .composer-selection-status {
   min-height: 1px;
   margin: 0;

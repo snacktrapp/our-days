@@ -46,6 +46,7 @@ const privateRoutes = [
   "/quality/global-error",
   "/quality/memories-empty",
   "/quality/video-feasibility",
+  "/quality/photo-status",
 ];
 
 function isRscNavigationRequest(url: string, headers: Record<string, string>) {

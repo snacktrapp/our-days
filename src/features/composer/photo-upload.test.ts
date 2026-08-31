@@ -95,6 +95,7 @@ function memoryResumeStore(initial: PhotoUploadResumeRecord | null = null) {
   let record: PhotoUploadResumeRecord | null = initial;
   return {
     find: vi.fn(async () => record),
+    listForScope: vi.fn(async () => (record ? [record] : [])),
     save: vi.fn(async (next: PhotoUploadResumeRecord) => {
       record = next;
     }),
@@ -629,6 +630,54 @@ describe("connected private photo upload", () => {
       },
     );
     expect(result.state).toBe("processing");
+  });
+
+  it("retains an acknowledged needs-attention record for the status shelf", async () => {
+    const { client } = clientWithStatus("needs_attention");
+    const resumeStore = memoryResumeStore();
+    let offset = 0;
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return new Response(null, {
+            status: 201,
+            headers: { location: uploadUrl },
+          });
+        }
+        if (init?.method === "HEAD") {
+          return new Response(null, {
+            status: 200,
+            headers: { "upload-offset": String(offset) },
+          });
+        }
+        offset += (init?.body as Blob).size;
+        return new Response(null, {
+          status: 204,
+          headers: { "upload-offset": String(offset) },
+        });
+      },
+    );
+
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          fetch: fetcher,
+          hash: vi.fn(async () => "e".repeat(64)),
+          resumeStore,
+          statusAttempts: 1,
+        },
+      ),
+    ).rejects.toMatchObject({ retryable: false });
+    expect(resumeStore.remove).not.toHaveBeenCalled();
+    expect(resumeStore.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({ acknowledged: true, intakeId, momentId }),
+    );
   });
 
   it("recovers stable keys and the same upload URL after file reselection", async () => {

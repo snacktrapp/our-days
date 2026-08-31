@@ -107,6 +107,15 @@ HEIC/iPhone proof, global live-session enforcement, quotas, cleanup/cancellation
 hosted workers, a durable pending/attention surface, recovery/export, and the
 PD-006 delivery decision remain required.
 
+The Phase 4D-C default-off status-recovery checkpoint is recorded in
+`docs/quality/PHASE_4D_C_PHOTO_STATUS_RECOVERY_REPORT.md`. It gives the current
+account a quiet, same-circle status shelf backed by opaque IndexedDB records,
+survives reload while processing, removes local coordination state after
+publication, refreshes the timeline, and keeps failed or interrupted work
+private and plainly described. It does not activate photo posting or replace
+the remaining quota, cancellation/cleanup, hosted-worker, HEIC/iPhone,
+cross-device, export, or live-session release gates.
+
 Deliver:
 
 - Reserved asset row, fingerprint-bound claim, direct private resumable upload, upload closure, isolated full-byte verification, immutable browser-unwritable canonical original/checksum, orientation-correct stripped derivative, idempotent promotion, controlled display, and original download.

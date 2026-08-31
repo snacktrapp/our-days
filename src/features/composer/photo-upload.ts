@@ -586,7 +586,6 @@ export async function uploadPhotoMoment(
       };
     }
     if (status.status === "needs_attention") {
-      await resumeStore.remove(resumeId);
       throw new PhotoUploadError(
         "This photo needs attention before it can be added.",
         false,

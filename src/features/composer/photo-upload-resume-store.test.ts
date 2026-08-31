@@ -94,6 +94,42 @@ describe("photo upload resume store", () => {
     await expect(storedRecords()).resolves.toEqual([]);
   });
 
+  it("lists only the current account and circle", async () => {
+    await photoUploadResumeStore.save(baseRecord);
+    await photoUploadResumeStore.save({
+      ...baseRecord,
+      id: "resume-other-account",
+      accountId: "account-2",
+    });
+    await photoUploadResumeStore.save({
+      ...baseRecord,
+      id: "resume-other-circle",
+      circleId: "circle-2",
+    });
+
+    await expect(
+      photoUploadResumeStore.listForScope("account-1", "circle-1"),
+    ).resolves.toEqual([baseRecord]);
+  });
+
+  it("retains acknowledged status records beyond upload URL expiry", async () => {
+    const acknowledged = {
+      ...baseRecord,
+      acknowledged: true,
+      expiresAt: "2000-01-01T00:00:00.000Z",
+      intakeId: "intake-1",
+      momentId: "moment-1",
+    };
+    await photoUploadResumeStore.save(acknowledged);
+
+    await expect(photoUploadResumeStore.find(exactMatch())).resolves.toEqual(
+      acknowledged,
+    );
+    await expect(
+      photoUploadResumeStore.listForScope("account-1", "circle-1"),
+    ).resolves.toEqual([acknowledged]);
+  });
+
   it("removes an acknowledged or abandoned attempt by id", async () => {
     await photoUploadResumeStore.save(baseRecord);
     await photoUploadResumeStore.remove(baseRecord.id);

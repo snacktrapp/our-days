@@ -30,6 +30,10 @@ export type PhotoUploadResumeStore = Readonly<{
       | "mimeType"
     >,
   ) => Promise<PhotoUploadResumeRecord | null>;
+  listForScope: (
+    accountId: string,
+    circleId: string,
+  ) => Promise<readonly PhotoUploadResumeRecord[]>;
   save: (record: PhotoUploadResumeRecord) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }>;
@@ -92,21 +96,36 @@ async function withStore<T>(
 
 function isExpired(record: PhotoUploadResumeRecord) {
   return Boolean(
-    record.expiresAt && Date.parse(record.expiresAt) <= Date.now(),
+    !record.acknowledged &&
+    record.expiresAt &&
+    Date.parse(record.expiresAt) <= Date.now(),
   );
+}
+
+async function currentRecords(store: IDBObjectStore) {
+  const records = (await requestResult(
+    store.getAll(),
+  )) as PhotoUploadResumeRecord[];
+  const current: PhotoUploadResumeRecord[] = [];
+  for (const record of records) {
+    if (isExpired(record)) {
+      store.delete(record.id);
+    } else {
+      current.push(record);
+    }
+  }
+  return current;
+}
+
+async function allRecords(store: IDBObjectStore) {
+  return (await requestResult(store.getAll())) as PhotoUploadResumeRecord[];
 }
 
 export const photoUploadResumeStore: PhotoUploadResumeStore = {
   async find(match) {
     return withStore("readwrite", async (store) => {
-      const records = (await requestResult(
-        store.getAll(),
-      )) as PhotoUploadResumeRecord[];
+      const records = await currentRecords(store);
       for (const record of records) {
-        if (isExpired(record)) {
-          store.delete(record.id);
-          continue;
-        }
         if (
           record.accountId === match.accountId &&
           record.circleId === match.circleId &&
@@ -120,6 +139,16 @@ export const photoUploadResumeStore: PhotoUploadResumeStore = {
       }
       return null;
     });
+  },
+  async listForScope(accountId, circleId) {
+    return withStore("readonly", async (store) =>
+      (await allRecords(store))
+        .filter(
+          (record) =>
+            record.accountId === accountId && record.circleId === circleId,
+        )
+        .sort((left, right) => left.id.localeCompare(right.id)),
+    );
   },
   async save(record) {
     await withStore("readwrite", async (store) => {

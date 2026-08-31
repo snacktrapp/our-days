@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
+import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PrimaryNavigation } from "./primary-navigation";
 import type {
   JournalSection,
@@ -95,6 +96,9 @@ export function JournalChrome({
             </button>
           )}
         </header>
+        {model.composer.photoPostingEnabled && model.composer.circleId ? (
+          <PhotoStatusShelf circleId={model.composer.circleId} />
+        ) : null}
         {children}
         <PrimaryNavigation
           composer={model.composer}
