@@ -26,6 +26,7 @@
     "test:db": "supabase test db --local supabase/tests/database",
     "test:db:concurrency": "node scripts/test-database-concurrency.mjs",
     "test:photo:concurrency": "node scripts/test-photo-intake-concurrency.mjs",
+    "test:photo:derivative:concurrency": "node scripts/test-photo-derivative-concurrency.mjs",
     "test:db:restore": "node scripts/test-local-logical-restore.mjs",
     "test:db:restore:self": "node scripts/test-local-logical-restore.mjs --self-test",
     "test:auth:integration": "node scripts/test-auth-integration.mjs",

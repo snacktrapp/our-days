@@ -3,6 +3,11 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import {
+  PHOTO_DISPLAY_TRANSFORM_VERSION,
+  validatePhotoDisplayByteStream,
+  withPhotoDisplayDerivative,
+} from "./lib/photo-display-derivative.mjs";
+import {
   validatePhotoByteStream,
   withValidatedPhotoSpool,
 } from "./lib/photo-byte-validator.mjs";
@@ -14,6 +19,7 @@ const supabaseBinary = fileURLToPath(
 
 const INTAKE_BUCKET = "our-days-intake";
 const ORIGINALS_BUCKET = "our-days-originals";
+const DISPLAY_BUCKET = "our-days-display";
 const PROTECTED_BUCKETS = ["our-days-originals", "our-days-display"];
 
 const CIRCLE_A = "20000000-0000-4000-8000-000000000001";
@@ -374,6 +380,7 @@ async function uploadObject(
   objectPath,
   bytes,
   upsert = false,
+  contentType = "image/jpeg",
 ) {
   return storageRequest(
     apiUrl,
@@ -383,7 +390,7 @@ async function uploadObject(
     {
       body: bytes,
       headers: {
-        "content-type": "image/jpeg",
+        "content-type": contentType,
         "x-upsert": String(upsert),
       },
       method: "POST",
@@ -545,6 +552,41 @@ function validateValidationLease(row, reservation) {
   return row;
 }
 
+function validateDerivativeLease(row, originalId) {
+  if (
+    !row ||
+    !uuidPattern.test(row.derivative_job_id) ||
+    !uuidPattern.test(row.lease_attempt_id) ||
+    row.original_id !== originalId ||
+    row.source_bucket_id !== ORIGINALS_BUCKET ||
+    !/^original\/[0-9a-f-]{36}\/[0-9a-f-]{36}$/iu.test(
+      row.source_object_path,
+    ) ||
+    !uuidPattern.test(row.source_storage_object_id) ||
+    typeof row.source_storage_object_version !== "string" ||
+    row.source_mime_type !== "image/jpeg" ||
+    Number(row.source_size_bytes) < 1 ||
+    !sha256Pattern.test(row.source_sha256_hex) ||
+    Number(row.source_width) < 1 ||
+    Number(row.source_height) < 1 ||
+    Number(row.source_channels) < 1 ||
+    Number(row.source_pages) !== 1 ||
+    row.display_bucket_id !== DISPLAY_BUCKET ||
+    !/^display\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.webp$/iu.test(
+      row.display_object_path,
+    ) ||
+    row.display_object_path.split("/")[2].replace(/\.webp$/u, "") !==
+      row.lease_attempt_id ||
+    Number(row.transform_profile_version) !== 1 ||
+    typeof row.lease_expires_at !== "string"
+  ) {
+    throw new Error(
+      "The derivative lease returned an invalid exact-source contract.",
+    );
+  }
+  return row;
+}
+
 function canonicalUserMetadata(lease) {
   const [, originalId] = lease.canonical_object_path.split("/");
   return {
@@ -579,6 +621,56 @@ async function uploadValidatedOriginal(
         "content-type": lease.expected_mime_type,
         "x-metadata": Buffer.from(
           JSON.stringify(canonicalUserMetadata(lease)),
+        ).toString("base64"),
+        "x-upsert": "false",
+      },
+      method: "POST",
+    },
+  );
+}
+
+function displayUserMetadata(lease, output) {
+  return {
+    derivative_id: lease.display_object_path.split("/")[1],
+    derivative_job_id: lease.derivative_job_id,
+    lease_attempt_id: lease.lease_attempt_id,
+    maximum_size_bytes: 12 * 1024 * 1024,
+    original_id: lease.original_id,
+    output_channels: output.channels,
+    output_height: output.height,
+    output_mime_type: "image/webp",
+    output_pages: output.pages,
+    output_sha256: output.sha256Hex,
+    output_size_bytes: output.sizeBytes,
+    output_width: output.width,
+    source_storage_object_id: lease.source_storage_object_id,
+    source_storage_object_version: lease.source_storage_object_version,
+    transform_profile_version: Number(lease.transform_profile_version),
+  };
+}
+
+async function uploadValidatedDisplay(
+  apiUrl,
+  apiKey,
+  token,
+  lease,
+  output,
+  derivativeStream,
+  contentType = "image/webp",
+) {
+  return storageRequest(
+    apiUrl,
+    apiKey,
+    token,
+    `object/${encodeURIComponent(DISPLAY_BUCKET)}/${encodedObjectPath(lease.display_object_path)}`,
+    {
+      body: derivativeStream,
+      duplex: "half",
+      headers: {
+        "cache-control": "max-age=0",
+        "content-type": contentType,
+        "x-metadata": Buffer.from(
+          JSON.stringify(displayUserMetadata(lease, output)),
         ).toString("base64"),
         "x-upsert": "false",
       },
@@ -900,6 +992,9 @@ try {
   })
     .jpeg({ quality: 82 })
     .toBuffer();
+  const syntheticDisplayCanary = await sharp(syntheticOriginal)
+    .webp({ effort: 4, quality: 80 })
+    .toBuffer();
 
   const unauthorizedUploadCases = [
     { label: "Anonymous reserved-path upload", token: null },
@@ -1176,6 +1271,7 @@ try {
 
   for (const bucket of PROTECTED_BUCKETS) {
     const canaryPath = `phase-4a/${randomUUID()}`;
+    const isDisplayBucket = bucket === DISPLAY_BUCKET;
     cleanupEntries.push({ bucket, objectPath: canaryPath });
     const seeded = await uploadObject(
       apiUrl,
@@ -1183,8 +1279,9 @@ try {
       serviceKey,
       bucket,
       canaryPath,
-      syntheticOriginal,
+      isDisplayBucket ? syntheticDisplayCanary : syntheticOriginal,
       false,
+      isDisplayBucket ? "image/webp" : "image/jpeg",
     );
     await parseResponse(seeded);
     if (!seeded.ok) {
@@ -1485,6 +1582,279 @@ try {
     "Completed family-browser original",
     cleanupEntries,
   );
+
+  await expectRpcDenied(
+    rpcRequest(
+      apiUrl,
+      anonKey,
+      tokens.organizerA,
+      "claim_photo_display_derivative",
+      { lease_key: randomUUID(), original_id: completedOriginalId },
+    ),
+    "Family organizer derivative claim",
+  );
+
+  const derivativeLeaseKey = randomUUID();
+  const derivativeLease = validateDerivativeLease(
+    singleRpcRow(
+      await rpcRequest(
+        apiUrl,
+        anonKey,
+        tokens.noCircle,
+        "claim_photo_display_derivative",
+        {
+          lease_key: derivativeLeaseKey,
+          original_id: completedOriginalId,
+        },
+      ),
+      "Display derivative lease",
+    ),
+    completedOriginalId,
+  );
+  if (
+    Number(derivativeLease.source_size_bytes) !== syntheticOriginal.length ||
+    derivativeLease.source_sha256_hex !== sha256Hex(syntheticOriginal)
+  ) {
+    throw new Error(
+      "The derivative lease changed the immutable original fingerprint.",
+    );
+  }
+  cleanupEntries.push({
+    bucket: DISPLAY_BUCKET,
+    objectPath: derivativeLease.display_object_path,
+  });
+
+  const derivativeSource = await authenticatedObjectRead(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    ORIGINALS_BUCKET,
+    derivativeLease.source_object_path,
+  );
+  if (!derivativeSource.ok || !derivativeSource.body) {
+    throw new Error(
+      "The derivative validator could not read its exact immutable source.",
+    );
+  }
+
+  let derivativeStep = "revalidate immutable source";
+  let completedDerivativeId;
+  let completedDerivativeEvidence;
+  try {
+    completedDerivativeId = await withValidatedPhotoSpool(
+      derivativeSource.body,
+      {
+        expectedMimeType: derivativeLease.source_mime_type,
+        expectedSha256Hex: derivativeLease.source_sha256_hex,
+        expectedSizeBytes: Number(derivativeLease.source_size_bytes),
+      },
+      async (validated) => {
+        if (
+          validated.width !== Number(derivativeLease.source_width) ||
+          validated.height !== Number(derivativeLease.source_height) ||
+          validated.channels !== Number(derivativeLease.source_channels) ||
+          validated.pages !== Number(derivativeLease.source_pages)
+        ) {
+          throw new Error(
+            "The derivative source decode changed immutable geometry.",
+          );
+        }
+
+        derivativeStep = "transform and upload display bytes";
+        return withPhotoDisplayDerivative(validated, {}, async (derivative) => {
+          await expectStorageWriteDenied(
+            uploadValidatedDisplay(
+              apiUrl,
+              anonKey,
+              tokens.noCircle,
+              derivativeLease,
+              derivative,
+              Buffer.from("wrong display MIME"),
+              "image/jpeg",
+            ),
+            "Non-WebP display upload",
+          );
+          await expectStorageWriteDenied(
+            uploadValidatedDisplay(
+              apiUrl,
+              anonKey,
+              tokens.noCircle,
+              derivativeLease,
+              derivative,
+              Buffer.alloc(12 * 1024 * 1024 + 1),
+            ),
+            "Oversized display upload",
+          );
+          const uploaded = await uploadValidatedDisplay(
+            apiUrl,
+            anonKey,
+            tokens.noCircle,
+            derivativeLease,
+            derivative,
+            derivative.stream,
+          );
+          const uploadBody = await parseResponse(uploaded);
+          if (!uploaded.ok) {
+            throw new Error(
+              `Display upload failed (${uploaded.status}, ${uploadBody?.error ?? "no error"}).`,
+            );
+          }
+
+          derivativeStep = "deny display overwrite";
+          const duplicate = await uploadValidatedDisplay(
+            apiUrl,
+            anonKey,
+            tokens.noCircle,
+            derivativeLease,
+            derivative,
+            Buffer.from("synthetic duplicate"),
+          );
+          const duplicateBody = await parseResponse(duplicate);
+          if (
+            duplicate.ok ||
+            !/duplicate|already exists/iu.test(
+              `${duplicateBody?.error ?? ""} ${duplicateBody?.message ?? ""}`,
+            )
+          ) {
+            throw new Error("Display no-upsert collision did not fail closed.");
+          }
+
+          derivativeStep = "read and verify canonical display bytes";
+          const canonicalRead = await authenticatedObjectRead(
+            apiUrl,
+            anonKey,
+            tokens.noCircle,
+            DISPLAY_BUCKET,
+            derivativeLease.display_object_path,
+          );
+          if (!canonicalRead.ok || !canonicalRead.body) {
+            throw new Error(
+              "The validator could not re-read its canonical display object.",
+            );
+          }
+          completedDerivativeEvidence = await validatePhotoDisplayByteStream(
+            canonicalRead.body,
+            {
+              expectedChannels: derivative.channels,
+              expectedHeight: derivative.height,
+              expectedPages: derivative.pages,
+              expectedSha256Hex: derivative.sha256Hex,
+              expectedSizeBytes: derivative.sizeBytes,
+              expectedWidth: derivative.width,
+              transformVersion: PHOTO_DISPLAY_TRANSFORM_VERSION,
+            },
+          );
+
+          derivativeStep = "load canonical display Storage evidence";
+          const objectInfo = await authenticatedObjectInfo(
+            apiUrl,
+            anonKey,
+            tokens.noCircle,
+            DISPLAY_BUCKET,
+            derivativeLease.display_object_path,
+          );
+          if (
+            !objectInfo.response.ok ||
+            !uuidPattern.test(objectInfo.body?.id) ||
+            typeof objectInfo.body?.version !== "string"
+          ) {
+            throw new Error(
+              "Canonical display Storage evidence was unavailable.",
+            );
+          }
+
+          derivativeStep = "atomically complete display derivative";
+          const completion = await rpcRequest(
+            apiUrl,
+            anonKey,
+            tokens.noCircle,
+            "complete_photo_display_derivative",
+            {
+              derivative_job_id: derivativeLease.derivative_job_id,
+              lease_key: derivativeLeaseKey,
+              output_channels: completedDerivativeEvidence.channels,
+              output_height: completedDerivativeEvidence.height,
+              output_pages: completedDerivativeEvidence.pages,
+              output_sha256_hex: completedDerivativeEvidence.sha256Hex,
+              output_size_bytes: completedDerivativeEvidence.sizeBytes,
+              output_width: completedDerivativeEvidence.width,
+              storage_object_id: objectInfo.body.id,
+              storage_object_version: objectInfo.body.version,
+            },
+          );
+          if (!completion.response.ok || !uuidPattern.test(completion.body)) {
+            throw new Error("Canonical display completion did not converge.");
+          }
+          return completion.body;
+        });
+      },
+    );
+  } catch (error) {
+    throw new Error(
+      `Photo derivative generation failed during: ${derivativeStep}.`,
+      { cause: error },
+    );
+  }
+  if (
+    completedDerivativeId !== derivativeLease.display_object_path.split("/")[1]
+  ) {
+    throw new Error(
+      "Canonical display path and immutable derivative identity diverged.",
+    );
+  }
+
+  for (const denied of [
+    { label: "Completed validator display", token: tokens.noCircle },
+    { label: "Completed organizer display", token: tokens.organizerA },
+    { label: "Completed member display", token: tokens.memberA },
+    { label: "Completed wrong-circle display", token: tokens.organizerB },
+    { label: "Completed revoked-member display", token: tokens.revokedA },
+    { label: "Completed anonymous display", token: null },
+  ]) {
+    await assertObjectOperationsDenied(
+      apiUrl,
+      anonKey,
+      denied.token,
+      DISPLAY_BUCKET,
+      derivativeLease.display_object_path,
+      denied.label,
+      cleanupEntries,
+    );
+  }
+  await assertObjectOperationsDenied(
+    apiUrl,
+    anonKey,
+    tokens.noCircle,
+    ORIGINALS_BUCKET,
+    derivativeLease.source_object_path,
+    "Post-derivative validator original",
+    cleanupEntries,
+  );
+  runDatabaseAssertion(`
+    do $assert_display_derivative$
+    begin
+      if not exists (
+        select 1
+          from private.photo_derivative_jobs as job
+          join private.photo_display_derivatives as derivative
+            on derivative.derivative_job_id = job.id
+         where job.id = '${derivativeLease.derivative_job_id}'::uuid
+           and job.state = 'verified'
+           and derivative.id = '${completedDerivativeId}'::uuid
+           and derivative.original_id = '${completedOriginalId}'::uuid
+           and derivative.object_path = '${derivativeLease.display_object_path}'
+           and encode(derivative.output_sha256, 'hex') =
+             '${completedDerivativeEvidence.sha256Hex}'
+           and derivative.output_pages = 1
+           and derivative.transform_profile_version = 1
+      ) or exists (
+        select 1 from public.moments where kind = 'photo'
+      ) then
+        raise exception 'display derivative escaped its private immutable boundary';
+      end if;
+    end;
+    $assert_display_derivative$;
+  `);
 
   const collisionReservation = validateReservation(
     singleRpcRow(
@@ -2072,7 +2442,7 @@ try {
   }
 
   process.stdout.write(
-    "Local synthetic photo intake, isolated validation, exact-byte immutable original promotion, canonical read-back, mismatched-canonical operator review, and HTTP denial checks passed.\n",
+    "Local synthetic photo intake, isolated validation, exact-byte immutable original promotion, metadata-safe private display derivation with canonical read-back, mismatched-canonical operator review, and HTTP denial checks passed.\n",
   );
 } catch (error) {
   primaryError = error;
