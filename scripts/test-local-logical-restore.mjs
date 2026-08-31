@@ -47,19 +47,19 @@ const reviewedSchemas = Object.freeze([
   "vault",
 ]);
 const expectedCanonicalSchemaFingerprint =
-  "acc764a2c84a69743528448f8ef74dc42e0e18eca1b8f0d194b90f472772f25f";
+  "7b438caf3d92cf4e798f12754d19546197f8ef4f560a3854b7fd3ad86eda200b";
 const expectedCanonicalCatalogFingerprint =
-  "0b2647fc5c9c72a615573930bbbb0ec2624ac9e14192e45ec124918f5b245c12";
+  "9ccc99a5b9bf6a959ae309b23a5279652e17d8d56ada5c090c4945b54760104e";
 const expectedRestoredSchemaFingerprint =
-  "2cef7e3f9076c266a6fbfad1a9dbf3cc46288426314e8ca085ca11310f366d80";
+  "2120b80bddc7e4d8c6bd4dcdbe2e60652c452f47212299702f29e8904480062e";
 const expectedCanonicalDataFingerprint =
-  "148f9755f87c323493b9dfa02ee97f09594fc203e91cce3a1590e7eb1da7da11";
+  "02aed07c454e54f35662be19f0b72f1c0792589a0d785c3c14cb4279f6b5ad10";
 const expectedDatabaseMetadataFingerprint =
   "ee56a43f1de60f4e99b9dce508f52ccb0df623cc2f771b3215b08ddcdbfc4617";
 const expectedDatabaseRepairSettingsFingerprint =
   "28b1448fc3b233f0155c8eb9d78d33b5a07dba55786d2b3e5de305cf0268784a";
 const expectedArchiveInventoryFingerprint =
-  "0e88b495542e186d2f12fb5eece497ff179a189ffd92621d7b051d923d72d04f";
+  "a654fc86e77ff4f90ede300ee071132e9bc312962e668bc5d08d6e06af380d82";
 const expectedPrivateBuckets = Object.freeze([
   Object.freeze({
     allowed_mime_types: null,
