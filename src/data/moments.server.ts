@@ -298,8 +298,24 @@ export async function loadConnectedTimeline(
   }
 
   const moments = rows.map((row) => mapTimelineRow(row, context.today));
+  const personalJournalIsWritable = Boolean(
+    personal &&
+      context.chrome.composer.journalPeople.some(
+        (person) => person.id === personal.id,
+      ),
+  );
   const chrome = personal
-    ? { ...context.chrome, accent: personal.accent, title: personal.name }
+    ? {
+        ...context.chrome,
+        accent: personal.accent,
+        title: personal.name,
+        composer: personalJournalIsWritable
+          ? {
+              ...context.chrome.composer,
+              defaultJournalPersonId: personal.id,
+            }
+          : context.chrome.composer,
+      }
     : context.chrome;
   return {
     chrome,

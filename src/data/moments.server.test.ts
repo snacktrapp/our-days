@@ -229,6 +229,70 @@ describe("connected timeline mapping", () => {
     );
   });
 
+  it("defaults Add Moment to the writable personal journal being viewed", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const timeline = await loadConnectedTimeline(
+      {
+        mode: "authenticated",
+        membershipId: "membership",
+        circleId: "circle",
+        personId: "parent",
+        role: "organizer",
+      },
+      {
+        circleName: "Our family",
+        circleTimeZone: "America/Los_Angeles",
+        today: "2026-08-30",
+        chrome: {
+          accent: "teal",
+          title: "Our family",
+          eyebrow: "Our family",
+          familyMark: [],
+          composer: {
+            experience: "connected-written",
+            previewToday: "2026-08-30",
+            defaultJournalPersonId: "parent",
+            recorderPersonId: "parent",
+            recordedByName: "Parent",
+            journalPeople: [
+              {
+                id: "parent",
+                name: "Parent",
+                initial: "P",
+                accent: "teal",
+                contextLabel: "You",
+              },
+              {
+                id: "child",
+                name: "Child",
+                initial: "C",
+                accent: "moss",
+                contextLabel: "Managed journal",
+              },
+            ],
+            taggablePeople: [],
+          },
+        },
+        people: [
+          {
+            id: "child",
+            name: "Child",
+            initial: "C",
+            accent: "moss",
+            roleLabel: "Managed journal",
+            journalHref: "/people/child",
+          },
+        ],
+      },
+      { journalPersonId: "child", pages: 1 },
+    );
+
+    expect(timeline.chrome.composer.defaultJournalPersonId).toBe("child");
+    expect(timeline.chrome.composer.recorderPersonId).toBe("parent");
+  });
+
   it("continues beyond twenty cumulative pages without repeating page twenty", async () => {
     const fullPage = Array.from({ length: 21 }, (_, index) =>
       row({ moment_id: `moment-${String(99 - index).padStart(2, "0")}` }),
