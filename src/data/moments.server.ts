@@ -94,7 +94,9 @@ export function mapTimelineRow(
           ? "A milestone"
           : row.moment_kind === "location"
             ? "A place"
-            : "A thought"
+            : row.moment_kind === "photo"
+              ? "A photo"
+              : "A thought"
         : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
     conversation: { notes: [], reactions: [] },
@@ -123,6 +125,18 @@ export function mapTimelineRow(
       kind: "location",
       place: row.place_name ?? "A remembered place",
       mapLabel: "Remembered here",
+    };
+  }
+  if (row.moment_kind === "photo") {
+    return {
+      ...base,
+      kind: "photo",
+      image: {
+        src: `/api/media/moments/${row.moment_id}`,
+        alt: `Photo in ${row.journal_person_name}’s journal from ${formatPlainDate(row.occurred_on, today)}`,
+        badgeLabel: formatPlainDate(row.occurred_on, today),
+        delivery: "private",
+      },
     };
   }
   return { ...base, kind: "thought" };

@@ -73,7 +73,12 @@ type TimelineMomentBase = Readonly<{
 export type PhotoMomentViewModel = TimelineMomentBase &
   Readonly<{
     kind: "photo";
-    image: Readonly<{ src: string; alt: string; badgeLabel: string }>;
+    image: Readonly<{
+      src: string;
+      alt: string;
+      badgeLabel: string;
+      delivery?: "private";
+    }>;
   }>;
 
 export type ThoughtMomentViewModel = TimelineMomentBase &

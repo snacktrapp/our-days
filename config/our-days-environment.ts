@@ -7,6 +7,7 @@ type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 export type OurDaysEnvironmentIdentity = "local" | "preview" | "production";
 export type OurDaysResourceMode = "detached" | "supabase";
 export type OurDaysInvitationDeliveryMode = "disabled" | "enabled";
+export type OurDaysMediaDeliveryMode = "disabled" | "enabled";
 
 export type OurDaysEnvironment = Readonly<{
   identity: OurDaysEnvironmentIdentity;
@@ -22,6 +23,10 @@ const environmentIdentities = new Set<OurDaysEnvironmentIdentity>([
 ]);
 const resourceModes = new Set<OurDaysResourceMode>(["detached", "supabase"]);
 const invitationDeliveryModes = new Set<OurDaysInvitationDeliveryMode>([
+  "disabled",
+  "enabled",
+]);
+const mediaDeliveryModes = new Set<OurDaysMediaDeliveryMode>([
   "disabled",
   "enabled",
 ]);
@@ -362,6 +367,22 @@ export function validateOurDaysEnvironment(
       "OUR_DAYS_INVITATION_DELIVERY_MODE=enabled requires supabase resource mode",
     );
   }
+  const mediaDeliveryMode = configuredValue(
+    environment,
+    "OUR_DAYS_MEDIA_DELIVERY_MODE",
+    issues,
+  );
+  if (
+    mediaDeliveryMode &&
+    !mediaDeliveryModes.has(mediaDeliveryMode as OurDaysMediaDeliveryMode)
+  ) {
+    issues.push("OUR_DAYS_MEDIA_DELIVERY_MODE must be disabled or enabled");
+  }
+  if (mediaDeliveryMode === "enabled" && resourceMode !== "supabase") {
+    issues.push(
+      "OUR_DAYS_MEDIA_DELIVERY_MODE=enabled requires supabase resource mode",
+    );
+  }
   const designPreview = configuredValue(
     environment,
     "OUR_DAYS_ENABLE_DESIGN_PREVIEW",
@@ -569,6 +590,15 @@ export function invitationDeliveryIsEnabled(
 ) {
   return (
     environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "enabled" &&
+    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+  );
+}
+
+export function mediaDeliveryIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  return (
+    environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "enabled" &&
     environment.OUR_DAYS_RESOURCE_MODE === "supabase"
   );
 }

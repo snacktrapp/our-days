@@ -1,4 +1,5 @@
 import { CspPublicImage } from "@/components/csp-image";
+import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import type {
@@ -59,14 +60,24 @@ export function MomentCard({
     return (
       <div className="moment-card photo-card">
         <div className="photo-frame">
-          <CspPublicImage
-            src={moment.image.src}
-            alt={moment.image.alt}
-            width={1200}
-            height={801}
-            highPriority={preload}
-            sizes="(max-width: 520px) 92vw, 410px"
-          />
+          {moment.image.delivery === "private" ? (
+            <PrivatePhotoImage
+              src={moment.image.src}
+              alt={moment.image.alt}
+              width={1200}
+              height={801}
+              highPriority={preload}
+            />
+          ) : (
+            <CspPublicImage
+              src={moment.image.src}
+              alt={moment.image.alt}
+              width={1200}
+              height={801}
+              highPriority={preload}
+              sizes="(max-width: 520px) 92vw, 410px"
+            />
+          )}
           <span className="photo-date">{moment.image.badgeLabel}</span>
         </div>
         <div className="card-copy">

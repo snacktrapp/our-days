@@ -366,6 +366,16 @@ test("previewing emits no mutation, persistence, history, or timeline change", a
   await page.goto("/family", { waitUntil: "networkidle" });
   await page.evaluate(async () => {
     if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
+    const timelineImages = Array.from(
+      document.querySelectorAll<HTMLImageElement>("[data-moment-kind] img"),
+    );
+    for (const image of timelineImages) image.loading = "eager";
+    await Promise.all(
+      timelineImages.map(async (image) => {
+        if (image.complete && image.naturalWidth > 0) return;
+        await image.decode();
+      }),
+    );
   });
   await page.evaluate(() => {
     const auditWindow = window as typeof window & {

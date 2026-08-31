@@ -72,13 +72,29 @@ Gate: equal-timestamp pagination, historical insertion, scroll stability, browse
 
 ## 4. Photo ownership pipeline
 
-Entry prerequisite: PD-006 is accepted for the media-delivery branch.
+Production activation prerequisite: PD-006 is accepted for the media-delivery
+branch. Local default-off delivery candidates may be built and tested without
+claiming that product decision is settled.
 
 The bounded Phase 4A quarantine-only foundation is recorded in `docs/quality/PHASE_4A_PHOTO_INTAKE_FOUNDATION_REPORT.md`. It introduces a private intake ledger, a third private quarantine bucket, exact-path reservation, a fingerprint-bound claim, direct authenticated TUS create/part, and an `uploaded_unverified` acknowledgement using only local synthetic data. It is not the Phase 4 media-delivery branch: there is no browser read, standard or signed upload, upsert, worker, content verification, immutable canonical original, derivative, photo moment, download, export, byte recovery, cleanup process, deployment, or production-data approval. Pinned Storage evidence shows concurrent TUS uploads to one path can both complete, so nothing may publish from the quarantine path.
 
 The bounded Phase 4B validation and immutable-promotion foundation is recorded in `docs/quality/PHASE_4B_IMMUTABLE_PHOTO_PROMOTION_REPORT.md`. It adds no-family validator identities, serialized revocation, distinct lease-attempt capabilities, a bounded private spool, exact JPEG/PNG/WebP structure and full-decode checks, fresh no-upsert canonical paths, canonical re-download, and an immutable original ledger using only synthetic local bytes. It still exposes no photo moment, derivative, family media read, download, export, cleanup promise, hosted worker, HEIC support, or production-data approval. PD-005 and PD-006 remain untouched.
 
 The bounded Phase 4C private display-derivative foundation is recorded in `docs/quality/PHASE_4C_PRIVATE_PHOTO_DERIVATIVE_REPORT.md`. It revalidates one immutable original, applies EXIF orientation, removes embedded metadata, produces a bounded WebP derivative at a fresh attempt-scoped path, re-downloads and independently verifies the complete canonical output, and records an immutable private ledger using only synthetic local bytes. It still exposes no photo moment, family media read, signed URL, original download, export, cleanup promise, hosted worker, HEIC support, or production-data approval. PD-005 and PD-006 remain untouched.
+
+The Phase 4D-A default-off publication checkpoint stages the complete immutable
+photo-moment draft before upload, publishes one moment and safe derivative link
+atomically after verification, and adds a same-origin authenticated no-store
+delivery candidate with immediate membership/trash rechecks. Publication and
+family delivery each require a database-owner capability, while the application
+route also requires an explicit web rollout switch. The web switch is not an
+independent authorization boundary because an authorized ordinary-JWT session
+can use the enabled Storage policy directly. Everything remains disabled by default;
+PD-006, hosted workers, HEIC/iPhone evidence, cleanup, export inclusion, and
+production media activation remain open.
+Production activation also requires one consistent live-Auth-session boundary
+for timeline metadata, not only derivative bytes, plus the browser upload,
+worker, recovery/export, and hosted-device gates below.
 
 Deliver:
 

@@ -3,6 +3,7 @@ import { isLocalDesignPreviewEnvironment } from "../../config/design-preview-pol
 import {
   environmentForNextConfig,
   invitationDeliveryIsEnabled,
+  mediaDeliveryIsEnabled,
   OurDaysEnvironmentError,
   validateOurDaysEnvironment,
 } from "../../config/our-days-environment";
@@ -71,6 +72,41 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_INVITATION_DELIVERY_MODE: "enabled",
       },
       "requires supabase resource mode",
+    );
+  });
+
+  it("keeps private media delivery disabled unless Supabase mode is explicit", () => {
+    expect(mediaDeliveryIsEnabled({})).toBe(false);
+    expect(
+      mediaDeliveryIsEnabled({
+        OUR_DAYS_MEDIA_DELIVERY_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+      }),
+    ).toBe(false);
+    expect(
+      mediaDeliveryIsEnabled({
+        OUR_DAYS_MEDIA_DELIVERY_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects malformed or detached private-media activation", () => {
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_MEDIA_DELIVERY_MODE: "sometimes",
+      },
+      "OUR_DAYS_MEDIA_DELIVERY_MODE must be disabled or enabled",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_MEDIA_DELIVERY_MODE: "enabled",
+      },
+      "OUR_DAYS_MEDIA_DELIVERY_MODE=enabled requires supabase resource mode",
     );
   });
 

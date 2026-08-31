@@ -478,6 +478,27 @@ async function reservePhoto(
   });
 }
 
+async function reservePhotoMoment(
+  apiUrl,
+  apiKey,
+  token,
+  circleId,
+  journalPersonId,
+  requestKey,
+) {
+  return rpcRequest(apiUrl, apiKey, token, "reserve_photo_moment", {
+    body: "A concurrency-safe photo moment.",
+    circle_id: circleId,
+    journal_person_id: journalPersonId,
+    occurred_at: null,
+    occurred_on: "2026-08-30",
+    occurred_timezone: null,
+    place_name: null,
+    request_key: requestKey,
+    tagged_person_ids: [],
+  });
+}
+
 async function claimPhotoUpload(
   apiUrl,
   apiKey,
@@ -1893,6 +1914,13 @@ try {
   cleanupPaths.push(closureRace.object_path, closurePrepareCanary.object_path);
   const closureRequestKey = randomUUID();
 
+  runDatabaseQuery(`
+    update private.photo_capabilities
+       set enabled = true,
+           updated_at = statement_timestamp()
+     where capability = 'photo_publication';
+  `);
+
   const closureRaceClaim = await claimPhotoUpload(
     apiUrl,
     apiKey,
@@ -1945,30 +1973,40 @@ try {
   );
   const closurePrepareTusUrl = tusUploadUrl(apiUrl, closurePrepareTusCreation);
 
-  const [closureRacePatch, closureRequest] = await runHeldRace({
-    apiUrl,
-    holderBody: { target_auth_user_id: DUAL_CIRCLE_USER },
-    holderFunction: "phase4a_test_hold_auth_user_lock",
-    label: "TUS patch and account-closure request",
-    requests: [
-      () =>
-        patchTusUpload(
-          apiKey,
-          tokens.dualCircle,
-          closureRaceTusUrl,
-          syntheticPhoto,
-        ),
-      () =>
-        rpcRequest(
-          apiUrl,
-          apiKey,
-          tokens.dualCircle,
-          "request_account_closure",
-          { request_key: closureRequestKey },
-        ),
-    ],
-    serviceKey,
-  });
+  const [closureRacePatch, closureRequest, stagedClosureReservation] =
+    await runHeldRace({
+      apiUrl,
+      holderBody: { target_auth_user_id: DUAL_CIRCLE_USER },
+      holderFunction: "phase4a_test_hold_auth_user_lock",
+      label: "TUS patch and account-closure request",
+      requests: [
+        () =>
+          patchTusUpload(
+            apiKey,
+            tokens.dualCircle,
+            closureRaceTusUrl,
+            syntheticPhoto,
+          ),
+        () =>
+          rpcRequest(
+            apiUrl,
+            apiKey,
+            tokens.dualCircle,
+            "request_account_closure",
+            { request_key: closureRequestKey },
+          ),
+        () =>
+          reservePhotoMoment(
+            apiUrl,
+            apiKey,
+            tokens.dualCircle,
+            CIRCLE_B,
+            PERSON_DUAL_B,
+            randomUUID(),
+          ),
+      ],
+      serviceKey,
+    });
   requireSafeStorageOutcome(
     closureRacePatch,
     "Account-closure request race TUS patch",
@@ -1977,6 +2015,20 @@ try {
     closureRequest,
     "Account-closure request",
   );
+  const closureIntakes = [closureRace, closurePrepareCanary];
+  if (stagedClosureReservation.response.ok) {
+    const staged = reservationRow(
+      stagedClosureReservation,
+      "Concurrent staged photo-moment reservation",
+    );
+    closureIntakes.push(staged);
+    cleanupPaths.push(staged.object_path);
+  } else {
+    requireSafeDenied(
+      stagedClosureReservation,
+      "Concurrent staged photo-moment reservation",
+    );
+  }
   await assertAcceptedPatchBytes(
     apiUrl,
     serviceKey,
@@ -1985,10 +2037,7 @@ try {
     syntheticPhoto,
     "Account-closure request race TUS patch",
   );
-  assertClosureRequestedButUnauthorized(
-    [closureRace, closurePrepareCanary],
-    closureRequestId,
-  );
+  assertClosureRequestedButUnauthorized(closureIntakes, closureRequestId);
   requireSafeDenied(
     await acknowledgePhoto(
       apiUrl,
@@ -2045,7 +2094,7 @@ try {
   if (preparedClosureId !== closureRequestId) {
     throw new Error("Account-closure preparation changed request identity.");
   }
-  assertClosurePrepared(closureRequestId, [closureRace, closurePrepareCanary]);
+  assertClosurePrepared(closureRequestId, closureIntakes);
   requireSafeDenied(
     await claimPhotoUpload(
       apiUrl,
@@ -2080,7 +2129,7 @@ try {
   );
 
   process.stdout.write(
-    "Forced Phase 4A duplicate reservation, fingerprint-claim, deterministic same/distinct-URL TUS, claim/authority-loss, acknowledgement/revocation, ordinary-member guardian revocation, account-closure request race, and preparation-time stale-patch checks preserved only quarantined, unverified state; Phase 4B revocation-first serialization denied post-revocation completion without changing the intake, job, original, or audit ledgers.\n",
+    "Forced Phase 4A duplicate reservation, fingerprint-claim, deterministic same/distinct-URL TUS, claim/authority-loss, acknowledgement/revocation, ordinary-member guardian revocation, account-closure request plus staged-photo race, and preparation-time stale-patch checks preserved only quarantined, unverified state; Phase 4B revocation-first serialization denied post-revocation completion without changing the intake, job, original, or audit ledgers.\n",
   );
 } catch (error) {
   primaryError = error;

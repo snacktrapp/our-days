@@ -109,6 +109,29 @@ describe("connected timeline mapping", () => {
     expect(moment.conversation).toEqual({ notes: [], reactions: [] });
   });
 
+  it("maps a connected photo to the same-origin private delivery route", () => {
+    const moment = mapTimelineRow(
+      row({
+        moment_id: "10000000-0000-4000-8000-000000000099",
+        moment_kind: "photo",
+        journal_person_name: "Molly",
+        recorder_person_id: "child",
+        recorder_person_name: "Molly",
+        body: "A windy afternoon.",
+      }),
+      "2026-08-30",
+    );
+    expect(moment).toMatchObject({
+      kind: "photo",
+      kicker: "A photo",
+      image: {
+        src: "/api/media/moments/10000000-0000-4000-8000-000000000099",
+        alt: "Photo in Molly’s journal from Aug 28, 2026",
+        delivery: "private",
+      },
+    });
+  });
+
   it("builds visible dates and gaps once and withholds the ending while more exists", () => {
     const newer = mapTimelineRow(row(), "2026-08-30");
     const older = mapTimelineRow(

@@ -17,6 +17,7 @@ const privateRoutes = [
   "/invite/:path*",
   "/access-unavailable",
   "/api/auth/:path*",
+  "/api/media/:path*",
   "/journal",
   "/family",
   "/trash",

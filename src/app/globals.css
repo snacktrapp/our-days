@@ -560,6 +560,33 @@ textarea:focus-visible,
   object-fit: cover;
   filter: saturate(0.84) contrast(0.97);
 }
+.private-photo-unavailable {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: rgba(49, 39, 31, 0.78);
+  text-align: center;
+}
+.private-photo-unavailable p {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+}
+.private-photo-unavailable button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(79, 63, 48, 0.2);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 252, 245, 0.72);
+  font: inherit;
+  font-weight: 700;
+}
 .photo-frame::after {
   content: "";
   position: absolute;

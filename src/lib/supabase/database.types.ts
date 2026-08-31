@@ -205,6 +205,44 @@ export type Database = {
           },
         ];
       };
+      moment_photos: {
+        Row: {
+          circle_id: string;
+          created_at: string;
+          display_derivative_id: string;
+          display_height: number;
+          display_width: number;
+          moment_id: string;
+          original_id: string;
+        };
+        Insert: {
+          circle_id: string;
+          created_at?: string;
+          display_derivative_id: string;
+          display_height: number;
+          display_width: number;
+          moment_id: string;
+          original_id: string;
+        };
+        Update: {
+          circle_id?: string;
+          created_at?: string;
+          display_derivative_id?: string;
+          display_height?: number;
+          display_width?: number;
+          moment_id?: string;
+          original_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_photos_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: true;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_reactions: {
         Row: {
           author_membership_id: string;
@@ -661,6 +699,25 @@ export type Database = {
           reactions: Json;
         }[];
       };
+      get_photo_moment_delivery: {
+        Args: { moment_id: string };
+        Returns: {
+          bucket_id: string;
+          object_path: string;
+          output_height: number;
+          output_mime_type: string;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+        }[];
+      };
+      get_photo_moment_status: {
+        Args: { intake_id: string };
+        Returns: {
+          moment_id: string;
+          status: string;
+        }[];
+      };
       list_manageable_trashed_written_moments: {
         Args: { circle_id: string };
         Returns: {
@@ -947,6 +1004,27 @@ export type Database = {
           bucket_id: string;
           expires_at: string;
           intake_id: string;
+          object_path: string;
+          state: string;
+        }[];
+      };
+      reserve_photo_moment: {
+        Args: {
+          body: string;
+          circle_id: string;
+          journal_person_id: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          request_key?: string;
+          tagged_person_ids: string[];
+        };
+        Returns: {
+          bucket_id: string;
+          expires_at: string;
+          intake_id: string;
+          moment_id: string;
           object_path: string;
           state: string;
         }[];
