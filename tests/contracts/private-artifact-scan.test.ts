@@ -282,6 +282,23 @@ describe("private artifact scanner", () => {
     );
   });
 
+  it("ignores disposable compiler cache while scanning deployable build output", () => {
+    const root = mkdtempSync(join(tmpdir(), "our-days-artifact-repo-"));
+    const files = new Map([
+      [".next/BUILD_ID", "fixture-build"],
+      [".next/cache/webpack/server-production/0.pack", secretKey],
+      [".next/routes-manifest.json", "safe"],
+    ]);
+    for (const [path, content] of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    writeFileSync(join(root, ".gitignore"), ".next\n");
+    expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
+
+    expect(scanRepository(root)).toEqual([]);
+  });
+
   it("keeps unexpected CLI filesystem errors generic", () => {
     const root = mkdtempSync(join(tmpdir(), `our-days-${secretKey}-`));
     const cli = resolve(process.cwd(), "scripts/verify-private-artifacts.mjs");

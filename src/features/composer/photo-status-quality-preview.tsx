@@ -18,7 +18,7 @@ export function PhotoStatusQualityPreview() {
         items={[
           {
             id: "processing",
-            journalPersonName: "Molly",
+            journalPersonName: "Person One",
             occurredOn: "2026-08-21",
             state: "processing",
             canCancel: false,
@@ -26,7 +26,7 @@ export function PhotoStatusQualityPreview() {
           },
           {
             id: "pending",
-            journalPersonName: "Brian",
+            journalPersonName: "Person Two",
             occurredOn: "2026-08-20",
             state: "pending",
             canCancel: true,
@@ -34,7 +34,7 @@ export function PhotoStatusQualityPreview() {
           },
           {
             id: "attention",
-            journalPersonName: "Molly",
+            journalPersonName: "Person One",
             occurredOn: "2026-08-19",
             state: "attention",
             canCancel: false,
@@ -42,7 +42,7 @@ export function PhotoStatusQualityPreview() {
           },
           {
             id: "cancelled",
-            journalPersonName: "Brian",
+            journalPersonName: "Person Two",
             occurredOn: "2026-08-18",
             state: "cancelled",
             canCancel: false,

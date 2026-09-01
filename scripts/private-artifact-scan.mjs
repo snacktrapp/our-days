@@ -336,13 +336,18 @@ export function scanRepository(root) {
         ({ ruleId }) => ruleId === "private-client-fixture",
       ),
     );
-  const buildFindings = walkFiles(buildPath).flatMap((path) =>
-    scanFile(
-      rootPath,
-      path,
-      isBrowserDeliverableArtifact(relative(rootPath, path)),
-    ),
-  );
+  const buildFindings = walkFiles(buildPath)
+    .filter((path) => {
+      const relativePath = posixPath(relative(rootPath, path));
+      return !relativePath.startsWith(".next/cache/");
+    })
+    .flatMap((path) =>
+      scanFile(
+        rootPath,
+        path,
+        isBrowserDeliverableArtifact(relative(rootPath, path)),
+      ),
+    );
 
   return [...sourceFindings, ...publicFindings, ...buildFindings].sort(
     (left, right) =>
