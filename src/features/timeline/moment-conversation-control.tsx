@@ -13,6 +13,24 @@ import type {
 
 type ConversationSection = "reactions" | "notes";
 
+type ConversationSummary = Readonly<{
+  hasNotes: boolean;
+  hasCurrentMemberNote: boolean;
+  currentMemberReactionId: MomentReactionId | null;
+}>;
+
+function summarizeConversation(
+  conversation: MomentConversationViewModel,
+): ConversationSummary {
+  return {
+    hasNotes: conversation.notes.length > 0,
+    hasCurrentMemberNote: conversation.notes.some((note) => note.canChange),
+    currentMemberReactionId:
+      conversation.reactions.find((reaction) => reaction.isCurrentMember)
+        ?.reactionId ?? null,
+  };
+}
+
 type MomentConversationControlProps = Readonly<{
   interaction: MomentInteractionViewModel;
   model: MomentDetailViewModel;
@@ -56,6 +74,10 @@ export function MomentConversationControl({
   const [noteError, setNoteError] = useState<string | null>(null);
   const [conversation, setConversation] =
     useState<MomentConversationViewModel | null>(null);
+  const [conversationSummary, setConversationSummary] =
+    useState<ConversationSummary>(() =>
+      summarizeConversation(model.conversation),
+    );
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [conversationLoadError, setConversationLoadError] = useState<
     string | null
@@ -161,6 +183,7 @@ export function MomentConversationControl({
         return false;
       }
       setConversation(result.conversation);
+      setConversationSummary(summarizeConversation(result.conversation));
       const currentReactionId =
         result.conversation.reactions.find(
           (reaction) => reaction.isCurrentMember,
@@ -313,6 +336,16 @@ export function MomentConversationControl({
   };
 
   const visibleConversation = conversation ?? model.conversation;
+  const savedReactionOption = interaction.reactionOptions.find(
+    (option) => option.id === conversationSummary.currentMemberReactionId,
+  );
+  const responseLabel = savedReactionOption?.label ?? "Respond";
+  const responseSymbol = savedReactionOption?.symbol ?? "♡";
+  const notesLabel = conversationSummary.hasCurrentMemberNote
+    ? "Note saved"
+    : conversationSummary.hasNotes
+      ? "Notes added"
+      : "Notes";
   const visibleReactions = visibleConversation.reactions.flatMap((reaction) => {
     const option = interaction.reactionOptions.find(
       ({ id }) => id === reaction.reactionId,
@@ -328,14 +361,14 @@ export function MomentConversationControl({
           aria-label={`Respond to ${anchor.kindLabel.toLowerCase()} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
           onClick={(event) => openDetail("reactions", event.currentTarget)}
         >
-          ♡ Respond
+          <span aria-hidden="true">{responseSymbol}</span> {responseLabel}
         </button>
         <button
           type="button"
           aria-label={`Open private notes for ${anchor.kindLabel.toLowerCase()} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
           onClick={(event) => openDetail("notes", event.currentTarget)}
         >
-          Notes
+          {notesLabel}
         </button>
         {model.taggedPeopleLabel ? (
           <span className="tagged">with {model.taggedPeopleLabel}</span>

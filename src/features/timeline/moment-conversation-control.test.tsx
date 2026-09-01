@@ -278,10 +278,24 @@ describe("MomentConversationControl", () => {
       ],
     };
     const actions = {
-      load: vi.fn().mockResolvedValue({
-        ok: true as const,
-        conversation: connectedConversation,
-      }),
+      load: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true as const,
+          conversation: connectedConversation,
+        })
+        .mockResolvedValueOnce({
+          ok: true as const,
+          conversation: {
+            notes: [],
+            reactions: [
+              {
+                ...connectedConversation.reactions[0],
+                reactionId: "made-me-smile" as const,
+              },
+            ],
+          },
+        }),
       createNote: vi.fn(),
       updateNote: vi.fn(),
       trashNote: vi.fn(),
@@ -319,6 +333,65 @@ describe("MomentConversationControl", () => {
     });
     expect(screen.getByRole("status")).toHaveTextContent("Response saved.");
     expect(screen.queryByText("Local preview · Nothing is saved")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      screen.getByRole("button", {
+        name: /Respond to thought .* by Journal person/u,
+      }),
+    ).toHaveTextContent("✦ Made me smile");
+  });
+
+  it("acknowledges a saved note on the closed moment without exposing its body", async () => {
+    const user = userEvent.setup();
+    const savedNote = {
+      id: "saved-note",
+      authorName: "Current person",
+      authorInitial: "C",
+      authorAccent: "teal" as const,
+      body: "A newly saved private detail.",
+      displayDate: "Aug 2, 2026",
+      revision: 1,
+      canChange: true,
+    };
+    const actions = {
+      load: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true as const,
+          conversation: { notes: [], reactions: [] },
+        })
+        .mockResolvedValueOnce({
+          ok: true as const,
+          conversation: { notes: [savedNote], reactions: [] },
+        }),
+      createNote: vi.fn().mockResolvedValue({ ok: true as const }),
+      updateNote: vi.fn(),
+      trashNote: vi.fn(),
+      setReaction: vi.fn(),
+    };
+    render(
+      <MomentConversationControl
+        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
+        model={{ ...model, conversation: { notes: [], reactions: [] } }}
+        actions={actions}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /Open private notes for thought/u }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Your note to the family" }),
+      savedNote.body,
+    );
+    await user.click(screen.getByRole("button", { name: "Save note" }));
+    expect(await screen.findByText(savedNote.body)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(
+      screen.getByRole("button", { name: /Open private notes for thought/u }),
+    ).toHaveTextContent("Note saved");
+    expect(screen.queryByText(savedNote.body)).toBeNull();
   });
 
   it("clears stale private bodies and disables mutations after a later load failure", async () => {
