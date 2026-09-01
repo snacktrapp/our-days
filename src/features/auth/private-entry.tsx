@@ -1,39 +1,30 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { purgeOurDaysBrowserState } from "@/lib/auth/browser-private-state";
-import {
-  requestSignInCode,
-  type SignInActionState,
-  verifySignInCode,
-} from "./sign-in-actions";
+import { requestSignInLink, type SignInActionState } from "./sign-in-actions";
 
 const initialSignInActionState: SignInActionState = { status: "idle" };
 
 export function PrivateEntry({
   connected = false,
   cleanupIncomplete = false,
+  linkIssue,
 }: {
   connected?: boolean;
   cleanupIncomplete?: boolean;
+  linkIssue?: "invalid" | "unavailable";
 }) {
   const [email, setEmail] = useState("");
   const [emailEdited, setEmailEdited] = useState(false);
-  const [codeRevision, setCodeRevision] = useState(0);
-  const [submittedCodeRevision, setSubmittedCodeRevision] = useState(-1);
-  const codeInput = useRef<HTMLInputElement>(null);
   const [cleanupState, setCleanupState] = useState<
     "checking" | "failed" | "ready"
   >(cleanupIncomplete ? "checking" : "ready");
   const [requestState, requestAction, requestPending] = useActionState(
-    requestSignInCode,
+    requestSignInLink,
     initialSignInActionState,
   );
-  const [verifyState, verifyAction, verifyPending] = useActionState(
-    verifySignInCode,
-    initialSignInActionState,
-  );
-  const codeRequested = requestState.status === "sent";
+  const linkRequested = requestState.status === "sent";
 
   useEffect(() => {
     if (!cleanupIncomplete) return;
@@ -47,22 +38,11 @@ export function PrivateEntry({
     });
   }, [cleanupIncomplete]);
 
-  useEffect(() => {
-    if (!codeRequested) return;
-    codeInput.current?.focus({ preventScroll: true });
-    codeInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [codeRequested]);
-
   const requestIsError =
     !emailEdited &&
     ["invalid", "denied", "unavailable"].includes(requestState.status);
-  const verifyIsError =
-    submittedCodeRevision === codeRevision &&
-    ["invalid", "denied", "no-access", "unavailable"].includes(
-      verifyState.status,
-    );
   const submittedEmail = requestState.email ?? email.trim().toLowerCase();
-  const busy = requestPending || verifyPending;
+  const busy = requestPending;
 
   return (
     <main className="private-entry-shell">
@@ -94,57 +74,25 @@ export function PrivateEntry({
           </div>
         ) : connected ? (
           <div className="private-entry-content">
-            {codeRequested ? (
+            {linkRequested ? (
               <>
                 <p>
-                  We sent a six-digit code to <strong>{submittedEmail}</strong>.
+                  We sent a private sign-in link to{" "}
+                  <strong>{submittedEmail}</strong>.
                 </p>
-                <form
-                  action={verifyAction}
-                  noValidate
-                  onSubmit={() => setSubmittedCodeRevision(codeRevision)}
-                >
-                  <input type="hidden" name="email" value={submittedEmail} />
-                  <label htmlFor="sign-in-code">Six-digit code</label>
-                  <input
-                    ref={codeInput}
-                    id="sign-in-code"
-                    name="code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    required
-                    disabled={busy}
-                    aria-invalid={verifyIsError ? true : undefined}
-                    aria-describedby={
-                      submittedCodeRevision === codeRevision &&
-                      verifyState.message
-                        ? "sign-in-verify-status"
-                        : undefined
-                    }
-                    onChange={() => setCodeRevision((revision) => revision + 1)}
-                  />
-                  <button type="submit" disabled={busy}>
-                    {verifyPending ? "Opening…" : "Open family journal"}
-                  </button>
-                  {submittedCodeRevision === codeRevision &&
-                  verifyState.message ? (
-                    <p
-                      id="sign-in-verify-status"
-                      className={verifyIsError ? "auth-error" : "auth-status"}
-                      role={verifyIsError ? "alert" : "status"}
-                    >
-                      {verifyState.message}
-                    </p>
-                  ) : null}
-                </form>
+                <p>Open that email on this device and tap the link.</p>
                 <a href="/sign-in">Use a different email</a>
               </>
             ) : (
               <>
                 <p>Enter the email address your family invited.</p>
+                {linkIssue ? (
+                  <p className="auth-error" role="alert">
+                    {linkIssue === "invalid"
+                      ? "That sign-in link is invalid or has expired. Request a new one."
+                      : "Our Days could not finish signing you in. Please request a new link."}
+                  </p>
+                ) : null}
                 <form
                   action={requestAction}
                   noValidate
@@ -173,7 +121,7 @@ export function PrivateEntry({
                     }}
                   />
                   <button type="submit" disabled={busy}>
-                    {requestPending ? "Sending…" : "Email me a code"}
+                    {requestPending ? "Sending…" : "Email me a sign-in link"}
                   </button>
                   {!emailEdited && requestState.message ? (
                     <p

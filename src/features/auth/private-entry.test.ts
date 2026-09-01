@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/browser-private-state", () => ({
   purgeOurDaysBrowserState: mocks.purge,
 }));
 vi.mock("./sign-in-actions", () => ({
-  requestSignInCode: mocks.requestCode,
+  requestSignInLink: mocks.requestCode,
   verifySignInCode: mocks.verifyCode,
 }));
 

@@ -27,7 +27,7 @@ function normalizedEmail(formData: FormData) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-export async function requestSignInCode(
+export async function requestSignInLink(
   _previousState: SignInActionState,
   formData: FormData,
 ): Promise<SignInActionState> {
@@ -43,7 +43,13 @@ export async function requestSignInCode(
     const supabase = await createOurDaysServerClient();
     await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: new URL(
+          "/auth/callback",
+          process.env.NEXT_PUBLIC_SITE_URL,
+        ).toString(),
+      },
     });
   } catch {
     // The response stays deliberately identical for unknown addresses,
@@ -53,7 +59,7 @@ export async function requestSignInCode(
   return {
     status: "sent",
     email,
-    message: "If this address has access, we sent a six-digit code.",
+    message: "If this address has access, we sent a private sign-in link.",
   };
 }
 

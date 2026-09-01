@@ -20,7 +20,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
 
-import { requestSignInCode, verifySignInCode } from "./sign-in-actions";
+import { requestSignInLink, verifySignInCode } from "./sign-in-actions";
 
 const initialSignInActionState = { status: "idle" } as const;
 
@@ -30,7 +30,7 @@ function form(fields: Record<string, string>) {
   return data;
 }
 
-describe("email-code sign in actions", () => {
+describe("passwordless email sign-in actions", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://journal.example.com");
     mocks.getHeaders.mockResolvedValue(
@@ -54,21 +54,22 @@ describe("email-code sign in actions", () => {
     vi.clearAllMocks();
   });
 
-  it("prevents ordinary OTP from creating a user and returns generic copy", async () => {
+  it("prevents a magic link from creating a user and returns generic copy", async () => {
     await expect(
-      requestSignInCode(
+      requestSignInLink(
         initialSignInActionState,
         form({ email: "  FAMILY@EXAMPLE.COM " }),
       ),
     ).resolves.toEqual({
       status: "sent",
       email: "family@example.com",
-      message: "If this address has access, we sent a six-digit code.",
+      message: "If this address has access, we sent a private sign-in link.",
     });
 
     expect(mocks.signInWithOtp).toHaveBeenCalledWith({
       email: "family@example.com",
       options: {
+        emailRedirectTo: "https://journal.example.com/auth/callback",
         shouldCreateUser: false,
       },
     });
@@ -78,14 +79,14 @@ describe("email-code sign in actions", () => {
     mocks.signInWithOtp.mockRejectedValueOnce(new Error("unknown user"));
 
     await expect(
-      requestSignInCode(
+      requestSignInLink(
         initialSignInActionState,
         form({ email: "unknown@example.com" }),
       ),
     ).resolves.toEqual({
       status: "sent",
       email: "unknown@example.com",
-      message: "If this address has access, we sent a six-digit code.",
+      message: "If this address has access, we sent a private sign-in link.",
     });
   });
 
@@ -95,7 +96,7 @@ describe("email-code sign in actions", () => {
     );
 
     await expect(
-      requestSignInCode(
+      requestSignInLink(
         initialSignInActionState,
         form({ email: "family@example.com" }),
       ),
