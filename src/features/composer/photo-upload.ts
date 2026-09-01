@@ -62,6 +62,7 @@ type UploadDependencies = Readonly<{
   fetch?: typeof globalThis.fetch;
   hash?: typeof hashPhotoInWorker;
   pause?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
+  processPhoto?: (intakeId: string, signal: AbortSignal) => Promise<void>;
   resumeStore?: PhotoUploadResumeStore;
   statusAttempts?: number;
 }>;
@@ -404,6 +405,38 @@ function renewPhotoUploadAttempt(attempt: PhotoUploadAttempt) {
   delete attempt.uploadUrl;
 }
 
+async function requestPhotoProcessing(intakeId: string, signal: AbortSignal) {
+  let response: Response;
+  try {
+    response = await globalThis.fetch("/api/photos/process", {
+      body: JSON.stringify({ intakeId }),
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal,
+    });
+  } catch {
+    return;
+  }
+  if (response.status === 409) {
+    let message = "This photo needs attention before it can be added.";
+    try {
+      const body = (await response.json()) as unknown;
+      if (
+        typeof body === "object" &&
+        body !== null &&
+        "message" in body &&
+        typeof body.message === "string"
+      ) {
+        message = body.message;
+      }
+    } catch {
+      // Keep the stable local message when a response body is unavailable.
+    }
+    throw new PhotoUploadError(message, false);
+  }
+}
+
 export async function uploadPhotoMoment(
   file: File,
   draft: PhotoMomentDraft,
@@ -616,6 +649,10 @@ export async function uploadPhotoMoment(
     });
 
     onStage({ state: "processing" });
+    await (dependencies.processPhoto ?? requestPhotoProcessing)(
+      reservation.intake_id,
+      signal,
+    );
     const pause = dependencies.pause ?? defaultPause;
     const statusAttempts = dependencies.statusAttempts ?? 1;
     for (let index = 0; index < statusAttempts; index += 1) {

@@ -19,11 +19,7 @@ export type PhotoStatusItem = Readonly<{
   journalPersonName: string;
   occurredOn: string;
   state:
-    | "attention"
-    | "cancelled"
-    | "pending"
-    | "processing"
-    | "published-cleanup";
+    "attention" | "cancelled" | "pending" | "processing" | "published-cleanup";
   canCancel: boolean;
   cleanupState: PhotoCleanupState;
 }>;
@@ -66,6 +62,18 @@ const allowedCleanupStates = new Set<PhotoCleanupState>([
   "operator_review",
   "queued",
 ]);
+const publishedRefreshKeyPrefix = "our-days:published-photo-refresh:";
+
+function firstPublishedRefresh(intakeId: string) {
+  const key = `${publishedRefreshKeyPrefix}${intakeId}`;
+  try {
+    if (window.sessionStorage.getItem(key) === "1") return false;
+    window.sessionStorage.setItem(key, "1");
+    return true;
+  } catch {
+    return true;
+  }
+}
 
 function visibleState(status: string): PhotoStatusItem["state"] {
   if (status === "cancelled_cleanup_pending") return "cancelled";
@@ -121,92 +129,137 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
   const inFlightRef = useRef<Promise<void> | null>(null);
   const publishedRef = useRef(new Set<string>());
 
-  const checkStatuses = useCallback(() => {
-    if (inFlightRef.current) return inFlightRef.current;
-    const run = ++runRef.current;
-    setChecking(true);
-    const task = (async () => {
-      try {
-        const supabase = createOurDaysBrowserClient();
-        const { data: rows, error } = await supabase.rpc(
-          "list_my_photo_intakes",
-          { circle_id: circleId },
-        );
-        if (run !== runRef.current) return;
-        if (
-          error ||
-          !rows ||
-          rows.some(
-            (row) =>
-              !allowedServerStatuses.has(row.status) ||
-              !allowedCleanupStates.has(row.cleanup_state as PhotoCleanupState),
-          )
-        ) {
-          throw new Error("Photo status unavailable");
-        }
-
-        const nextItems = rows.map((row) => ({
-          id: row.intake_id,
-          journalPersonName: row.journal_person_name,
-          occurredOn: row.occurred_on,
-          state: visibleState(row.status),
-          canCancel: row.can_cancel,
-          cleanupState: row.cleanup_state as PhotoCleanupState,
-        }));
-        setItems(nextItems);
-        setCheckFailed(false);
-        setCancellationResult((current) =>
-          current && nextItems.some((item) => item.id === current.id)
-            ? current
-            : null,
-        );
-
-        let shouldRefresh = false;
-        for (const item of nextItems) {
-          if (
-            item.state === "published-cleanup" &&
-            !publishedRef.current.has(item.id)
-          ) {
-            publishedRef.current.add(item.id);
-            shouldRefresh = true;
-          }
-        }
-        if (shouldRefresh) router.refresh();
-
+  const checkStatuses = useCallback(
+    (finishProcessing = false) => {
+      if (inFlightRef.current) return inFlightRef.current;
+      const run = ++runRef.current;
+      setChecking(true);
+      const task = (async () => {
         try {
-          const { data: sessionData, error: sessionError } =
-            await supabase.auth.getSession();
-          const accountId = sessionData.session?.user.id;
-          if (sessionError || !accountId) throw new Error("Session unavailable");
-          const localRecords = await photoUploadResumeStore.listForScope(
-            accountId,
-            circleId,
+          const supabase = createOurDaysBrowserClient();
+          const initial = await supabase.rpc("list_my_photo_intakes", {
+            circle_id: circleId,
+          });
+          let rows = initial.data;
+          let statusError = initial.error;
+          if (run !== runRef.current) return;
+          if (
+            statusError ||
+            !rows ||
+            rows.some(
+              (row) =>
+                !allowedServerStatuses.has(row.status) ||
+                !allowedCleanupStates.has(
+                  row.cleanup_state as PhotoCleanupState,
+                ),
+            )
+          ) {
+            throw new Error("Photo status unavailable");
+          }
+
+          if (finishProcessing) {
+            const pendingIds = rows
+              .filter((row) => row.status === "processing")
+              .map((row) => row.intake_id);
+            if (pendingIds.length > 0) {
+              await Promise.allSettled(
+                pendingIds.map((intakeId) =>
+                  globalThis.fetch("/api/photos/process", {
+                    body: JSON.stringify({ intakeId }),
+                    credentials: "same-origin",
+                    headers: { "content-type": "application/json" },
+                    method: "POST",
+                  }),
+                ),
+              );
+              const refreshed = await supabase.rpc("list_my_photo_intakes", {
+                circle_id: circleId,
+              });
+              rows = refreshed.data;
+              statusError = refreshed.error;
+              if (
+                run !== runRef.current ||
+                statusError ||
+                !rows ||
+                rows.some(
+                  (row) =>
+                    !allowedServerStatuses.has(row.status) ||
+                    !allowedCleanupStates.has(
+                      row.cleanup_state as PhotoCleanupState,
+                    ),
+                )
+              ) {
+                throw new Error("Photo status unavailable");
+              }
+            }
+          }
+
+          const nextItems = rows.map((row) => ({
+            id: row.intake_id,
+            journalPersonName: row.journal_person_name,
+            occurredOn: row.occurred_on,
+            state: visibleState(row.status),
+            canCancel: row.can_cancel,
+            cleanupState: row.cleanup_state as PhotoCleanupState,
+          }));
+          setItems(nextItems);
+          setCheckFailed(false);
+          setCancellationResult((current) =>
+            current && nextItems.some((item) => item.id === current.id)
+              ? current
+              : null,
           );
-          const serverIntakeIds = new Set(rows.map((row) => row.intake_id));
-          await Promise.all(
-            localRecords
-              .filter(
-                (record) =>
-                  record.intakeId && !serverIntakeIds.has(record.intakeId),
-              )
-              .map((record) => photoUploadResumeStore.remove(record.id)),
-          );
-          if (run === runRef.current) setLocalStoreWarning(false);
+
+          let shouldRefresh = false;
+          for (const item of nextItems) {
+            if (
+              item.state === "published-cleanup" &&
+              !publishedRef.current.has(item.id) &&
+              firstPublishedRefresh(item.id)
+            ) {
+              publishedRef.current.add(item.id);
+              shouldRefresh = true;
+            }
+          }
+          if (shouldRefresh) router.refresh();
+
+          try {
+            const { data: sessionData, error: sessionError } =
+              await supabase.auth.getSession();
+            const accountId = sessionData.session?.user.id;
+            if (sessionError || !accountId)
+              throw new Error("Session unavailable");
+            const localRecords = await photoUploadResumeStore.listForScope(
+              accountId,
+              circleId,
+            );
+            const serverIntakeIds = new Set(rows.map((row) => row.intake_id));
+            await Promise.all(
+              localRecords
+                .filter(
+                  (record) =>
+                    record.intakeId && !serverIntakeIds.has(record.intakeId),
+                )
+                .map((record) => photoUploadResumeStore.remove(record.id)),
+            );
+            if (run === runRef.current) setLocalStoreWarning(false);
+          } catch {
+            if (run === runRef.current) setLocalStoreWarning(true);
+          }
         } catch {
-          if (run === runRef.current) setLocalStoreWarning(true);
+          if (run === runRef.current) setCheckFailed(true);
+        } finally {
+          if (run === runRef.current) setChecking(false);
         }
-      } catch {
-        if (run === runRef.current) setCheckFailed(true);
-      } finally {
-        if (run === runRef.current) setChecking(false);
-      }
-    })();
-    inFlightRef.current = task;
-    void task.finally(() => {
-      if (inFlightRef.current === task) inFlightRef.current = null;
-    });
-    return task;
-  }, [circleId, router]);
+      })();
+      inFlightRef.current = task;
+      void task.finally(() => {
+        if (inFlightRef.current === task) inFlightRef.current = null;
+      });
+      return task;
+    },
+    [circleId, router],
+  );
 
   useEffect(() => {
     void checkStatuses();
@@ -332,7 +385,7 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
       onConfirmCancel={(id) => void cancel(id)}
       onKeep={() => setConfirmingCancelId(null)}
       onRequestCancel={setConfirmingCancelId}
-      onCheck={() => void checkStatuses()}
+      onCheck={() => void checkStatuses(true)}
     />
   );
 }
@@ -460,6 +513,12 @@ export function PhotoStatusShelfView({
                     Cancel upload
                   </button>
                 )}
+              </div>
+            ) : item.state === "processing" ? (
+              <div className="photo-status-actions">
+                <button type="button" disabled={checking} onClick={onCheck}>
+                  {checking ? "Checking…" : "Try finishing"}
+                </button>
               </div>
             ) : null}
           </div>

@@ -129,9 +129,16 @@ describe("connected private photo upload", () => {
       "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
       "sb_publishable_photo_test",
     );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ok: true, momentId }, { status: 200 })),
+    );
   });
 
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
 
   it("classifies supported bytes rather than trusting a picker MIME hint", async () => {
     expect(await detectedPhotoMime(jpegFile())).toBe("image/jpeg");
@@ -198,6 +205,14 @@ describe("connected private photo upload", () => {
     );
 
     expect(result).toEqual({ state: "published", intakeId, momentId });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/photos/process",
+      expect.objectContaining({
+        body: JSON.stringify({ intakeId }),
+        credentials: "same-origin",
+        method: "POST",
+      }),
+    );
     expect(calls).toEqual([
       "reserve_photo_moment",
       "claim_photo_intake_upload",

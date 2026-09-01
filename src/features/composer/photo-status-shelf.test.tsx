@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const refresh = vi.fn();
@@ -63,6 +63,7 @@ const localRecord = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
   mocks.getSession.mockResolvedValue({
     data: { session: { user: { id: accountId } } },
     error: null,
@@ -85,6 +86,8 @@ beforeEach(() => {
     return { data: [serverRow], error: null };
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("PhotoStatusShelf", () => {
   it("shows server-authoritative unfinished work even without local browser state", async () => {
@@ -117,6 +120,35 @@ describe("PhotoStatusShelf", () => {
       ),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: /Cancel upload/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Try finishing" })).toBeVisible();
+  });
+
+  it("retries private processing only when the user asks", async () => {
+    const processRequest = vi.fn(async () =>
+      Response.json({ ok: true }, { status: 202 }),
+    );
+    vi.stubGlobal("fetch", processRequest);
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...serverRow, can_cancel: false, status: "processing" }],
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Try finishing" }),
+    );
+    await waitFor(() =>
+      expect(processRequest).toHaveBeenCalledWith(
+        "/api/photos/process",
+        expect.objectContaining({
+          body: JSON.stringify({ intakeId }),
+          credentials: "same-origin",
+          method: "POST",
+        }),
+      ),
+    );
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
   });
 
   it("cancels through the server before removing matching local resume state", async () => {
@@ -141,17 +173,15 @@ describe("PhotoStatusShelf", () => {
       intake_id: intakeId,
     });
     expect(mocks.remove).toHaveBeenCalledWith(localRecord.id);
-    expect(
-      await screen.findByText("Photo cancelled"),
-    ).toBeVisible();
+    expect(await screen.findByText("Photo cancelled")).toBeVisible();
     expect(
       screen.getByText(
         "It won’t be added. Its temporary private upload copy is waiting for secure removal.",
       ),
     ).toBeVisible();
-    expect(
-      screen.getByRole("status", { name: "" }),
-    ).toHaveTextContent("Cancellation confirmed");
+    expect(screen.getByRole("status", { name: "" })).toHaveTextContent(
+      "Cancellation confirmed",
+    );
     expect(screen.getByText(/Cancellation confirmed/)).toHaveFocus();
   });
 
@@ -187,12 +217,8 @@ describe("PhotoStatusShelf", () => {
     expect(
       await screen.findByText("Private upload not finished"),
     ).toBeVisible();
-    expect(
-      await screen.findByText(/Photo status is current/u),
-    ).toBeVisible();
-    expect(
-      screen.queryByText("Couldn’t check your photo yet"),
-    ).toBeNull();
+    expect(await screen.findByText(/Photo status is current/u)).toBeVisible();
+    expect(screen.queryByText("Couldn’t check your photo yet")).toBeNull();
   });
 
   it("keeps the item and does not claim cancellation when confirmation fails", async () => {
@@ -269,6 +295,28 @@ describe("PhotoStatusShelf", () => {
     await waitFor(() => expect(mocks.listForScope).toHaveBeenCalledOnce());
     fireEvent(window, new Event("online"));
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(2));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh the timeline again after a published shelf remount", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...serverRow,
+          can_cancel: false,
+          cleanup_state: "queued",
+          status: "published_cleanup_pending",
+        },
+      ],
+      error: null,
+    });
+    const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
+    expect(await screen.findByText("Photo added privately")).toBeVisible();
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+
+    firstPage.unmount();
+    render(<PhotoStatusShelf circleId={circleId} />);
+    expect(await screen.findByText("Photo added privately")).toBeVisible();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
