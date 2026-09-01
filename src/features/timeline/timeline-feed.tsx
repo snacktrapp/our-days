@@ -81,7 +81,7 @@ function TimelineEntry({
             connectedPosition={connectedPosition}
             connectedTotal={connectedTotal}
           />
-          <time dateTime={entry.moment.occurredOn}>
+          <time className="sr-only" dateTime={entry.moment.occurredOn}>
             {entry.moment.displayDate}
           </time>
         </article>

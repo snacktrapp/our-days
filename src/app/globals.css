@@ -489,13 +489,6 @@ textarea:focus-visible,
   z-index: 1;
   margin-bottom: 28px;
 }
-.moment > time {
-  display: block;
-  margin-top: 8px;
-  text-align: center;
-  color: #665e55;
-  font-size: 9px;
-}
 .connection {
   min-height: 42px;
   display: flex;
