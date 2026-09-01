@@ -35,45 +35,59 @@ function jpegFile(size = 12) {
 
 function clientWithStatus(status = "published") {
   const calls: string[] = [];
-  const rpc = vi.fn(async (name: string) => {
-    calls.push(name);
-    if (name === "reserve_photo_moment") {
+  const rpc = vi.fn(
+    async (name: string): Promise<{ data: unknown; error: unknown }> => {
+      calls.push(name);
+      if (name === "reserve_photo_moment") {
+        return {
+          data: [
+            {
+              bucket_id: "our-days-intake",
+              expires_at: "2026-08-31T20:00:00Z",
+              intake_id: intakeId,
+              moment_id: momentId,
+              object_path: `intake/${intakeId}`,
+              state: "reserved",
+            },
+          ],
+          error: null,
+        };
+      }
+      if (name === "claim_photo_intake_upload") {
+        return {
+          data: [
+            {
+              bucket_id: "our-days-intake",
+              intake_id: intakeId,
+              object_path: `intake/${intakeId}`,
+              state: "upload_claimed",
+              upload_expires_at: "2026-08-31T20:00:00Z",
+            },
+          ],
+          error: null,
+        };
+      }
+      if (name === "acknowledge_photo_intake") {
+        return { data: [], error: null };
+      }
+      if (name === "cancel_photo_intake") {
+        return {
+          data: [
+            {
+              cleanup_state: "queued",
+              intake_id: intakeId,
+              state: "invalidated",
+            },
+          ],
+          error: null,
+        };
+      }
       return {
-        data: [
-          {
-            bucket_id: "our-days-intake",
-            expires_at: "2026-08-31T20:00:00Z",
-            intake_id: intakeId,
-            moment_id: momentId,
-            object_path: `intake/${intakeId}`,
-            state: "reserved",
-          },
-        ],
+        data: [{ moment_id: status === "published" ? momentId : null, status }],
         error: null,
       };
-    }
-    if (name === "claim_photo_intake_upload") {
-      return {
-        data: [
-          {
-            bucket_id: "our-days-intake",
-            intake_id: intakeId,
-            object_path: `intake/${intakeId}`,
-            state: "upload_claimed",
-            upload_expires_at: "2026-08-31T20:00:00Z",
-          },
-        ],
-        error: null,
-      };
-    }
-    if (name === "acknowledge_photo_intake") {
-      return { data: [], error: null };
-    }
-    return {
-      data: [{ moment_id: status === "published" ? momentId : null, status }],
-      error: null,
-    };
-  });
+    },
+  );
   const client = {
     auth: {
       getSession: vi.fn(async () => ({
@@ -446,10 +460,107 @@ describe("connected private photo upload", () => {
     releaseClaim();
 
     await expect(upload).rejects.toEqual(
-      expect.objectContaining({ name: "AbortError" }),
+      expect.objectContaining<Partial<PhotoUploadError>>({
+        message:
+          "Upload stopped. This photo won’t be added. Private removal is finishing.",
+        retryable: true,
+      }),
     );
     expect(fetcher).not.toHaveBeenCalled();
+    expect(calls).toContain("cancel_photo_intake");
     expect(calls).not.toContain("acknowledge_photo_intake");
+  });
+
+  it("does not claim cancellation when the server cannot confirm it", async () => {
+    const { client, rpc } = clientWithStatus();
+    const originalRpc = rpc.getMockImplementation();
+    let releaseClaim: () => void = () => {
+      throw new Error("Claim did not start.");
+    };
+    rpc.mockImplementation(async (...arguments_) => {
+      if (arguments_[0] === "claim_photo_intake_upload") {
+        await new Promise<void>((resolve) => {
+          releaseClaim = resolve;
+        });
+      }
+      if (arguments_[0] === "cancel_photo_intake") {
+        return { data: null, error: { message: "offline" } };
+      }
+      return originalRpc!(...arguments_);
+    });
+    const resumeStore = memoryResumeStore();
+    const controller = new AbortController();
+    const upload = uploadPhotoMoment(
+      jpegFile(),
+      draft,
+      createPhotoUploadAttempt(),
+      controller.signal,
+      () => undefined,
+      {
+        createClient: () => client,
+        fetch: vi.fn(),
+        hash: vi.fn(async () => "6".repeat(64)),
+        resumeStore,
+      },
+    );
+    await vi.waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith(
+        "claim_photo_intake_upload",
+        expect.any(Object),
+      ),
+    );
+    controller.abort();
+    releaseClaim();
+
+    await expect(upload).rejects.toEqual(
+      expect.objectContaining<Partial<PhotoUploadError>>({
+        message:
+          "The transfer stopped on this device, but cancellation could not be confirmed. Review unfinished photos before trying again.",
+        retryable: false,
+      }),
+    );
+    expect(resumeStore.remove).not.toHaveBeenCalled();
+  });
+
+  it("maps quota failures and retires a reservation rejected at claim", async () => {
+    const { client, rpc } = clientWithStatus();
+    const originalRpc = rpc.getMockImplementation();
+    rpc.mockImplementation(async (...arguments_) => {
+      if (arguments_[0] === "claim_photo_intake_upload") {
+        return {
+          data: null,
+          error: { message: "PHOTO_ACCOUNT_BYTE_QUOTA" },
+        };
+      }
+      return originalRpc!(...arguments_);
+    });
+    const resumeStore = memoryResumeStore();
+    const attempt = createPhotoUploadAttempt();
+    const originalRequestKey = attempt.requestKey;
+
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        attempt,
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          fetch: vi.fn(),
+          hash: vi.fn(async () => "5".repeat(64)),
+          resumeStore,
+        },
+      ),
+    ).rejects.toThrow(
+      "Private removal is still finishing for earlier uploads. Review unfinished photos before trying again.",
+    );
+    expect(rpc).toHaveBeenCalledWith("cancel_photo_intake", {
+      intake_id: intakeId,
+    });
+    expect(resumeStore.remove).toHaveBeenCalledTimes(1);
+    expect(attempt.requestKey).not.toBe(originalRequestKey);
+    expect(attempt.intakeId).toBeUndefined();
   });
 
   it("bounds repeated ambiguous PATCH failures with delayed retries", async () => {
@@ -522,6 +633,7 @@ describe("connected private photo upload", () => {
       async () => new Response(null, { status: 410 }),
     );
     const expiredAttempt = createPhotoUploadAttempt();
+    const expiredRequestKey = expiredAttempt.requestKey;
 
     await expect(
       uploadPhotoMoment(
@@ -545,6 +657,8 @@ describe("connected private photo upload", () => {
     );
     expect(resumeStore.remove).toHaveBeenCalledWith(expiredResume.id);
     expect(expiredAttempt.uploadUrl).toBeUndefined();
+    expect(expiredAttempt.requestKey).not.toBe(expiredRequestKey);
+    expect(expiredAttempt.requestKey).not.toBe(expiredResume.requestKey);
 
     let offset = 0;
     const freshFetcher = vi.fn(
@@ -568,11 +682,10 @@ describe("connected private photo upload", () => {
         });
       },
     );
-    const freshAttempt = createPhotoUploadAttempt();
     await uploadPhotoMoment(
       jpegFile(),
       draft,
-      freshAttempt,
+      expiredAttempt,
       new AbortController().signal,
       () => undefined,
       {
@@ -587,7 +700,7 @@ describe("connected private photo upload", () => {
     expect(
       freshFetcher.mock.calls.filter(([, init]) => init?.method === "POST"),
     ).toHaveLength(1);
-    expect(freshAttempt.uploadUrl).toBe(uploadUrl);
+    expect(expiredAttempt.uploadUrl).toBe(uploadUrl);
   });
 
   it("reports processing honestly when publication has not completed", async () => {

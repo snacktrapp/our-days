@@ -16,6 +16,7 @@ const uuidPattern =
 export type PhotoUploadStage =
   | Readonly<{ state: "preparing" }>
   | Readonly<{ state: "uploading"; progress: number }>
+  | Readonly<{ state: "stopping" }>
   | Readonly<{ state: "finishing" }>
   | Readonly<{ state: "processing" }>;
 
@@ -365,6 +366,44 @@ async function draftFingerprint(draft: PhotoMomentDraft) {
   );
 }
 
+function isAbortError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AbortError"
+  );
+}
+
+function photoQuotaMessage(error: unknown) {
+  const message =
+    typeof error === "object" && error && "message" in error
+      ? String(error.message)
+      : "";
+  if (
+    message.includes("PHOTO_ACCOUNT_OPEN_QUOTA") ||
+    message.includes("PHOTO_CIRCLE_OPEN_QUOTA")
+  ) {
+    return "You have too many unfinished private uploads to start another. Review unfinished photos and remove one first.";
+  }
+  if (
+    message.includes("PHOTO_ACCOUNT_BYTE_QUOTA") ||
+    message.includes("PHOTO_CIRCLE_BYTE_QUOTA")
+  ) {
+    return "Private removal is still finishing for earlier uploads. Review unfinished photos before trying again.";
+  }
+  return null;
+}
+
+function renewPhotoUploadAttempt(attempt: PhotoUploadAttempt) {
+  const renewed = createPhotoUploadAttempt();
+  attempt.requestKey = renewed.requestKey;
+  attempt.uploadRequestKey = renewed.uploadRequestKey;
+  delete attempt.intakeId;
+  delete attempt.momentId;
+  delete attempt.uploadUrl;
+}
+
 export async function uploadPhotoMoment(
   file: File,
   draft: PhotoMomentDraft,
@@ -397,140 +436,157 @@ export async function uploadPhotoMoment(
     fileSize: file.size,
     mimeType,
   });
-  throwIfAborted(signal);
   const resumeId = resumed?.id ?? crypto.randomUUID();
-  if (resumed) {
-    attempt.requestKey = resumed.requestKey;
-    attempt.uploadRequestKey = resumed.uploadRequestKey;
-    attempt.intakeId = resumed.intakeId;
-    attempt.momentId = resumed.momentId;
-    try {
+  let acknowledgementStarted = false;
+
+  const retireAttempt = async () => {
+    if (attempt.intakeId) {
+      const { data, error } = await supabase.rpc("cancel_photo_intake", {
+        intake_id: attempt.intakeId,
+      });
+      const cancellation = firstRow(data);
+      if (error || cancellation?.state !== "invalidated") return false;
+    }
+    await resumeStore.remove(resumeId);
+    renewPhotoUploadAttempt(attempt);
+    return true;
+  };
+
+  try {
+    if (resumed) {
+      attempt.requestKey = resumed.requestKey;
+      attempt.uploadRequestKey = resumed.uploadRequestKey;
+      attempt.intakeId = resumed.intakeId;
+      attempt.momentId = resumed.momentId;
       attempt.uploadUrl = resumed.uploadUrl
         ? resolvedUploadUrl(endpoint, resumed.uploadUrl)
         : undefined;
-    } catch (error) {
-      if (error instanceof PhotoUploadError && error.discardResume) {
-        await resumeStore.remove(resumeId);
-      }
-      throw error;
     }
-  }
+    throwIfAborted(signal);
 
-  const saveResume = async (changes: Partial<PhotoUploadResumeRecord> = {}) => {
-    await resumeStore.save({
-      id: resumeId,
-      accountId: session.accountId,
-      circleId: draft.circleId,
-      draftHash,
-      fileSha256: sha256,
-      fileSize: file.size,
-      mimeType,
-      requestKey: attempt.requestKey,
-      uploadRequestKey: attempt.uploadRequestKey,
-      intakeId: attempt.intakeId,
-      momentId: attempt.momentId,
-      uploadUrl: attempt.uploadUrl,
-      expiresAt: resumed?.expiresAt,
-      acknowledged: resumed?.acknowledged ?? false,
-      ...changes,
-    });
-  };
+    const saveResume = async (
+      changes: Partial<PhotoUploadResumeRecord> = {},
+    ) => {
+      await resumeStore.save({
+        id: resumeId,
+        accountId: session.accountId,
+        circleId: draft.circleId,
+        draftHash,
+        fileSha256: sha256,
+        fileSize: file.size,
+        mimeType,
+        requestKey: attempt.requestKey,
+        uploadRequestKey: attempt.uploadRequestKey,
+        intakeId: attempt.intakeId,
+        momentId: attempt.momentId,
+        uploadUrl: attempt.uploadUrl,
+        expiresAt: resumed?.expiresAt,
+        acknowledged: resumed?.acknowledged ?? false,
+        ...changes,
+      });
+    };
 
-  const { data: reservationRows, error: reservationError } = await supabase.rpc(
-    "reserve_photo_moment",
-    {
-      body: draft.body,
-      circle_id: draft.circleId,
-      journal_person_id: draft.journalPersonId,
-      occurred_at: draft.occurredAt ?? undefined,
-      occurred_on: draft.occurredOn,
-      occurred_timezone: draft.occurredTimezone ?? undefined,
-      place_name: draft.placeName,
-      request_key: attempt.requestKey,
-      tagged_person_ids: [...draft.taggedPersonIds],
-    },
-  );
-  throwIfAborted(signal);
-  const reservation = firstRow(reservationRows);
-  if (
-    reservationError ||
-    !reservation ||
-    !uuidPattern.test(reservation.intake_id) ||
-    !uuidPattern.test(reservation.moment_id)
-  ) {
-    throw new PhotoUploadError("That photo moment could not be prepared.");
-  }
-  attempt.intakeId = reservation.intake_id;
-  attempt.momentId = reservation.moment_id;
-  await saveResume({ expiresAt: reservation.expires_at });
-  throwIfAborted(signal);
-
-  const { data: claimRows, error: claimError } = await supabase.rpc(
-    "claim_photo_intake_upload",
-    {
-      expected_mime_type: mimeType,
-      expected_sha256_hex: sha256,
-      expected_size_bytes: file.size,
-      intake_id: reservation.intake_id,
-      upload_request_key: attempt.uploadRequestKey,
-    },
-  );
-  throwIfAborted(signal);
-  const claim = firstRow(claimRows);
-  if (claimError || !claim) {
-    throw new PhotoUploadError("That private upload could not be prepared.");
-  }
-
-  const fetcher = dependencies.fetch ?? globalThis.fetch;
-  const headers = async () => {
-    const activeSession = await currentSession(supabase);
-    if (activeSession.accountId !== session.accountId) {
-      throw new PhotoUploadError("Your family access changed.", false);
+    const { data: reservationRows, error: reservationError } =
+      await supabase.rpc("reserve_photo_moment", {
+        body: draft.body,
+        circle_id: draft.circleId,
+        journal_person_id: draft.journalPersonId,
+        occurred_at: draft.occurredAt ?? undefined,
+        occurred_on: draft.occurredOn,
+        occurred_timezone: draft.occurredTimezone ?? undefined,
+        place_name: draft.placeName,
+        request_key: attempt.requestKey,
+        tagged_person_ids: [...draft.taggedPersonIds],
+      });
+    const reservationQuotaMessage = photoQuotaMessage(reservationError);
+    if (reservationQuotaMessage) {
+      throw new PhotoUploadError(reservationQuotaMessage);
     }
-    return authenticatedTusHeaders(publishableKey, activeSession.accessToken);
-  };
-  await saveResume({ expiresAt: claim.upload_expires_at });
-  throwIfAborted(signal);
-  if (claim.state !== "uploaded_unverified") {
-    if (!attempt.uploadUrl) {
-      const metadata = {
+    const reservation = firstRow(reservationRows);
+    if (
+      reservationError ||
+      !reservation ||
+      !uuidPattern.test(reservation.intake_id) ||
+      !uuidPattern.test(reservation.moment_id)
+    ) {
+      throw new PhotoUploadError("That photo moment could not be prepared.");
+    }
+    attempt.intakeId = reservation.intake_id;
+    attempt.momentId = reservation.moment_id;
+    await saveResume({ expiresAt: reservation.expires_at });
+    throwIfAborted(signal);
+
+    const { data: claimRows, error: claimError } = await supabase.rpc(
+      "claim_photo_intake_upload",
+      {
         expected_mime_type: mimeType,
-        expected_sha256: sha256,
+        expected_sha256_hex: sha256,
         expected_size_bytes: file.size,
         intake_id: reservation.intake_id,
         upload_request_key: attempt.uploadRequestKey,
-      };
-      const response = await fetcher(endpoint, {
-        headers: {
-          ...(await headers()),
-          "upload-length": String(file.size),
-          "upload-metadata": [
-            `bucketName ${asciiBase64(claim.bucket_id)}`,
-            `objectName ${asciiBase64(claim.object_path)}`,
-            `contentType ${asciiBase64(mimeType)}`,
-            `cacheControl ${asciiBase64("3600")}`,
-            `metadata ${asciiBase64(JSON.stringify(metadata))}`,
-          ].join(","),
-        },
-        method: "POST",
-        signal,
-      });
-      throwIfAborted(signal);
-      if (!response.ok) {
-        throw new PhotoUploadError("The private upload could not be started.");
-      }
-      attempt.uploadUrl = resolvedUploadUrl(
-        endpoint,
-        response.headers.get("location"),
-      );
-      await saveResume({
-        expiresAt: claim.upload_expires_at,
-        uploadUrl: attempt.uploadUrl,
-      });
-      throwIfAborted(signal);
+      },
+    );
+    const claimQuotaMessage = photoQuotaMessage(claimError);
+    if (claimQuotaMessage) {
+      throw new PhotoUploadError(claimQuotaMessage, true, true);
     }
-    const pause = dependencies.pause ?? defaultPause;
-    try {
+    throwIfAborted(signal);
+    const claim = firstRow(claimRows);
+    if (claimError || !claim) {
+      throw new PhotoUploadError("That private upload could not be prepared.");
+    }
+
+    const fetcher = dependencies.fetch ?? globalThis.fetch;
+    const headers = async () => {
+      const activeSession = await currentSession(supabase);
+      if (activeSession.accountId !== session.accountId) {
+        throw new PhotoUploadError("Your family access changed.", false);
+      }
+      return authenticatedTusHeaders(publishableKey, activeSession.accessToken);
+    };
+    await saveResume({ expiresAt: claim.upload_expires_at });
+    throwIfAborted(signal);
+    if (claim.state !== "uploaded_unverified") {
+      if (!attempt.uploadUrl) {
+        const metadata = {
+          expected_mime_type: mimeType,
+          expected_sha256: sha256,
+          expected_size_bytes: file.size,
+          intake_id: reservation.intake_id,
+          upload_request_key: attempt.uploadRequestKey,
+        };
+        const response = await fetcher(endpoint, {
+          headers: {
+            ...(await headers()),
+            "upload-length": String(file.size),
+            "upload-metadata": [
+              `bucketName ${asciiBase64(claim.bucket_id)}`,
+              `objectName ${asciiBase64(claim.object_path)}`,
+              `contentType ${asciiBase64(mimeType)}`,
+              `cacheControl ${asciiBase64("3600")}`,
+              `metadata ${asciiBase64(JSON.stringify(metadata))}`,
+            ].join(","),
+          },
+          method: "POST",
+          signal,
+        });
+        throwIfAborted(signal);
+        if (!response.ok) {
+          throw new PhotoUploadError(
+            "The private upload could not be started.",
+          );
+        }
+        attempt.uploadUrl = resolvedUploadUrl(
+          endpoint,
+          response.headers.get("location"),
+        );
+        await saveResume({
+          expiresAt: claim.upload_expires_at,
+          uploadUrl: attempt.uploadUrl,
+        });
+        throwIfAborted(signal);
+      }
+      const pause = dependencies.pause ?? defaultPause;
       await uploadChunks({
         file,
         fetcher,
@@ -540,62 +596,93 @@ export async function uploadPhotoMoment(
         signal,
         uploadUrl: attempt.uploadUrl,
       });
-    } catch (error) {
-      if (error instanceof PhotoUploadError && error.discardResume) {
-        await resumeStore.remove(resumeId);
-        attempt.uploadUrl = undefined;
-      }
-      throw error;
     }
-  }
 
-  throwIfAborted(signal);
-  onStage({ state: "finishing" });
-  const { error: acknowledgementError } = await supabase.rpc(
-    "acknowledge_photo_intake",
-    { intake_id: reservation.intake_id },
-  );
-  if (acknowledgementError) {
-    throw new PhotoUploadError(
-      "The upload finished, but could not yet be confirmed.",
-    );
-  }
-  await saveResume({
-    acknowledged: true,
-    expiresAt: claim.upload_expires_at,
-  });
-
-  onStage({ state: "processing" });
-  const pause = dependencies.pause ?? defaultPause;
-  const statusAttempts = dependencies.statusAttempts ?? 1;
-  for (let index = 0; index < statusAttempts; index += 1) {
-    const { data: statusRows, error: statusError } = await supabase.rpc(
-      "get_photo_moment_status",
+    throwIfAborted(signal);
+    acknowledgementStarted = true;
+    onStage({ state: "finishing" });
+    const { error: acknowledgementError } = await supabase.rpc(
+      "acknowledge_photo_intake",
       { intake_id: reservation.intake_id },
     );
-    const status = firstRow(statusRows);
-    if (statusError || !status) {
-      throw new PhotoUploadError("The photo’s private status was unavailable.");
-    }
-    if (status.status === "published") {
-      await resumeStore.remove(resumeId);
-      return {
-        state: "published",
-        intakeId: reservation.intake_id,
-        momentId: reservation.moment_id,
-      };
-    }
-    if (status.status === "needs_attention") {
+    if (acknowledgementError) {
       throw new PhotoUploadError(
-        "This photo needs attention before it can be added.",
+        "The upload finished, but could not yet be confirmed.",
+      );
+    }
+    await saveResume({
+      acknowledged: true,
+      expiresAt: claim.upload_expires_at,
+    });
+
+    onStage({ state: "processing" });
+    const pause = dependencies.pause ?? defaultPause;
+    const statusAttempts = dependencies.statusAttempts ?? 1;
+    for (let index = 0; index < statusAttempts; index += 1) {
+      const { data: statusRows, error: statusError } = await supabase.rpc(
+        "get_photo_moment_status",
+        { intake_id: reservation.intake_id },
+      );
+      const status = firstRow(statusRows);
+      if (statusError || !status) {
+        throw new PhotoUploadError(
+          "The photo’s private status was unavailable.",
+        );
+      }
+      if (status.status === "published") {
+        await resumeStore.remove(resumeId);
+        return {
+          state: "published",
+          intakeId: reservation.intake_id,
+          momentId: reservation.moment_id,
+        };
+      }
+      if (status.status === "needs_attention") {
+        throw new PhotoUploadError(
+          "This photo needs attention before it can be added.",
+          false,
+        );
+      }
+      if (status.status === "cancelled") {
+        await resumeStore.remove(resumeId);
+        renewPhotoUploadAttempt(attempt);
+        throw new PhotoUploadError(
+          "This unfinished photo was cancelled and will not be added.",
+          true,
+        );
+      }
+      if (index + 1 < statusAttempts) await pause(1500, signal);
+    }
+    return {
+      state: "processing",
+      intakeId: reservation.intake_id,
+      momentId: reservation.moment_id,
+    };
+  } catch (error) {
+    const abort = isAbortError(error);
+    const discardResume =
+      error instanceof PhotoUploadError && error.discardResume;
+    if ((abort && !acknowledgementStarted) || discardResume) {
+      const retired = await retireAttempt();
+      if (!retired) {
+        throw new PhotoUploadError(
+          "The transfer stopped on this device, but cancellation could not be confirmed. Review unfinished photos before trying again.",
+          false,
+        );
+      }
+      if (abort) {
+        throw new PhotoUploadError(
+          "Upload stopped. This photo won’t be added. Private removal is finishing.",
+          true,
+        );
+      }
+    }
+    if (abort && acknowledgementStarted) {
+      throw new PhotoUploadError(
+        "The photo was already finishing privately. Check its status before trying again.",
         false,
       );
     }
-    if (index + 1 < statusAttempts) await pause(1500, signal);
+    throw error;
   }
-  return {
-    state: "processing",
-    intakeId: reservation.intake_id,
-    momentId: reservation.moment_id,
-  };
 }

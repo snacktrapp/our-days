@@ -30,6 +30,7 @@ import {
 
 const accountId = "10000000-0000-4000-8000-000000000001";
 const circleId = "20000000-0000-4000-8000-000000000001";
+const intakeId = "d6000000-0000-4000-8000-000000000001";
 const record: PhotoUploadResumeRecord = {
   id: "resume-reload",
   accountId,
@@ -38,11 +39,22 @@ const record: PhotoUploadResumeRecord = {
   draftHash: "a".repeat(64),
   fileSha256: "b".repeat(64),
   fileSize: 1_024,
-  intakeId: "d6000000-0000-4000-8000-000000000001",
+  intakeId,
   mimeType: "image/jpeg",
   momentId: "d6000000-0000-4000-8000-000000000002",
   requestKey: "request-reload",
   uploadRequestKey: "upload-request-reload",
+};
+const serverRow = {
+  can_cancel: false,
+  cleanup_state: "not_requested",
+  intake_id: intakeId,
+  journal_person_id: "30000000-0000-4000-8000-000000000001",
+  journal_person_name: "A Organizer One",
+  moment_id: record.momentId!,
+  occurred_on: "2026-08-21",
+  requested_at: "2026-08-31T12:00:00Z",
+  status: "processing",
 };
 
 beforeEach(() => {
@@ -54,59 +66,35 @@ beforeEach(() => {
     data: { session: { user: { id: accountId } } },
     error: null,
   });
-  mocks.rpc.mockResolvedValue({
-    data: [{ moment_id: null, status: "processing" }],
-    error: null,
-  });
+  mocks.rpc.mockResolvedValue({ data: [serverRow], error: null });
 });
 
 describe("PhotoStatusShelf reload recovery", () => {
-  it("keeps an unacknowledged unexpired record neutral after remount", async () => {
-    await photoUploadResumeStore.save({
-      ...record,
-      acknowledged: false,
-      expiresAt: "2999-01-01T00:00:00.000Z",
-    });
-
-    const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
-    expect(
-      await screen.findByText("Private upload not finished"),
-    ).toBeVisible();
-    expect(screen.queryByText("Private upload in progress")).toBeNull();
-    firstPage.unmount();
-
-    render(<PhotoStatusShelf circleId={circleId} />);
-    expect(
-      await screen.findByText("Private upload not finished"),
-    ).toBeVisible();
-    expect(screen.queryByText("Private upload in progress")).toBeNull();
-    expect(mocks.rpc).not.toHaveBeenCalled();
-  });
-
-  it("survives a remount, then clears and refreshes after publication", async () => {
-    await photoUploadResumeStore.save(record);
-
+  it("survives remount from server state when this browser has no resume record", async () => {
     const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
     expect(await screen.findByText("Preparing your photo")).toBeVisible();
     firstPage.unmount();
 
-    const reloadedPage = render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
-    await expect(
-      photoUploadResumeStore.listForScope(accountId, circleId),
-    ).resolves.toEqual([record]);
-    reloadedPage.unmount();
-
-    mocks.rpc.mockResolvedValue({
-      data: [{ moment_id: record.momentId, status: "published" }],
-      error: null,
-    });
     render(<PhotoStatusShelf circleId={circleId} />);
-
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    expect(await screen.findByText("Preparing your photo")).toBeVisible();
     await expect(
       photoUploadResumeStore.listForScope(accountId, circleId),
     ).resolves.toEqual([]);
+    expect(mocks.rpc).toHaveBeenCalledWith("list_my_photo_intakes", {
+      circle_id: circleId,
+    });
+  });
+
+  it("removes an obsolete browser resume record after the server no longer counts it", async () => {
+    await photoUploadResumeStore.save(record);
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+
+    render(<PhotoStatusShelf circleId={circleId} />);
+    await waitFor(async () => {
+      await expect(
+        photoUploadResumeStore.listForScope(accountId, circleId),
+      ).resolves.toEqual([]);
+    });
     expect(
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();

@@ -482,6 +482,7 @@ export function MomentComposer({
           attempt,
           controller.signal,
           (stage) => {
+            if (controller.signal.aborted) return;
             if (stage.state === "finishing" || stage.state === "processing") {
               photoUploadAbortRef.current = null;
             }
@@ -545,7 +546,10 @@ export function MomentComposer({
   };
 
   const stopPhotoUpload = () => {
-    photoUploadAbortRef.current?.abort();
+    const controller = photoUploadAbortRef.current;
+    if (!controller || controller.signal.aborted) return;
+    setPhotoUploadStage({ state: "stopping" });
+    controller.abort();
   };
 
   const returnToEditing = () => {
@@ -561,6 +565,8 @@ export function MomentComposer({
       ? "Preparing your photo privately…"
       : photoUploadStage?.state === "uploading"
         ? `Uploading… ${Math.round(photoUploadStage.progress * 100)}%`
+        : photoUploadStage?.state === "stopping"
+          ? "Stopping transfer and confirming cancellation…"
         : photoUploadStage?.state === "finishing"
           ? "Finishing your private upload…"
           : photoUploadStage?.state === "processing"
@@ -772,7 +778,7 @@ export function MomentComposer({
                   type="button"
                   onClick={stopPhotoUpload}
                 >
-                  Stop upload
+                  Cancel upload
                 </button>
               ) : photoRetryBlocked ? (
                 <button
@@ -807,6 +813,8 @@ export function MomentComposer({
                         ? mode === "photo"
                           ? photoUploadStage?.state === "finishing"
                             ? "Finishing photo…"
+                            : photoUploadStage?.state === "stopping"
+                              ? "Cancelling photo…"
                             : "Adding photo…"
                           : "Saving…"
                         : mode === "photo" && saveError

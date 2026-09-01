@@ -2960,15 +2960,35 @@ textarea:focus-visible,
 .photo-status-item > div {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 .photo-status-item strong {
   font-family: Georgia, serif;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .photo-status-item span:not(.photo-status-mark) {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.photo-status-result,
+.photo-status-browser-note {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--cream) 94%, var(--accent));
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  outline-offset: 3px;
+}
+.photo-status-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px !important;
 }
 .photo-status-item button {
   min-width: 44px;
@@ -2992,7 +3012,7 @@ textarea:focus-visible,
   .photo-status-item {
     grid-template-columns: 28px minmax(0, 1fr);
   }
-  .photo-status-item button {
+  .photo-status-actions {
     grid-column: 2;
     justify-self: start;
   }

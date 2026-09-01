@@ -511,6 +511,14 @@ export type Database = {
           state: string;
         }[];
       };
+      cancel_photo_intake: {
+        Args: { intake_id: string };
+        Returns: {
+          cleanup_state: string;
+          intake_id: string;
+          state: string;
+        }[];
+      };
       claim_photo_display_derivative: {
         Args: { lease_key: string; original_id: string };
         Returns: {
@@ -811,6 +819,20 @@ export type Database = {
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
+        }[];
+      };
+      list_my_photo_intakes: {
+        Args: { circle_id: string };
+        Returns: {
+          can_cancel: boolean;
+          cleanup_state: string;
+          intake_id: string;
+          journal_person_id: string;
+          journal_person_name: string;
+          moment_id: string;
+          occurred_on: string;
+          requested_at: string;
+          status: string;
         }[];
       };
       list_pending_invitation_email_requests: {

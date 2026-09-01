@@ -250,7 +250,7 @@ describe("MomentComposer", () => {
     expect(photoUpload.upload).not.toHaveBeenCalled();
   });
 
-  it("offers an honest Stop upload control and preserves the photo draft", async () => {
+  it("offers an honest Cancel upload control and preserves the photo draft", async () => {
     photoUpload.upload.mockImplementation(
       async (
         _file: File,
@@ -288,7 +288,7 @@ describe("MomentComposer", () => {
     expect(
       screen.getByRole("progressbar", { name: "Private photo upload" }),
     ).toHaveValue(0.25);
-    await user.click(screen.getByRole("button", { name: "Stop upload" }));
+    await user.click(screen.getByRole("button", { name: "Cancel upload" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Upload stopped. Your photo and draft are still here.",
     );
@@ -343,7 +343,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save moment" }));
 
     expect(screen.getByText("Finishing your private upload…")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Stop upload" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel upload" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "Finishing photo…" }),
     ).toBeDisabled();

@@ -34,20 +34,31 @@ import { PhotoStatusShelf } from "./photo-status-shelf";
 
 const circleId = "20000000-0000-4000-8000-000000000001";
 const accountId = "10000000-0000-4000-8000-000000000001";
-const record = {
+const intakeId = "d6000000-0000-4000-8000-000000000001";
+const serverRow = {
+  can_cancel: true,
+  cleanup_state: "not_requested",
+  intake_id: intakeId,
+  journal_person_id: "30000000-0000-4000-8000-000000000001",
+  journal_person_name: "A Organizer One",
+  moment_id: "d6000000-0000-4000-8000-000000000002",
+  occurred_on: "2026-08-21",
+  requested_at: "2026-08-31T12:00:00Z",
+  status: "uploading",
+};
+const localRecord = {
   id: "resume-1",
   accountId,
-  acknowledged: true,
+  acknowledged: false,
   circleId,
   draftHash: "a".repeat(64),
   fileSha256: "b".repeat(64),
   fileSize: 1_024,
-  intakeId: "d6000000-0000-4000-8000-000000000001",
+  intakeId,
   mimeType: "image/jpeg",
-  momentId: "d6000000-0000-4000-8000-000000000002",
+  momentId: serverRow.moment_id,
   requestKey: "request-1",
   uploadRequestKey: "upload-request-1",
-  uploadUrl: "https://example.invalid/storage/v1/upload/resumable/id",
 };
 
 beforeEach(() => {
@@ -58,86 +69,286 @@ beforeEach(() => {
   });
   mocks.listForScope.mockResolvedValue([]);
   mocks.remove.mockResolvedValue(undefined);
-  mocks.rpc.mockResolvedValue({
-    data: [{ moment_id: null, status: "processing" }],
-    error: null,
+  mocks.rpc.mockImplementation(async (name: string) => {
+    if (name === "cancel_photo_intake") {
+      return {
+        data: [
+          {
+            cleanup_state: "queued",
+            intake_id: intakeId,
+            state: "invalidated",
+          },
+        ],
+        error: null,
+      };
+    }
+    return { data: [serverRow], error: null };
   });
 });
 
 describe("PhotoStatusShelf", () => {
-  it("shows a quiet durable processing state without family content", async () => {
-    mocks.listForScope.mockResolvedValue([
-      { ...record, expiresAt: "2000-01-01T00:00:00.000Z" },
-    ]);
-    render(<PhotoStatusShelf circleId={circleId} />);
-
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
-    expect(
-      screen.getByText("It will appear in the timeline when it is ready."),
-    ).toBeVisible();
-    expect(mocks.listForScope).toHaveBeenCalledWith(accountId, circleId);
-    expect(document.body.textContent).not.toContain(record.fileSha256);
-    expect(document.body.textContent).not.toContain(record.uploadUrl);
-  });
-
-  it("uses neutral language for an unacknowledged unexpired upload", async () => {
-    mocks.listForScope.mockResolvedValue([
-      {
-        ...record,
-        acknowledged: false,
-        expiresAt: "2999-01-01T00:00:00.000Z",
-      },
-    ]);
+  it("shows server-authoritative unfinished work even without local browser state", async () => {
     render(<PhotoStatusShelf circleId={circleId} />);
 
     expect(
       await screen.findByText("Private upload not finished"),
     ).toBeVisible();
-    expect(screen.queryByText("Upload didn’t finish")).toBeNull();
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(screen.getByText(/A Organizer One/)).toBeVisible();
+    expect(mocks.rpc).toHaveBeenCalledWith("list_my_photo_intakes", {
+      circle_id: circleId,
+    });
+    expect(mocks.listForScope).toHaveBeenCalledWith(accountId, circleId);
+    expect(
+      screen.getByRole("button", { name: /Cancel upload for A Organizer One/ }),
+    ).toBeVisible();
   });
 
-  it("reports an expired unacknowledged upload as interrupted", async () => {
-    mocks.listForScope.mockResolvedValue([
-      {
-        ...record,
-        acknowledged: false,
-        expiresAt: "2000-01-01T00:00:00.000Z",
-      },
-    ]);
-    render(<PhotoStatusShelf circleId={circleId} />);
-
-    expect(await screen.findByText("Upload didn’t finish")).toBeVisible();
-    expect(mocks.rpc).not.toHaveBeenCalled();
-  });
-
-  it("keeps needs-attention visible until the member dismisses it", async () => {
-    mocks.listForScope.mockResolvedValue([record]);
+  it("describes processing truthfully and removes the unsafe cancel action", async () => {
     mocks.rpc.mockResolvedValue({
-      data: [{ moment_id: null, status: "needs_attention" }],
+      data: [{ ...serverRow, can_cancel: false, status: "processing" }],
       error: null,
     });
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    expect(await screen.findByText("Preparing your photo")).toBeVisible();
+    expect(
+      screen.getByText(
+        "It is being prepared privately and can’t be cancelled safely now.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Cancel upload/ })).toBeNull();
+  });
+
+  it("cancels through the server before removing matching local resume state", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     const user = userEvent.setup();
     render(<PhotoStatusShelf circleId={circleId} />);
 
-    expect(await screen.findByText("This photo needs attention")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(mocks.remove).toHaveBeenCalledWith(record.id);
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("region", { name: "Private photo status" }),
-      ).toBeNull(),
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Cancel upload for A Organizer One/,
+      }),
     );
+    expect(mocks.rpc).not.toHaveBeenCalledWith("cancel_photo_intake", {
+      intake_id: intakeId,
+    });
+    await user.click(
+      screen.getByRole("button", {
+        name: /Confirm cancellation for A Organizer One/,
+      }),
+    );
+    expect(mocks.rpc).toHaveBeenCalledWith("cancel_photo_intake", {
+      intake_id: intakeId,
+    });
+    expect(mocks.remove).toHaveBeenCalledWith(localRecord.id);
+    expect(
+      await screen.findByText("Photo cancelled"),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        "It won’t be added. Its temporary private upload copy is waiting for secure removal.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("status", { name: "" }),
+    ).toHaveTextContent("Cancellation confirmed");
+    expect(screen.getByText(/Cancellation confirmed/)).toHaveFocus();
   });
 
-  it("offers an explicit retry when private status cannot be checked", async () => {
-    mocks.listForScope.mockResolvedValue([record]);
-    mocks.rpc
-      .mockResolvedValueOnce({ data: null, error: { message: "offline" } })
-      .mockResolvedValueOnce({
-        data: [{ moment_id: null, status: "processing" }],
-        error: null,
+  it("keeps confirmed server cancellation when local browser cleanup fails", async () => {
+    mocks.listForScope
+      .mockResolvedValueOnce([localRecord])
+      .mockRejectedValueOnce(new Error("IndexedDB unavailable"));
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Cancel upload for A Organizer One/,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /Confirm cancellation for A Organizer One/,
+      }),
+    );
+
+    expect(await screen.findByText("Photo cancelled")).toBeVisible();
+    expect(screen.getByText(/Cancellation confirmed/)).toBeVisible();
+    expect(
+      await screen.findByText(/couldn’t remove its saved upload shortcut/u),
+    ).toBeVisible();
+  });
+
+  it("renders authoritative server state when IndexedDB reconciliation fails", async () => {
+    mocks.listForScope.mockRejectedValue(new Error("IndexedDB unavailable"));
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    expect(
+      await screen.findByText("Private upload not finished"),
+    ).toBeVisible();
+    expect(
+      await screen.findByText(/Photo status is current/u),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("Couldn’t check your photo yet"),
+    ).toBeNull();
+  });
+
+  it("keeps the item and does not claim cancellation when confirmation fails", async () => {
+    mocks.rpc.mockImplementation(async (name: string) =>
+      name === "cancel_photo_intake"
+        ? { data: null, error: { message: "offline" } }
+        : { data: [serverRow], error: null },
+    );
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: /Cancel upload for A Organizer One/,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /Confirm cancellation for A Organizer One/,
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Cancellation couldn’t be confirmed",
+    );
+    expect(screen.getByText("Private upload not finished")).toBeVisible();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it("clears stale local resume state only after a successful authoritative check", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await waitFor(() =>
+      expect(mocks.remove).toHaveBeenCalledWith(localRecord.id),
+    );
+    expect(
+      screen.queryByRole("region", { name: "Private photo status" }),
+    ).toBeNull();
+  });
+
+  it("keeps published cleanup visible and refreshes the timeline", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...serverRow,
+          can_cancel: false,
+          status: "published_cleanup_pending",
+        },
+      ],
+      error: null,
+    });
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    expect(await screen.findByText("Photo added privately")).toBeVisible();
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes the timeline only once for the same published intake", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...serverRow,
+          can_cancel: false,
+          cleanup_state: "queued",
+          status: "published_cleanup_pending",
+        },
+      ],
+      error: null,
+    });
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    expect(await screen.findByText("Photo added privately")).toBeVisible();
+    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalledOnce());
+    fireEvent(window, new Event("online"));
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(2));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("reports cleanup operator review without promising ongoing removal", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...serverRow,
+          can_cancel: false,
+          cleanup_state: "operator_review",
+          status: "cancelled_cleanup_pending",
+        },
+      ],
+      error: null,
+    });
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    expect(
+      await screen.findByText("Private cleanup needs attention"),
+    ).toBeVisible();
+    expect(screen.getByText(/needs private maintenance/u)).toBeVisible();
+    expect(screen.queryByText(/is being removed/u)).toBeNull();
+  });
+
+  it("does not let a delayed status poll overwrite confirmed cancellation", async () => {
+    let resolveDelayed!: (value: unknown) => void;
+    let listCalls = 0;
+    mocks.rpc.mockImplementation((name: string) => {
+      if (name === "cancel_photo_intake") {
+        return Promise.resolve({
+          data: [
+            {
+              cleanup_state: "queued",
+              intake_id: intakeId,
+              state: "invalidated",
+            },
+          ],
+          error: null,
+        });
+      }
+      listCalls += 1;
+      if (listCalls === 1) {
+        return Promise.resolve({ data: [serverRow], error: null });
+      }
+      return new Promise((resolve) => {
+        resolveDelayed = resolve;
       });
+    });
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} />);
+    await screen.findByText("Private upload not finished");
+    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalledOnce());
+
+    fireEvent(window, new Event("online"));
+    await waitFor(() => expect(listCalls).toBe(2));
+    await user.click(
+      screen.getByRole("button", {
+        name: /Cancel upload for A Organizer One/,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: /Confirm cancellation for A Organizer One/,
+      }),
+    );
+    expect(await screen.findByText("Photo cancelled")).toBeVisible();
+
+    resolveDelayed({ data: [serverRow], error: null });
+    await Promise.resolve();
+    expect(screen.getByText("Photo cancelled")).toBeVisible();
+    expect(screen.queryByText("Private upload not finished")).toBeNull();
+  });
+
+  it("fails closed for an unknown or unavailable authoritative status", async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ ...serverRow, status: "surprise" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [serverRow], error: null });
     const user = userEvent.setup();
     render(<PhotoStatusShelf circleId={circleId} />);
 
@@ -145,56 +356,16 @@ describe("PhotoStatusShelf", () => {
       "Couldn’t check your photo yet",
     );
     await user.click(screen.getByRole("button", { name: "Check again" }));
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("fails closed when the server returns an unknown status", async () => {
-    mocks.listForScope.mockResolvedValue([record]);
-    mocks.rpc.mockResolvedValue({
-      data: [{ moment_id: null, status: "surprise" }],
-      error: null,
-    });
-    render(<PhotoStatusShelf circleId={circleId} />);
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "We couldn’t check its status yet.",
-    );
-    expect(screen.queryByText("Preparing your photo")).toBeNull();
-  });
-
-  it("removes a published record and refreshes the timeline", async () => {
-    mocks.listForScope.mockResolvedValue([record]);
-    mocks.rpc.mockResolvedValue({
-      data: [{ moment_id: record.momentId, status: "published" }],
-      error: null,
-    });
-    render(<PhotoStatusShelf circleId={circleId} />);
-
-    await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(record.id));
-    expect(mocks.refresh).toHaveBeenCalledOnce();
     expect(
-      screen.queryByRole("region", { name: "Private photo status" }),
-    ).toBeNull();
+      await screen.findByText("Private upload not finished"),
+    ).toBeVisible();
   });
 
-  it("clears visible status immediately during sign-out purge", async () => {
-    mocks.listForScope.mockResolvedValue([record]);
-    render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
-
-    fireEvent(window, new Event("our-days:clear-private-state"));
-    expect(
-      screen.queryByRole("region", { name: "Private photo status" }),
-    ).toBeNull();
-  });
-
-  it("does not overlap a manual check with one already in flight", async () => {
-    let resolveStatus!: (value: unknown) => void;
-    mocks.listForScope.mockResolvedValue([record]);
+  it("does not overlap refreshes and clears visible state during sign-out", async () => {
+    let resolveList!: (value: unknown) => void;
     mocks.rpc.mockReturnValue(
       new Promise((resolve) => {
-        resolveStatus = resolve;
+        resolveList = resolve;
       }),
     );
     render(<PhotoStatusShelf circleId={circleId} />);
@@ -202,63 +373,14 @@ describe("PhotoStatusShelf", () => {
 
     fireEvent(window, new Event("online"));
     expect(mocks.rpc).toHaveBeenCalledOnce();
-    resolveStatus({
-      data: [{ moment_id: null, status: "processing" }],
-      error: null,
-    });
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
-  });
+    resolveList({ data: [serverRow], error: null });
+    expect(
+      await screen.findByText("Private upload not finished"),
+    ).toBeVisible();
 
-  it("does not let a delayed check restore an item being dismissed", async () => {
-    let resolveStatus!: (value: unknown) => void;
-    mocks.listForScope.mockResolvedValue([
-      {
-        ...record,
-        acknowledged: false,
-        expiresAt: "2000-01-01T00:00:00.000Z",
-      },
-    ]);
-    const user = userEvent.setup();
-    render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Upload didn’t finish")).toBeVisible();
-
-    mocks.listForScope.mockResolvedValue([record]);
-    mocks.rpc.mockReturnValue(
-      new Promise((resolve) => {
-        resolveStatus = resolve;
-      }),
-    );
-    fireEvent(window, new Event("online"));
-    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledOnce());
-    await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    resolveStatus({
-      data: [{ moment_id: null, status: "processing" }],
-      error: null,
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByText("Preparing your photo")).toBeNull(),
-    );
-  });
-
-  it("keeps the notice and reports a failed dismiss", async () => {
-    mocks.listForScope.mockResolvedValue([
-      {
-        ...record,
-        acknowledged: false,
-        expiresAt: "2000-01-01T00:00:00.000Z",
-      },
-    ]);
-    mocks.remove.mockRejectedValue(new Error("IndexedDB failed"));
-    const user = userEvent.setup();
-    render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Upload didn’t finish")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(screen.getByText("Upload didn’t finish")).toBeVisible();
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Couldn’t dismiss this notice. Try Dismiss again.",
-    );
-    expect(screen.queryByText("Couldn’t check your photo yet")).toBeNull();
+    fireEvent(window, new Event("our-days:clear-private-state"));
+    expect(
+      screen.queryByRole("region", { name: "Private photo status" }),
+    ).toBeNull();
   });
 });

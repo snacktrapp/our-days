@@ -1164,6 +1164,12 @@ select ok(
 );
 
 reset role;
+update private.photo_intakes
+   set state = 'invalidated',
+       invalidated_at = statement_timestamp(),
+       invalidation_reason = 'reservation_expired'
+ where id = 'c3000000-0000-4000-8000-000000000001'
+   and state = 'reserved';
 insert into private.photo_intakes (
   id,
   circle_id,
