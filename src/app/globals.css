@@ -2756,7 +2756,7 @@ textarea:focus-visible,
 .composer-select-field > .composer-select-arrow {
   position: absolute;
   right: 14px;
-  bottom: 15px;
+  bottom: 17px;
   color: var(--ink);
   font-size: 16px;
   font-weight: 400;
@@ -2783,13 +2783,17 @@ textarea:focus-visible,
   cursor: pointer;
 }
 .composer-optional-toggle::after {
-  content: "+";
+  content: "";
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
   margin-left: 9px;
-  color: var(--teal);
-  font-size: 17px;
+  background:
+    linear-gradient(var(--teal), var(--teal)) center / 10px 2px no-repeat,
+    linear-gradient(var(--teal), var(--teal)) center / 2px 10px no-repeat;
 }
 .composer-optional-toggle[aria-expanded="true"]::after {
-  content: "−";
+  background: linear-gradient(var(--teal), var(--teal)) center / 10px 2px no-repeat;
 }
 .composer-optional-toggle span {
   margin-left: auto;
