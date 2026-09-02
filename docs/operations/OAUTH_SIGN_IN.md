@@ -4,11 +4,11 @@ OAuth is **identity only**. Our Days stays invitation-only: a Google or X accoun
 
 The existing email magic-link path remains as a backup (“Email me a sign-in link”).
 
-This repository does not invent or ship provider credentials. The UI, start routes, and callbacks are in place so the flow works as soon as Brian creates the apps and sets the variables.
+This repository does not invent or ship provider credentials. The UI, start routes, and callbacks are in place so the flow works as soon as Brian creates the apps and sets the variables in the dashboards named in `docs/operations/ACCOUNT_AND_ENV.md` — never in chat.
 
 ## Environment variables
 
-Set these on the web app (`.env.local` for the file-backed local journal, and the dedicated Vercel project for a hosted first-party callback):
+Set these on the web app (`.env.local` for the file-backed local journal, and the **existing** Vercel project `our-days` / `https://our-days-neon.vercel.app` for a hosted first-party callback). Do not create a new Vercel project.
 
 | Variable | Purpose |
 | --- | --- |
