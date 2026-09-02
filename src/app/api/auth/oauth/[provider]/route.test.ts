@@ -47,7 +47,9 @@ describe("OAuth start route", () => {
       { params: Promise.resolve({ provider: "google" }) },
     );
 
-    expect(response.headers.get("set-cookie")).toContain("our-days-oauth-state=");
+    expect(response.headers.get("set-cookie")).toContain(
+      "our-days-oauth-state=",
+    );
     expect(response.headers.get("location")).toContain(
       "https://accounts.google.com/o/oauth2/v2/auth",
     );

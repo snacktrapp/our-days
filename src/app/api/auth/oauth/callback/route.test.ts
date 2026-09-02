@@ -15,9 +15,9 @@ vi.mock("@/lib/auth/oauth-state", () => ({
   expireOAuthState: mocks.expireOAuthState,
 }));
 vi.mock("@/lib/auth/oauth-protocol", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/oauth-protocol")>(
-    "@/lib/auth/oauth-protocol",
-  );
+  const actual = await vi.importActual<
+    typeof import("@/lib/auth/oauth-protocol")
+  >("@/lib/auth/oauth-protocol");
   return {
     ...actual,
     exchangeAuthorizationCode: mocks.exchangeAuthorizationCode,
