@@ -117,6 +117,16 @@ select throws_ok(
   '22023', 'Moment could not be created',
   'the general moment RPC cannot forge a photo without verified media'
 );
+select throws_ok(
+  $$select public.create_family_moment(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001', 'video', '',
+    'A forged video without verified media.', '', '{}'::uuid[],
+    '2024-06-15', null, null
+  )$$,
+  '22023', 'Moment could not be created',
+  'the general moment RPC cannot forge a video without verified media'
+);
 reset role;
 select is(
   (select row(
