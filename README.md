@@ -53,7 +53,9 @@ an interaction. The complete build, browser, visual, database, recovery, and
 artifact gate runs once on the pull request while the Vercel Preview is being
 reviewed; it is not a routine pre-push wait.
 
-In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for a fallback local production-build check. CI and Vercel still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
+CI and Vercel both use `npm run build:webpack`, keeping the verified bundle and
+deployed bundle on the same production bundler. Local WebKit is opt-in with
+`PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
 
 `.github/workflows/ci.yml` runs once for pull requests into `main` (and by explicit
 manual dispatch). Its independent quality, browser, database, and visual jobs

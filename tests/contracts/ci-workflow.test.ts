@@ -69,7 +69,7 @@ describe("CI workflow privacy and supply-chain contract", () => {
     const steps = workflow.split(/^      - name:/gm).slice(1);
     const buildStepIndexes = steps
       .map((step, index) =>
-        /^\s*run: npm run build\s*$/m.test(step) ? index : -1,
+        /^\s*run: npm run build:webpack\s*$/m.test(step) ? index : -1,
       )
       .filter((index) => index !== -1);
     expect(buildStepIndexes).toHaveLength(3);

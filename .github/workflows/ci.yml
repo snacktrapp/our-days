@@ -39,8 +39,8 @@ jobs:
         run: npm audit --audit-level=moderate
       - name: Run formatting, lint, type, and component checks
         run: npm run check
-      - name: Build and scan with the default production bundler
-        run: npm run build
+      - name: Build and scan with the deployed production bundler
+        run: npm run build:webpack
 
   browser:
     name: Functional browsers
@@ -61,7 +61,7 @@ jobs:
       - name: Install pinned browser engines and system libraries
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Build and scan the production application
-        run: npm run build
+        run: npm run build:webpack
       - name: Run Chromium, Firefox, and WebKit functional checks
         run: npx playwright test --grep-invert @visual
 
@@ -130,7 +130,7 @@ jobs:
       - name: Install the pinned Chromium build
         run: npx playwright install chromium
       - name: Build and scan the production application
-        run: npm run build
+        run: npm run build:webpack
       - name: Compare approved Intel macOS visual baselines
         run: >-
           npx playwright test tests/e2e/visual.spec.ts
