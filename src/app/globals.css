@@ -148,6 +148,23 @@ button:focus-visible,
   padding-top: 20px;
   border-top: 1px solid var(--hairline);
 }
+.private-entry-oauth {
+  display: grid;
+  gap: 9px;
+}
+.private-entry-oauth form + form {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.private-entry-backup {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+.private-entry-backup > p:first-child {
+  margin-bottom: 12px;
+}
 .private-entry-content label {
   color: var(--ink);
   font-size: 13px;

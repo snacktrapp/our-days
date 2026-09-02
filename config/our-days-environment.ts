@@ -432,6 +432,46 @@ export function validateOurDaysEnvironment(
       );
     }
   }
+  const googleClientId = configuredValue(
+    environment,
+    "OUR_DAYS_GOOGLE_CLIENT_ID",
+    issues,
+  );
+  const googleClientSecret = configuredValue(
+    environment,
+    "OUR_DAYS_GOOGLE_CLIENT_SECRET",
+    issues,
+  );
+  if (googleClientId && !googleClientSecret) {
+    issues.push(
+      "OUR_DAYS_GOOGLE_CLIENT_SECRET is required when OUR_DAYS_GOOGLE_CLIENT_ID is set",
+    );
+  }
+  if (googleClientSecret && !googleClientId) {
+    issues.push(
+      "OUR_DAYS_GOOGLE_CLIENT_ID is required when OUR_DAYS_GOOGLE_CLIENT_SECRET is set",
+    );
+  }
+  const xClientId = configuredValue(
+    environment,
+    "OUR_DAYS_X_CLIENT_ID",
+    issues,
+  );
+  const xClientSecret = configuredValue(
+    environment,
+    "OUR_DAYS_X_CLIENT_SECRET",
+    issues,
+  );
+  if (xClientId && !xClientSecret) {
+    issues.push(
+      "OUR_DAYS_X_CLIENT_SECRET is required when OUR_DAYS_X_CLIENT_ID is set",
+    );
+  }
+  if (xClientSecret && !xClientId) {
+    issues.push(
+      "OUR_DAYS_X_CLIENT_ID is required when OUR_DAYS_X_CLIENT_SECRET is set",
+    );
+  }
   const designPreview = configuredValue(
     environment,
     "OUR_DAYS_ENABLE_DESIGN_PREVIEW",

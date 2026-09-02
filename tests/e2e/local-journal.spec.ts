@@ -30,6 +30,12 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(
     page.getByRole("heading", { name: "Open your family journal." }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sign in with Google" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sign in with X" }),
+  ).toBeVisible();
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
@@ -100,4 +106,18 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     display: "standalone",
     start_url: "/",
   });
+});
+
+test("unconfigured Google and X stay on the invitation gate", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByRole("button", { name: "Sign in with Google" }).click();
+  await expect(page).toHaveURL(/\/sign-in\?oauth=unavailable/u);
+  await expect(
+    page.getByText("That sign-in method is unavailable right now."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Email me a sign-in link" }),
+  ).toBeVisible();
 });

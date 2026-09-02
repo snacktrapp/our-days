@@ -195,6 +195,41 @@ describe("Our Days environment isolation", () => {
     );
   });
 
+  it("treats Google and X OAuth secrets as optional complete pairs", () => {
+    expect(
+      validateOurDaysEnvironment({
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+        OUR_DAYS_GOOGLE_CLIENT_ID: "google-id.apps.googleusercontent.com",
+        OUR_DAYS_GOOGLE_CLIENT_SECRET: "google-secret",
+        OUR_DAYS_X_CLIENT_ID: "x-id",
+        OUR_DAYS_X_CLIENT_SECRET: "x-secret",
+      }),
+    ).toMatchObject({
+      identity: "local",
+      resourceMode: "detached",
+    });
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+        OUR_DAYS_GOOGLE_CLIENT_ID: "google-id.apps.googleusercontent.com",
+      },
+      "OUR_DAYS_GOOGLE_CLIENT_SECRET is required when OUR_DAYS_GOOGLE_CLIENT_ID is set",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+        OUR_DAYS_X_CLIENT_SECRET: "x-secret",
+      },
+      "OUR_DAYS_X_CLIENT_ID is required when OUR_DAYS_X_CLIENT_SECRET is set",
+    );
+  });
+
   it("permits an explicit local detached build without resource credentials", () => {
     expect(
       validateOurDaysEnvironment({

@@ -14,7 +14,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>. The public gate is the same invitation-only sign-in screen as production. For the local journal, use `family@example.com` (a synthetic organizer, not a production family member). Data stays in `.data/our-days-local/`.
+Open <http://localhost:3000>. The public gate is the invitation-only sign-in screen: Sign in with Google and Sign in with X first, with “Email me a sign-in link” as backup. For the local journal without OAuth secrets, use `family@example.com` (a synthetic organizer, not a production family member). Data stays in `.data/our-days-local/`. Google and X work once the client IDs/secrets in `.env.example` are filled; an uninvited Google/X account still cannot enter. Setup steps are in `docs/operations/OAUTH_SIGN_IN.md`.
 
 Requires Node.js 22 or newer. `.node-version` pins the locally verified and CI runtime; the checked-in package lock is authoritative.
 
@@ -81,6 +81,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md` — private closure intent, atomic all-circle access detachment, and remaining external-deletion gates
 - `docs/quality/PHASE_8A_LOCAL_RECOVERY_FOUNDATION_REPORT.md` — same-container synthetic database restore evidence and remaining production recovery gates
 - `docs/operations/LOCAL_RECOVERY_DRILL.md` — destructive local-fixture drill procedure, safety boundary, and production recovery prerequisites
+- `docs/operations/OAUTH_SIGN_IN.md` — Google and X OAuth app setup, env vars, and invitation-bound identity
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 

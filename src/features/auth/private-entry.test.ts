@@ -36,5 +36,37 @@ describe("sign-in cleanup gate", () => {
       "Private browser data is still open in another Our Days tab.",
     );
     expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Google and X first, with the email magic link as backup", () => {
+    render(createElement(PrivateEntry, { connected: true }));
+
+    expect(
+      screen.getByRole("button", { name: "Sign in with Google" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Sign in with X" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Email me a sign-in link" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Use the Google or X account your family invited."),
+    ).toBeVisible();
+    expect(screen.getByText("Or email a private sign-in link")).toBeVisible();
+  });
+
+  it("keeps Google and X off the locked invitation-only gate", () => {
+    render(createElement(PrivateEntry));
+
+    expect(
+      screen.queryByRole("button", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Our Days is invitation only." }),
+    ).toBeVisible();
   });
 });

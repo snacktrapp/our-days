@@ -6,14 +6,25 @@ import { requestSignInLink, type SignInActionState } from "./sign-in-actions";
 
 const initialSignInActionState: SignInActionState = { status: "idle" };
 
+const oauthIssueCopy = {
+  unavailable: "That sign-in method is unavailable right now.",
+  invalid:
+    "That sign-in did not finish. Try Google, X, or email a private link.",
+  "no-access": "This account does not have access to a family circle.",
+  "no-email":
+    "That account did not share an email we can match to a family invitation.",
+} as const;
+
 export function PrivateEntry({
   connected = false,
   cleanupIncomplete = false,
   linkIssue,
+  oauthIssue,
 }: {
   connected?: boolean;
   cleanupIncomplete?: boolean;
   linkIssue?: "invalid" | "unavailable";
+  oauthIssue?: keyof typeof oauthIssueCopy;
 }) {
   const [email, setEmail] = useState("");
   const [emailEdited, setEmailEdited] = useState(false);
@@ -74,17 +85,32 @@ export function PrivateEntry({
           </div>
         ) : connected ? (
           <div className="private-entry-content">
+            <p>Use the Google or X account your family invited.</p>
+            {oauthIssue ? (
+              <p className="auth-error" role="alert">
+                {oauthIssueCopy[oauthIssue]}
+              </p>
+            ) : null}
+            <div className="private-entry-oauth">
+              <form action="/api/auth/oauth/google" method="get">
+                <button type="submit">Sign in with Google</button>
+              </form>
+              <form action="/api/auth/oauth/x" method="get">
+                <button type="submit">Sign in with X</button>
+              </form>
+            </div>
             {linkRequested ? (
-              <>
+              <div className="private-entry-backup">
                 <p>
                   We sent a private sign-in link to{" "}
                   <strong>{submittedEmail}</strong>.
                 </p>
                 <p>Open that email on this device and tap the link.</p>
                 <a href="/sign-in">Use a different email</a>
-              </>
+              </div>
             ) : (
-              <>
+              <div className="private-entry-backup">
+                <p>Or email a private sign-in link</p>
                 <p>Enter the email address your family invited.</p>
                 {linkIssue ? (
                   <p className="auth-error" role="alert">
@@ -133,7 +159,7 @@ export function PrivateEntry({
                     </p>
                   ) : null}
                 </form>
-              </>
+              </div>
             )}
           </div>
         ) : (
