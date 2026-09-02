@@ -16,13 +16,14 @@ describe("FullscreenMediaViewer", () => {
     const trigger = screen.getByRole("button", {
       name: "Open photo full screen: Family outside",
     });
+    const preview = screen.getByText("Photo preview");
     fireEvent.click(trigger);
 
     const dialog = screen.getByRole("dialog", {
       name: "Full-screen photo: Family outside",
     });
     expect(dialog).toBeVisible();
-    expect(screen.queryByText("Photo preview")).not.toBeInTheDocument();
+    expect(screen.getByText("Photo preview")).toBe(preview);
     const photo = screen.getByText("Full photo").parentElement;
     expect(photo).toHaveClass("media-viewer-photo");
     fireEvent.doubleClick(photo as HTMLElement);
@@ -34,6 +35,7 @@ describe("FullscreenMediaViewer", () => {
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Photo preview")).toBe(preview);
     expect(trigger).toHaveFocus();
   });
 
@@ -68,6 +70,7 @@ describe("FullscreenMediaViewer", () => {
       clientX: 124,
       clientY: 320,
     });
+    expect(photo.style.transform).toBe("translate3d(0, 120px, 0)");
     fireEvent.pointerUp(photo, {
       pointerId: 1,
       pointerType: "touch",

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { connection } from "next/server";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
-import { ServiceWorkerRegistration } from "./service-worker-registration";
+import { ServiceWorkerCleanup } from "./service-worker-registration";
 import "./globals.css";
 
 const metadataBase = resolveMetadataBase();
@@ -70,7 +70,7 @@ export default async function RootLayout({
           {themeBootstrap}
         </Script>
         {children}
-        <ServiceWorkerRegistration />
+        <ServiceWorkerCleanup />
       </body>
     </html>
   );

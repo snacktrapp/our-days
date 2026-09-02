@@ -21,8 +21,9 @@ export function FullscreenMediaViewer({
 }: FullscreenMediaViewerProps) {
   const [open, setOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
-  const [pullStep, setPullStep] = useState(0);
+  const [pulling, setPulling] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const photoRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const singleTapTimerRef = useRef<number | null>(null);
   const pullRef = useRef<{
@@ -85,9 +86,10 @@ export function FullscreenMediaViewer({
   }
 
   function close() {
+    if (photoRef.current) photoRef.current.style.transform = "";
     setOpen(false);
     setZoomed(false);
-    setPullStep(0);
+    setPulling(false);
     pullRef.current = null;
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   }
@@ -100,6 +102,7 @@ export function FullscreenMediaViewer({
       startY: event.clientY,
       distance: 0,
     };
+    setPulling(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -111,7 +114,7 @@ export function FullscreenMediaViewer({
     if (deltaY < Math.abs(deltaX)) return;
     event.preventDefault();
     pull.distance = Math.min(deltaY, 144);
-    setPullStep(Math.min(6, Math.ceil(pull.distance / 24)));
+    event.currentTarget.style.transform = `translate3d(0, ${pull.distance}px, 0)`;
   }
 
   function finishPull(event: React.PointerEvent<HTMLDivElement>) {
@@ -122,7 +125,12 @@ export function FullscreenMediaViewer({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (event.type === "pointerup" && pull.distance >= 96) close();
-    else setPullStep(0);
+    else {
+      setPulling(false);
+      window.requestAnimationFrame(() => {
+        if (photoRef.current) photoRef.current.style.transform = "";
+      });
+    }
   }
 
   return (
@@ -134,14 +142,7 @@ export function FullscreenMediaViewer({
         aria-label={`Open ${kind} full screen: ${label}`}
         onClick={(event) => openFromTap(event.detail)}
       >
-        {open && isPhoto ? (
-          <span
-            className="media-viewer-preview-placeholder"
-            aria-hidden="true"
-          />
-        ) : (
-          preview
-        )}
+        {preview}
         {isPhoto ? null : (
           <span className="video-viewer-play" aria-hidden="true">
             ▶
@@ -176,7 +177,8 @@ export function FullscreenMediaViewer({
           </button>
           {isPhoto ? (
             <div
-              className={`media-viewer-photo ${zoomed ? "is-zoomed" : ""} ${pullStep > 0 ? "is-pulling" : ""} pull-step-${pullStep}`}
+              ref={photoRef}
+              className={`media-viewer-photo ${zoomed ? "is-zoomed" : ""} ${pulling ? "is-pulling" : ""}`}
               onDoubleClick={() => setZoomed((current) => !current)}
               onPointerDown={startPull}
               onPointerMove={movePull}

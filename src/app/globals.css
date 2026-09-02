@@ -5744,13 +5744,6 @@ textarea:focus-visible,
   height: 100%;
 }
 
-.media-viewer-preview-placeholder {
-  display: block;
-  width: 100%;
-  height: 100%;
-  background: #020403;
-}
-
 .video-viewer-trigger {
   cursor: pointer;
 }
@@ -5823,30 +5816,6 @@ textarea:focus-visible,
 .media-viewer-photo.is-pulling {
   opacity: 0.86;
   transition: none;
-}
-
-.media-viewer-photo.pull-step-1 {
-  transform: translateY(24px);
-}
-
-.media-viewer-photo.pull-step-2 {
-  transform: translateY(48px);
-}
-
-.media-viewer-photo.pull-step-3 {
-  transform: translateY(72px);
-}
-
-.media-viewer-photo.pull-step-4 {
-  transform: translateY(96px);
-}
-
-.media-viewer-photo.pull-step-5 {
-  transform: translateY(120px);
-}
-
-.media-viewer-photo.pull-step-6 {
-  transform: translateY(144px);
 }
 
 .media-viewer-photo img,
