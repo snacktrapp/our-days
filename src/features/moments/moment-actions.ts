@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -14,6 +15,14 @@ import type {
   MomentConversationViewModel,
   MomentReactionId,
 } from "@/features/timeline/timeline-view-model";
+
+async function localStore() {
+  return import("@/lib/local-journal/store");
+}
+
+async function localViews() {
+  return import("@/lib/local-journal/views");
+}
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -143,6 +152,32 @@ export async function createFamilyMomentAction(input: {
   ) {
     return { ok: false, message: "Check the moment and try again." };
   }
+  if (localJournalIsEnabled()) {
+    try {
+      const { createLocalWrittenMoment } = await localStore();
+      const momentId = await createLocalWrittenMoment(access, {
+        journalPersonId: input.journalPersonId,
+        kind: input.kind,
+        title: input.title.trim(),
+        body: input.body.trim(),
+        placeName: input.placeName.trim(),
+        taggedPersonIds: input.taggedPersonIds,
+        occurredOn: input.occurredOn,
+        occurredAt: input.occurredAt,
+        occurredTimezone: input.occurredTimezone,
+      });
+      refreshMomentSurfaces(input.journalPersonId);
+      return { ok: true, message: "Moment saved.", momentId };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "That moment could not be saved. Your draft is still here.",
+      };
+    }
+  }
 
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("create_family_moment", {
@@ -205,6 +240,33 @@ export async function updateFamilyMomentAction(input: {
   ) {
     return { ok: false, message: "Check the moment and try again." };
   }
+  if (localJournalIsEnabled()) {
+    try {
+      const { updateLocalWrittenMoment } = await localStore();
+      const revision = await updateLocalWrittenMoment(access, {
+        momentId: input.momentId,
+        revision: input.revision,
+        title: input.title.trim(),
+        body: input.body.trim(),
+        placeName: input.placeName.trim(),
+        taggedPersonIds: input.taggedPersonIds,
+        occurredOn: input.occurredOn,
+        occurredAt: input.occurredAt,
+        occurredTimezone: input.occurredTimezone,
+      });
+      refreshMomentSurfaces();
+      return { ok: true, message: "Moment updated.", revision };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This moment changed elsewhere. Reopen it before editing again."
+            : "That moment could not be changed.",
+      };
+    }
+  }
 
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("update_family_moment", {
@@ -248,6 +310,31 @@ async function setMomentTrashed(
     input.revision < 1
   ) {
     return { ok: false, message: "That moment could not be changed." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { setLocalMomentTrashed } = await localStore();
+      const revision = await setLocalMomentTrashed(access, {
+        momentId: input.momentId,
+        revision: input.revision,
+        trashed,
+      });
+      refreshMomentSurfaces();
+      return {
+        ok: true,
+        message: trashed ? "Moment moved to trash." : "Moment restored.",
+        revision,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This moment changed elsewhere. Refresh before trying again."
+            : "That moment could not be changed.",
+      };
+    }
   }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("set_written_moment_trashed", {
@@ -386,6 +473,21 @@ export async function loadMomentConversationAction(input: {
       message: "Preview conversations are not saved.",
     };
   }
+  if (localJournalIsEnabled()) {
+    try {
+      return {
+        ok: true as const,
+        conversation: await (
+          await localViews()
+        ).loadLocalConversation(access, input.momentId),
+      };
+    } catch {
+      return {
+        ok: false as const,
+        message: "That conversation could not be opened.",
+      };
+    }
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("get_moment_conversation", {
     moment_id: input.momentId,
@@ -421,6 +523,21 @@ export async function createMomentNoteAction(input: {
   const access = await requireJournalAccess();
   if (access.mode !== "authenticated")
     return { ok: false, message: "Preview notes are not saved." };
+  if (localJournalIsEnabled()) {
+    try {
+      const { createLocalNote } = await localStore();
+      const momentId = await createLocalNote(access, {
+        momentId: input.momentId,
+        body: input.body.trim(),
+      });
+      return { ok: true, message: "Note saved.", momentId };
+    } catch {
+      return {
+        ok: false,
+        message: "That note could not be saved. Your words are still here.",
+      };
+    }
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("create_moment_note", {
     moment_id: input.momentId,
@@ -452,6 +569,26 @@ export async function updateMomentNoteAction(input: {
   const access = await requireJournalAccess();
   if (access.mode !== "authenticated")
     return { ok: false, message: "Preview notes are not changed." };
+  if (localJournalIsEnabled()) {
+    try {
+      const { updateLocalNote } = await localStore();
+      const revision = await updateLocalNote(access, {
+        noteId: input.noteId,
+        revision: input.revision,
+        body: input.body.trim(),
+      });
+      return { ok: true, message: "Note updated.", revision };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This note changed elsewhere. Reopen it before editing again."
+            : "That note could not be changed.",
+      };
+    }
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("update_moment_note", {
     note_id: input.noteId,
@@ -484,6 +621,25 @@ export async function trashMomentNoteAction(input: {
   const access = await requireJournalAccess();
   if (access.mode !== "authenticated")
     return { ok: false, message: "Preview notes are not changed." };
+  if (localJournalIsEnabled()) {
+    try {
+      const { trashLocalNote } = await localStore();
+      const revision = await trashLocalNote(access, {
+        noteId: input.noteId,
+        revision: input.revision,
+      });
+      return { ok: true, message: "Note moved to trash.", revision };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This note changed elsewhere. Reopen it before trying again."
+            : "That note could not be moved to trash.",
+      };
+    }
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("trash_moment_note", {
     note_id: input.noteId,
@@ -515,6 +671,23 @@ export async function setMomentReactionAction(input: {
   const access = await requireJournalAccess();
   if (access.mode !== "authenticated")
     return { ok: false, message: "Preview responses are not saved." };
+  if (localJournalIsEnabled()) {
+    try {
+      const { setLocalReaction } = await localStore();
+      const revision = await setLocalReaction(access, {
+        momentId: input.momentId,
+        reactionId: input.reactionId as
+          "held-close" | "made-me-smile" | "remember-this" | null,
+      });
+      return {
+        ok: true,
+        message: input.reactionId ? "Response saved." : "Response removed.",
+        revision,
+      };
+    } catch {
+      return { ok: false, message: "That response could not be saved." };
+    }
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("set_moment_reaction", {
     moment_id: input.momentId,
@@ -548,6 +721,29 @@ export async function createWrittenMomentAction(input: {
     !validOccurrence(input.occurredOn, input.occurredAt, input.occurredTimezone)
   ) {
     return { ok: false, message: "Check the moment and try again." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { createLocalWrittenMoment } = await localStore();
+      const momentId = await createLocalWrittenMoment(access, {
+        journalPersonId: input.journalPersonId,
+        kind: "thought",
+        title: "",
+        body: input.body.trim(),
+        placeName: "",
+        taggedPersonIds: [],
+        occurredOn: input.occurredOn,
+        occurredAt: input.occurredAt,
+        occurredTimezone: input.occurredTimezone,
+      });
+      refreshMomentSurfaces(input.journalPersonId);
+      return { ok: true, message: "Moment saved.", momentId };
+    } catch {
+      return {
+        ok: false,
+        message: "That moment could not be saved. Your draft is still here.",
+      };
+    }
   }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("create_written_moment", {
@@ -590,6 +786,33 @@ export async function updateWrittenMomentAction(input: {
     !validOccurrence(input.occurredOn, input.occurredAt, input.occurredTimezone)
   ) {
     return { ok: false, message: "Check the moment and try again." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { updateLocalWrittenMoment } = await localStore();
+      const revision = await updateLocalWrittenMoment(access, {
+        momentId: input.momentId,
+        revision: input.revision,
+        title: "",
+        body: input.body.trim(),
+        placeName: "",
+        taggedPersonIds: [],
+        occurredOn: input.occurredOn,
+        occurredAt: input.occurredAt,
+        occurredTimezone: input.occurredTimezone,
+      });
+      refreshMomentSurfaces();
+      return { ok: true, message: "Moment updated.", revision };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This moment changed elsewhere. Reopen it before editing again."
+            : "That moment could not be changed.",
+      };
+    }
   }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("update_written_moment", {

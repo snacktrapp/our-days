@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 
@@ -37,6 +38,18 @@ export async function requestSignInLink(
   }
   if (!(await hasExpectedOrigin())) {
     return { status: "denied", message: "Sign-in is unavailable right now." };
+  }
+
+  if (localJournalIsEnabled()) {
+    const { createLocalJournalSession } =
+      await import("@/lib/local-journal/auth");
+    const session = await createLocalJournalSession(email);
+    if (session) redirect("/family");
+    return {
+      status: "sent",
+      email,
+      message: "If this address has access, we sent a private sign-in link.",
+    };
   }
 
   try {

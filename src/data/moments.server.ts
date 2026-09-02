@@ -8,6 +8,7 @@ import type {
 } from "@/features/timeline/timeline-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import type { Database } from "@/lib/supabase/database.types";
+import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type { ConnectedJournalContext } from "./journal-context.server";
 import { mapDatabaseAccent } from "./journal-context.server";
@@ -270,6 +271,10 @@ export async function loadConnectedTimeline(
     snapshotAt?: string;
   }>,
 ): Promise<TimelineViewModel> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalTimeline } = await import("@/lib/local-journal/views");
+    return loadLocalTimeline(access, context, options);
+  }
   const supabase = await createOurDaysServerClient();
   const pageCount = requestedPageCount(options.pages);
   const rows: TimelineRow[] = [];

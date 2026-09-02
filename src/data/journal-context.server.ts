@@ -2,7 +2,10 @@ import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
-import { photoPostingIsEnabled } from "../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  photoPostingIsEnabled,
+} from "../../config/our-days-environment";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
@@ -115,6 +118,11 @@ export function buildActivityNotifications(
 export async function loadConnectedJournalContext(
   access: AuthenticatedAccess,
 ): Promise<ConnectedJournalContext> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalJournalContext } =
+      await import("@/lib/local-journal/views");
+    return loadLocalJournalContext(access);
+  }
   const supabase = await createOurDaysServerClient();
   const [
     circleResult,

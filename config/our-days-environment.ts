@@ -9,6 +9,7 @@ export type OurDaysResourceMode = "detached" | "supabase";
 export type OurDaysInvitationDeliveryMode = "disabled" | "enabled";
 export type OurDaysMediaDeliveryMode = "disabled" | "enabled";
 export type OurDaysPhotoPostingMode = "disabled" | "enabled";
+export type OurDaysLocalJournalMode = "disabled" | "enabled";
 
 export type OurDaysEnvironment = Readonly<{
   identity: OurDaysEnvironmentIdentity;
@@ -32,6 +33,10 @@ const mediaDeliveryModes = new Set<OurDaysMediaDeliveryMode>([
   "enabled",
 ]);
 const photoPostingModes = new Set<OurDaysPhotoPostingMode>([
+  "disabled",
+  "enabled",
+]);
+const localJournalModes = new Set<OurDaysLocalJournalMode>([
   "disabled",
   "enabled",
 ]);
@@ -404,6 +409,29 @@ export function validateOurDaysEnvironment(
       "OUR_DAYS_PHOTO_POSTING_MODE=enabled requires supabase resource mode",
     );
   }
+  const localJournalMode = configuredValue(
+    environment,
+    "OUR_DAYS_LOCAL_JOURNAL_MODE",
+    issues,
+  );
+  if (
+    localJournalMode &&
+    !localJournalModes.has(localJournalMode as OurDaysLocalJournalMode)
+  ) {
+    issues.push("OUR_DAYS_LOCAL_JOURNAL_MODE must be disabled or enabled");
+  }
+  if (localJournalMode === "enabled") {
+    if (resourceMode !== "detached") {
+      issues.push(
+        "OUR_DAYS_LOCAL_JOURNAL_MODE=enabled requires detached resource mode",
+      );
+    }
+    if (identity && identity !== "local") {
+      issues.push(
+        "OUR_DAYS_LOCAL_JOURNAL_MODE=enabled requires a local environment",
+      );
+    }
+  }
   const designPreview = configuredValue(
     environment,
     "OUR_DAYS_ENABLE_DESIGN_PREVIEW",
@@ -640,6 +668,17 @@ export function photoPostingIsEnabled(
   return (
     environment.OUR_DAYS_PHOTO_POSTING_MODE === "enabled" &&
     environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+  );
+}
+
+export function localJournalIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  return (
+    environment.OUR_DAYS_LOCAL_JOURNAL_MODE === "enabled" &&
+    environment.OUR_DAYS_RESOURCE_MODE === "detached" &&
+    environment.OUR_DAYS_ENVIRONMENT === "local" &&
+    !isDesignPreviewEnvironment(environment)
   );
 }
 

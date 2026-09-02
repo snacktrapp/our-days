@@ -1,4 +1,7 @@
-import { mediaDeliveryIsEnabled } from "../../../../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  mediaDeliveryIsEnabled,
+} from "../../../../../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -46,9 +49,50 @@ export async function GET(
   const range = request.headers.get("range");
   if (
     !uuidPattern.test(momentId) ||
-    !mediaDeliveryIsEnabled() ||
     (range !== null && !singleByteRangePattern.test(range))
   ) {
+    return unavailable();
+  }
+  if (localJournalIsEnabled()) {
+    const { readLocalJournalAccess } = await import("@/lib/local-journal/auth");
+    const { readLocalMediaFile } =
+      await import("@/lib/local-journal/media-coordinator");
+    const { findLocalVisibleMoment } =
+      await import("@/lib/local-journal/views");
+    const access = await readLocalJournalAccess();
+    if (!access) return unavailable();
+    const moment = await findLocalVisibleMoment(momentId);
+    if (!moment?.media || moment.kind !== "video") return unavailable();
+    const bytes = readLocalMediaFile(moment.media.originalRelativePath);
+    const headers = new Headers(privateHeaders);
+    headers.set("Accept-Ranges", "bytes");
+    headers.set("Content-Type", moment.media.mimeType);
+    headers.set("Vary", "Range");
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
+      if (!match) return unavailable();
+      const start = match[1] ? Number(match[1]) : 0;
+      const end = match[2] ? Number(match[2]) : bytes.byteLength - 1;
+      if (
+        !Number.isSafeInteger(start) ||
+        !Number.isSafeInteger(end) ||
+        start < 0 ||
+        end < start ||
+        end >= bytes.byteLength
+      ) {
+        return unavailable();
+      }
+      headers.set("Content-Length", String(end - start + 1));
+      headers.set("Content-Range", `bytes ${start}-${end}/${bytes.byteLength}`);
+      return new Response(bytes.subarray(start, end + 1), {
+        status: 206,
+        headers,
+      });
+    }
+    headers.set("Content-Length", String(bytes.byteLength));
+    return new Response(bytes, { status: 200, headers });
+  }
+  if (!mediaDeliveryIsEnabled()) {
     return unavailable();
   }
 

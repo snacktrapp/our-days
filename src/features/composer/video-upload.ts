@@ -5,7 +5,10 @@ import type {
   Upload as TusUpload,
 } from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
-import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
+import {
+  readOptionalSupabasePublicConfig,
+  readSupabasePublicConfig,
+} from "@/lib/supabase/public-config";
 
 export const maximumVideoBytes = 100 * 1024 * 1024;
 export const maximumVideoDurationMs = 60_500;
@@ -269,6 +272,54 @@ function firstRow<T>(value: readonly T[] | null) {
   return value?.[0];
 }
 
+async function uploadLocalVideoMoment(
+  file: File,
+  draft: VideoMomentDraft,
+  attempt: VideoUploadAttempt,
+  signal: AbortSignal,
+  onStage: (stage: VideoUploadStage) => void,
+) {
+  throwIfAborted(signal);
+  onStage({ state: "uploading", progress: 0.2 });
+  const body = new FormData();
+  body.set("file", file);
+  body.set("journalPersonId", draft.journalPersonId);
+  body.set("body", draft.body);
+  body.set("placeName", draft.placeName);
+  body.set("taggedPersonIds", JSON.stringify([...draft.taggedPersonIds]));
+  body.set("occurredOn", draft.occurredOn);
+  body.set("occurredAt", draft.occurredAt ?? "");
+  body.set("occurredTimezone", draft.occurredTimezone ?? "");
+  body.set("durationMs", String(draft.durationMs));
+  body.set("requestKey", attempt.requestKey);
+  const response = await fetch("/api/media/local/video", {
+    body,
+    credentials: "same-origin",
+    method: "POST",
+    signal,
+  });
+  throwIfAborted(signal);
+  onStage({ state: "finishing" });
+  let payload: { momentId?: string; message?: string } = {};
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    payload = {};
+  }
+  if (
+    !response.ok ||
+    typeof payload.momentId !== "string" ||
+    !uuidPattern.test(payload.momentId)
+  ) {
+    throw new VideoUploadError(
+      payload.message ?? "That video could not be uploaded.",
+      response.status >= 500,
+    );
+  }
+  attempt.momentId = payload.momentId;
+  return { momentId: payload.momentId };
+}
+
 export async function uploadVideoMoment(
   file: File,
   draft: VideoMomentDraft,
@@ -280,6 +331,9 @@ export async function uploadVideoMoment(
   throwIfAborted(signal);
   onStage({ state: "preparing" });
   const mimeType = inspectVideo(file, draft.durationMs);
+  if (!readOptionalSupabasePublicConfig()) {
+    return uploadLocalVideoMoment(file, draft, attempt, signal, onStage);
+  }
   const createClient = dependencies.createClient ?? createOurDaysBrowserClient;
   const supabase = createClient();
   const { url, publishableKey } = readSupabasePublicConfig();

@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build:webpack && playwright test",
     "test:e2e:update": "npm run build:webpack && playwright test --update-snapshots",
+    "test:e2e:local-journal": "npm run build:webpack && playwright test -c playwright.local-journal.config.ts",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop --project-id our-days",
     "db:reset": "supabase db reset --local",

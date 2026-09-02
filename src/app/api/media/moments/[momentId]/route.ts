@@ -1,4 +1,7 @@
-import { mediaDeliveryIsEnabled } from "../../../../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  mediaDeliveryIsEnabled,
+} from "../../../../../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -27,7 +30,32 @@ export async function GET(
   context: Readonly<{ params: Promise<{ momentId: string }> }>,
 ) {
   const { momentId } = await context.params;
-  if (!uuidPattern.test(momentId) || !mediaDeliveryIsEnabled()) {
+  if (!uuidPattern.test(momentId)) return unavailable();
+  if (localJournalIsEnabled()) {
+    const { readLocalJournalAccess } = await import("@/lib/local-journal/auth");
+    const { digestBuffer, readLocalMediaFile } =
+      await import("@/lib/local-journal/media-coordinator");
+    const { findLocalVisibleMoment } =
+      await import("@/lib/local-journal/views");
+    const access = await readLocalJournalAccess();
+    if (!access) return unavailable();
+    const moment = await findLocalVisibleMoment(momentId);
+    if (!moment?.media || moment.kind !== "photo") return unavailable();
+    const relativePath =
+      moment.media.displayRelativePath ?? moment.media.originalRelativePath;
+    const bytes = readLocalMediaFile(relativePath);
+    const expectedSha = moment.media.displaySha256 ?? moment.media.sha256;
+    if (digestBuffer(bytes) !== expectedSha) return unavailable();
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        ...privateHeaders,
+        "Content-Length": String(bytes.byteLength),
+        "Content-Type": moment.media.displayMimeType ?? moment.media.mimeType,
+      },
+    });
+  }
+  if (!mediaDeliveryIsEnabled()) {
     return unavailable();
   }
 

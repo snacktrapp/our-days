@@ -23,6 +23,9 @@
 # production
 /build
 
+# local journal (no-Docker happy path)
+/.data/
+
 # misc
 .DS_Store
 *.pem

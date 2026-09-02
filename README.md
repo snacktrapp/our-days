@@ -4,6 +4,8 @@ Our Days is a private, mobile-first family journal built around a chronological 
 
 The current route-based shell preserves the approved interactive design baseline. Backend/auth work intentionally follows the privacy and acceptance gates in `docs/`.
 
+The default local path now runs that same product without Docker Desktop or the multi-container Supabase Studio stack. Sign-in, written moments, and photo/video coordinators use a file-backed local journal; hosted Supabase remains the production backend.
+
 ## Local development
 
 ```bash
@@ -12,11 +14,11 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>; local development redirects the locked root to `/family` for design work.
+Open <http://localhost:3000>. The public gate is the same invitation-only sign-in screen as production. For the local journal, use `family@example.com` (a synthetic organizer, not a production family member). Data stays in `.data/our-days-local/`.
 
 Requires Node.js 22 or newer. `.node-version` pins the locally verified and CI runtime; the checked-in package lock is authoritative.
 
-The Phase 2 database foundation is local and unlinked. Running it requires a Docker-compatible container runtime, then:
+The Phase 2 database foundation is local and unlinked. It is optional and not on the happy path. Running it requires a Docker-compatible container runtime, then:
 
 ```bash
 npm run supabase:start

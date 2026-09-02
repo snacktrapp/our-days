@@ -3,6 +3,7 @@ import { isDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import {
   environmentForNextConfig,
   invitationDeliveryIsEnabled,
+  localJournalIsEnabled,
   mediaDeliveryIsEnabled,
   photoPostingIsEnabled,
   OurDaysEnvironmentError,
@@ -143,6 +144,54 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_PHOTO_POSTING_MODE: "enabled",
       },
       "OUR_DAYS_PHOTO_POSTING_MODE=enabled requires supabase resource mode",
+    );
+  });
+
+  it("keeps the local journal off unless detached local mode is explicit", () => {
+    expect(localJournalIsEnabled({})).toBe(false);
+    expect(
+      localJournalIsEnabled({
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+      }),
+    ).toBe(false);
+    expect(
+      localJournalIsEnabled({
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "false",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a hosted or Supabase local-journal activation", () => {
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "sometimes",
+      },
+      "OUR_DAYS_LOCAL_JOURNAL_MODE must be disabled or enabled",
+    );
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "production",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+        NEXT_PUBLIC_SITE_URL: "https://journal.example.com",
+        OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://journal.example.com",
+        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: productionRef,
+        OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF: productionRef,
+        NEXT_PUBLIC_SUPABASE_URL: `https://${productionRef}.supabase.co`,
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+          "sb_publishable_environment_contract_fixture",
+      },
+      "requires detached resource mode",
     );
   });
 

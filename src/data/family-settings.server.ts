@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type {
   ConnectedFamilySettingsPanelViewModel,
@@ -69,6 +70,10 @@ function invitationDateLabel(value: string, timeZone: string, prefix: string) {
 export async function loadConnectedFamilyAccess(
   access: AuthenticatedAccess,
 ): Promise<FamilyAccessData> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalFamilyAccess } = await import("@/lib/local-journal/views");
+    return loadLocalFamilyAccess(access);
+  }
   const supabase = await createOurDaysServerClient();
   const pendingPromise =
     access.role === "organizer"
