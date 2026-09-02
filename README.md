@@ -37,6 +37,7 @@ npm run db:lint
 ## Verification
 
 ```bash
+npm run verify:focused
 npm run lint
 npm run typecheck
 npm run build
@@ -45,9 +46,26 @@ npm run check
 npm run test:e2e
 ```
 
-In this restricted development environment, Turbopack can be prevented from binding its internal CSS worker port; use `npm run build:webpack` for a fallback local production-build check. CI and Vercel still run the default build. Local WebKit is opt-in with `PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
+`npm run verify:focused` is the normal local iteration check. It runs formatting,
+lint, and type safety across the repository, then only the unit tests related to
+changes from `origin/main`. Run task-specific Playwright files while working on
+an interaction. The complete build, browser, visual, database, recovery, and
+artifact gate runs once on the pull request while the Vercel Preview is being
+reviewed; it is not a routine pre-push wait.
 
-`.github/workflows/ci.yml` is committed locally but cannot run until the separate GitHub repository is explicitly approved and created. It uses a read-only token, immutable GitHub-owned action SHAs, no secrets or dependency cache, Linux functional checks across Chromium/Firefox/WebKit, and x64 macOS 15 visual comparisons. Each repository production-build script atomically follows compilation with a redacting credential/private-fixture scan. The first hosted visual run is a calibration gate because screenshot rendering can differ by host OS; any new baseline must be reviewed rather than automatically accepted. Browser traces, screenshots, and HTML reports are intentionally not uploaded because future authenticated runs may contain private family data.
+CI and Vercel both use `npm run build:webpack`, keeping the verified bundle and
+deployed bundle on the same production bundler. Local WebKit is opt-in with
+`PLAYWRIGHT_INCLUDE_WEBKIT=1`; the prepared CI workflow always includes it.
+
+`.github/workflows/ci.yml` runs once for pull requests into `main` (and by explicit
+manual dispatch). Its independent quality, browser, database, and visual jobs
+start in parallel, use the lockfile-keyed npm download cache, and retain a
+read-only token plus immutable GitHub-owned action SHAs. Linux functional checks
+cover Chromium/Firefox/WebKit and x64 macOS 15 compares the visual baselines.
+Each production-build script atomically follows compilation with a redacting
+credential/private-fixture scan. Browser traces, screenshots, HTML reports, and
+built application artifacts are intentionally not uploaded because future
+authenticated runs may contain private family data.
 
 `next.config.ts` validates the resource identity before Next starts or builds. Unmanaged local commands default to a resource-free local mode; CI declares that mode explicitly. Any future Preview or Production deployment must declare its environment, HTTPS site origin, trusted Production origin, expected and Production Supabase project references, known forbidden Proof references, matching Supabase base URL, and current publishable key. Preview cannot use the Production origin or project. The web process rejects legacy/alternate Supabase connection variables, management tokens, secret/service-role credentials, JWT secrets, and direct database credentials by both name and sensitive value pattern. See `docs/quality/ENVIRONMENT_ISOLATION_REPORT.md`.
 

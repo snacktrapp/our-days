@@ -15,10 +15,16 @@ const runbook = readFileSync(
   resolve(process.cwd(), "docs/operations/RELEASE_WORKFLOW.md"),
   "utf8",
 );
+const pullRequestTemplate = readFileSync(
+  resolve(process.cwd(), ".github/pull_request_template.md"),
+  "utf8",
+);
 
-describe("staging and release workflow", () => {
-  it("runs the existing privacy-preserving CI gates on main and staging", () => {
-    expect(ci).toContain("branches: [main, staging]");
+describe("preview and release workflow", () => {
+  it("runs the privacy-preserving CI gate once on pull requests to main", () => {
+    expect(ci).toContain("pull_request:\n    branches: [main]");
+    expect(ci).toContain("workflow_dispatch:");
+    expect(ci).not.toContain("  push:");
     expect(ci).toContain("permissions:\n  contents: read");
     expect(ci).not.toContain("pull_request_target:");
   });
@@ -33,11 +39,16 @@ describe("staging and release workflow", () => {
     );
   });
 
-  it("keeps staging data isolated and requires an exact approved release", () => {
-    expect(runbook).toContain("Staging must never use the Production Supabase");
-    expect(runbook).toContain("synthetic staging family");
-    expect(runbook).toContain("exact Git commit");
-    expect(runbook).toContain("staged Production Vercel deployment");
-    expect(runbook).toContain("Supabase branches consume paid compute");
+  it("keeps Preview detached and requires an exact approved release", () => {
+    expect(runbook).toContain("Preview must never use the Production Supabase");
+    expect(runbook).toContain("detached; design preview only");
+    expect(runbook).toContain("exact commit approved");
+    expect(runbook).toMatch(/promoting its build\s+artifact/u);
+    expect(runbook).toContain("requires separate cost approval");
+    expect(packageJson.scripts["verify:focused"]).toContain(
+      "vitest run --changed origin/main",
+    );
+    expect(pullRequestTemplate).toContain("Preview deployment ID");
+    expect(pullRequestTemplate).toContain("Brian approved this exact commit");
   });
 });
