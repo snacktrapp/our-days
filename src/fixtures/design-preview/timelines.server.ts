@@ -14,6 +14,7 @@ import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
+import { buildTimelineEntries } from "@/data/moments.server";
 import {
   anniversaryKey,
   compareMemoryDatesDescending,
@@ -362,6 +363,10 @@ const familyEntries = [
 ] as const satisfies readonly TimelineEntryViewModel[];
 
 export function getFamilyTimelineFixture(): TimelineViewModel {
+  const moments = (familyEntries as readonly TimelineEntryViewModel[])
+    .filter(isMomentEntry)
+    .map((entry) => entry.moment);
+
   return {
     chrome: chrome("teal", "All our days"),
     interaction: timelineInteraction,
@@ -369,7 +374,16 @@ export function getFamilyTimelineFixture(): TimelineViewModel {
       { label: "Family", href: "/family", current: true },
       { label: "Molly", href: "/people/molly", current: false },
     ],
-    entries: familyEntries,
+    entries: buildTimelineEntries(
+      moments,
+      designPreviewToday,
+      false,
+      undefined,
+      {
+        markerLabel: "Earlier years",
+        message: "Keep scrolling to travel back through your family’s life.",
+      },
+    ),
   };
 }
 
@@ -440,53 +454,21 @@ function personalTimelineEntries(
     ];
   }
 
-  const entries: TimelineEntryViewModel[] = [];
-  const latestYear = moments[0].moment.occurredOn.slice(0, 4);
-  entries.push({
-    id: `${person.id}-latest`,
-    entryType: "date-marker",
-    label: latestYear === "2026" ? "Summer 2026" : latestYear,
-  });
-
-  moments.forEach((entry, index) => {
-    const previous = moments[index - 1];
-    if (previous) {
-      entries.push({
-        id: `${person.id}-gap-${previous.moment.id}-${entry.moment.id}`,
-        entryType: "elapsed-gap",
-        label: elapsedCalendarLabel(
-          previous.moment.occurredOn,
-          entry.moment.occurredOn,
-        ),
-      });
-      const year = entry.moment.occurredOn.slice(0, 4);
-      if (year !== previous.moment.occurredOn.slice(0, 4)) {
-        entries.push({
-          id: `${person.id}-year-${year}`,
-          entryType: "date-marker",
-          label: year,
-          divider: true,
-        });
-      }
-    }
-    entries.push(entry);
-  });
-  entries.push(
+  return buildTimelineEntries(
+    moments.map((entry) => entry.moment),
+    designPreviewToday,
+    false,
+    person.name,
     moments.length === 1
       ? {
-          id: `${person.id}-story-so-far`,
-          entryType: "end-message",
           markerLabel: "The story so far",
           message: `This is the earliest moment kept for ${person.name}.`,
         }
       : {
-          id: `${person.id}-earlier-years`,
-          entryType: "end-message",
           markerLabel: "Earlier years",
           message: "Keep scrolling to travel back through this life.",
         },
   );
-  return entries;
 }
 
 function personalSummary(entries: readonly TimelineEntryViewModel[]): string {
