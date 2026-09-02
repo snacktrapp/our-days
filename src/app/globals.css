@@ -867,11 +867,6 @@ textarea:focus-visible,
   display: grid;
   gap: 7px;
 }
-.inline-note-form label {
-  color: #60574e;
-  font-size: 10px;
-  font-weight: 700;
-}
 .inline-note-form textarea {
   width: 100%;
   min-height: 76px;

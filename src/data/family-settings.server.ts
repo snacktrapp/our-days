@@ -195,7 +195,7 @@ export function buildConnectedFamilySettingsModel(
   return {
     chrome: {
       ...context.chrome,
-      title: "Family settings",
+      title: "Account",
       settingsHref: "/settings/family",
     },
     panel: {

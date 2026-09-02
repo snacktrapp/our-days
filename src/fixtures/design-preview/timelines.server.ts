@@ -585,7 +585,7 @@ export function getPeopleFixture(): PeopleViewModel {
 
 export function getFamilySettingsFixture(): FamilySettingsViewModel {
   return {
-    chrome: chrome("teal", "Family settings"),
+    chrome: chrome("teal", "Account"),
     panel: {
       mode: "preview",
       intro:

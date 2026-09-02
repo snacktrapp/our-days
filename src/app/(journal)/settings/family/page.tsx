@@ -16,6 +16,7 @@ import {
 } from "@/features/family-settings/family-settings-actions";
 import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-environment";
 import { AccountTools } from "@/features/family-settings/account-tools";
+import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 
 export default async function FamilySettingsPage() {
   const access = await requireJournalAccess();
@@ -40,7 +41,11 @@ export default async function FamilySettingsPage() {
   );
 
   return (
-    <JournalChrome model={model.chrome} section="settings">
+    <JournalChrome
+      model={model.chrome}
+      section="settings"
+      createMomentAction={createFamilyMomentAction}
+    >
       <FamilySettingsPanel
         model={model.panel}
         actions={{

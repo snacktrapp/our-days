@@ -18,15 +18,61 @@ type JournalChromeProps = Readonly<{
   createMomentAction?: SaveFamilyMomentAction;
 }>;
 
+function PrimaryJournalHeader({
+  model,
+  createMomentAction,
+}: Readonly<{
+  model: JournalChromeViewModel;
+  createMomentAction?: SaveFamilyMomentAction;
+}>) {
+  return (
+    <header className="topbar">
+      <TimelineHeaderComposer
+        composer={model.composer}
+        createMomentAction={createMomentAction}
+      />
+      <div className="title-lockup">
+        <span className="eyebrow">{model.eyebrow}</span>
+        <h1 id="journal-focus-target" tabIndex={-1}>
+          {model.title}
+        </h1>
+      </div>
+      <div className="topbar-actions">
+        <NotificationCenter items={model.notifications} />
+        <ThemeToggle />
+      </div>
+    </header>
+  );
+}
+
+function TrashHeader({ model }: Readonly<{ model: JournalChromeViewModel }>) {
+  return (
+    <header className="topbar">
+      <span className="topbar-leading-spacer" aria-hidden="true" />
+      <div className="title-lockup">
+        <span className="eyebrow">{model.eyebrow}</span>
+        <h1 id="journal-focus-target" tabIndex={-1}>
+          {model.title}
+        </h1>
+      </div>
+      <Link
+        className="quiet-button settings-close-link"
+        aria-label="Back to Family"
+        href="/family"
+        prefetch={false}
+      >
+        ←
+      </Link>
+    </header>
+  );
+}
+
 export function JournalChrome({
   model,
   section,
   children,
   createMomentAction,
 }: JournalChromeProps) {
-  const hasJournalActions = ["timeline", "people", "memories"].includes(
-    section,
-  );
   return (
     <main className={`app-shell theme-${model.accent}`}>
       <div className="ambient ambient-one" />
@@ -38,48 +84,14 @@ export function JournalChrome({
           aria-live="assertive"
           aria-atomic="true"
         />
-        <header className="topbar">
-          {hasJournalActions ? (
-            <TimelineHeaderComposer
-              composer={model.composer}
-              createMomentAction={createMomentAction}
-            />
-          ) : (
-            <span className="topbar-leading-spacer" aria-hidden="true" />
-          )}
-          <div className="title-lockup">
-            <span className="eyebrow">{model.eyebrow}</span>
-            <h1 id="journal-focus-target" tabIndex={-1}>
-              {model.title}
-            </h1>
-          </div>
-          {hasJournalActions ? (
-            <div className="topbar-actions">
-              <NotificationCenter items={model.notifications} />
-              <ThemeToggle />
-            </div>
-          ) : section === "settings" ? (
-            <Link
-              className="quiet-button settings-close-link"
-              aria-label="Back to People"
-              href="/people"
-              prefetch={false}
-            >
-              ←
-            </Link>
-          ) : section === "trash" ? (
-            <Link
-              className="quiet-button settings-close-link"
-              aria-label="Back to Family"
-              href="/family"
-              prefetch={false}
-            >
-              ←
-            </Link>
-          ) : (
-            <ThemeToggle />
-          )}
-        </header>
+        {section === "trash" ? (
+          <TrashHeader model={model} />
+        ) : (
+          <PrimaryJournalHeader
+            model={model}
+            createMomentAction={createMomentAction}
+          />
+        )}
         {section === "timeline" &&
         model.composer.photoPostingEnabled &&
         model.composer.circleId ? (

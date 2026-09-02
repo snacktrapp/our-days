@@ -525,10 +525,10 @@ export function MomentConversationControl({
             void saveNote();
           }}
         >
-          <label htmlFor={`${panelId}-note-field`}>Add a family note</label>
           <textarea
             ref={noteRef}
             id={`${panelId}-note-field`}
+            aria-label="Add a family note"
             value={noteDraft}
             maxLength={1000}
             placeholder="A memory, detail, or reply…"

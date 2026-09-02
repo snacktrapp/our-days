@@ -231,7 +231,7 @@ describe("connected family settings data", () => {
     });
 
     expect(model.chrome).toMatchObject({
-      title: "Family settings",
+      title: "Account",
       settingsHref: "/settings/family",
     });
     expect(model.panel).toMatchObject({
