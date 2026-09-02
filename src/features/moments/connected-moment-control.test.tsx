@@ -38,6 +38,19 @@ const actions = {
 };
 
 describe("ConnectedMomentControl", () => {
+  it("does not show an options control on entries the viewer cannot change", () => {
+    render(
+      <ConnectedMomentControl
+        moment={{ ...moment, canChange: false, revision: undefined }}
+        actions={actions}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /^Moment options/u }),
+    ).toBeNull();
+  });
+
   it("names repeated actions with their person and date", () => {
     render(
       <>
@@ -61,21 +74,24 @@ describe("ConnectedMomentControl", () => {
       </>,
     );
 
-    expect(
-      screen.getByRole("button", {
-        name: "Edit — Brian’s “Worth keeping.” moment from Aug 28, 2026 — entry 1 of 2",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: "Edit — Molly’s “Worth keeping.” moment from Aug 29, 2026 — entry 2 of 2",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: "Move to trash — Molly’s “Worth keeping.” moment from Aug 29, 2026 — entry 2 of 2",
-      }),
-    ).toBeInTheDocument();
+    const optionButtons = screen.getAllByRole("button", {
+      name: /^Moment options/u,
+    });
+    expect(optionButtons[0]).toHaveAccessibleName(
+      "Moment options — Brian’s “Worth keeping.” moment from Aug 28, 2026 — entry 1 of 2",
+    );
+    expect(optionButtons[1]).toHaveAccessibleName(
+      "Moment options — Molly’s “Worth keeping.” moment from Aug 29, 2026 — entry 2 of 2",
+    );
+    fireEvent.click(optionButtons[1]);
+    const trashButton = screen.getByRole("button", {
+      name: "Move to trash — Molly’s “Worth keeping.” moment from Aug 29, 2026 — entry 2 of 2",
+    });
+    expect(trashButton).toBeInTheDocument();
+    const menu = screen.getByRole("group", { name: "Moment options" });
+    expect(menu.tagName).toBe("DIALOG");
+    expect(menu).toHaveAttribute("open");
+    expect(menu).not.toHaveAttribute("style");
   });
 
   it("constrains backdating to today and confirms before discarding a draft", async () => {
@@ -83,6 +99,7 @@ describe("ConnectedMomentControl", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
     render(<ConnectedMomentControl moment={moment} actions={actions} />);
 
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
     const date = screen.getByLabelText("Moment date");
     expect(date).toHaveAttribute("max", "2026-08-30");
@@ -103,6 +120,7 @@ describe("ConnectedMomentControl", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
     expect(screen.getByLabelText("Your thought")).toHaveValue("Worth keeping.");
     confirm.mockRestore();
@@ -120,6 +138,7 @@ describe("ConnectedMomentControl", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: /^Moment options/u }));
     fireEvent.click(screen.getByRole("button", { name: /^Move to trash/u }));
 
     expect(
@@ -140,8 +159,8 @@ describe("ConnectedMomentControl", () => {
         <ConnectedMomentControl moment={moment} actions={actions} />
       </>,
     );
-    const edit = screen.getByRole("button", { name: /^Edit/u });
-    await user.click(edit);
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
+    await user.click(screen.getByRole("button", { name: /^Edit/u }));
     await user.type(screen.getByLabelText("Your thought"), " More");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -168,6 +187,7 @@ describe("ConnectedMomentControl", () => {
         }}
       />,
     );
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
     await user.type(screen.getByLabelText("Your thought"), " More");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -193,6 +213,7 @@ describe("ConnectedMomentControl", () => {
         }}
       />,
     );
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Move to trash/u }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

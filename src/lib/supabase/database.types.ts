@@ -243,6 +243,56 @@ export type Database = {
           },
         ];
       };
+      moment_videos: {
+        Row: {
+          bucket_id: string;
+          circle_id: string;
+          created_at: string;
+          duration_ms: number;
+          mime_type: string;
+          moment_id: string;
+          object_path: string;
+          size_bytes: number;
+          storage_object_id: string;
+          storage_object_version: string;
+          upload_request_id: string;
+        };
+        Insert: {
+          bucket_id?: string;
+          circle_id: string;
+          created_at?: string;
+          duration_ms: number;
+          mime_type: string;
+          moment_id: string;
+          object_path: string;
+          size_bytes: number;
+          storage_object_id: string;
+          storage_object_version: string;
+          upload_request_id: string;
+        };
+        Update: {
+          bucket_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          duration_ms?: number;
+          mime_type?: string;
+          moment_id?: string;
+          object_path?: string;
+          size_bytes?: number;
+          storage_object_id?: string;
+          storage_object_version?: string;
+          upload_request_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_videos_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: true;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_reactions: {
         Row: {
           author_membership_id: string;
@@ -700,6 +750,10 @@ export type Database = {
         };
         Returns: string;
       };
+      finalize_video_moment: {
+        Args: { request_id: string };
+        Returns: string;
+      };
       get_moment_conversation: {
         Args: { moment_id: string };
         Returns: {
@@ -724,6 +778,16 @@ export type Database = {
         Returns: {
           moment_id: string;
           status: string;
+        }[];
+      };
+      get_video_moment_delivery: {
+        Args: { moment_id: string };
+        Returns: {
+          bucket_id: string;
+          duration_ms: number;
+          mime_type: string;
+          object_path: string;
+          size_bytes: number;
         }[];
       };
       list_manageable_trashed_written_moments: {
@@ -1049,6 +1113,30 @@ export type Database = {
           moment_id: string;
           object_path: string;
           state: string;
+        }[];
+      };
+      reserve_video_moment: {
+        Args: {
+          body: string;
+          circle_id: string;
+          duration_ms: number;
+          expected_mime_type: string;
+          expected_size_bytes: number;
+          journal_person_id: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          request_key?: string;
+          tagged_person_ids: string[];
+        };
+        Returns: {
+          bucket_id: string;
+          moment_id: string;
+          object_path: string;
+          request_id: string;
+          state: string;
+          upload_expires_at: string;
         }[];
       };
       revoke_invitation: {

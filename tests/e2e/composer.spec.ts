@@ -136,6 +136,57 @@ async function openComposer(page: Page) {
   return page.getByRole("dialog");
 }
 
+test("date, time, and journal stay separated inside every phone-width drawer", async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/family");
+    const dialog = await openComposer(page);
+    await dialog.getByRole("button", { name: /^Photo/u }).click();
+
+    const geometry = await dialog.evaluate((element) => {
+      const sheet = element.querySelector<HTMLElement>(".composer-sheet")!;
+      const fields = element.querySelector<HTMLElement>(
+        ".composer-core-fields",
+      )!;
+      const date =
+        element.querySelector<HTMLInputElement>('input[type="date"]')!;
+      const time =
+        element.querySelector<HTMLInputElement>('input[type="time"]')!;
+      const journal = element.querySelector<HTMLSelectElement>("select")!;
+      const sheetRect = sheet.getBoundingClientRect();
+      const rectangles = [date, time, journal].map((control) =>
+        control.getBoundingClientRect(),
+      );
+      return {
+        contained: rectangles.every(
+          (rect) =>
+            rect.left >= sheetRect.left && rect.right <= sheetRect.right,
+        ),
+        separated:
+          rectangles[0].bottom <= rectangles[1].top &&
+          rectangles[1].bottom <= rectangles[2].top,
+        noHorizontalOverflow:
+          document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth &&
+          sheet.scrollWidth <= sheet.clientWidth &&
+          fields.scrollWidth <= fields.clientWidth,
+      };
+    });
+
+    expect(geometry).toEqual({
+      contained: true,
+      separated: true,
+      noHorizontalOverflow: true,
+    });
+  }
+});
+
 test("composer is modal, contains focus, protects every draft, and restores focus", async ({
   page,
 }) => {
@@ -147,10 +198,32 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
     true,
   );
-  await expect(page.getByRole("button", { name: /^Photo/u })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "New moment" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "New moment" })).toHaveCSS(
+    "outline-style",
+    "none",
+  );
   await expect(
     page.getByText(/Local design preview · Nothing is saved/u),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(dialog).toHaveClass(/new-moment-composer-dialog/u);
+  const drawerPlacement = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(".topbar");
+    const sheet = document.querySelector<HTMLElement>(
+      ".new-moment-composer-dialog .composer-sheet",
+    );
+    if (!header || !sheet) return null;
+    const headerRect = header.getBoundingClientRect();
+    const sheetRect = sheet.getBoundingClientRect();
+    return {
+      distanceFromHeader: Math.round(sheetRect.top - headerRect.bottom),
+      opensFromTop: sheetRect.top < window.innerHeight / 2,
+    };
+  });
+  expect(drawerPlacement).toEqual({
+    distanceFromHeader: 0,
+    opensFromTop: true,
+  });
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
   await expectMinimumTargets(dialog);
 
@@ -169,9 +242,12 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expectCompleteFocusTraversal(page, dialog, firstChoice, "chooser");
 
   await dialog
-    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
     .click();
-  const text = page.getByRole("textbox", { name: "Your thought" });
+  const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await page.getByLabel("Moment date").fill("2023-08-21");
   const journal = dialog.getByRole("combobox", {
@@ -179,7 +255,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     exact: true,
   });
   await expect(journal.locator('option[value="molly"]')).toHaveCount(0);
-  await page.getByRole("button", { name: /People and place/u }).click();
+  await page.getByRole("button", { name: /Details/u }).click();
   const averyTag = page.getByRole("checkbox", { name: /Avery/u });
   await averyTag.check();
   await expect(averyTag).toBeChecked();
@@ -216,9 +292,8 @@ test("required content rejects whitespace and future dates before review", async
 }) => {
   await page.goto("/family");
   const cases = [
-    { choice: /A thought/u, field: "Your thought", error: "Write a thought" },
-    { choice: /Milestone/u, field: "Milestone", error: "Name the milestone" },
-    { choice: /A place/u, field: "Place name", error: "Name the place" },
+    { choice: /Written entry/u, field: "Entry", error: "Write a thought" },
+    { choice: /Location/u, field: "Place name", error: "Name the place" },
   ] as const;
 
   for (const testCase of cases) {
@@ -230,15 +305,15 @@ test("required content rejects whitespace and future dates before review", async
     await expect(dialog.getByRole("alert")).toContainText(testCase.error);
     await expect(field).toBeFocused();
     await expect(
-      dialog.getByRole("heading", { name: "A preview of this moment" }),
+      dialog.getByRole("heading", { name: "Review entry" }),
     ).toHaveCount(0);
     page.once("dialog", (confirmation) => confirmation.accept());
     await dialog.getByRole("button", { name: "Close moment composer" }).click();
   }
 
   const dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /A thought/u }).click();
-  await dialog.getByRole("textbox", { name: "Your thought" }).fill("Later");
+  await dialog.getByRole("button", { name: /Written entry/u }).click();
+  await dialog.getByRole("textbox", { name: "Entry" }).fill("Later");
   const date = dialog.getByLabel("Moment date");
   await date.fill("2026-08-29");
   expect(
@@ -246,7 +321,7 @@ test("required content rejects whitespace and future dates before review", async
   ).toBe(false);
   await dialog.getByRole("button", { name: "Preview moment" }).click();
   await expect(
-    dialog.getByRole("heading", { name: "A preview of this moment" }),
+    dialog.getByRole("heading", { name: "Review entry" }),
   ).toHaveCount(0);
 });
 
@@ -296,15 +371,13 @@ test("all four capture modes produce honest, non-durable previews", async ({
     page.getByText("Photo ready for this local preview."),
   ).toBeVisible();
   await expect(photoPreview).not.toHaveAttribute("style");
-  await page
-    .getByRole("textbox", { name: "A few words" })
-    .fill("The last warm hour.");
+  await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
   await page.getByRole("button", { name: "Preview moment" }).click();
   await expect(
     page.getByText("Design preview · Nothing was saved"),
   ).toBeVisible();
   await expect(
-    dialog.getByRole("heading", { name: "A preview of this moment" }),
+    dialog.getByRole("heading", { name: "Review entry" }),
   ).toBeFocused();
   await expect(page.getByText("The last warm hour.")).toBeVisible();
   await expectCompleteFocusTraversal(
@@ -315,43 +388,39 @@ test("all four capture modes produce honest, non-durable previews", async ({
   );
   await page.getByRole("button", { name: "Back to edit" }).click();
   await expect(page.getByAltText("Selected photo preview")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "A few words" })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "Note" })).toHaveValue(
     "The last warm hour.",
   );
   await page.getByRole("button", { name: "Preview moment" }).click();
   await page.getByRole("button", { name: "Close preview" }).click();
 
   dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /A thought/u }).click();
+  await dialog.getByRole("button", { name: /Written entry/u }).click();
   await page
-    .getByRole("textbox", { name: "Your thought" })
+    .getByRole("textbox", { name: "Entry" })
     .fill("The kitchen was loud.");
   await page.getByRole("button", { name: "Preview moment" }).click();
   await expect(dialog.getByText("The kitchen was loud.")).toBeVisible();
   await page.getByRole("button", { name: "Close preview" }).click();
 
   dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /Milestone/u }).click();
-  await expect(
-    dialog.getByRole("textbox", { name: "What made it meaningful?" }),
-  ).toBeVisible();
+  await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await dialog
-    .getByRole("textbox", { name: "Milestone", exact: true })
-    .fill("First day of school");
+    .getByRole("searchbox", { name: "Reference or words" })
+    .fill("John 3:16");
+  await dialog.getByRole("button", { name: /John 3:16/u }).click();
   await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(dialog.getByText("First day of school")).toBeVisible();
+  await expect(dialog.getByText("John 3:16")).toBeVisible();
   await page.getByRole("button", { name: "Close preview" }).click();
 
   dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /A place/u }).click();
-  await expect(
-    dialog.getByRole("textbox", { name: "What happened here?" }),
-  ).toBeVisible();
+  await dialog.getByRole("button", { name: /Location/u }).click();
+  await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
   await page.getByLabel("Place name").fill("Sand Harbor");
   await page.getByRole("button", { name: "Preview moment" }).click();
   await expect(
     dialog.locator(".composer-preview-copy > span").filter({
-      hasText: /^Place$/u,
+      hasText: /^Location$/u,
     }),
   ).toBeVisible();
   await expect(dialog.getByText("Sand Harbor", { exact: true })).toHaveCount(1);
@@ -494,7 +563,7 @@ test("previewing emits no mutation, persistence, history, or timeline change", a
   await expect(
     dialog.getByText("Photo ready for this local preview."),
   ).toBeVisible();
-  await dialog.getByRole("textbox", { name: "A few words" }).fill(malicious);
+  await dialog.getByRole("textbox", { name: "Note" }).fill(malicious);
   await page.getByRole("button", { name: "Preview moment" }).click();
   await expect(page.getByText(malicious)).toBeVisible();
   expect(
@@ -542,20 +611,24 @@ test("previewing emits no mutation, persistence, history, or timeline change", a
 
   let draftDialog = await openComposer(page);
   await draftDialog
-    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
     .click();
   await page
-    .getByRole("textbox", { name: "Your thought" })
+    .getByRole("textbox", { name: "Entry" })
     .fill("Never persist this draft");
   await page.reload();
   await expect(page.getByRole("dialog")).toBeHidden();
   draftDialog = await openComposer(page);
   await draftDialog
-    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
     .click();
-  await expect(page.getByRole("textbox", { name: "Your thought" })).toHaveValue(
-    "",
-  );
+  await expect(page.getByRole("textbox", { name: "Entry" })).toHaveValue("");
 
   await page.getByRole("button", { name: "Close moment composer" }).click();
   draftDialog = await openComposer(page);
@@ -595,11 +668,12 @@ test("expanded capture states have no serious axe violations", async ({
 
   const dialog = await openComposer(page);
   await scan();
-  await dialog.getByRole("button", { name: /Milestone/u }).click();
+  await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await dialog
-    .getByRole("textbox", { name: "Milestone", exact: true })
-    .fill("First day of school");
-  await page.getByRole("button", { name: /People and place/u }).click();
+    .getByRole("searchbox", { name: "Reference or words" })
+    .fill("John 3:16");
+  await dialog.getByRole("button", { name: /John 3:16/u }).click();
+  await page.getByRole("button", { name: /Details/u }).click();
   await scan();
   await page.getByRole("button", { name: "Preview moment" }).click();
   await scan();
@@ -613,11 +687,14 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
   const backgroundScroll = await page.evaluate(() => window.scrollY);
   const dialog = await openComposer(page);
   await dialog
-    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
     .click();
-  const text = page.getByRole("textbox", { name: "Your thought" });
+  const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("Short screen");
-  await page.getByRole("button", { name: /People and place/u }).click();
+  await page.getByRole("button", { name: /Details/u }).click();
 
   await page.setViewportSize({ width: 320, height: 350 });
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
@@ -629,7 +706,7 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     text,
     page.getByLabel("Moment date"),
     dialog.getByRole("combobox", { name: "Journal", exact: true }),
-    page.getByRole("button", { name: /People and place/u }),
+    page.getByRole("button", { name: /Details/u }),
     mollyTag,
     page.getByLabel(/^Place/u),
     page.getByRole("button", { name: "Preview moment" }),

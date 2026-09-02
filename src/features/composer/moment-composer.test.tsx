@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "./moment-composer";
 import { PhotoUploadError } from "./photo-upload";
+import {
+  clearOptimisticMediaUploads,
+  optimisticMediaUploadSnapshot,
+} from "./optimistic-media-upload";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -12,12 +16,19 @@ const navigation = vi.hoisted(() => ({
 const photoUpload = vi.hoisted(() => ({
   upload: vi.fn(),
 }));
+const videoUpload = vi.hoisted(() => ({
+  upload: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
 }));
 vi.mock("./photo-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./photo-upload")>()),
   uploadPhotoMoment: photoUpload.upload,
+}));
+vi.mock("./video-upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./video-upload")>()),
+  uploadVideoMoment: videoUpload.upload,
 }));
 
 const people = [
@@ -96,7 +107,11 @@ function ConnectedHarness({
   );
 }
 
-function ConnectedFamilyHarness() {
+function ConnectedFamilyHarness({
+  save = vi.fn(),
+}: {
+  save?: ComponentProps<typeof MomentComposer>["saveFamilyMoment"];
+}) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
@@ -114,7 +129,7 @@ function ConnectedFamilyHarness() {
         open={open}
         returnFocusRef={triggerRef}
         onRequestClose={() => setOpen(false)}
-        saveFamilyMoment={vi.fn()}
+        saveFamilyMoment={save}
       />
     </>
   );
@@ -128,11 +143,14 @@ const revokeObjectURL = vi.fn();
 
 beforeEach(() => {
   createdUrlCount = 0;
+  window.sessionStorage.clear();
   createObjectURL.mockClear();
   revokeObjectURL.mockClear();
   navigation.refresh.mockClear();
   navigation.replace.mockClear();
   photoUpload.upload.mockReset();
+  videoUpload.upload.mockReset();
+  clearOptimisticMediaUploads();
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: createObjectURL,
@@ -144,6 +162,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearOptimisticMediaUploads();
   vi.restoreAllMocks();
 });
 
@@ -165,11 +184,11 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Open connected composer" }),
     );
-    expect(screen.getByText("Private to this family")).toBeVisible();
-    expect(screen.getByRole("button", { name: /A thought/ })).toHaveFocus();
+    expect(screen.getByText("Family only")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "New moment" })).toHaveFocus();
     expect(screen.queryByRole("button", { name: /Photo/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Milestone/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /A place/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Location/ })).toBeNull();
   });
 
   it("shows gated connected Photo and reports private processing honestly", async () => {
@@ -196,7 +215,7 @@ describe("MomentComposer", () => {
       screen.getByRole("button", { name: "Open connected family composer" }),
     );
     const photoChoice = screen.getByRole("button", { name: /^Photo/u });
-    expect(photoChoice).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "New moment" })).toHaveFocus();
     await user.click(photoChoice);
     const picker = screen.getByLabelText(/Choose photo/u);
     await user.upload(
@@ -207,22 +226,32 @@ describe("MomentComposer", () => {
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
+    fireEvent.change(screen.getByLabelText(/Time/u), {
+      target: { value: "14:58" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.refresh).not.toHaveBeenCalled();
+    expect(optimisticMediaUploadSnapshot()).toEqual([
+      expect.objectContaining({
+        body: "Kept exactly once.",
+        occurredTime: "14:58",
+        stage: { state: "processing" },
+      }),
+    ]);
     expect(
-      await screen.findByRole("heading", { name: "Photo received" }),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        "Photo received for Brian’s journal. It is still being prepared privately.",
-      ),
-    ).toBeVisible();
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    ).toHaveFocus();
     expect(photoUpload.upload).toHaveBeenCalledWith(
       expect.any(File),
       expect.objectContaining({
         circleId: "20000000-0000-4000-8000-000000000001",
+        body: "Kept exactly once.",
         journalPersonId: "brian",
+        occurredAt: expect.any(String),
       }),
       expect.objectContaining({
         requestKey: expect.any(String),
@@ -231,6 +260,56 @@ describe("MomentComposer", () => {
       expect.any(AbortSignal),
       expect.any(Function),
     );
+  });
+
+  it("selects, validates, and saves a short video through the media card", async () => {
+    videoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        _signal: AbortSignal,
+        onStage: (stage: unknown) => void,
+      ) => {
+        onStage({ state: "uploading", progress: 0.5 });
+        onStage({ state: "finishing" });
+        return { momentId: "d6000000-0000-4000-8000-000000000012" };
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo or video/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo or video/u),
+      new File([new Uint8Array(24)], "first-steps.mp4", {
+        type: "video/mp4",
+      }),
+    );
+    const preview = screen.getByLabelText("Selected video preview");
+    Object.defineProperties(preview, {
+      duration: { configurable: true, value: 12.4 },
+      videoHeight: { configurable: true, value: 1080 },
+      videoWidth: { configurable: true, value: 1920 },
+    });
+    fireEvent.loadedMetadata(preview);
+    fireEvent.loadedData(preview);
+
+    expect(screen.getByText("Video ready to upload privately.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(videoUpload.upload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ durationMs: 12_400 }),
+      expect.objectContaining({ requestKey: expect.any(String) }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
   it("rejects HEIC truthfully before a connected upload starts", async () => {
@@ -250,7 +329,16 @@ describe("MomentComposer", () => {
     expect(photoUpload.upload).not.toHaveBeenCalled();
   });
 
-  it("offers an honest Cancel upload control and preserves the photo draft", async () => {
+  it("closes immediately while a photo continues uploading from an immutable draft", async () => {
+    let finishUpload: (
+      value: Readonly<{
+        state: "processing";
+        intakeId: string;
+        momentId: string;
+      }>,
+    ) => void = () => {
+      throw new Error("Upload was not started.");
+    };
     photoUpload.upload.mockImplementation(
       async (
         _file: File,
@@ -260,12 +348,8 @@ describe("MomentComposer", () => {
         onStage: (stage: unknown) => void,
       ) => {
         onStage({ state: "uploading", progress: 0.25 });
-        return new Promise((_resolve, reject) => {
-          signal.addEventListener(
-            "abort",
-            () => reject(new DOMException("stopped", "AbortError")),
-            { once: true },
-          );
+        return new Promise((resolve) => {
+          finishUpload = resolve;
         });
       },
     );
@@ -282,24 +366,168 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.type(screen.getByLabelText("Note"), "Still in the post.");
+    fireEvent.change(screen.getByLabelText(/Time/u), {
+      target: { value: "14:58" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(
-      screen.getByRole("progressbar", { name: "Private photo upload" }),
-    ).toHaveValue(0.25);
-    await user.click(screen.getByRole("button", { name: "Cancel upload" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Upload stopped. Your photo and draft are still here.",
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(optimisticMediaUploadSnapshot()).toEqual([
+      expect.objectContaining({
+        body: "Still in the post.",
+        occurredTime: "14:58",
+        stage: { state: "uploading", progress: 0.25 },
+      }),
+    ]);
+    expect(photoUpload.upload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        body: "Still in the post.",
+        occurredAt: expect.any(String),
+        occurredOn: "2026-08-28",
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+      expect.any(Function),
     );
-    expect(
-      screen.queryByRole("progressbar", { name: "Private photo upload" }),
-    ).toBeNull();
-    expect(screen.queryByText(/Uploading…/u)).toBeNull();
-    expect(screen.getByText("A photo to remember")).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Try upload again" }),
-    ).toBeVisible();
+    finishUpload({
+      state: "processing",
+      intakeId: "d6000000-0000-4000-8000-000000000001",
+      momentId: "d6000000-0000-4000-8000-000000000002",
+    });
+    await waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "processing",
+      }),
+    );
+  });
+
+  it("does not abort the detached upload when its composer unmounts", async () => {
+    let resolveUpload!: (value: {
+      state: "processing";
+      intakeId: string;
+      momentId: string;
+    }) => void;
+    let uploadSignal: AbortSignal | undefined;
+    photoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        signal: AbortSignal,
+      ) => {
+        uploadSignal = signal;
+        return new Promise((resolve) => {
+          resolveUpload = resolve;
+        });
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    const rendered = render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    rendered.unmount();
+
+    expect(uploadSignal?.aborted).toBe(false);
+    resolveUpload({
+      state: "processing",
+      intakeId: "d6000000-0000-4000-8000-000000000021",
+      momentId: "d6000000-0000-4000-8000-000000000022",
+    });
+    await waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "processing",
+      }),
+    );
+  });
+
+  it("aborts and removes private local media at an account boundary", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    photoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        signal: AbortSignal,
+      ) => {
+        uploadSignal = signal;
+        return new Promise(() => undefined);
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    window.dispatchEvent(new Event("our-days:clear-private-state"));
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(optimisticMediaUploadSnapshot()).toEqual([]);
+  });
+
+  it("never lets an earlier upload completion erase a second draft", async () => {
+    let resolveUpload!: (value: {
+      state: "processing";
+      intakeId: string;
+      momentId: string;
+    }) => void;
+    photoUpload.upload.mockImplementation(
+      async () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.type(screen.getByLabelText("Note"), "A separate second draft");
+    resolveUpload({
+      state: "processing",
+      intakeId: "d6000000-0000-4000-8000-000000000031",
+      momentId: "d6000000-0000-4000-8000-000000000032",
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Note")).toHaveValue(
+        "A separate second draft",
+      ),
+    );
   });
 
   it("crosses an honest non-cancellable boundary before acknowledgement", async () => {
@@ -339,21 +567,23 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.getByText("Finishing your private upload…")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Cancel upload" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Finishing photo…" }),
-    ).toBeDisabled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+      state: "finishing",
+    });
     finish();
-    expect(
-      await screen.findByRole("heading", { name: "Photo received" }),
-    ).toBeVisible();
+    await waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "processing",
+      }),
+    );
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
-  it("does not offer a futile retry for a non-retryable upload error", async () => {
+  it("keeps a failed upload out of the next clean draft", async () => {
     photoUpload.upload.mockRejectedValue(
       new PhotoUploadError("Your private session needs to be renewed.", false),
     );
@@ -370,22 +600,25 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Your private session needs to be renewed.",
+    await waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message: "Your private session needs to be renewed.",
+      }),
     );
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Try upload again" }),
     ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Return to photo" }),
-    ).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Back to edit" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "New moment" })).toBeVisible();
   });
 
-  it("keeps a connected draft after failure and announces confirmed success", async () => {
+  it("keeps a connected draft after failure and closes after confirmed success", async () => {
     const save = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, message: "Try again safely." })
@@ -395,26 +628,19 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Open connected composer" }),
     );
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
-    await user.type(screen.getByLabelText("Your thought"), "Kept draft");
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Kept draft");
     fireEvent.change(screen.getByLabelText("Moment date"), {
       target: { value: "2023-08-21" },
     });
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Try again safely.",
     );
     expect(screen.getByText("Kept draft")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
-    expect(
-      await screen.findByRole("heading", { name: "Moment saved" }),
-    ).toBeVisible();
-    expect(
-      screen.getByText("Saved to Brian’s journal on Aug 21, 2023."),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Done" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         body: "Kept draft",
@@ -422,7 +648,6 @@ describe("MomentComposer", () => {
         occurredOn: "2023-08-21",
       }),
     );
-    await user.click(screen.getByRole("button", { name: "Done" }));
     expect(navigation.refresh).toHaveBeenCalledOnce();
     expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
@@ -442,25 +667,22 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Open connected composer" }),
     );
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
-    await user.type(screen.getByLabelText("Your thought"), "Still saving");
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Still saving");
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
       screen.getByRole("button", { name: "Close moment composer" }),
     ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Back to edit" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
     fireEvent.click(screen.getByRole("dialog"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     finishSave({ ok: true, message: "Saved" });
-    expect(
-      await screen.findByRole("heading", { name: "Moment saved" }),
-    ).toBeVisible();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("closes a saved moment without a discard warning and refreshes from the close control", async () => {
+  it("closes immediately after save without a discard warning", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const user = userEvent.setup();
     render(
@@ -471,20 +693,11 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Open connected composer" }),
     );
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
-    await user.type(screen.getByLabelText("Your thought"), "Already safe");
-    await user.click(screen.getByRole("button", { name: "Review moment" }));
-    await user.click(screen.getByRole("button", { name: "Save moment" }));
-    expect(
-      await screen.findByRole("heading", { name: "Moment saved" }),
-    ).toBeVisible();
-
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
-
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Already safe");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(confirm).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
     expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
@@ -492,10 +705,13 @@ describe("MomentComposer", () => {
   it("opens honestly as a modal, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
     expect(screen.getByRole("dialog")).toHaveAttribute("open");
+    expect(screen.getByRole("dialog")).toHaveClass(
+      "new-moment-composer-dialog",
+    );
     expect(
-      screen.getByText(/Local design preview · Nothing is saved/u),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: /Photo/ })).toHaveFocus();
+      screen.queryByText(/Local design preview · Nothing is saved/u),
+    ).toBeNull();
+    expect(screen.getByRole("heading", { name: "New moment" })).toHaveFocus();
     expect(document.body).toHaveClass("composer-scroll-locked");
 
     await user.click(
@@ -506,11 +722,11 @@ describe("MomentComposer", () => {
     expect(document.body).not.toHaveClass("composer-scroll-locked");
   });
 
-  it("previews a backdated thought with journal, people, place, and recorder context", async () => {
+  it("saves a backdated local design entry without a review step", async () => {
     const user = await openComposer();
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
 
-    const text = screen.getByRole("textbox", { name: "Your thought" });
+    const text = screen.getByRole("textbox", { name: "Entry" });
     const date = screen.getByLabelText("Moment date");
     const journal = screen.getByLabelText("Journal");
     expect(date).toHaveValue("2026-08-28");
@@ -523,81 +739,101 @@ describe("MomentComposer", () => {
     await user.type(text, "A brave blue door.");
     fireEvent.change(date, { target: { value: "2023-08-21" } });
     await user.selectOptions(journal, "avery");
-    await user.click(screen.getByRole("button", { name: /People and place/ }));
+    await user.click(screen.getByRole("button", { name: /Details/ }));
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     await user.type(screen.getByLabelText(/^Place/u), "Oak Street School");
-    await user.click(screen.getByRole("button", { name: "Preview moment" }));
-
-    const reviewHeading = screen.getByRole("heading", {
-      name: "A preview of this moment",
-    });
-    expect(reviewHeading).toBeVisible();
-    expect(reviewHeading).toHaveFocus();
-    expect(
-      screen.getByText("Design preview · Nothing was saved"),
-    ).toBeVisible();
-    expect(screen.getByText("A brave blue door.")).toBeVisible();
-    expect(screen.getByText("Aug 21, 2023")).toBeVisible();
-    expect(screen.getByText("Avery")).toBeVisible();
-    expect(screen.getByText("Molly")).toBeVisible();
-    expect(screen.getByText("Oak Street School")).toBeVisible();
-    expect(screen.getByText("Recorded by Brian")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Back to edit" }));
-    expect(screen.getByRole("textbox", { name: "Your thought" })).toHaveValue(
-      "A brave blue door.",
-    );
-    expect(screen.getByLabelText("Moment date")).toHaveValue("2023-08-21");
-    expect(screen.getByLabelText("Journal")).toHaveValue("avery");
-    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
-    expect(screen.getByLabelText(/^Place/u)).toHaveValue("Oak Street School");
-
-    await user.click(screen.getByRole("button", { name: "Preview moment" }));
-    await user.click(screen.getByRole("button", { name: "Close preview" }));
+    expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open composer" }));
-    expect(screen.getByRole("button", { name: /A thought/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
     expect(screen.queryByDisplayValue("A brave blue door.")).toBeNull();
+  }, 10_000);
+
+  it.each([["Location", "Place name", "Sand Harbor"]])(
+    "gives %s a distinct required title",
+    async (choice, label, value) => {
+      const user = await openComposer();
+      await user.click(
+        screen.getByRole("button", { name: new RegExp(choice) }),
+      );
+      const requiredTitle = screen.getByLabelText(label);
+      expect(requiredTitle).toBeRequired();
+      await user.type(requiredTitle, value);
+      expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    },
+  );
+
+  it("searches the local Bible library and includes a selected verse", async () => {
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+
+    const search = screen.getByRole("searchbox", {
+      name: "Reference or words",
+    });
+    await user.type(search, "love is patient");
+    await user.click(screen.getByRole("button", { name: /1 Corinthians 13/u }));
+
+    expect(screen.getByLabelText("Reference")).toHaveValue(
+      "1 Corinthians 13:4–7",
+    );
+    expect(
+      (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+    ).toContain("Love is patient");
+    expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
   });
 
-  it.each([
-    ["Milestone", "Milestone", "First day of school"],
-    ["A place", "Place name", "Sand Harbor"],
-  ])("gives %s a distinct required title", async (choice, label, value) => {
-    const user = await openComposer();
-    await user.click(screen.getByRole("button", { name: new RegExp(choice) }));
-    const requiredTitle = screen.getByLabelText(label);
-    expect(requiredTitle).toBeRequired();
-    await user.type(requiredTitle, value);
-    await user.click(screen.getByRole("button", { name: "Preview moment" }));
-    expect(screen.getAllByText(value).length).toBeGreaterThan(0);
+  it("saves a selected Bible verse as a compatible written moment", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedFamilyHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    await user.type(
+      screen.getByRole("searchbox", { name: "Reference or words" }),
+      "John 3:16",
+    );
+    await user.click(screen.getByRole("button", { name: /John 3:16/u }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "thought",
+          title: "",
+          body: expect.stringContaining("— John 3:16 · World English Bible"),
+        }),
+      ),
+    );
   });
 
   it("preserves a draft while choosing and confirms an incompatible type change", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(
-      screen.getByRole("textbox", { name: "Your thought" }),
+      screen.getByRole("textbox", { name: "Entry" }),
       "Keep this",
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
     expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
-    expect(screen.getByRole("textbox", { name: "Your thought" })).toHaveValue(
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("textbox", { name: "Entry" })).toHaveValue(
       "Keep this",
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Milestone/ }));
+    await user.click(screen.getByRole("button", { name: /Location/ }));
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
     confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: /Milestone/ }));
-    expect(screen.getByLabelText("Milestone")).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: /Location/ }));
+    expect(screen.getByLabelText("Place name")).toHaveValue("");
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -664,9 +900,7 @@ describe("MomentComposer", () => {
     const firstPreview = screen.getByAltText("Selected photo preview");
 
     fireEvent.submit(picker.closest("form")!);
-    expect(
-      screen.getByRole("button", { name: "Preview moment" }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Wait for this photo to finish loading.",
     );
@@ -683,37 +917,7 @@ describe("MomentComposer", () => {
 
     fireEvent.load(secondPreview);
     fireEvent.submit(picker.closest("form")!);
-    expect(
-      screen.getByRole("heading", { name: "A preview of this moment" }),
-    ).toBeVisible();
-  });
-
-  it("returns safely to edit if a decoded photo fails in review", async () => {
-    const user = await openComposer();
-    await user.click(screen.getByRole("button", { name: /^Photo/u }));
-    const picker = screen.getByLabelText(/Choose photo/u);
-    await user.upload(
-      picker,
-      new File(["photo"], "private.jpg", { type: "image/jpeg" }),
-    );
-    fireEvent.load(screen.getByAltText("Selected photo preview"));
-    fireEvent.submit(picker.closest("form")!);
-    const reviewImage = document.querySelector<HTMLImageElement>(
-      ".composer-review img",
-    );
-    expect(reviewImage).not.toBeNull();
-
-    fireEvent.error(reviewImage!);
-
-    expect(revokeObjectURL).toHaveBeenCalledOnce();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "This image could not be shown. Choose another one.",
-    );
-    expect(screen.queryByText("Design preview · Nothing was saved")).toBeNull();
-    await waitFor(() =>
-      expect(screen.getByLabelText(/Choose photo/u)).toHaveFocus(),
-    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("revokes photo URLs on replacement, removal, accepted discard, and completion", async () => {
@@ -763,7 +967,7 @@ describe("MomentComposer", () => {
     await user.upload(input, second);
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     fireEvent.submit(input.closest("form")!);
-    await user.click(screen.getByRole("button", { name: "Close preview" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       4,
       "blob:composer-preview-4",
@@ -793,20 +997,19 @@ describe("MomentComposer", () => {
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Milestone/ }));
+    await user.click(screen.getByRole("button", { name: /Location/ }));
 
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByLabelText("Milestone")).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
   });
 
   it.each([
-    ["A thought", "Your thought", "Write a thought"],
-    ["Milestone", "Milestone", "Name the milestone"],
-    ["A place", "Place name", "Name the place"],
+    ["Written entry", "Entry", "Write a thought"],
+    ["Location", "Place name", "Name the place"],
   ])(
     "rejects whitespace-only required content for %s",
     async (choice, label, error) => {
@@ -816,20 +1019,18 @@ describe("MomentComposer", () => {
       );
       const field = screen.getByLabelText(label);
       fireEvent.change(field, { target: { value: " \n " } });
-      await user.click(screen.getByRole("button", { name: "Preview moment" }));
+      await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent(error);
       expect(field).toHaveFocus();
-      expect(
-        screen.queryByRole("heading", { name: "A preview of this moment" }),
-      ).toBeNull();
+      expect(screen.getByRole("dialog")).toBeVisible();
     },
   );
 
   it("removes a stale self-tag when its person becomes the journal", async () => {
     const user = await openComposer();
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
-    await user.click(screen.getByRole("button", { name: /People and place/ }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.click(screen.getByRole("button", { name: /Details/ }));
     const avery = screen.getByRole("checkbox", { name: /Avery/ });
     await user.click(avery);
     expect(avery).toBeChecked();
@@ -843,10 +1044,7 @@ describe("MomentComposer", () => {
     [
       "whitespace text",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.type(
-          screen.getByRole("textbox", { name: "Your thought" }),
-          " ",
-        );
+        await user.type(screen.getByRole("textbox", { name: "Entry" }), " ");
       },
     ],
     [
@@ -866,25 +1064,21 @@ describe("MomentComposer", () => {
     [
       "people tag",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.click(
-          screen.getByRole("button", { name: /People and place/ }),
-        );
+        await user.click(screen.getByRole("button", { name: /Details/ }));
         await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
       },
     ],
     [
       "place",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.click(
-          screen.getByRole("button", { name: /People and place/ }),
-        );
+        await user.click(screen.getByRole("button", { name: /Details/ }));
         await user.type(screen.getByLabelText(/^Place/u), "The porch");
       },
     ],
   ])("treats a changed %s as a protected draft", async (_, mutate) => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await user.click(screen.getByRole("button", { name: /A thought/ }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await mutate(user);
     await user.click(
       screen.getByRole("button", { name: "Close moment composer" }),

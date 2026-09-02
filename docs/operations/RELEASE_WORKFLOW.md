@@ -1,0 +1,108 @@
+# Our Days release workflow
+
+This runbook replaces direct deployment from a developer worktree. Localhost is
+for rapid iteration; the installed staging PWA is the acceptance environment.
+Production receives only a committed, verified release candidate.
+
+## Environment boundary
+
+| Environment | Git source     | Vercel                                      | Supabase                                       | Permitted data                                     |
+| ----------- | -------------- | ------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- |
+| Local       | working branch | local server                                | local stack                                    | synthetic fixtures only                            |
+| Staging     | `staging`      | protected staging/preview deployment        | dedicated persistent staging branch or project | synthetic staging family and disposable media only |
+| Production  | `main`         | staged Production deployment, then promoted | dedicated Our Days Production project          | private family data                                |
+
+Staging must never use the Production Supabase URL, publishable key, Auth users,
+database rows, or Storage objects. Production and staging must both list every
+known Proof project reference in `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS`.
+The web deployment never receives a service-role key, database password, direct
+database URL, JWT secret, or Supabase management token.
+
+## One-time setup
+
+1. Create the isolated Our Days GitHub repository under the approved personal
+   account and add it as `origin`. Never change global GitHub authentication to
+   accomplish this.
+2. Push `main`, create `staging` from the verified baseline, and protect both
+   branches. Require the Quality, Functional browsers, Local Supabase
+   authorization, and Visual checks before merging.
+3. Connect the GitHub repository to the existing Our Days Vercel project.
+4. Assign a stable protected staging hostname to the `staging` branch. Configure
+   Preview variables specifically for that branch; do not use Production values.
+5. Create an isolated Supabase staging branch/project without Production data,
+   apply committed migrations, provision only test identities, and seed a
+   synthetic family plus disposable media.
+6. Configure staging Auth redirects for the stable staging origin. Keep design
+   fixtures disabled in every hosted environment.
+
+Supabase branches consume paid compute. Creation requires explicit cost approval;
+pause or delete unused branches where the selected staging model permits it.
+
+## Environment variables
+
+Configure values in Vercel, never in committed environment files.
+
+| Variable                                   | Staging                     | Production                 |
+| ------------------------------------------ | --------------------------- | -------------------------- |
+| `OUR_DAYS_ENVIRONMENT`                     | `preview`                   | `production`               |
+| `OUR_DAYS_RESOURCE_MODE`                   | `supabase`                  | `supabase`                 |
+| `NEXT_PUBLIC_SITE_URL`                     | stable staging HTTPS origin | Production HTTPS origin    |
+| `OUR_DAYS_PRODUCTION_SITE_ORIGIN`          | Production HTTPS origin     | Production HTTPS origin    |
+| `OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF`   | staging ref                 | Production ref             |
+| `OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF` | Production ref              | Production ref             |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | staging base URL            | Production base URL        |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | staging publishable key     | Production publishable key |
+| `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS` | complete Proof denylist     | complete Proof denylist    |
+| `OUR_DAYS_ENABLE_DESIGN_PREVIEW`           | `false`                     | `false`                    |
+
+Invitation, media delivery, photo posting, and worker credentials must be scoped
+independently. A feature is enabled in staging only after its isolated backend is
+ready; Production is changed only as part of an approved release.
+
+## Change and acceptance loop
+
+1. Start from current `staging` and create a short-lived feature branch.
+2. Make one coherent batch. Run focused tests while iterating.
+3. Run formatting, lint, type checks, unit tests, production build, functional
+   mobile browsers, visual baselines, database authorization tests, and artifact
+   scanning through CI.
+4. Merge to `staging` only after all required checks pass. Vercel deploys the
+   committed branch to the stable staging PWA.
+5. Run staging smoke tests for sign-in, timeline loading, note creation,
+   photo/video upload and background processing, reactions, notes, edit/trash,
+   sign-out, and access revocation. Inspect browser console, failed requests, and
+   Vercel runtime errors.
+6. Brian reviews the installed staging PWA and annotates that deployment. Fixes
+   repeat this loop; localhost is not an approval substitute.
+7. Record approval against the exact Git commit and staging deployment ID.
+
+## Production release
+
+1. Merge the approved commit from `staging` to `main`; do not deploy a dirty
+   worktree. `npm run release:state` must pass.
+2. If migrations changed, apply only backward-compatible reviewed migrations
+   before switching application traffic. Re-run authorization and status checks.
+3. Create a staged Production Vercel deployment without assigning the Production
+   domain. Confirm its commit, environment identity, project IDs, build result,
+   artifact scan, and headers.
+4. Run read-only Production-origin smoke checks and inspect runtime errors.
+5. Promote that staged deployment to the Production domain. Do not rebuild from
+   an uncommitted local directory.
+6. Re-run sign-in, family timeline, private media delivery, and sign-out checks;
+   monitor runtime errors for at least five minutes.
+
+## Failure and rollback
+
+- Application regression: immediately roll back the Vercel domain to the prior
+  known-good Production deployment, then diagnose on staging.
+- Database migration regression: do not perform an improvised destructive
+  rollback. Keep migrations backward-compatible and apply a reviewed forward fix.
+- Media-processing failure: retain the user-visible placeholder and original
+  private upload; never interpret absence from a pending list as publication.
+- Authorization or privacy failure: disable the affected feature or roll back the
+  application immediately, revoke exposed access, and treat the event as a
+  release blocker.
+
+Every release record should contain the Git SHA, staging URL and deployment ID,
+required-check results, approving person/time, Production deployment ID,
+post-release smoke result, and rollback candidate.

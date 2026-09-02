@@ -7,6 +7,7 @@ import sharp from "sharp";
 
 export const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_MAX_PHOTO_PIXELS = 50_000_000;
+const MAX_GAIN_MAP_PIXELS = 12_500_000;
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const sharpFormatByMimeType = new Map([
@@ -349,13 +350,20 @@ async function validateExactPngDatastream(handle, sizeBytes) {
   pngStructureFailure();
 }
 
-async function validateExactJpegCodestream(handle, sizeBytes) {
+async function validateExactJpegCodestream(
+  handle,
+  sizeBytes,
+  { allowAuxiliaryCodestream = false } = {},
+) {
   let phase = "soi-first";
   let position = 0;
   let segmentLengthHigh = 0;
   let segmentMarker = 0;
   let segmentRemaining = 0;
   let sawScan = false;
+  let codestreamCount = 0;
+  let codestreamStart = 0;
+  const codestreams = [];
 
   const finishSegment = () => {
     if (segmentMarker === 0xda) {
@@ -371,8 +379,24 @@ async function validateExactJpegCodestream(handle, sizeBytes) {
 
   const acceptMarker = (marker) => {
     if (marker === 0xd9) {
-      if (!sawScan || position !== sizeBytes) jpegStructureFailure();
-      phase = "complete";
+      if (!sawScan) jpegStructureFailure();
+      codestreamCount += 1;
+      codestreams.push(
+        Object.freeze({ end: position, start: codestreamStart }),
+      );
+      if (position === sizeBytes) {
+        phase = "complete";
+        return;
+      }
+      // Modern iPhone JPEGs can carry one HDR gain-map image as a second,
+      // complete JPEG codestream. The caller separately requires Sharp to
+      // recognise the MPF/gain-map relationship before accepting two streams.
+      if (!allowAuxiliaryCodestream || codestreamCount !== 1) {
+        jpegStructureFailure();
+      }
+      sawScan = false;
+      codestreamStart = position;
+      phase = "soi-first";
       return;
     }
     if (
@@ -456,6 +480,7 @@ async function validateExactJpegCodestream(handle, sizeBytes) {
   }
 
   if (position !== sizeBytes || phase !== "complete") jpegStructureFailure();
+  return Object.freeze(codestreams);
 }
 
 function byteChunk(value) {
@@ -538,10 +563,10 @@ async function writeAll(handle, chunk) {
   }
 }
 
-async function decodeCompletely(path, mimeType, limits) {
+async function decodeCompletely(input, mimeType, limits) {
   let metadata;
   try {
-    metadata = await sharp(path, {
+    metadata = await sharp(input, {
       animated: false,
       failOn: "warning",
       limitInputChannels: limits.maxChannels,
@@ -600,7 +625,7 @@ async function decodeCompletely(path, mimeType, limits) {
   }
 
   try {
-    const decoder = sharp(path, {
+    const decoder = sharp(input, {
       animated: false,
       failOn: "warning",
       limitInputChannels: limits.maxChannels,
@@ -634,7 +659,18 @@ async function decodeCompletely(path, mimeType, limits) {
     fail("PHOTO_DECODE_FAILED", "Photo bytes could not be decoded safely.");
   }
 
-  return { channels, height, pages, width };
+  return {
+    channels,
+    gainMapImage:
+      mimeType === "image/jpeg" &&
+      Buffer.isBuffer(metadata.gainMap?.image) &&
+      metadata.gainMap.image.length > 0
+        ? metadata.gainMap.image
+        : null,
+    height,
+    pages,
+    width,
+  };
 }
 
 function sameDigest(actual, expected) {
@@ -796,19 +832,60 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
       );
     }
     await verifySpool(readHandle, sizeBytes, sha256);
+    let jpegCodestreams = Object.freeze([
+      Object.freeze({ end: sizeBytes, start: 0 }),
+    ]);
     if (detectedMimeType === "image/jpeg") {
-      await validateExactJpegCodestream(readHandle, sizeBytes);
+      jpegCodestreams = await validateExactJpegCodestream(
+        readHandle,
+        sizeBytes,
+        { allowAuxiliaryCodestream: true },
+      );
     }
     if (detectedMimeType === "image/png") {
       await validateExactPngDatastream(readHandle, sizeBytes);
     }
 
     const decoded = await decodeCompletely(path, detectedMimeType, options);
+    if (jpegCodestreams.length > 1) {
+      const auxiliaryRange = jpegCodestreams[1];
+      const auxiliaryBytes = await readExactAt(
+        readHandle,
+        auxiliaryRange.end - auxiliaryRange.start,
+        auxiliaryRange.start,
+      );
+      if (
+        !decoded.gainMapImage ||
+        !decoded.gainMapImage.equals(auxiliaryBytes)
+      ) {
+        jpegStructureFailure();
+      }
+      const auxiliary = await decodeCompletely(auxiliaryBytes, "image/jpeg", {
+        ...options,
+        maxPixels: Math.min(
+          MAX_GAIN_MAP_PIXELS,
+          options.maxPixels,
+          decoded.width * decoded.height,
+        ),
+      });
+      if (
+        auxiliary.gainMapImage ||
+        auxiliary.width > decoded.width ||
+        auxiliary.height > decoded.height
+      ) {
+        jpegStructureFailure();
+      }
+    } else if (decoded.gainMapImage) {
+      jpegStructureFailure();
+    }
     result = Object.freeze({
-      ...decoded,
+      channels: decoded.channels,
+      height: decoded.height,
       mimeType: detectedMimeType,
+      pages: decoded.pages,
       sha256Hex: sha256.toString("hex"),
       sizeBytes,
+      width: decoded.width,
     });
 
     // The already-open descriptor retains the exact inode while removing the

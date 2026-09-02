@@ -120,13 +120,13 @@ test("managed journal defaults retain adult recorder truth across client navigat
 }) => {
   await page.goto("/people/avery");
   await page.getByRole("button", { name: "Add moment" }).click();
-  await page.getByRole("button", { name: /A thought/u }).click();
+  await page.getByRole("button", { name: /Written entry/u }).click();
   await expect(page.getByLabel("Journal", { exact: true })).toHaveValue(
     "avery",
   );
   await expect(page.getByText("Recorded by Brian")).toBeVisible();
   await page
-    .getByRole("textbox", { name: "Your thought" })
+    .getByRole("textbox", { name: "Entry" })
     .fill("Avery tried something new.");
   await page.getByRole("button", { name: "Preview moment" }).click();
   await expect(page.getByText("Recorded by Brian")).toBeVisible();
@@ -135,7 +135,7 @@ test("managed journal defaults retain adult recorder truth across client navigat
   await page.getByRole("link", { name: "People" }).click();
   await page.locator('a[href="/people/sam"]').click();
   await page.getByRole("button", { name: "Add moment" }).click();
-  await page.getByRole("button", { name: /A thought/u }).click();
+  await page.getByRole("button", { name: /Written entry/u }).click();
   await expect(page.getByLabel("Journal", { exact: true })).toHaveValue("sam");
   await expect(page.getByText("Recorded by Brian")).toBeVisible();
 });

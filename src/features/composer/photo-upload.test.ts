@@ -266,6 +266,45 @@ describe("connected private photo upload", () => {
     ).toEqual([0, sixMiB / file.size, 1]);
   });
 
+  it("uses the Safari-safe TUS transport in the production path", async () => {
+    const { client } = clientWithStatus();
+    const upload = vi.fn(async (input) => {
+      expect(input.endpoint).toBe(
+        "https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co/storage/v1/upload/resumable",
+      );
+      expect(input.metadata).toMatchObject({
+        bucketName: "our-days-intake",
+        contentType: "image/jpeg",
+        objectName: `intake/${intakeId}`,
+      });
+      expect(await input.session()).toEqual({
+        accessToken: "ordinary-user-token",
+      });
+      input.onStage({ state: "uploading", progress: 1 });
+      await input.saveUploadUrl(uploadUrl);
+    });
+    const attempt = createPhotoUploadAttempt();
+
+    const result = await uploadPhotoMoment(
+      jpegFile(),
+      draft,
+      attempt,
+      new AbortController().signal,
+      () => undefined,
+      {
+        createClient: () => client,
+        hash: vi.fn(async () => "1".repeat(64)),
+        resumeStore: memoryResumeStore(),
+        statusAttempts: 1,
+        upload,
+      },
+    );
+
+    expect(result.state).toBe("published");
+    expect(upload).toHaveBeenCalledOnce();
+    expect(attempt.uploadUrl).toBe(uploadUrl);
+  });
+
   it("resumes the same TUS URL after an ambiguous chunk failure", async () => {
     const file = jpegFile(sixMiB + 3);
     const attempt = createPhotoUploadAttempt();
@@ -760,7 +799,7 @@ describe("connected private photo upload", () => {
     expect(result.state).toBe("processing");
   });
 
-  it("retains an acknowledged needs-attention record for the status shelf", async () => {
+  it("retires an acknowledged needs-attention record so a retry starts fresh", async () => {
     const { client } = clientWithStatus("needs_attention");
     const resumeStore = memoryResumeStore();
     let offset = 0;
@@ -801,10 +840,71 @@ describe("connected private photo upload", () => {
           statusAttempts: 1,
         },
       ),
-    ).rejects.toMatchObject({ retryable: false });
-    expect(resumeStore.remove).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({ discardResume: true, retryable: true });
+    expect(resumeStore.remove).toHaveBeenCalledOnce();
     expect(resumeStore.save).toHaveBeenLastCalledWith(
       expect.objectContaining({ acknowledged: true, intakeId, momentId }),
+    );
+  });
+
+  it("drops a terminal acknowledged resume before reserving a fresh intake", async () => {
+    const staleResume: PhotoUploadResumeRecord = {
+      id: "terminal-resume",
+      accountId: "10000000-0000-4000-8000-000000000001",
+      acknowledged: true,
+      circleId: draft.circleId,
+      draftHash: "ignored-by-test-store",
+      fileSha256: "f".repeat(64),
+      fileSize: 12,
+      mimeType: "image/jpeg",
+      requestKey: "d7000000-0000-4000-8000-000000000005",
+      uploadRequestKey: "d7000000-0000-4000-8000-000000000006",
+      intakeId,
+      momentId,
+      uploadUrl,
+    };
+    const resumeStore = memoryResumeStore(staleResume);
+    const { client, rpc } = clientWithStatus("published");
+    const implementation = rpc.getMockImplementation();
+    let statusReads = 0;
+    rpc.mockImplementation(async (name: string, args?: unknown) => {
+      if (name === "get_photo_moment_status") {
+        statusReads += 1;
+        if (statusReads === 1) {
+          return {
+            data: [{ moment_id: null, status: "needs_attention" }],
+            error: null,
+          };
+        }
+      }
+      void args;
+      return implementation!(name);
+    });
+    const attempt = createPhotoUploadAttempt();
+
+    const result = await uploadPhotoMoment(
+      jpegFile(),
+      draft,
+      attempt,
+      new AbortController().signal,
+      () => undefined,
+      {
+        createClient: () => client,
+        hash: vi.fn(async () => "f".repeat(64)),
+        resumeStore,
+        statusAttempts: 1,
+        upload: vi.fn(async (input) => {
+          await input.saveUploadUrl(uploadUrl);
+        }),
+      },
+    );
+
+    expect(result.state).toBe("published");
+    expect(resumeStore.remove).toHaveBeenCalledWith(staleResume.id);
+    expect(attempt.requestKey).not.toBe(staleResume.requestKey);
+    expect(rpc).not.toHaveBeenCalledWith(
+      "cancel_photo_intake",
+      expect.anything(),
     );
   });
 

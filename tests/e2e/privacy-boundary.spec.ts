@@ -16,7 +16,7 @@ const fixtureText = [
   "June",
   "Sand Harbor",
   "All our days",
-  "Nothing from this day yet",
+  "No entries for this date",
   "March 4",
   "/sample-family.jpg",
   detailCanary,

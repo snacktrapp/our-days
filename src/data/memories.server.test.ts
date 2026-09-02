@@ -110,7 +110,7 @@ describe("connected Memories data", () => {
     expect(model.feature).toMatchObject({
       state: "moment",
       personName: "Parent",
-      actionLabel: "Open moments from this day →",
+      actionLabel: "View entries →",
     });
     if (model.feature.state !== "moment") {
       throw new Error("Expected a written memory doorway");

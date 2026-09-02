@@ -37,7 +37,9 @@
     "types:db": "supabase gen types --local --lang typescript --schema public | prettier --parser typescript > src/lib/supabase/database.types.ts",
     "types:db:check": "node scripts/verify-database-types.mjs",
     "verify:artifacts": "node scripts/verify-private-artifacts.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:db:restore:self"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:db:restore:self",
+    "release:state": "node scripts/verify-release-state.mjs",
+    "release:verify": "npm run release:state && npm run check && npm run build:webpack && playwright test --grep-invert @visual"
   },
   "dependencies": {
     "@noble/hashes": "2.2.0",
@@ -47,7 +49,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "server-only": "0.0.1",
-    "sharp": "0.35.4"
+    "sharp": "0.35.4",
+    "tus-js-client": "4.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

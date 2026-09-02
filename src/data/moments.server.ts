@@ -96,7 +96,9 @@ export function mapTimelineRow(
             ? "A place"
             : row.moment_kind === "photo"
               ? "A photo"
-              : "A thought"
+              : row.moment_kind === "video"
+                ? "A video"
+                : "A thought"
         : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
     conversation: { notes: [], reactions: [] },
@@ -136,6 +138,15 @@ export function mapTimelineRow(
         alt: `Photo in ${row.journal_person_name}’s journal from ${formatPlainDate(row.occurred_on, today)}`,
         badgeLabel: formatPlainDate(row.occurred_on, today),
         delivery: "private",
+      },
+    };
+  }
+  if (row.moment_kind === "video") {
+    return {
+      ...base,
+      kind: "video",
+      video: {
+        src: `/api/media/videos/${row.moment_id}`,
       },
     };
   }
@@ -300,9 +311,9 @@ export async function loadConnectedTimeline(
   const moments = rows.map((row) => mapTimelineRow(row, context.today));
   const personalJournalIsWritable = Boolean(
     personal &&
-      context.chrome.composer.journalPeople.some(
-        (person) => person.id === personal.id,
-      ),
+    context.chrome.composer.journalPeople.some(
+      (person) => person.id === personal.id,
+    ),
   );
   const chrome = personal
     ? {
@@ -321,9 +332,11 @@ export async function loadConnectedTimeline(
     chrome,
     switcher: [
       { label: "Family", href: "/family", current: !personal },
-      ...(personal
-        ? [{ label: personal.name, href: queryPrefix, current: true }]
-        : []),
+      ...context.people.map((person) => ({
+        label: person.name,
+        href: `/people/${person.id}`,
+        current: personal?.id === person.id,
+      })),
     ],
     timelineLabel: personal
       ? `Chronological moments for ${personal.name}`
@@ -332,8 +345,8 @@ export async function loadConnectedTimeline(
       ? {
           initial: personal.initial,
           accent: personal.accent,
-          title: `${personal.name}’s days`,
-          summary: "One life, held in its true order.",
+          title: `${personal.name}’s journal`,
+          summary: "Chronological entries",
         }
       : undefined,
     interaction: connectedTimelineInteraction(access, context),

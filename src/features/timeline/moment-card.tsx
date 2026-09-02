@@ -1,5 +1,7 @@
+import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
+import { PrivateVideoPlayer } from "@/components/private-video-player";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import type {
@@ -11,6 +13,9 @@ import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
 } from "./timeline-view-model";
+
+const bibleVerseMomentPattern =
+  /^([\s\S]+)\n\n— ([^\n]+) · World English Bible$/u;
 
 function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   const base = {
@@ -25,7 +30,7 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
     placeName: moment.placeName,
   };
 
-  if (moment.kind === "photo") {
+  if (moment.kind === "photo" || moment.kind === "video") {
     return { ...base, kind: moment.kind };
   }
   if (moment.kind === "location") {
@@ -56,32 +61,114 @@ export function MomentCard({
   connectedPosition,
   connectedTotal,
 }: MomentCardProps) {
-  if (moment.kind === "photo") {
+  const bibleVerseMatch =
+    moment.kind === "thought"
+      ? bibleVerseMomentPattern.exec(moment.text)
+      : null;
+  const bibleVerse = bibleVerseMatch
+    ? { verse: bibleVerseMatch[1], reference: bibleVerseMatch[2] }
+    : null;
+  const typeLabel =
+    moment.kind === "thought"
+      ? "Note"
+      : moment.kind === "video"
+        ? "Video"
+        : moment.kind === "location"
+          ? "Location"
+          : moment.kind === "milestone"
+            ? "Milestone"
+            : "Photo";
+
+  if (moment.kind === "photo" || moment.kind === "video") {
     return (
-      <div className="moment-card photo-card">
-        <div className="photo-frame">
-          {moment.image.delivery === "private" ? (
-            <PrivatePhotoImage
-              src={moment.image.src}
-              alt={moment.image.alt}
-              width={1200}
-              height={801}
-              highPriority={preload}
+      <div
+        className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
+      >
+        <div
+          className={`photo-frame ${moment.kind === "video" ? "video-frame" : ""}`}
+        >
+          {moment.kind === "video" ? (
+            <FullscreenMediaViewer
+              kind="video"
+              label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
+              reactionTargetId={moment.id}
+              preview={
+                <PrivateVideoPlayer
+                  src={moment.video.src}
+                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
+                  preload={preload ? "metadata" : "none"}
+                  controls={false}
+                />
+              }
+              fullscreenMedia={
+                <PrivateVideoPlayer
+                  src={moment.video.src}
+                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
+                  preload="metadata"
+                />
+              }
             />
           ) : (
-            <CspPublicImage
-              src={moment.image.src}
-              alt={moment.image.alt}
-              width={1200}
-              height={801}
-              highPriority={preload}
-              sizes="(max-width: 520px) 92vw, 410px"
+            <FullscreenMediaViewer
+              kind="photo"
+              label={moment.image.alt}
+              reactionTargetId={moment.id}
+              preview={
+                moment.image.delivery === "private" ? (
+                  <PrivatePhotoImage
+                    src={moment.image.src}
+                    alt={moment.image.alt}
+                    width={1200}
+                    height={801}
+                    highPriority={preload}
+                  />
+                ) : (
+                  <CspPublicImage
+                    src={moment.image.src}
+                    alt={moment.image.alt}
+                    width={1200}
+                    height={801}
+                    highPriority={preload}
+                    sizes="(max-width: 520px) 92vw, 410px"
+                  />
+                )
+              }
+              fullscreenMedia={
+                moment.image.delivery === "private" ? (
+                  <PrivatePhotoImage
+                    src={moment.image.src}
+                    alt={moment.image.alt}
+                    width={1600}
+                    height={1068}
+                    highPriority
+                  />
+                ) : (
+                  <CspPublicImage
+                    src={moment.image.src}
+                    alt={moment.image.alt}
+                    width={1600}
+                    height={1068}
+                    highPriority
+                    sizes="100vw"
+                  />
+                )
+              }
             />
           )}
-          <span className="photo-date">{moment.image.badgeLabel}</span>
         </div>
         <div className="card-copy">
-          <p className="moment-kicker">{moment.kicker}</p>
+          <div className="photo-card-heading">
+            <p className="moment-kicker">{typeLabel}</p>
+            {connectedActions && moment.canChange ? (
+              <ConnectedMomentControl
+                moment={moment}
+                actions={connectedActions}
+                position={connectedPosition}
+                total={connectedTotal}
+                taggablePeople={interaction?.taggablePeople ?? []}
+              />
+            ) : null}
+          </div>
           <p>{moment.text}</p>
           {interaction ? (
             <MomentConversationControl
@@ -99,9 +186,20 @@ export function MomentCard({
 
   if (moment.kind === "thought") {
     return (
-      <div className="moment-card thought-card">
-        <span className="thought-label">{moment.kicker}</span>
-        <blockquote>“{moment.text}”</blockquote>
+      <div
+        className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
+      >
+        <span className="thought-label">
+          {bibleVerse ? "Bible verse" : typeLabel}
+        </span>
+        {bibleVerse ? (
+          <blockquote className="bible-verse-copy">
+            <span>“{bibleVerse.verse}”</span>
+            <cite>{bibleVerse.reference} · World English Bible</cite>
+          </blockquote>
+        ) : (
+          <blockquote>“{moment.text}”</blockquote>
+        )}
         {moment.placeName ? (
           <p className="moment-place-label">⌖ {moment.placeName}</p>
         ) : null}
@@ -114,7 +212,7 @@ export function MomentCard({
             total={connectedTotal}
           />
         ) : null}
-        {connectedActions ? (
+        {connectedActions && moment.canChange ? (
           <ConnectedMomentControl
             moment={moment}
             actions={connectedActions}
@@ -137,10 +235,20 @@ export function MomentCard({
           <span className="place-pin">
             <i />
           </span>
-          <span className="map-label">{moment.mapLabel}</span>
         </div>
         <div className="card-copy">
-          <p className="moment-kicker">{moment.kicker}</p>
+          <div className="location-card-heading">
+            <p className="moment-kicker">{typeLabel}</p>
+            {connectedActions && moment.canChange ? (
+              <ConnectedMomentControl
+                moment={moment}
+                actions={connectedActions}
+                position={connectedPosition}
+                total={connectedTotal}
+                taggablePeople={interaction?.taggablePeople ?? []}
+              />
+            ) : null}
+          </div>
           <h3>{moment.place}</h3>
           <p>{moment.text}</p>
           {interaction ? (
@@ -150,15 +258,6 @@ export function MomentCard({
               actions={conversationActions}
               position={connectedPosition}
               total={connectedTotal}
-            />
-          ) : null}
-          {connectedActions ? (
-            <ConnectedMomentControl
-              moment={moment}
-              actions={connectedActions}
-              position={connectedPosition}
-              total={connectedTotal}
-              taggablePeople={interaction?.taggablePeople ?? []}
             />
           ) : null}
         </div>
@@ -174,31 +273,31 @@ export function MomentCard({
         {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
-        <span>{moment.kicker}</span>
+        <span>{typeLabel}</span>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
         {moment.placeName ? (
           <p className="moment-place-label">⌖ {moment.placeName}</p>
         ) : null}
-        {interaction ? (
-          <MomentConversationControl
-            interaction={interaction}
-            model={detailModel(moment)}
-            actions={conversationActions}
-            position={connectedPosition}
-            total={connectedTotal}
-          />
-        ) : null}
-        {connectedActions ? (
-          <ConnectedMomentControl
-            moment={moment}
-            actions={connectedActions}
-            position={connectedPosition}
-            total={connectedTotal}
-            taggablePeople={interaction?.taggablePeople ?? []}
-          />
-        ) : null}
       </div>
+      {interaction ? (
+        <MomentConversationControl
+          interaction={interaction}
+          model={detailModel(moment)}
+          actions={conversationActions}
+          position={connectedPosition}
+          total={connectedTotal}
+        />
+      ) : null}
+      {connectedActions && moment.canChange ? (
+        <ConnectedMomentControl
+          moment={moment}
+          actions={connectedActions}
+          position={connectedPosition}
+          total={connectedTotal}
+          taggablePeople={interaction?.taggablePeople ?? []}
+        />
+      ) : null}
     </div>
   );
 }

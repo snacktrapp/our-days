@@ -14,13 +14,23 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/photo-worker.server", () => ({
+  PHOTO_WORKER_VERSION: "test-photo-worker-version",
   PhotoWorkerError: class PhotoWorkerError extends Error {
     readonly retryable: boolean;
+    readonly stage: string;
+    readonly code: string;
 
-    constructor(message: string, retryable = true) {
+    constructor(
+      message: string,
+      retryable = true,
+      stage = "worker",
+      code = "PHOTO_WORKER_FAILED",
+    ) {
       super(message);
       this.name = "PhotoWorkerError";
       this.retryable = retryable;
+      this.stage = stage;
+      this.code = code;
     }
   },
   processPhotoIntake: mocks.process,
@@ -150,14 +160,58 @@ describe("private photo processing route", () => {
   });
 
   it("returns a stable attention response after a terminal safe failure", async () => {
+    mocks.rpc.mockReset();
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ moment_id: null, status: "needs_attention" }],
+        error: null,
+      });
     mocks.process.mockRejectedValue(
-      new PhotoWorkerError("private details", false),
+      new PhotoWorkerError(
+        "private details",
+        false,
+        "validation",
+        "PHOTO_FORMAT_UNSUPPORTED",
+      ),
     );
     const response = await request();
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
       ok: false,
       message: "This file could not be verified as a safe photo.",
+    });
+  });
+
+  it("keeps a nonterminal worker invariant retryable", async () => {
+    mocks.rpc.mockReset();
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      });
+    mocks.process.mockRejectedValue(
+      new PhotoWorkerError(
+        "private details",
+        false,
+        "validation",
+        "PHOTO_VALIDATION_CONTRACT_UNSAFE",
+      ),
+    );
+
+    const response = await request();
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ok: false,
+      message: "The photo is still being prepared. Check again shortly.",
     });
   });
 });

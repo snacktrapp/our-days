@@ -183,6 +183,32 @@ describe("private artifact scanner", () => {
     );
   });
 
+  it("follows Vercel function links and scans their in-repository targets", () => {
+    const root = mkdtempSync(join(tmpdir(), "our-days-function-link-"));
+    const target = join(root, ".local-function");
+    mkdirSync(join(root, ".next", "output", "functions"), {
+      recursive: true,
+    });
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(root, ".next", "BUILD_ID"), "fixture-build");
+    writeFileSync(join(target, "handler.js"), secretKey);
+    writeFileSync(join(root, ".gitignore"), ".next\n.local-function\n");
+    expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
+    symlinkSync(
+      target,
+      join(root, ".next", "output", "functions", "linked.func"),
+    );
+
+    expect(scanRepository(root)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "supabase-secret-key",
+          path: ".local-function/handler.js",
+        }),
+      ]),
+    );
+  });
+
   it("includes untracked, non-ignored source in the credential scan", () => {
     const root = mkdtempSync(join(tmpdir(), "our-days-artifact-repo-"));
     mkdirSync(join(root, ".next"));
@@ -287,6 +313,7 @@ describe("private artifact scanner", () => {
     const files = new Map([
       [".next/BUILD_ID", "fixture-build"],
       [".next/cache/webpack/server-production/0.pack", secretKey],
+      [".next/dev/cache/turbopack/compiler.pack", secretKey],
       [".next/routes-manifest.json", "safe"],
     ]);
     for (const [path, content] of files) {
@@ -297,6 +324,22 @@ describe("private artifact scanner", () => {
     expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
 
     expect(scanRepository(root)).toEqual([]);
+  });
+
+  it("scans a Vercel source bundle when Git metadata is unavailable", () => {
+    const root = mkdtempSync(join(tmpdir(), "our-days-vercel-source-"));
+    mkdirSync(join(root, ".next"), { recursive: true });
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, ".next", "BUILD_ID"), "fixture-build");
+    writeFileSync(join(root, "src", "safe.ts"), "export const safe = true;");
+    const priorVercel = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      expect(scanRepository(root)).toEqual([]);
+    } finally {
+      if (priorVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = priorVercel;
+    }
   });
 
   it("keeps unexpected CLI filesystem errors generic", () => {

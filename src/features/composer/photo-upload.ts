@@ -1,4 +1,9 @@
 import { resolveSupabaseOrigin } from "../../../config/supabase-origin";
+import type {
+  DetailedError,
+  HttpRequest,
+  Upload as TusUpload,
+} from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
 import { hashPhotoInWorker } from "./photo-hash";
@@ -48,12 +53,19 @@ export type PhotoUploadResult = Readonly<{
 export class PhotoUploadError extends Error {
   readonly retryable: boolean;
   readonly discardResume: boolean;
+  readonly resumeDisposition: "preserve" | "cancel-active" | "retire-terminal";
 
-  constructor(message: string, retryable = true, discardResume = false) {
+  constructor(
+    message: string,
+    retryable = true,
+    resumeDisposition:
+      "preserve" | "cancel-active" | "retire-terminal" = "preserve",
+  ) {
     super(message);
     this.name = "PhotoUploadError";
     this.retryable = retryable;
-    this.discardResume = discardResume;
+    this.resumeDisposition = resumeDisposition;
+    this.discardResume = resumeDisposition !== "preserve";
   }
 }
 
@@ -65,6 +77,7 @@ type UploadDependencies = Readonly<{
   processPhoto?: (intakeId: string, signal: AbortSignal) => Promise<void>;
   resumeStore?: PhotoUploadResumeStore;
   statusAttempts?: number;
+  upload?: typeof uploadWithTusClient;
 }>;
 
 export function createPhotoUploadAttempt(): PhotoUploadAttempt {
@@ -155,7 +168,7 @@ function resolvedUploadUrl(endpoint: string, location: string | null) {
     throw new PhotoUploadError(
       "The upload returned an unsafe destination.",
       false,
-      true,
+      "cancel-active",
     );
   }
   return resolved.toString();
@@ -207,14 +220,14 @@ async function remoteOffset(
     throw new PhotoUploadError(
       "That interrupted upload expired. Try the upload again.",
       true,
-      true,
+      "cancel-active",
     );
   }
   if (response.status === 409) {
     throw new PhotoUploadError(
       "That interrupted upload changed. Try the upload again.",
       true,
-      true,
+      "cancel-active",
     );
   }
   const value = response.headers.get("upload-offset");
@@ -302,14 +315,14 @@ async function uploadChunks(input: {
       throw new PhotoUploadError(
         "That interrupted upload expired. Try the upload again.",
         true,
-        true,
+        "cancel-active",
       );
     }
     if (response.status === 409) {
       throw new PhotoUploadError(
         "That interrupted upload changed. Try the upload again.",
         true,
-        true,
+        "cancel-active",
       );
     }
     if (
@@ -323,6 +336,138 @@ async function uploadChunks(input: {
     offset = nextOffset;
     input.onStage({ state: "uploading", progress: offset / input.file.size });
   }
+}
+
+function tusResponseStatus(error: Error | DetailedError) {
+  if (!("originalResponse" in error) || !error.originalResponse) return null;
+  return error.originalResponse.getStatus();
+}
+
+async function uploadWithTusClient(input: {
+  endpoint: string;
+  file: File;
+  metadata: Readonly<Record<string, string>>;
+  onStage: (stage: PhotoUploadStage) => void;
+  publishableKey: string;
+  saveUploadUrl: (uploadUrl: string) => Promise<void>;
+  session: () => Promise<Readonly<{ accessToken: string }>>;
+  signal: AbortSignal;
+  uploadUrl?: string;
+}) {
+  const { Upload } = await import("tus-js-client");
+  let uploadUrlSave: Promise<void> = Promise.resolve();
+  let sessionError: PhotoUploadError | null = null;
+  let upload: TusUpload;
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      input.signal.removeEventListener("abort", abort);
+      callback();
+    };
+    const abort = () => {
+      void upload.abort(false);
+      finish(() => {
+        try {
+          throwIfAborted(input.signal);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    };
+
+    upload = new Upload(input.file, {
+      chunkSize: tusChunkBytes,
+      endpoint: input.endpoint,
+      headers: {
+        apikey: input.publishableKey,
+        "x-upsert": "false",
+      },
+      metadata: { ...input.metadata },
+      onBeforeRequest: async (request: HttpRequest) => {
+        try {
+          const session = await input.session();
+          request.setHeader("authorization", `Bearer ${session.accessToken}`);
+        } catch (error) {
+          sessionError =
+            error instanceof PhotoUploadError
+              ? error
+              : new PhotoUploadError(
+                  "Your private session needs to be renewed.",
+                  false,
+                );
+          throw sessionError;
+        }
+      },
+      onError: (error) => {
+        finish(() => {
+          if (sessionError) {
+            reject(sessionError);
+            return;
+          }
+          const status = tusResponseStatus(error);
+          if (status === 404 || status === 410) {
+            reject(
+              new PhotoUploadError(
+                "That interrupted upload expired. Try the upload again.",
+                true,
+                "cancel-active",
+              ),
+            );
+            return;
+          }
+          if (status === 409) {
+            reject(
+              new PhotoUploadError(
+                "That interrupted upload changed. Try the upload again.",
+                true,
+                "cancel-active",
+              ),
+            );
+            return;
+          }
+          reject(
+            new PhotoUploadError(
+              "The private photo transfer could not be completed. Try again.",
+            ),
+          );
+        });
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        input.onStage({
+          state: "uploading",
+          progress: bytesTotal === 0 ? 0 : bytesUploaded / bytesTotal,
+        });
+      },
+      onSuccess: () => finish(resolve),
+      onUploadUrlAvailable: () => {
+        try {
+          const safeUrl = resolvedUploadUrl(input.endpoint, upload.url);
+          uploadUrlSave = input.saveUploadUrl(safeUrl);
+        } catch (error) {
+          void upload.abort(false);
+          finish(() => reject(error));
+        }
+      },
+      removeFingerprintOnSuccess: true,
+      retryDelays: [0, 3_000, 5_000, 10_000, 20_000],
+      storeFingerprintForResuming: false,
+      uploadDataDuringCreation: true,
+      uploadUrl: input.uploadUrl,
+    });
+
+    input.signal.addEventListener("abort", abort, { once: true });
+    if (input.signal.aborted) {
+      abort();
+      return;
+    }
+    input.onStage({ state: "uploading", progress: 0 });
+    upload.start();
+  });
+
+  await uploadUrlSave;
 }
 
 function defaultPause(milliseconds: number, signal: AbortSignal) {
@@ -433,7 +578,11 @@ async function requestPhotoProcessing(intakeId: string, signal: AbortSignal) {
     } catch {
       // Keep the stable local message when a response body is unavailable.
     }
-    throw new PhotoUploadError(message, false);
+    // A terminal worker result cannot be resumed: the intake and its
+    // idempotency keys now point at an immutable rejected record. Remove the
+    // local resume record so the next attempt reserves a genuinely fresh
+    // intake instead of replaying this 409 forever.
+    throw new PhotoUploadError(message, true, "retire-terminal");
   }
 }
 
@@ -461,7 +610,7 @@ export async function uploadPhotoMoment(
   const resumeStore = dependencies.resumeStore ?? photoUploadResumeStore;
   const draftHash = await draftFingerprint(draft);
   throwIfAborted(signal);
-  const resumed = await resumeStore.find({
+  let resumed = await resumeStore.find({
     accountId: session.accountId,
     circleId: draft.circleId,
     draftHash,
@@ -469,6 +618,56 @@ export async function uploadPhotoMoment(
     fileSize: file.size,
     mimeType,
   });
+  if (resumed) {
+    attempt.requestKey = resumed.requestKey;
+    attempt.uploadRequestKey = resumed.uploadRequestKey;
+    attempt.intakeId = resumed.intakeId;
+    attempt.momentId = resumed.momentId;
+    attempt.uploadUrl = resumed.uploadUrl
+      ? resolvedUploadUrl(endpoint, resumed.uploadUrl)
+      : undefined;
+  }
+  if (resumed?.acknowledged && resumed.intakeId) {
+    const { data: statusRows, error: statusError } = await supabase.rpc(
+      "get_photo_moment_status",
+      { intake_id: resumed.intakeId },
+    );
+    const status = firstRow(statusRows);
+    if (
+      !statusError &&
+      status?.status === "published" &&
+      status.moment_id &&
+      uuidPattern.test(status.moment_id)
+    ) {
+      await resumeStore.remove(resumed.id);
+      return {
+        state: "published",
+        intakeId: resumed.intakeId,
+        momentId: status.moment_id,
+      };
+    }
+    if (
+      !statusError &&
+      (status?.status === "needs_attention" || status?.status === "cancelled")
+    ) {
+      await resumeStore.remove(resumed.id);
+      renewPhotoUploadAttempt(attempt);
+      resumed = null;
+    }
+    if (
+      !statusError &&
+      (status?.status === "uploading" || status?.status === "processing") &&
+      resumed?.intakeId &&
+      resumed?.momentId &&
+      uuidPattern.test(resumed.momentId)
+    ) {
+      return {
+        state: "processing",
+        intakeId: resumed.intakeId,
+        momentId: resumed.momentId,
+      };
+    }
+  }
   const resumeId = resumed?.id ?? crypto.randomUUID();
   let acknowledgementStarted = false;
 
@@ -561,7 +760,7 @@ export async function uploadPhotoMoment(
     );
     const claimQuotaMessage = photoQuotaMessage(claimError);
     if (claimQuotaMessage) {
-      throw new PhotoUploadError(claimQuotaMessage, true, true);
+      throw new PhotoUploadError(claimQuotaMessage, true, "cancel-active");
     }
     throwIfAborted(signal);
     const claim = firstRow(claimRows);
@@ -580,55 +779,84 @@ export async function uploadPhotoMoment(
     await saveResume({ expiresAt: claim.upload_expires_at });
     throwIfAborted(signal);
     if (claim.state !== "uploaded_unverified") {
-      if (!attempt.uploadUrl) {
-        const metadata = {
-          expected_mime_type: mimeType,
-          expected_sha256: sha256,
-          expected_size_bytes: file.size,
-          intake_id: reservation.intake_id,
-          upload_request_key: attempt.uploadRequestKey,
-        };
-        const response = await fetcher(endpoint, {
-          headers: {
-            ...(await headers()),
-            "upload-length": String(file.size),
-            "upload-metadata": [
-              `bucketName ${asciiBase64(claim.bucket_id)}`,
-              `objectName ${asciiBase64(claim.object_path)}`,
-              `contentType ${asciiBase64(mimeType)}`,
-              `cacheControl ${asciiBase64("3600")}`,
-              `metadata ${asciiBase64(JSON.stringify(metadata))}`,
-            ].join(","),
-          },
-          method: "POST",
-          signal,
-        });
-        throwIfAborted(signal);
-        if (!response.ok) {
-          throw new PhotoUploadError(
-            "The private upload could not be started.",
+      const objectMetadata = {
+        expected_mime_type: mimeType,
+        expected_sha256: sha256,
+        expected_size_bytes: file.size,
+        intake_id: reservation.intake_id,
+        upload_request_key: attempt.uploadRequestKey,
+      };
+      const metadata = {
+        bucketName: claim.bucket_id,
+        objectName: claim.object_path,
+        contentType: mimeType,
+        cacheControl: "3600",
+        metadata: JSON.stringify(objectMetadata),
+      };
+      if (dependencies.fetch) {
+        if (!attempt.uploadUrl) {
+          const response = await fetcher(endpoint, {
+            headers: {
+              ...(await headers()),
+              "upload-length": String(file.size),
+              "upload-metadata": Object.entries(metadata)
+                .map(([key, value]) => `${key} ${asciiBase64(value)}`)
+                .join(","),
+            },
+            method: "POST",
+            signal,
+          });
+          throwIfAborted(signal);
+          if (!response.ok) {
+            throw new PhotoUploadError(
+              "The private upload could not be started.",
+            );
+          }
+          attempt.uploadUrl = resolvedUploadUrl(
+            endpoint,
+            response.headers.get("location"),
           );
+          await saveResume({
+            expiresAt: claim.upload_expires_at,
+            uploadUrl: attempt.uploadUrl,
+          });
+          throwIfAborted(signal);
         }
-        attempt.uploadUrl = resolvedUploadUrl(
+        const pause = dependencies.pause ?? defaultPause;
+        await uploadChunks({
+          file,
+          fetcher,
+          headers,
+          onStage,
+          pause,
+          signal,
+          uploadUrl: attempt.uploadUrl!,
+        });
+      } else {
+        await (dependencies.upload ?? uploadWithTusClient)({
           endpoint,
-          response.headers.get("location"),
-        );
-        await saveResume({
-          expiresAt: claim.upload_expires_at,
+          file,
+          metadata,
+          onStage,
+          publishableKey,
+          saveUploadUrl: async (uploadUrl) => {
+            attempt.uploadUrl = uploadUrl;
+            await saveResume({
+              expiresAt: claim.upload_expires_at,
+              uploadUrl,
+            });
+          },
+          session: async () => {
+            const activeSession = await currentSession(supabase);
+            if (activeSession.accountId !== session.accountId) {
+              throw new PhotoUploadError("Your family access changed.", false);
+            }
+            return { accessToken: activeSession.accessToken };
+          },
+          signal,
           uploadUrl: attempt.uploadUrl,
         });
-        throwIfAborted(signal);
       }
-      const pause = dependencies.pause ?? defaultPause;
-      await uploadChunks({
-        file,
-        fetcher,
-        headers,
-        onStage,
-        pause,
-        signal,
-        uploadUrl: attempt.uploadUrl,
-      });
     }
 
     throwIfAborted(signal);
@@ -677,7 +905,8 @@ export async function uploadPhotoMoment(
       if (status.status === "needs_attention") {
         throw new PhotoUploadError(
           "This photo needs attention before it can be added.",
-          false,
+          true,
+          "retire-terminal",
         );
       }
       if (status.status === "cancelled") {
@@ -697,9 +926,18 @@ export async function uploadPhotoMoment(
     };
   } catch (error) {
     const abort = isAbortError(error);
-    const discardResume =
-      error instanceof PhotoUploadError && error.discardResume;
-    if ((abort && !acknowledgementStarted) || discardResume) {
+    const resumeDisposition =
+      error instanceof PhotoUploadError ? error.resumeDisposition : "preserve";
+    if (resumeDisposition === "retire-terminal") {
+      // Once acknowledged, terminal processing states are server-owned and
+      // cannot be cancelled. Retire only the device resume pointer; otherwise
+      // the same rejected intake is restored on every retry.
+      await resumeStore.remove(resumeId);
+      renewPhotoUploadAttempt(attempt);
+    } else if (
+      (abort && !acknowledgementStarted) ||
+      resumeDisposition === "cancel-active"
+    ) {
       const retired = await retireAttempt();
       if (!retired) {
         throw new PhotoUploadError(

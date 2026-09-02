@@ -15,6 +15,7 @@ import {
   withdrawFamilyInvitationEmailRequestAction,
 } from "@/features/family-settings/family-settings-actions";
 import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-environment";
+import { AccountTools } from "@/features/family-settings/account-tools";
 
 export default async function FamilySettingsPage() {
   const access = await requireJournalAccess();
@@ -50,6 +51,7 @@ export default async function FamilySettingsPage() {
           withdrawInvitation: withdrawFamilyInvitationEmailRequestAction,
         }}
       />
+      <AccountTools />
     </JournalChrome>
   );
 }

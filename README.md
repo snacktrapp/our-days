@@ -85,3 +85,5 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 ## Deployment boundary
 
 Do not link or deploy this repository until Brian approves creation of the dedicated GitHub, Supabase, and Vercel resources. Preview environments must never point at production family data. Until invitation auth exists, any external preview also requires Vercel Deployment Protection; the default production route is fail-closed and does not render the fixture timeline. The local fixture bypass is accepted only with an explicit flag, local/detached identity, and a loopback site origin.
+
+The staging, approval, promotion, rollback, and production smoke-test procedure is documented in `docs/operations/RELEASE_WORKFLOW.md`. `npm run release:state` rejects a dirty worktree, an unapproved branch, or a missing/non-GitHub `origin`; `npm run release:verify` then runs the complete local release gate without deploying anything.

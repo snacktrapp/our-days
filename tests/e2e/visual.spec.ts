@@ -81,19 +81,19 @@ test(
     await page
       .getByRole("dialog")
       .getByRole("button", {
-        name: "A thought A few words to keep",
+        name: "Written entry Text, date, and details",
         exact: true,
       })
       .click();
     await page
-      .getByRole("textbox", { name: "Your thought" })
+      .getByRole("textbox", { name: "Entry" })
       .fill("A backpack almost as big as Avery, and one brave wave goodbye.");
     await page.getByLabel("Moment date").fill("2023-08-21");
     await page
       .getByRole("dialog")
       .getByRole("combobox", { name: "Journal", exact: true })
       .selectOption("avery");
-    await page.getByRole("button", { name: /People and place/u }).click();
+    await page.getByRole("button", { name: /Details/u }).click();
     await page.getByRole("checkbox", { name: /Molly/u }).check();
     await page.getByLabel(/^Place/u).fill("Oak Street School");
     await expect(page).toHaveScreenshot(
@@ -116,7 +116,7 @@ test(
       page.getByText("Photo ready for this local preview."),
     ).toBeVisible();
     await page
-      .getByRole("textbox", { name: "A few words" })
+      .getByRole("textbox", { name: "Note" })
       .fill("The last warm hour before dinner.");
     await expect(page).toHaveScreenshot("composer-photo-chromium-mobile.png", {
       animations: "disabled",
@@ -132,17 +132,18 @@ test(
     await page.getByRole("button", { name: "Add moment" }).click();
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /Milestone/u })
+      .getByRole("button", { name: /Bible verse/u })
       .click();
     await page
       .getByRole("dialog")
-      .getByRole("textbox", { name: "Milestone", exact: true })
-      .fill("First day of school");
+      .getByRole("searchbox", { name: "Reference or words" })
+      .fill("John 3:16");
     await page
-      .getByRole("textbox", { name: "What made it meaningful?" })
-      .fill("One brave wave, then straight through the blue door.");
+      .getByRole("dialog")
+      .getByRole("button", { name: /John 3:16/u })
+      .click();
     await expect(page).toHaveScreenshot(
-      "composer-milestone-chromium-mobile.png",
+      "composer-bible-verse-chromium-mobile.png",
       { animations: "disabled", caret: "hide" },
     );
     await page.getByRole("button", { name: "Preview moment" }).click();
@@ -151,11 +152,11 @@ test(
     await page.getByRole("button", { name: "Add moment" }).click();
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /A place/u })
+      .getByRole("button", { name: /Location/u })
       .click();
     await page.getByLabel("Place name").fill("The little beach");
     await page
-      .getByRole("textbox", { name: "What happened here?" })
+      .getByRole("textbox", { name: "Details" })
       .fill("Avery finally put both feet in the water.");
     await expect(page).toHaveScreenshot("composer-place-chromium-mobile.png", {
       animations: "disabled",
@@ -180,7 +181,7 @@ test(
     await page.getByRole("button", { name: "Add moment" }).click();
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /A place/u })
+      .getByRole("button", { name: /Location/u })
       .click();
     await page.getByLabel("Place name").fill("The little beach");
     await page.locator(".composer-sheet").evaluate((sheet) => {

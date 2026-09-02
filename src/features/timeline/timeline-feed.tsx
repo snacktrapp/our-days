@@ -11,7 +11,34 @@ import type {
 } from "@/features/moments/moment-action-types";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
+const connectionMonths = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "June",
+  "July",
+  "Aug.",
+  "Sept.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+] as const;
+
+function connectionDate(occurredOn: string) {
+  const [year, month, day] = occurredOn.split("-").map(Number);
+  const monthLabel = connectionMonths[month - 1];
+  return monthLabel && year && day
+    ? `${monthLabel} ${day}, ${year}`
+    : occurredOn;
+}
+
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
+  const dateAndTime = moment.displayTime
+    ? `${connectionDate(moment.occurredOn)} | ${moment.displayTime}`
+    : connectionDate(moment.occurredOn);
+
   return (
     <div className="connection">
       <span
@@ -22,7 +49,7 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
       </span>
       <span className="moment-meta">
         <strong>{moment.personName}</strong>
-        {moment.displayTime ? <span>{moment.displayTime}</span> : null}
+        <span>{dateAndTime}</span>
       </span>
     </div>
   );
@@ -30,6 +57,17 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
 
 function assertNever(entry: never): never {
   throw new Error(`Unsupported timeline entry: ${JSON.stringify(entry)}`);
+}
+
+function preciseEndCopy(markerLabel: string, message: string) {
+  if (markerLabel === "The beginning") {
+    return {
+      markerLabel: "Earliest entry",
+      message: "No earlier entries.",
+    };
+  }
+
+  return { markerLabel, message };
 }
 
 type TimelineEntryProps = Readonly<{
@@ -87,12 +125,13 @@ function TimelineEntry({
         </article>
       );
     case "end-message":
+      const endCopy = preciseEndCopy(entry.markerLabel, entry.message);
       return (
         <>
           <div className="date-marker year-marker">
-            <span>{entry.markerLabel}</span>
+            <span>{endCopy.markerLabel}</span>
           </div>
-          <p className="timeline-whisper">{entry.message}</p>
+          <p className="timeline-whisper">{endCopy.message}</p>
         </>
       );
     case "empty-state":
@@ -138,19 +177,29 @@ export function TimelineFeed({
         />
       ) : null}
       {model.switcher.length > 0 && (
-        <div className="view-switch" role="group" aria-label="Timeline view">
-          {model.switcher.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              prefetch={false}
-              aria-current={item.current ? "page" : undefined}
-              className={item.current ? "active" : ""}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </div>
+        <details className="view-switch">
+          <summary>
+            <span>
+              {model.switcher.find((item) => item.current)?.label ?? "Timeline"}
+            </span>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m4.5 6 3.5 3.5L11.5 6" />
+            </svg>
+          </summary>
+          <nav aria-label="Choose a family timeline">
+            {model.switcher.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                aria-current={item.current ? "page" : undefined}
+                className={item.current ? "active" : ""}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </details>
       )}
 
       {model.personalIntro && (

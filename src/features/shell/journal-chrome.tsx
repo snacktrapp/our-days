@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PrimaryNavigation } from "./primary-navigation";
+import { TimelineHeaderComposer } from "./timeline-header-composer";
+import { ThemeToggle } from "./theme-toggle";
 import type {
   JournalSection,
   JournalChromeViewModel,
@@ -63,7 +65,15 @@ export function JournalChrome({
               {model.title}
             </h1>
           </div>
-          {section === "settings" ? (
+          {section === "timeline" ? (
+            <div className="topbar-actions">
+              <TimelineHeaderComposer
+                composer={model.composer}
+                createMomentAction={createMomentAction}
+              />
+              <ThemeToggle />
+            </div>
+          ) : section === "settings" ? (
             <Link
               className="quiet-button settings-close-link"
               aria-label="Back to People"
@@ -81,29 +91,21 @@ export function JournalChrome({
             >
               ←
             </Link>
-          ) : model.timelineOptionsHref ? (
-            <Link
-              className="quiet-button"
-              aria-label="Open timeline options"
-              href={model.timelineOptionsHref}
-              prefetch={false}
-            >
-              •••
-            </Link>
           ) : (
-            <button className="quiet-button" aria-label="Timeline options">
-              •••
-            </button>
+            <ThemeToggle />
           )}
         </header>
-        {model.composer.photoPostingEnabled && model.composer.circleId ? (
-          <PhotoStatusShelf circleId={model.composer.circleId} />
+        {section === "timeline" &&
+        model.composer.photoPostingEnabled &&
+        model.composer.circleId ? (
+          <PhotoStatusShelf
+            circleId={model.composer.circleId}
+            today={model.composer.previewToday}
+          />
         ) : null}
         {children}
         <PrimaryNavigation
-          composer={model.composer}
           section={section}
-          createMomentAction={createMomentAction}
           memoriesHref={model.memoriesHref}
         />
       </section>

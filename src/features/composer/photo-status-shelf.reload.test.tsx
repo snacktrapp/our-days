@@ -72,11 +72,11 @@ beforeEach(() => {
 describe("PhotoStatusShelf reload recovery", () => {
   it("survives remount from server state when this browser has no resume record", async () => {
     const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
+    expect(await screen.findByText("Adding your photo…")).toBeVisible();
     firstPage.unmount();
 
     render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Preparing your photo")).toBeVisible();
+    expect(await screen.findByText("Adding your photo…")).toBeVisible();
     await expect(
       photoUploadResumeStore.listForScope(accountId, circleId),
     ).resolves.toEqual([]);
@@ -85,9 +85,16 @@ describe("PhotoStatusShelf reload recovery", () => {
     });
   });
 
-  it("removes an obsolete browser resume record after the server no longer counts it", async () => {
+  it("removes an obsolete browser resume record only after explicit publication", async () => {
     await photoUploadResumeStore.save(record);
-    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    mocks.rpc.mockImplementation(async (name: string) =>
+      name === "get_photo_moment_status"
+        ? {
+            data: [{ moment_id: record.momentId, status: "published" }],
+            error: null,
+          }
+        : { data: [], error: null },
+    );
 
     render(<PhotoStatusShelf circleId={circleId} />);
     await waitFor(async () => {
@@ -98,5 +105,8 @@ describe("PhotoStatusShelf reload recovery", () => {
     expect(
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();
+    expect(mocks.rpc).toHaveBeenCalledWith("get_photo_moment_status", {
+      intake_id: intakeId,
+    });
   });
 });

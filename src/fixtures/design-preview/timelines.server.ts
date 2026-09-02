@@ -252,7 +252,7 @@ const familyEntries = [
       personName: "Avery",
       personInitial: "A",
       personAccent: "ochre",
-      displayTime: "Added by Molly",
+      displayTime: undefined,
       displayDate: "Aug 21, 2023",
       occurredOn: "2023-08-21",
       kicker: "Milestone",
@@ -521,7 +521,7 @@ export function getPersonalTimelineFixture(
 export function getPeopleFixture(): PeopleViewModel {
   return {
     chrome: chrome("teal", "Our people"),
-    intro: "Five lives, held together. Each person has a journal of their own.",
+    intro: "Individual journals within this family archive.",
     people: [
       {
         id: "brian",
@@ -695,7 +695,7 @@ export function getMemoriesFixture(): MemoriesViewModel {
   return {
     chrome: chrome("teal", "Memories"),
     heading: "On this day",
-    subheading: "Across the years",
+    subheading: "This date across years",
     feature: {
       state: "photo",
       href: "/memories/on-this-day",
@@ -703,16 +703,8 @@ export function getMemoriesFixture(): MemoriesViewModel {
       imageAlt: featured.image.alt,
       dateLabel: featured.displayDate,
       title: featured.kicker,
-      actionLabel: `See ${anniversaryMoments.length} moments from this day →`,
+      actionLabel: `View ${anniversaryMoments.length} entries →`,
     },
-    collections: [
-      {
-        href: "/memories/milestones",
-        label: "The days we chose to mark",
-        description:
-          "Firsts, changes, and new chapters, kept in their true order.",
-      },
-    ],
     years: availableMemoryYears().map((year) => ({
       year,
       href: `/memories/years/${year}`,
@@ -732,9 +724,9 @@ export function getOnThisDayFixture(
     chrome: memoriesChrome,
     returnHref: "/memories",
     returnLabel: "All memories",
-    eyebrow: "On this day · Across the years",
+    eyebrow: "On this day · Prior years",
     title: formatAnniversaryLabel(monthAndDay),
-    description: "Ordinary moments returning quietly from the family archive.",
+    description: "Entries recorded on this date in prior years.",
   } as const;
 
   if (moments.length === 0) {
@@ -742,9 +734,8 @@ export function getOnThisDayFixture(
       ...base,
       state: "empty",
       emptyState: {
-        title: "Nothing from this day yet",
-        description:
-          "As the journal grows, moments from this date will gather here.",
+        title: "No entries for this date",
+        description: "Entries from this date will appear here.",
       },
     };
   }

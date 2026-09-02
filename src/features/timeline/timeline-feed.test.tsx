@@ -1,8 +1,12 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { TimelineFeed } from "./timeline-feed";
 import type { TimelineViewModel } from "./timeline-view-model";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/family",
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+}));
 
 const shared = {
   journalPersonId: "person",
@@ -97,6 +101,8 @@ const model = {
         kind: "location",
         place: "The lake",
         mapLabel: "LAKE",
+        canChange: true,
+        revision: 1,
       },
     },
     {
@@ -122,7 +128,15 @@ const model = {
 
 describe("TimelineFeed", () => {
   it("renders the rail sequence and all four moment treatments semantically", () => {
-    const { container } = render(<TimelineFeed model={model} />);
+    const { container } = render(
+      <TimelineFeed
+        model={model}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+        }}
+      />,
+    );
     expect(
       screen.getByLabelText("Chronological moments for Person"),
     ).toBeInTheDocument();
@@ -138,23 +152,101 @@ describe("TimelineFeed", () => {
       "2026-08-01",
     );
     expect(screen.getByAltText("Family outside")).toBeInTheDocument();
+    expect(screen.getAllByText("Aug. 1, 2026 | 8:00 pm")).toHaveLength(4);
+    expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(
+        '[data-moment-kind="location"] .location-card-heading .connected-moment-menu-trigger',
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("opens the one private response surface without card totals", async () => {
-    const user = userEvent.setup();
+  it("keeps the date but omits a timestamp when no time was recorded", () => {
+    render(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            {
+              id: "date-only",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "date-only-moment",
+                kind: "thought",
+                displayTime: undefined,
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("DATE ONLY")).not.toBeInTheDocument();
+    expect(screen.getByText("Aug. 1, 2026")).toBeVisible();
+  });
+
+  it("shows entry options only on moments the viewer can change", () => {
+    render(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            {
+              id: "owned",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "owned-moment",
+                kind: "thought",
+                canChange: true,
+                revision: 3,
+              },
+            },
+            {
+              id: "family-member",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "family-member-moment",
+                kind: "thought",
+                personName: "Molly",
+                canChange: false,
+              },
+            },
+          ],
+        }}
+        connectedActions={{ update: vi.fn(), trash: vi.fn() }}
+      />,
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: /^Moment options/u }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: /^Moment options/u }),
+    ).toHaveAccessibleName(expect.stringContaining("Person’s"));
+    expect(
+      screen.queryByRole("button", {
+        name: /Moment options — Molly’s/u,
+      }),
+    ).toBeNull();
+  });
+
+  it("shows activity and opens responses inline without card totals", () => {
     render(<TimelineFeed model={model} />);
-    expect(screen.queryByText("A private detail.")).toBeNull();
+    expect(screen.getAllByText("A private detail.")).toHaveLength(4);
     expect(screen.queryByText(/2 notes/u)).toBeNull();
 
     const respond = screen.getAllByRole("button", {
-      name: /Respond to .* by Person on Aug 1, 2026/u,
+      name: /Choose a reaction .* by Person on Aug 1, 2026/u,
     })[0];
-    await user.click(respond);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("A private detail.")).toBeInTheDocument();
+    fireEvent.keyDown(respond, { key: "ArrowUp" });
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(
-      screen.getByText(/Notes and reactions are not saved/u),
-    ).toBeInTheDocument();
+      screen.getByRole("menu", { name: "Choose a reaction" }),
+    ).toBeVisible();
+    expect(screen.queryByText(/Notes and reactions are not saved/u)).toBeNull();
   });
 
   it("keeps the timeline rail and loaded moments when an older page fails", () => {

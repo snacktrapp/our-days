@@ -57,23 +57,34 @@ function actionMomentLabel(moment: TimelineMomentViewModel) {
   return `${moment.personName}’s “${excerpt}” moment from ${moment.displayDate}`;
 }
 
-export function ConnectedMomentControl({
+type ConnectedMomentControlProps = Readonly<{
+  moment: TimelineMomentViewModel;
+  actions?: ConnectedMomentActions;
+  position?: number;
+  total?: number;
+  taggablePeople?: NonNullable<MomentInteractionViewModel["taggablePeople"]>;
+}>;
+
+export function ConnectedMomentControl(props: ConnectedMomentControlProps) {
+  if (!props.actions || !props.moment.canChange || !props.moment.revision) {
+    return null;
+  }
+
+  return <ChangeableMomentControl {...props} actions={props.actions} />;
+}
+
+function ChangeableMomentControl({
   moment,
   actions,
   position = 1,
   total = 1,
   taggablePeople = [],
-}: {
-  moment: TimelineMomentViewModel;
-  actions: ConnectedMomentActions;
-  position?: number;
-  total?: number;
-  taggablePeople?: NonNullable<MomentInteractionViewModel["taggablePeople"]>;
-}) {
+}: ConnectedMomentControlProps & { actions: ConnectedMomentActions }) {
   const pathname = usePathname();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [body, setBody] = useState(moment.text);
   const [title, setTitle] = useState(
     moment.kind === "milestone" ? moment.milestone : "",
@@ -89,7 +100,9 @@ export function ConnectedMomentControl({
   const [occurredTime, setOccurredTime] = useState(originalTime);
   const [message, setMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const menuWrapperRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDialogElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -109,7 +122,32 @@ export function ConnectedMomentControl({
     };
   }, [open]);
 
-  if (!moment.canChange || !moment.revision) return null;
+  useEffect(() => {
+    if (!menuOpen) return;
+    const menu = menuRef.current;
+    if (menu && !menu.open) menu.showModal();
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !menuWrapperRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+      if (menu?.open) menu.close();
+    };
+  }, [menuOpen]);
 
   const draftIsDirty =
     body !== moment.text ||
@@ -139,7 +177,7 @@ export function ConnectedMomentControl({
     setOccurredTime(originalTime);
     setOpen(false);
     setMessage(null);
-    window.requestAnimationFrame(() => editButtonRef.current?.focus());
+    window.requestAnimationFrame(() => menuTriggerRef.current?.focus());
   };
 
   const save = async () => {
@@ -224,6 +262,7 @@ export function ConnectedMomentControl({
         return;
       }
       announce("Moment moved to trash.");
+      setMenuOpen(false);
       restoreJournalFocusAfterRefresh();
     } catch {
       setMessage("That moment could not be moved to trash. Try again.");
@@ -232,26 +271,70 @@ export function ConnectedMomentControl({
     }
   };
 
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(moment.text);
+      announce("Moment text copied.");
+      setMenuOpen(false);
+    } catch {
+      setMessage("That moment could not be copied. Try again.");
+    }
+  };
+
   return (
     <>
-      <div className="connected-moment-actions">
+      <div className="connected-moment-actions" ref={menuWrapperRef}>
         <button
-          ref={editButtonRef}
+          ref={menuTriggerRef}
+          className="connected-moment-menu-trigger"
           type="button"
-          aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-          onClick={() => setOpen(true)}
+          aria-controls={menuOpen ? `moment-actions-${moment.id}` : undefined}
+          aria-expanded={menuOpen}
+          aria-label={`Moment options — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+          onClick={() => setMenuOpen((current) => !current)}
         >
-          Edit
-        </button>
-        <button
-          type="button"
-          aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-          disabled={pending}
-          onClick={trash}
-        >
-          {pending ? "Moving…" : "Move to trash"}
+          <span aria-hidden="true">•••</span>
         </button>
       </div>
+      {menuOpen ? (
+        <dialog
+          ref={menuRef}
+          className="connected-moment-menu connected-moment-menu-portal"
+          id={`moment-actions-${moment.id}`}
+          role="group"
+          aria-label="Moment options"
+          onCancel={(event) => {
+            event.preventDefault();
+            setMenuOpen(false);
+            menuTriggerRef.current?.focus();
+          }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setMenuOpen(false);
+          }}
+        >
+          <button type="button" onClick={copyText}>
+            Copy text
+          </button>
+          <button
+            type="button"
+            aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+            onClick={() => {
+              setMenuOpen(false);
+              setOpen(true);
+            }}
+          >
+            Edit moment
+          </button>
+          <button
+            type="button"
+            aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+            disabled={pending}
+            onClick={trash}
+          >
+            {pending ? "Moving…" : "Move to trash"}
+          </button>
+        </dialog>
+      ) : null}
       {message && !open ? (
         <p className="connected-moment-message" role="alert">
           {message}

@@ -70,21 +70,6 @@ export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
           </Link>
         )}
       </section>
-      <nav className="memory-collections" aria-labelledby="collections-heading">
-        <h2 id="collections-heading">Milestones</h2>
-        {model.collections.map((collection) => (
-          <Link key={collection.href} href={collection.href} prefetch={false}>
-            <span className="memory-collection-node" aria-hidden="true">
-              ✦
-            </span>
-            <span>
-              <strong>{collection.label}</strong>
-              <small>{collection.description}</small>
-            </span>
-            <span aria-hidden="true">→</span>
-          </Link>
-        ))}
-      </nav>
       <nav className="browse-years" aria-labelledby="browse-years-heading">
         <h2 id="browse-years-heading">Browse by year</h2>
         {model.years.length > 0 ? (

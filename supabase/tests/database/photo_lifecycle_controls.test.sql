@@ -320,8 +320,9 @@ select isnt(
 );
 reset role;
 
--- Account byte liability: three claimed-and-cancelled 50 MiB liabilities are
--- retained until cleanup completion even though their declared files are tiny.
+-- Terminal cleanup is maintenance work. Three claimed-and-cancelled uploads
+-- may remain queued until their resumable URLs expire, but they must not lock
+-- the member out of starting a new upload.
 set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000006'::uuid
@@ -368,7 +369,7 @@ select * from public.reserve_photo_moment(
   '2024-07-04', null, null,
   'e3000000-0000-4000-8000-000000000004'
 ) \gset bytes_four_
-select throws_ok(
+select lives_ok(
   format(
     $$select * from public.claim_photo_intake_upload(
       %L::uuid, 'e3100000-0000-4000-8000-000000000004',
@@ -376,8 +377,7 @@ select throws_ok(
     )$$,
     :'bytes_four_intake_id'
   ),
-  'P0001', 'PHOTO_ACCOUNT_BYTE_QUOTA',
-  'three unresolved fixed-size liabilities prevent another upload claim'
+  'queued cleanup from terminal uploads does not block another upload claim'
 );
 reset role;
 

@@ -1,9 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import { photoUploadResumeStore } from "./photo-upload-resume-store";
+import {
+  clearOptimisticMediaUploads,
+  emptyOptimisticMediaUploadSnapshot,
+  firstPublishedMediaRefresh,
+  optimisticMediaUploadSnapshot,
+  removeOptimisticMediaUpload,
+  removeOptimisticMediaUploadByIntake,
+  subscribeToOptimisticMediaUploads,
+  updateOptimisticMediaUpload,
+  type OptimisticMediaUpload,
+} from "./optimistic-media-upload";
 
 type PhotoCleanupState =
   | "awaiting_cleanup_job"
@@ -26,23 +43,17 @@ export type PhotoStatusItem = Readonly<{
 
 type CancellationResult = Readonly<{
   id: string;
-  kind: "error" | "success";
   message: string;
 }>;
 
 type PhotoStatusShelfViewProps = Readonly<{
   cancellationResult: CancellationResult | null;
   cancellingIds: ReadonlySet<string>;
-  cleanupWarningId: string | null;
   confirmingCancelId: string | null;
-  checkFailed: boolean;
-  checking: boolean;
   items: readonly PhotoStatusItem[];
-  localStoreWarning: boolean;
   onConfirmCancel: (id: string) => void;
   onKeep: () => void;
   onRequestCancel: (id: string) => void;
-  onCheck: () => void;
 }>;
 
 const allowedServerStatuses = new Set([
@@ -62,17 +73,28 @@ const allowedCleanupStates = new Set<PhotoCleanupState>([
   "operator_review",
   "queued",
 ]);
-const publishedRefreshKeyPrefix = "our-days:published-photo-refresh:";
+const allowedMomentStatuses = new Set([
+  "cancelled",
+  "needs_attention",
+  "processing",
+  "published",
+  "uploading",
+]);
+const terminalUploadMessage =
+  "This photo could not be added. Dismiss it and try again.";
 
-function firstPublishedRefresh(intakeId: string) {
-  const key = `${publishedRefreshKeyPrefix}${intakeId}`;
-  try {
-    if (window.sessionStorage.getItem(key) === "1") return false;
-    window.sessionStorage.setItem(key, "1");
-    return true;
-  } catch {
-    return true;
-  }
+type PhotoMomentStatus =
+  "cancelled" | "needs_attention" | "processing" | "published" | "uploading";
+
+function momentStatusFromShelfItem(
+  item: PhotoStatusItem,
+): PhotoMomentStatus | null {
+  if (item.state === "published-cleanup") return "published";
+  if (item.state === "attention") return "needs_attention";
+  if (item.state === "cancelled") return "cancelled";
+  if (item.state === "processing") return "processing";
+  if (item.state === "pending") return "uploading";
+  return null;
 }
 
 function visibleState(status: string): PhotoStatusItem["state"] {
@@ -93,47 +115,160 @@ function dateLabel(date: string) {
   }).format(new Date(year, month - 1, day));
 }
 
-function cleanupCopy(item: PhotoStatusItem) {
-  const prefix =
-    item.state === "published-cleanup"
-      ? "The photo was added privately."
-      : "It won’t be added.";
-  if (item.cleanupState === "not_required") {
-    return `${prefix} No uploaded photo bytes were retained.`;
+function optimisticStageLabel(upload: OptimisticMediaUpload) {
+  if (upload.stage.state === "uploading") {
+    return `Uploading ${Math.round(upload.stage.progress * 100)}%`;
   }
-  if (item.cleanupState === "leased") {
-    return `${prefix} Its temporary private upload copy is being removed.`;
-  }
-  if (item.cleanupState === "operator_review") {
-    return `${prefix} Its temporary private upload copy needs private maintenance.`;
-  }
-  return `${prefix} Its temporary private upload copy is waiting for secure removal.`;
+  if (upload.stage.state === "processing") return "Preparing media";
+  if (upload.stage.state === "published") return "Added to timeline";
+  if (upload.stage.state === "failed") return upload.stage.message;
+  if (upload.stage.state === "stopping") return "Stopping upload";
+  if (upload.stage.state === "finishing") return "Finishing";
+  return "Preparing upload";
 }
 
-export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
+function OptimisticMediaCard({
+  upload,
+  pendingPlacement = false,
+}: Readonly<{
+  upload: OptimisticMediaUpload;
+  pendingPlacement?: boolean;
+}>) {
+  return (
+    <article
+      className={
+        pendingPlacement
+          ? "pending-media-item"
+          : "moment moment-media optimistic-media-moment"
+      }
+    >
+      <div className="connection">
+        <span
+          className={`avatar-node dot-${upload.journalPersonAccent}`}
+          aria-hidden="true"
+        >
+          {upload.journalPersonInitial}
+        </span>
+        <span className="moment-meta">
+          <strong>{upload.journalPersonName}</strong>
+          <span>
+            {dateLabel(upload.occurredOn)}
+            {upload.occurredTime ? ` | ${upload.occurredTime}` : ""}
+          </span>
+        </span>
+      </div>
+      <div
+        className="moment-card photo-card optimistic-media-card"
+        aria-busy={
+          upload.stage.state !== "failed" && upload.stage.state !== "published"
+        }
+      >
+        <div className="photo-frame">
+          {upload.kind === "video" ? (
+            <video
+              src={upload.previewUrl}
+              muted
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            // The preview is a private, device-local blob URL.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={upload.previewUrl} alt="" />
+          )}
+          <span className="optimistic-media-overlay">
+            {optimisticStageLabel(upload)}
+          </span>
+        </div>
+        <div className="card-copy">
+          <div className="photo-card-heading">
+            <p className="moment-kicker">{upload.kind}</p>
+          </div>
+          {upload.body ? <p>{upload.body}</p> : null}
+          {pendingPlacement ? (
+            <p className="pending-media-placement">
+              Uploading privately · Will appear on{" "}
+              {dateLabel(upload.occurredOn)}
+            </p>
+          ) : null}
+          {upload.stage.state === "uploading" ? (
+            <progress max={1} value={upload.stage.progress}>
+              {Math.round(upload.stage.progress * 100)}%
+            </progress>
+          ) : null}
+          {upload.stage.state === "failed" ? (
+            <button
+              className="pending-media-dismiss"
+              type="button"
+              onClick={() => removeOptimisticMediaUpload(upload.id)}
+            >
+              Dismiss
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function OptimisticMediaTimeline({
+  uploads,
+}: Readonly<{ uploads: readonly OptimisticMediaUpload[] }>) {
+  if (uploads.length === 0) return null;
+
+  return (
+    <section
+      className="timeline optimistic-media-timeline"
+      aria-label="Media being added"
+    >
+      <div className="time-rail" aria-hidden="true" />
+      {uploads.map((upload) => (
+        <OptimisticMediaCard key={upload.id} upload={upload} />
+      ))}
+    </section>
+  );
+}
+
+function BackdatedMediaShelf({
+  uploads,
+}: Readonly<{ uploads: readonly OptimisticMediaUpload[] }>) {
+  if (uploads.length === 0) return null;
+  return (
+    <section className="pending-media-shelf" aria-label="Media being uploaded">
+      {uploads.map((upload) => (
+        <OptimisticMediaCard key={upload.id} upload={upload} pendingPlacement />
+      ))}
+    </section>
+  );
+}
+
+export function PhotoStatusShelf({
+  circleId,
+  today = "",
+}: Readonly<{ circleId: string; today?: string }>) {
   const router = useRouter();
   const [items, setItems] = useState<readonly PhotoStatusItem[]>([]);
-  const [checkFailed, setCheckFailed] = useState(false);
-  const [checking, setChecking] = useState(false);
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(
     null,
   );
   const [cancellationResult, setCancellationResult] =
     useState<CancellationResult | null>(null);
-  const [cleanupWarningId, setCleanupWarningId] = useState<string | null>(null);
-  const [localStoreWarning, setLocalStoreWarning] = useState(false);
   const [cancellingIds, setCancellingIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
   const runRef = useRef(0);
   const inFlightRef = useRef<Promise<void> | null>(null);
   const publishedRef = useRef(new Set<string>());
+  const optimisticUploads = useSyncExternalStore(
+    subscribeToOptimisticMediaUploads,
+    optimisticMediaUploadSnapshot,
+    emptyOptimisticMediaUploadSnapshot,
+  ).filter((upload) => upload.circleId === circleId);
 
   const checkStatuses = useCallback(
     (finishProcessing = false) => {
       if (inFlightRef.current) return inFlightRef.current;
       const run = ++runRef.current;
-      setChecking(true);
       const task = (async () => {
         try {
           const supabase = createOurDaysBrowserClient();
@@ -194,7 +329,7 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
             }
           }
 
-          const nextItems = rows.map((row) => ({
+          const allItems = rows.map((row) => ({
             id: row.intake_id,
             journalPersonName: row.journal_person_name,
             occurredOn: row.occurred_on,
@@ -202,8 +337,10 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
             canCancel: row.can_cancel,
             cleanupState: row.cleanup_state as PhotoCleanupState,
           }));
+          const nextItems = allItems.filter(
+            (item) => item.state === "pending" || item.state === "processing",
+          );
           setItems(nextItems);
-          setCheckFailed(false);
           setCancellationResult((current) =>
             current && nextItems.some((item) => item.id === current.id)
               ? current
@@ -211,14 +348,70 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
           );
 
           let shouldRefresh = false;
-          for (const item of nextItems) {
-            if (
-              item.state === "published-cleanup" &&
-              !publishedRef.current.has(item.id) &&
-              firstPublishedRefresh(item.id)
-            ) {
-              publishedRef.current.add(item.id);
-              shouldRefresh = true;
+          const serverIntakeIds = new Set(rows.map((row) => row.intake_id));
+          const resolvedStatuses = new Map<string, PhotoMomentStatus>();
+          for (const item of allItems) {
+            const status = momentStatusFromShelfItem(item);
+            if (status) resolvedStatuses.set(item.id, status);
+            if (status === "published") {
+              if (
+                !publishedRef.current.has(item.id) &&
+                firstPublishedMediaRefresh(item.id)
+              ) {
+                publishedRef.current.add(item.id);
+                removeOptimisticMediaUploadByIntake(item.id);
+                shouldRefresh = true;
+              }
+            } else if (status === "needs_attention" || status === "cancelled") {
+              const matchingUpload = optimisticMediaUploadSnapshot().find(
+                (upload) => upload.intakeId === item.id,
+              );
+              if (matchingUpload) {
+                updateOptimisticMediaUpload(matchingUpload.id, {
+                  stage: { state: "failed", message: terminalUploadMessage },
+                });
+              }
+            }
+          }
+
+          const absentUploads = optimisticMediaUploadSnapshot().filter(
+            (upload) =>
+              upload.circleId === circleId &&
+              upload.kind === "photo" &&
+              upload.intakeId &&
+              (upload.stage.state === "processing" ||
+                upload.stage.state === "published") &&
+              !serverIntakeIds.has(upload.intakeId),
+          );
+          const absenceResults = await Promise.all(
+            absentUploads.map(async (upload) => {
+              const result = await supabase.rpc("get_photo_moment_status", {
+                intake_id: upload.intakeId!,
+              });
+              const status = result.data?.[0]?.status;
+              return {
+                upload,
+                status:
+                  !result.error && status && allowedMomentStatuses.has(status)
+                    ? (status as PhotoMomentStatus)
+                    : null,
+              };
+            }),
+          );
+          if (run !== runRef.current) return;
+          for (const { upload, status } of absenceResults) {
+            if (!status || !upload.intakeId) continue;
+            resolvedStatuses.set(upload.intakeId, status);
+            if (status === "published") {
+              removeOptimisticMediaUpload(upload.id);
+              if (firstPublishedMediaRefresh(upload.intakeId)) {
+                publishedRef.current.add(upload.intakeId);
+                shouldRefresh = true;
+              }
+            } else if (status === "needs_attention" || status === "cancelled") {
+              updateOptimisticMediaUpload(upload.id, {
+                stage: { state: "failed", message: terminalUploadMessage },
+              });
             }
           }
           if (shouldRefresh) router.refresh();
@@ -233,23 +426,49 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
               accountId,
               circleId,
             );
-            const serverIntakeIds = new Set(rows.map((row) => row.intake_id));
+            const unresolvedLocalRecords = localRecords.filter(
+              (record) =>
+                record.intakeId &&
+                !serverIntakeIds.has(record.intakeId) &&
+                !resolvedStatuses.has(record.intakeId),
+            );
+            const localStatusResults = await Promise.all(
+              unresolvedLocalRecords.map(async (record) => {
+                const result = await supabase.rpc("get_photo_moment_status", {
+                  intake_id: record.intakeId!,
+                });
+                const status = result.data?.[0]?.status;
+                return {
+                  intakeId: record.intakeId!,
+                  status:
+                    !result.error && status && allowedMomentStatuses.has(status)
+                      ? (status as PhotoMomentStatus)
+                      : null,
+                };
+              }),
+            );
+            if (run !== runRef.current) return;
+            for (const result of localStatusResults) {
+              if (result.status) {
+                resolvedStatuses.set(result.intakeId, result.status);
+              }
+            }
             await Promise.all(
               localRecords
                 .filter(
                   (record) =>
-                    record.intakeId && !serverIntakeIds.has(record.intakeId),
+                    record.intakeId &&
+                    ["cancelled", "needs_attention", "published"].includes(
+                      resolvedStatuses.get(record.intakeId) ?? "",
+                    ),
                 )
                 .map((record) => photoUploadResumeStore.remove(record.id)),
             );
-            if (run === runRef.current) setLocalStoreWarning(false);
           } catch {
-            if (run === runRef.current) setLocalStoreWarning(true);
+            // Browser resume shortcuts are best-effort and never need a family-facing notice.
           }
         } catch {
-          if (run === runRef.current) setCheckFailed(true);
-        } finally {
-          if (run === runRef.current) setChecking(false);
+          // A status poll can retry quietly when the page is visible again.
         }
       })();
       inFlightRef.current = task;
@@ -262,21 +481,19 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
   );
 
   useEffect(() => {
-    void checkStatuses();
+    void checkStatuses(true);
     const checkWhenVisible = () => {
-      if (!document.hidden) void checkStatuses();
+      if (!document.hidden) void checkStatuses(true);
     };
     const interval = window.setInterval(checkWhenVisible, 10_000);
     const clear = () => {
       runRef.current += 1;
       inFlightRef.current = null;
       publishedRef.current.clear();
+      clearOptimisticMediaUploads();
       setItems([]);
-      setCheckFailed(false);
       setCancellationResult(null);
-      setCleanupWarningId(null);
       setConfirmingCancelId(null);
-      setLocalStoreWarning(false);
       setCancellingIds(new Set());
     };
     window.addEventListener("our-days:clear-private-state", clear);
@@ -292,16 +509,27 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
     };
   }, [checkStatuses]);
 
+  useEffect(() => {
+    const timers: number[] = [];
+    for (const upload of optimisticUploads) {
+      if (upload.stage.state !== "published") continue;
+      const refreshKey = upload.intakeId ?? upload.momentId ?? upload.id;
+      if (firstPublishedMediaRefresh(refreshKey)) router.refresh();
+      timers.push(
+        window.setTimeout(() => removeOptimisticMediaUpload(upload.id), 1_200),
+      );
+    }
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [optimisticUploads, router]);
+
   const cancel = async (id: string) => {
     runRef.current += 1;
     inFlightRef.current = null;
     setConfirmingCancelId(null);
     setCancellingIds((current) => new Set(current).add(id));
     setCancellationResult(null);
-    setCleanupWarningId(null);
 
     const supabase = createOurDaysBrowserClient();
-    let cleanupState: PhotoCleanupState;
     try {
       const { data, error } = await supabase.rpc("cancel_photo_intake", {
         intake_id: id,
@@ -314,28 +542,10 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
       ) {
         throw new Error("Cancellation unavailable");
       }
-      cleanupState = result.cleanup_state as PhotoCleanupState;
-      setItems((current) =>
-        current.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                canCancel: false,
-                cleanupState,
-                state: "cancelled",
-              }
-            : item,
-        ),
-      );
-      setCancellationResult({
-        id,
-        kind: "success",
-        message: "Cancellation confirmed. The photo won’t be added.",
-      });
+      setItems((current) => current.filter((item) => item.id !== id));
     } catch {
       setCancellationResult({
         id,
-        kind: "error",
         message:
           "Cancellation couldn’t be confirmed. Check your connection and try again.",
       });
@@ -362,7 +572,7 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
           .map((record) => photoUploadResumeStore.remove(record.id)),
       );
     } catch {
-      setCleanupWarningId(id);
+      // Local resume cleanup is best-effort after server-confirmed cancellation.
     } finally {
       setCancellingIds((current) => {
         const next = new Set(current);
@@ -373,43 +583,53 @@ export function PhotoStatusShelf({ circleId }: Readonly<{ circleId: string }>) {
   };
 
   return (
-    <PhotoStatusShelfView
-      cancellationResult={cancellationResult}
-      cancellingIds={cancellingIds}
-      cleanupWarningId={cleanupWarningId}
-      confirmingCancelId={confirmingCancelId}
-      checkFailed={checkFailed}
-      checking={checking}
-      items={items}
-      localStoreWarning={localStoreWarning}
-      onConfirmCancel={(id) => void cancel(id)}
-      onKeep={() => setConfirmingCancelId(null)}
-      onRequestCancel={setConfirmingCancelId}
-      onCheck={() => void checkStatuses(true)}
-    />
+    <>
+      <OptimisticMediaTimeline
+        uploads={optimisticUploads.filter(
+          (upload) => upload.occurredOn === today,
+        )}
+      />
+      <BackdatedMediaShelf
+        uploads={optimisticUploads.filter(
+          (upload) => upload.occurredOn !== today,
+        )}
+      />
+      <PhotoStatusShelfView
+        cancellationResult={cancellationResult}
+        cancellingIds={cancellingIds}
+        confirmingCancelId={confirmingCancelId}
+        items={items.filter(
+          (item) =>
+            !optimisticUploads.some((upload) => upload.intakeId === item.id),
+        )}
+        onConfirmCancel={(id) => void cancel(id)}
+        onKeep={() => setConfirmingCancelId(null)}
+        onRequestCancel={setConfirmingCancelId}
+      />
+    </>
   );
 }
 
 export function PhotoStatusShelfView({
   cancellationResult,
   cancellingIds,
-  cleanupWarningId,
   confirmingCancelId,
-  checkFailed,
-  checking,
   items,
-  localStoreWarning,
   onConfirmCancel,
   onKeep,
   onRequestCancel,
-  onCheck,
 }: PhotoStatusShelfViewProps) {
   const resultRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (cancellationResult) resultRef.current?.focus();
   }, [cancellationResult]);
 
-  if (items.length === 0 && !checkFailed) return null;
+  if (items.length === 0 && !cancellationResult) return null;
+
+  const processingCount = items.filter(
+    (item) => item.state === "processing",
+  ).length;
+  const unfinishedItems = items.filter((item) => item.state === "pending");
 
   return (
     <section className="photo-status-shelf" aria-label="Private photo status">
@@ -417,22 +637,22 @@ export function PhotoStatusShelfView({
         <p
           className="photo-status-result"
           ref={resultRef}
-          role={cancellationResult.kind === "error" ? "alert" : "status"}
+          role="alert"
           tabIndex={-1}
         >
           {cancellationResult.message}
         </p>
       ) : null}
-      {localStoreWarning ? (
-        <p className="photo-status-browser-note" role="status">
-          Photo status is current, but this browser couldn’t tidy its saved
-          upload shortcut.
+      {processingCount > 0 ? (
+        <p className="photo-processing-status" role="status">
+          {processingCount === 1
+            ? "Adding your photo…"
+            : `Adding ${processingCount} photos…`}
         </p>
       ) : null}
-      {items.map((item) => {
+      {unfinishedItems.map((item) => {
         const cancelling = cancellingIds.has(item.id);
         const confirming = confirmingCancelId === item.id;
-        const cleanupAttention = item.cleanupState === "operator_review";
         return (
           <div
             key={item.id}
@@ -446,41 +666,12 @@ export function PhotoStatusShelfView({
                   ? "✓"
                   : "!"}
             </span>
-            <div>
-              <strong>
-                {cleanupAttention
-                  ? item.state === "published-cleanup"
-                    ? "Photo added; cleanup needs attention"
-                    : "Private cleanup needs attention"
-                  : item.state === "pending"
-                    ? "Private upload not finished"
-                    : item.state === "processing"
-                      ? "Preparing your photo"
-                      : item.state === "cancelled"
-                        ? "Photo cancelled"
-                        : item.state === "published-cleanup"
-                          ? "Photo added privately"
-                          : "Photo wasn’t added"}
-              </strong>
+            <div className="photo-status-copy">
+              <strong>Photo upload paused</strong>
               <span>
                 {item.journalPersonName} · {dateLabel(item.occurredOn)}
               </span>
-              <span>
-                {item.state === "pending"
-                  ? "It is private and has not been added to the timeline."
-                  : item.state === "processing"
-                    ? "It is being prepared privately and can’t be cancelled safely now."
-                    : item.state === "cancelled" ||
-                        item.state === "published-cleanup"
-                      ? cleanupCopy(item)
-                      : "It remains private and was not added. Family organizers can review it later."}
-              </span>
-              {cleanupWarningId === item.id ? (
-                <span role="status">
-                  Cancellation was confirmed, but this browser couldn’t remove
-                  its saved upload shortcut.
-                </span>
-              ) : null}
+              <span>It hasn’t been added to the timeline.</span>
               {confirming ? (
                 <span className="photo-status-confirmation">
                   Cancel this unfinished photo? It won’t be added.
@@ -514,30 +705,10 @@ export function PhotoStatusShelfView({
                   </button>
                 )}
               </div>
-            ) : item.state === "processing" ? (
-              <div className="photo-status-actions">
-                <button type="button" disabled={checking} onClick={onCheck}>
-                  {checking ? "Checking…" : "Try finishing"}
-                </button>
-              </div>
             ) : null}
           </div>
         );
       })}
-      {checkFailed ? (
-        <div className="photo-status-item photo-status-error" role="alert">
-          <span className="photo-status-mark" aria-hidden="true">
-            ◌
-          </span>
-          <div>
-            <strong>Couldn’t check your photo yet</strong>
-            <span>We couldn’t check its private status yet.</span>
-          </div>
-          <button type="button" disabled={checking} onClick={onCheck}>
-            {checking ? "Checking…" : "Check again"}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

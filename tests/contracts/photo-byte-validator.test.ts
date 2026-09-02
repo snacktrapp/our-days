@@ -159,6 +159,34 @@ describe("photo byte validator", () => {
     },
   );
 
+  it("accepts a JPEG with a recognized HDR gain map", async () => {
+    const builder = sharp({
+      create: {
+        background: "#f4c36b",
+        channels: 3,
+        height: 64,
+        width: 96,
+      },
+    }) as ReturnType<typeof sharp> & {
+      withGainMap(): ReturnType<typeof sharp>;
+    };
+    const bytes = await builder.withGainMap().jpeg({ quality: 90 }).toBuffer();
+    const metadata = await sharp(bytes).metadata();
+
+    expect(metadata.gainMap?.image).toBeInstanceOf(Buffer);
+    await expect(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/jpeg"),
+      ),
+    ).resolves.toMatchObject({
+      height: 64,
+      mimeType: "image/jpeg",
+      pages: 1,
+      width: 96,
+    });
+  });
+
   it("opens its spool exclusively with owner-only permissions", async () => {
     const bytes = await sharp({
       create: {

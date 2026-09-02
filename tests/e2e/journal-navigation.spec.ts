@@ -48,9 +48,7 @@ test("route-based journal navigation preserves the approved views", async ({
       .allTextContents(),
   ).toEqual(["2026", "2023", "2022", "2019"]);
 
-  await page
-    .getByRole("link", { name: /See 3 moments from this day/u })
-    .click();
+  await page.getByRole("link", { name: /View 3 entries/u }).click();
   await expect(page).toHaveURL(/\/memories\/on-this-day$/u);
   await expect(page).toHaveTitle("On this day — Our Days");
   await expect(page.getByRole("heading", { name: "August 28" })).toBeVisible();
@@ -80,7 +78,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page).toHaveURL(/\/memories\/on-this-day$/u);
 
   await page.getByRole("link", { name: /All memories/u }).click();
-  await page.getByRole("link", { name: /The days we chose to mark/u }).click();
+  await page.getByRole("link", { name: /Recorded milestones/u }).click();
   await expect(page).toHaveURL(/\/memories\/milestones$/u);
   await expect(page).toHaveTitle("Milestones — Our Days");
   await expect(page.getByRole("heading", { name: "Milestones" })).toBeVisible();
@@ -172,7 +170,98 @@ test("primary screens and composer states have no serious axe violations", async
   await scan();
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "A thought A few words to keep", exact: true })
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
     .click();
   await scan();
+});
+
+test("appearance preference persists and the journal grid stays fixed", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (!window.localStorage.getItem("our-days-theme")) {
+      window.localStorage.setItem("our-days-theme", "dark");
+    }
+  });
+  await page.goto("/family");
+
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    /viewport-fit=cover/u,
+  );
+  await expect(
+    page.locator('meta[name="mobile-web-app-capable"]'),
+  ).toHaveAttribute("content", "yes");
+  await expect(
+    page.locator('meta[name="apple-mobile-web-app-status-bar-style"]'),
+  ).toHaveAttribute("content", "black-translucent");
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Use light appearance" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(
+    page.getByRole("button", { name: "Use dark appearance" }),
+  ).toBeVisible();
+
+  const gridAttachment = await page
+    .locator(".phone-stage")
+    .evaluate((stage) => window.getComputedStyle(stage).backgroundAttachment);
+  expect(gridAttachment).toBe("fixed, fixed");
+  const rootGrid = await page.locator(".app-shell").evaluate((shell) => {
+    const style = window.getComputedStyle(shell);
+    return {
+      attachment: style.backgroundAttachment,
+      image: style.backgroundImage,
+    };
+  });
+  expect(rootGrid.attachment).toBe("fixed, fixed");
+  expect(rootGrid.image).not.toBe("none");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("the timeline selector scrolls beneath the sticky header", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1042, height: 879 });
+  await page.goto("/family");
+
+  const stage = page.locator(".phone-stage");
+  const header = page.locator(".topbar");
+  const selector = page.locator(".view-switch");
+  await expect(selector).toBeVisible();
+
+  await stage.evaluate((element) => {
+    element.scrollTop = 52;
+  });
+
+  const layering = await page.evaluate(() => {
+    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const viewSwitch = document.querySelector<HTMLElement>(".view-switch");
+    if (!topbar || !viewSwitch) return null;
+
+    const headerRect = topbar.getBoundingClientRect();
+    const selectorRect = viewSwitch.getBoundingClientRect();
+    const sampleX = selectorRect.left + selectorRect.width / 2;
+    const sampleY = Math.max(
+      headerRect.top + 1,
+      Math.min(headerRect.bottom - 1, selectorRect.top + 1),
+    );
+    const topElement = document.elementFromPoint(sampleX, sampleY);
+
+    return {
+      overlaps: selectorRect.top < headerRect.bottom,
+      topElementIsHeader: Boolean(topElement?.closest(".topbar")),
+    };
+  });
+
+  expect(layering).toEqual({
+    overlaps: true,
+    topElementIsHeader: true,
+  });
+  await expect(header).toBeVisible();
 });

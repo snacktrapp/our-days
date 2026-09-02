@@ -10,11 +10,7 @@ export function PhotoStatusQualityPreview() {
       <PhotoStatusShelfView
         cancellationResult={null}
         cancellingIds={new Set()}
-        cleanupWarningId={null}
         confirmingCancelId="pending"
-        checkFailed
-        checking={false}
-        localStoreWarning={false}
         items={[
           {
             id: "processing",
@@ -52,7 +48,6 @@ export function PhotoStatusQualityPreview() {
         onConfirmCancel={() => undefined}
         onKeep={() => undefined}
         onRequestCancel={() => undefined}
-        onCheck={() => undefined}
       />
     </main>
   );

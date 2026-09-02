@@ -96,6 +96,8 @@ function requestedAnniversary(value: string | undefined) {
 function momentKindLabel(moment: TimelineMomentViewModel) {
   if (moment.kind === "milestone") return "Milestone";
   if (moment.kind === "location") return "Place";
+  if (moment.kind === "photo") return "Photo";
+  if (moment.kind === "video") return "Video";
   return "Thought";
 }
 
@@ -159,7 +161,7 @@ export async function loadConnectedMemories(
   return {
     chrome: memoryChrome(context),
     heading: "On this day",
-    subheading: "Across the years",
+    subheading: "This date across years",
     feature: featureMoment
       ? {
           state: "moment",
@@ -170,24 +172,15 @@ export async function loadConnectedMemories(
           personAccent: featureMoment.personAccent,
           kindLabel: momentKindLabel(featureMoment),
           summary: momentSummary(featureMoment),
-          actionLabel: "Open moments from this day →",
+          actionLabel: "View entries →",
         }
       : {
           state: "empty",
           href: "/memories/on-this-day",
-          title: "Nothing from this day yet",
-          description:
-            "As the journal grows, moments from this date will gather here.",
-          actionLabel: "Open this day →",
+          title: "No entries for this date",
+          description: "Entries from this date will appear here.",
+          actionLabel: "View date →",
         },
-    collections: [
-      {
-        href: "/memories/milestones",
-        label: "The days we chose to mark",
-        description:
-          "Firsts, changes, and new chapters, kept in their true order.",
-      },
-    ],
     years: visibleYears.map(({ memory_year: year }) => ({
       year: String(year),
       href: `/memories/years/${year}`,
@@ -319,10 +312,10 @@ export async function loadConnectedMemoryJourney(
     title,
     description:
       options.mode === "year"
-        ? "A chapter of family life, held in its true order."
+        ? "Entries recorded during this year."
         : options.mode === "milestones"
-          ? "Firsts, changes, and new chapters, held in their true order."
-          : "Ordinary moments returning quietly from the family archive.",
+          ? "Milestone entries in chronological order."
+          : "Entries recorded on this date in prior years.",
   } as const;
 
   if (moments.length === 0) {
@@ -350,9 +343,8 @@ export async function loadConnectedMemoryJourney(
                   "Milestones added to the family journal will gather here in their true order.",
               }
             : {
-                title: "Nothing from this day yet",
-                description:
-                  "As the journal grows, moments from this date will gather here.",
+                title: "No entries for this date",
+                description: "Entries from this date will appear here.",
               },
     };
   }

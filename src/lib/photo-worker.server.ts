@@ -20,6 +20,7 @@ const displayBucket = "our-days-display";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
+export const PHOTO_WORKER_VERSION = "2026-09-01-iphone-hdr-gain-map-v1";
 
 type WorkerClient = SupabaseClient<Database>;
 type ValidationLease =
@@ -52,11 +53,20 @@ type DisplayPhoto = Readonly<{
 
 export class PhotoWorkerError extends Error {
   readonly retryable: boolean;
+  readonly stage: string;
+  readonly code: string;
 
-  constructor(message: string, retryable = true) {
+  constructor(
+    message: string,
+    retryable = true,
+    stage = "worker",
+    code = "PHOTO_WORKER_FAILED",
+  ) {
     super(message);
     this.name = "PhotoWorkerError";
     this.retryable = retryable;
+    this.stage = stage;
+    this.code = code;
   }
 }
 
@@ -452,6 +462,8 @@ async function validateAndPromote(
       throw new PhotoWorkerError(
         "This file could not be verified as a safe photo.",
         false,
+        "validation",
+        error.code,
       );
     }
     throw error;

@@ -7,757 +7,408 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { MomentConversationActions } from "@/features/moments/moment-action-types";
 import { MomentConversationControl } from "./moment-conversation-control";
 import type {
+  MomentConversationViewModel,
   MomentDetailViewModel,
   MomentInteractionViewModel,
 } from "./timeline-view-model";
 
-const noteCanary = "The quiet ride home was my favorite part.";
-
 const interaction = {
-  currentPerson: { name: "Current person", initial: "C", accent: "teal" },
+  currentPerson: { name: "Brian", initial: "B", accent: "teal" },
   reactionOptions: [
-    { id: "held-close", label: "Hold close", symbol: "♡" },
-    { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
-    { id: "remember-this", label: "I remember", symbol: "↺" },
+    { id: "held-close", label: "Held close", symbol: "♡" },
+    { id: "made-me-smile", label: "Made me smile", symbol: "⌣" },
+    { id: "remember-this", label: "Remember this", symbol: "✦" },
   ],
 } as const satisfies MomentInteractionViewModel;
 
+const initialConversation = {
+  notes: [
+    {
+      id: "note-one",
+      authorName: "Molly",
+      authorInitial: "M",
+      authorAccent: "ochre",
+      body: "The quiet ride home was my favorite part.",
+      displayDate: "Aug 2, 2026",
+    },
+  ],
+  reactions: [
+    {
+      id: "reaction-one",
+      personName: "Molly",
+      personInitial: "M",
+      personAccent: "ochre",
+      reactionId: "held-close",
+    },
+  ],
+} as const satisfies MomentConversationViewModel;
+
 const model = {
   id: "moment-one",
-  kind: "thought",
-  personName: "Journal person",
+  kind: "photo",
+  personName: "Brian",
   personAccent: "clay",
   displayDate: "Aug 1, 2026",
-  kicker: "An ordinary evening",
-  text: "Worth keeping exactly as it was.",
-  taggedPeopleLabel: "Someone",
-  conversation: {
-    notes: [
-      {
-        id: "note-one",
-        authorName: "Family member",
-        authorInitial: "F",
-        authorAccent: "ochre",
-        body: noteCanary,
-        displayDate: "Aug 2, 2026",
-      },
-    ],
-    reactions: [
-      {
-        id: "reaction-one",
-        personName: "Family member",
-        personInitial: "F",
-        personAccent: "ochre",
-        reactionId: "held-close",
-      },
-    ],
-  },
+  kicker: "Photo",
+  text: "Beautiful night.",
+  conversation: initialConversation,
 } as const satisfies MomentDetailViewModel;
 
-function renderControl(overrides: Partial<MomentDetailViewModel> = {}) {
+function connectedActions(
+  conversation: MomentConversationViewModel = initialConversation,
+): MomentConversationActions & {
+  load: ReturnType<typeof vi.fn>;
+  createNote: ReturnType<typeof vi.fn>;
+  setReaction: ReturnType<typeof vi.fn>;
+} {
+  return {
+    load: vi.fn().mockResolvedValue({ ok: true, conversation }),
+    createNote: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
+    updateNote: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
+    trashNote: vi.fn().mockResolvedValue({ ok: true, message: "Removed" }),
+    setReaction: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
+  };
+}
+
+function renderControl(
+  actions?: MomentConversationActions,
+  conversation: MomentConversationViewModel = initialConversation,
+) {
   return render(
     <MomentConversationControl
       interaction={interaction}
-      model={{ ...model, ...overrides } as MomentDetailViewModel}
+      model={{ ...model, conversation }}
+      actions={actions}
+      position={2}
+      total={5}
     />,
   );
 }
 
 describe("MomentConversationControl", () => {
-  it("keeps private detail out of the closed DOM and opens Notes at its heading", async () => {
-    const user = userEvent.setup();
+  it("shows family activity directly on the moment without a dialog", () => {
     renderControl();
 
-    expect(screen.queryByText(noteCanary)).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    const notes = screen.getByRole("button", {
-      name: /Open private notes for thought .* by Journal person/u,
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Molly");
+    expect(
+      screen.getByRole("list", { name: "Notes from family" }),
+    ).toHaveTextContent("MollyThe quiet ride home was my favorite part.");
+  });
+
+  it("keeps long conversations compact and expands older notes inline", async () => {
+    const user = userEvent.setup();
+    renderControl(undefined, {
+      notes: [
+        ...initialConversation.notes,
+        {
+          ...initialConversation.notes[0],
+          id: "note-two",
+          body: "A second detail.",
+        },
+        {
+          ...initialConversation.notes[0],
+          id: "note-three",
+          body: "An older detail.",
+        },
+      ],
+      reactions: [],
     });
-    await user.click(notes);
 
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAccessibleName(
-      "Thought: “Worth keeping exactly as it was.” — Journal person, Aug 1, 2026",
-    );
-    expect(dialog).toHaveAttribute(
-      "aria-describedby",
-      "moment-detail-moment-one-privacy",
-    );
-    expect(screen.getByText(noteCanary)).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Notes from family" }),
-    ).toHaveFocus();
-    expect(document.body).toHaveClass("composer-scroll-locked");
-    expect(screen.queryByText(/\d+ notes/u)).toBeNull();
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Show 1 more" }));
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
+    await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("uses one reversible response from the fixed, count-free vocabulary", async () => {
-    const user = userEvent.setup();
-    renderControl();
-    await user.click(
-      screen.getByRole("button", {
-        name: /Respond to thought .* by Journal person/u,
-      }),
-    );
-
-    expect(
-      screen.getByRole("heading", { name: "A quiet response" }),
-    ).toHaveFocus();
-    const group = screen.getByRole("group", { name: "Your response" });
-    const choices = within(group).getAllByRole("button");
-    expect(choices.map((choice) => choice.textContent)).toEqual([
-      "♡Hold close",
-      "✦Made me smile",
-      "↺I remember",
-    ]);
-    expect(
-      choices.every(
-        (choice) => choice.getAttribute("aria-pressed") === "false",
-      ),
-    ).toBe(true);
-
-    await user.click(choices[0]);
-    expect(choices[0]).toHaveAttribute("aria-pressed", "true");
-    await user.click(choices[1]);
-    expect(choices[0]).toHaveAttribute("aria-pressed", "false");
-    expect(choices[1]).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("status")).toHaveTextContent("Nothing was saved");
-    await user.click(choices[1]);
-    expect(choices[1]).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("rejects whitespace, focuses the note, and renders hostile text literally", async () => {
-    const user = userEvent.setup();
-    const hostileNote = '<img data-note-injection src=x onerror="alert(1)">';
-    renderControl();
-    await user.click(
-      screen.getByRole("button", {
-        name: /Open private notes for thought .* by Journal person/u,
-      }),
-    );
-
-    const note = screen.getByRole("textbox", {
-      name: "Your note to the family",
-    });
-    await user.type(note, "   ");
-    await user.click(screen.getByRole("button", { name: "Preview note" }));
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Write a note before previewing it.",
-    );
-    expect(note).toHaveFocus();
-
-    await user.clear(note);
-    await user.type(note, hostileNote);
-    await user.click(screen.getByRole("button", { name: "Preview note" }));
-    const preview = screen.getByRole("article", {
-      name: "Your local note preview",
-    });
-    expect(preview).toHaveTextContent(hostileNote);
-    expect(preview.querySelector("[data-note-injection]")).toBeNull();
-    expect(preview).toHaveTextContent("Your local preview · Not saved");
-  });
-
-  it("edits and clears a segregated note preview", async () => {
-    const user = userEvent.setup();
-    renderControl();
-    await user.click(
-      screen.getByRole("button", {
-        name: /Open private notes for thought .* by Journal person/u,
-      }),
-    );
-    const note = screen.getByRole("textbox", {
-      name: "Your note to the family",
-    });
-    await user.type(note, "A small detail.");
-    await user.click(screen.getByRole("button", { name: "Preview note" }));
-    await user.click(screen.getByRole("button", { name: "Back to edit" }));
-    expect(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-    ).toHaveValue("A small detail.");
-    expect(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-    ).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Preview note" }));
-    await user.click(screen.getByRole("button", { name: "Clear preview" }));
-    expect(
-      screen.queryByRole("article", { name: "Your local note preview" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-    ).toHaveValue("");
-  });
-
-  it("protects dirty state and restores the exact opener after discard", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    renderControl();
-    const notes = screen.getByRole("button", {
-      name: /Open private notes for thought .* by Journal person/u,
-    });
-    await user.click(notes);
-    await user.type(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-      "Do not lose this yet.",
-    );
-
-    await user.click(screen.getByRole("button", { name: "Close preview" }));
-    expect(confirm).toHaveBeenCalledWith("Discard this unsaved note?");
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-    ).toHaveValue("Do not lose this yet.");
-
-    confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: "Close preview" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(notes).toHaveFocus();
-    expect(document.body).not.toHaveClass("composer-scroll-locked");
-
-    await user.click(notes);
-    expect(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-    ).toHaveValue("");
-  });
-
-  it("handles pristine Escape and dirty backdrop dismissal consistently", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    renderControl();
-    const respond = screen.getByRole("button", {
-      name: /Respond to thought .* by Journal person/u,
-    });
-    await user.click(respond);
-    fireEvent(
-      screen.getByRole("dialog"),
-      new Event("cancel", { cancelable: true }),
-    );
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(respond).toHaveFocus();
-    expect(confirm).not.toHaveBeenCalled();
-
-    await user.click(respond);
-    await user.click(screen.getByRole("button", { name: "Hold close" }));
-    fireEvent.click(screen.getByRole("dialog"));
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("renders a warm empty state without inventing note or response activity", async () => {
-    const user = userEvent.setup();
-    renderControl({ conversation: { notes: [], reactions: [] } });
-    await user.click(
-      screen.getByRole("button", {
-        name: /Open private notes for thought .* by Journal person/u,
-      }),
-    );
-    expect(
-      screen.getByText("No notes here yet. The moment can stay quiet."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("No family responses are attached to this moment."),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/be the first/iu)).toBeNull();
-  });
-
-  it("lazy-loads a connected conversation and persists one replaceable response", async () => {
-    const user = userEvent.setup();
-    const connectedConversation = {
+  it("opens emoji choices on one tap and saves only the chosen response", async () => {
+    const refreshedConversation = {
       notes: [],
       reactions: [
         {
-          id: "reaction-current",
-          personName: "Current person",
-          personInitial: "C",
-          personAccent: "teal" as const,
-          reactionId: "held-close" as const,
+          id: "reaction-brian",
+          personName: "Brian",
+          personInitial: "B",
+          personAccent: "teal",
+          reactionId: "held-close",
           isCurrentMember: true,
         },
       ],
-    };
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: connectedConversation,
-        })
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: {
-            notes: [],
-            reactions: [
-              {
-                ...connectedConversation.reactions[0],
-                reactionId: "made-me-smile" as const,
-              },
-            ],
-          },
-        }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn().mockResolvedValue({
+    } as const satisfies MomentConversationViewModel;
+    const emptyConversation = { notes: [], reactions: [] } as const;
+    const actions = connectedActions(emptyConversation);
+    actions.load
+      .mockResolvedValueOnce({ ok: true, conversation: emptyConversation })
+      .mockResolvedValue({
         ok: true,
-        message: "Response saved.",
-      }),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
+        conversation: refreshedConversation,
+      });
+    const user = userEvent.setup();
+    renderControl(actions);
+
     await user.click(
       screen.getByRole("button", {
-        name: /Respond to thought .* by Journal person/u,
+        name: /Choose a reaction for photo .* entry 2 of 5/u,
       }),
     );
-    expect(
-      await screen.findByText("Private to Cedar Circle"),
-    ).toBeInTheDocument();
-    const group = screen.getByRole("group", { name: "Your response" });
-    expect(
-      within(group).getByRole("button", { name: "Hold close" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(actions.setReaction).not.toHaveBeenCalled();
+    const choices = screen.getByRole("menu", { name: "Choose a reaction" });
     await user.click(
-      within(group).getByRole("button", { name: "Made me smile" }),
+      within(choices).getByRole("menuitemradio", { name: "Heart" }),
     );
-    await user.click(screen.getByRole("button", { name: "Save response" }));
-    expect(actions.setReaction).toHaveBeenCalledWith({
-      momentId: "moment-one",
-      reactionId: "made-me-smile",
-    });
-    expect(screen.getByRole("status")).toHaveTextContent("Response saved.");
-    expect(screen.queryByText("Local preview · Nothing is saved")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(
-      screen.getByRole("button", {
-        name: /Respond to thought .* by Journal person/u,
-      }),
-    ).toHaveTextContent("✦ Made me smile");
-  });
-
-  it("acknowledges a saved note on the closed moment without exposing its body", async () => {
-    const user = userEvent.setup();
-    const savedNote = {
-      id: "saved-note",
-      authorName: "Current person",
-      authorInitial: "C",
-      authorAccent: "teal" as const,
-      body: "A newly saved private detail.",
-      displayDate: "Aug 2, 2026",
-      revision: 1,
-      canChange: true,
-    };
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [], reactions: [] },
-        })
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [savedNote], reactions: [] },
-        }),
-      createNote: vi.fn().mockResolvedValue({ ok: true as const }),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-
-    await user.click(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Your note to the family" }),
-      savedNote.body,
-    );
-    await user.click(screen.getByRole("button", { name: "Save note" }));
-    expect(await screen.findByText(savedNote.body)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Close" }));
-
-    expect(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    ).toHaveTextContent("Note saved");
-    expect(screen.queryByText(savedNote.body)).toBeNull();
-  });
-
-  it("clears stale private bodies and disables mutations after a later load failure", async () => {
-    const user = userEvent.setup();
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: {
-            notes: [
-              {
-                id: "private-note",
-                authorName: "Family member",
-                authorInitial: "F",
-                authorAccent: "ochre" as const,
-                body: noteCanary,
-                displayDate: "Aug 2, 2026",
-              },
-            ],
-            reactions: [],
-          },
-        })
-        .mockResolvedValue({
-          ok: false as const,
-          message: "This moment is no longer available.",
-        }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    const notesOpener = screen.getByRole("button", {
-      name: /Open private notes for thought/u,
-    });
-    await user.click(notesOpener);
-    expect(await screen.findByText(noteCanary)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    await user.click(notesOpener);
-    expect(
-      await screen.findByRole("alert", {
-        name: "",
-      }),
-    ).toHaveTextContent("This moment is no longer available.");
-    expect(screen.queryByText(noteCanary)).toBeNull();
-    expect(screen.getByRole("button", { name: "Save note" })).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Save response" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
-  });
-
-  it("restores stable focus after editing or removing an owned note", async () => {
-    const user = userEvent.setup();
-    const ownedNote = {
-      id: "owned-note",
-      authorName: "Current person",
-      authorInitial: "C",
-      authorAccent: "teal" as const,
-      body: "My remembered detail.",
-      displayDate: "Aug 2, 2026",
-      revision: 1,
-      canChange: true,
-    };
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [ownedNote], reactions: [] },
-        })
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: {
-            notes: [
-              { ...ownedNote, body: "My corrected detail.", revision: 2 },
-            ],
-            reactions: [],
-          },
-        })
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [], reactions: [] },
-        }),
-      createNote: vi.fn(),
-      updateNote: vi.fn().mockResolvedValue({ ok: true, revision: 2 }),
-      trashNote: vi.fn().mockResolvedValue({ ok: true, revision: 3 }),
-      setReaction: vi.fn(),
-    };
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    );
-    await user.click(await screen.findByRole("button", { name: /^Edit —/u }));
-    const editBox = screen.getByRole("textbox", {
-      name: "Edit your family note",
-    });
-    await user.clear(editBox);
-    await user.type(editBox, "My corrected detail.");
-    await user.click(screen.getAllByRole("button", { name: "Save note" })[0]);
-    expect(
-      await screen.findByRole("heading", { name: "Notes from family" }),
-    ).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: /^Remove —/u }));
-    expect(
-      await screen.findByRole("heading", { name: "Notes from family" }),
-    ).toHaveFocus();
-    expect(screen.queryByText("My corrected detail.")).toBeNull();
-  });
-
-  it("protects an in-progress owned-note edit from every dialog dismissal", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const ownedNote = {
-      id: "owned-note",
-      authorName: "Current person",
-      authorInitial: "C",
-      authorAccent: "teal" as const,
-      body: "Original detail.",
-      displayDate: "Aug 2, 2026",
-      revision: 1,
-      canChange: true,
-    };
-    const actions = {
-      load: vi.fn().mockResolvedValue({
-        ok: true as const,
-        conversation: {
-          notes: [ownedNote],
-          reactions: [
-            {
-              id: "current-reaction",
-              personName: "Current person",
-              personInitial: "C",
-              personAccent: "teal" as const,
-              reactionId: "held-close" as const,
-              isCurrentMember: true,
-            },
-          ],
-        },
-      }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    );
-    await user.click(await screen.findByRole("button", { name: /^Edit —/u }));
-    const editBox = screen.getByRole("textbox", {
-      name: "Edit your family note",
-    });
-    await user.clear(editBox);
-    await user.type(editBox, "Changed but not saved.");
-
-    fireEvent(
-      screen.getByRole("dialog"),
-      new Event("cancel", { cancelable: true }),
-    );
-
-    expect(confirm).toHaveBeenCalledWith("Discard this unsaved note?");
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(editBox).toHaveValue("Changed but not saved.");
-  });
-
-  it("does not warn when an owned note was opened for editing but not changed", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const ownedNote = {
-      id: "owned-note",
-      authorName: "Current person",
-      authorInitial: "C",
-      authorAccent: "teal" as const,
-      body: "Original detail.",
-      displayDate: "Aug 2, 2026",
-      revision: 1,
-      canChange: true,
-    };
-    const actions = {
-      load: vi.fn().mockResolvedValue({
-        ok: true as const,
-        conversation: { notes: [ownedNote], reactions: [] },
-      }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    const opener = screen.getByRole("button", {
-      name: /Open private notes for thought/u,
-    });
-    await user.click(opener);
-    await user.click(await screen.findByRole("button", { name: /^Edit —/u }));
-    await user.click(screen.getByRole("button", { name: "Close" }));
-
-    expect(confirm).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(opener).toHaveFocus();
-  });
-
-  it("describes a dirty response removal together with an unsaved note", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const actions = {
-      load: vi.fn().mockResolvedValue({
-        ok: true as const,
-        conversation: {
-          notes: [],
-          reactions: [
-            {
-              id: "current-reaction",
-              personName: "Current person",
-              personInitial: "C",
-              personAccent: "teal" as const,
-              reactionId: "held-close" as const,
-              isCurrentMember: true,
-            },
-          ],
-        },
-      }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    );
-    await user.type(
-      await screen.findByRole("textbox", { name: "Your note to the family" }),
-      "Keep this draft.",
-    );
-    await user.click(screen.getByRole("button", { name: "Hold close" }));
-    await user.click(screen.getByRole("button", { name: "Close" }));
-
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this unsaved note and response?",
-    );
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("restores retry focus after repeated failure and section focus after recovery", async () => {
-    const user = userEvent.setup();
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({ ok: false as const, message: "Unavailable." })
-        .mockResolvedValueOnce({
-          ok: false as const,
-          message: "Still unavailable.",
-        })
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [], reactions: [] },
-        }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn(),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Open private notes for thought/u }),
-    );
-    const firstRetry = await screen.findByRole("button", { name: "Try again" });
-    await user.click(firstRetry);
-    const secondRetry = await screen.findByRole("button", {
-      name: "Try again",
-    });
-    await waitFor(() => expect(secondRetry).toHaveFocus());
-
-    await user.click(secondRetry);
     await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Notes from family" }),
-      ).toHaveFocus(),
-    );
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
-  });
-
-  it("announces durable reaction success and stays clean when refresh fails", async () => {
-    const user = userEvent.setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const actions = {
-      load: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true as const,
-          conversation: { notes: [], reactions: [] },
-        })
-        .mockResolvedValueOnce({
-          ok: false as const,
-          message: "Refresh unavailable.",
-        }),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      trashNote: vi.fn(),
-      setReaction: vi.fn().mockResolvedValue({
-        ok: true as const,
-        message: "Response saved.",
+      expect(actions.setReaction).toHaveBeenCalledWith({
+        momentId: "moment-one",
+        reactionId: "held-close",
       }),
-    };
-    render(
-      <MomentConversationControl
-        interaction={{ ...interaction, audienceName: "Cedar Circle" }}
-        model={{ ...model, conversation: { notes: [], reactions: [] } }}
-        actions={actions}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Respond to thought/u }),
-    );
-    await user.click(
-      await screen.findByRole("button", { name: "Made me smile" }),
-    );
-    await user.click(screen.getByRole("button", { name: "Save response" }));
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Your response was saved, but this conversation needs to be reopened.",
     );
     expect(
-      screen.getByRole("heading", { name: "A quiet response" }),
-    ).toHaveFocus();
+      screen.getByRole("button", { name: /Choose a reaction/u }),
+    ).toHaveTextContent("❤️");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Brian");
+  });
 
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    expect(confirm).not.toHaveBeenCalled();
+  it("shows standard emoji choices without relying on a long press", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.click(
+      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
+    );
+
+    const choices = screen.getByRole("menu", { name: "Choose a reaction" });
+    expect(within(choices).getAllByRole("menuitemradio")).toHaveLength(3);
+    expect(
+      within(choices).getByRole("menuitemradio", { name: "Heart" }),
+    ).toHaveTextContent("❤️");
+    expect(
+      within(choices).getByRole("menuitemradio", { name: "Laugh" }),
+    ).toHaveTextContent("😂");
+    expect(
+      within(choices).getByRole("menuitemradio", { name: "Meaningful" }),
+    ).toHaveTextContent("✨");
+  });
+
+  it("keeps the picker open and restores the prior response when saving fails", async () => {
+    const actions = connectedActions();
+    actions.setReaction.mockResolvedValue({
+      ok: false,
+      message: "That response could not be saved.",
+    });
+    const user = userEvent.setup();
+    renderControl(actions);
+
+    const trigger = screen.getByRole("button", {
+      name: /Choose a reaction for photo/u,
+    });
+    fireEvent.keyDown(trigger, { key: "ArrowUp" });
+    const choice = await screen.findByRole("menuitemradio", {
+      name: "Meaningful",
+    });
+    await user.click(choice);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That response could not be saved.",
+    );
+    expect(choice).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByRole("menu", { name: "Choose a reaction" }),
+    ).toBeVisible();
+  });
+
+  it("loads connected comments without waiting for a reaction tap", async () => {
+    const actions = connectedActions(initialConversation);
+    renderControl(actions, { notes: [], reactions: [] });
+
+    expect(
+      await screen.findByRole("list", { name: "Notes from family" }),
+    ).toHaveTextContent("The quiet ride home was my favorite part.");
+    expect(actions.load).toHaveBeenCalledWith({ momentId: "moment-one" });
+  });
+
+  it("opens a compact note field inline with only Cancel and Save", async () => {
+    const user = userEvent.setup();
+    renderControl();
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    const note = screen.getByRole("textbox", { name: "Add a family note" });
+    expect(note).toHaveFocus();
+    const form = note.closest("form")!;
+    expect(
+      within(form)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Cancel", "Save"]);
     expect(screen.queryByRole("dialog")).toBeNull();
+
+    await user.type(note, "Keep this draft?");
+    await user.click(within(form).getByRole("button", { name: "Cancel" }));
+    expect(
+      screen.queryByRole("textbox", { name: "Add a family note" }),
+    ).toBeNull();
+  });
+
+  it("saves a note inline and immediately shows its author and text", async () => {
+    const empty = { notes: [], reactions: [] } as const;
+    const saved = {
+      notes: [
+        {
+          id: "note-brian",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "The sky was even better in person.",
+          displayDate: "Today",
+          canChange: true,
+          revision: 1,
+        },
+      ],
+      reactions: [],
+    } as const satisfies MomentConversationViewModel;
+    const actions = connectedActions(empty);
+    actions.load
+      .mockResolvedValueOnce({ ok: true, conversation: empty })
+      .mockResolvedValueOnce({ ok: true, conversation: saved });
+    const user = userEvent.setup();
+    renderControl(actions, empty);
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Add a family note" }),
+      "The sky was even better in person.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(actions.createNote).toHaveBeenCalledWith({
+        momentId: "moment-one",
+        body: "The sky was even better in person.",
+      }),
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Add a family note" }),
+    ).toBeNull();
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    expect(within(notes).getByText("Brian")).toBeVisible();
+    expect(
+      within(notes).getByText("The sky was even better in person."),
+    ).toBeVisible();
+  });
+
+  it("retains the note and shows an actionable error when saving fails", async () => {
+    const empty = { notes: [], reactions: [] } as const;
+    const actions = connectedActions(empty);
+    actions.createNote.mockResolvedValue({
+      ok: false,
+      message: "That note could not be saved.",
+    });
+    const user = userEvent.setup();
+    renderControl(actions, empty);
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    const note = screen.getByRole("textbox", { name: "Add a family note" });
+    await user.type(note, "Do not lose this.");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That note could not be saved.",
+    );
+    expect(note).toHaveValue("Do not lose this.");
+  });
+
+  it("edits and removes an owned note inline", async () => {
+    const owned = {
+      notes: [
+        {
+          id: "note-owned",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "Original note.",
+          displayDate: "Today",
+          canChange: true,
+          revision: 3,
+        },
+      ],
+      reactions: [],
+    } as const satisfies MomentConversationViewModel;
+    const updated = {
+      ...owned,
+      notes: [{ ...owned.notes[0], body: "Updated note.", revision: 4 }],
+    } as const satisfies MomentConversationViewModel;
+    const actions = connectedActions(owned);
+    actions.load.mockResolvedValue({ ok: true, conversation: updated });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const user = userEvent.setup();
+    renderControl(actions, owned);
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const editor = screen.getByRole("textbox", { name: "Edit your note" });
+    await user.clear(editor);
+    await user.type(editor, "Updated note.");
+    await user.click(
+      within(editor.closest("form")!).getByRole("button", { name: "Save" }),
+    );
+    await waitFor(() =>
+      expect(actions.updateNote).toHaveBeenCalledWith({
+        noteId: "note-owned",
+        revision: 4,
+        body: "Updated note.",
+      }),
+    );
+    expect(screen.getByText("Updated note.")).toBeVisible();
+
+    actions.load.mockResolvedValueOnce({
+      ok: true,
+      conversation: { notes: [], reactions: [] },
+    });
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    expect(confirm).toHaveBeenCalledWith(
+      "Remove this note from the family conversation?",
+    );
+    await waitFor(() =>
+      expect(actions.trashNote).toHaveBeenCalledWith({
+        noteId: "note-owned",
+        revision: 4,
+      }),
+    );
+    expect(
+      screen.queryByRole("list", { name: "Notes from family" }),
+    ).toBeNull();
+  });
+
+  it("renders note text literally", () => {
+    const hostile = '<img data-note-injection src=x onerror="alert(1)">';
+    renderControl(undefined, {
+      notes: [
+        {
+          id: "literal-note",
+          authorName: "Molly",
+          authorInitial: "M",
+          authorAccent: "ochre",
+          body: hostile,
+          displayDate: "Today",
+        },
+      ],
+      reactions: [],
+    });
+
+    const list = screen.getByRole("list", { name: "Notes from family" });
+    expect(list).toHaveTextContent(hostile);
+    expect(list.querySelector("[data-note-injection]")).toBeNull();
   });
 });

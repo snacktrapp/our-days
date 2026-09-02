@@ -1,7 +1,8 @@
 import type { AccentToken } from "@/features/accent-token";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
-export type MomentKind = "photo" | "thought" | "milestone" | "location";
+export type MomentKind =
+  "photo" | "video" | "thought" | "milestone" | "location";
 
 export type MomentReactionId = "held-close" | "made-me-smile" | "remember-this";
 
@@ -84,6 +85,15 @@ export type PhotoMomentViewModel = TimelineMomentBase &
 export type ThoughtMomentViewModel = TimelineMomentBase &
   Readonly<{ kind: "thought" }>;
 
+export type VideoMomentViewModel = TimelineMomentBase &
+  Readonly<{
+    kind: "video";
+    video: Readonly<{
+      src: string;
+      durationMs?: number;
+    }>;
+  }>;
+
 export type LocationMomentViewModel = TimelineMomentBase &
   Readonly<{
     kind: "location";
@@ -101,6 +111,7 @@ export type MilestoneMomentViewModel = TimelineMomentBase &
 
 export type TimelineMomentViewModel =
   | PhotoMomentViewModel
+  | VideoMomentViewModel
   | ThoughtMomentViewModel
   | LocationMomentViewModel
   | MilestoneMomentViewModel;
@@ -119,6 +130,7 @@ type MomentDetailBase = Readonly<{
 
 export type MomentDetailViewModel =
   | (MomentDetailBase & Readonly<{ kind: "photo" }>)
+  | (MomentDetailBase & Readonly<{ kind: "video" }>)
   | (MomentDetailBase & Readonly<{ kind: "thought" }>)
   | (MomentDetailBase &
       Readonly<{

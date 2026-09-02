@@ -41,11 +41,6 @@ export type MemoriesViewModel = Readonly<{
   heading: string;
   subheading: string;
   feature: MemoryFeatureViewModel;
-  collections: readonly Readonly<{
-    href: string;
-    label: string;
-    description: string;
-  }>[];
   years: readonly MemoryYearViewModel[];
   yearsEmptyMessage?: string;
   yearNavigation?: Readonly<{

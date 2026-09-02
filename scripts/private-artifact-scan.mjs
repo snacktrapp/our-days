@@ -293,6 +293,19 @@ export function trackedFiles(root) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (presentResult.status !== 0 || deletedResult.status !== 0) {
+    if (process.env.VERCEL === "1") {
+      return walkFiles(root)
+        .map((path) => posixPath(relative(root, path)))
+        .filter(
+          (path) =>
+            path &&
+            !path.startsWith(".git/") &&
+            !path.startsWith(".next/") &&
+            !path.startsWith(".vercel/") &&
+            !path.startsWith("node_modules/"),
+        )
+        .sort();
+    }
     throw new Error("Could not enumerate tracked files for the privacy scan.");
   }
   const deletedPaths = new Set(
@@ -305,7 +318,7 @@ export function trackedFiles(root) {
 }
 
 export function scanRepository(root) {
-  const rootPath = resolve(root);
+  const rootPath = realpathSync(resolve(root));
   const buildPath = resolve(rootPath, ".next");
   const buildIdPath = resolve(buildPath, "BUILD_ID");
 
@@ -339,15 +352,33 @@ export function scanRepository(root) {
   const buildFindings = walkFiles(buildPath)
     .filter((path) => {
       const relativePath = posixPath(relative(rootPath, path));
-      return !relativePath.startsWith(".next/cache/");
+      return (
+        !relativePath.startsWith(".next/cache/") &&
+        !relativePath.startsWith(".next/dev/")
+      );
     })
-    .flatMap((path) =>
-      scanFile(
+    .flatMap((path) => {
+      const relativePath = relative(rootPath, path);
+      if (
+        lstatSync(path).isSymbolicLink() &&
+        posixPath(relativePath).startsWith(".next/output/functions/") &&
+        safeFileWithin(rootPath, path)
+      ) {
+        const target = realpathSync(path);
+        return walkFiles(target).flatMap((targetPath) =>
+          scanFile(
+            rootPath,
+            targetPath,
+            isBrowserDeliverableArtifact(relative(rootPath, targetPath)),
+          ),
+        );
+      }
+      return scanFile(
         rootPath,
         path,
-        isBrowserDeliverableArtifact(relative(rootPath, path)),
-      ),
-    );
+        isBrowserDeliverableArtifact(relativePath),
+      );
+    });
 
   return [...sourceFindings, ...publicFindings, ...buildFindings].sort(
     (left, right) =>

@@ -2,6 +2,7 @@ import { photoPostingIsEnabled } from "../../../../../config/our-days-environmen
 import {
   processPhotoIntake,
   PhotoWorkerError,
+  PHOTO_WORKER_VERSION,
 } from "@/lib/photo-worker.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -78,16 +79,40 @@ export async function POST(request: Request) {
     );
   }
 
-  console.info("[photo-process] started", { intakeId });
+  console.info("[photo-process] started", {
+    intakeId,
+    workerVersion: PHOTO_WORKER_VERSION,
+  });
   try {
     await processPhotoIntake(intakeId);
   } catch (error) {
-    const retryable =
+    const workerRetryable =
       error instanceof PhotoWorkerError ? error.retryable : true;
+    let terminal = false;
+    let serverStatus = "unavailable";
+    if (!workerRetryable) {
+      const { data: failureRows, error: failureStatusError } =
+        await supabase.rpc("get_photo_moment_status", {
+          intake_id: intakeId,
+        });
+      const failureStatus = failureRows?.[0]?.status;
+      if (!failureStatusError && failureStatus) serverStatus = failureStatus;
+      terminal =
+        !failureStatusError &&
+        (failureStatus === "needs_attention" || failureStatus === "cancelled");
+    }
+    const retryable = workerRetryable || !terminal;
     console.error("[photo-process] failed", {
+      code:
+        error instanceof PhotoWorkerError
+          ? error.code
+          : "PHOTO_WORKER_UNEXPECTED",
       intakeId,
       kind: error instanceof Error ? error.name : "UnknownError",
       retryable,
+      serverStatus,
+      stage: error instanceof PhotoWorkerError ? error.stage : "worker",
+      workerVersion: PHOTO_WORKER_VERSION,
     });
     return response(
       {

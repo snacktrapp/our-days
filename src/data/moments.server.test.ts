@@ -132,6 +132,27 @@ describe("connected timeline mapping", () => {
     });
   });
 
+  it("maps a connected video to the same-origin private byte-range route", () => {
+    const moment = mapTimelineRow(
+      row({
+        moment_id: "10000000-0000-4000-8000-000000000098",
+        moment_kind: "video",
+        journal_person_name: "Molly",
+        recorder_person_id: "child",
+        recorder_person_name: "Molly",
+        body: "First steps across the kitchen.",
+      }),
+      "2026-08-30",
+    );
+    expect(moment).toMatchObject({
+      kind: "video",
+      kicker: "A video",
+      video: {
+        src: "/api/media/videos/10000000-0000-4000-8000-000000000098",
+      },
+    });
+  });
+
   it("builds visible dates and gaps once and withholds the ending while more exists", () => {
     const newer = mapTimelineRow(row(), "2026-08-30");
     const older = mapTimelineRow(
@@ -291,6 +312,14 @@ describe("connected timeline mapping", () => {
 
     expect(timeline.chrome.composer.defaultJournalPersonId).toBe("child");
     expect(timeline.chrome.composer.recorderPersonId).toBe("parent");
+    expect(timeline.switcher).toEqual([
+      { label: "Family", href: "/family", current: false },
+      {
+        label: "Child",
+        href: "/people/child",
+        current: true,
+      },
+    ]);
   });
 
   it("continues beyond twenty cumulative pages without repeating page twenty", async () => {

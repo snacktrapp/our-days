@@ -1,0 +1,15 @@
+# Local credentials and developer state must never enter a Vercel source bundle.
+.env*
+!.env.example
+supabase/.temp/**
+supabase/.branches/**
+
+# Generated and local-only directories.
+.git/**
+.next/**
+.vercel/**
+node_modules/**
+coverage/**
+test-results/**
+playwright-report/**
+blob-report/**

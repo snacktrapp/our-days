@@ -18,8 +18,7 @@ export default async function PeoplePage() {
   const context = await loadConnectedJournalContext(access);
   const model = {
     chrome: { ...context.chrome, title: "Our people" },
-    intro:
-      "Each person has a journal of their own, held inside this private family circle.",
+    intro: "Individual journals within this family archive.",
     people: context.people,
     familySettingsHref: null,
   };

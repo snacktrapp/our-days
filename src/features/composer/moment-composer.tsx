@@ -9,13 +9,22 @@ import type {
   SaveFamilyMomentAction,
   SaveWrittenMomentAction,
 } from "@/features/moments/moment-action-types";
+import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
-  createPhotoUploadAttempt,
-  PhotoUploadError,
-  uploadPhotoMoment,
-  type PhotoUploadAttempt,
-  type PhotoUploadStage,
-} from "./photo-upload";
+  acceptedVideoMime,
+  maximumVideoBytes,
+  maximumVideoDurationMs,
+  type VideoUploadAttempt,
+  type VideoUploadStage,
+} from "./video-upload";
+import {
+  formatBibleVerseMoment,
+  searchBibleVerses,
+} from "./bible-verse-catalog";
+import {
+  startOptimisticPhotoUpload,
+  startOptimisticVideoUpload,
+} from "./optimistic-media-upload";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
@@ -36,35 +45,51 @@ type ModeCopy = Readonly<{
   bodyRequired: boolean;
 }>;
 
+type ComposerMode = MomentKind | "bible-verse";
+
 type PhotoDecodeState = "empty" | "decoding" | "ready" | "error";
 
-const modeCopy: Readonly<Record<MomentKind, ModeCopy>> = {
+const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
   photo: {
     kindLabel: "Photo",
-    title: "Choose a glimpse to keep",
-    bodyLabel: "A few words",
-    bodyPlaceholder: "What do you want to remember?",
+    title: "New photo entry",
+    bodyLabel: "Note",
+    bodyPlaceholder: "Add context…",
+    bodyRequired: false,
+  },
+  video: {
+    kindLabel: "Video",
+    title: "New video entry",
+    bodyLabel: "Note",
+    bodyPlaceholder: "Add context…",
     bodyRequired: false,
   },
   thought: {
-    kindLabel: "Thought",
-    title: "Hold onto this moment",
-    bodyLabel: "Your thought",
-    bodyPlaceholder: "What happened?",
+    kindLabel: "Note",
+    title: "New written entry",
+    bodyLabel: "Entry",
+    bodyPlaceholder: "Record what happened…",
     bodyRequired: true,
   },
   milestone: {
     kindLabel: "Milestone",
-    title: "Mark this milestone",
-    bodyLabel: "What made it meaningful?",
-    bodyPlaceholder: "The part you want to remember…",
+    title: "New milestone",
+    bodyLabel: "Details",
+    bodyPlaceholder: "Add relevant details…",
     bodyRequired: false,
   },
+  "bible-verse": {
+    kindLabel: "Bible verse",
+    title: "Add a Bible verse",
+    bodyLabel: "Verse text",
+    bodyPlaceholder: "Select a result or enter the verse text…",
+    bodyRequired: true,
+  },
   location: {
-    kindLabel: "Place",
-    title: "Remember somewhere together",
-    bodyLabel: "What happened here?",
-    bodyPlaceholder: "A small detail from this place…",
+    kindLabel: "Location",
+    title: "New location entry",
+    bodyLabel: "Details",
+    bodyPlaceholder: "Add context for this location…",
     bodyRequired: false,
   },
 };
@@ -111,7 +136,7 @@ function resolvePreviewTitle(
 ) {
   if (title.trim()) return title.trim();
   if (body.trim()) return body.trim();
-  if (hasPhoto) return "A photo to remember";
+  if (hasPhoto) return "Photo entry";
   return fallback;
 }
 
@@ -125,12 +150,13 @@ export function MomentComposer({
 }: MomentComposerProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState<MomentKind | null>(null);
+  const [mode, setMode] = useState<ComposerMode | null>(null);
   const [choosingMode, setChoosingMode] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
   const [body, setBody] = useState("");
   const [title, setTitle] = useState("");
+  const [verseQuery, setVerseQuery] = useState("");
   const [occurredOn, setOccurredOn] = useState(model.previewToday);
   const [occurredTime, setOccurredTime] = useState("");
   const [journalPersonId, setJournalPersonId] = useState(
@@ -142,23 +168,25 @@ export function MomentComposer({
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoDecodeState, setPhotoDecodeState] =
     useState<PhotoDecodeState>("empty");
+  const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [photoRetryable, setPhotoRetryable] = useState(true);
-  const [savedHeading, setSavedHeading] = useState("Moment saved");
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
-  const [photoUploadStage, setPhotoUploadStage] =
-    useState<PhotoUploadStage | null>(null);
+  const [photoUploadStage, setPhotoUploadStage] = useState<
+    PhotoUploadStage | VideoUploadStage | null
+  >(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const firstChoiceRef = useRef<HTMLButtonElement>(null);
+  const chooserHeadingRef = useRef<HTMLHeadingElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const verseSearchRef = useRef<HTMLInputElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
-  const savedDoneRef = useRef<HTMLButtonElement>(null);
+  const editorHeadingRef = useRef<HTMLHeadingElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewUrlRef = useRef<string | null>(null);
   const photoUploadAttemptRef = useRef<PhotoUploadAttempt | null>(null);
+  const videoUploadAttemptRef = useRef<VideoUploadAttempt | null>(null);
   const photoUploadAbortRef = useRef<AbortController | null>(null);
   const uploadInFlightRef = useRef(false);
 
@@ -169,6 +197,7 @@ export function MomentComposer({
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
+  const verseMatches = searchBibleVerses(verseQuery).slice(0, 6);
   const connectedFamily = model.experience === "connected-family";
   const connectedExperience =
     connectedFamily || model.experience === "connected-written";
@@ -176,18 +205,16 @@ export function MomentComposer({
     connectedFamily && model.photoPostingEnabled && model.circleId,
   );
   const resolvedPlaceName = mode === "location" ? title : placeName;
-  const isDirty =
-    !savedMessage &&
-    Boolean(
-      body.length ||
-      title.length ||
-      placeName.length ||
-      photoFile ||
-      taggedPersonIds.length ||
-      occurredOn !== model.previewToday ||
-      occurredTime.length > 0 ||
-      journalPersonId !== model.defaultJournalPersonId,
-    );
+  const isDirty = Boolean(
+    body.length ||
+    title.length ||
+    placeName.length ||
+    photoFile ||
+    taggedPersonIds.length ||
+    occurredOn !== model.previewToday ||
+    occurredTime.length > 0 ||
+    journalPersonId !== model.defaultJournalPersonId,
+  );
 
   const revokeCurrentPhotoUrl = useCallback(() => {
     if (photoPreviewUrlRef.current) {
@@ -215,7 +242,7 @@ export function MomentComposer({
   );
 
   const resetDraft = useCallback(
-    (nextMode: MomentKind | null = null) => {
+    (nextMode: ComposerMode | null = null) => {
       clearPhotoPreview();
       if (photoInputRef.current) photoInputRef.current.value = "";
       setMode(nextMode);
@@ -224,6 +251,7 @@ export function MomentComposer({
       setOptionalDetailsOpen(false);
       setBody("");
       setTitle("");
+      setVerseQuery("");
       setOccurredOn(model.previewToday);
       setOccurredTime("");
       setJournalPersonId(model.defaultJournalPersonId);
@@ -231,15 +259,15 @@ export function MomentComposer({
       setPlaceName("");
       setPhotoFile(null);
       setPhotoDecodeState("empty");
+      setVideoDurationMs(null);
       setPhotoError(null);
       setContentError(null);
       setSaveError(null);
       setPhotoRetryable(true);
-      setSavedHeading("Moment saved");
-      setSavedMessage(null);
       photoUploadAbortRef.current?.abort();
       photoUploadAbortRef.current = null;
       photoUploadAttemptRef.current = null;
+      videoUploadAttemptRef.current = null;
       uploadInFlightRef.current = false;
       setPhotoUploadStage(null);
     },
@@ -257,25 +285,20 @@ export function MomentComposer({
         return;
       }
 
-      const momentWasSaved = Boolean(savedMessage);
       resetDraft();
       onRequestClose();
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
-      if (momentWasSaved) {
-        router.replace("/family");
-        router.refresh();
-      }
     },
-    [
-      isDirty,
-      onRequestClose,
-      resetDraft,
-      returnFocusRef,
-      router,
-      savedMessage,
-      saving,
-    ],
+    [isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
   );
+
+  const finishConnectedSave = useCallback(() => {
+    resetDraft();
+    onRequestClose();
+    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+    router.replace("/family");
+    router.refresh();
+  }, [onRequestClose, resetDraft, returnFocusRef, router]);
 
   useEffect(
     () => () => {
@@ -305,16 +328,17 @@ export function MomentComposer({
   useEffect(() => {
     if (!open) return;
     const focusFrame = window.requestAnimationFrame(() => {
-      if (savedMessage) savedDoneRef.current?.focus();
-      else if (reviewing) reviewHeadingRef.current?.focus();
+      if (reviewing) reviewHeadingRef.current?.focus();
       else if (mode && !choosingMode) {
-        if (mode === "photo") photoInputRef.current?.focus();
+        if (mode === "photo" || mode === "video")
+          editorHeadingRef.current?.focus({ preventScroll: true });
         else if (mode === "thought") bodyTextareaRef.current?.focus();
+        else if (mode === "bible-verse") verseSearchRef.current?.focus();
         else titleInputRef.current?.focus();
-      } else firstChoiceRef.current?.focus();
+      } else chooserHeadingRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(focusFrame);
-  }, [choosingMode, mode, open, reviewing, savedMessage]);
+  }, [choosingMode, mode, open, reviewing]);
 
   const replacePhoto = (file: File | null) => {
     if (uploadInFlightRef.current) return;
@@ -323,6 +347,7 @@ export function MomentComposer({
     clearPhotoPreview();
     setPhotoFile(null);
     setPhotoDecodeState("empty");
+    setVideoDurationMs(null);
     setPhotoError(null);
     setPhotoRetryable(true);
     if (!file) {
@@ -330,6 +355,28 @@ export function MomentComposer({
       return;
     }
     const normalizedType = file.type.toLowerCase();
+    const videoMime = acceptedVideoMime(file);
+    if (videoMime) {
+      if (file.size === 0) {
+        setPhotoDecodeState("error");
+        setPhotoError("That video is empty. Choose another one.");
+        if (photoInputRef.current) photoInputRef.current.value = "";
+        return;
+      }
+      if (file.size > maximumVideoBytes) {
+        setPhotoDecodeState("error");
+        setPhotoError("Choose a video smaller than 100 MB.");
+        if (photoInputRef.current) photoInputRef.current.value = "";
+        return;
+      }
+      const nextUrl = URL.createObjectURL(file);
+      photoPreviewUrlRef.current = nextUrl;
+      setMode("video");
+      setPhotoFile(file);
+      setPhotoPreviewUrl(nextUrl);
+      setPhotoDecodeState("decoding");
+      return;
+    }
     const supportedType = connectedPhotoAvailable
       ? normalizedType === "" || connectedPhotoTypes.has(normalizedType)
       : previewImageTypes.has(normalizedType);
@@ -356,6 +403,7 @@ export function MomentComposer({
       return;
     }
     const nextUrl = URL.createObjectURL(file);
+    setMode("photo");
     photoPreviewUrlRef.current = nextUrl;
     setPhotoFile(file);
     setPhotoPreviewUrl(nextUrl);
@@ -368,7 +416,40 @@ export function MomentComposer({
     setPhotoError(null);
   };
 
-  const chooseMode = (nextMode: MomentKind) => {
+  const inspectSelectedVideo = (
+    expectedUrl: string,
+    video: HTMLVideoElement,
+    frameReady: boolean,
+  ) => {
+    if (photoPreviewUrlRef.current !== expectedUrl) return;
+    const { duration, videoHeight, videoWidth } = video;
+    if (!Number.isFinite(duration) || duration <= 0) {
+      rejectUndecodablePhoto(expectedUrl);
+      setPhotoError(
+        "This video's duration could not be read. Choose another one.",
+      );
+      return;
+    }
+    const durationMs = Math.ceil(duration * 1000);
+    if (durationMs > maximumVideoDurationMs) {
+      rejectUndecodablePhoto(expectedUrl);
+      setPhotoError("Choose a video about 60 seconds or shorter.");
+      return;
+    }
+    if (
+      videoWidth <= 0 ||
+      videoHeight <= 0 ||
+      videoWidth * videoHeight > 9_000_000
+    ) {
+      rejectUndecodablePhoto(expectedUrl);
+      setPhotoError("This video's picture size is not supported.");
+      return;
+    }
+    setVideoDurationMs(durationMs);
+    if (frameReady) acceptDecodedPhoto(expectedUrl);
+  };
+
+  const chooseMode = (nextMode: ComposerMode) => {
     if (mode === nextMode) {
       setChoosingMode(false);
       return;
@@ -399,33 +480,41 @@ export function MomentComposer({
     );
   };
 
-  const previewDraft = () => {
-    if (mode === "photo" && photoDecodeState !== "ready") {
+  const validateDraft = () => {
+    if (
+      (mode === "photo" || mode === "video") &&
+      photoDecodeState !== "ready"
+    ) {
       setPhotoError(
         photoDecodeState === "decoding"
-          ? "Wait for this photo to finish loading."
-          : "Choose a photo for this preview.",
+          ? `Wait for this ${mode} to finish loading.`
+          : `Choose a ${mode} for this preview.`,
       );
       photoInputRef.current?.focus();
       return;
     }
     if (mode === "thought" && !body.trim()) {
-      setContentError("Write a thought before previewing this moment.");
+      setContentError("Write a thought before saving this moment.");
       bodyTextareaRef.current?.focus();
-      return;
+      return false;
     }
     if ((mode === "milestone" || mode === "location") && !title.trim()) {
       setContentError(
         mode === "milestone"
-          ? "Name the milestone before previewing this moment."
-          : "Name the place before previewing this moment.",
+          ? "Name the milestone before saving this moment."
+          : "Name the place before saving this moment.",
       );
       titleInputRef.current?.focus();
-      return;
+      return false;
+    }
+    if (mode === "bible-verse" && (!title.trim() || !body.trim())) {
+      setContentError("Select a verse before saving this entry.");
+      verseSearchRef.current?.focus();
+      return false;
     }
     setContentError(null);
     setSaveError(null);
-    setReviewing(true);
+    return true;
   };
 
   const saveConnectedMoment = async () => {
@@ -447,64 +536,85 @@ export function MomentComposer({
       occurredAt = localMoment.toISOString();
       occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
+    const capturedBody = body.trim();
+    const savedOccurredOn = occurredOn;
+    const savedOccurredTime = occurredTime;
+    const savedJournalPersonId = journalPersonId;
+    const savedPlaceName = placeName;
+    const savedTaggedPersonIds = [...taggedPersonIds];
+    const savedJournalPerson = journalPerson;
     setSaveError(null);
     setPhotoRetryable(true);
+
+    if (mode === "photo" || mode === "video") {
+      if (
+        !connectedPhotoAvailable ||
+        !model.circleId ||
+        !photoFile ||
+        photoDecodeState !== "ready" ||
+        (mode === "video" && !videoDurationMs)
+      ) {
+        setSaveError(`Choose the ${mode} again and try once more.`);
+        return;
+      }
+      const common = {
+        file: photoFile,
+        occurredTime: savedOccurredTime,
+        person: {
+          id: savedJournalPersonId,
+          name: savedJournalPerson.name,
+          initial: savedJournalPerson.initial,
+          accent: savedJournalPerson.accent,
+        },
+      };
+      if (mode === "photo") {
+        startOptimisticPhotoUpload({
+          ...common,
+          draft: {
+            body: capturedBody,
+            circleId: model.circleId,
+            journalPersonId: savedJournalPersonId,
+            occurredAt,
+            occurredOn: savedOccurredOn,
+            occurredTimezone,
+            placeName: savedPlaceName,
+            taggedPersonIds: savedTaggedPersonIds,
+          },
+        });
+      } else {
+        startOptimisticVideoUpload({
+          ...common,
+          draft: {
+            body: capturedBody,
+            circleId: model.circleId,
+            durationMs: videoDurationMs!,
+            journalPersonId: savedJournalPersonId,
+            occurredAt,
+            occurredOn: savedOccurredOn,
+            occurredTimezone,
+            placeName: savedPlaceName,
+            taggedPersonIds: savedTaggedPersonIds,
+          },
+        });
+      }
+      resetDraft();
+      onRequestClose();
+      window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+      return;
+    }
+
     setSaving(true);
     uploadInFlightRef.current = true;
     try {
-      if (mode === "photo") {
-        if (
-          !connectedPhotoAvailable ||
-          !model.circleId ||
-          !photoFile ||
-          photoDecodeState !== "ready"
-        ) {
-          setSaveError("Choose the photo again and try once more.");
-          return;
-        }
-        const attempt =
-          photoUploadAttemptRef.current ?? createPhotoUploadAttempt();
-        photoUploadAttemptRef.current = attempt;
-        const controller = new AbortController();
-        photoUploadAbortRef.current = controller;
-        const result = await uploadPhotoMoment(
-          photoFile,
-          {
-            body,
-            circleId: model.circleId,
-            journalPersonId,
-            occurredAt,
-            occurredOn,
-            occurredTimezone,
-            placeName,
-            taggedPersonIds: [...taggedPersonIds],
-          },
-          attempt,
-          controller.signal,
-          (stage) => {
-            if (controller.signal.aborted) return;
-            if (stage.state === "finishing" || stage.state === "processing") {
-              photoUploadAbortRef.current = null;
-            }
-            setPhotoUploadStage(stage);
-          },
-        );
-        setSavedHeading(
-          result.state === "published" ? "Moment saved" : "Photo received",
-        );
-        setSavedMessage(
-          result.state === "published"
-            ? `Saved to ${journalPerson.name}’s journal on ${plainDateLabel(occurredOn)}.`
-            : `Photo received for ${journalPerson.name}’s journal. It is still being prepared privately.`,
-        );
-        return;
-      }
+      const savedKind = mode === "bible-verse" ? "thought" : mode;
+      const savedBody =
+        mode === "bible-verse" ? formatBibleVerseMoment(title, body) : body;
       const result = saveFamilyMoment
         ? await saveFamilyMoment({
             journalPersonId,
-            kind: mode,
-            title: mode === "milestone" ? title : "",
-            body,
+            kind: savedKind,
+            title: savedKind === "milestone" ? title : "",
+            body: savedBody,
             placeName: mode === "location" ? title : placeName,
             taggedPersonIds,
             occurredOn,
@@ -513,7 +623,7 @@ export function MomentComposer({
           })
         : await saveWrittenMoment!({
             journalPersonId,
-            body,
+            body: savedBody,
             occurredOn,
             occurredAt,
             occurredTimezone,
@@ -522,27 +632,27 @@ export function MomentComposer({
         setSaveError(result.message);
         return;
       }
-      setSavedMessage(
-        `Saved to ${journalPerson.name}’s journal on ${plainDateLabel(occurredOn)}.`,
-      );
-    } catch (error) {
-      setPhotoUploadStage(null);
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setSaveError("Upload stopped. Your photo and draft are still here.");
-      } else if (error instanceof PhotoUploadError) {
-        setPhotoRetryable(error.retryable);
-        setSaveError(error.message);
-      } else {
-        setSaveError(
-          "That photo could not be uploaded. Your draft is still here.",
-        );
-      }
+      finishConnectedSave();
+    } catch {
+      setSaveError("That moment could not be saved. Try again.");
     } finally {
       uploadInFlightRef.current = false;
       photoUploadAbortRef.current = null;
       setPhotoUploadStage(null);
       setSaving(false);
     }
+  };
+
+  const submitDraft = async () => {
+    if (!validateDraft()) return;
+    if (connectedExperience) {
+      await saveConnectedMoment();
+      return;
+    }
+
+    // The disconnected design-preview route has no persistence layer. Closing
+    // after validation mirrors the production one-step save interaction.
+    close(true);
   };
 
   const stopPhotoUpload = () => {
@@ -557,23 +667,27 @@ export function MomentComposer({
       photoUploadAttemptRef.current = null;
       setPhotoUploadStage(null);
     }
+    if (mode === "video" && videoUploadAttemptRef.current) {
+      videoUploadAttemptRef.current = null;
+      setPhotoUploadStage(null);
+    }
     setReviewing(false);
   };
 
   const photoUploadLabel =
     photoUploadStage?.state === "preparing"
-      ? "Preparing your photo privately…"
+      ? `Preparing your ${mode === "video" ? "video" : "photo"} privately…`
       : photoUploadStage?.state === "uploading"
         ? `Uploading… ${Math.round(photoUploadStage.progress * 100)}%`
         : photoUploadStage?.state === "stopping"
           ? "Stopping transfer and confirming cancellation…"
-        : photoUploadStage?.state === "finishing"
-          ? "Finishing your private upload…"
-          : photoUploadStage?.state === "processing"
-            ? "Photo received. Preparing it for your timeline…"
-            : null;
+          : photoUploadStage?.state === "finishing"
+            ? "Finishing your private upload…"
+            : photoUploadStage?.state === "processing"
+              ? "Photo received. Preparing it for your timeline…"
+              : null;
   const photoRetryBlocked = Boolean(
-    mode === "photo" && saveError && !photoRetryable,
+    (mode === "photo" || mode === "video") && saveError && !photoRetryable,
   );
 
   const previewTitle = resolvePreviewTitle(
@@ -588,9 +702,9 @@ export function MomentComposer({
   return (
     <dialog
       ref={dialogRef}
-      className="composer-dialog"
+      className="composer-dialog new-moment-composer-dialog"
       aria-labelledby="composer-title"
-      aria-describedby="composer-privacy"
+      aria-describedby={connectedExperience ? "composer-privacy" : undefined}
       onKeyDown={containDialogFocus}
       onCancel={(event) => {
         event.preventDefault();
@@ -611,33 +725,15 @@ export function MomentComposer({
           ×
         </button>
 
-        {savedMessage ? (
-          <div className="composer-review composer-saved" role="status">
-            <span id="composer-privacy" className="private-label">
-              Private to this family
-            </span>
-            <h2 id="composer-title">{savedHeading}</h2>
-            <p>{savedMessage}</p>
-            <button
-              ref={savedDoneRef}
-              className="save-moment"
-              type="button"
-              onClick={() => close(true)}
-            >
-              Done
-            </button>
-          </div>
-        ) : !mode || choosingMode ? (
+        {!mode || choosingMode ? (
           <>
-            <span id="composer-privacy" className="private-label">
-              {connectedExperience
-                ? "Private to this family"
-                : "Local design preview · Nothing is saved"}
-            </span>
-            <h2 id="composer-title">
-              {mode
-                ? "Choose a kind of moment"
-                : "What would you like to remember?"}
+            {connectedExperience ? (
+              <span id="composer-privacy" className="private-label">
+                Family only
+              </span>
+            ) : null}
+            <h2 ref={chooserHeadingRef} id="composer-title" tabIndex={-1}>
+              {mode ? "Select entry type" : "New moment"}
             </h2>
             {mode && isDirty ? (
               <p className="composer-draft-held">
@@ -646,41 +742,28 @@ export function MomentComposer({
             ) : null}
             <div className="moment-choices">
               {!connectedExperience || connectedPhotoAvailable ? (
-                <button
-                  ref={firstChoiceRef}
-                  onClick={() => chooseMode("photo")}
-                >
+                <button onClick={() => chooseMode("photo")}>
                   <span className="choice-icon photo-choice" aria-hidden="true">
                     ▣
                   </span>
-                  <strong>Photo</strong>
-                  <small>A glimpse of the day</small>
+                  <strong>Photo or video</strong>
+                  <small>Media with date and note</small>
                 </button>
               ) : null}
-              <button
-                ref={
-                  connectedExperience && !connectedPhotoAvailable
-                    ? firstChoiceRef
-                    : undefined
-                }
-                onClick={() => chooseMode("thought")}
-              >
+              <button onClick={() => chooseMode("thought")}>
                 <span className="choice-icon thought-choice" aria-hidden="true">
                   “
                 </span>
-                <strong>A thought</strong>
-                <small>A few words to keep</small>
+                <strong>Written entry</strong>
+                <small>Text, date, and details</small>
               </button>
               {!connectedExperience || connectedFamily ? (
-                <button onClick={() => chooseMode("milestone")}>
-                  <span
-                    className="choice-icon milestone-choice"
-                    aria-hidden="true"
-                  >
-                    ✦
+                <button onClick={() => chooseMode("bible-verse")}>
+                  <span className="choice-icon bible-choice" aria-hidden="true">
+                    †
                   </span>
-                  <strong>Milestone</strong>
-                  <small>A meaningful first</small>
+                  <strong>Bible verse</strong>
+                  <small>Search and include scripture</small>
                 </button>
               ) : null}
               {!connectedExperience || connectedFamily ? (
@@ -691,8 +774,8 @@ export function MomentComposer({
                   >
                     ⌖
                   </span>
-                  <strong>A place</strong>
-                  <small>Somewhere worth returning to</small>
+                  <strong>Location</strong>
+                  <small>A place connected to a memory</small>
                 </button>
               ) : null}
             </div>
@@ -701,14 +784,14 @@ export function MomentComposer({
           <div className="composer-review">
             <span id="composer-privacy" className="private-label">
               {connectedExperience
-                ? "Private to this family"
+                ? "Family only"
                 : "Design preview · Nothing was saved"}
             </span>
             <h2 ref={reviewHeadingRef} id="composer-title" tabIndex={-1}>
-              A preview of this moment
+              Review entry
             </h2>
             <article className={`composer-preview-card preview-${mode}`}>
-              {photoPreviewUrl ? (
+              {photoPreviewUrl && mode === "photo" ? (
                 <div className="composer-photo-preview">
                   {/* The selected blob must bypass both Next's public optimizer
                       and its CSP-incompatible inline image style. */}
@@ -726,6 +809,21 @@ export function MomentComposer({
                       setReviewing(false);
                       rejectUndecodablePhoto(photoPreviewUrl);
                     }}
+                  />
+                </div>
+              ) : null}
+              {photoPreviewUrl && mode === "video" ? (
+                <div className="composer-photo-preview composer-video-preview">
+                  <video
+                    key={photoPreviewUrl}
+                    src={photoPreviewUrl}
+                    aria-label="Selected video preview"
+                    controls
+                    controlsList="nodownload noremoteplayback"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    playsInline
+                    preload="metadata"
                   />
                 </div>
               ) : null}
@@ -769,7 +867,7 @@ export function MomentComposer({
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
             <div className="composer-review-actions">
-              {mode === "photo" &&
+              {(mode === "photo" || mode === "video") &&
               saving &&
               (photoUploadStage?.state === "preparing" ||
                 photoUploadStage?.state === "uploading") ? (
@@ -786,7 +884,7 @@ export function MomentComposer({
                   type="button"
                   onClick={returnToEditing}
                 >
-                  Return to photo
+                  Return to {mode === "video" ? "video" : "photo"}
                 </button>
               ) : (
                 <>
@@ -810,14 +908,14 @@ export function MomentComposer({
                   >
                     {connectedExperience
                       ? saving
-                        ? mode === "photo"
+                        ? mode === "photo" || mode === "video"
                           ? photoUploadStage?.state === "finishing"
-                            ? "Finishing photo…"
+                            ? `Finishing ${mode}…`
                             : photoUploadStage?.state === "stopping"
-                              ? "Cancelling photo…"
-                            : "Adding photo…"
+                              ? `Cancelling ${mode}…`
+                              : `Adding ${mode}…`
                           : "Saving…"
-                        : mode === "photo" && saveError
+                        : (mode === "photo" || mode === "video") && saveError
                           ? "Try upload again"
                           : "Save moment"
                       : "Close preview"}
@@ -825,12 +923,12 @@ export function MomentComposer({
                 </>
               )}
             </div>
-            {mode === "photo" && photoUploadLabel ? (
+            {(mode === "photo" || mode === "video") && photoUploadLabel ? (
               <div className="composer-upload-status" role="status">
                 <p>{photoUploadLabel}</p>
                 {photoUploadStage?.state === "uploading" ? (
                   <progress
-                    aria-label="Private photo upload"
+                    aria-label={`Private ${mode} upload`}
                     max={1}
                     value={photoUploadStage.progress}
                   />
@@ -848,7 +946,7 @@ export function MomentComposer({
             className="quick-compose"
             onSubmit={(event) => {
               event.preventDefault();
-              previewDraft();
+              void submitDraft();
             }}
           >
             <button
@@ -859,16 +957,23 @@ export function MomentComposer({
               ← Choose another
             </button>
             <span id="composer-privacy" className="private-label">
-              {connectedExperience
-                ? "Private to this family"
-                : `Local ${copy.kindLabel.toLowerCase()} preview`}
+              {copy.title}
             </span>
-            <h2 id="composer-title">{copy.title}</h2>
+            <h2
+              ref={editorHeadingRef}
+              id="composer-title"
+              className="sr-only"
+              tabIndex={-1}
+            >
+              {copy.title}
+            </h2>
 
-            {mode === "photo" ? (
+            {mode === "photo" || mode === "video" ? (
               <label className="photo-input">
                 <span>
-                  {photoFile ? "Choose a different photo" : "Choose photo"}
+                  {photoFile
+                    ? "Choose different media"
+                    : "Choose photo or video"}
                 </span>
                 <small>
                   {connectedPhotoAvailable
@@ -878,15 +983,18 @@ export function MomentComposer({
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
                   required={!photoFile}
                   aria-invalid={photoError ? true : undefined}
                   aria-describedby={
                     photoError ? "photo-preview-error" : undefined
                   }
-                  onChange={(event) =>
-                    replacePhoto(event.currentTarget.files?.[0] ?? null)
-                  }
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    event.currentTarget.blur();
+                    editorHeadingRef.current?.focus({ preventScroll: true });
+                    replacePhoto(file);
+                  }}
                 />
               </label>
             ) : null}
@@ -907,12 +1015,12 @@ export function MomentComposer({
               {photoFile
                 ? photoDecodeState === "ready"
                   ? connectedPhotoAvailable
-                    ? "Photo ready to upload privately."
-                    : "Photo ready for this local preview."
-                  : "Preparing this photo on your device."
+                    ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
+                    : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
+                  : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
                 : ""}
             </p>
-            {photoPreviewUrl ? (
+            {photoPreviewUrl && mode === "photo" ? (
               <div className="composer-photo-preview">
                 {/* The selected blob is local-only and must never enter the
                     generic Next image optimizer or receive inline styles. */}
@@ -932,10 +1040,105 @@ export function MomentComposer({
                 </button>
               </div>
             ) : null}
+            {photoPreviewUrl && mode === "video" ? (
+              <div className="composer-photo-preview composer-video-preview">
+                <video
+                  key={photoPreviewUrl}
+                  src={photoPreviewUrl}
+                  aria-label="Selected video preview"
+                  controls
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  playsInline
+                  preload="metadata"
+                  onLoadedMetadata={(event) =>
+                    inspectSelectedVideo(
+                      photoPreviewUrl,
+                      event.currentTarget,
+                      false,
+                    )
+                  }
+                  onLoadedData={(event) =>
+                    inspectSelectedVideo(
+                      photoPreviewUrl,
+                      event.currentTarget,
+                      true,
+                    )
+                  }
+                  onError={() => {
+                    rejectUndecodablePhoto(photoPreviewUrl);
+                    setPhotoError(
+                      "This video could not be played. Choose another one.",
+                    );
+                  }}
+                />
+                <button type="button" onClick={() => replacePhoto(null)}>
+                  Remove video
+                </button>
+              </div>
+            ) : null}
 
-            {mode === "milestone" || mode === "location" ? (
+            {mode === "bible-verse" ? (
+              <section
+                className="bible-verse-search"
+                aria-labelledby="bible-search-heading"
+              >
+                <div>
+                  <strong id="bible-search-heading">Find a verse</strong>
+                  <small>World English Bible · Public domain</small>
+                </div>
+                <label className="composer-field">
+                  <span>Reference or words</span>
+                  <input
+                    ref={verseSearchRef}
+                    type="search"
+                    value={verseQuery}
+                    placeholder="John 3:16 or love is patient"
+                    autoComplete="off"
+                    onChange={(event) => setVerseQuery(event.target.value)}
+                  />
+                </label>
+                <div className="bible-verse-results" aria-live="polite">
+                  {verseMatches.length > 0 ? (
+                    verseMatches.map((verse) => (
+                      <button
+                        key={verse.reference}
+                        type="button"
+                        aria-pressed={
+                          title === verse.reference && body === verse.text
+                        }
+                        onClick={() => {
+                          setTitle(verse.reference);
+                          setBody(verse.text);
+                          setContentError(null);
+                        }}
+                      >
+                        <strong>{verse.reference}</strong>
+                        <span>{verse.text}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p>
+                      No match in the starter library. Enter the reference and
+                      verse text below.
+                    </p>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {mode === "milestone" ||
+            mode === "location" ||
+            mode === "bible-verse" ? (
               <label className="composer-field">
-                <span>{mode === "milestone" ? "Milestone" : "Place name"}</span>
+                <span>
+                  {mode === "milestone"
+                    ? "Milestone"
+                    : mode === "bible-verse"
+                      ? "Reference"
+                      : "Place name"}
+                </span>
                 <input
                   ref={titleInputRef}
                   type="text"
@@ -949,7 +1152,9 @@ export function MomentComposer({
                   placeholder={
                     mode === "milestone"
                       ? "A meaningful first"
-                      : "Somewhere worth remembering"
+                      : mode === "bible-verse"
+                        ? "Select above or enter a reference"
+                        : "Somewhere worth remembering"
                   }
                   onChange={(event) => {
                     setTitle(event.target.value);
@@ -967,17 +1172,22 @@ export function MomentComposer({
                 value={body}
                 required={copy.bodyRequired}
                 aria-invalid={
-                  mode === "thought" && contentError ? true : undefined
+                  (mode === "thought" || mode === "bible-verse") && contentError
+                    ? true
+                    : undefined
                 }
                 aria-describedby={
-                  mode === "thought" && contentError
+                  (mode === "thought" || mode === "bible-verse") && contentError
                     ? "composer-content-error"
                     : undefined
                 }
                 maxLength={4000}
                 onChange={(event) => {
                   setBody(event.target.value);
-                  if (mode === "thought" && event.target.value.trim()) {
+                  if (
+                    (mode === "thought" || mode === "bible-verse") &&
+                    event.target.value.trim()
+                  ) {
                     setContentError(null);
                   }
                 }}
@@ -1004,18 +1214,16 @@ export function MomentComposer({
                   onChange={(event) => setOccurredOn(event.target.value)}
                 />
               </label>
-              {connectedExperience ? (
-                <label className="composer-field">
-                  <span>
-                    Time <small>Optional</small>
-                  </span>
-                  <input
-                    type="time"
-                    value={occurredTime}
-                    onChange={(event) => setOccurredTime(event.target.value)}
-                  />
-                </label>
-              ) : null}
+              <label className="composer-field">
+                <span>
+                  Time <small>Optional</small>
+                </span>
+                <input
+                  type="time"
+                  value={occurredTime}
+                  onChange={(event) => setOccurredTime(event.target.value)}
+                />
+              </label>
               <div className="composer-field composer-select-field">
                 <label htmlFor="composer-journal-person">Journal</label>
                 <select
@@ -1043,7 +1251,7 @@ export function MomentComposer({
                 aria-controls="composer-optional-fields"
                 onClick={() => setOptionalDetailsOpen((current) => !current)}
               >
-                People and place <span>Optional</span>
+                Details <span>Optional</span>
               </button>
               {optionalDetailsOpen ? (
                 <div id="composer-optional-fields">
@@ -1090,7 +1298,7 @@ export function MomentComposer({
                         placeholder="Add a place by hand"
                         onChange={(event) => setPlaceName(event.target.value)}
                       />
-                      <small>No location is read from your photo.</small>
+                      <small>No location is read from your media.</small>
                     </label>
                   ) : null}
                 </div>
@@ -1100,14 +1308,57 @@ export function MomentComposer({
             {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
-            <p className="composer-preview-note">
-              {connectedExperience
-                ? "This will appear in its true chronological place."
-                : "Preview only. Nothing will be uploaded or saved."}
-            </p>
-            <button className="save-moment" type="submit">
-              {connectedExperience ? "Review moment" : "Preview moment"}
+            {connectedExperience ? (
+              <p className="composer-preview-note">
+                This will appear in its true chronological place.
+              </p>
+            ) : null}
+            <button
+              className="save-moment"
+              type="submit"
+              disabled={saving || photoRetryBlocked}
+            >
+              {saving
+                ? mode === "photo" || mode === "video"
+                  ? photoUploadStage?.state === "finishing"
+                    ? `Finishing ${mode}…`
+                    : `Adding ${mode}…`
+                  : "Saving…"
+                : photoRetryBlocked
+                  ? "Upload unavailable"
+                  : (mode === "photo" || mode === "video") && saveError
+                    ? "Try upload again"
+                    : "Save"}
             </button>
+            {(mode === "photo" || mode === "video") &&
+            saving &&
+            (photoUploadStage?.state === "preparing" ||
+              photoUploadStage?.state === "uploading") ? (
+              <button
+                className="secondary-composer-action stop-photo-upload"
+                type="button"
+                onClick={stopPhotoUpload}
+              >
+                Cancel upload
+              </button>
+            ) : null}
+            {(mode === "photo" || mode === "video") && photoUploadLabel ? (
+              <div className="composer-upload-status" role="status">
+                <p>{photoUploadLabel}</p>
+                {photoUploadStage?.state === "uploading" ? (
+                  <progress
+                    aria-label={`Private ${mode} upload`}
+                    max={1}
+                    value={photoUploadStage.progress}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+            {saveError ? (
+              <p className="composer-error" role="alert">
+                {saveError}
+              </p>
+            ) : null}
           </form>
         ) : null}
       </section>

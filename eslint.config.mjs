@@ -15,7 +15,8 @@ const eslintConfig = defineConfig([
           patterns: [
             {
               group: ["@/fixtures/**"],
-              message: "Presentation fixtures may only be loaded by server page modules.",
+              message:
+                "Presentation fixtures may only be loaded by server page modules.",
             },
           ],
         },
@@ -31,6 +32,7 @@ const eslintConfig = defineConfig([
     "coverage/**",
     "playwright-report/**",
     "test-results/**",
+    ".vercel/**",
     "next-env.d.ts",
   ]),
 ]);

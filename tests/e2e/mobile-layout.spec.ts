@@ -80,6 +80,81 @@ test("reduced-motion preference removes entrance animations", async ({
   );
 });
 
+test("the graph-paper grid is painted by a viewport-fixed layer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+
+  const grid = await page.locator(".app-shell").evaluate((shell) => {
+    const layer = getComputedStyle(shell, "::before");
+    const stage = getComputedStyle(document.querySelector(".phone-stage")!);
+    return {
+      backgroundImage: layer.backgroundImage,
+      bottom: layer.bottom,
+      left: layer.left,
+      phoneStageBackgroundImage: stage.backgroundImage,
+      position: layer.position,
+      right: layer.right,
+      top: layer.top,
+    };
+  });
+
+  expect(grid.position).toBe("fixed");
+  expect(grid.backgroundImage).toContain("linear-gradient");
+  expect(grid.phoneStageBackgroundImage).toBe("none");
+  expect(grid).toMatchObject({
+    bottom: "0px",
+    left: "0px",
+    right: "0px",
+    top: "0px",
+  });
+});
+
+test("portalled moment options stay visible above navigation without inline positioning", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/family");
+  await page.evaluate(() => {
+    const menu = document.createElement("dialog");
+    menu.className = "connected-moment-menu connected-moment-menu-portal";
+    menu.setAttribute("role", "group");
+    menu.setAttribute("aria-label", "Moment options");
+    for (const text of ["Copy text", "Edit moment", "Move to trash"]) {
+      const button = document.createElement("button");
+      button.textContent = text;
+      menu.append(button);
+    }
+    document.body.append(menu);
+    menu.showModal();
+  });
+  const menu = page.getByRole("group", { name: "Moment options" });
+  await expect(menu).toBeVisible();
+  await expect(menu).not.toHaveAttribute("style");
+
+  const geometry = await menu.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      height: rect.height,
+      insideViewport:
+        rect.left >= 0 &&
+        rect.right <= document.documentElement.clientWidth &&
+        rect.top >= 0,
+      navTop: nav.top,
+      position: getComputedStyle(element).position,
+      scrollY: window.scrollY,
+      top: rect.top,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(geometry.insideViewport).toBe(true);
+  expect(geometry.position).toBe("fixed");
+  expect(geometry.bottom).toBeLessThanOrEqual(geometry.navTop);
+});
+
 test("maximum-length family names stay bounded beside the mobile timeline", async ({
   page,
 }) => {
@@ -208,6 +283,21 @@ test("deep memory actions can scroll above the fixed navigation", async ({
       geometry.navigationTop - 4,
     );
   }
+});
+
+test("primary navigation stays compact above the device safe area", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const geometry = await page.locator(".bottom-nav").evaluate((navigation) => {
+    const style = window.getComputedStyle(navigation);
+    return {
+      height: navigation.getBoundingClientRect().height,
+      paddingBottom: Number.parseFloat(style.paddingBottom),
+    };
+  });
+
+  expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
 });
 
 test("200 percent zoom-equivalent viewport retains one-dimensional reflow", async ({

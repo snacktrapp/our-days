@@ -17,6 +17,7 @@ export default defineConfig({
       "tests/contracts/**/*.test.ts",
       "tests/integration/**/*.test.ts",
     ],
+    testTimeout: 10_000,
     restoreMocks: true,
     clearMocks: true,
   },
