@@ -79,7 +79,6 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.goForward();
   await expect(page).toHaveURL(/\/memories\/on-this-day$/u);
 
-  await page.getByRole("link", { name: /All memories/u }).click();
   // The retired milestone collection is intentionally absent from Memories;
   // keep the legacy deep link covered for existing bookmarks.
   await page.goto("/memories/milestones");

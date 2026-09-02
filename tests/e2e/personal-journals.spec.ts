@@ -122,9 +122,10 @@ test("managed journal defaults retain adult recorder truth across client navigat
   await page.goto("/people/avery");
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
-  await expect(page.getByLabel("Journal", { exact: true })).toHaveValue(
-    "avery",
-  );
+  await page.getByRole("button", { name: /Details/u }).click();
+  await expect(
+    page.getByRole("button", { name: /^Journal, Avery/u }),
+  ).toBeVisible();
   await expect(page.getByText("Recorded by Brian")).toBeVisible();
   await page
     .getByRole("textbox", { name: "Entry" })
@@ -136,7 +137,10 @@ test("managed journal defaults retain adult recorder truth across client navigat
   await page.locator('a[href="/people/sam"]').click();
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
-  await expect(page.getByLabel("Journal", { exact: true })).toHaveValue("sam");
+  await page.getByRole("button", { name: /Details/u }).click();
+  await expect(
+    page.getByRole("button", { name: /^Journal, Sam/u }),
+  ).toBeVisible();
   await expect(page.getByText("Recorded by Brian")).toBeVisible();
 });
 

@@ -159,6 +159,7 @@ export function DateTimeFields({
           <button
             type="button"
             className="composer-picker-trigger"
+            aria-label={`Moment date, ${dateLabel(date)}`}
             aria-haspopup="dialog"
             aria-expanded={openPicker === "date"}
             onClick={openDatePicker}
@@ -174,6 +175,7 @@ export function DateTimeFields({
           <button
             type="button"
             className="composer-picker-trigger"
+            aria-label={`Time, ${timeLabel(time)}`}
             aria-haspopup="dialog"
             aria-expanded={openPicker === "time"}
             onClick={openTimePicker}

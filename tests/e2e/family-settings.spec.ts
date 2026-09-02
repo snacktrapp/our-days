@@ -38,9 +38,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await page.goto("/people");
   await page.getByRole("link", { name: "Family access & invitations" }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
-  await expect(
-    page.getByRole("heading", { name: "Family settings" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.getByText("Managed profile · No sign-in")).toHaveCount(3);
   await expect(page.getByText("Account · Can sign in")).toHaveCount(2);
   await expect(
@@ -185,12 +183,12 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
   ).toEqual([]);
 });
 
-test("the Account navigation opens settings and its close control returns to People", async ({
+test("the shared Account navigation opens settings and returns through the primary nav", async ({
   page,
 }) => {
   await page.goto("/family");
   await page.getByRole("link", { name: "Account" }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
-  await page.getByRole("link", { name: "Back to People" }).click();
+  await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/people$/u);
 });

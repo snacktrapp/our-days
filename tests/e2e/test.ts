@@ -64,6 +64,7 @@ export const test = base.extend<{
           ) &&
           !(
             (failure.includes("_rsc=") ||
+              failure.includes("/_next/image?") ||
               /\/apple-touch-icon\.png(?:\?|$)/u.test(failure)) &&
             /(ERR_ABORTED|NS_BINDING_ABORTED|cancel)/i.test(failure)
           ),

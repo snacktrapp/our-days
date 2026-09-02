@@ -58,6 +58,7 @@ export function JournalPickerField({
         ref={triggerRef}
         type="button"
         className="composer-picker-trigger composer-journal-trigger"
+        aria-label={`Journal, ${selected.name} · ${selected.contextLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}

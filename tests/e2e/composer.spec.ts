@@ -136,6 +136,14 @@ async function openComposer(page: Page) {
   return page.getByRole("dialog");
 }
 
+async function selectMomentDate(dialog: Locator, dateLabel: string) {
+  await dialog.getByRole("button", { name: /^Moment date,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose moment date" })
+    .getByRole("button", { name: dateLabel, exact: true })
+    .click();
+}
+
 test("date, time, and journal stay separated inside every phone-width drawer", async ({
   page,
 }) => {
@@ -148,17 +156,19 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
     await page.goto("/family");
     const dialog = await openComposer(page);
     await dialog.getByRole("button", { name: /^Photo/u }).click();
+    await dialog.getByRole("button", { name: /Details/u }).click();
 
     const geometry = await dialog.evaluate((element) => {
       const sheet = element.querySelector<HTMLElement>(".composer-sheet")!;
       const fields = element.querySelector<HTMLElement>(
         ".composer-core-fields",
       )!;
-      const date =
-        element.querySelector<HTMLInputElement>('input[type="date"]')!;
-      const time =
-        element.querySelector<HTMLInputElement>('input[type="time"]')!;
-      const journal = element.querySelector<HTMLSelectElement>("select")!;
+      const [date, time] = [
+        ...element.querySelectorAll<HTMLElement>(".composer-picker-trigger"),
+      ];
+      const journal = element.querySelector<HTMLElement>(
+        ".composer-journal-trigger",
+      )!;
       const sheetRect = sheet.getBoundingClientRect();
       const rectangles = [date, time, journal].map((control) =>
         control.getBoundingClientRect(),
@@ -168,9 +178,10 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
           (rect) =>
             rect.left >= sheetRect.left && rect.right <= sheetRect.right,
         ),
-        separated:
-          rectangles[0].bottom <= rectangles[1].top &&
-          rectangles[1].bottom <= rectangles[2].top,
+        dateAndTimeSeparated: rectangles[0].right <= rectangles[1].left,
+        journalBelow:
+          Math.max(rectangles[0].bottom, rectangles[1].bottom) <=
+          rectangles[2].top,
         noHorizontalOverflow:
           document.documentElement.scrollWidth <=
             document.documentElement.clientWidth &&
@@ -181,7 +192,8 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
 
     expect(geometry).toEqual({
       contained: true,
-      separated: true,
+      dateAndTimeSeparated: true,
+      journalBelow: true,
       noHorizontalOverflow: true,
     });
   }
@@ -254,17 +266,19 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     .click();
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
-  await page.getByLabel("Moment date").fill("2023-08-21");
-  const journal = dialog.getByRole("combobox", {
-    name: "Journal",
-    exact: true,
-  });
-  await expect(journal.locator('option[value="molly"]')).toHaveCount(0);
+  await selectMomentDate(dialog, "Aug 21, 2026");
+  const journal = dialog.getByRole("button", { name: /^Journal,/u });
   await page.getByRole("button", { name: /Details/u }).click();
+  await journal.click();
+  await expect(
+    dialog.getByRole("menuitemradio", { name: /Molly/u }),
+  ).toHaveCount(0);
+  await journal.click();
   const averyTag = page.getByRole("checkbox", { name: /Avery/u });
   await averyTag.check();
   await expect(averyTag).toBeChecked();
-  await journal.selectOption("avery");
+  await journal.click();
+  await dialog.getByRole("menuitemradio", { name: /Avery/u }).click();
   await expect(averyTag).not.toBeChecked();
   await expect(averyTag).toBeDisabled();
   await page.getByRole("checkbox", { name: /Molly/u }).check();
@@ -281,8 +295,10 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   page.once("dialog", async (confirmation) => confirmation.dismiss());
   await page.getByRole("button", { name: "Close moment composer" }).click();
   await expect(text).toHaveValue("A draft worth keeping");
-  await expect(page.getByLabel("Moment date")).toHaveValue("2023-08-21");
-  await expect(journal).toHaveValue("avery");
+  await expect(
+    dialog.getByRole("button", { name: "Moment date, Aug 21, 2026" }),
+  ).toBeVisible();
+  await expect(journal).toHaveAccessibleName(/^Journal, Avery/u);
   await expect(page.getByRole("checkbox", { name: /Molly/u })).toBeChecked();
 
   page.once("dialog", async (confirmation) => confirmation.accept());
@@ -319,11 +335,13 @@ test("required content rejects whitespace and future dates before review", async
   const dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Written entry/u }).click();
   await dialog.getByRole("textbox", { name: "Entry" }).fill("Later");
-  const date = dialog.getByLabel("Moment date");
-  await date.fill("2026-08-29");
-  expect(
-    await date.evaluate((input: HTMLInputElement) => input.checkValidity()),
-  ).toBe(false);
+  await dialog.getByRole("button", { name: /^Moment date,/u }).click();
+  await expect(
+    dialog
+      .getByRole("dialog", { name: "Choose moment date" })
+      .getByRole("button", { name: "Aug 29, 2026", exact: true }),
+  ).toBeDisabled();
+  await dialog.getByRole("button", { name: /^Moment date,/u }).click();
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(
     dialog.getByRole("heading", { name: "Review entry" }),
@@ -684,8 +702,8 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
   for (const control of [
     page.getByRole("button", { name: "Close moment composer" }),
     text,
-    page.getByLabel("Moment date"),
-    dialog.getByRole("combobox", { name: "Journal", exact: true }),
+    page.getByRole("button", { name: /^Moment date,/u }),
+    dialog.getByRole("button", { name: /^Journal,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
     page.getByLabel(/^Place/u),
