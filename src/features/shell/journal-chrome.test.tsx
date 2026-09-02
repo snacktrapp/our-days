@@ -1,6 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { JournalChromeViewModel, JournalSection } from "./shell-view-model";
+import type {
+  JournalChromeViewModel,
+  JournalSection,
+} from "./shell-view-model";
 import { JournalChrome } from "./journal-chrome";
 
 vi.mock("./timeline-header-composer", () => ({
