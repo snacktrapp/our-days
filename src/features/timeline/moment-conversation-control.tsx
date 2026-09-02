@@ -70,7 +70,6 @@ export function MomentConversationControl({
   const [noteDraft, setNoteDraft] = useState("");
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [editingNoteBody, setEditingNoteBody] = useState("");
   const [selectedReactionId, setSelectedReactionId] =
     useState<MomentReactionId | null>(() =>
       currentReaction(model.conversation),
@@ -91,10 +90,10 @@ export function MomentConversationControl({
   useEffect(() => {
     if (panel !== "note") return;
     const frame = window.requestAnimationFrame(() =>
-      noteRef.current?.focus({ preventScroll: true }),
+      noteRef.current?.focus({ preventScroll: !editingNoteId }),
     );
     return () => window.cancelAnimationFrame(frame);
-  }, [panel]);
+  }, [editingNoteId, panel]);
 
   useEffect(() => {
     if (panel !== "reactions") return;
@@ -228,7 +227,21 @@ export function MomentConversationControl({
     setPending(true);
     setError(null);
     try {
-      if (actions) {
+      const editingNote = editingNoteId
+        ? conversation.notes.find((note) => note.id === editingNoteId)
+        : undefined;
+      if (actions && editingNote?.revision) {
+        const result = await actions.updateNote({
+          noteId: editingNote.id,
+          revision: editingNote.revision,
+          body,
+        });
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        await loadConversation(true);
+      } else if (actions) {
         const result = await actions.createNote({ momentId: model.id, body });
         if (!result.ok) {
           setError(result.message);
@@ -253,6 +266,7 @@ export function MomentConversationControl({
         }));
       }
       setNoteDraft("");
+      setEditingNoteId(null);
       setPanel(null);
       window.requestAnimationFrame(() =>
         noteTriggerRef.current?.focus({ preventScroll: true }),
@@ -312,7 +326,8 @@ export function MomentConversationControl({
                               disabled={pending}
                               onClick={() => {
                                 setEditingNoteId(note.id);
-                                setEditingNoteBody(note.body);
+                                setNoteDraft(note.body);
+                                setPanel("note");
                                 setError(null);
                               }}
                             >
@@ -354,74 +369,7 @@ export function MomentConversationControl({
                           </span>
                         ) : null}
                       </span>
-                      {editingNoteId === note.id && actions && note.revision ? (
-                        <form
-                          className="inline-note-edit"
-                          onSubmit={async (event) => {
-                            event.preventDefault();
-                            const body = editingNoteBody.trim();
-                            if (!body) return;
-                            setPending(true);
-                            setError(null);
-                            try {
-                              const result = await actions.updateNote({
-                                noteId: note.id,
-                                revision: note.revision!,
-                                body,
-                              });
-                              if (!result.ok) {
-                                setError(result.message);
-                                return;
-                              }
-                              setEditingNoteId(null);
-                              setEditingNoteBody("");
-                              await loadConversation(true);
-                            } catch {
-                              setError(
-                                "That note could not be updated. Try again.",
-                              );
-                            } finally {
-                              setPending(false);
-                            }
-                          }}
-                        >
-                          <label
-                            className="sr-only"
-                            htmlFor={`${panelId}-edit-${note.id}`}
-                          >
-                            Edit your note
-                          </label>
-                          <textarea
-                            id={`${panelId}-edit-${note.id}`}
-                            value={editingNoteBody}
-                            maxLength={1000}
-                            disabled={pending}
-                            onChange={(event) =>
-                              setEditingNoteBody(event.target.value)
-                            }
-                          />
-                          <div>
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => {
-                                setEditingNoteId(null);
-                                setEditingNoteBody("");
-                              }}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={pending || !editingNoteBody.trim()}
-                            >
-                              {pending ? "Saving…" : "Save"}
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <p>{note.body}</p>
-                      )}
+                      <p>{note.body}</p>
                     </div>
                   </li>
                 ))}
@@ -528,7 +476,7 @@ export function MomentConversationControl({
           <textarea
             ref={noteRef}
             id={`${panelId}-note-field`}
-            aria-label="Add a family note"
+            aria-label={editingNoteId ? "Edit your note" : "Add a family note"}
             value={noteDraft}
             maxLength={1000}
             placeholder="A memory, detail, or reply…"
@@ -544,6 +492,7 @@ export function MomentConversationControl({
               disabled={pending}
               onClick={() => {
                 setNoteDraft("");
+                setEditingNoteId(null);
                 setError(null);
                 setPanel(null);
                 window.requestAnimationFrame(() =>

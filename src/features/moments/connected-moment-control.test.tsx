@@ -89,9 +89,27 @@ describe("ConnectedMomentControl", () => {
     });
     expect(trashButton).toBeInTheDocument();
     const menu = screen.getByRole("group", { name: "Moment options" });
-    expect(menu.tagName).toBe("DIALOG");
-    expect(menu).toHaveAttribute("open");
+    expect(menu.tagName).toBe("DIV");
+    expect(document.body).toContainElement(menu);
     expect(menu).not.toHaveAttribute("style");
+  });
+
+  it("closes the compact options menu from its trigger or an outside press", async () => {
+    const user = userEvent.setup();
+    render(<ConnectedMomentControl moment={moment} actions={actions} />);
+
+    const trigger = screen.getByRole("button", { name: /^Moment options/u });
+    await user.click(trigger);
+    expect(
+      screen.getByRole("group", { name: "Moment options" }),
+    ).toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(screen.queryByRole("group", { name: "Moment options" })).toBeNull();
+
+    await user.click(trigger);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("group", { name: "Moment options" })).toBeNull();
   });
 
   it("constrains backdating to today and confirms before discarding a draft", async () => {
@@ -101,7 +119,9 @@ describe("ConnectedMomentControl", () => {
 
     await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
-    await user.click(screen.getByRole("button", { name: "Aug 28, 2026" }));
+    await user.click(
+      screen.getByRole("button", { name: "Moment date, Aug 28, 2026" }),
+    );
     expect(screen.getByRole("button", { name: "Aug 30, 2026" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Aug 31, 2026" })).toBeDisabled();
 

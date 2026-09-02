@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --grid-surface: #0b1712;
   --paper: #0b1712;
   --ink: #f0f2ed;
   --muted: #98a39c;
@@ -20,7 +21,7 @@
   --header-drawer-radius: 10px;
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --header-drawer-padding: 16px;
-  --header-drawer-top: calc(72px + env(safe-area-inset-top));
+  --header-drawer-top: calc(63px + env(safe-area-inset-top));
   --header-drawer-gutter: max(16px, calc((100vw - 430px) / 2 + 16px));
 }
 
@@ -30,6 +31,7 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
+  --grid-surface: #e7dfd3;
   --paper: #f3eee4;
   --ink: #202721;
   --muted: #59645e;
@@ -583,7 +585,7 @@ textarea:focus-visible,
   flex-direction: column;
   padding: 2px 4px 2px 0;
   border-radius: 4px;
-  background: var(--paper);
+  background: var(--grid-surface);
   white-space: nowrap;
 }
 .moment-meta strong {
@@ -3758,8 +3760,10 @@ textarea:focus-visible,
   cursor: pointer;
 }
 .journal-loading {
+  min-height: calc(100svh - 56px - env(safe-area-inset-bottom));
   display: grid;
   place-items: center;
+  position: relative;
 }
 .journal-loading p {
   position: relative;
@@ -4083,7 +4087,7 @@ textarea:focus-visible,
 .moment-meta {
   top: -1px;
   left: calc(50% + 21px);
-  background: var(--paper);
+  background: var(--grid-surface);
 }
 
 .moment-meta strong {
@@ -4906,7 +4910,7 @@ textarea:focus-visible,
 }
 
 .app-shell {
-  background-color: var(--paper);
+  background-color: var(--grid-surface);
   background-image: none;
 }
 
@@ -5115,7 +5119,7 @@ textarea:focus-visible,
 :root[data-theme="light"] body,
 :root[data-theme="light"] .app-shell,
 :root[data-theme="light"] .private-entry-shell {
-  background-color: #e7dfd3;
+  background-color: var(--grid-surface);
 }
 
 :root[data-theme="light"] .app-shell::before {
@@ -5989,11 +5993,11 @@ textarea:focus-visible,
 
 @media (min-width: 431px) {
   :root {
-    --header-drawer-top: 100px;
+    --header-drawer-top: 92px;
   }
 
   .new-moment-composer-dialog .composer-sheet {
-    max-height: calc(100dvh - 100px);
+    max-height: calc(100dvh - 92px);
   }
 }
 
@@ -6398,18 +6402,20 @@ textarea:focus-visible,
 
 /* The menu is portalled to the viewport so a media card's rounded clipping
    never cuts it off. */
-dialog.connected-moment-menu-portal {
+.connected-moment-menu-portal {
   position: fixed;
   z-index: 1000;
   inset: auto 12px calc(64px + env(safe-area-inset-bottom));
   width: min(calc(100vw - 24px), 360px);
   max-width: 360px;
+  height: fit-content;
+  max-height: min(60vh, 260px);
   margin: 0 auto;
   transform: none;
-}
-
-dialog.connected-moment-menu-portal::backdrop {
-  background: transparent;
+  grid-auto-rows: max-content;
+  align-content: start;
+  overflow: auto;
+  outline: none;
 }
 
 .pending-media-shelf {
@@ -6528,6 +6534,31 @@ dialog.connected-moment-menu-portal::backdrop {
 .inline-note-form button,
 .inline-note-edit button {
   min-height: 44px;
+}
+
+/* Secondary destinations share the journal canvas; only their inner content
+   is card-shaped. This neutralizes the legacy full-page card treatment. */
+.people-panel,
+.memories-panel,
+.family-settings-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Keep primary navigation in its own composited layer so iOS rubber-band
+   scrolling cannot paint page content over it. */
+.bottom-nav {
+  z-index: 100;
+  isolation: isolate;
+  transform: translate3d(-50%, 0, 0);
+}
+
+@media (min-width: 431px) {
+  .bottom-nav {
+    transform: translateZ(0);
+  }
 }
 
 /* Hard-coded dark-theme display colors need explicit light equivalents. */

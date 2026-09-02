@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { DateTimeFields } from "@/features/composer/date-time-fields";
@@ -102,7 +103,7 @@ function ChangeableMomentControl({
   const [message, setMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const menuWrapperRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDialogElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -125,8 +126,6 @@ function ChangeableMomentControl({
 
   useEffect(() => {
     if (!menuOpen) return;
-    const menu = menuRef.current;
-    if (menu && !menu.open) menu.showModal();
     const closeOutside = (event: PointerEvent) => {
       const target = event.target as Node;
       if (
@@ -146,7 +145,6 @@ function ChangeableMomentControl({
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeWithEscape);
-      if (menu?.open) menu.close();
     };
   }, [menuOpen]);
 
@@ -297,45 +295,40 @@ function ChangeableMomentControl({
           <span aria-hidden="true">•••</span>
         </button>
       </div>
-      {menuOpen ? (
-        <dialog
-          ref={menuRef}
-          className="connected-moment-menu connected-moment-menu-portal"
-          id={`moment-actions-${moment.id}`}
-          role="group"
-          aria-label="Moment options"
-          onCancel={(event) => {
-            event.preventDefault();
-            setMenuOpen(false);
-            menuTriggerRef.current?.focus();
-          }}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setMenuOpen(false);
-          }}
-        >
-          <button type="button" onClick={copyText}>
-            Copy text
-          </button>
-          <button
-            type="button"
-            aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-            onClick={() => {
-              setMenuOpen(false);
-              setOpen(true);
-            }}
-          >
-            Edit moment
-          </button>
-          <button
-            type="button"
-            aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-            disabled={pending}
-            onClick={trash}
-          >
-            {pending ? "Moving…" : "Move to trash"}
-          </button>
-        </dialog>
-      ) : null}
+      {menuOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="connected-moment-menu connected-moment-menu-portal"
+              id={`moment-actions-${moment.id}`}
+              role="group"
+              aria-label="Moment options"
+            >
+              <button type="button" onClick={copyText}>
+                Copy text
+              </button>
+              <button
+                type="button"
+                aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setOpen(true);
+                }}
+              >
+                Edit moment
+              </button>
+              <button
+                type="button"
+                aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+                disabled={pending}
+                onClick={trash}
+              >
+                {pending ? "Moving…" : "Move to trash"}
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
       {message && !open ? (
         <p className="connected-moment-message" role="alert">
           {message}

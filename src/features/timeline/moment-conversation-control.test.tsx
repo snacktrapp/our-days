@@ -330,7 +330,7 @@ describe("MomentConversationControl", () => {
     expect(note).toHaveValue("Do not lose this.");
   });
 
-  it("edits and removes an owned note inline", async () => {
+  it("edits an owned note in the original note field and removes it", async () => {
     const owned = {
       notes: [
         {
@@ -351,13 +351,22 @@ describe("MomentConversationControl", () => {
       notes: [{ ...owned.notes[0], body: "Updated note.", revision: 4 }],
     } as const satisfies MomentConversationViewModel;
     const actions = connectedActions(owned);
-    actions.load.mockResolvedValue({ ok: true, conversation: updated });
+    actions.load
+      .mockResolvedValueOnce({ ok: true, conversation: owned })
+      .mockResolvedValue({ ok: true, conversation: updated });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     renderControl(actions, owned);
 
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
+    expect(editor.closest("form")).toHaveClass("inline-note-form");
+    expect(editor).toHaveValue("Original note.");
+    expect(
+      within(screen.getByRole("list", { name: "Notes from family" })).getByText(
+        "Original note.",
+      ),
+    ).toBeVisible();
     await user.clear(editor);
     await user.type(editor, "Updated note.");
     await user.click(
@@ -366,7 +375,7 @@ describe("MomentConversationControl", () => {
     await waitFor(() =>
       expect(actions.updateNote).toHaveBeenCalledWith({
         noteId: "note-owned",
-        revision: 4,
+        revision: 3,
         body: "Updated note.",
       }),
     );

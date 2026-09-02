@@ -117,7 +117,7 @@ test("portalled moment options stay visible above navigation without inline posi
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => {
-    const menu = document.createElement("dialog");
+    const menu = document.createElement("div");
     menu.className = "connected-moment-menu connected-moment-menu-portal";
     menu.setAttribute("role", "group");
     menu.setAttribute("aria-label", "Moment options");
@@ -127,7 +127,6 @@ test("portalled moment options stay visible above navigation without inline posi
       menu.append(button);
     }
     document.body.append(menu);
-    menu.showModal();
   });
   const menu = page.getByRole("group", { name: "Moment options" });
   await expect(menu).toBeVisible();
@@ -298,6 +297,40 @@ test("primary navigation stays compact above the device safe area", async ({
   });
 
   expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
+});
+
+test("primary navigation remains above every secondary page canvas", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const path of ["/people", "/memories", "/settings/family"]) {
+    await page.goto(path);
+    const panel = page.locator(".section-panel").first();
+    await expect(panel).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(panel).toHaveCSS("border-top-width", "0px");
+
+    for (const scrollY of [
+      0,
+      await page.evaluate(() => document.body.scrollHeight),
+    ]) {
+      await page.evaluate(
+        (nextScrollY) => window.scrollTo(0, nextScrollY),
+        scrollY,
+      );
+      const navigationIsTopmost = await page
+        .locator(".bottom-nav")
+        .evaluate((navigation) => {
+          const rect = navigation.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + 2,
+          );
+          return hit === navigation || Boolean(hit?.closest(".bottom-nav"));
+        });
+      expect(navigationIsTopmost).toBe(true);
+    }
+  }
 });
 
 test("200 percent zoom-equivalent viewport retains one-dimensional reflow", async ({

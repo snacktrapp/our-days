@@ -1,7 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
+
+type PrimarySection = Extract<
+  JournalSection,
+  "timeline" | "people" | "memories" | "settings"
+>;
+
+function sectionFromPathname(pathname: string): PrimarySection | null {
+  if (pathname === "/family" || pathname.startsWith("/journal")) {
+    return "timeline";
+  }
+  if (pathname.startsWith("/people")) return "people";
+  if (pathname.startsWith("/memories")) return "memories";
+  if (pathname.startsWith("/settings")) return "settings";
+  return null;
+}
+
+function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    event.button === 0 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
 
 function NavIcon({
   name,
@@ -52,12 +79,30 @@ export function PrimaryNavigation({
   memoriesHref?: string | null;
   settingsHref?: string | null;
 }) {
+  const pathname = usePathname();
+  const [pendingSelection, setPendingSelection] = useState<{
+    fromPathname: string;
+    section: PrimarySection;
+  } | null>(null);
+  const selectedSection =
+    pendingSelection?.fromPathname === pathname
+      ? pendingSelection.section
+      : (sectionFromPathname(pathname) ?? section);
+
+  const selectImmediately =
+    (nextSection: PrimarySection) => (event: MouseEvent<HTMLAnchorElement>) => {
+      if (!event.defaultPrevented && isUnmodifiedPrimaryClick(event)) {
+        setPendingSelection({ fromPathname: pathname, section: nextSection });
+      }
+    };
+
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
       <Link
-        className={`nav-item ${section === "timeline" ? "active" : ""}`}
-        aria-current={section === "timeline" ? "page" : undefined}
+        className={`nav-item ${selectedSection === "timeline" ? "active" : ""}`}
+        aria-current={selectedSection === "timeline" ? "page" : undefined}
         href="/family"
+        onClick={selectImmediately("timeline")}
         prefetch={false}
       >
         <span className="nav-symbol" aria-hidden="true">
@@ -66,9 +111,10 @@ export function PrimaryNavigation({
         <span>Family</span>
       </Link>
       <Link
-        className={`nav-item ${section === "people" ? "active" : ""}`}
-        aria-current={section === "people" ? "page" : undefined}
+        className={`nav-item ${selectedSection === "people" ? "active" : ""}`}
+        aria-current={selectedSection === "people" ? "page" : undefined}
         href="/people"
+        onClick={selectImmediately("people")}
         prefetch={false}
       >
         <span className="nav-symbol" aria-hidden="true">
@@ -80,9 +126,10 @@ export function PrimaryNavigation({
         <span className="nav-item nav-item-unavailable" aria-hidden="true" />
       ) : (
         <Link
-          className={`nav-item ${section === "memories" ? "active" : ""}`}
-          aria-current={section === "memories" ? "page" : undefined}
+          className={`nav-item ${selectedSection === "memories" ? "active" : ""}`}
+          aria-current={selectedSection === "memories" ? "page" : undefined}
           href={memoriesHref ?? "/memories"}
+          onClick={selectImmediately("memories")}
           prefetch={false}
         >
           <span className="nav-symbol" aria-hidden="true">
@@ -95,9 +142,10 @@ export function PrimaryNavigation({
         <span className="nav-item nav-item-unavailable" aria-hidden="true" />
       ) : (
         <Link
-          className={`nav-item ${section === "settings" ? "active" : ""}`}
-          aria-current={section === "settings" ? "page" : undefined}
+          className={`nav-item ${selectedSection === "settings" ? "active" : ""}`}
+          aria-current={selectedSection === "settings" ? "page" : undefined}
           href={settingsHref ?? "/settings/family"}
+          onClick={selectImmediately("settings")}
           prefetch={false}
         >
           <span className="nav-symbol" aria-hidden="true">

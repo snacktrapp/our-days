@@ -203,6 +203,16 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   page,
 }) => {
   await page.goto("/family");
+  await page.getByRole("button", { name: /Open notifications/u }).click();
+  const notificationPanel = page.getByRole("region", {
+    name: "Notifications",
+  });
+  await expect(notificationPanel).toBeVisible();
+  const notificationTop = await notificationPanel.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().top),
+  );
+  await page.getByRole("button", { name: "Close notifications" }).click();
+
   const trigger = page.getByRole("button", { name: "Add moment" });
   const dialog = await openComposer(page);
 
@@ -235,12 +245,12 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     return {
       distanceFromHeader: Math.round(sheetRect.top - headerRect.bottom),
       opensFromTop: sheetRect.top < window.innerHeight / 2,
+      top: Math.round(sheetRect.top),
     };
   });
-  expect(drawerPlacement).toEqual({
-    distanceFromHeader: 0,
-    opensFromTop: true,
-  });
+  expect(drawerPlacement?.distanceFromHeader).toBeLessThan(0);
+  expect(drawerPlacement?.opensFromTop).toBe(true);
+  expect(drawerPlacement?.top).toBe(notificationTop);
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
   await expectMinimumTargets(dialog);
 
