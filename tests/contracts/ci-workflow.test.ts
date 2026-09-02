@@ -50,8 +50,10 @@ describe("CI workflow privacy and supply-chain contract", () => {
     const setupNodeSteps = actionStepBlocks(setupNodeAction);
     expect(setupNodeSteps).toHaveLength(4);
     for (const step of setupNodeSteps) {
-      expect(step).toContain("package-manager-cache: false");
+      expect(step).toContain("cache: npm");
     }
+    expect(workflow).not.toContain("actions/cache@");
+    expect(workflow).not.toContain("node_modules");
   });
 
   it("runs the required engines without exporting private browser artifacts", () => {
@@ -96,5 +98,6 @@ describe("CI workflow privacy and supply-chain contract", () => {
     expect(workflow).toContain("run: npm run db:lint");
     expect(workflow).toContain("if: always()");
     expect(workflow).toContain("run: npm run supabase:stop");
+    expect(workflow).not.toContain("needs:");
   });
 });

@@ -1,10 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main, staging]
   pull_request:
-    branches: [main, staging]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +32,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
+          cache: npm
       - name: Install the exact dependency tree
         run: npm ci
       - name: Audit the complete dependency tree
@@ -46,7 +44,6 @@ jobs:
 
   browser:
     name: Functional browsers
-    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -58,7 +55,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
+          cache: npm
       - name: Install the exact dependency tree
         run: npm ci
       - name: Install pinned browser engines and system libraries
@@ -70,7 +67,6 @@ jobs:
 
   database:
     name: Local Supabase authorization
-    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -82,7 +78,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
+          cache: npm
       - name: Install the exact dependency tree
         run: npm ci
       - name: Install pinned Chromium, Firefox, WebKit, and system libraries
@@ -117,7 +113,6 @@ jobs:
 
   visual:
     name: Intel macOS visual baselines
-    needs: quality
     runs-on: macos-15-intel
     timeout-minutes: 25
     steps:
@@ -129,7 +124,7 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
+          cache: npm
       - name: Install the exact dependency tree
         run: npm ci
       - name: Install the pinned Chromium build
