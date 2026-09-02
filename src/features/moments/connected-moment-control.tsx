@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { DateTimeFields } from "@/features/composer/date-time-fields";
 import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
@@ -415,25 +416,13 @@ function ChangeableMomentControl({
               />
             </label>
             <div className="composer-core-fields">
-              <label className="composer-field">
-                <span>Moment date</span>
-                <input
-                  type="date"
-                  value={occurredOn}
-                  max={moment.maxOccurredOn}
-                  onChange={(event) => setOccurredOn(event.target.value)}
-                />
-              </label>
-              <label className="composer-field">
-                <span>
-                  Time <small>Optional</small>
-                </span>
-                <input
-                  type="time"
-                  value={occurredTime}
-                  onChange={(event) => setOccurredTime(event.target.value)}
-                />
-              </label>
+              <DateTimeFields
+                date={occurredOn}
+                maxDate={moment.maxOccurredOn}
+                time={occurredTime}
+                onDateChange={setOccurredOn}
+                onTimeChange={setOccurredTime}
+              />
             </div>
             <fieldset className="people-tags">
               <legend>Who else was part of this?</legend>

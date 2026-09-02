@@ -98,6 +98,22 @@ function chrome(
     title,
     eyebrow: "Our family",
     familyMark,
+    notifications: [
+      {
+        id: "preview-note-molly",
+        actorName: "Molly",
+        message: "commented on your photo.",
+        displayDate: "Today",
+        href: "/family#moment-sunset",
+      },
+      {
+        id: "preview-reaction-molly",
+        actorName: "Molly",
+        message: "loved your photo.",
+        displayDate: "Today",
+        href: "/family#moment-sunset",
+      },
+    ],
     composer: {
       previewToday: "2026-08-28",
       defaultJournalPersonId,

@@ -12,7 +12,16 @@ describe("PrimaryNavigation", () => {
     expect(navigation).toHaveTextContent("Family");
     expect(navigation).toHaveTextContent("People");
     expect(navigation).toHaveTextContent("Memories");
+    expect(navigation).toHaveTextContent("Account");
     expect(navigation).not.toHaveTextContent("Add");
     expect(screen.queryByRole("button", { name: "Add moment" })).toBeNull();
+  });
+
+  it("marks Account current in family settings", () => {
+    render(<PrimaryNavigation section="settings" />);
+    expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });

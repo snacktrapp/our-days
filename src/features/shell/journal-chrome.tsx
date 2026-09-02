@@ -5,6 +5,7 @@ import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
 import { ThemeToggle } from "./theme-toggle";
+import { NotificationCenter } from "./notification-center";
 import type {
   JournalSection,
   JournalChromeViewModel,
@@ -23,16 +24,9 @@ export function JournalChrome({
   children,
   createMomentAction,
 }: JournalChromeProps) {
-  const familyBadges = model.familyMark.map((badge) => (
-    <span
-      key={badge.id}
-      className={`family-mark-dot dot-${badge.accent}`}
-      aria-hidden="true"
-    >
-      {badge.initial}
-    </span>
-  ));
-
+  const hasJournalActions = ["timeline", "people", "memories"].includes(
+    section,
+  );
   return (
     <main className={`app-shell theme-${model.accent}`}>
       <div className="ambient ambient-one" />
@@ -45,19 +39,13 @@ export function JournalChrome({
           aria-atomic="true"
         />
         <header className="topbar">
-          {section === "settings" || model.settingsHref === null ? (
-            <span className="family-mark" aria-hidden="true">
-              {familyBadges}
-            </span>
+          {hasJournalActions ? (
+            <TimelineHeaderComposer
+              composer={model.composer}
+              createMomentAction={createMomentAction}
+            />
           ) : (
-            <Link
-              className="family-mark"
-              aria-label="Open family settings"
-              href={model.settingsHref ?? "/settings/family"}
-              prefetch={false}
-            >
-              {familyBadges}
-            </Link>
+            <span className="topbar-leading-spacer" aria-hidden="true" />
           )}
           <div className="title-lockup">
             <span className="eyebrow">{model.eyebrow}</span>
@@ -65,12 +53,9 @@ export function JournalChrome({
               {model.title}
             </h1>
           </div>
-          {section === "timeline" ? (
+          {hasJournalActions ? (
             <div className="topbar-actions">
-              <TimelineHeaderComposer
-                composer={model.composer}
-                createMomentAction={createMomentAction}
-              />
+              <NotificationCenter items={model.notifications} />
               <ThemeToggle />
             </div>
           ) : section === "settings" ? (
@@ -107,6 +92,7 @@ export function JournalChrome({
         <PrimaryNavigation
           section={section}
           memoriesHref={model.memoriesHref}
+          settingsHref={model.settingsHref}
         />
       </section>
     </main>

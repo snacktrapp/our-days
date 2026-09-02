@@ -207,6 +207,11 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     page.getByText(/Local design preview · Nothing is saved/u),
   ).toHaveCount(0);
   await expect(dialog).toHaveClass(/new-moment-composer-dialog/u);
+  await dialog.locator(".composer-sheet").evaluate(async (sheet) => {
+    await Promise.all(
+      sheet.getAnimations().map((animation) => animation.finished),
+    );
+  });
   const drawerPlacement = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>(".topbar");
     const sheet = document.querySelector<HTMLElement>(
@@ -301,7 +306,7 @@ test("required content rejects whitespace and future dates before review", async
     await dialog.getByRole("button", { name: testCase.choice }).click();
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
-    await dialog.getByRole("button", { name: "Preview moment" }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog.getByRole("alert")).toContainText(testCase.error);
     await expect(field).toBeFocused();
     await expect(
@@ -319,7 +324,7 @@ test("required content rejects whitespace and future dates before review", async
   expect(
     await date.evaluate((input: HTMLInputElement) => input.checkValidity()),
   ).toBe(false);
-  await dialog.getByRole("button", { name: "Preview moment" }).click();
+  await dialog.getByRole("button", { name: "Save" }).click();
   await expect(
     dialog.getByRole("heading", { name: "Review entry" }),
   ).toHaveCount(0);
@@ -342,7 +347,7 @@ test("Escape and backdrop dismissal restore focus without a draft", async ({
   await expect(trigger).toBeFocused();
 });
 
-test("all four capture modes produce honest, non-durable previews", async ({
+test("all four capture modes save directly without a confirmation screen", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -372,36 +377,19 @@ test("all four capture modes produce honest, non-durable previews", async ({
   ).toBeVisible();
   await expect(photoPreview).not.toHaveAttribute("style");
   await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(
-    page.getByText("Design preview · Nothing was saved"),
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("heading", { name: "Review entry" }),
-  ).toBeFocused();
-  await expect(page.getByText("The last warm hour.")).toBeVisible();
-  await expectCompleteFocusTraversal(
-    page,
-    dialog,
-    page.getByRole("button", { name: "Back to edit" }),
-    "photo preview",
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Review entry" })).toHaveCount(
+    0,
   );
-  await page.getByRole("button", { name: "Back to edit" }).click();
-  await expect(page.getByAltText("Selected photo preview")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Note" })).toHaveValue(
-    "The last warm hour.",
-  );
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await page.getByRole("button", { name: "Close preview" }).click();
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Written entry/u }).click();
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("The kitchen was loud.");
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(dialog.getByText("The kitchen was loud.")).toBeVisible();
-  await page.getByRole("button", { name: "Close preview" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
@@ -409,25 +397,18 @@ test("all four capture modes produce honest, non-durable previews", async ({
     .getByRole("searchbox", { name: "Reference or words" })
     .fill("John 3:16");
   await dialog.getByRole("button", { name: /John 3:16/u }).click();
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(dialog.getByText("John 3:16")).toBeVisible();
-  await page.getByRole("button", { name: "Close preview" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Location/u }).click();
   await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
   await page.getByLabel("Place name").fill("Sand Harbor");
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(
-    dialog.locator(".composer-preview-copy > span").filter({
-      hasText: /^Location$/u,
-    }),
-  ).toBeVisible();
-  await expect(dialog.getByText("Sand Harbor", { exact: true })).toHaveCount(1);
-  await page.getByRole("button", { name: "Close preview" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
 });
 
-test("previewing emits no mutation, persistence, history, or timeline change", async ({
+test("design-mode save emits no mutation, persistence, history, or timeline change", async ({
   browserName,
   page,
 }) => {
@@ -564,8 +545,9 @@ test("previewing emits no mutation, persistence, history, or timeline change", a
     dialog.getByText("Photo ready for this local preview."),
   ).toBeVisible();
   await dialog.getByRole("textbox", { name: "Note" }).fill(malicious);
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(page.getByText(malicious)).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: "Note" })).toHaveValue(
+    malicious,
+  );
   expect(
     await page.evaluate(
       () =>
@@ -573,10 +555,9 @@ test("previewing emits no mutation, persistence, history, or timeline change", a
           .__composerInjected,
     ),
   ).toBeUndefined();
-  await expect(page.locator(".composer-preview-card script")).toHaveCount(0);
-  await expect(page.locator(".composer-preview-card img")).toHaveCount(1);
   await expect(page.locator("body")).not.toContainText(privateFilenameMarker);
-  await page.getByRole("button", { name: "Close preview" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
 
   expect(
     await timeline.evaluateAll((moments) =>
@@ -675,7 +656,6 @@ test("expanded capture states have no serious axe violations", async ({
   await dialog.getByRole("button", { name: /John 3:16/u }).click();
   await page.getByRole("button", { name: /Details/u }).click();
   await scan();
-  await page.getByRole("button", { name: "Preview moment" }).click();
   await scan();
 });
 
@@ -709,20 +689,14 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
     page.getByLabel(/^Place/u),
-    page.getByRole("button", { name: "Preview moment" }),
+    page.getByRole("button", { name: "Save" }),
   ]) {
     await expectReachable(control);
   }
   await expectMinimumTargets(dialog);
   await expectReadableInputType(dialog);
 
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  for (const control of [
-    page.getByRole("button", { name: "Close moment composer" }),
-    page.getByRole("button", { name: "Back to edit" }),
-    page.getByRole("button", { name: "Close preview" }),
-  ]) {
-    await expectReachable(control);
-  }
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
 });

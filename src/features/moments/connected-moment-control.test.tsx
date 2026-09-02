@@ -101,8 +101,9 @@ describe("ConnectedMomentControl", () => {
 
     await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
-    const date = screen.getByLabelText("Moment date");
-    expect(date).toHaveAttribute("max", "2026-08-30");
+    await user.click(screen.getByRole("button", { name: "Aug 28, 2026" }));
+    expect(screen.getByRole("button", { name: "Aug 30, 2026" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Aug 31, 2026" })).toBeDisabled();
 
     await user.clear(screen.getByLabelText("Your thought"));
     await user.type(screen.getByLabelText("Your thought"), "A changed draft.");

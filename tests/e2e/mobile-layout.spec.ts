@@ -264,7 +264,7 @@ test("deep memory actions can scroll above the fixed navigation", async ({
     const action = page
       .locator("[data-moment-kind]")
       .last()
-      .getByRole("button", { name: /notes/u });
+      .getByRole("button", { name: /note/u });
     await action.focus();
     await action.evaluate((element) =>
       element.scrollIntoView({ block: "end", behavior: "instant" }),

@@ -9,7 +9,6 @@ const THEME_EVENT = "our-days:theme-change";
 
 function applyTheme(theme: JournalTheme) {
   document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
   window.localStorage.setItem(STORAGE_KEY, theme);
   window.dispatchEvent(new Event(THEME_EVENT));
 }

@@ -51,10 +51,8 @@ const themeBootstrap = `
       ? savedTheme
       : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
     document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
   } catch (_) {
     document.documentElement.dataset.theme = "dark";
-    document.documentElement.style.colorScheme = "dark";
   }
 `;
 

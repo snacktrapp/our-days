@@ -7,7 +7,10 @@ vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: vi.fn(),
 }));
 
-import { plainToday } from "./journal-context.server";
+import {
+  buildActivityNotifications,
+  plainToday,
+} from "./journal-context.server";
 
 describe("circle calendar date", () => {
   it("uses the circle timezone when one instant spans two local dates", () => {
@@ -18,5 +21,49 @@ describe("circle calendar date", () => {
     const boundary = new Date("2026-08-30T06:30:00.000Z");
     expect(plainToday("America/Los_Angeles", boundary)).toBe("2026-08-29");
     expect(plainToday("Pacific/Kiritimati", boundary)).toBe("2026-08-30");
+  });
+});
+
+describe("family activity notifications", () => {
+  it("keeps only activity on the current member's entries and orders it newest first", () => {
+    const notifications = buildActivityNotifications(
+      [
+        {
+          id: "note-one",
+          moment_id: "owned",
+          author_membership_id: "molly",
+          created_at: "2026-09-01T18:00:00.000Z",
+        },
+        {
+          id: "note-other",
+          moment_id: "not-owned",
+          author_membership_id: "molly",
+          created_at: "2026-09-02T18:00:00.000Z",
+        },
+      ],
+      [
+        {
+          id: "reaction-one",
+          moment_id: "owned",
+          author_membership_id: "molly",
+          reaction_type: "held-close",
+          created_at: "2026-09-02T18:00:00.000Z",
+        },
+      ],
+      new Set(["owned"]),
+      new Map([["molly", "Molly"]]),
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        id: "reaction:reaction-one:held-close",
+        actorName: "Molly",
+        message: "loved your entry.",
+      }),
+      expect.objectContaining({
+        id: "note:note-one",
+        message: "commented on your entry.",
+      }),
+    ]);
   });
 });

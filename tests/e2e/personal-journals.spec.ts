@@ -83,20 +83,21 @@ test("People links to five distinct, owner-correct life journals", async ({
     ).toEqual(journal.dates);
     await expect(page.locator(".elapsed-gap")).toHaveText(journal.gaps);
     await expect(page.locator(".year-divider")).toHaveText(journal.years);
+    await page.locator(".view-switch summary").click();
     await expect(
       page
-        .getByRole("group", { name: "Timeline view" })
+        .getByRole("navigation", { name: "Choose a family timeline" })
         .getByRole("link", { name: journal.name, exact: true }),
     ).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".time-rail")).toBeVisible();
   }
 });
 
-test("managed profiles preserve recorder truth and honest empty states", async ({
+test("managed profiles preserve journal identity and honest empty states", async ({
   page,
 }) => {
   await page.goto("/people/avery");
-  await expect(page.getByText("Added by Molly")).toBeVisible();
+  await expect(page.getByText("Avery", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("First day of school")).toBeVisible();
   await expect(page.getByText("The story so far")).toBeVisible();
   await expect(
@@ -128,9 +129,8 @@ test("managed journal defaults retain adult recorder truth across client navigat
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("Avery tried something new.");
-  await page.getByRole("button", { name: "Preview moment" }).click();
-  await expect(page.getByText("Recorded by Brian")).toBeVisible();
-  await page.getByRole("button", { name: "Close preview" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
 
   await page.getByRole("link", { name: "People" }).click();
   await page.locator('a[href="/people/sam"]').click();

@@ -197,7 +197,7 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("✨");
   });
 
-  it("keeps the picker open and restores the prior response when saving fails", async () => {
+  it("closes the picker and restores the prior response when saving fails", async () => {
     const actions = connectedActions();
     actions.setReaction.mockResolvedValue({
       ok: false,
@@ -218,10 +218,10 @@ describe("MomentConversationControl", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That response could not be saved.",
     );
-    expect(choice).toHaveAttribute("aria-checked", "false");
     expect(
-      screen.getByRole("menu", { name: "Choose a reaction" }),
-    ).toBeVisible();
+      screen.queryByRole("menu", { name: "Choose a reaction" }),
+    ).toBeNull();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 
   it("loads connected comments without waiting for a reaction tap", async () => {

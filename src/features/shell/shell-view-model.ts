@@ -17,4 +17,11 @@ export type JournalChromeViewModel = Readonly<{
   timelineOptionsHref?: string;
   settingsHref?: string | null;
   memoriesHref?: string | null;
+  notifications?: readonly Readonly<{
+    id: string;
+    actorName: string;
+    message: string;
+    displayDate: string;
+    href: string;
+  }>[];
 }>;

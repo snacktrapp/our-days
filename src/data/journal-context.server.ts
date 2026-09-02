@@ -51,38 +51,131 @@ export type ConnectedJournalContext = Readonly<{
   people: PeopleViewModel["people"];
 }>;
 
+type ActivityNote = Readonly<{
+  id: string;
+  moment_id: string;
+  author_membership_id: string;
+  created_at: string;
+}>;
+
+type ActivityReaction = ActivityNote & Readonly<{ reaction_type: string }>;
+
+export function buildActivityNotifications(
+  notes: readonly ActivityNote[],
+  reactions: readonly ActivityReaction[],
+  ownedMomentIds: ReadonlySet<string>,
+  memberNames: ReadonlyMap<string, string>,
+): NonNullable<JournalChromeViewModel["notifications"]> {
+  const displayDate = (createdAt: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(createdAt));
+  const reactionMessages: Readonly<Record<string, string>> = {
+    "held-close": "loved your entry.",
+    "made-me-smile": "smiled at your entry.",
+    "remember-this": "remembered your entry.",
+  };
+
+  return [
+    ...notes
+      .filter((note) => ownedMomentIds.has(note.moment_id))
+      .map((note) => ({
+        id: `note:${note.id}`,
+        actorName: memberNames.get(note.author_membership_id) ?? "Family",
+        message: "commented on your entry.",
+        displayDate: displayDate(note.created_at),
+        href: `/family#moment-${note.moment_id}`,
+        createdAt: note.created_at,
+      })),
+    ...reactions
+      .filter((reaction) => ownedMomentIds.has(reaction.moment_id))
+      .map((reaction) => ({
+        id: `reaction:${reaction.id}:${reaction.reaction_type}`,
+        actorName: memberNames.get(reaction.author_membership_id) ?? "Family",
+        message:
+          reactionMessages[reaction.reaction_type] ?? "reacted to your entry.",
+        displayDate: displayDate(reaction.created_at),
+        href: `/family#moment-${reaction.moment_id}`,
+        createdAt: reaction.created_at,
+      })),
+  ]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 20)
+    .map((notification) => ({
+      id: notification.id,
+      actorName: notification.actorName,
+      message: notification.message,
+      displayDate: notification.displayDate,
+      href: notification.href,
+    }));
+}
+
 export async function loadConnectedJournalContext(
   access: AuthenticatedAccess,
 ): Promise<ConnectedJournalContext> {
   const supabase = await createOurDaysServerClient();
-  const [circleResult, peopleResult, membershipsResult, guardiansResult] =
-    await Promise.all([
-      supabase
-        .from("circles")
-        .select("id, name, time_zone")
-        .eq("id", access.circleId)
-        .single(),
-      supabase
-        .from("people")
-        .select("id, display_name, profile_kind, accent_token")
-        .eq("circle_id", access.circleId)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("circle_memberships")
-        .select("id, person_id, role, status")
-        .eq("circle_id", access.circleId),
-      supabase
-        .from("person_guardians")
-        .select("managed_person_id, guardian_membership_id")
-        .eq("circle_id", access.circleId)
-        .is("revoked_at", null),
-    ]);
+  const [
+    circleResult,
+    peopleResult,
+    membershipsResult,
+    guardiansResult,
+    momentsResult,
+    notesResult,
+    reactionsResult,
+  ] = await Promise.all([
+    supabase
+      .from("circles")
+      .select("id, name, time_zone")
+      .eq("id", access.circleId)
+      .single(),
+    supabase
+      .from("people")
+      .select("id, display_name, profile_kind, accent_token")
+      .eq("circle_id", access.circleId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("circle_memberships")
+      .select("id, person_id, role, status")
+      .eq("circle_id", access.circleId),
+    supabase
+      .from("person_guardians")
+      .select("managed_person_id, guardian_membership_id")
+      .eq("circle_id", access.circleId)
+      .is("revoked_at", null),
+    supabase
+      .from("moments")
+      .select("id")
+      .eq("circle_id", access.circleId)
+      .eq("recorded_by_membership_id", access.membershipId)
+      .is("trashed_at", null),
+    supabase
+      .from("moment_notes")
+      .select("id, moment_id, author_membership_id, created_at")
+      .eq("circle_id", access.circleId)
+      .neq("author_membership_id", access.membershipId)
+      .is("trashed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("moment_reactions")
+      .select("id, moment_id, author_membership_id, reaction_type, created_at")
+      .eq("circle_id", access.circleId)
+      .neq("author_membership_id", access.membershipId)
+      .is("removed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(40),
+  ]);
 
   const error =
     circleResult.error ??
     peopleResult.error ??
     membershipsResult.error ??
-    guardiansResult.error;
+    guardiansResult.error ??
+    momentsResult.error ??
+    notesResult.error ??
+    reactionsResult.error;
   if (error) throw error;
   if (!circleResult.data) throw new Error("Circle is unavailable");
 
@@ -90,6 +183,15 @@ export async function loadConnectedJournalContext(
   const people = peopleResult.data ?? [];
   const accountMembershipByPerson = new Map(
     memberships.map((membership) => [membership.person_id, membership]),
+  );
+  const personNameById = new Map(
+    people.map((person) => [person.id, person.display_name]),
+  );
+  const memberNames = new Map(
+    memberships.map((membership) => [
+      membership.id,
+      personNameById.get(membership.person_id) ?? "Family",
+    ]),
   );
   const guardedPersonIds = new Set(
     (guardiansResult.data ?? [])
@@ -160,6 +262,12 @@ export async function loadConnectedJournalContext(
     timelineOptionsHref: "/trash",
     settingsHref: "/settings/family",
     memoriesHref: "/memories",
+    notifications: buildActivityNotifications(
+      notesResult.data ?? [],
+      reactionsResult.data ?? [],
+      new Set((momentsResult.data ?? []).map((moment) => moment.id)),
+      memberNames,
+    ),
   };
 
   return {

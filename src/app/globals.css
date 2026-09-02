@@ -17,6 +17,11 @@
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
+  --header-drawer-radius: 10px;
+  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  --header-drawer-padding: 16px;
+  --header-drawer-top: calc(64px + env(safe-area-inset-top));
+  --header-drawer-gutter: max(16px, calc((100vw - 430px) / 2 + 16px));
 }
 
 :root[data-theme="dark"] {
@@ -27,7 +32,7 @@
   color-scheme: light;
   --paper: #f3eee4;
   --ink: #202721;
-  --muted: #657069;
+  --muted: #59645e;
   --hairline: rgba(45, 67, 58, 0.18);
   --line: #c6d0c9;
   --cream: #fbf8f1;
@@ -409,6 +414,15 @@ textarea:focus-visible,
   background: transparent;
   color: var(--ochre);
   cursor: pointer;
+}
+.topbar > .header-add-moment,
+.topbar-leading-spacer {
+  justify-self: start;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
 }
 .header-add-moment svg {
   width: 20px;
@@ -4678,7 +4692,11 @@ textarea:focus-visible,
 
 .composer-back {
   color: var(--teal);
+  font-family: var(--font-interface);
   font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .photo-input,
@@ -4756,7 +4774,11 @@ textarea:focus-visible,
 
 .composer-optional-toggle {
   color: var(--ink);
+  font-family: var(--font-interface);
   font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .composer-optional-toggle span {
@@ -4939,6 +4961,111 @@ textarea:focus-visible,
   stroke-linejoin: round;
 }
 
+.notification-center {
+  position: relative;
+}
+
+.notification-trigger {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.notification-trigger svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notification-trigger:hover,
+.notification-trigger:focus-visible {
+  color: var(--ink);
+  background: transparent;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--deep);
+  border-radius: 50%;
+  background: var(--clay);
+}
+
+.notification-panel {
+  position: absolute;
+  z-index: 35;
+  top: 47px;
+  right: -44px;
+  width: min(310px, calc(100vw - 32px));
+  padding: var(--header-drawer-padding);
+  border-radius: var(--header-drawer-radius);
+  color: var(--ink);
+}
+
+.notification-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.notification-heading > strong {
+  font-family: var(--font-interface);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.notification-heading > strong:focus,
+.notification-heading > strong:focus-visible {
+  outline: none;
+}
+
+.notification-heading button {
+  margin: -11px -11px -11px 0;
+}
+
+.notification-panel ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification-panel li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.notification-panel a {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  color: inherit;
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.notification-panel time,
+.notification-panel > p {
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 9px;
+}
+
+.notification-panel > p {
+  margin: 12px 0 4px;
+}
+
 .account-tools {
   margin: 0 18px 24px;
 }
@@ -5000,6 +5127,19 @@ textarea:focus-visible,
 
 :root[data-theme="light"] .bottom-nav {
   background: rgba(243, 238, 228, 0.96);
+}
+
+:root[data-theme="light"] .nav-item {
+  color: #4f5d56;
+}
+
+:root[data-theme="light"] .nav-item.active {
+  color: #7d520f;
+}
+
+:root[data-theme="light"] .invite-section form > button {
+  border-color: #b8893f;
+  background: #b8893f;
 }
 
 :root[data-theme="light"] .memory-feature-written,
@@ -5068,6 +5208,105 @@ textarea:focus-visible,
 :root[data-theme="light"] .composer-select-field > label,
 :root[data-theme="light"] .people-tags legend {
   color: var(--muted);
+}
+
+:root[data-theme="light"] .composer-field > span small,
+:root[data-theme="light"] .composer-optional-toggle span {
+  color: #59645e;
+}
+
+:root[data-theme="light"] .bible-verse-results button span,
+:root[data-theme="light"] .bible-verse-results p {
+  color: var(--ink);
+}
+
+.notification-trigger {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+:root[data-theme="light"] .invite-button {
+  border-color: #b8893f;
+  background: #b8893f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-moment-composer-dialog .composer-sheet {
+    animation: none;
+  }
+}
+
+/* Entry choices use the same compact header-drawer pattern as Activity. */
+.new-moment-composer-dialog .composer-sheet {
+  padding: var(--header-drawer-padding) var(--header-drawer-padding)
+    max(var(--header-drawer-padding), env(safe-area-inset-bottom));
+}
+
+.new-moment-composer-dialog .composer-sheet > .sheet-close {
+  top: 0;
+  right: 0;
+}
+
+.new-moment-composer-dialog .composer-sheet h2 {
+  min-height: 22px;
+  margin: 0 44px 8px 0;
+  font-family: var(--font-interface);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.new-moment-composer-dialog .moment-choices {
+  display: block;
+}
+
+.new-moment-composer-dialog .moment-choices button {
+  width: 100%;
+  min-height: 0;
+  padding: 10px 0;
+  display: grid;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.new-moment-composer-dialog .moment-choices button + button {
+  border-top: 1px solid var(--hairline);
+}
+
+.new-moment-composer-dialog .moment-choices button:hover,
+.new-moment-composer-dialog .moment-choices button:focus-visible,
+:root[data-theme="light"]
+  .new-moment-composer-dialog
+  .moment-choices
+  button:hover,
+:root[data-theme="light"]
+  .new-moment-composer-dialog
+  .moment-choices
+  button:focus-visible {
+  border-color: var(--hairline);
+  background: transparent;
+}
+
+.new-moment-composer-dialog .moment-choices .choice-icon {
+  display: none;
+}
+
+.new-moment-composer-dialog .moment-choices strong {
+  font-family: var(--font-interface);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.new-moment-composer-dialog .moment-choices small {
+  margin: 0;
+  font-family: var(--font-record);
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 :root[data-theme="light"] .composer-field input::placeholder,
@@ -5461,7 +5700,7 @@ textarea:focus-visible,
 
 /* Navigation contains destinations only. */
 .bottom-nav {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 /* Video deliberately shares the photo card geometry. */
@@ -5593,16 +5832,15 @@ textarea:focus-visible,
   position: relative;
 }
 
-.media-viewer-close,
-.media-viewer-zoom {
+.media-viewer-close {
   min-width: 44px;
   min-height: 44px;
   position: fixed;
   z-index: 2;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 0;
+  border: 0;
   color: white;
-  background: rgba(3, 8, 6, 0.72);
-  backdrop-filter: blur(10px);
+  background: transparent;
 }
 
 .media-viewer-close {
@@ -5613,45 +5851,9 @@ textarea:focus-visible,
   line-height: 1;
 }
 
-.media-viewer-zoom {
-  right: max(12px, env(safe-area-inset-right));
-  bottom: max(18px, calc(env(safe-area-inset-bottom) + 6px));
-  padding: 0 14px;
-  border-radius: 5px;
-  font:
-    600 10px/1 ui-monospace,
-    "SFMono-Regular",
-    Menlo,
-    Consolas,
-    monospace;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.media-viewer-hint {
-  position: fixed;
-  left: max(12px, env(safe-area-inset-left));
-  bottom: max(22px, calc(env(safe-area-inset-bottom) + 10px));
-  z-index: 2;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.7);
-  font:
-    500 10px/1.3 ui-monospace,
-    "SFMono-Regular",
-    Menlo,
-    Consolas,
-    monospace;
-  letter-spacing: 0.04em;
-}
-
-@media (orientation: landscape) {
-  .media-viewer-hint {
-    bottom: max(14px, env(safe-area-inset-bottom));
-  }
-
-  .media-viewer-zoom {
-    bottom: max(10px, env(safe-area-inset-bottom));
-  }
+.media-viewer-close:focus-visible {
+  outline: 0;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }
 
 .video-frame::after {
@@ -5696,19 +5898,24 @@ textarea:focus-visible,
 /* The new-entry composer is visually attached to the header Add control. */
 .new-moment-composer-dialog[open] {
   align-items: flex-start;
+  justify-content: flex-start;
 }
 
 .new-moment-composer-dialog .composer-sheet {
+  width: min(310px, calc(100vw - 32px));
   max-height: calc(100dvh - 72px - env(safe-area-inset-top));
-  margin-top: calc(72px + env(safe-area-inset-top));
-  border-radius: 0 0 14px 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
-  animation: composer-sheet-down 0.22s ease-out;
+  position: fixed;
+  top: var(--header-drawer-top);
+  left: var(--header-drawer-gutter);
+  margin-top: 0;
+  padding-inline: var(--header-drawer-padding);
+  border-radius: var(--header-drawer-radius);
+  animation: none;
 }
 
 .new-moment-composer-dialog,
 :root[data-theme="light"] .new-moment-composer-dialog {
-  background: rgba(0, 7, 4, 0.34);
+  background: transparent;
   backdrop-filter: none;
 }
 
@@ -5729,12 +5936,45 @@ textarea:focus-visible,
   width: 44px;
   height: 44px;
   position: absolute;
-  top: 39px;
-  right: 13px;
+  top: 0;
+  right: 0;
   margin: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+/* Header drawers share one surface and one close control. Their height and
+   anchoring vary only with the amount of content they contain. */
+.header-drawer-surface,
+:root[data-theme="light"] .header-drawer-surface {
+  border: 0;
+  background: var(--cream);
+  box-shadow: var(--header-drawer-shadow);
+  color: var(--ink);
+}
+
+.header-drawer-close {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-family: var(--font-interface);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.header-drawer-close:hover,
+.header-drawer-close:focus-visible {
+  background: transparent;
+  color: var(--ink);
 }
 
 @keyframes composer-sheet-down {
@@ -5749,15 +5989,107 @@ textarea:focus-visible,
 }
 
 @media (min-width: 431px) {
+  :root {
+    --header-drawer-top: 92px;
+  }
+
   .new-moment-composer-dialog .composer-sheet {
     max-height: calc(100dvh - 100px);
-    margin-top: 100px;
   }
 }
 
-/* Native iOS date and time controls have minimum intrinsic widths. Keeping the
-   composer fields in one column prevents the time control from escaping the
-   drawer at every supported phone width. */
+/* Once an entry type is chosen, the composer becomes a full-height app
+   surface. The timeline remains mounted behind it for drafts and optimistic
+   media uploads, while only the form body scrolls. */
+.composer-editor-fullscreen[open] {
+  align-items: stretch;
+  justify-content: center;
+}
+
+.composer-editor-fullscreen .composer-sheet {
+  width: min(100dvw, 430px);
+  height: 100dvh;
+  max-height: 100dvh;
+  inset: 0 auto auto 50%;
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
+.composer-editor-fullscreen .composer-sheet > .sheet-close {
+  z-index: 6;
+  top: env(safe-area-inset-top);
+  right: 4px;
+}
+
+.composer-fullscreen-form {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.composer-editor-header {
+  min-height: calc(62px + env(safe-area-inset-top));
+  padding: calc(8px + env(safe-area-inset-top)) 52px 8px 16px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--cream);
+}
+
+.composer-editor-header .composer-back {
+  width: max-content;
+  min-height: 28px;
+  margin: 0;
+  padding: 0;
+}
+
+.composer-editor-header .private-label {
+  margin: 0;
+}
+
+.composer-editor-scroll {
+  min-height: 0;
+  padding: 2px 16px 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 24px;
+}
+
+.composer-editor-footer {
+  position: relative;
+  z-index: 5;
+  padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
+  background: var(--cream);
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.composer-editor-footer .save-moment {
+  min-height: 48px;
+  margin: 0;
+}
+
+.composer-editor-footer .secondary-composer-action {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.composer-editor-footer .composer-upload-status,
+.composer-editor-footer .composer-error {
+  margin-top: 8px;
+}
+
+/* Composer metadata uses one shared layout across every entry type and the
+   edit surface. Date and time stay compact; longer controls remain full width. */
 .composer-core-fields {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -5765,6 +6097,304 @@ textarea:focus-visible,
 .composer-core-fields > .composer-field,
 .composer-core-fields > .composer-select-field {
   grid-column: 1 / -1;
+}
+
+.composer-core-fields > .composer-select-field,
+.composer-journal-picker {
+  width: min(100%, 220px);
+  justify-self: start;
+}
+
+.composer-core-fields > .composer-select-field select {
+  min-height: 44px;
+  padding: 8px 34px 8px 10px;
+}
+
+.composer-core-fields > .composer-select-field > .composer-select-arrow {
+  right: 11px;
+  bottom: 15px;
+}
+
+.composer-journal-picker {
+  position: relative;
+}
+
+.composer-journal-trigger {
+  font-size: 13px;
+}
+
+.composer-journal-menu {
+  position: absolute;
+  z-index: 4;
+  top: 100%;
+  left: 0;
+  width: min(100%, 220px);
+  margin-top: 6px;
+  padding: 6px;
+}
+
+.composer-journal-menu > button {
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-journal-menu > button:hover,
+.composer-journal-menu > button:focus-visible,
+.composer-journal-menu > button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--teal) 12%, transparent);
+  outline: none;
+}
+
+.composer-journal-menu > button > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.composer-journal-menu strong {
+  font: 600 13px/1.2 var(--font-record);
+}
+
+.composer-journal-menu small {
+  color: var(--muted);
+  font:
+    600 8px/1.2 ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Consolas,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.composer-journal-menu > button > span:last-child {
+  color: var(--ochre);
+  font-family: var(--font-record);
+}
+
+.composer-date-time-fields {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.composer-date-time-triggers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.composer-picker-trigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: #13211b;
+  color: var(--ink);
+  font-family: var(--font-record);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-picker-trigger:hover,
+.composer-picker-trigger:focus-visible,
+.composer-picker-trigger[aria-expanded="true"] {
+  border-color: var(--teal);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 12%, transparent);
+}
+
+.composer-picker-trigger > span:last-child {
+  flex: none;
+  color: var(--teal);
+  font-size: 13px;
+}
+
+.composer-picker-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-picker-empty {
+  color: var(--muted);
+}
+
+.composer-picker-panel {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: #101d17;
+  color: var(--ink);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
+}
+
+.composer-calendar-heading {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.composer-calendar-heading strong {
+  font-family: var(--font-record);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.composer-calendar-heading button,
+.composer-calendar-grid button {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-record);
+  cursor: pointer;
+}
+
+.composer-calendar-heading button {
+  font-size: 24px;
+}
+
+.composer-calendar-heading button:disabled,
+.composer-calendar-grid button:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.35;
+}
+
+.composer-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+}
+
+.composer-calendar-grid > span {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.composer-calendar-grid button:hover,
+.composer-calendar-grid button:focus-visible {
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  outline: none;
+}
+
+.composer-calendar-grid button[aria-pressed="true"] {
+  background: var(--ochre);
+  color: #10150f;
+  font-weight: 700;
+}
+
+.composer-picker-secondary,
+.composer-picker-primary {
+  min-height: 42px;
+  padding: 0 15px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  font: 600 12px/1 var(--font-record);
+  cursor: pointer;
+}
+
+.composer-calendar-panel > .composer-picker-secondary {
+  width: 100%;
+  margin-top: 10px;
+  background: transparent;
+  color: var(--teal);
+}
+
+.composer-time-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.composer-time-controls > span {
+  padding-bottom: 14px;
+  color: var(--muted);
+  font-family: var(--font-record);
+}
+
+.composer-time-controls label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.composer-time-controls select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: #13211b;
+  color: var(--ink);
+  font-family: var(--font-record);
+  font-size: 16px;
+}
+
+.composer-picker-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.composer-picker-actions .composer-picker-secondary {
+  background: transparent;
+  color: var(--muted);
+}
+
+.composer-picker-primary {
+  border-color: var(--ochre);
+  background: var(--ochre);
+  color: #10150f;
+}
+
+:root[data-theme="light"] .composer-picker-trigger,
+:root[data-theme="light"] .composer-time-controls select {
+  background: #f7f1e7;
+}
+
+:root[data-theme="light"] .composer-picker-panel {
+  background: #fffaf1;
+  box-shadow: 0 16px 34px rgba(48, 43, 34, 0.16);
 }
 
 /* The menu is portalled to the viewport so a media card's rounded clipping
@@ -5860,4 +6490,66 @@ dialog.connected-moment-menu-portal::backdrop {
   height: 3px;
   margin-top: 10px;
   accent-color: var(--ochre);
+}
+
+:root[data-theme="light"] .memory-journey-heading > span {
+  color: #285f5b;
+}
+
+:root[data-theme="light"] .moment-choices small {
+  color: #4f5d56;
+}
+
+:root[data-theme="light"] .composer-back {
+  color: #285f5b;
+}
+
+:root[data-theme="light"] .composer-sheet .private-label {
+  color: #3f6238;
+}
+
+:root[data-theme="light"] .save-moment {
+  border-color: #b8893f;
+  background: #b8893f;
+}
+
+/* Keep every compact journal control comfortably tappable on narrow phones. */
+.soft-actions .quick-reaction-trigger,
+.soft-actions .note-action-trigger,
+.quick-reaction-control .inline-reaction-picker button {
+  width: 44px;
+  min-height: 44px;
+}
+
+.view-switch summary,
+.view-switch nav a {
+  min-height: 44px;
+}
+
+.inline-note-form button,
+.inline-note-edit button {
+  min-height: 44px;
+}
+
+/* Hard-coded dark-theme display colors need explicit light equivalents. */
+:root[data-theme="light"] .date-marker span {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .milestone-copy > span,
+:root[data-theme="light"] .milestone-seal span,
+:root[data-theme="light"] .milestone-seal strong {
+  color: #7d520f;
+}
+
+:root[data-theme="light"] .bible-verse-results button span,
+:root[data-theme="light"] .bible-verse-results p {
+  color: var(--ink);
+}
+
+/* This must follow the drawer animation declaration above. */
+@media (prefers-reduced-motion: reduce) {
+  .new-moment-composer-dialog .composer-sheet {
+    animation: none;
+  }
 }

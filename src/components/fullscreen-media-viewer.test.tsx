@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FullscreenMediaViewer } from "./fullscreen-media-viewer";
 
 describe("FullscreenMediaViewer", () => {
-  it("opens a photo full screen, toggles zoom, and returns focus on close", () => {
+  it("opens a photo full screen, supports direct zoom, and returns focus on close", () => {
     render(
       <FullscreenMediaViewer
         kind="photo"
@@ -22,10 +22,12 @@ describe("FullscreenMediaViewer", () => {
       name: "Full-screen photo: Family outside",
     });
     expect(dialog).toBeVisible();
-    const zoom = screen.getByRole("button", { name: "Zoom in" });
-    fireEvent.click(zoom);
-    expect(zoom).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Fit to screen")).toBeVisible();
+    const photo = screen.getByText("Full photo").parentElement;
+    expect(photo).toHaveClass("media-viewer-photo");
+    fireEvent.doubleClick(photo as HTMLElement);
+    expect(photo).toHaveClass("is-zoomed");
+    expect(screen.queryByRole("button", { name: /Zoom/u })).toBeNull();
+    expect(screen.queryByText(/Pinch/u)).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
@@ -56,7 +58,7 @@ describe("FullscreenMediaViewer", () => {
       name: "Full-screen video: Family video",
     });
     expect(dialog.querySelector("video")).toHaveAttribute("controls");
-    expect(screen.getByText("Rotate for a wider view")).toBeVisible();
+    expect(screen.queryByText("Rotate for a wider view")).toBeNull();
   });
 
   it("uses a second media tap for the exact entry reaction instead of opening", () => {

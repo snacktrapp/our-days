@@ -25,6 +25,8 @@ import {
   startOptimisticPhotoUpload,
   startOptimisticVideoUpload,
 } from "./optimistic-media-upload";
+import { DateTimeFields } from "./date-time-fields";
+import { JournalPickerField } from "./journal-picker-field";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
@@ -702,7 +704,9 @@ export function MomentComposer({
   return (
     <dialog
       ref={dialogRef}
-      className="composer-dialog new-moment-composer-dialog"
+      className={`composer-dialog new-moment-composer-dialog${
+        mode && !choosingMode && !reviewing ? " composer-editor-fullscreen" : ""
+      }`}
       aria-labelledby="composer-title"
       aria-describedby={connectedExperience ? "composer-privacy" : undefined}
       onKeyDown={containDialogFocus}
@@ -714,10 +718,10 @@ export function MomentComposer({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <section className="composer-sheet">
+      <section className="composer-sheet header-drawer-surface">
         <span className="sheet-handle" aria-hidden="true" />
         <button
-          className="sheet-close"
+          className="sheet-close header-drawer-close"
           aria-label="Close moment composer"
           disabled={saving}
           onClick={() => close()}
@@ -943,422 +947,408 @@ export function MomentComposer({
           </div>
         ) : copy ? (
           <form
-            className="quick-compose"
+            className="quick-compose composer-fullscreen-form"
             onSubmit={(event) => {
               event.preventDefault();
               void submitDraft();
             }}
           >
-            <button
-              className="composer-back"
-              type="button"
-              onClick={() => setChoosingMode(true)}
-            >
-              ← Choose another
-            </button>
-            <span id="composer-privacy" className="private-label">
-              {copy.title}
-            </span>
-            <h2
-              ref={editorHeadingRef}
-              id="composer-title"
-              className="sr-only"
-              tabIndex={-1}
-            >
-              {copy.title}
-            </h2>
-
-            {mode === "photo" || mode === "video" ? (
-              <label className="photo-input">
-                <span>
-                  {photoFile
-                    ? "Choose different media"
-                    : "Choose photo or video"}
-                </span>
-                <small>
-                  {connectedPhotoAvailable
-                    ? "The original uploads privately to this family."
-                    : "It stays on this device in the preview."}
-                </small>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
-                  required={!photoFile}
-                  aria-invalid={photoError ? true : undefined}
-                  aria-describedby={
-                    photoError ? "photo-preview-error" : undefined
-                  }
-                  onChange={(event) => {
-                    const file = event.currentTarget.files?.[0] ?? null;
-                    event.currentTarget.blur();
-                    editorHeadingRef.current?.focus({ preventScroll: true });
-                    replacePhoto(file);
-                  }}
-                />
-              </label>
-            ) : null}
-            {photoError ? (
-              <p
-                id="photo-preview-error"
-                className="composer-error"
-                role="alert"
+            <header className="composer-editor-header">
+              <button
+                className="composer-back"
+                type="button"
+                onClick={() => setChoosingMode(true)}
               >
-                {photoError}
-              </p>
-            ) : null}
-            <p
-              className="composer-selection-status"
-              role="status"
-              aria-live="polite"
-            >
-              {photoFile
-                ? photoDecodeState === "ready"
-                  ? connectedPhotoAvailable
-                    ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
-                    : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
-                  : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
-                : ""}
-            </p>
-            {photoPreviewUrl && mode === "photo" ? (
-              <div className="composer-photo-preview">
-                {/* The selected blob is local-only and must never enter the
-                    generic Next image optimizer or receive inline styles. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={photoPreviewUrl}
-                  src={photoPreviewUrl}
-                  alt="Selected photo preview"
-                  width={720}
-                  height={540}
-                  decoding="async"
-                  onLoad={() => acceptDecodedPhoto(photoPreviewUrl)}
-                  onError={() => rejectUndecodablePhoto(photoPreviewUrl)}
-                />
-                <button type="button" onClick={() => replacePhoto(null)}>
-                  Remove photo
-                </button>
-              </div>
-            ) : null}
-            {photoPreviewUrl && mode === "video" ? (
-              <div className="composer-photo-preview composer-video-preview">
-                <video
-                  key={photoPreviewUrl}
-                  src={photoPreviewUrl}
-                  aria-label="Selected video preview"
-                  controls
-                  controlsList="nodownload noremoteplayback"
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  playsInline
-                  preload="metadata"
-                  onLoadedMetadata={(event) =>
-                    inspectSelectedVideo(
-                      photoPreviewUrl,
-                      event.currentTarget,
-                      false,
-                    )
-                  }
-                  onLoadedData={(event) =>
-                    inspectSelectedVideo(
-                      photoPreviewUrl,
-                      event.currentTarget,
-                      true,
-                    )
-                  }
-                  onError={() => {
-                    rejectUndecodablePhoto(photoPreviewUrl);
-                    setPhotoError(
-                      "This video could not be played. Choose another one.",
-                    );
-                  }}
-                />
-                <button type="button" onClick={() => replacePhoto(null)}>
-                  Remove video
-                </button>
-              </div>
-            ) : null}
-
-            {mode === "bible-verse" ? (
-              <section
-                className="bible-verse-search"
-                aria-labelledby="bible-search-heading"
+                ← Choose another
+              </button>
+              <span id="composer-privacy" className="private-label">
+                {copy.title}
+              </span>
+              <h2
+                ref={editorHeadingRef}
+                id="composer-title"
+                className="sr-only"
+                tabIndex={-1}
               >
-                <div>
-                  <strong id="bible-search-heading">Find a verse</strong>
-                  <small>World English Bible · Public domain</small>
-                </div>
-                <label className="composer-field">
-                  <span>Reference or words</span>
+                {copy.title}
+              </h2>
+            </header>
+
+            <div className="composer-editor-scroll">
+              {mode === "photo" || mode === "video" ? (
+                <label className="photo-input">
+                  <span>
+                    {photoFile
+                      ? "Choose different media"
+                      : "Choose photo or video"}
+                  </span>
+                  <small>
+                    {connectedPhotoAvailable
+                      ? "The original uploads privately to this family."
+                      : "It stays on this device in the preview."}
+                  </small>
                   <input
-                    ref={verseSearchRef}
-                    type="search"
-                    value={verseQuery}
-                    placeholder="John 3:16 or love is patient"
-                    autoComplete="off"
-                    onChange={(event) => setVerseQuery(event.target.value)}
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
+                    required={!photoFile}
+                    aria-invalid={photoError ? true : undefined}
+                    aria-describedby={
+                      photoError ? "photo-preview-error" : undefined
+                    }
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      event.currentTarget.blur();
+                      editorHeadingRef.current?.focus({ preventScroll: true });
+                      replacePhoto(file);
+                    }}
                   />
                 </label>
-                <div className="bible-verse-results" aria-live="polite">
-                  {verseMatches.length > 0 ? (
-                    verseMatches.map((verse) => (
-                      <button
-                        key={verse.reference}
-                        type="button"
-                        aria-pressed={
-                          title === verse.reference && body === verse.text
-                        }
-                        onClick={() => {
-                          setTitle(verse.reference);
-                          setBody(verse.text);
-                          setContentError(null);
-                        }}
-                      >
-                        <strong>{verse.reference}</strong>
-                        <span>{verse.text}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <p>
-                      No match in the starter library. Enter the reference and
-                      verse text below.
-                    </p>
-                  )}
+              ) : null}
+              {photoError ? (
+                <p
+                  id="photo-preview-error"
+                  className="composer-error"
+                  role="alert"
+                >
+                  {photoError}
+                </p>
+              ) : null}
+              <p
+                className="composer-selection-status"
+                role="status"
+                aria-live="polite"
+              >
+                {photoFile
+                  ? photoDecodeState === "ready"
+                    ? connectedPhotoAvailable
+                      ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
+                      : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
+                    : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
+                  : ""}
+              </p>
+              {photoPreviewUrl && mode === "photo" ? (
+                <div className="composer-photo-preview">
+                  {/* The selected blob is local-only and must never enter the
+                    generic Next image optimizer or receive inline styles. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    key={photoPreviewUrl}
+                    src={photoPreviewUrl}
+                    alt="Selected photo preview"
+                    width={720}
+                    height={540}
+                    decoding="async"
+                    onLoad={() => acceptDecodedPhoto(photoPreviewUrl)}
+                    onError={() => rejectUndecodablePhoto(photoPreviewUrl)}
+                  />
+                  <button type="button" onClick={() => replacePhoto(null)}>
+                    Remove photo
+                  </button>
                 </div>
-              </section>
-            ) : null}
+              ) : null}
+              {photoPreviewUrl && mode === "video" ? (
+                <div className="composer-photo-preview composer-video-preview">
+                  <video
+                    key={photoPreviewUrl}
+                    src={photoPreviewUrl}
+                    aria-label="Selected video preview"
+                    controls
+                    controlsList="nodownload noremoteplayback"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={(event) =>
+                      inspectSelectedVideo(
+                        photoPreviewUrl,
+                        event.currentTarget,
+                        false,
+                      )
+                    }
+                    onLoadedData={(event) =>
+                      inspectSelectedVideo(
+                        photoPreviewUrl,
+                        event.currentTarget,
+                        true,
+                      )
+                    }
+                    onError={() => {
+                      rejectUndecodablePhoto(photoPreviewUrl);
+                      setPhotoError(
+                        "This video could not be played. Choose another one.",
+                      );
+                    }}
+                  />
+                  <button type="button" onClick={() => replacePhoto(null)}>
+                    Remove video
+                  </button>
+                </div>
+              ) : null}
 
-            {mode === "milestone" ||
-            mode === "location" ||
-            mode === "bible-verse" ? (
-              <label className="composer-field">
-                <span>
-                  {mode === "milestone"
-                    ? "Milestone"
-                    : mode === "bible-verse"
-                      ? "Reference"
-                      : "Place name"}
-                </span>
-                <input
-                  ref={titleInputRef}
-                  type="text"
-                  value={title}
-                  required
-                  aria-invalid={contentError ? true : undefined}
-                  aria-describedby={
-                    contentError ? "composer-content-error" : undefined
-                  }
-                  maxLength={120}
-                  placeholder={
-                    mode === "milestone"
-                      ? "A meaningful first"
+              {mode === "bible-verse" ? (
+                <section
+                  className="bible-verse-search"
+                  aria-labelledby="bible-search-heading"
+                >
+                  <div>
+                    <strong id="bible-search-heading">Find a verse</strong>
+                    <small>World English Bible · Public domain</small>
+                  </div>
+                  <label className="composer-field">
+                    <span>Reference or words</span>
+                    <input
+                      ref={verseSearchRef}
+                      type="search"
+                      value={verseQuery}
+                      placeholder="John 3:16 or love is patient"
+                      autoComplete="off"
+                      onChange={(event) => setVerseQuery(event.target.value)}
+                    />
+                  </label>
+                  <div className="bible-verse-results" aria-live="polite">
+                    {verseMatches.length > 0 ? (
+                      verseMatches.map((verse) => (
+                        <button
+                          key={verse.reference}
+                          type="button"
+                          aria-pressed={
+                            title === verse.reference && body === verse.text
+                          }
+                          onClick={() => {
+                            setTitle(verse.reference);
+                            setBody(verse.text);
+                            setContentError(null);
+                          }}
+                        >
+                          <strong>{verse.reference}</strong>
+                          <span>{verse.text}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p>
+                        No match in the starter library. Enter the reference and
+                        verse text below.
+                      </p>
+                    )}
+                  </div>
+                </section>
+              ) : null}
+
+              {mode === "milestone" ||
+              mode === "location" ||
+              mode === "bible-verse" ? (
+                <label className="composer-field">
+                  <span>
+                    {mode === "milestone"
+                      ? "Milestone"
                       : mode === "bible-verse"
-                        ? "Select above or enter a reference"
-                        : "Somewhere worth remembering"
+                        ? "Reference"
+                        : "Place name"}
+                  </span>
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={title}
+                    required
+                    aria-invalid={contentError ? true : undefined}
+                    aria-describedby={
+                      contentError ? "composer-content-error" : undefined
+                    }
+                    maxLength={120}
+                    placeholder={
+                      mode === "milestone"
+                        ? "A meaningful first"
+                        : mode === "bible-verse"
+                          ? "Select above or enter a reference"
+                          : "Somewhere worth remembering"
+                    }
+                    onChange={(event) => {
+                      setTitle(event.target.value);
+                      if (event.target.value.trim()) setContentError(null);
+                    }}
+                  />
+                </label>
+              ) : null}
+
+              <label className="composer-field">
+                <span>{copy.bodyLabel}</span>
+                <textarea
+                  ref={bodyTextareaRef}
+                  placeholder={copy.bodyPlaceholder}
+                  value={body}
+                  required={copy.bodyRequired}
+                  aria-invalid={
+                    (mode === "thought" || mode === "bible-verse") &&
+                    contentError
+                      ? true
+                      : undefined
                   }
+                  aria-describedby={
+                    (mode === "thought" || mode === "bible-verse") &&
+                    contentError
+                      ? "composer-content-error"
+                      : undefined
+                  }
+                  maxLength={4000}
                   onChange={(event) => {
-                    setTitle(event.target.value);
-                    if (event.target.value.trim()) setContentError(null);
+                    setBody(event.target.value);
+                    if (
+                      (mode === "thought" || mode === "bible-verse") &&
+                      event.target.value.trim()
+                    ) {
+                      setContentError(null);
+                    }
                   }}
                 />
               </label>
-            ) : null}
-
-            <label className="composer-field">
-              <span>{copy.bodyLabel}</span>
-              <textarea
-                ref={bodyTextareaRef}
-                placeholder={copy.bodyPlaceholder}
-                value={body}
-                required={copy.bodyRequired}
-                aria-invalid={
-                  (mode === "thought" || mode === "bible-verse") && contentError
-                    ? true
-                    : undefined
-                }
-                aria-describedby={
-                  (mode === "thought" || mode === "bible-verse") && contentError
-                    ? "composer-content-error"
-                    : undefined
-                }
-                maxLength={4000}
-                onChange={(event) => {
-                  setBody(event.target.value);
-                  if (
-                    (mode === "thought" || mode === "bible-verse") &&
-                    event.target.value.trim()
-                  ) {
-                    setContentError(null);
-                  }
-                }}
-              />
-            </label>
-            {contentError ? (
-              <p
-                id="composer-content-error"
-                className="composer-error"
-                role="alert"
-              >
-                {contentError}
-              </p>
-            ) : null}
-
-            <div className="composer-core-fields">
-              <label className="composer-field">
-                <span>Moment date</span>
-                <input
-                  type="date"
-                  value={occurredOn}
-                  max={model.previewToday}
-                  required
-                  onChange={(event) => setOccurredOn(event.target.value)}
-                />
-              </label>
-              <label className="composer-field">
-                <span>
-                  Time <small>Optional</small>
-                </span>
-                <input
-                  type="time"
-                  value={occurredTime}
-                  onChange={(event) => setOccurredTime(event.target.value)}
-                />
-              </label>
-              <div className="composer-field composer-select-field">
-                <label htmlFor="composer-journal-person">Journal</label>
-                <select
-                  id="composer-journal-person"
-                  value={journalPersonId}
-                  onChange={(event) => chooseJournalPerson(event.target.value)}
+              {contentError ? (
+                <p
+                  id="composer-content-error"
+                  className="composer-error"
+                  role="alert"
                 >
-                  {model.journalPeople.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name} · {person.contextLabel}
-                    </option>
-                  ))}
-                </select>
-                <span className="composer-select-arrow" aria-hidden="true">
-                  ⌄
-                </span>
-              </div>
-            </div>
+                  {contentError}
+                </p>
+              ) : null}
 
-            <div className="composer-optional">
-              <button
-                className="composer-optional-toggle"
-                type="button"
-                aria-expanded={optionalDetailsOpen}
-                aria-controls="composer-optional-fields"
-                onClick={() => setOptionalDetailsOpen((current) => !current)}
-              >
-                Details <span>Optional</span>
-              </button>
-              {optionalDetailsOpen ? (
-                <div id="composer-optional-fields">
-                  <fieldset className="people-tags">
-                    <legend>Who else was part of this?</legend>
-                    <div>
-                      {model.taggablePeople
-                        .filter(
-                          (person) =>
-                            !connectedExperience ||
-                            person.id !== journalPersonId,
-                        )
-                        .map((person) => {
-                          const isPreviewJournalPerson =
-                            !connectedExperience &&
-                            person.id === journalPersonId;
-                          return (
-                            <label key={person.id}>
-                              <input
-                                type="checkbox"
-                                checked={taggedPersonIds.includes(person.id)}
-                                disabled={isPreviewJournalPerson}
-                                onChange={() => toggleTaggedPerson(person.id)}
-                              />
-                              <span
-                                className={`tag-person-dot dot-${person.accent}`}
-                                aria-hidden="true"
-                              >
-                                {person.initial}
-                              </span>
-                              {person.name}
-                            </label>
-                          );
-                        })}
-                    </div>
-                  </fieldset>
-                  {mode !== "location" ? (
-                    <label className="composer-field">
-                      <span>Place</span>
-                      <input
-                        type="text"
-                        value={placeName}
-                        maxLength={160}
-                        placeholder="Add a place by hand"
-                        onChange={(event) => setPlaceName(event.target.value)}
-                      />
-                      <small>No location is read from your media.</small>
-                    </label>
-                  ) : null}
-                </div>
+              <div className="composer-core-fields">
+                <DateTimeFields
+                  date={occurredOn}
+                  maxDate={model.previewToday}
+                  time={occurredTime}
+                  onDateChange={setOccurredOn}
+                  onTimeChange={setOccurredTime}
+                />
+              </div>
+
+              <div className="composer-optional">
+                <button
+                  className="composer-optional-toggle"
+                  type="button"
+                  aria-expanded={optionalDetailsOpen}
+                  aria-controls="composer-optional-fields"
+                  onClick={() => setOptionalDetailsOpen((current) => !current)}
+                >
+                  Details <span>Optional</span>
+                </button>
+                {optionalDetailsOpen ? (
+                  <div id="composer-optional-fields">
+                    <JournalPickerField
+                      options={model.journalPeople}
+                      value={journalPersonId}
+                      onChange={chooseJournalPerson}
+                    />
+                    <fieldset className="people-tags">
+                      <legend>Who else was part of this?</legend>
+                      <div>
+                        {model.taggablePeople
+                          .filter(
+                            (person) =>
+                              !connectedExperience ||
+                              person.id !== journalPersonId,
+                          )
+                          .map((person) => {
+                            const isPreviewJournalPerson =
+                              !connectedExperience &&
+                              person.id === journalPersonId;
+                            return (
+                              <label key={person.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={taggedPersonIds.includes(person.id)}
+                                  disabled={isPreviewJournalPerson}
+                                  onChange={() => toggleTaggedPerson(person.id)}
+                                />
+                                <span
+                                  className={`tag-person-dot dot-${person.accent}`}
+                                  aria-hidden="true"
+                                >
+                                  {person.initial}
+                                </span>
+                                {person.name}
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </fieldset>
+                    {mode !== "location" ? (
+                      <label className="composer-field">
+                        <span>Place</span>
+                        <input
+                          type="text"
+                          value={placeName}
+                          maxLength={160}
+                          placeholder="Add a place by hand"
+                          onChange={(event) => setPlaceName(event.target.value)}
+                        />
+                        <small>No location is read from your media.</small>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {journalPersonId !== model.recorderPersonId ? (
+                <p className="recorded-by">
+                  Recorded by {model.recordedByName}
+                </p>
+              ) : null}
+              {connectedExperience ? (
+                <p className="composer-preview-note">
+                  This will appear in its true chronological place.
+                </p>
               ) : null}
             </div>
 
-            {journalPersonId !== model.recorderPersonId ? (
-              <p className="recorded-by">Recorded by {model.recordedByName}</p>
-            ) : null}
-            {connectedExperience ? (
-              <p className="composer-preview-note">
-                This will appear in its true chronological place.
-              </p>
-            ) : null}
-            <button
-              className="save-moment"
-              type="submit"
-              disabled={saving || photoRetryBlocked}
-            >
-              {saving
-                ? mode === "photo" || mode === "video"
-                  ? photoUploadStage?.state === "finishing"
-                    ? `Finishing ${mode}…`
-                    : `Adding ${mode}…`
-                  : "Saving…"
-                : photoRetryBlocked
-                  ? "Upload unavailable"
-                  : (mode === "photo" || mode === "video") && saveError
-                    ? "Try upload again"
-                    : "Save"}
-            </button>
-            {(mode === "photo" || mode === "video") &&
-            saving &&
-            (photoUploadStage?.state === "preparing" ||
-              photoUploadStage?.state === "uploading") ? (
+            <footer className="composer-editor-footer">
               <button
-                className="secondary-composer-action stop-photo-upload"
-                type="button"
-                onClick={stopPhotoUpload}
+                className="save-moment"
+                type="submit"
+                disabled={saving || photoRetryBlocked}
               >
-                Cancel upload
+                {saving
+                  ? mode === "photo" || mode === "video"
+                    ? photoUploadStage?.state === "finishing"
+                      ? `Finishing ${mode}…`
+                      : `Adding ${mode}…`
+                    : "Saving…"
+                  : photoRetryBlocked
+                    ? "Upload unavailable"
+                    : (mode === "photo" || mode === "video") && saveError
+                      ? "Try upload again"
+                      : "Save"}
               </button>
-            ) : null}
-            {(mode === "photo" || mode === "video") && photoUploadLabel ? (
-              <div className="composer-upload-status" role="status">
-                <p>{photoUploadLabel}</p>
-                {photoUploadStage?.state === "uploading" ? (
-                  <progress
-                    aria-label={`Private ${mode} upload`}
-                    max={1}
-                    value={photoUploadStage.progress}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-            {saveError ? (
-              <p className="composer-error" role="alert">
-                {saveError}
-              </p>
-            ) : null}
+              {(mode === "photo" || mode === "video") &&
+              saving &&
+              (photoUploadStage?.state === "preparing" ||
+                photoUploadStage?.state === "uploading") ? (
+                <button
+                  className="secondary-composer-action stop-photo-upload"
+                  type="button"
+                  onClick={stopPhotoUpload}
+                >
+                  Cancel upload
+                </button>
+              ) : null}
+              {(mode === "photo" || mode === "video") && photoUploadLabel ? (
+                <div className="composer-upload-status" role="status">
+                  <p>{photoUploadLabel}</p>
+                  {photoUploadStage?.state === "uploading" ? (
+                    <progress
+                      aria-label={`Private ${mode} upload`}
+                      max={1}
+                      value={photoUploadStage.progress}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {saveError ? (
+                <p className="composer-error" role="alert">
+                  {saveError}
+                </p>
+              ) : null}
+            </footer>
           </form>
         ) : null}
       </section>

@@ -185,11 +185,11 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
   ).toEqual([]);
 });
 
-test("the family mark opens settings and its close control returns to People", async ({
+test("the Account navigation opens settings and its close control returns to People", async ({
   page,
 }) => {
   await page.goto("/family");
-  await page.getByRole("link", { name: "Open family settings" }).click();
+  await page.getByRole("link", { name: "Account" }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
   await page.getByRole("link", { name: "Back to People" }).click();
   await expect(page).toHaveURL(/\/people$/u);

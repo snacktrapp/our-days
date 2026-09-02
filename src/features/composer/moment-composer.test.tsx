@@ -173,6 +173,59 @@ async function openComposer() {
   return user;
 }
 
+async function setComposerTime(
+  user: ReturnType<typeof userEvent.setup>,
+  hour: string,
+  minute: string,
+  period: "AM" | "PM",
+) {
+  await user.click(screen.getByRole("button", { name: /No time/u }));
+  await user.selectOptions(screen.getByLabelText("Hour"), hour);
+  await user.selectOptions(screen.getByLabelText("Minute"), minute);
+  await user.selectOptions(screen.getByLabelText("AM or PM"), period);
+  await user.click(screen.getByRole("button", { name: "Set time" }));
+}
+
+async function setComposerDate(
+  user: ReturnType<typeof userEvent.setup>,
+  target: string,
+) {
+  await user.click(screen.getByRole("button", { name: /Aug 28, 2026/u }));
+  const targetDate = new Date(`${target}T12:00:00`);
+  const monthDelta =
+    (2026 - targetDate.getFullYear()) * 12 + (7 - targetDate.getMonth());
+  const previousMonth = screen.getByRole("button", {
+    name: "Previous month",
+  });
+  for (let index = 0; index < monthDelta; index += 1) {
+    fireEvent.click(previousMonth);
+  }
+  await user.click(
+    screen.getByRole("button", {
+      name: new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(targetDate),
+    }),
+  );
+}
+
+async function selectComposerJournal(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  let trigger = screen.queryByRole("button", { name: /Brian · You/u });
+  if (!trigger) {
+    await user.click(screen.getByRole("button", { name: /Details/u }));
+    trigger = screen.getByRole("button", { name: /Brian · You/u });
+  }
+  await user.click(trigger);
+  await user.click(
+    screen.getByRole("menuitemradio", { name: new RegExp(name) }),
+  );
+}
+
 describe("MomentComposer", () => {
   it("offers only the production-ready written path in a connected journal", async () => {
     const user = userEvent.setup();
@@ -227,9 +280,7 @@ describe("MomentComposer", () => {
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
     await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
-    fireEvent.change(screen.getByLabelText(/Time/u), {
-      target: { value: "14:58" },
-    });
+    await setComposerTime(user, "2", "45", "PM");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -238,7 +289,7 @@ describe("MomentComposer", () => {
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
         body: "Kept exactly once.",
-        occurredTime: "14:58",
+        occurredTime: "14:45",
         stage: { state: "processing" },
       }),
     ]);
@@ -367,16 +418,14 @@ describe("MomentComposer", () => {
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     await user.type(screen.getByLabelText("Note"), "Still in the post.");
-    fireEvent.change(screen.getByLabelText(/Time/u), {
-      target: { value: "14:58" },
-    });
+    await setComposerTime(user, "2", "45", "PM");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
         body: "Still in the post.",
-        occurredTime: "14:58",
+        occurredTime: "14:45",
         stage: { state: "uploading", progress: 0.25 },
       }),
     ]);
@@ -630,9 +679,7 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "Kept draft");
-    fireEvent.change(screen.getByLabelText("Moment date"), {
-      target: { value: "2023-08-21" },
-    });
+    await setComposerDate(user, "2023-08-21");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Try again safely.",
@@ -727,19 +774,15 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
 
     const text = screen.getByRole("textbox", { name: "Entry" });
-    const date = screen.getByLabelText("Moment date");
-    const journal = screen.getByLabelText("Journal");
-    expect(date).toHaveValue("2026-08-28");
-    expect(journal).toHaveValue("brian");
+    expect(screen.getByRole("button", { name: /Aug 28, 2026/u })).toBeVisible();
     expect(text.closest("form")).not.toBeNull();
     expect((text.closest("form") as HTMLFormElement).checkValidity()).toBe(
       false,
     );
 
     await user.type(text, "A brave blue door.");
-    fireEvent.change(date, { target: { value: "2023-08-21" } });
-    await user.selectOptions(journal, "avery");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    await setComposerDate(user, "2023-08-21");
+    await selectComposerJournal(user, "Avery");
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     await user.type(screen.getByLabelText(/^Place/u), "Oak Street School");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
@@ -1035,7 +1078,7 @@ describe("MomentComposer", () => {
     await user.click(avery);
     expect(avery).toBeChecked();
 
-    await user.selectOptions(screen.getByLabelText("Journal"), "avery");
+    await selectComposerJournal(user, "Avery");
     expect(avery).not.toBeChecked();
     expect(avery).toBeDisabled();
   });
@@ -1049,16 +1092,14 @@ describe("MomentComposer", () => {
     ],
     [
       "date",
-      async () => {
-        fireEvent.change(screen.getByLabelText("Moment date"), {
-          target: { value: "2020-01-01" },
-        });
+      async (user: ReturnType<typeof userEvent.setup>) => {
+        await setComposerDate(user, "2020-01-01");
       },
     ],
     [
       "journal",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.selectOptions(screen.getByLabelText("Journal"), "avery");
+        await selectComposerJournal(user, "Avery");
       },
     ],
     [

@@ -6,7 +6,6 @@ describe("ThemeToggle", () => {
   beforeEach(() => {
     window.localStorage.clear();
     document.documentElement.dataset.theme = "dark";
-    document.documentElement.style.colorScheme = "dark";
   });
 
   it("switches and persists the journal appearance", () => {
@@ -18,7 +17,6 @@ describe("ThemeToggle", () => {
     fireEvent.click(toggle);
 
     expect(document.documentElement.dataset.theme).toBe("light");
-    expect(document.documentElement.style.colorScheme).toBe("light");
     expect(window.localStorage.getItem("our-days-theme")).toBe("light");
     expect(
       screen.getByRole("button", { name: "Use dark appearance" }),
@@ -27,7 +25,6 @@ describe("ThemeToggle", () => {
 
   it("reflects a light theme applied before hydration", () => {
     document.documentElement.dataset.theme = "light";
-    document.documentElement.style.colorScheme = "light";
 
     render(<ThemeToggle />);
 

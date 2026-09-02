@@ -57,6 +57,7 @@ export function MomentConversationControl({
   const panelId = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
+  const reactionControlRef = useRef<HTMLDivElement>(null);
   const reactionTriggerRef = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<InlinePanel>(null);
   const [conversation, setConversation] = useState<MomentConversationViewModel>(
@@ -93,6 +94,31 @@ export function MomentConversationControl({
       noteRef.current?.focus({ preventScroll: true }),
     );
     return () => window.cancelAnimationFrame(frame);
+  }, [panel]);
+
+  useEffect(() => {
+    if (panel !== "reactions") return;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !reactionControlRef.current?.contains(event.target)
+      ) {
+        setPanel(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPanel(null);
+      window.requestAnimationFrame(() =>
+        reactionTriggerRef.current?.focus({ preventScroll: true }),
+      );
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   }, [panel]);
 
   useEffect(() => {
@@ -152,9 +178,12 @@ export function MomentConversationControl({
     const prior = selectedReactionId;
     const next = prior === reactionId ? null : reactionId;
     setSelectedReactionId(next);
+    setPanel(null);
     setError(null);
+    window.requestAnimationFrame(() =>
+      reactionTriggerRef.current?.focus({ preventScroll: true }),
+    );
     if (!actions) {
-      setPanel(null);
       return;
     }
 
@@ -171,10 +200,6 @@ export function MomentConversationControl({
       }
       const loaded = await loadConversation(true);
       if (!loaded) setSelectedReactionId(next);
-      setPanel(null);
-      window.requestAnimationFrame(() =>
-        reactionTriggerRef.current?.focus({ preventScroll: true }),
-      );
     } catch {
       setSelectedReactionId(prior);
       setError("That response could not be saved. Try again.");
@@ -418,7 +443,7 @@ export function MomentConversationControl({
       ) : null}
 
       <div className="soft-actions">
-        <div className="quick-reaction-control">
+        <div ref={reactionControlRef} className="quick-reaction-control">
           <button
             ref={reactionTriggerRef}
             className="quick-reaction-trigger"
@@ -437,7 +462,7 @@ export function MomentConversationControl({
               event.preventDefault();
               openReactionPicker();
             }}
-            onClick={openReactionPicker}
+            onClick={() => void togglePanel("reactions")}
           >
             <span aria-hidden="true">
               {selectedReactionId
@@ -468,9 +493,6 @@ export function MomentConversationControl({
                   </button>
                 );
               })}
-              {loading ? (
-                <span className="inline-conversation-wait">Loading…</span>
-              ) : null}
             </div>
           ) : null}
         </div>

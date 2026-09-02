@@ -9,9 +9,10 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
+  await page.locator(".view-switch summary").click();
   await expect(
     page
-      .getByRole("group", { name: "Timeline view" })
+      .getByRole("navigation", { name: "Choose a family timeline" })
       .getByRole("link", { name: "Family", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
@@ -26,9 +27,10 @@ test("route-based journal navigation preserves the approved views", async ({
     page.getByRole("heading", { name: "Molly’s days" }),
   ).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
+  await page.locator(".view-switch summary").click();
   await expect(
     page
-      .getByRole("group", { name: "Timeline view" })
+      .getByRole("navigation", { name: "Choose a family timeline" })
       .getByRole("link", { name: "Molly", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 
@@ -78,7 +80,9 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page).toHaveURL(/\/memories\/on-this-day$/u);
 
   await page.getByRole("link", { name: /All memories/u }).click();
-  await page.getByRole("link", { name: /Recorded milestones/u }).click();
+  // The retired milestone collection is intentionally absent from Memories;
+  // keep the legacy deep link covered for existing bookmarks.
+  await page.goto("/memories/milestones");
   await expect(page).toHaveURL(/\/memories\/milestones$/u);
   await expect(page).toHaveTitle("Milestones — Our Days");
   await expect(page.getByRole("heading", { name: "Milestones" })).toBeVisible();
@@ -206,19 +210,20 @@ test("appearance preference persists and the journal grid stays fixed", async ({
     page.getByRole("button", { name: "Use dark appearance" }),
   ).toBeVisible();
 
-  const gridAttachment = await page
-    .locator(".phone-stage")
-    .evaluate((stage) => window.getComputedStyle(stage).backgroundAttachment);
-  expect(gridAttachment).toBe("fixed, fixed");
   const rootGrid = await page.locator(".app-shell").evaluate((shell) => {
-    const style = window.getComputedStyle(shell);
+    const layer = window.getComputedStyle(shell, "::before");
+    const stage = window.getComputedStyle(
+      document.querySelector(".phone-stage")!,
+    );
     return {
-      attachment: style.backgroundAttachment,
-      image: style.backgroundImage,
+      image: layer.backgroundImage,
+      phoneStageImage: stage.backgroundImage,
+      position: layer.position,
     };
   });
-  expect(rootGrid.attachment).toBe("fixed, fixed");
+  expect(rootGrid.position).toBe("fixed");
   expect(rootGrid.image).not.toBe("none");
+  expect(rootGrid.phoneStageImage).toBe("none");
 
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

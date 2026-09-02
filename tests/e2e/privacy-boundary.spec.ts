@@ -151,10 +151,6 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
       await captureNavigation("/memories", "/memories/on-this-day"),
     ],
     [
-      "/memories/milestones",
-      await captureNavigation("/memories", "/memories/milestones"),
-    ],
-    [
       "/memories/years/2023",
       await captureNavigation("/memories", "/memories/years/2023"),
     ],
@@ -168,6 +164,12 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   capturedRequests.set(
     "/people/not-in-this-family",
     capturedRequests.get("/people/molly")!,
+  );
+  // The retired Milestones collection has no visible entry point. Reuse a
+  // genuine Memories navigation envelope to verify its guarded legacy route.
+  capturedRequests.set(
+    "/memories/milestones",
+    capturedRequests.get("/memories/on-this-day")!,
   );
   // `/journal` is a guarded compatibility redirect and intentionally has no
   // visible link. Reuse the genuine browser-generated envelope captured from
@@ -184,6 +186,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   );
   capturedRequests.set(
     "/quality/video-feasibility",
+    capturedRequests.get("/family")!,
+  );
+  capturedRequests.set(
+    "/quality/photo-status",
     capturedRequests.get("/family")!,
   );
 

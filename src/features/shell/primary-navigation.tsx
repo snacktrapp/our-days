@@ -3,7 +3,11 @@
 import Link from "next/link";
 import type { JournalSection } from "./shell-view-model";
 
-function NavIcon({ name }: { name: "family" | "people" | "memories" }) {
+function NavIcon({
+  name,
+}: {
+  name: "family" | "people" | "memories" | "account";
+}) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -30,15 +34,23 @@ function NavIcon({ name }: { name: "family" | "people" | "memories" }) {
       </svg>
     );
   }
-  return null;
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="8" r="3" />
+      <path d="M5.5 19c.55-3.7 2.7-5.6 6.5-5.6s5.95 1.9 6.5 5.6" />
+      <path d="M18.5 4.75 20 6.25l-1.5 1.5" />
+    </svg>
+  );
 }
 
 export function PrimaryNavigation({
   section,
   memoriesHref,
+  settingsHref,
 }: {
   section: JournalSection;
   memoriesHref?: string | null;
+  settingsHref?: string | null;
 }) {
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
@@ -77,6 +89,21 @@ export function PrimaryNavigation({
             <NavIcon name="memories" />
           </span>
           <span>Memories</span>
+        </Link>
+      )}
+      {settingsHref === null ? (
+        <span className="nav-item nav-item-unavailable" aria-hidden="true" />
+      ) : (
+        <Link
+          className={`nav-item ${section === "settings" ? "active" : ""}`}
+          aria-current={section === "settings" ? "page" : undefined}
+          href={settingsHref ?? "/settings/family"}
+          prefetch={false}
+        >
+          <span className="nav-symbol" aria-hidden="true">
+            <NavIcon name="account" />
+          </span>
+          <span>Account</span>
         </Link>
       )}
     </nav>

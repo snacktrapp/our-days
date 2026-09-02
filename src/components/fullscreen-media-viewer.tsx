@@ -135,21 +135,6 @@ export function FullscreenMediaViewer({
           ) : (
             <div className="media-viewer-video">{fullscreenMedia}</div>
           )}
-          {isPhoto ? (
-            <button
-              type="button"
-              className="media-viewer-zoom"
-              aria-pressed={zoomed}
-              onClick={() => setZoomed((current) => !current)}
-            >
-              {zoomed ? "Fit to screen" : "Zoom in"}
-            </button>
-          ) : null}
-          <p className="media-viewer-hint">
-            {isPhoto
-              ? "Pinch or double-tap to zoom"
-              : "Rotate for a wider view"}
-          </p>
         </dialog>
       ) : null}
     </>
