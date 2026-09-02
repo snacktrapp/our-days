@@ -16,7 +16,7 @@ export default async function EmptyMemoriesQualityPage() {
   }
 
   return (
-    <JournalChrome model={model.chrome} section="memories">
+    <JournalChrome model={model.chrome} section="memories" standaloneNavigation>
       <MemoryJourneyPanel model={model} />
     </JournalChrome>
   );

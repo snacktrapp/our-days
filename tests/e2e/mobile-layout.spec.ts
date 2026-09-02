@@ -299,43 +299,155 @@ test("primary navigation stays compact above the device safe area", async ({
   expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
 });
 
-test("wide touch viewports keep navigation fixed through the loading shell", async ({
+test("touch-focused composer textareas keep content spacing without a selection ring", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await page.getByRole("button", { name: "Add moment" }).click();
+  const composer = page.getByRole("dialog");
+  await composer.getByRole("button", { name: /Location/u }).click();
+  const details = composer.getByRole("textbox", { name: "Details" });
+  await details.fill("Vroom vroom");
+
+  const focusedField = await details.evaluate((textarea) => {
+    const style = getComputedStyle(textarea);
+    return {
+      boxShadow: style.boxShadow,
+      outlineStyle: style.outlineStyle,
+      paddingLeft: Number.parseFloat(style.paddingLeft),
+      paddingTop: Number.parseFloat(style.paddingTop),
+    };
+  });
+
+  await composer.getByRole("button", { name: /Details/u }).click();
+  const molly = composer.getByRole("checkbox", { name: "Molly" });
+  await molly.tap();
+  const touchTagFocus = await molly.evaluate((input) => {
+    const label = input.closest("label");
+    if (!label) throw new Error("Person tag label is missing");
+    const style = getComputedStyle(label);
+    return {
+      boxShadow: style.boxShadow,
+      outlineStyle: style.outlineStyle,
+    };
+  });
+  await page.keyboard.press("Tab");
+  await molly.focus();
+  const keyboardTagFocus = await molly.evaluate((input) => {
+    const label = input.closest("label");
+    if (!label) throw new Error("Person tag label is missing");
+    const style = getComputedStyle(label);
+    return {
+      borderColor: style.borderColor,
+      boxShadow: style.boxShadow,
+      outlineStyle: style.outlineStyle,
+    };
+  });
+
+  expect(focusedField.paddingLeft).toBeGreaterThanOrEqual(12);
+  expect(focusedField.paddingTop).toBeGreaterThanOrEqual(12);
+  expect(focusedField.outlineStyle).toBe("none");
+  expect(focusedField.boxShadow).toBe("none");
+  expect(touchTagFocus.outlineStyle).toBe("none");
+  expect(touchTagFocus.boxShadow).toBe("none");
+  expect(keyboardTagFocus.outlineStyle).toBe("none");
+  expect(keyboardTagFocus.borderColor).not.toBe("rgb(168, 82, 92)");
+  expect(keyboardTagFocus.boxShadow).not.toBe("none");
+});
+
+test("real route transitions preserve the nav through every loading frame", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 440, height: 844 });
-  await page.goto("/people");
+  await page.goto("/family");
   const navigation = page.locator(".bottom-nav");
-  const settled = await navigation.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      position: getComputedStyle(element).position,
-      top: rect.top,
-      viewportBottomGap: window.innerHeight - rect.bottom,
-    };
+  const navigationNode = await navigation.elementHandle();
+  expect(navigationNode).not.toBeNull();
+
+  await page.route(/\/people\?_rsc=/u, async (route) => {
+    const requestUrl = new URL(route.request().url());
+    requestUrl.searchParams.set("previewLoading", "navigation");
+    await route.continue({ url: requestUrl.toString() });
   });
 
-  await page.locator(".phone-stage").evaluate((stage) => {
-    const navigation = stage.querySelector(".bottom-nav");
+  await page.evaluate(() => {
+    const navigation = document.querySelector<HTMLElement>(".bottom-nav");
     if (!navigation) throw new Error("Primary navigation is missing");
-    const loading = document.createElement("div");
-    loading.className = "journal-loading";
-    loading.textContent = "Opening your family’s days…";
-    stage.classList.add("journal-loading-shell");
-    stage.replaceChildren(loading, navigation);
-  });
-  const loading = await navigation.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      position: getComputedStyle(element).position,
-      top: rect.top,
-      viewportBottomGap: window.innerHeight - rect.bottom,
+    const samples: Array<{
+      bottomGap: number;
+      count: number;
+      isOriginalNode: boolean;
+      position: string;
+      top: number;
+    }> = [];
+    const state = window as typeof window & {
+      __navTransitionSamples?: typeof samples;
+      __stopNavTransitionSampling?: boolean;
     };
+    state.__navTransitionSamples = samples;
+    state.__stopNavTransitionSampling = false;
+    const sample = () => {
+      const style = getComputedStyle(navigation);
+      const rect = navigation.getBoundingClientRect();
+      samples.push({
+        bottomGap: window.innerHeight - rect.bottom,
+        count: document.querySelectorAll(".bottom-nav").length,
+        isOriginalNode: navigation === document.querySelector(".bottom-nav"),
+        position: style.position,
+        top: rect.top,
+      });
+      if (!state.__stopNavTransitionSampling) requestAnimationFrame(sample);
+    };
+    sample();
   });
 
-  expect(settled.position).toBe("fixed");
-  expect(loading.position).toBe("fixed");
-  expect(Math.abs(loading.top - settled.top)).toBeLessThanOrEqual(1);
-  expect(loading.viewportBottomGap).toBe(settled.viewportBottomGap);
+  await page
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link", { name: "People" })
+    .click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Opening your family’s days…")).toBeVisible();
+  await expect(page).toHaveURL(/\/people$/u);
+  await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  const samples = await page.evaluate(() => {
+    const state = window as typeof window & {
+      __navTransitionSamples?: Array<{
+        bottomGap: number;
+        count: number;
+        isOriginalNode: boolean;
+        position: string;
+        top: number;
+      }>;
+      __stopNavTransitionSampling?: boolean;
+    };
+    state.__stopNavTransitionSampling = true;
+    return state.__navTransitionSamples ?? [];
+  });
+
+  expect(samples.length).toBeGreaterThan(10);
+  expect(samples.every(({ count }) => count === 1)).toBe(true);
+  expect(samples.every(({ isOriginalNode }) => isOriginalNode)).toBe(true);
+  expect(samples.every(({ position }) => position === "fixed")).toBe(true);
+  expect(
+    Math.max(...samples.map(({ top }) => top)) -
+      Math.min(...samples.map(({ top }) => top)),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.max(...samples.map(({ bottomGap }) => bottomGap)) -
+      Math.min(...samples.map(({ bottomGap }) => bottomGap)),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    await navigationNode!.evaluate(
+      (element) =>
+        element.isConnected &&
+        element === document.querySelector(".bottom-nav"),
+    ),
+  ).toBe(true);
 });
 
 test("primary navigation remains above every secondary page canvas", async ({

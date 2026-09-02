@@ -18,7 +18,7 @@ export default async function VideoFeasibilityQualityPage() {
   };
 
   return (
-    <JournalChrome model={chrome} section="timeline">
+    <JournalChrome model={chrome} section="timeline" standaloneNavigation>
       <VideoFeasibilityPanel />
     </JournalChrome>
   );

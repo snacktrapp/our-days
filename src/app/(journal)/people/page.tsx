@@ -5,9 +5,17 @@ import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 
-export default async function PeoplePage() {
+export default async function PeoplePage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<{ previewLoading?: string }>;
+}>) {
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
+    const { previewLoading } = await searchParams;
+    if (previewLoading === "navigation") {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
     const model = getPeopleFixture();
     return (
       <JournalChrome model={model.chrome} section="people">

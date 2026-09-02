@@ -15,6 +15,7 @@ type JournalChromeProps = Readonly<{
   section: JournalSection;
   children: ReactNode;
   createMomentAction?: SaveFamilyMomentAction;
+  standaloneNavigation?: boolean;
 }>;
 
 function PrimaryJournalHeader({
@@ -71,6 +72,7 @@ export function JournalChrome({
   section,
   children,
   createMomentAction,
+  standaloneNavigation = false,
 }: JournalChromeProps) {
   return (
     <main className={`app-shell theme-${model.accent}`}>
@@ -92,11 +94,13 @@ export function JournalChrome({
           />
         )}
         {children}
-        <PrimaryNavigation
-          section={section}
-          memoriesHref={model.memoriesHref}
-          settingsHref={model.settingsHref}
-        />
+        {standaloneNavigation ? (
+          <PrimaryNavigation
+            section={section}
+            memoriesHref={model.memoriesHref}
+            settingsHref={model.settingsHref}
+          />
+        ) : null}
       </section>
     </main>
   );
