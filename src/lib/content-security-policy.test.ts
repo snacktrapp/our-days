@@ -44,6 +44,16 @@ describe("content security policy", () => {
     expect(policy).not.toContain("*.storage.supabase.co");
   });
 
+  it("does not upgrade loopback HTTP production servers to HTTPS", () => {
+    const policy = buildContentSecurityPolicy({
+      nonce,
+      development: false,
+      siteUrl: "http://127.0.0.1:3100",
+    });
+
+    expect(policy).not.toContain("upgrade-insecure-requests");
+  });
+
   it("permits only development tooling escapes and local Supabase", () => {
     const policy = buildContentSecurityPolicy({
       nonce,

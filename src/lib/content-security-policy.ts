@@ -5,8 +5,24 @@ const NONCE_PATTERN = /^[A-Za-z0-9+/_=-]{22,128}$/u;
 type ContentSecurityPolicyOptions = Readonly<{
   nonce: string;
   development: boolean;
+  siteUrl?: string;
   supabaseUrl?: string;
 }>;
+
+function isLoopbackSite(siteUrl?: string) {
+  if (!siteUrl) return false;
+  try {
+    const url = new URL(siteUrl);
+    return (
+      url.hostname === "localhost" ||
+      url.hostname.endsWith(".localhost") ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
 
 function normalizedSupabaseOrigins(supabaseUrl?: string) {
   if (!supabaseUrl)
@@ -22,6 +38,7 @@ function normalizedSupabaseOrigins(supabaseUrl?: string) {
 export function buildContentSecurityPolicy({
   nonce,
   development,
+  siteUrl,
   supabaseUrl,
 }: ContentSecurityPolicyOptions) {
   if (!NONCE_PATTERN.test(nonce)) {
@@ -64,7 +81,9 @@ export function buildContentSecurityPolicy({
     ["base-uri", "'none'"],
     ["form-action", "'self'"],
     ["frame-ancestors", "'none'"],
-    ...(!development ? [["upgrade-insecure-requests"]] : []),
+    ...(!development && !isLoopbackSite(siteUrl)
+      ? [["upgrade-insecure-requests"]]
+      : []),
   ];
 
   return directives
