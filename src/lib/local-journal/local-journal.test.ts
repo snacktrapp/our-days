@@ -104,7 +104,10 @@ describe("local journal happy path", () => {
       occurredTimezone: null,
     });
     expect(moment.kind).toBe("photo");
-    expect(moment.media?.displayMimeType).toBe("image/webp");
+    expect(moment.media?.displayMimeType).toBe("image/jpeg");
+    expect(moment.media?.displayRelativePath).toBe(
+      moment.media?.originalRelativePath,
+    );
     expect(moment.media?.sha256).toHaveLength(64);
   });
 });

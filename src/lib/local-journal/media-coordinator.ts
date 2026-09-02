@@ -3,7 +3,6 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import sharp from "sharp";
 import {
   localJournalMediaDirectory,
   publishLocalMediaMoment,
@@ -118,30 +117,15 @@ async function writeMediaFiles(
   );
 
   if (kind === "photo") {
-    const display = await sharp(original)
-      .rotate()
-      .resize({
-        width: 1600,
-        height: 1600,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .webp({ quality: 82, effort: 4 })
-      .toBuffer();
-    const displayRelativePath = `${mediaId}/display.webp`;
-    writeFileSync(
-      join(localJournalMediaDirectory(), displayRelativePath),
-      display,
-    );
     return {
       mimeType: originalMime,
       byteLength: original.byteLength,
       sha256,
       originalRelativePath,
-      displayRelativePath,
-      displayMimeType: "image/webp",
-      displayByteLength: display.byteLength,
-      displaySha256: sha256Hex(display),
+      displayRelativePath: originalRelativePath,
+      displayMimeType: originalMime,
+      displayByteLength: original.byteLength,
+      displaySha256: sha256,
     } satisfies LocalMedia;
   }
 
