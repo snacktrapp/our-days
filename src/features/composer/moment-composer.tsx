@@ -25,6 +25,7 @@ import {
   startOptimisticPhotoUpload,
   startOptimisticVideoUpload,
 } from "./optimistic-media-upload";
+import { startOptimisticMomentSave } from "./optimistic-moment-save";
 import { DateTimeFields } from "./date-time-fields";
 import { JournalPickerField } from "./journal-picker-field";
 
@@ -151,7 +152,8 @@ export function MomentComposer({
   saveWrittenMoment,
 }: MomentComposerProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  // Connected saves now detach from this surface before network work begins.
+  const saving = false;
   const [mode, setMode] = useState<ComposerMode | null>(null);
   const [choosingMode, setChoosingMode] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -293,14 +295,6 @@ export function MomentComposer({
     },
     [isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
   );
-
-  const finishConnectedSave = useCallback(() => {
-    resetDraft();
-    onRequestClose();
-    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
-    router.replace("/family");
-    router.refresh();
-  }, [onRequestClose, resetDraft, returnFocusRef, router]);
 
   useEffect(
     () => () => {
@@ -602,47 +596,59 @@ export function MomentComposer({
       resetDraft();
       onRequestClose();
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+      router.replace("/family");
       return;
     }
 
-    setSaving(true);
-    uploadInFlightRef.current = true;
-    try {
-      const savedKind = mode === "bible-verse" ? "thought" : mode;
-      const savedBody =
-        mode === "bible-verse" ? formatBibleVerseMoment(title, body) : body;
-      const result = saveFamilyMoment
-        ? await saveFamilyMoment({
-            journalPersonId,
-            kind: savedKind,
-            title: savedKind === "milestone" ? title : "",
-            body: savedBody,
-            placeName: mode === "location" ? title : placeName,
-            taggedPersonIds,
-            occurredOn,
-            occurredAt,
-            occurredTimezone,
-          })
-        : await saveWrittenMoment!({
-            journalPersonId,
-            body: savedBody,
-            occurredOn,
-            occurredAt,
-            occurredTimezone,
-          });
-      if (!result.ok) {
-        setSaveError(result.message);
-        return;
-      }
-      finishConnectedSave();
-    } catch {
-      setSaveError("That moment could not be saved. Try again.");
-    } finally {
-      uploadInFlightRef.current = false;
-      photoUploadAbortRef.current = null;
-      setPhotoUploadStage(null);
-      setSaving(false);
-    }
+    const savedMode = mode;
+    const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
+    const savedTitle = title.trim();
+    const savedBody =
+      savedMode === "bible-verse"
+        ? formatBibleVerseMoment(savedTitle, capturedBody)
+        : capturedBody;
+    const savedResolvedPlaceName =
+      savedMode === "location" ? savedTitle : savedPlaceName.trim();
+    startOptimisticMomentSave({
+      circleId: model.circleId ?? null,
+      mode: savedMode,
+      title: savedTitle,
+      body: capturedBody,
+      placeName: savedResolvedPlaceName,
+      taggedPeopleLabel: taggedPeople.map((person) => person.name).join(", "),
+      occurredOn: savedOccurredOn,
+      occurredTime: savedOccurredTime,
+      person: {
+        name: savedJournalPerson.name,
+        initial: savedJournalPerson.initial,
+        accent: savedJournalPerson.accent,
+      },
+      save: () =>
+        saveFamilyMoment
+          ? saveFamilyMoment({
+              journalPersonId: savedJournalPersonId,
+              kind: savedKind,
+              title: savedKind === "milestone" ? savedTitle : "",
+              body: savedBody,
+              placeName: savedResolvedPlaceName,
+              taggedPersonIds: savedTaggedPersonIds,
+              occurredOn: savedOccurredOn,
+              occurredAt,
+              occurredTimezone,
+            })
+          : saveWrittenMoment!({
+              journalPersonId: savedJournalPersonId,
+              body: savedBody,
+              occurredOn: savedOccurredOn,
+              occurredAt,
+              occurredTimezone,
+            }),
+      onPublished: () => router.refresh(),
+    });
+    resetDraft();
+    onRequestClose();
+    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+    router.replace("/family");
   };
 
   const submitDraft = async () => {

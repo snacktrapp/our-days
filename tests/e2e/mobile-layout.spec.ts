@@ -299,6 +299,45 @@ test("primary navigation stays compact above the device safe area", async ({
   expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
 });
 
+test("wide touch viewports keep navigation fixed through the loading shell", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 440, height: 844 });
+  await page.goto("/people");
+  const navigation = page.locator(".bottom-nav");
+  const settled = await navigation.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      position: getComputedStyle(element).position,
+      top: rect.top,
+      viewportBottomGap: window.innerHeight - rect.bottom,
+    };
+  });
+
+  await page.locator(".phone-stage").evaluate((stage) => {
+    const navigation = stage.querySelector(".bottom-nav");
+    if (!navigation) throw new Error("Primary navigation is missing");
+    const loading = document.createElement("div");
+    loading.className = "journal-loading";
+    loading.textContent = "Opening your family’s days…";
+    stage.classList.add("journal-loading-shell");
+    stage.replaceChildren(loading, navigation);
+  });
+  const loading = await navigation.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      position: getComputedStyle(element).position,
+      top: rect.top,
+      viewportBottomGap: window.innerHeight - rect.bottom,
+    };
+  });
+
+  expect(settled.position).toBe("fixed");
+  expect(loading.position).toBe("fixed");
+  expect(Math.abs(loading.top - settled.top)).toBeLessThanOrEqual(1);
+  expect(loading.viewportBottomGap).toBe(settled.viewportBottomGap);
+});
+
 test("primary navigation remains above every secondary page canvas", async ({
   page,
 }) => {

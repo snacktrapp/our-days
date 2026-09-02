@@ -3792,7 +3792,7 @@ textarea:focus-visible,
   cursor: pointer;
 }
 
-@media (min-width: 431px) {
+@media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .phone-stage {
     margin: 28px 0;
     min-height: calc(100svh - 56px);
@@ -4885,7 +4885,7 @@ textarea:focus-visible,
   font-family: inherit;
 }
 
-@media (min-width: 431px) {
+@media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .phone-stage {
     border-color: var(--hairline);
     border-radius: 18px;
@@ -5744,6 +5744,13 @@ textarea:focus-visible,
   height: 100%;
 }
 
+.media-viewer-preview-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #020403;
+}
+
 .video-viewer-trigger {
   cursor: pointer;
 }
@@ -5808,6 +5815,38 @@ textarea:focus-visible,
 
 .media-viewer-photo {
   touch-action: pinch-zoom;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.media-viewer-photo.is-pulling {
+  opacity: 0.86;
+  transition: none;
+}
+
+.media-viewer-photo.pull-step-1 {
+  transform: translateY(24px);
+}
+
+.media-viewer-photo.pull-step-2 {
+  transform: translateY(48px);
+}
+
+.media-viewer-photo.pull-step-3 {
+  transform: translateY(72px);
+}
+
+.media-viewer-photo.pull-step-4 {
+  transform: translateY(96px);
+}
+
+.media-viewer-photo.pull-step-5 {
+  transform: translateY(120px);
+}
+
+.media-viewer-photo.pull-step-6 {
+  transform: translateY(144px);
 }
 
 .media-viewer-photo img,
@@ -5991,7 +6030,7 @@ textarea:focus-visible,
   }
 }
 
-@media (min-width: 431px) {
+@media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   :root {
     --header-drawer-top: 92px;
   }
@@ -6497,6 +6536,91 @@ textarea:focus-visible,
   accent-color: var(--ochre);
 }
 
+.optimistic-written-timeline {
+  padding-top: 16px;
+  padding-bottom: 4px;
+}
+
+.optimistic-written-moment {
+  margin-bottom: 18px;
+}
+
+.optimistic-written-card {
+  padding: 18px;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--hairline));
+}
+
+.optimistic-written-card .moment-kicker {
+  margin: 0 0 12px;
+}
+
+.optimistic-written-card blockquote {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  line-height: 1.45;
+}
+
+.optimistic-written-card cite {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-family: var(--font-record);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.optimistic-written-card h3,
+.optimistic-written-card > p {
+  margin: 0;
+}
+
+.optimistic-written-card h3 {
+  font-size: 18px;
+}
+
+.optimistic-written-card h3 + p {
+  margin-top: 8px;
+  font-family: var(--font-serif);
+}
+
+.optimistic-written-metadata,
+.optimistic-written-status {
+  color: var(--muted);
+  font-family: var(--font-record);
+  font-size: 9px !important;
+  letter-spacing: 0.04em;
+}
+
+.optimistic-written-metadata {
+  margin-top: 9px !important;
+}
+
+.optimistic-written-status {
+  margin-top: 12px !important;
+  text-transform: uppercase;
+}
+
+.optimistic-written-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.optimistic-written-actions button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font: inherit;
+}
+
+.optimistic-written-actions button:last-child {
+  color: var(--clay);
+}
+
 :root[data-theme="light"] .memory-journey-heading > span {
   color: #285f5b;
 }
@@ -6555,7 +6679,7 @@ textarea:focus-visible,
   transform: translate3d(-50%, 0, 0);
 }
 
-@media (min-width: 431px) {
+@media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .bottom-nav {
     transform: translateZ(0);
   }

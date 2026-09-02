@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
-import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
 import { ThemeToggle } from "./theme-toggle";
@@ -92,14 +91,6 @@ export function JournalChrome({
             createMomentAction={createMomentAction}
           />
         )}
-        {section === "timeline" &&
-        model.composer.photoPostingEnabled &&
-        model.composer.circleId ? (
-          <PhotoStatusShelf
-            circleId={model.composer.circleId}
-            today={model.composer.previewToday}
-          />
-        ) : null}
         {children}
         <PrimaryNavigation
           section={section}

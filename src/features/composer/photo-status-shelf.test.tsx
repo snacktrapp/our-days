@@ -35,6 +35,10 @@ import {
   addOptimisticMediaUpload,
   clearOptimisticMediaUploads,
 } from "./optimistic-media-upload";
+import {
+  clearOptimisticMomentSaves,
+  startOptimisticMomentSave,
+} from "./optimistic-moment-save";
 
 const circleId = "20000000-0000-4000-8000-000000000001";
 const accountId = "10000000-0000-4000-8000-000000000001";
@@ -68,6 +72,7 @@ const localRecord = {
 beforeEach(() => {
   vi.clearAllMocks();
   clearOptimisticMediaUploads();
+  clearOptimisticMomentSaves();
   window.sessionStorage.clear();
   mocks.getSession.mockResolvedValue({
     data: { session: { user: { id: accountId } } },
@@ -94,10 +99,36 @@ beforeEach(() => {
 
 afterEach(() => {
   clearOptimisticMediaUploads();
+  clearOptimisticMomentSaves();
   vi.unstubAllGlobals();
 });
 
 describe("PhotoStatusShelf", () => {
+  it("shows a non-media draft immediately while its save continues", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    startOptimisticMomentSave({
+      circleId,
+      mode: "thought",
+      title: "",
+      body: "The exact note is already on the timeline.",
+      placeName: "",
+      taggedPeopleLabel: "Molly",
+      occurredOn: "2026-09-01",
+      occurredTime: "09:29",
+      person: { name: "Brian", initial: "B", accent: "teal" },
+      save: () => new Promise(() => undefined),
+      onPublished: vi.fn(),
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+
+    expect(
+      screen.getByText(/The exact note is already on the timeline\./u),
+    ).toBeVisible();
+    expect(screen.getByText("with Molly")).toBeVisible();
+    expect(screen.getByText("Adding…")).toBeVisible();
+  });
+
   it("shows the captured note, date, time, and progress in an immediate timeline placeholder", async () => {
     mocks.rpc.mockResolvedValue({ data: [], error: null });
     addOptimisticMediaUpload({

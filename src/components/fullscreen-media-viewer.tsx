@@ -21,9 +21,16 @@ export function FullscreenMediaViewer({
 }: FullscreenMediaViewerProps) {
   const [open, setOpen] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const [pullStep, setPullStep] = useState(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const singleTapTimerRef = useRef<number | null>(null);
+  const pullRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    distance: number;
+  } | null>(null);
   const titleId = useId();
   const isPhoto = kind === "photo";
 
@@ -80,7 +87,42 @@ export function FullscreenMediaViewer({
   function close() {
     setOpen(false);
     setZoomed(false);
+    setPullStep(0);
+    pullRef.current = null;
     window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function startPull(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isPhoto || zoomed || event.pointerType === "mouse") return;
+    pullRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      distance: 0,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function movePull(event: React.PointerEvent<HTMLDivElement>) {
+    const pull = pullRef.current;
+    if (!pull || pull.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pull.startX;
+    const deltaY = Math.max(0, event.clientY - pull.startY);
+    if (deltaY < Math.abs(deltaX)) return;
+    event.preventDefault();
+    pull.distance = Math.min(deltaY, 144);
+    setPullStep(Math.min(6, Math.ceil(pull.distance / 24)));
+  }
+
+  function finishPull(event: React.PointerEvent<HTMLDivElement>) {
+    const pull = pullRef.current;
+    if (!pull || pull.pointerId !== event.pointerId) return;
+    pullRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (event.type === "pointerup" && pull.distance >= 96) close();
+    else setPullStep(0);
   }
 
   return (
@@ -92,7 +134,14 @@ export function FullscreenMediaViewer({
         aria-label={`Open ${kind} full screen: ${label}`}
         onClick={(event) => openFromTap(event.detail)}
       >
-        {preview}
+        {open && isPhoto ? (
+          <span
+            className="media-viewer-preview-placeholder"
+            aria-hidden="true"
+          />
+        ) : (
+          preview
+        )}
         {isPhoto ? null : (
           <span className="video-viewer-play" aria-hidden="true">
             ▶
@@ -127,8 +176,12 @@ export function FullscreenMediaViewer({
           </button>
           {isPhoto ? (
             <div
-              className={`media-viewer-photo ${zoomed ? "is-zoomed" : ""}`}
+              className={`media-viewer-photo ${zoomed ? "is-zoomed" : ""} ${pullStep > 0 ? "is-pulling" : ""} pull-step-${pullStep}`}
               onDoubleClick={() => setZoomed((current) => !current)}
+              onPointerDown={startPull}
+              onPointerMove={movePull}
+              onPointerUp={finishPull}
+              onPointerCancel={finishPull}
             >
               {fullscreenMedia}
             </div>

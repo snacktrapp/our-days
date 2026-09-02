@@ -21,6 +21,14 @@ import {
   updateOptimisticMediaUpload,
   type OptimisticMediaUpload,
 } from "./optimistic-media-upload";
+import {
+  emptyOptimisticMomentSaveSnapshot,
+  optimisticMomentSaveSnapshot,
+  removeOptimisticMomentSave,
+  retryOptimisticMomentSave,
+  subscribeToOptimisticMomentSaves,
+  type OptimisticMomentSave,
+} from "./optimistic-moment-save";
 
 type PhotoCleanupState =
   | "awaiting_cleanup_job"
@@ -229,6 +237,117 @@ function OptimisticMediaTimeline({
   );
 }
 
+function optimisticMomentLabel(save: OptimisticMomentSave) {
+  if (save.mode === "bible-verse") return "Bible verse";
+  if (save.mode === "thought") return "Note";
+  if (save.mode === "location") return "Location";
+  return "Milestone";
+}
+
+function OptimisticMomentCard({
+  save,
+  pendingPlacement = false,
+}: Readonly<{
+  save: OptimisticMomentSave;
+  pendingPlacement?: boolean;
+}>) {
+  return (
+    <article
+      className={
+        pendingPlacement
+          ? "pending-media-item"
+          : "moment optimistic-written-moment"
+      }
+    >
+      <div className="connection">
+        <span
+          className={`avatar-node dot-${save.journalPersonAccent}`}
+          aria-hidden="true"
+        >
+          {save.journalPersonInitial}
+        </span>
+        <span className="moment-meta">
+          <strong>{save.journalPersonName}</strong>
+          <span>
+            {dateLabel(save.occurredOn)}
+            {save.occurredTime ? ` | ${save.occurredTime}` : ""}
+          </span>
+        </span>
+      </div>
+      <div
+        className="moment-card optimistic-written-card"
+        aria-busy={save.stage.state === "saving"}
+      >
+        <p className="moment-kicker">{optimisticMomentLabel(save)}</p>
+        {save.mode === "thought" ? (
+          <blockquote>“{save.body}”</blockquote>
+        ) : null}
+        {save.mode === "bible-verse" ? (
+          <>
+            <blockquote>“{save.body}”</blockquote>
+            <cite>{save.title}</cite>
+          </>
+        ) : null}
+        {save.mode === "milestone" || save.mode === "location" ? (
+          <>
+            <h3>{save.title}</h3>
+            {save.body ? <p>{save.body}</p> : null}
+          </>
+        ) : null}
+        {save.placeName && save.mode !== "location" ? (
+          <p className="optimistic-written-metadata">{save.placeName}</p>
+        ) : null}
+        {save.taggedPeopleLabel ? (
+          <p className="optimistic-written-metadata">
+            with {save.taggedPeopleLabel}
+          </p>
+        ) : null}
+        {pendingPlacement ? (
+          <p className="pending-media-placement">
+            Adding privately · Will appear on {dateLabel(save.occurredOn)}
+          </p>
+        ) : null}
+        <p className="optimistic-written-status" role="status">
+          {save.stage.state === "saving" ? "Adding…" : save.stage.message}
+        </p>
+        {save.stage.state === "failed" ? (
+          <div className="optimistic-written-actions">
+            <button
+              type="button"
+              onClick={() => retryOptimisticMomentSave(save.id)}
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => removeOptimisticMomentSave(save.id)}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function OptimisticMomentTimeline({
+  saves,
+}: Readonly<{ saves: readonly OptimisticMomentSave[] }>) {
+  if (saves.length === 0) return null;
+  return (
+    <section
+      className="timeline optimistic-written-timeline"
+      aria-label="Moments being added"
+    >
+      <div className="time-rail" aria-hidden="true" />
+      {saves.map((save) => (
+        <OptimisticMomentCard key={save.id} save={save} />
+      ))}
+    </section>
+  );
+}
+
 function BackdatedMediaShelf({
   uploads,
 }: Readonly<{ uploads: readonly OptimisticMediaUpload[] }>) {
@@ -237,6 +356,19 @@ function BackdatedMediaShelf({
     <section className="pending-media-shelf" aria-label="Media being uploaded">
       {uploads.map((upload) => (
         <OptimisticMediaCard key={upload.id} upload={upload} pendingPlacement />
+      ))}
+    </section>
+  );
+}
+
+function BackdatedMomentShelf({
+  saves,
+}: Readonly<{ saves: readonly OptimisticMomentSave[] }>) {
+  if (saves.length === 0) return null;
+  return (
+    <section className="pending-media-shelf" aria-label="Moments being added">
+      {saves.map((save) => (
+        <OptimisticMomentCard key={save.id} save={save} pendingPlacement />
       ))}
     </section>
   );
@@ -264,6 +396,11 @@ export function PhotoStatusShelf({
     optimisticMediaUploadSnapshot,
     emptyOptimisticMediaUploadSnapshot,
   ).filter((upload) => upload.circleId === circleId);
+  const optimisticMomentSaves = useSyncExternalStore(
+    subscribeToOptimisticMomentSaves,
+    optimisticMomentSaveSnapshot,
+    emptyOptimisticMomentSaveSnapshot,
+  ).filter((save) => save.circleId === circleId);
 
   const checkStatuses = useCallback(
     (finishProcessing = false) => {
@@ -589,9 +726,19 @@ export function PhotoStatusShelf({
           (upload) => upload.occurredOn === today,
         )}
       />
+      <OptimisticMomentTimeline
+        saves={optimisticMomentSaves.filter(
+          (save) => save.occurredOn === today,
+        )}
+      />
       <BackdatedMediaShelf
         uploads={optimisticUploads.filter(
           (upload) => upload.occurredOn !== today,
+        )}
+      />
+      <BackdatedMomentShelf
+        saves={optimisticMomentSaves.filter(
+          (save) => save.occurredOn !== today,
         )}
       />
       <PhotoStatusShelfView

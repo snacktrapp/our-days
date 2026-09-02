@@ -22,6 +22,7 @@ describe("FullscreenMediaViewer", () => {
       name: "Full-screen photo: Family outside",
     });
     expect(dialog).toBeVisible();
+    expect(screen.queryByText("Photo preview")).not.toBeInTheDocument();
     const photo = screen.getByText("Full photo").parentElement;
     expect(photo).toHaveClass("media-viewer-photo");
     fireEvent.doubleClick(photo as HTMLElement);
@@ -34,6 +35,47 @@ describe("FullscreenMediaViewer", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("dismisses a photo with a deliberate downward pull", () => {
+    render(
+      <FullscreenMediaViewer
+        kind="photo"
+        label="Family outside"
+        preview={<span>Photo preview</span>}
+        fullscreenMedia={<span>Full photo</span>}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: Family outside",
+      }),
+    );
+    const photo = screen.getByText("Full photo").parentElement as HTMLElement;
+    Object.defineProperties(photo, {
+      setPointerCapture: { configurable: true, value: vi.fn() },
+      hasPointerCapture: { configurable: true, value: () => false },
+    });
+    fireEvent.pointerDown(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 200,
+    });
+    fireEvent.pointerMove(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 320,
+    });
+    fireEvent.pointerUp(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 320,
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens a video with native playback controls", () => {

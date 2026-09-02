@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { MomentCard } from "./moment-card";
 import type {
   TimelineEntryViewModel,
@@ -150,10 +151,12 @@ export function TimelineFeed({
   model,
   connectedActions,
   conversationActions,
+  pendingEntries,
 }: {
   model: TimelineViewModel;
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
+  pendingEntries?: ReactNode;
 }) {
   const firstMomentId = model.entries.find(
     (entry) => entry.entryType === "moment",
@@ -201,6 +204,8 @@ export function TimelineFeed({
           </nav>
         </details>
       )}
+
+      {pendingEntries}
 
       {model.personalIntro && (
         <div className="personal-intro">

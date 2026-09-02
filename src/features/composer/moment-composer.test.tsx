@@ -8,6 +8,11 @@ import {
   clearOptimisticMediaUploads,
   optimisticMediaUploadSnapshot,
 } from "./optimistic-media-upload";
+import {
+  clearOptimisticMomentSaves,
+  optimisticMomentSaveSnapshot,
+  retryOptimisticMomentSave,
+} from "./optimistic-moment-save";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -151,6 +156,7 @@ beforeEach(() => {
   photoUpload.upload.mockReset();
   videoUpload.upload.mockReset();
   clearOptimisticMediaUploads();
+  clearOptimisticMomentSaves();
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: createObjectURL,
@@ -163,6 +169,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearOptimisticMediaUploads();
+  clearOptimisticMomentSaves();
   vi.restoreAllMocks();
 });
 
@@ -284,7 +291,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
@@ -359,7 +366,7 @@ describe("MomentComposer", () => {
       expect.any(AbortSignal),
       expect.any(Function),
     );
-    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -628,7 +635,7 @@ describe("MomentComposer", () => {
         state: "processing",
       }),
     );
-    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -667,7 +674,7 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("heading", { name: "New moment" })).toBeVisible();
   });
 
-  it("keeps a connected draft after failure and closes after confirmed success", async () => {
+  it("closes immediately and keeps a failed connected save actionable on the timeline", async () => {
     const save = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, message: "Try again safely." })
@@ -681,13 +688,19 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Entry"), "Kept draft");
     await setComposerDate(user, "2023-08-21");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Try again safely.",
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() =>
+      expect(optimisticMomentSaveSnapshot()[0]).toEqual(
+        expect.objectContaining({
+          body: "Kept draft",
+          occurredOn: "2023-08-21",
+          stage: { state: "failed", message: "Try again safely." },
+        }),
+      ),
     );
-    expect(screen.getByText("Kept draft")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    retryOptimisticMomentSave(optimisticMomentSaveSnapshot()[0]!.id);
+    await waitFor(() => expect(optimisticMomentSaveSnapshot()).toEqual([]));
     expect(save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         body: "Kept draft",
@@ -699,7 +712,7 @@ describe("MomentComposer", () => {
     expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
 
-  it("keeps every dismissal path unavailable while a save is in flight", async () => {
+  it("closes immediately while a written save continues independently", async () => {
     let finishSave: (value: { ok: true; message: string }) => void = () => {
       throw new Error("The save promise was not started.");
     };
@@ -718,15 +731,18 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Entry"), "Still saving");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("dialog"));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(optimisticMomentSaveSnapshot()[0]).toEqual(
+      expect.objectContaining({
+        body: "Still saving",
+        stage: { state: "saving" },
+      }),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
 
     finishSave({ ok: true, message: "Saved" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(optimisticMomentSaveSnapshot()).toEqual([]));
+    expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
   it("closes immediately after save without a discard warning", async () => {
