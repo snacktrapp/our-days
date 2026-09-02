@@ -1,11 +1,11 @@
 import "server-only";
 
-import { isLocalDesignPreviewEnvironment } from "../../config/design-preview-policy";
+import { isDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 export function isDesignPreviewEnabled() {
-  return isLocalDesignPreviewEnvironment(process.env);
+  return isDesignPreviewEnvironment(process.env);
 }
 
 export async function requireDesignPreview() {

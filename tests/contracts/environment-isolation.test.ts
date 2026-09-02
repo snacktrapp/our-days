@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocalDesignPreviewEnvironment } from "../../config/design-preview-policy";
+import { isDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import {
   environmentForNextConfig,
   invitationDeliveryIsEnabled,
@@ -180,7 +180,7 @@ describe("Our Days environment isolation", () => {
     });
   });
 
-  it("confines the explicit design-preview bypass to local detached loopback", () => {
+  it("confines the explicit design-preview bypass to local loopback or Vercel Preview", () => {
     expect(
       validateOurDaysEnvironment({
         OUR_DAYS_ENVIRONMENT: "local",
@@ -195,19 +195,27 @@ describe("Our Days environment isolation", () => {
         ...productionEnvironment,
         OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
       },
-      "requires local identity",
+      "requires an explicit local loopback or Vercel Preview identity",
     );
-    expectUnsafe(
-      {
-        ...productionEnvironment,
+    expect(
+      validateOurDaysEnvironment({
         VERCEL_ENV: "preview",
         OUR_DAYS_ENVIRONMENT: "preview",
-        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: previewRef,
+        OUR_DAYS_RESOURCE_MODE: "detached",
         NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
-        NEXT_PUBLIC_SUPABASE_URL: `https://${previewRef}.supabase.co`,
+        OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://journal.example.com",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      }),
+    ).toMatchObject({ identity: "preview", resourceMode: "detached" });
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "preview",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
+        OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://journal.example.com",
         OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
       },
-      "requires local identity",
+      "requires an explicit local loopback or Vercel Preview identity",
     );
     expectUnsafe(
       {
@@ -215,7 +223,7 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_RESOURCE_MODE: "detached",
         OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
       },
-      "explicit loopback site origin",
+      "explicit local loopback or Vercel Preview identity",
     );
     expectUnsafe(
       {
@@ -235,35 +243,35 @@ describe("Our Days environment isolation", () => {
       NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
       OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
     } as const;
-    expect(isLocalDesignPreviewEnvironment(safe)).toBe(true);
+    expect(isDesignPreviewEnvironment(safe)).toBe(true);
     expect(
-      isLocalDesignPreviewEnvironment({
+      isDesignPreviewEnvironment({
         NODE_ENV: "development",
         OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
       }),
     ).toBe(false);
     expect(
-      isLocalDesignPreviewEnvironment({
+      isDesignPreviewEnvironment({
         ...safe,
         NEXT_PUBLIC_SITE_URL: "http://0.0.0.0:3100",
       }),
     ).toBe(false);
     expect(
-      isLocalDesignPreviewEnvironment({
+      isDesignPreviewEnvironment({
         ...safe,
         VERCEL_ENV: "preview",
         OUR_DAYS_ENVIRONMENT: "preview",
         NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
-      isLocalDesignPreviewEnvironment({
+      isDesignPreviewEnvironment({
         ...safe,
         OUR_DAYS_RESOURCE_MODE: "supabase",
       }),
     ).toBe(false);
     expect(
-      isLocalDesignPreviewEnvironment({
+      isDesignPreviewEnvironment({
         ...safe,
         NEXT_PUBLIC_SITE_URL: "http://localhost:3100/family",
       }),

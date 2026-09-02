@@ -1,11 +1,8 @@
 type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 
-export function isLocalDesignPreviewEnvironment(
-  environment: ProcessEnvironment,
-) {
+export function isDesignPreviewEnvironment(environment: ProcessEnvironment) {
   if (
     environment.OUR_DAYS_ENABLE_DESIGN_PREVIEW !== "true" ||
-    environment.OUR_DAYS_ENVIRONMENT !== "local" ||
     environment.OUR_DAYS_RESOURCE_MODE !== "detached"
   ) {
     return false;
@@ -18,14 +15,23 @@ export function isLocalDesignPreviewEnvironment(
       site.hostname.endsWith(".localhost") ||
       site.hostname === "127.0.0.1" ||
       site.hostname === "[::1]";
-    return (
-      loopback &&
+    const isBareOrigin =
       !site.username &&
       !site.password &&
       site.pathname === "/" &&
       !site.search &&
-      !site.hash &&
-      ["http:", "https:"].includes(site.protocol)
+      !site.hash;
+    if (!isBareOrigin) return false;
+
+    if (environment.OUR_DAYS_ENVIRONMENT === "local") {
+      return loopback && ["http:", "https:"].includes(site.protocol);
+    }
+
+    return (
+      environment.OUR_DAYS_ENVIRONMENT === "preview" &&
+      environment.VERCEL_ENV === "preview" &&
+      !loopback &&
+      site.protocol === "https:"
     );
   } catch {
     return false;

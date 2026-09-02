@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { isLocalDesignPreviewEnvironment } from "./design-preview-policy";
+import { isDesignPreviewEnvironment } from "./design-preview-policy";
 import { resolveSupabaseOrigin, SupabaseOriginError } from "./supabase-origin";
 
 type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
@@ -430,12 +430,9 @@ export function validateOurDaysEnvironment(
     },
     issues,
   );
-  if (
-    designPreview === "true" &&
-    !isLocalDesignPreviewEnvironment(environment)
-  ) {
+  if (designPreview === "true" && !isDesignPreviewEnvironment(environment)) {
     issues.push(
-      "OUR_DAYS_ENABLE_DESIGN_PREVIEW=true requires local identity, detached resources, and an explicit loopback site origin",
+      "OUR_DAYS_ENABLE_DESIGN_PREVIEW=true requires an explicit local loopback or Vercel Preview identity with detached resources",
     );
   }
 
@@ -501,9 +498,13 @@ export function validateOurDaysEnvironment(
   );
 
   if (resourceMode === "detached") {
-    if (identity && identity !== "local") {
+    if (
+      identity &&
+      identity !== "local" &&
+      !isDesignPreviewEnvironment(environment)
+    ) {
       issues.push(
-        "detached resource mode is allowed only for local and synthetic CI builds",
+        "detached resource mode is allowed only for local, synthetic CI, or explicit Vercel design previews",
       );
     }
     if (expectedRef || productionRef || supabaseUrl || publishableKey) {
@@ -511,6 +512,15 @@ export function validateOurDaysEnvironment(
         "detached resource mode must not include Supabase connection values",
       );
     }
+  }
+
+  if (
+    identity === "preview" &&
+    siteOrigin &&
+    productionSiteOrigin &&
+    siteOrigin === productionSiteOrigin
+  ) {
+    issues.push("Preview must not use the Production site origin");
   }
 
   if (resourceMode === "supabase") {
