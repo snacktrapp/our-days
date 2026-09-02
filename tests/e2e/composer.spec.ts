@@ -443,7 +443,6 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
   test.skip(browserName !== "chromium", "Browser storage inventory runs once.");
   await page.goto("/family", { waitUntil: "networkidle" });
   await page.evaluate(async () => {
-    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
     const timelineImages = Array.from(
       document.querySelectorAll<HTMLImageElement>("[data-moment-kind] img"),
     );

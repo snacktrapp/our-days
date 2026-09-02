@@ -5,43 +5,27 @@ test.skip(
   "Service-worker lifecycle assertions run in the dedicated Chromium PWA project.",
 );
 
-const allowedCachePaths = [
-  "/offline.html",
-  "/offline.css",
-  "/manifest.webmanifest",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
-];
-
-test("manifest is installable and service worker caches only the public allowlist", async ({
+test("manifest is installable and legacy service-worker state is retired", async ({
   page,
-  context,
   request,
 }) => {
   await page.goto("/family");
-  await page.evaluate(() => navigator.serviceWorker.ready);
-  await page.reload();
-
-  const cacheState = await page.evaluate(async () => {
-    const names = await caches.keys();
-    const urls = (
-      await Promise.all(
-        names.map(async (name) => {
-          const cache = await caches.open(name);
-          return (await cache.keys()).map(
-            (request) => new URL(request.url).pathname,
-          );
-        }),
-      )
+  await expect
+    .poll(() =>
+      page.evaluate(async () => ({
+        registrations: (
+          await navigator.serviceWorker.getRegistrations()
+        ).filter(({ active, installing, waiting }) =>
+          [active, installing, waiting].some((worker) =>
+            worker?.scriptURL.startsWith(window.location.origin),
+          ),
+        ).length,
+        legacyCaches: (await caches.keys()).filter((name) =>
+          name.startsWith("our-days-public-shell-"),
+        ),
+      })),
     )
-      .flat()
-      .sort();
-    return { names, urls };
-  });
-  expect(cacheState.names).toEqual(["our-days-public-shell-v4"]);
-  expect(cacheState.urls).toEqual([...allowedCachePaths].sort());
-  expect(cacheState.urls).not.toContain("/family");
+    .toEqual({ registrations: 0, legacyCaches: [] });
 
   const manifestResponse = await request.get("/manifest.webmanifest");
   expect(manifestResponse.ok()).toBe(true);
@@ -59,20 +43,6 @@ test("manifest is installable and service worker caches only the public allowlis
       expect.objectContaining({ purpose: "maskable" }),
     ]),
   );
-
-  await context.setOffline(true);
-  await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "You’re offline." }),
-  ).toBeVisible();
-  await expect(page.locator("body")).toHaveCSS("display", "grid");
-  await expect(page.locator(".card")).toHaveCSS("border-radius", "28px");
-  await expect(page.locator(".card")).toHaveCSS(
-    "background-color",
-    "rgb(255, 253, 248)",
-  );
-  await expect(page.getByText("All our days")).toHaveCount(0);
-  await context.setOffline(false);
 });
 
 test("a failed media request leaves the timeline stable without leaking errors", async ({

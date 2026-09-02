@@ -175,9 +175,6 @@ test("video selection fails locally without network, persistence, filename, or c
     "Browser mutation inventory runs once.",
   );
   await page.goto("/quality/video-feasibility", { waitUntil: "networkidle" });
-  await page.evaluate(async () => {
-    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
-  });
   await page.evaluate(() => {
     const auditWindow = window as typeof window & {
       __videoCacheMutations?: string[];

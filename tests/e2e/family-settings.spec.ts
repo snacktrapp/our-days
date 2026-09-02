@@ -100,9 +100,6 @@ test("family-setting previews are ephemeral and make no browser-side request", a
   page,
 }) => {
   await page.goto("/settings/family");
-  await page.evaluate(async () => {
-    if ("serviceWorker" in navigator) await navigator.serviceWorker.ready;
-  });
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
   const before = await browserState(page);

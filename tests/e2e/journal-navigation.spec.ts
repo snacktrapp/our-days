@@ -229,9 +229,14 @@ test("appearance preference persists and the journal grid stays fixed", async ({
 });
 
 test("the timeline selector scrolls beneath the sticky header", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1042, height: 879 });
+  browser,
+}, testInfo) => {
+  const context = await browser.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    hasTouch: false,
+    viewport: { width: 1042, height: 879 },
+  });
+  const page = await context.newPage();
   await page.goto("/family");
 
   const stage = page.locator(".phone-stage");
@@ -240,8 +245,26 @@ test("the timeline selector scrolls beneath the sticky header", async ({
   await expect(selector).toBeVisible();
 
   await stage.evaluate((element) => {
-    element.scrollTop = 52;
+    const topbar = element.querySelector<HTMLElement>(".topbar");
+    const viewSwitch = element.querySelector<HTMLElement>(".view-switch");
+    if (!topbar || !viewSwitch) return;
+
+    const headerRect = topbar.getBoundingClientRect();
+    const selectorRect = viewSwitch.getBoundingClientRect();
+    element.scrollTop += selectorRect.top - headerRect.bottom + 8;
   });
+
+  await expect
+    .poll(async () => {
+      const headerBottom = await header.evaluate(
+        (element) => element.getBoundingClientRect().bottom,
+      );
+      const selectorTop = await selector.evaluate(
+        (element) => element.getBoundingClientRect().top,
+      );
+      return selectorTop < headerBottom;
+    })
+    .toBe(true);
 
   const layering = await page.evaluate(() => {
     const topbar = document.querySelector<HTMLElement>(".topbar");
@@ -268,4 +291,5 @@ test("the timeline selector scrolls beneath the sticky header", async ({
     topElementIsHeader: true,
   });
   await expect(header).toBeVisible();
+  await context.close();
 });

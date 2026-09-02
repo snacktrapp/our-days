@@ -8,7 +8,7 @@ const journals = [
     momentIds: ["moment-sunset", "moment-late-summer-2022"],
     dates: ["2026-08-28", "2022-08-28"],
     gaps: ["4 years earlier"],
-    years: ["2022"],
+    years: ["Aug 28, 2022"],
   },
   {
     id: "molly",
@@ -17,7 +17,7 @@ const journals = [
     momentIds: ["moment-kitchen", "moment-lake", "moment-porch-light-2019"],
     dates: ["2026-08-14", "2026-07-06", "2019-08-28"],
     gaps: ["one month earlier", "7 years earlier"],
-    years: ["2019"],
+    years: ["Aug 28, 2019"],
   },
   {
     id: "avery",
