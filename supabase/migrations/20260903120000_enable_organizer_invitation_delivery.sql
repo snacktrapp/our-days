@@ -10,7 +10,7 @@ update private.invitation_delivery_capabilities
    and enabled is distinct from true;
 
 comment on table private.invitation_delivery_capabilities is
-  'Database-owner capability boundary for invitation delivery. Organizer sending is enabled; the relation still has no Data API or service-role access.';
+  'Database-owner capability boundary for invitation delivery. Organizer sending is enabled; the relation still has no Data API access.';
 
 create function private.ensure_login_capable_auth_user(
   normalized_email text

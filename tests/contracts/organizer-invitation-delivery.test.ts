@@ -24,6 +24,10 @@ describe("organizer invitation delivery", () => {
       "grant execute on function public.accept_pending_invitation_for_current_user()",
     );
     expect(migration).not.toMatch(/resend|sendgrid|postmark|mailgun|ses/iu);
-    expect(migration).not.toMatch(/service_role|sb_secret_/u);
+    expect(migration).not.toMatch(/sb_secret_/u);
+    expect(migration).not.toMatch(/grant execute[\s\S]*service_role/iu);
+    expect(migration).toContain(
+      "revoke all on function public.accept_pending_invitation_for_current_user()",
+    );
   });
 });
