@@ -1569,7 +1569,9 @@ try {
     .locator(".moment-card")
     .filter({ hasText: milestoneMoment });
   await milestoneCard.getByRole("button", { name: /^Edit —/u }).click();
-  await invitedPage.getByRole("button", { name: /^Place, Cedar Park/u }).waitFor();
+  await invitedPage
+    .getByRole("button", { name: /^Place, Cedar Park/u })
+    .waitFor();
   await invitedPage
     .getByRole("textbox", { exact: true, name: "Milestone" })
     .fill(editedMilestoneMoment);
