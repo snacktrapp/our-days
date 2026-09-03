@@ -1,19 +1,25 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
   formatBibleVerseMoment,
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
 import { MomentCard } from "./moment-card";
+import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
   MomentInteractionViewModel,
   ThoughtMomentViewModel,
 } from "./timeline-view-model";
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/family",
-  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
-}));
+vi.mock("./thought-copy-overflow", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./thought-copy-overflow")>();
+  return {
+    ...actual,
+    thoughtCopyOverflows: vi.fn(actual.thoughtCopyOverflows),
+  };
+});
 
 const interaction = {
   currentPerson: { name: "Brian", initial: "B", accent: "teal" },
@@ -101,5 +107,78 @@ describe("MomentCard double-tap heart", () => {
         reactionId: "held-close",
       }),
     );
+  });
+});
+
+describe("MomentCard long thought copy", () => {
+  it("leaves a short note unclamped", () => {
+    render(<MomentCard moment={thought} />);
+
+    expect(
+      screen.queryByRole("button", { name: "See more" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Worth keeping/u).closest("blockquote"),
+    ).not.toHaveClass("thought-copy-clamped");
+  });
+
+  it("shows five lines then See more on a long note, and See less after expand", async () => {
+    vi.mocked(thoughtCopyOverflows).mockReturnValue(true);
+    const user = userEvent.setup();
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          text: "Tonight the kitchen was loud enough to fill the whole screen.",
+        }}
+      />,
+    );
+
+    const quote = screen.getByText(/kitchen was loud/u).closest("blockquote");
+    expect(quote).toHaveClass("thought-copy-clamped");
+    const more = screen.getByRole("button", { name: "See more" });
+    expect(more).toHaveClass("thought-more");
+    expect(more).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(more);
+    expect(quote).not.toHaveClass("thought-copy-clamped");
+    expect(screen.getByRole("button", { name: "See less" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "See less" }));
+    expect(quote).toHaveClass("thought-copy-clamped");
+    expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
+    vi.mocked(thoughtCopyOverflows).mockReset();
+  });
+
+  it("keeps double-tap heart on a clamped Bible verse", async () => {
+    vi.mocked(thoughtCopyOverflows).mockReturnValue(true);
+    const actions = conversationActions();
+    const passage = await selectBiblePassage("Leviticus", 12, 1, 8);
+    expect(passage).not.toBeNull();
+    render(
+      <MomentCard
+        interaction={interaction}
+        conversationActions={actions}
+        moment={{
+          ...thought,
+          id: "long-verse-moment",
+          text: formatBibleVerseMoment(passage!.reference, passage!.text),
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
+    doubleTap(screen.getByText(/Leviticus/u).closest("blockquote")!);
+
+    await waitFor(() =>
+      expect(actions.setReaction).toHaveBeenCalledWith({
+        momentId: "long-verse-moment",
+        reactionId: "held-close",
+      }),
+    );
+    vi.mocked(thoughtCopyOverflows).mockReset();
   });
 });

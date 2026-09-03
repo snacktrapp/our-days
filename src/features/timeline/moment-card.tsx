@@ -5,7 +5,7 @@ import { PrivateVideoPlayer } from "@/components/private-video-player";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
-import { DoubleTapHeartText } from "./double-tap-heart-text";
+import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import type {
   ConnectedMomentActions,
   MomentConversationActions,
@@ -190,14 +190,17 @@ export function MomentCard({
           {bibleVerse ? "Bible verse" : typeLabel}
         </span>
         {bibleVerse ? (
-          <DoubleTapHeartText momentId={moment.id} className="bible-verse-copy">
+          <ExpandableThoughtCopy
+            momentId={moment.id}
+            className="bible-verse-copy"
+          >
             <span>“{bibleVerse.verse}”</span>
             <cite>{bibleVerse.reference} · World English Bible</cite>
-          </DoubleTapHeartText>
+          </ExpandableThoughtCopy>
         ) : (
-          <DoubleTapHeartText momentId={moment.id}>
+          <ExpandableThoughtCopy momentId={moment.id}>
             “{moment.text}”
-          </DoubleTapHeartText>
+          </ExpandableThoughtCopy>
         )}
         {moment.placeName ? (
           <p className="moment-place-label">⌖ {moment.placeName}</p>
