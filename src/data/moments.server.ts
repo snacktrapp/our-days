@@ -158,7 +158,10 @@ export function buildTimelineEntries(
   today: string,
   hasMore: boolean,
   personalName?: string,
-  completion?: Readonly<{ markerLabel: string; message: string }>,
+  completion: Readonly<{ markerLabel: string; message: string }> = {
+    markerLabel: "The beginning",
+    message: "You’ve reached the earliest moment kept here.",
+  },
 ): readonly TimelineEntryViewModel[] {
   if (moments.length === 0) {
     return [
@@ -195,7 +198,7 @@ export function buildTimelineEntries(
       moment,
     });
   }
-  if (!hasMore && completion) {
+  if (!hasMore) {
     entries.push({
       id: "connected-end",
       entryType: "end-message",

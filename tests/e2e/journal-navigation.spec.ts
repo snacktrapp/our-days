@@ -17,10 +17,10 @@ test("route-based journal navigation preserves the approved views", async ({
   ).toHaveAttribute("aria-current", "page");
   await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
   await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
+  await expect(page.getByText(/earliest entry/i)).toBeVisible();
   await expect(page.locator(".elapsed-gap")).toHaveCount(0);
-  await expect(page.locator(".timeline-whisper")).toHaveCount(0);
-  await expect(page.getByText(/earliest entry/i)).toHaveCount(0);
   await expect(page.getByText("No earlier entries.")).toHaveCount(0);
+  await expect(page.locator(".timeline-whisper")).toHaveCount(0);
   await expect(
     page.getByText(
       /days earlier|one day earlier|weeks earlier|one month earlier|months earlier|years earlier|yesterday/iu,

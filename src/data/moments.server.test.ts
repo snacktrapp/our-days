@@ -179,7 +179,7 @@ describe("connected timeline mapping", () => {
     );
   });
 
-  it("keeps empty journals honest and ends a completed family feed on the last moment", () => {
+  it("keeps empty journals honest and closes a completed family feed with the earliest-entry marker", () => {
     expect(buildTimelineEntries([], "2026-08-30", false, "Child")).toEqual([
       expect.objectContaining({
         entryType: "empty-state",
@@ -192,11 +192,10 @@ describe("connected timeline mapping", () => {
       false,
     );
     expect(entries.at(-1)).toMatchObject({
-      entryType: "moment",
+      entryType: "end-message",
+      markerLabel: "The beginning",
+      message: "You’ve reached the earliest moment kept here.",
     });
-    expect(entries.some((entry) => entry.entryType === "end-message")).toBe(
-      false,
-    );
   });
 
   it("retains the loaded page and offers an inline retry when an older RPC fails", async () => {

@@ -132,7 +132,9 @@ function TimelineEntry({
           <div className="date-marker year-marker">
             <span>{endCopy.markerLabel}</span>
           </div>
-          <p className="timeline-whisper">{endCopy.message}</p>
+          {endCopy.message === "No earlier entries." ? null : (
+            <p className="timeline-whisper">{endCopy.message}</p>
+          )}
         </>
       );
     case "empty-state":

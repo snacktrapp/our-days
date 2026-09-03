@@ -285,4 +285,33 @@ describe("TimelineFeed", () => {
       "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
     );
   });
+
+  it("keeps the earliest-entry pill and omits the no-earlier-entries bar", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            { id: "marker", entryType: "date-marker", label: "Today" },
+            {
+              id: "thought",
+              entryType: "moment",
+              moment: { ...shared, id: "thought-moment", kind: "thought" },
+            },
+            {
+              id: "end",
+              entryType: "end-message",
+              markerLabel: "The beginning",
+              message: "You’ve reached the earliest moment kept here.",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Earliest entry")).toBeVisible();
+    expect(screen.queryByText("No earlier entries.")).toBeNull();
+    expect(container.querySelector(".timeline-whisper")).toBeNull();
+    expect(screen.getByText("Today")).toBeVisible();
+  });
 });
