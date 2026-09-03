@@ -164,6 +164,19 @@ test("reduced-motion preference removes entrance animations", async ({
     "animation-name",
     "none",
   );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.getByRole("button", { name: /Open notifications/u }).click();
+  await expect(page.locator(".notification-panel")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+  await page.keyboard.press("Escape");
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
 });
 
 test("the graph-paper grid is painted by a viewport-fixed layer", async ({
@@ -265,10 +278,12 @@ test("moment options open as a compact popover under the trigger without inline 
         rect.top >= 0,
       navTop: nav.top,
       position: style.position,
+      animationName: style.animationName,
       width: rect.width,
     };
   });
   expect(geometry.position).toBe("absolute");
+  expect(geometry.animationName).toContain("overlay-popover-in");
   expect(geometry.compactWidth).toBe(true);
   expect(geometry.alignedToTrigger).toBe(true);
   expect(geometry.belowTrigger).toBe(true);

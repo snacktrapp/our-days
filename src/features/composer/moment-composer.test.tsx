@@ -833,8 +833,12 @@ describe("MomentComposer", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open composer" })).toHaveFocus();
-    expect(document.body).not.toHaveClass("composer-scroll-locked");
-    expect(document.documentElement).not.toHaveClass("composer-scroll-locked");
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass("composer-scroll-locked");
+      expect(document.documentElement).not.toHaveClass(
+        "composer-scroll-locked",
+      );
+    });
   });
 
   it("saves a backdated local design entry without a review step", async () => {

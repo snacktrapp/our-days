@@ -11,6 +11,10 @@ test("route-based journal navigation preserves the approved views", async ({
   ).toBeVisible();
   await page.locator(".title-switcher summary").click();
   await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "animation-name",
+    "overlay-popover-in",
+  );
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })

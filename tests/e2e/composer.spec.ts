@@ -251,6 +251,10 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     name: "Notifications",
   });
   await expect(notificationPanel).toBeVisible();
+  await expect(notificationPanel).toHaveCSS(
+    "animation-name",
+    "overlay-popover-in",
+  );
   const notificationTop = await notificationPanel.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
@@ -282,7 +286,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
         Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000),
     };
   });
-  expect(overlayMotion.name).toBe("composer-ease-up");
+  expect(overlayMotion.name).toBe("overlay-popover-in");
   expect(overlayMotion.durationMs).toBe(180);
   await overlaySheet.evaluate(async (sheet) => {
     await Promise.all(

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
 import { useComposerSession } from "@/features/composer/composer-session";
 import type {
@@ -88,18 +89,32 @@ function ChangeableMomentControl({
   const [message, setMessage] = useState<string | null>(null);
   const menuWrapperRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
+    useOverlayPopoverClose();
+
+  const closeMenu = useCallback(
+    (immediate = false) => {
+      if (immediate) {
+        cancel();
+        setMenuOpen(false);
+        return;
+      }
+      requestClose(() => setMenuOpen(false));
+    },
+    [cancel, requestClose],
+  );
 
   useEffect(() => {
     if (!menuOpen) return;
     const closeOutside = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!menuWrapperRef.current?.contains(target)) {
-        setMenuOpen(false);
+        closeMenu();
       }
     };
     const closeWithEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setMenuOpen(false);
+      closeMenu();
       menuTriggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", closeOutside);
@@ -108,7 +123,7 @@ function ChangeableMomentControl({
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeWithEscape);
     };
-  }, [menuOpen]);
+  }, [closeMenu, menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -145,7 +160,7 @@ function ChangeableMomentControl({
         return;
       }
       announce("Moment moved to trash.");
-      setMenuOpen(false);
+      closeMenu(true);
       restoreJournalFocusAfterRefresh();
     } catch {
       setMessage("That moment could not be moved to trash. Try again.");
@@ -158,14 +173,14 @@ function ChangeableMomentControl({
     try {
       await navigator.clipboard.writeText(moment.text);
       announce("Moment text copied.");
-      setMenuOpen(false);
+      closeMenu(true);
     } catch {
       setMessage("That moment could not be copied. Try again.");
     }
   };
 
   const editMoment = () => {
-    setMenuOpen(false);
+    closeMenu(true);
     if (!composerSession) return;
     const draft = buildComposerEditDraft(moment, actions.update);
     if (!draft) return;
@@ -180,11 +195,15 @@ function ChangeableMomentControl({
           className="connected-moment-menu-trigger"
           type="button"
           aria-controls={menuOpen ? `moment-actions-${moment.id}` : undefined}
-          aria-expanded={menuOpen}
+          aria-expanded={menuOpen && !closing}
           aria-label={`Moment options — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
           onClick={() => {
             if (menuOpen) {
-              setMenuOpen(false);
+              if (closingRef.current) {
+                cancel();
+                return;
+              }
+              closeMenu();
               return;
             }
             const trigger = menuTriggerRef.current;
@@ -196,11 +215,17 @@ function ChangeableMomentControl({
         </button>
         {menuOpen ? (
           <div
-            className="connected-moment-menu"
+            className={
+              closing
+                ? "connected-moment-menu is-closing"
+                : "connected-moment-menu"
+            }
             id={`moment-actions-${moment.id}`}
             role="group"
             aria-label="Moment options"
+            aria-hidden={closing ? true : undefined}
             data-placement={menuPlacement}
+            onAnimationEnd={onAnimationEnd}
           >
             <button type="button" onClick={copyText}>
               Copy text

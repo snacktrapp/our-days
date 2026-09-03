@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
@@ -209,6 +210,12 @@ export function MomentComposer({
   );
   const [choosingMode, setChoosingMode] = useState(!editDraft);
   const [reviewing, setReviewing] = useState(false);
+  const {
+    closing: overlayClosing,
+    requestClose: requestOverlayClose,
+    onAnimationEnd: onOverlayAnimationEnd,
+  } = useOverlayPopoverClose();
+  const chooserSurface = !mode || choosingMode || reviewing;
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
     Boolean(
       editDraft &&
@@ -383,13 +390,29 @@ export function MomentComposer({
         return;
       }
 
-      resetDraft();
-      onRequestClose();
+      const dismiss = () => {
+        resetDraft();
+        onRequestClose();
+      };
+      if (chooserSurface) {
+        requestOverlayClose(dismiss);
+      } else {
+        dismiss();
+      }
       window.requestAnimationFrame(() =>
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
     },
-    [editDraft, isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
+    [
+      chooserSurface,
+      editDraft,
+      isDirty,
+      onRequestClose,
+      requestOverlayClose,
+      resetDraft,
+      returnFocusRef,
+      saving,
+    ],
   );
 
   useEffect(
@@ -862,6 +885,7 @@ export function MomentComposer({
       }`}
       aria-labelledby="composer-title"
       aria-describedby={connectedExperience ? "composer-privacy" : undefined}
+      aria-hidden={overlayClosing ? true : undefined}
       onKeyDown={containDialogFocus}
       onCancel={(event) => {
         event.preventDefault();
@@ -871,7 +895,12 @@ export function MomentComposer({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <section className="composer-sheet header-drawer-surface">
+      <section
+        className={`composer-sheet header-drawer-surface${
+          chooserSurface ? " overlay-popover" : ""
+        }${chooserSurface && overlayClosing ? " is-closing" : ""}`}
+        onAnimationEnd={chooserSurface ? onOverlayAnimationEnd : undefined}
+      >
         <span className="sheet-handle" aria-hidden="true" />
         <button
           className="sheet-close header-drawer-close"

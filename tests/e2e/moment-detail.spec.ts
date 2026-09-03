@@ -55,7 +55,7 @@ test("family activity is visible inline and reactions open as a picker", async (
       height: element.getBoundingClientRect().height,
     };
   });
-  expect(motion.animationName).toContain("reaction-picker-in");
+  expect(motion.animationName).toContain("overlay-popover-in");
   expect(Number.parseFloat(motion.animationDuration)).toBeCloseTo(0.18, 2);
   expect(motion.originY).toBeGreaterThan(motion.height);
   await expect(picker.getByRole("menuitemradio")).toHaveCount(3);

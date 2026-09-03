@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
 import type {
   MomentConversationViewModel,
@@ -127,12 +128,14 @@ export function MomentConversationControl({
     useState<MomentReactionId | null>(() =>
       currentReaction(model.conversation),
     );
-  const [reactionsClosing, setReactionsClosing] = useState(false);
   const reactionWriteGen = useRef(0);
-  const panelRef = useRef<InlinePanel>(null);
-  const reactionsClosingRef = useRef(false);
-  const reactionCloseTimerRef = useRef<number | null>(null);
-  panelRef.current = panel;
+  const {
+    closing: reactionsClosing,
+    closingRef: reactionsClosingRef,
+    requestClose: requestOverlayClose,
+    cancel: cancelReactionPickerClose,
+    onAnimationEnd: onReactionPickerAnimationEnd,
+  } = useOverlayPopoverClose();
 
   const reactionOptions = useMemo(
     () =>
@@ -146,26 +149,6 @@ export function MomentConversationControl({
   const kindLabel = momentKindLabel(model);
   const controlLabel = conciseLabel(model.text);
 
-  const clearReactionCloseTimer = useCallback(() => {
-    if (reactionCloseTimerRef.current == null) return;
-    window.clearTimeout(reactionCloseTimerRef.current);
-    reactionCloseTimerRef.current = null;
-  }, []);
-
-  const finishReactionPickerClose = useCallback(() => {
-    clearReactionCloseTimer();
-    reactionsClosingRef.current = false;
-    setReactionsClosing(false);
-    setPanel((current) => (current === "reactions" ? null : current));
-  }, [clearReactionCloseTimer]);
-
-  const cancelReactionPickerClose = useCallback(() => {
-    if (!reactionsClosingRef.current) return;
-    clearReactionCloseTimer();
-    reactionsClosingRef.current = false;
-    setReactionsClosing(false);
-  }, [clearReactionCloseTimer]);
-
   const requestReactionPickerClose = useCallback(
     (restoreFocus = false) => {
       const restoreTriggerFocus = () => {
@@ -174,31 +157,17 @@ export function MomentConversationControl({
           reactionTriggerRef.current?.focus({ preventScroll: true }),
         );
       };
-      if (panelRef.current !== "reactions") {
+      if (panel !== "reactions") {
         restoreTriggerFocus();
         return;
       }
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        finishReactionPickerClose();
-        restoreTriggerFocus();
-        return;
-      }
-      if (reactionsClosingRef.current) {
-        restoreTriggerFocus();
-        return;
-      }
-      reactionsClosingRef.current = true;
-      setReactionsClosing(true);
-      reactionCloseTimerRef.current = window.setTimeout(
-        finishReactionPickerClose,
-        140,
-      );
+      requestOverlayClose(() => {
+        setPanel((current) => (current === "reactions" ? null : current));
+      });
       restoreTriggerFocus();
     },
-    [finishReactionPickerClose],
+    [panel, requestOverlayClose, setPanel],
   );
-
-  useEffect(() => () => clearReactionCloseTimer(), [clearReactionCloseTimer]);
 
   useEffect(() => {
     if (panel !== "note") return;
@@ -567,11 +536,7 @@ export function MomentConversationControl({
               role="menu"
               aria-label="Choose a reaction"
               aria-hidden={reactionsClosing ? true : undefined}
-              onAnimationEnd={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.animationName !== "reaction-picker-out") return;
-                finishReactionPickerClose();
-              }}
+              onAnimationEnd={onReactionPickerAnimationEnd}
             >
               {interaction.reactionOptions.map((option) => {
                 const presentation = reactionPresentation[option.id];

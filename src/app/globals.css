@@ -517,7 +517,8 @@ button:focus-visible,
   width: min(280px, calc(100dvw - 48px));
   padding: 4px;
   display: grid;
-  transform: translateX(-50%);
+  translate: -50% 0;
+  transform-origin: top center;
   border: 1px solid var(--hairline);
   border-radius: var(--header-drawer-radius);
   background: var(--cream);
@@ -1354,11 +1355,13 @@ button:focus-visible,
   border-radius: 15px;
   background: var(--cream);
   box-shadow: 0 12px 30px rgb(49 39 31 / 16%);
+  transform-origin: top right;
 }
 
 .connected-moment-menu[data-placement="above"] {
   top: auto;
   bottom: calc(100% + 4px);
+  transform-origin: bottom right;
 }
 
 .connected-moment-menu button {
@@ -4595,10 +4598,10 @@ button:focus-visible,
   transform-origin: 29px calc(100% + 29px);
 }
 
-@keyframes reaction-picker-in {
+@keyframes overlay-popover-in {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.93);
   }
 
   to {
@@ -4607,7 +4610,7 @@ button:focus-visible,
   }
 }
 
-@keyframes reaction-picker-out {
+@keyframes overlay-popover-out {
   from {
     opacity: 1;
     transform: scale(1);
@@ -4615,7 +4618,7 @@ button:focus-visible,
 
   to {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.93);
   }
 }
 
@@ -5259,6 +5262,7 @@ button:focus-visible,
   padding: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
   color: var(--ink);
+  transform-origin: calc(100% - 8px) 0;
 }
 
 .notification-heading {
@@ -6092,8 +6096,7 @@ button:focus-visible,
   margin-top: 0;
   padding-inline: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
-  /* 180ms ease-up; backwards fill so no leftover translateY after it ends. */
-  animation: composer-ease-up 180ms ease backwards;
+  transform-origin: 28px 0;
 }
 
 .new-moment-composer-dialog,
@@ -6925,12 +6928,23 @@ button:focus-visible,
     animation: nav-pending-pulse 900ms ease-in-out infinite;
   }
 
-  .quick-reaction-control .inline-reaction-picker {
-    animation: reaction-picker-in 180ms ease-out backwards;
+  .overlay-popover,
+  .quick-reaction-control .inline-reaction-picker,
+  .connected-moment-menu,
+  .notification-panel,
+  .title-switcher nav,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+    animation: overlay-popover-in 180ms ease-out backwards;
   }
 
-  .quick-reaction-control .inline-reaction-picker.is-closing {
-    animation: reaction-picker-out 120ms ease-in forwards;
+  .overlay-popover.is-closing,
+  .inline-reaction-picker.is-closing,
+  .connected-moment-menu.is-closing,
+  .notification-panel.is-closing,
+  .title-switcher nav.is-closing,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
+    .composer-sheet.is-closing {
+    animation: overlay-popover-out 120ms ease-in forwards;
   }
 
   .quick-reaction-trigger:active {
@@ -6964,8 +6978,19 @@ button:focus-visible,
     animation: none;
   }
 
+  .overlay-popover,
+  .overlay-popover.is-closing,
   .quick-reaction-control .inline-reaction-picker,
-  .quick-reaction-control .inline-reaction-picker.is-closing {
+  .quick-reaction-control .inline-reaction-picker.is-closing,
+  .connected-moment-menu,
+  .connected-moment-menu.is-closing,
+  .notification-panel,
+  .notification-panel.is-closing,
+  .title-switcher nav,
+  .title-switcher nav.is-closing,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
+    .composer-sheet.is-closing {
     animation: none;
   }
 
