@@ -111,8 +111,6 @@ export function MomentConversationControl({
   const panelId = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
-  const noteControlRef = useRef<HTMLDivElement>(null);
-  const noteFormRef = useRef<HTMLFormElement>(null);
   const reactionControlRef = useRef<HTMLDivElement>(null);
   const reactionTriggerRef = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<InlinePanel>(null);
@@ -134,20 +132,10 @@ export function MomentConversationControl({
   const {
     closing: reactionsClosing,
     closingRef: reactionsClosingRef,
-    requestClose: requestReactionOverlayClose,
-    cancel: cancelReactionOverlayClose,
-    onAnimationEnd: onReactionOverlayAnimationEnd,
+    requestClose: requestOverlayClose,
+    cancel: cancelReactionPickerClose,
+    onAnimationEnd: onReactionPickerAnimationEnd,
   } = useOverlayPopoverClose();
-  const {
-    closing: noteClosing,
-    closingRef: noteClosingRef,
-    requestClose: requestNoteDrawerClose,
-    cancel: cancelNoteDrawerClose,
-    onAnimationEnd: onNoteDrawerAnimationEnd,
-  } = useOverlayPopoverClose({
-    animationName: "note-drawer-out",
-    durationMs: 180,
-  });
 
   const reactionOptions = useMemo(
     () =>
@@ -161,44 +149,24 @@ export function MomentConversationControl({
   const kindLabel = momentKindLabel(model);
   const controlLabel = conciseLabel(model.text);
 
-  const requestPanelClose = useCallback(
-    (nextPanel: Exclude<InlinePanel, null>, restoreFocus = false) => {
+  const requestReactionPickerClose = useCallback(
+    (restoreFocus = false) => {
       const restoreTriggerFocus = () => {
         if (!restoreFocus) return;
-        window.requestAnimationFrame(() => {
-          if (nextPanel === "reactions") {
-            reactionTriggerRef.current?.focus({ preventScroll: true });
-            return;
-          }
-          noteTriggerRef.current?.focus({ preventScroll: true });
-        });
+        window.requestAnimationFrame(() =>
+          reactionTriggerRef.current?.focus({ preventScroll: true }),
+        );
       };
-      if (panel !== nextPanel) {
+      if (panel !== "reactions") {
         restoreTriggerFocus();
         return;
       }
-      const requestClose =
-        nextPanel === "reactions"
-          ? requestReactionOverlayClose
-          : requestNoteDrawerClose;
-      requestClose(() => {
-        setPanel((current) => (current === nextPanel ? null : current));
+      requestOverlayClose(() => {
+        setPanel((current) => (current === "reactions" ? null : current));
       });
       restoreTriggerFocus();
     },
-    [panel, requestNoteDrawerClose, requestReactionOverlayClose, setPanel],
-  );
-  const requestReactionPickerClose = useCallback(
-    (restoreFocus = false) => {
-      requestPanelClose("reactions", restoreFocus);
-    },
-    [requestPanelClose],
-  );
-  const requestNoteClose = useCallback(
-    (restoreFocus = false) => {
-      requestPanelClose("note", restoreFocus);
-    },
-    [requestPanelClose],
+    [panel, requestOverlayClose, setPanel],
   );
 
   useEffect(() => {
@@ -210,26 +178,18 @@ export function MomentConversationControl({
   }, [editingNoteId, panel]);
 
   useEffect(() => {
-    if (panel !== "reactions" && panel !== "note") return;
-    const root =
-      panel === "reactions"
-        ? reactionControlRef.current
-        : noteControlRef.current;
+    if (panel !== "reactions") return;
     const closeOnOutsidePress = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return;
-      if (panel === "reactions") {
-        if (!root?.contains(event.target)) requestReactionPickerClose();
-        return;
+      if (
+        event.target instanceof Node &&
+        !reactionControlRef.current?.contains(event.target)
+      ) {
+        requestReactionPickerClose();
       }
-      const inNote =
-        noteControlRef.current?.contains(event.target) ||
-        noteFormRef.current?.contains(event.target);
-      if (!inNote) requestNoteClose();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (panel === "reactions") requestReactionPickerClose(true);
-      else requestNoteClose(true);
+      requestReactionPickerClose(true);
     };
     document.addEventListener("pointerdown", closeOnOutsidePress);
     window.addEventListener("keydown", closeOnEscape);
@@ -237,7 +197,7 @@ export function MomentConversationControl({
       document.removeEventListener("pointerdown", closeOnOutsidePress);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [panel, requestNoteClose, requestReactionPickerClose]);
+  }, [panel, requestReactionPickerClose]);
 
   const applyLoadedConversation = useCallback(
     (next: MomentConversationViewModel, startedWriteGen: number) => {
@@ -291,31 +251,26 @@ export function MomentConversationControl({
 
   const togglePanel = async (nextPanel: Exclude<InlinePanel, null>) => {
     setError(null);
-    if (panel === nextPanel) {
-      const closingRef =
-        nextPanel === "reactions" ? reactionsClosingRef : noteClosingRef;
-      const cancelClose =
-        nextPanel === "reactions"
-          ? cancelReactionOverlayClose
-          : cancelNoteDrawerClose;
-      if (closingRef.current) {
-        cancelClose();
+    if (nextPanel === "reactions" && panel === "reactions") {
+      if (reactionsClosingRef.current) {
+        cancelReactionPickerClose();
         return;
       }
-      if (nextPanel === "reactions") requestReactionPickerClose();
-      else requestNoteClose();
+      requestReactionPickerClose();
       return;
     }
-    cancelReactionOverlayClose();
-    cancelNoteDrawerClose();
+    if (panel === nextPanel) {
+      setPanel(null);
+      return;
+    }
+    cancelReactionPickerClose();
     setPanel(nextPanel);
     await loadConversation();
   };
 
   const openReactionPicker = () => {
     setError(null);
-    cancelReactionOverlayClose();
-    cancelNoteDrawerClose();
+    cancelReactionPickerClose();
     setPanel("reactions");
     void loadConversation();
   };
@@ -419,7 +374,10 @@ export function MomentConversationControl({
       }
       setNoteDraft("");
       setEditingNoteId(null);
-      requestNoteClose(true);
+      setPanel(null);
+      window.requestAnimationFrame(() =>
+        noteTriggerRef.current?.focus({ preventScroll: true }),
+      );
     } catch {
       setError("That note could not be saved. Try again.");
     } finally {
@@ -476,8 +434,6 @@ export function MomentConversationControl({
                               onClick={() => {
                                 setEditingNoteId(note.id);
                                 setNoteDraft(note.body);
-                                cancelReactionOverlayClose();
-                                cancelNoteDrawerClose();
                                 setPanel("note");
                                 setError(null);
                               }}
@@ -578,7 +534,7 @@ export function MomentConversationControl({
               role="menu"
               aria-label="Choose a reaction"
               aria-hidden={reactionsClosing ? true : undefined}
-              onAnimationEnd={onReactionOverlayAnimationEnd}
+              onAnimationEnd={onReactionPickerAnimationEnd}
             >
               {interaction.reactionOptions.map((option) => {
                 const presentation = reactionPresentation[option.id];
@@ -599,23 +555,21 @@ export function MomentConversationControl({
             </div>
           ) : null}
         </div>
-        <div ref={noteControlRef} className="note-action-control">
-          <button
-            ref={noteTriggerRef}
-            className="note-action-trigger"
-            type="button"
-            aria-expanded={panel === "note" && !noteClosing}
-            aria-controls={`${panelId}-note`}
-            aria-label={`Add a note to ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
-            onClick={() => void togglePanel("note")}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5.5 5.5h13a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
-              <path d="M8 10h8M8 13h5" />
-            </svg>
-            <span className="sr-only">{noteLabel}</span>
-          </button>
-        </div>
+        <button
+          ref={noteTriggerRef}
+          className="note-action-trigger"
+          type="button"
+          aria-expanded={panel === "note"}
+          aria-controls={`${panelId}-note`}
+          aria-label={`Add a note to ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
+          onClick={() => void togglePanel("note")}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5.5 5.5h13a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
+            <path d="M8 10h8M8 13h5" />
+          </svg>
+          <span className="sr-only">{noteLabel}</span>
+        </button>
         {model.taggedPeopleLabel ? (
           <span className="tagged">with {model.taggedPeopleLabel}</span>
         ) : null}
@@ -623,54 +577,48 @@ export function MomentConversationControl({
 
       {panel === "note" ? (
         <form
-          ref={noteFormRef}
           id={`${panelId}-note`}
-          className={`inline-note-form note-drawer${
-            noteClosing ? " is-closing" : ""
-          }`}
-          aria-hidden={noteClosing ? true : undefined}
-          onAnimationEnd={onNoteDrawerAnimationEnd}
+          className="inline-note-form"
           onSubmit={(event) => {
             event.preventDefault();
             void saveNote();
           }}
         >
-          <div className="note-drawer-panel">
-            <textarea
-              ref={noteRef}
-              id={`${panelId}-note-field`}
-              aria-label={
-                editingNoteId ? "Edit your note" : "Add a family note"
-              }
-              value={noteDraft}
-              maxLength={1000}
-              placeholder="A memory, detail, or reply…"
-              disabled={loading || pending}
-              onChange={(event) => {
-                setNoteDraft(event.target.value);
-                if (event.target.value.trim()) setError(null);
+          <textarea
+            ref={noteRef}
+            id={`${panelId}-note-field`}
+            aria-label={editingNoteId ? "Edit your note" : "Add a family note"}
+            value={noteDraft}
+            maxLength={1000}
+            placeholder="A memory, detail, or reply…"
+            disabled={loading || pending}
+            onChange={(event) => {
+              setNoteDraft(event.target.value);
+              if (event.target.value.trim()) setError(null);
+            }}
+          />
+          <div>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setNoteDraft("");
+                setEditingNoteId(null);
+                setError(null);
+                setPanel(null);
+                window.requestAnimationFrame(() =>
+                  noteTriggerRef.current?.focus({ preventScroll: true }),
+                );
               }}
-            />
-            <div>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setNoteDraft("");
-                  setEditingNoteId(null);
-                  setError(null);
-                  requestNoteClose(true);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || pending || !noteDraft.trim()}
-              >
-                {pending ? "Saving…" : "Save"}
-              </button>
-            </div>
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || pending || !noteDraft.trim()}
+            >
+              {pending ? "Saving…" : "Save"}
+            </button>
           </div>
         </form>
       ) : null}

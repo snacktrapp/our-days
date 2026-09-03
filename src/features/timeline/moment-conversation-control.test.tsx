@@ -429,18 +429,15 @@ describe("MomentConversationControl", () => {
     const user = userEvent.setup();
     renderControl();
 
-    const trigger = screen.getByRole("button", {
-      name: /Add a note to photo/u,
-    });
-    await user.click(trigger);
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
-    expect(form).toHaveClass("note-drawer");
+    expect(form).toHaveClass("inline-note-form");
     expect(form).not.toHaveClass("overlay-popover");
-    expect(form.closest(".note-action-control")).toBeNull();
-    expect(form.closest(".soft-actions")).toBeNull();
-    expect(window.getComputedStyle(form).position).not.toBe("absolute");
+    expect(form).not.toHaveClass("note-drawer");
     expect(
       within(form)
         .getAllByRole("button")
@@ -450,10 +447,9 @@ describe("MomentConversationControl", () => {
 
     await user.type(note, "Keep this draft?");
     await user.click(within(form).getByRole("button", { name: "Cancel" }));
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector(".inline-note-form")).toHaveClass(
-      "is-closing",
-    );
+    expect(
+      screen.queryByRole("textbox", { name: "Add a family note" }),
+    ).toBeNull();
   });
 
   it("saves a note inline and immediately shows its author and text", async () => {
@@ -498,9 +494,6 @@ describe("MomentConversationControl", () => {
     expect(
       screen.queryByRole("textbox", { name: "Add a family note" }),
     ).toBeNull();
-    expect(document.querySelector(".inline-note-form")).toHaveClass(
-      "is-closing",
-    );
     const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(within(notes).getByText("Brian")).toBeVisible();
     expect(
@@ -562,8 +555,6 @@ describe("MomentConversationControl", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor.closest("form")).toHaveClass("inline-note-form");
-    expect(editor.closest("form")).toHaveClass("note-drawer");
-    expect(editor.closest("form")).not.toHaveClass("overlay-popover");
     expect(editor).toHaveValue("Original note.");
     expect(
       within(screen.getByRole("list", { name: "Notes from family" })).getByText(
