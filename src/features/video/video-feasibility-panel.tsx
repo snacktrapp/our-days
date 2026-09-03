@@ -8,10 +8,7 @@ import {
   useState,
 } from "react";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import {
-  showModalPreservingScroll,
-  useLockBackgroundScroll,
-} from "@/features/dialog/lock-background-scroll";
+import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 
 type InspectionState = "empty" | "inspecting" | "ready" | "error";
 
@@ -225,24 +222,17 @@ function VideoFeasibilityDialog({
 
   useEffect(() => () => revokeActiveUrl(), [revokeActiveUrl]);
 
-  useLockBackgroundScroll(open);
+  const dialogMounted = useModalDialog(open, dialogRef);
 
-  // Lock is declared first so React cleanup closes the dialog, then restores scroll.
   useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    if (!open || !dialog) return;
-    showModalPreservingScroll(dialog);
+    if (!open) return;
     const focusFrame = window.requestAnimationFrame(() =>
       inputRef.current?.focus(),
     );
-
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      if (dialog.open) dialog.close();
-    };
+    return () => window.cancelAnimationFrame(focusFrame);
   }, [open]);
 
-  if (!open) return null;
+  if (!dialogMounted) return null;
 
   const status =
     inspectionState === "ready"

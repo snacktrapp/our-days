@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useState, type RefObject } from "react";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 
@@ -8,8 +8,6 @@ export function showModalPreservingScroll(dialog: HTMLDialogElement) {
   const scrollY = window.scrollY;
   if (!dialog.open) dialog.showModal();
   // Native showModal() makes document scrolling a no-op until close.
-  // Keep the call so non-modal fallbacks still restore; callers must
-  // declare useLockBackgroundScroll before this effect so close runs first.
   if (scrollY > 0) window.scrollTo(0, scrollY);
 }
 
@@ -47,6 +45,10 @@ export function overlayBackgroundScrollShouldStop(
   if (scrollDirection === "up" && atTop) return true;
   if (scrollDirection === "down" && atBottom) return true;
   return false;
+}
+
+function restoreWindowScroll(scrollY: number) {
+  if (scrollY > 0) window.scrollTo(0, scrollY);
 }
 
 export function useLockBackgroundScroll(active: boolean) {
@@ -96,10 +98,44 @@ export function useLockBackgroundScroll(active: boolean) {
     return () => {
       if (!htmlWasLocked) html.classList.remove(backgroundScrollLockClass);
       if (!bodyWasLocked) body.classList.remove(backgroundScrollLockClass);
-      if (scrollY > 0) window.scrollTo(0, scrollY);
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       document.removeEventListener("wheel", onWheel, true);
+      restoreWindowScroll(scrollY);
+      // Native modal unblock can reset scroll after this cleanup.
+      requestAnimationFrame(() => {
+        restoreWindowScroll(scrollY);
+        requestAnimationFrame(() => restoreWindowScroll(scrollY));
+      });
     };
   }, [active]);
+}
+
+export function useModalDialog(
+  open: boolean,
+  dialogRef: RefObject<HTMLDialogElement | null>,
+) {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+
+  useLockBackgroundScroll(mounted);
+
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!mounted || !dialog) return;
+    if (open) {
+      showModalPreservingScroll(dialog);
+      return;
+    }
+    if (dialog.open) dialog.close();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setMounted(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogRef, mounted, open]);
+
+  return mounted;
 }

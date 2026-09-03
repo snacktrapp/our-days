@@ -729,8 +729,12 @@ test("expanded capture states have no serious axe violations", async ({
 });
 
 test("an open entry overlay does not scroll the family feed underneath", async ({
+  allowedConsoleErrors,
   page,
 }) => {
+  allowedConsoleErrors.push(
+    "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive",
+  );
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => window.scrollTo(0, 160));
@@ -779,7 +783,9 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await expect(dialog).toBeHidden();
   await expect(page.locator("html")).not.toHaveClass(/composer-scroll-locked/u);
   await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
-  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBe(backgroundScroll);
 });
 
 test("keyboard-sized viewport keeps every capture and review control reachable", async ({

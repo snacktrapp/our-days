@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import {
-  showModalPreservingScroll,
-  useLockBackgroundScroll,
-} from "@/features/dialog/lock-background-scroll";
+import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
@@ -405,18 +396,7 @@ export function MomentComposer({
     [revokeCurrentPhotoUrl],
   );
 
-  useLockBackgroundScroll(open);
-
-  // Lock is declared first so React cleanup closes the dialog, then restores scroll.
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    if (!open || !dialog) return;
-    showModalPreservingScroll(dialog);
-
-    return () => {
-      if (dialog.open) dialog.close();
-    };
-  }, [open]);
+  const dialogMounted = useModalDialog(open, dialogRef);
 
   useEffect(() => {
     if (!open) return;
@@ -864,7 +844,7 @@ export function MomentComposer({
     copy?.kindLabel ?? "Moment",
   );
 
-  if (!open) return null;
+  if (!dialogMounted) return null;
 
   return (
     <dialog

@@ -1,4 +1,5 @@
-import { renderHook } from "@testing-library/react";
+import { render, renderHook, waitFor } from "@testing-library/react";
+import { createElement, useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   backgroundScrollLockClass,
@@ -6,6 +7,7 @@ import {
   overlayScrollParent,
   showModalPreservingScroll,
   useLockBackgroundScroll,
+  useModalDialog,
 } from "./lock-background-scroll";
 
 function scrollable(kind: "auto" | "scroll" = "auto") {
@@ -128,6 +130,35 @@ describe("overlay background scroll lock", () => {
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     unmount();
+  });
+
+  it("closes a connected modal before restoring window scroll", async () => {
+    let scrollY = 160;
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => scrollY,
+    });
+    const scrollTo = vi.fn((...args: unknown[]) => {
+      if (typeof args[1] === "number") scrollY = args[1];
+    });
+    window.scrollTo = scrollTo as typeof window.scrollTo;
+
+    function Harness({ open }: { open: boolean }) {
+      const ref = useRef<HTMLDialogElement>(null);
+      const mounted = useModalDialog(open, ref);
+      if (!mounted) return null;
+      return createElement("dialog", { ref });
+    }
+
+    const { rerender } = render(createElement(Harness, { open: true }));
+    const dialog = document.querySelector("dialog");
+    expect(dialog).toHaveAttribute("open");
+    expect(document.body).toHaveClass(backgroundScrollLockClass);
+
+    rerender(createElement(Harness, { open: false }));
+    await waitFor(() => expect(document.querySelector("dialog")).toBeNull());
+    expect(document.body).not.toHaveClass(backgroundScrollLockClass);
+    expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
   it("locks html and body while an overlay is open", () => {
