@@ -98,17 +98,26 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
-  it("does not reset the page scroll while an overlay is open", () => {
-    const scrollTo = vi.fn();
+  it("holds the page scroll offset while an overlay is open", () => {
+    let scrollY = 160;
     Object.defineProperty(window, "scrollY", {
       configurable: true,
-      value: 160,
+      get: () => scrollY,
+    });
+    const scrollTo = vi.fn((x: number, y: number) => {
+      void x;
+      scrollY = y;
     });
     window.scrollTo = scrollTo as typeof window.scrollTo;
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
     expect(scrollTo).not.toHaveBeenCalled();
-    unmount();
+    scrollY = 0;
+    window.dispatchEvent(new Event("scroll"));
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    scrollY = 0;
+    document.body.dispatchEvent(new Event("focusin", { bubbles: true }));
+    expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    unmount();
   });
 
   it("locks html and body while an overlay is open", () => {
