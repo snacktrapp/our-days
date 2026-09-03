@@ -64,6 +64,7 @@ describe("VideoFeasibilityPanel", () => {
     ).toBeVisible();
     expect(screen.getByLabelText("Choose a short video")).toHaveFocus();
     expect(document.body).toHaveClass("composer-scroll-locked");
+    expect(document.documentElement).toHaveClass("composer-scroll-locked");
 
     await user.click(
       screen.getByRole("button", {
@@ -73,6 +74,7 @@ describe("VideoFeasibilityPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
     expect(document.body).not.toHaveClass("composer-scroll-locked");
+    expect(document.documentElement).not.toHaveClass("composer-scroll-locked");
   });
 
   it("rejects unsafe declared type, empty bytes, and oversized bytes before creating a URL", async () => {

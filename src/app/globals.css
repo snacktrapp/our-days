@@ -69,8 +69,19 @@ body {
   color: var(--ink);
   font-family: var(--font-interface);
 }
+html.composer-scroll-locked,
 body.composer-scroll-locked {
   overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.composer-scroll-locked,
+html.composer-scroll-locked body {
+  max-height: 100dvh;
+}
+
+html.composer-scroll-locked .app-shell,
+html.composer-scroll-locked .phone-stage {
   overscroll-behavior: none;
 }
 button {

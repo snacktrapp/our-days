@@ -821,6 +821,7 @@ describe("MomentComposer", () => {
     ).toBeNull();
     expect(screen.getByRole("heading", { name: "New moment" })).toHaveFocus();
     expect(document.body).toHaveClass("composer-scroll-locked");
+    expect(document.documentElement).toHaveClass("composer-scroll-locked");
 
     await user.click(
       screen.getByRole("button", { name: "Close moment composer" }),
@@ -828,6 +829,7 @@ describe("MomentComposer", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open composer" })).toHaveFocus();
     expect(document.body).not.toHaveClass("composer-scroll-locked");
+    expect(document.documentElement).not.toHaveClass("composer-scroll-locked");
   });
 
   it("saves a backdated local design entry without a review step", async () => {

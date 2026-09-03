@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useLockBackgroundScroll } from "@/features/dialog/lock-background-scroll";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
@@ -395,19 +396,14 @@ export function MomentComposer({
     [revokeCurrentPhotoUrl],
   );
 
+  useLockBackgroundScroll(open);
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
-
-    const bodyWasLocked = document.body.classList.contains(
-      "composer-scroll-locked",
-    );
-    document.body.classList.add("composer-scroll-locked");
     if (!dialog.open) dialog.showModal();
 
     return () => {
-      if (!bodyWasLocked)
-        document.body.classList.remove("composer-scroll-locked");
       if (dialog.open) dialog.close();
     };
   }, [open]);

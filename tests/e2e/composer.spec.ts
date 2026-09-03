@@ -719,6 +719,44 @@ test("expanded capture states have no serious axe violations", async ({
   await scan();
 });
 
+test("an open entry overlay does not scroll the family feed underneath", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 568 });
+  await page.goto("/family");
+  await page.evaluate(() => window.scrollTo(0, 160));
+  const backgroundScroll = await page.evaluate(() => window.scrollY);
+  expect(backgroundScroll).toBeGreaterThan(0);
+
+  const dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /Bible verse/u }).click();
+  await selectBiblePassage(dialog, {
+    book: "Proverbs",
+    chapter: 28,
+    start: 10,
+    end: 21,
+  });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/upright/u);
+  await expect(page.locator("html")).toHaveClass(/composer-scroll-locked/u);
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
+
+  await page.getByRole("button", { name: /^Chapter,/u }).hover();
+  await page.mouse.wheel(0, 480);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
+
+  const verse = page.getByLabel("Verse text");
+  await verse.evaluate((element) => {
+    if (!(element instanceof HTMLTextAreaElement)) return;
+    element.scrollTop = 48;
+  });
+  expect(
+    await verse.evaluate((element) =>
+      element instanceof HTMLTextAreaElement ? element.scrollTop : 0,
+    ),
+  ).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
+});
+
 test("keyboard-sized viewport keeps every capture and review control reachable", async ({
   page,
 }) => {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useLockBackgroundScroll } from "@/features/dialog/lock-background-scroll";
 
 type InspectionState = "empty" | "inspecting" | "ready" | "error";
 
@@ -215,13 +216,11 @@ function VideoFeasibilityDialog({
 
   useEffect(() => () => revokeActiveUrl(), [revokeActiveUrl]);
 
+  useLockBackgroundScroll(open);
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
-    const bodyWasLocked = document.body.classList.contains(
-      "composer-scroll-locked",
-    );
-    document.body.classList.add("composer-scroll-locked");
     if (!dialog.open) dialog.showModal();
     const focusFrame = window.requestAnimationFrame(() =>
       inputRef.current?.focus(),
@@ -229,8 +228,6 @@ function VideoFeasibilityDialog({
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      if (!bodyWasLocked)
-        document.body.classList.remove("composer-scroll-locked");
       if (dialog.open) dialog.close();
     };
   }, [open]);
