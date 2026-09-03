@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect } from "react";
+import { replaceNonceableStyleSheet } from "@/lib/page-csp-nonce";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 export const backgroundScrollLockSheetId = "composer-scroll-lock-sheet";
@@ -42,34 +43,12 @@ export function overlayBackgroundScrollShouldStop(
   return false;
 }
 
-function pageNonce(doc: Document) {
-  // Browsers strip the nonce attribute from connected nodes, so [nonce]
-  // never matches. The IDL property still holds the value on script/style.
-  for (const node of doc.querySelectorAll("script, style")) {
-    if (!(node instanceof HTMLElement)) continue;
-    const nonce = node.nonce || node.getAttribute("nonce") || "";
-    if (nonce) return nonce;
-  }
-  const attributed = doc.querySelector<HTMLElement>("[nonce]");
-  return attributed?.nonce || attributed?.getAttribute("nonce") || "";
-}
-
 function writeLockSheet(doc: Document, topPx: number) {
-  const existing = doc.getElementById(backgroundScrollLockSheetId);
-  const sheet =
-    existing instanceof HTMLStyleElement
-      ? existing
-      : doc.createElement("style");
-  if (!(existing instanceof HTMLStyleElement)) {
-    sheet.id = backgroundScrollLockSheetId;
-    const nonce = pageNonce(doc);
-    if (nonce) {
-      sheet.setAttribute("nonce", nonce);
-      sheet.nonce = nonce;
-    }
-    doc.head.append(sheet);
-  }
-  sheet.textContent = `:root{${lockTopVariable}:${topPx}px}`;
+  replaceNonceableStyleSheet(
+    doc,
+    backgroundScrollLockSheetId,
+    `:root{${lockTopVariable}:${topPx}px}`,
+  );
 }
 
 function clearLockSheet(doc: Document) {

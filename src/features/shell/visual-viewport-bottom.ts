@@ -1,3 +1,5 @@
+import { replaceNonceableStyleSheet } from "@/lib/page-csp-nonce";
+
 const insetVariable = "--bottom-nav-visual-inset";
 const insetSheetId = "bottom-nav-visual-inset-sheet";
 
@@ -9,22 +11,6 @@ export function visualViewportBottomInset(
   return Math.max(0, view.innerHeight - viewport.height - viewport.offsetTop);
 }
 
-function pageNonce(doc: Document) {
-  const withNonce = doc.querySelector<HTMLElement>("[nonce]");
-  return withNonce?.nonce || withNonce?.getAttribute("nonce") || "";
-}
-
-function insetSheet(doc: Document) {
-  const existing = doc.getElementById(insetSheetId);
-  if (existing instanceof HTMLStyleElement) return existing;
-  const sheet = doc.createElement("style");
-  sheet.id = insetSheetId;
-  const nonce = pageNonce(doc);
-  if (nonce) sheet.setAttribute("nonce", nonce);
-  doc.head.append(sheet);
-  return sheet;
-}
-
 export function syncBottomNavVisualInset(
   view: Pick<Window, "innerHeight" | "visualViewport"> & {
     document: Document;
@@ -33,7 +19,11 @@ export function syncBottomNavVisualInset(
   // iOS already pins position:fixed to the visual viewport. Applying the
   // leftover layout gap as `bottom` lifts the bar and leaves a beige hole
   // above the home indicator.
-  insetSheet(view.document).textContent = `:root{${insetVariable}:0px}`;
+  replaceNonceableStyleSheet(
+    view.document,
+    insetSheetId,
+    `:root{${insetVariable}:0px}`,
+  );
 }
 
 export function clearBottomNavVisualInset(root: HTMLElement) {

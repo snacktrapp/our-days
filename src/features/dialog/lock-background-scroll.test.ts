@@ -1,5 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { pageCspNonceMetaName } from "@/lib/page-csp-nonce";
 import {
   backgroundScrollLockClass,
   backgroundScrollLockSheetId,
@@ -32,6 +33,7 @@ describe("overlay background scroll lock", () => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
     document.getElementById(backgroundScrollLockSheetId)?.remove();
+    document.querySelector(`meta[name="${pageCspNonceMetaName}"]`)?.remove();
     vi.restoreAllMocks();
   });
 
@@ -82,13 +84,10 @@ describe("overlay background scroll lock", () => {
   });
 
   it("pins the locked page with a nonceable scroll offset", () => {
-    const nonceHost = document.createElement("script");
-    Object.defineProperty(nonceHost, "nonce", {
-      configurable: true,
-      get: () => "test-nonce",
-    });
+    const nonceHost = document.createElement("meta");
+    nonceHost.setAttribute("name", pageCspNonceMetaName);
+    nonceHost.setAttribute("content", "test-nonce");
     document.head.append(nonceHost);
-    expect(document.querySelector("[nonce]")).toBeNull();
     const scrollTo = vi.fn();
     Object.defineProperty(window, "scrollY", {
       configurable: true,
