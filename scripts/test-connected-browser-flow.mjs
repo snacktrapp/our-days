@@ -1569,16 +1569,11 @@ try {
     .locator(".moment-card")
     .filter({ hasText: milestoneMoment });
   await milestoneCard.getByRole("button", { name: /^Edit —/u }).click();
-  const optionalPlace = invitedPage.getByRole("textbox", {
-    name: /^Place Optional$/u,
-  });
-  if ((await optionalPlace.inputValue()) !== "Cedar Park") {
-    throw new Error("Editing a milestone did not preserve its optional place.");
-  }
+  await invitedPage.getByRole("button", { name: /^Place, Cedar Park/u }).waitFor();
   await invitedPage
     .getByRole("textbox", { exact: true, name: "Milestone" })
     .fill(editedMilestoneMoment);
-  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByRole("button", { name: "Save" }).click();
   await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
   const editedMilestoneCard = invitedPage
     .locator(".moment-card")
@@ -1626,8 +1621,8 @@ try {
   await invitedPage.setViewportSize({ height: 350, width: 320 });
   await assertPageQuality(invitedPage, "Short connected moment editor");
   await invitedPage.setViewportSize({ height: 844, width: 390 });
-  await invitedPage.getByLabel("Your thought").fill(editedMoment);
-  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByLabel("Entry").fill(editedMoment);
+  await invitedPage.getByRole("button", { name: "Save" }).click();
   await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
   await invitedPage.getByText(editedMoment).waitFor();
   await invitedPage.waitForFunction(
@@ -1753,7 +1748,7 @@ try {
   await invitedPage
     .getByRole("textbox", { exact: true, name: "Milestone" })
     .fill(archivedMilestoneMoment);
-  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByRole("button", { name: "Save" }).click();
   await invitedPage.getByRole("dialog").waitFor({ state: "detached" });
   await invitedPage.getByText(archivedMilestoneMoment).waitFor();
   await invitedPage.reload();
@@ -1985,8 +1980,8 @@ try {
     .locator("article")
     .filter({ hasText: editedMoment });
   await deepEditArticle.getByRole("button", { name: /^Edit/u }).click();
-  await invitedPage.getByLabel("Your thought").fill(deepEditedMoment);
-  await invitedPage.getByRole("button", { name: "Save changes" }).click();
+  await invitedPage.getByLabel("Entry").fill(deepEditedMoment);
+  await invitedPage.getByRole("button", { name: "Save" }).click();
   await invitedPage.waitForURL(`${appUrl}/family`);
   await invitedPage.getByText(deepEditedMoment).waitFor();
 

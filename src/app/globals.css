@@ -1206,11 +1206,6 @@ button:focus-visible,
   color: #8b3e36;
 }
 
-.connected-edit-sheet {
-  display: grid;
-  gap: 1rem;
-}
-
 .composer-saved {
   min-height: 14rem;
   align-content: center;

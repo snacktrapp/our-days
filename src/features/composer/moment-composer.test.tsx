@@ -3,7 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "./moment-composer";
-import { selectBiblePassage } from "./bible-verse-catalog";
+import {
+  selectBiblePassage,
+  emptyBibleVerseSelection,
+} from "./bible-verse-catalog";
 import { emptyPlaceSelection } from "@/lib/place-coordinates";
 import { PhotoUploadError } from "./photo-upload";
 import {
@@ -1078,6 +1081,146 @@ describe("MomentComposer", () => {
     );
     expect(onRequestClose).toHaveBeenCalledOnce();
     expect(navigation.replace).toHaveBeenCalledWith("/family");
+  });
+
+  it("edits a saved note in the written-entry composer", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const create = vi.fn();
+    const onRequestClose = vi.fn();
+    const triggerRef = { current: null };
+    const user = userEvent.setup();
+    render(
+      <>
+        <p id="journal-live-region" aria-live="assertive" />
+        <h1 id="journal-focus-target" tabIndex={-1}>
+          Our family
+        </h1>
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open
+          editDraft={{
+            momentId: "moment-note",
+            revision: 2,
+            mode: "thought",
+            journalPersonId: "brian",
+            occurredOn: "2026-08-28",
+            maxOccurredOn: "2026-08-30",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: [],
+            place: { label: "Cedar Park", latitude: null, longitude: null },
+            verseSelection: emptyBibleVerseSelection,
+            title: "",
+            body: "Worth keeping.",
+            save: update,
+          }}
+          returnFocusRef={triggerRef}
+          onRequestClose={onRequestClose}
+          saveFamilyMoment={create}
+        />
+      </>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "New written entry" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Edit this moment" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Your thought")).toBeNull();
+    expect(screen.getByLabelText("Entry")).toHaveValue("Worth keeping.");
+    expect(
+      screen.getByRole("button", { name: /^Place, Cedar Park/u }),
+    ).toBeVisible();
+
+    await user.type(screen.getByLabelText("Entry"), " Still.");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        momentId: "moment-note",
+        body: "Worth keeping. Still.",
+        placeName: "Cedar Park",
+        title: "",
+      }),
+    );
+    expect(onRequestClose).toHaveBeenCalledOnce();
+  });
+
+  it("edits a saved photo with the existing picture and no file picker", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const create = vi.fn();
+    const onRequestClose = vi.fn();
+    const triggerRef = { current: null };
+    const user = userEvent.setup();
+    render(
+      <>
+        <p id="journal-live-region" aria-live="assertive" />
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open
+          editDraft={{
+            momentId: "moment-photo",
+            revision: 4,
+            mode: "photo",
+            journalPersonId: "brian",
+            occurredOn: "2026-08-28",
+            maxOccurredOn: "2026-08-30",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: [],
+            place: emptyPlaceSelection(),
+            verseSelection: emptyBibleVerseSelection,
+            title: "",
+            body: "At the lake",
+            existingMedia: {
+              kind: "photo",
+              src: "/api/media/moments/moment-photo",
+              alt: "Lake photo",
+            },
+            save: update,
+          }}
+          returnFocusRef={triggerRef}
+          onRequestClose={onRequestClose}
+          saveFamilyMoment={create}
+        />
+      </>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "New photo entry" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Note")).toHaveValue("At the lake");
+    expect(screen.getByRole("img", { name: "Lake photo" })).toBeVisible();
+    expect(screen.queryByText("Choose photo or video")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove photo" })).toBeNull();
+
+    await user.type(screen.getByLabelText("Note"), " at dusk");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(create).not.toHaveBeenCalled();
+    expect(photoUpload.upload).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        momentId: "moment-photo",
+        body: "At the lake at dusk",
+        title: "",
+      }),
+    );
+    expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
   it("preserves a draft while choosing and confirms an incompatible type change", async () => {

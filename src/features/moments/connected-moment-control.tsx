@@ -2,33 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
-import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import { DateTimeFields } from "@/features/composer/date-time-fields";
-import { LocationFields } from "@/features/composer/location-fields";
-import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
 import { useComposerSession } from "@/features/composer/composer-session";
-import { type PlaceSelection } from "@/lib/place-coordinates";
 import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
 } from "@/features/timeline/timeline-view-model";
 import type { ConnectedMomentActions } from "./moment-action-types";
-
-function localTimeFor(moment: TimelineMomentViewModel) {
-  const instant = moment.editOccurrence?.occurredAt;
-  const timeZone = moment.editOccurrence?.timeZone;
-  if (!instant || !timeZone) return "";
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(instant));
-  const hour = parts.find((part) => part.type === "hour")?.value;
-  const minute = parts.find((part) => part.type === "minute")?.value;
-  return hour && minute ? `${hour}:${minute}` : "";
-}
 
 function announce(message: string) {
   const region = document.getElementById("journal-live-region");
@@ -84,53 +64,14 @@ function ChangeableMomentControl({
   actions,
   position = 1,
   total = 1,
-  taggablePeople = [],
 }: ConnectedMomentControlProps & { actions: ConnectedMomentActions }) {
-  const pathname = usePathname();
-  const router = useRouter();
   const composerSession = useComposerSession();
   const [pending, setPending] = useState(false);
-  const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [body, setBody] = useState(moment.text);
-  const [title, setTitle] = useState(
-    moment.kind === "milestone" ? moment.milestone : "",
-  );
-  const originalPlace: PlaceSelection = {
-    label: moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
-    latitude: moment.latitude ?? null,
-    longitude: moment.longitude ?? null,
-  };
-  const [place, setPlace] = useState<PlaceSelection>(originalPlace);
-  const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
-    moment.taggedPeople?.map((person) => person.id) ?? [],
-  );
-  const [occurredOn, setOccurredOn] = useState(moment.occurredOn);
-  const originalTime = localTimeFor(moment);
-  const [occurredTime, setOccurredTime] = useState(originalTime);
   const [message, setMessage] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const menuWrapperRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!open || !dialog) return;
-    const bodyWasLocked = document.body.classList.contains(
-      "composer-scroll-locked",
-    );
-    document.body.classList.add("composer-scroll-locked");
-    if (!dialog.open) dialog.showModal();
-    const frame = window.requestAnimationFrame(() => bodyRef.current?.focus());
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (!bodyWasLocked)
-        document.body.classList.remove("composer-scroll-locked");
-      if (dialog.open) dialog.close();
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -155,100 +96,6 @@ function ChangeableMomentControl({
       document.removeEventListener("keydown", closeWithEscape);
     };
   }, [menuOpen]);
-
-  const draftIsDirty =
-    body !== moment.text ||
-    title !== (moment.kind === "milestone" ? moment.milestone : "") ||
-    place.label !== originalPlace.label ||
-    place.latitude !== originalPlace.latitude ||
-    place.longitude !== originalPlace.longitude ||
-    taggedPersonIds.join(",") !==
-      (moment.taggedPeople?.map((person) => person.id) ?? []).join(",") ||
-    occurredOn !== moment.occurredOn ||
-    occurredTime !== originalTime;
-
-  const close = () => {
-    if (pending) return;
-    if (
-      draftIsDirty &&
-      !window.confirm("Discard your unsaved changes to this moment?")
-    ) {
-      return;
-    }
-    setBody(moment.text);
-    setTitle(moment.kind === "milestone" ? moment.milestone : "");
-    setPlace(originalPlace);
-    setTaggedPersonIds(moment.taggedPeople?.map((person) => person.id) ?? []);
-    setOccurredOn(moment.occurredOn);
-    setOccurredTime(originalTime);
-    setOpen(false);
-    setMessage(null);
-    window.requestAnimationFrame(() => menuTriggerRef.current?.focus());
-  };
-
-  const save = async () => {
-    const trimmedBody = body.trim();
-    if (moment.kind === "thought" && !trimmedBody) {
-      setMessage("Write a thought before saving.");
-      bodyRef.current?.focus();
-      return;
-    }
-    if (moment.kind === "milestone" && !title.trim()) {
-      setMessage("Name the milestone before saving.");
-      return;
-    }
-    if (moment.kind === "location" && !place.label.trim()) {
-      setMessage("Name the place before saving.");
-      return;
-    }
-    let occurredAt = moment.editOccurrence?.occurredAt ?? null;
-    let occurredTimezone = moment.editOccurrence?.timeZone ?? null;
-    if (!occurredTime) {
-      occurredAt = null;
-      occurredTimezone = null;
-    } else if (
-      occurredOn !== moment.occurredOn ||
-      occurredTime !== originalTime
-    ) {
-      const localMoment = new Date(`${occurredOn}T${occurredTime}:00`);
-      if (Number.isNaN(localMoment.getTime())) {
-        setMessage("Check the time and try again.");
-        return;
-      }
-      occurredAt = localMoment.toISOString();
-      occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    }
-    setMessage(null);
-    setPending(true);
-    try {
-      const result = await actions.update({
-        momentId: moment.id,
-        revision: moment.revision!,
-        title: title.trim(),
-        body: trimmedBody,
-        placeName: place.label.trim(),
-        latitude: place.latitude,
-        longitude: place.longitude,
-        taggedPersonIds,
-        occurredOn,
-        occurredAt,
-        occurredTimezone,
-      });
-      if (!result.ok) {
-        setMessage(result.message);
-        return;
-      }
-      announce("Changes to this moment were saved.");
-      setOpen(false);
-      router.replace(pathname);
-      router.refresh();
-      restoreJournalFocusAfterRefresh();
-    } catch {
-      setMessage("That moment could not be changed. Try again.");
-    } finally {
-      setPending(false);
-    }
-  };
 
   const trash = async () => {
     if (
@@ -289,6 +136,14 @@ function ChangeableMomentControl({
     }
   };
 
+  const editMoment = () => {
+    setMenuOpen(false);
+    if (!composerSession) return;
+    const draft = buildComposerEditDraft(moment, actions.update);
+    if (!draft) return;
+    composerSession.openEdit(draft, menuTriggerRef.current);
+  };
+
   return (
     <>
       <div className="connected-moment-actions" ref={menuWrapperRef}>
@@ -319,40 +174,7 @@ function ChangeableMomentControl({
               <button
                 type="button"
                 aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-                onClick={() => {
-                  setMenuOpen(false);
-                  const parsed =
-                    moment.kind === "thought"
-                      ? parseBibleVerseMoment(moment.text)
-                      : null;
-                  if (parsed && composerSession && moment.revision) {
-                    composerSession.openEdit(
-                      {
-                        momentId: moment.id,
-                        revision: moment.revision,
-                        mode: "bible-verse",
-                        journalPersonId: moment.journalPersonId,
-                        occurredOn: moment.occurredOn,
-                        maxOccurredOn:
-                          moment.maxOccurredOn ?? moment.occurredOn,
-                        occurredTime: originalTime,
-                        occurredAt: moment.editOccurrence?.occurredAt ?? null,
-                        occurredTimezone:
-                          moment.editOccurrence?.timeZone ?? null,
-                        taggedPersonIds:
-                          moment.taggedPeople?.map((person) => person.id) ?? [],
-                        place: originalPlace,
-                        verseSelection: parsed.selection,
-                        title: parsed.reference,
-                        body: parsed.text,
-                        save: actions.update,
-                      },
-                      menuTriggerRef.current,
-                    );
-                    return;
-                  }
-                  setOpen(true);
-                }}
+                onClick={editMoment}
               >
                 Edit moment
               </button>
@@ -368,118 +190,10 @@ function ChangeableMomentControl({
             document.body,
           )
         : null}
-      {message && !open ? (
+      {message ? (
         <p className="connected-moment-message" role="alert">
           {message}
         </p>
-      ) : null}
-      {open ? (
-        <dialog
-          ref={dialogRef}
-          className="composer-dialog"
-          aria-labelledby={`edit-moment-${moment.id}`}
-          onKeyDown={containDialogFocus}
-          onCancel={(event) => {
-            event.preventDefault();
-            close();
-          }}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) close();
-          }}
-        >
-          <section className="composer-sheet connected-edit-sheet">
-            <span className="sheet-handle" aria-hidden="true" />
-            <button
-              className="sheet-close"
-              type="button"
-              aria-label="Close moment editor"
-              disabled={pending}
-              onClick={close}
-            >
-              ×
-            </button>
-            <span className="private-label">Private to this family</span>
-            <h2 id={`edit-moment-${moment.id}`}>Edit this moment</h2>
-            {moment.kind === "milestone" ? (
-              <label className="composer-field">
-                <span>Milestone</span>
-                <input
-                  type="text"
-                  value={title}
-                  maxLength={120}
-                  onChange={(event) => setTitle(event.target.value)}
-                />
-              </label>
-            ) : null}
-            {moment.kind === "location" ? (
-              <LocationFields required value={place} onChange={setPlace} />
-            ) : (
-              <LocationFields optional value={place} onChange={setPlace} />
-            )}
-            <label className="composer-field">
-              <span>
-                {moment.kind === "thought" ? "Your thought" : "Details"}
-              </span>
-              <textarea
-                ref={bodyRef}
-                value={body}
-                maxLength={4000}
-                onChange={(event) => setBody(event.target.value)}
-              />
-            </label>
-            <div className="composer-core-fields">
-              <DateTimeFields
-                date={occurredOn}
-                maxDate={moment.maxOccurredOn}
-                time={occurredTime}
-                onDateChange={setOccurredOn}
-                onTimeChange={setOccurredTime}
-              />
-            </div>
-            <fieldset className="people-tags">
-              <legend>Who else was part of this?</legend>
-              <div>
-                {taggablePeople
-                  .filter((person) => person.id !== moment.journalPersonId)
-                  .map((person) => (
-                    <label key={person.id}>
-                      <input
-                        type="checkbox"
-                        checked={taggedPersonIds.includes(person.id)}
-                        onChange={() =>
-                          setTaggedPersonIds((current) =>
-                            current.includes(person.id)
-                              ? current.filter((id) => id !== person.id)
-                              : [...current, person.id],
-                          )
-                        }
-                      />
-                      <span
-                        className={`tag-person-dot dot-${person.accent}`}
-                        aria-hidden="true"
-                      >
-                        {person.initial}
-                      </span>
-                      {person.name}
-                    </label>
-                  ))}
-              </div>
-            </fieldset>
-            {message ? (
-              <p className="composer-error" role="alert">
-                {message}
-              </p>
-            ) : null}
-            <button
-              className="save-moment"
-              type="button"
-              disabled={pending}
-              onClick={save}
-            >
-              {pending ? "Saving…" : "Save changes"}
-            </button>
-          </section>
-        </dialog>
       ) : null}
     </>
   );

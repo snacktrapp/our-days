@@ -37,10 +37,18 @@ import {
   type PlaceSelection,
 } from "@/lib/place-coordinates";
 
+type ComposerMode = MomentKind | "bible-verse";
+
+export type ComposerExistingMedia = Readonly<{
+  kind: "photo" | "video";
+  src: string;
+  alt?: string;
+}>;
+
 export type ComposerEditDraft = Readonly<{
   momentId: string;
   revision: number;
-  mode: "bible-verse";
+  mode: ComposerMode;
   journalPersonId: string;
   occurredOn: string;
   maxOccurredOn: string;
@@ -52,6 +60,7 @@ export type ComposerEditDraft = Readonly<{
   verseSelection: BibleVerseSelection;
   title: string;
   body: string;
+  existingMedia?: ComposerExistingMedia;
   save: UpdateFamilyMomentAction;
 }>;
 
@@ -74,8 +83,6 @@ type ModeCopy = Readonly<{
   bodyPlaceholder: string;
   bodyRequired: boolean;
 }>;
-
-type ComposerMode = MomentKind | "bible-verse";
 
 type PhotoDecodeState = "empty" | "decoding" | "ready" | "error";
 
@@ -170,6 +177,19 @@ function resolvePreviewTitle(
   return fallback;
 }
 
+function focusJournalContext() {
+  document
+    .getElementById("journal-focus-target")
+    ?.focus({ preventScroll: true });
+}
+
+function restoreJournalFocusAfterRefresh() {
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(focusJournalContext),
+  );
+  window.setTimeout(focusJournalContext, 150);
+}
+
 export function MomentComposer({
   model,
   open,
@@ -192,7 +212,8 @@ export function MomentComposer({
     Boolean(
       editDraft &&
       (editDraft.taggedPersonIds.length > 0 ||
-        editDraft.place.label.trim().length > 0),
+        (editDraft.mode !== "location" &&
+          editDraft.place.label.trim().length > 0)),
     ),
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
@@ -216,9 +237,12 @@ export function MomentComposer({
     editDraft?.place ?? emptyPlaceSelection,
   );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
-  const [photoDecodeState, setPhotoDecodeState] =
-    useState<PhotoDecodeState>("empty");
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(
+    editDraft?.existingMedia?.src ?? null,
+  );
+  const [photoDecodeState, setPhotoDecodeState] = useState<PhotoDecodeState>(
+    editDraft?.existingMedia ? "ready" : "empty",
+  );
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -256,6 +280,7 @@ export function MomentComposer({
     connectedFamily && model.photoPostingEnabled && model.circleId,
   );
   const resolvedPlaceName = mode === "location" ? title : place.label;
+  const editingExistingMedia = Boolean(editDraft?.existingMedia);
   const isDirty = editDraft
     ? body !== editDraft.body ||
       title !== editDraft.title ||
@@ -545,6 +570,7 @@ export function MomentComposer({
   const validateDraft = () => {
     if (
       (mode === "photo" || mode === "video") &&
+      !editingExistingMedia &&
       photoDecodeState !== "ready"
     ) {
       setPhotoError(
@@ -652,7 +678,7 @@ export function MomentComposer({
         if (region) region.textContent = "Changes to this moment were saved.";
         resetDraft();
         onRequestClose();
-        window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+        restoreJournalFocusAfterRefresh();
         router.replace(pathname);
         router.refresh();
       } catch {
@@ -1111,34 +1137,38 @@ export function MomentComposer({
 
             <div className="composer-editor-scroll">
               {mode === "photo" || mode === "video" ? (
-                <label className="photo-input">
-                  <span>
-                    {photoFile
-                      ? "Choose different media"
-                      : "Choose photo or video"}
-                  </span>
-                  <small>
-                    {connectedPhotoAvailable
-                      ? "The original uploads privately to this family."
-                      : "It stays on this device in the preview."}
-                  </small>
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
-                    required={!photoFile}
-                    aria-invalid={photoError ? true : undefined}
-                    aria-describedby={
-                      photoError ? "photo-preview-error" : undefined
-                    }
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0] ?? null;
-                      event.currentTarget.blur();
-                      editorHeadingRef.current?.focus({ preventScroll: true });
-                      replacePhoto(file);
-                    }}
-                  />
-                </label>
+                editingExistingMedia ? null : (
+                  <label className="photo-input">
+                    <span>
+                      {photoFile
+                        ? "Choose different media"
+                        : "Choose photo or video"}
+                    </span>
+                    <small>
+                      {connectedPhotoAvailable
+                        ? "The original uploads privately to this family."
+                        : "It stays on this device in the preview."}
+                    </small>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
+                      required={!photoFile}
+                      aria-invalid={photoError ? true : undefined}
+                      aria-describedby={
+                        photoError ? "photo-preview-error" : undefined
+                      }
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0] ?? null;
+                        event.currentTarget.blur();
+                        editorHeadingRef.current?.focus({
+                          preventScroll: true,
+                        });
+                        replacePhoto(file);
+                      }}
+                    />
+                  </label>
+                )
               ) : null}
               {photoError ? (
                 <p
@@ -1149,19 +1179,21 @@ export function MomentComposer({
                   {photoError}
                 </p>
               ) : null}
-              <p
-                className="composer-selection-status"
-                role="status"
-                aria-live="polite"
-              >
-                {photoFile
-                  ? photoDecodeState === "ready"
-                    ? connectedPhotoAvailable
-                      ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
-                      : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
-                    : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
-                  : ""}
-              </p>
+              {editingExistingMedia ? null : (
+                <p
+                  className="composer-selection-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {photoFile
+                    ? photoDecodeState === "ready"
+                      ? connectedPhotoAvailable
+                        ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
+                        : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
+                      : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
+                    : ""}
+                </p>
+              )}
               {photoPreviewUrl && mode === "photo" ? (
                 <div className="composer-photo-preview">
                   {/* The selected blob is local-only and must never enter the
@@ -1170,16 +1202,26 @@ export function MomentComposer({
                   <img
                     key={photoPreviewUrl}
                     src={photoPreviewUrl}
-                    alt="Selected photo preview"
+                    alt={
+                      editDraft?.existingMedia?.alt ?? "Selected photo preview"
+                    }
                     width={720}
                     height={540}
                     decoding="async"
-                    onLoad={() => acceptDecodedPhoto(photoPreviewUrl)}
-                    onError={() => rejectUndecodablePhoto(photoPreviewUrl)}
+                    onLoad={() => {
+                      if (editingExistingMedia) return;
+                      acceptDecodedPhoto(photoPreviewUrl);
+                    }}
+                    onError={() => {
+                      if (editingExistingMedia) return;
+                      rejectUndecodablePhoto(photoPreviewUrl);
+                    }}
                   />
-                  <button type="button" onClick={() => replacePhoto(null)}>
-                    Remove photo
-                  </button>
+                  {editingExistingMedia ? null : (
+                    <button type="button" onClick={() => replacePhoto(null)}>
+                      Remove photo
+                    </button>
+                  )}
                 </div>
               ) : null}
               {photoPreviewUrl && mode === "video" ? (
@@ -1194,30 +1236,42 @@ export function MomentComposer({
                     disableRemotePlayback
                     playsInline
                     preload="metadata"
-                    onLoadedMetadata={(event) =>
-                      inspectSelectedVideo(
-                        photoPreviewUrl,
-                        event.currentTarget,
-                        false,
-                      )
+                    onLoadedMetadata={
+                      editingExistingMedia
+                        ? undefined
+                        : (event) =>
+                            inspectSelectedVideo(
+                              photoPreviewUrl,
+                              event.currentTarget,
+                              false,
+                            )
                     }
-                    onLoadedData={(event) =>
-                      inspectSelectedVideo(
-                        photoPreviewUrl,
-                        event.currentTarget,
-                        true,
-                      )
+                    onLoadedData={
+                      editingExistingMedia
+                        ? undefined
+                        : (event) =>
+                            inspectSelectedVideo(
+                              photoPreviewUrl,
+                              event.currentTarget,
+                              true,
+                            )
                     }
-                    onError={() => {
-                      rejectUndecodablePhoto(photoPreviewUrl);
-                      setPhotoError(
-                        "This video could not be played. Choose another one.",
-                      );
-                    }}
+                    onError={
+                      editingExistingMedia
+                        ? undefined
+                        : () => {
+                            rejectUndecodablePhoto(photoPreviewUrl);
+                            setPhotoError(
+                              "This video could not be played. Choose another one.",
+                            );
+                          }
+                    }
                   />
-                  <button type="button" onClick={() => replacePhoto(null)}>
-                    Remove video
-                  </button>
+                  {editingExistingMedia ? null : (
+                    <button type="button" onClick={() => replacePhoto(null)}>
+                      Remove video
+                    </button>
+                  )}
                 </div>
               ) : null}
 
@@ -1407,14 +1461,16 @@ export function MomentComposer({
                 disabled={saving || photoRetryBlocked}
               >
                 {saving
-                  ? mode === "photo" || mode === "video"
-                    ? photoUploadStage?.state === "finishing"
+                  ? editDraft || (mode !== "photo" && mode !== "video")
+                    ? "Saving…"
+                    : photoUploadStage?.state === "finishing"
                       ? `Finishing ${mode}…`
                       : `Adding ${mode}…`
-                    : "Saving…"
-                  : photoRetryBlocked
+                  : !editDraft && photoRetryBlocked
                     ? "Upload unavailable"
-                    : (mode === "photo" || mode === "video") && saveError
+                    : !editDraft &&
+                        (mode === "photo" || mode === "video") &&
+                        saveError
                       ? "Try upload again"
                       : "Save"}
               </button>
