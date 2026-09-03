@@ -229,6 +229,12 @@ describe("photo lightbox", () => {
     expect(photo).toHaveClass("photo-lightbox-photo");
     expect(photo.style.left).toBe("");
     expect(photo.style.top).toBe("");
+    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
+    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
+    expect(photo.style.width).toBe(`${dest.width}px`);
+    expect(photo.style.height).toBe(`${dest.height}px`);
+    expect(overlay).toBeVisible();
+    expect(overlay).not.toHaveStyle({ opacity: "0" });
     expect(stage).toBeTruthy();
     expect(stage.contains(photo)).toBe(true);
     expect(photo.style.transform).toBe(restTransform);
@@ -369,6 +375,10 @@ describe("photo lightbox", () => {
     expect(stage.style.height).toBe(`${viewport.height}px`);
     expect(photo.style.left).toBe("");
     expect(photo.style.top).toBe("");
+    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
+    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
+    expect(photo.style.width).toBe(`${dest.width}px`);
+    expect(photo.style.height).toBe(`${dest.height}px`);
     expect(photo.style.transform).toBe(restTransform);
     expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
     expect(dest.top + dest.height).toBeLessThanOrEqual(
@@ -418,6 +428,10 @@ describe("photo lightbox", () => {
     expect(photo.style.transform).toBe(restTransform);
     expect(photo.style.left).toBe("");
     expect(photo.style.top).toBe("");
+    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
+    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
+    expect(photo.style.width).toBe(`${dest.width}px`);
+    expect(photo.style.height).toBe(`${dest.height}px`);
     expect(dest.width).toBeCloseTo(viewport.width);
     expect(dest.top).toBeGreaterThan(viewport.top);
     expect(dest.top).toBeCloseTo(

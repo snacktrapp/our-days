@@ -274,9 +274,13 @@ function PhotoLightboxLayer({
   } | null>(null);
   const titleId = useId();
   const [stage, setStage] = useState(visiblePhotoViewport);
-  const destRef = useRef<Box>(
-    destinationBox(request.width ?? 1200, request.height ?? 801, stage),
+  const dest = destinationBox(
+    request.width ?? 1200,
+    request.height ?? 801,
+    stage,
   );
+  const destRef = useRef(dest);
+  destRef.current = dest;
 
   useEffect(() => {
     let cancelled = false;
@@ -364,12 +368,6 @@ function PhotoLightboxLayer({
 
   useLayoutEffect(() => {
     if (!objectUrl || openedRef.current) return;
-    const photo = photoRef.current;
-    const painted = photo?.getBoundingClientRect();
-    destRef.current =
-      painted && painted.width >= 2 && painted.height >= 2
-        ? boxFromRect(painted)
-        : destinationBox(request.width ?? 1200, request.height ?? 801, stage);
     openedRef.current = true;
     const origin = request.origin;
     if (overlayMotionReduced()) {
@@ -378,7 +376,7 @@ function PhotoLightboxLayer({
       window.requestAnimationFrame(() => setMotion("open"));
       return;
     }
-    setPhotoLayer(invertTransform(origin, destRef.current), "none");
+    setPhotoLayer(invertTransform(origin, dest), "none");
     setDimmer("0", "none");
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -387,7 +385,7 @@ function PhotoLightboxLayer({
         window.setTimeout(() => setMotion("open"), motionMs);
       });
     });
-  }, [objectUrl, request.origin, stage]);
+  }, [dest, objectUrl, request.origin]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -541,6 +539,10 @@ function PhotoLightboxLayer({
           className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""} ${
             motion === "pulling" ? "is-pulling" : ""
           }`}
+          style={{
+            width: dest.width,
+            height: dest.height,
+          }}
           onDoubleClick={() => setZoomed((current) => !current)}
           onPointerDown={startPull}
           onPointerMove={movePull}
@@ -549,18 +551,7 @@ function PhotoLightboxLayer({
         >
           {objectUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={objectUrl}
-              alt={request.alt}
-              width={request.width}
-              height={request.height}
-              onLoad={() => {
-                const painted = photoRef.current?.getBoundingClientRect();
-                if (painted && painted.width >= 2 && painted.height >= 2) {
-                  destRef.current = boxFromRect(painted);
-                }
-              }}
-            />
+            <img src={objectUrl} alt={request.alt} />
           ) : null}
         </div>
       </div>
