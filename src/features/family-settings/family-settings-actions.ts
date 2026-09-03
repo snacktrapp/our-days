@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
+import { createClient } from "@supabase/supabase-js";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
 import {
   invitationDeliveryIsEnabled,
   resolvedSiteOrigin,
@@ -280,16 +282,30 @@ export async function requestFamilyInvitationAction(
   return { ok: true, message: "Private invitation requested." };
 }
 
+function createInviteMailerClient() {
+  const { url, publishableKey } = readSupabasePublicConfig();
+  return createClient(url, publishableKey, {
+    auth: {
+      flowType: "implicit",
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 async function sendInvitedMagicLink(email: string) {
   const siteOrigin = resolvedSiteOrigin();
   if (!siteOrigin) return false;
   try {
-    const mailer = await createOurDaysServerClient();
+    // Cookie-backed SSR clients default to PKCE. The verifier then lives on
+    // this server, so the recipient’s browser cannot redeem the link.
+    const mailer = createInviteMailerClient();
     const { error } = await mailer.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: new URL("/auth/callback", siteOrigin).toString(),
+        emailRedirectTo: new URL("/auth/complete", siteOrigin).toString(),
       },
     });
     return !error;

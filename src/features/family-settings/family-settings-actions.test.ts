@@ -320,10 +320,17 @@ describe("family settings actions", () => {
         request_key: requestKey,
       },
     );
+    expect(mocks.createAnonClient).toHaveBeenCalledWith(
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "sb_publishable_environment_contract_fixture",
+      expect.objectContaining({
+        auth: expect.objectContaining({ flowType: "implicit" }),
+      }),
+    );
     expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
       email: "grandma@example.com",
       options: {
-        emailRedirectTo: "https://journal.example.com/auth/callback",
+        emailRedirectTo: "https://journal.example.com/auth/complete",
         shouldCreateUser: false,
       },
     });
@@ -356,7 +363,7 @@ describe("family settings actions", () => {
       email: "grandma@example.com",
       options: {
         emailRedirectTo:
-          "https://our-days-git-preview.vercel.app/auth/callback",
+          "https://our-days-git-preview.vercel.app/auth/complete",
         shouldCreateUser: false,
       },
     });
@@ -384,7 +391,7 @@ describe("family settings actions", () => {
     expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
       email: "tars-trapp@agentmail.to",
       options: {
-        emailRedirectTo: "https://journal.example.com/auth/callback",
+        emailRedirectTo: "https://journal.example.com/auth/complete",
         shouldCreateUser: false,
       },
     });

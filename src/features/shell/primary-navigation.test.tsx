@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrimaryNavigation } from "./primary-navigation";
@@ -68,6 +68,24 @@ describe("PrimaryNavigation", () => {
         .getByRole("link", { name: "Family" })
         .querySelector(".nav-symbol-pending"),
     ).toBeNull();
+  });
+
+  it("moves the current tab when a family-dropdown journal is chosen", () => {
+    render(<PrimaryNavigation section="timeline" />);
+    expect(screen.getByRole("link", { name: "Family" })).toHaveClass("active");
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("our-days:navigate-section", {
+          detail: { href: "/people/molly" },
+        }),
+      );
+    });
+
+    expect(screen.getByRole("link", { name: "People" })).toHaveClass("active");
+    expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
+      "active",
+    );
   });
 
   it("does not pulse the current tab when it is tapped again", async () => {

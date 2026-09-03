@@ -9,6 +9,7 @@ import {
 describe("MapTiler geocoding", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
   it("returns labeled coordinates from a forward search", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
@@ -75,5 +76,16 @@ describe("MapTiler geocoding", () => {
     expect(staticMapImageSrc(35.1428, -120.6413)).toBe(
       "/api/maps/static?lat=35.1428&lng=-120.6413",
     );
+  });
+
+  it("uses a direct MapTiler image when the public key is present", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
+    expect(staticMapImageSrc(39.2, -119.93)).toBe(
+      "https://api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/800x330.png?key=public-key",
+    );
+    expect(staticMapImageSrc(35.1428, -120.6413)).toBe(
+      "https://api.maptiler.com/maps/streets-v2/static/-120.6413,35.1428,14/800x330.png?key=public-key",
+    );
+    vi.unstubAllEnvs();
   });
 });

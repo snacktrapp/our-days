@@ -1,7 +1,7 @@
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 import {
   mapTilerStaticMapUrl,
-  publicMapTilerKey,
+  serverMapTilerKey,
 } from "@/features/composer/maptiler";
 
 const headers = {
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   );
   if (!coordinates) return unavailable(400);
 
-  const key = publicMapTilerKey();
+  const key = serverMapTilerKey();
   const mapUrl = mapTilerStaticMapUrl(
     key,
     coordinates.latitude,
@@ -40,8 +40,8 @@ export async function GET(request: Request) {
   }
   if (!upstream.ok) return unavailable();
 
-  const contentType = upstream.headers.get("content-type") ?? "";
-  if (!contentType.startsWith("image/")) return unavailable();
+  const contentType = upstream.headers.get("content-type") ?? "image/png";
+  if (contentType && !contentType.startsWith("image/")) return unavailable();
 
   return new Response(upstream.body, {
     status: 200,

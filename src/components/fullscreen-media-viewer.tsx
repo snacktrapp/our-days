@@ -121,7 +121,19 @@ export function FullscreenMediaViewer({
     setOpen(false);
     setZoomed(false);
     setMotion("open");
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
+    document.getElementById("journal-focus-target")?.blur();
+    if (document.activeElement instanceof HTMLElement) {
+      const active = document.activeElement;
+      if (
+        active.closest(".topbar") ||
+        active.classList.contains("media-viewer-close")
+      ) {
+        active.blur();
+      }
+    }
+    window.requestAnimationFrame(() =>
+      triggerRef.current?.focus({ preventScroll: true }),
+    );
   }
 
   function closeToCard() {
@@ -192,9 +204,24 @@ export function FullscreenMediaViewer({
       "media-viewer-scroll-locked",
     );
     document.body.classList.add("media-viewer-scroll-locked");
+    document.documentElement.classList.add("media-viewer-open");
+
+    const blockPageScroll = (event: TouchEvent) => {
+      if (
+        event.target instanceof Node &&
+        photoRef.current?.contains(event.target) &&
+        event.touches.length > 1
+      ) {
+        return;
+      }
+      event.preventDefault();
+    };
+    document.addEventListener("touchmove", blockPageScroll, { passive: false });
 
     return () => {
       clearCloseTimer();
+      document.removeEventListener("touchmove", blockPageScroll);
+      document.documentElement.classList.remove("media-viewer-open");
       if (!bodyWasLocked)
         document.body.classList.remove("media-viewer-scroll-locked");
       if (dialog.open) dialog.close();
@@ -302,7 +329,9 @@ export function FullscreenMediaViewer({
       <button
         ref={triggerRef}
         type="button"
-        className={`media-viewer-trigger ${isPhoto ? "photo-viewer-trigger" : "video-viewer-trigger"}`}
+        className={`media-viewer-trigger ${isPhoto ? "photo-viewer-trigger" : "video-viewer-trigger"}${
+          open ? " is-open" : ""
+        }`}
         aria-label={`Open ${kind} full screen: ${label}`}
         onClick={(event) => handlePreviewTap(event.detail)}
       >

@@ -82,13 +82,19 @@ function SwitcherLinkLabel({
 
 function SwitcherLink({
   item,
+  current,
+  onChoose,
 }: Readonly<{
   item: FamilyTimelineSwitcherItem;
+  current: boolean;
+  onChoose: (item: FamilyTimelineSwitcherItem) => void;
 }>) {
   const [holding, setHolding] = useState(false);
 
   function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
-    if (item.current || !isUnmodifiedPrimaryClick(event)) return;
+    if (!isUnmodifiedPrimaryClick(event)) return;
+    onChoose(item);
+    if (current) return;
     setHolding(true);
   }
 
@@ -96,8 +102,8 @@ function SwitcherLink({
     <Link
       href={item.href}
       prefetch={false}
-      aria-current={item.current ? "page" : undefined}
-      className={`${item.current ? "active" : ""}${holding ? " is-pending" : ""}`}
+      aria-current={current ? "page" : undefined}
+      className={`${current ? "active" : ""}${holding ? " is-pending" : ""}`}
       onPointerDown={acknowledge}
       onClick={acknowledge}
     >
@@ -114,8 +120,26 @@ export function FamilyTitleSwitcher({
   switcher: readonly FamilyTimelineSwitcherItem[];
 }>) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [chosenHref, setChosenHref] = useState<string | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
     useOverlayPopoverClose();
+  const serverCurrentHref =
+    switcher.find((item) => item.current)?.href ?? null;
+  const currentHref = chosenHref ?? serverCurrentHref;
+  const chosenItem = switcher.find((item) => item.href === currentHref);
+  const displayModel =
+    chosenItem && chosenHref && chosenItem.href.startsWith("/people/")
+      ? { ...model, title: chosenItem.label }
+      : model;
+
+  function chooseItem(item: FamilyTimelineSwitcherItem) {
+    setChosenHref(item.href);
+    window.dispatchEvent(
+      new CustomEvent("our-days:navigate-section", {
+        detail: { href: item.href },
+      }),
+    );
+  }
 
   useEffect(() => {
     const closeIfOpen = () => {
@@ -167,7 +191,7 @@ export function FamilyTitleSwitcher({
           });
         }}
       >
-        <TitleCopy model={model} chevron />
+        <TitleCopy model={displayModel} chevron />
       </summary>
       <nav
         className={closing ? "is-closing" : undefined}
@@ -176,7 +200,12 @@ export function FamilyTitleSwitcher({
         onAnimationEnd={onAnimationEnd}
       >
         {switcher.map((item) => (
-          <SwitcherLink key={item.href} item={item} />
+          <SwitcherLink
+            key={item.href}
+            item={item}
+            current={item.href === currentHref}
+            onChoose={chooseItem}
+          />
         ))}
       </nav>
     </details>

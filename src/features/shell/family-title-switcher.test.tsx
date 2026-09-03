@@ -90,4 +90,23 @@ describe("FamilyTitleSwitcher", () => {
       "is-pending",
     );
   });
+
+  it("moves the current highlight to the pressed journal immediately", () => {
+    render(<FamilyTitleSwitcher model={model} switcher={switcher} />);
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    const family = screen.getByRole("link", { name: "Family" });
+    const molly = screen.getByRole("link", { name: "Molly" });
+    expect(family).toHaveClass("active");
+    expect(family).toHaveAttribute("aria-current", "page");
+
+    fireEvent.pointerDown(molly, { button: 0 });
+
+    expect(molly).toHaveClass("active");
+    expect(molly).toHaveAttribute("aria-current", "page");
+    expect(family).not.toHaveClass("active");
+    expect(family).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+  });
 });

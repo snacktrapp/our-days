@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
@@ -777,6 +778,13 @@ export function MomentComposer({
         : capturedBody;
     const savedResolvedPlaceName =
       savedMode === "location" ? savedTitle : savedPlaceName.trim();
+    flushSync(() => {
+      resetDraft();
+      onRequestClose();
+    });
+    window.requestAnimationFrame(() =>
+      returnFocusRef.current?.focus({ preventScroll: true }),
+    );
     startOptimisticMomentSave({
       circleId: model.circleId ?? null,
       mode: savedMode,
@@ -815,11 +823,6 @@ export function MomentComposer({
             }),
       onPublished: () => router.refresh(),
     });
-    resetDraft();
-    onRequestClose();
-    window.requestAnimationFrame(() =>
-      returnFocusRef.current?.focus({ preventScroll: true }),
-    );
     router.replace("/family");
   };
 

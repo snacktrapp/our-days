@@ -27,6 +27,15 @@ export function publicMapTilerKey() {
   return process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim() ?? "";
 }
 
+export function serverMapTilerKey() {
+  return (
+    publicMapTilerKey() ||
+    process.env.MAPTILER_KEY?.trim() ||
+    process.env.MAPTILER_API_KEY?.trim() ||
+    ""
+  );
+}
+
 export function mapTilerStyleUrl(key: string) {
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
 }
@@ -44,7 +53,7 @@ export function mapTilerStaticMapUrl(
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/static/${longitude},${latitude},14/${size.width}x${size.height}.png?key=${encodeURIComponent(key)}`;
 }
 
-export function staticMapImageSrc(latitude: number, longitude: number) {
+export function staticMapProxySrc(latitude: number, longitude: number) {
   const coordinates = parsePlaceCoordinates(latitude, longitude);
   if (!coordinates) return "";
   const params = new URLSearchParams({
@@ -52,6 +61,20 @@ export function staticMapImageSrc(latitude: number, longitude: number) {
     lng: String(coordinates.longitude),
   });
   return `/api/maps/static?${params}`;
+}
+
+export function staticMapImageSrc(latitude: number, longitude: number) {
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
+  if (!coordinates) return "";
+  const key = publicMapTilerKey();
+  if (key) {
+    return mapTilerStaticMapUrl(
+      key,
+      coordinates.latitude,
+      coordinates.longitude,
+    );
+  }
+  return staticMapProxySrc(coordinates.latitude, coordinates.longitude);
 }
 
 function featureLabel(feature: MapTilerFeature) {

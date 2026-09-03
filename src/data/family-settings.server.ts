@@ -49,9 +49,8 @@ function invitationStatus(
 }
 
 function invitationStatusLabel(state: "queued" | "provisioned" | "delivered") {
-  if (state === "queued") return "Queued";
-  if (state === "provisioned") return "Preparing";
-  return "Sent";
+  void state;
+  return "Pending";
 }
 
 function initialFor(name: string) {

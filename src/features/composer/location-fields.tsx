@@ -236,7 +236,7 @@ export function LocationFields({
         </ul>
       ) : null}
 
-      {mapAvailable && value.latitude != null && value.longitude != null ? (
+      {value.latitude != null && value.longitude != null ? (
         <LocationMapVisual
           className="composer-location-map"
           place={value.label}

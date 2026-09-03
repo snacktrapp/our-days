@@ -140,6 +140,25 @@ describe("TimelineFeed", () => {
     expect(pending.nextElementSibling).toHaveClass("timeline");
   });
 
+  it("does not render a person-journal banner above the feed", () => {
+    render(
+      <TimelineFeed
+        model={{
+          ...model,
+          personalIntro: {
+            initial: "P",
+            accent: "teal",
+            title: "Person’s journal",
+            summary: "Chronological entries",
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByText("Person’s journal")).toBeNull();
+    expect(screen.queryByText("Chronological entries")).toBeNull();
+    expect(document.querySelector(".personal-intro")).toBeNull();
+  });
+
   it("renders the rail sequence and all four moment treatments semantically", () => {
     const { container } = render(
       <TimelineFeed

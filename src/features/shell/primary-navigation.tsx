@@ -2,7 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
@@ -117,6 +117,27 @@ export function PrimaryNavigation({
     pendingSelection.section !== currentSection
       ? pendingSelection.section
       : null;
+
+  useEffect(() => {
+    const onNavigateSection = (event: Event) => {
+      const href =
+        event && typeof event === "object" && "detail" in event
+          ? (event as { detail?: { href?: unknown } }).detail?.href
+          : undefined;
+      if (typeof href !== "string") {
+        return;
+      }
+      const nextSection = sectionFromPathname(href);
+      if (!nextSection) return;
+      setPendingSelection({ fromPathname: pathname, section: nextSection });
+    };
+    window.addEventListener("our-days:navigate-section", onNavigateSection);
+    return () =>
+      window.removeEventListener(
+        "our-days:navigate-section",
+        onNavigateSection,
+      );
+  }, [pathname]);
 
   const selectImmediately =
     (nextSection: PrimarySection) => (event: MouseEvent<HTMLAnchorElement>) => {

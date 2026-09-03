@@ -120,6 +120,44 @@ button:focus-visible,
   outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
   outline-offset: 2px;
 }
+
+/* Journal header / lightbox chrome: no focus ring at all, including
+   :focus-visible. Phone Safari was leaving a box around the family title
+   and a hairline under the floating header after photo dismiss. */
+.topbar,
+.topbar *:focus,
+.topbar *:focus-visible,
+.topbar > .title-switcher > summary,
+.topbar > .title-switcher > summary:focus,
+.topbar > .title-switcher > summary:focus-visible,
+.title-lockup h1,
+.title-lockup h1:focus,
+.title-lockup h1:focus-visible,
+.title-switcher-heading h1,
+.title-switcher-heading h1:focus,
+.title-switcher-heading h1:focus-visible,
+#journal-focus-target,
+#journal-focus-target:focus,
+#journal-focus-target:focus-visible,
+.header-add-moment,
+.header-add-moment:focus,
+.header-add-moment:focus-visible,
+.theme-toggle,
+.theme-toggle:focus,
+.theme-toggle:focus-visible,
+.notification-trigger,
+.notification-trigger:focus,
+.notification-trigger:focus-visible,
+.media-viewer-close,
+.media-viewer-close:focus,
+.media-viewer-close:focus-visible,
+.media-viewer-trigger,
+.media-viewer-trigger:focus,
+.media-viewer-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+}
 @media (hover: hover) and (pointer: fine) {
   input:focus-visible,
   textarea:focus-visible {
@@ -927,7 +965,7 @@ button:focus-visible,
   font-size: 10px;
   cursor: pointer;
 }
-.soft-actions button:first-child {
+.soft-actions .quick-reaction-trigger {
   color: var(--accent);
 }
 .soft-actions button.held {
@@ -944,6 +982,11 @@ button:focus-visible,
 }
 .inline-conversation {
   min-width: 0;
+  overflow: visible;
+}
+
+.soft-actions {
+  overflow: visible;
 }
 .conversation-summary {
   margin-top: 11px;
@@ -1377,7 +1420,9 @@ button:focus-visible,
   z-index: 6;
 }
 
-.moment-card:has(.connected-moment-menu) {
+.moment-card:has(.connected-moment-menu),
+.moment-card:has(.inline-note-form),
+.moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
 
@@ -4411,7 +4456,9 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.moment-card:has(.connected-moment-menu) {
+.moment-card:has(.connected-moment-menu),
+.moment-card:has(.inline-note-form),
+.moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
 
@@ -4638,10 +4685,26 @@ button:focus-visible,
   background: #0e1b16;
 }
 
-.quick-reaction-control {
+.quick-reaction-control,
+.note-action-control {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.note-action-control .inline-note-form {
+  position: absolute;
+  z-index: 12;
+  bottom: calc(100% + 7px);
+  right: -8px;
+  width: min(280px, calc(100vw - 40px));
+  margin: 0;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  border-radius: 16px;
+  /* Comment icon is 44px, overlay hangs 7px above and 8px to the right. */
+  transform-origin: calc(100% - 14px) calc(100% + 29px);
 }
 
 .quick-reaction-trigger,
@@ -5945,6 +6008,40 @@ button:focus-visible,
   color: #101711;
 }
 
+/* Light Account actions: keep ink on cream. The danger fill is cream in
+   light theme, so white label text must not survive from the dark rule. */
+:root[data-theme="light"] .access-review > button,
+:root[data-theme="light"] .invite-review button,
+:root[data-theme="light"] .settings-review-actions button,
+:root[data-theme="light"] .settings-role-card button,
+:root[data-theme="light"] .guardian-options button,
+:root[data-theme="light"] .settings-removal-zone > button {
+  border-color: var(--hairline);
+  background: var(--cream);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .invite-section form > button {
+  border-color: #b8893f;
+  background: #b8893f;
+  color: #101711;
+}
+
+:root[data-theme="light"] .access-list button {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+}
+
+:root[data-theme="light"] .settings-review-actions .settings-danger-button,
+:root[data-theme="light"]
+  .settings-removal-zone
+  > button.settings-danger-button {
+  border-color: color-mix(in srgb, #844740 48%, var(--hairline));
+  background: var(--cream);
+  color: #6e2f28;
+}
+
 .video-feasibility-card .card-copy > p:not(.moment-kicker),
 .video-feasibility-explainer,
 .video-feasibility-input small {
@@ -6138,9 +6235,9 @@ button:focus-visible,
   overflow: hidden;
 }
 
+.media-viewer-trigger:focus,
 .media-viewer-trigger:focus-visible {
-  outline: 2px solid var(--accent-gold);
-  outline-offset: -4px;
+  outline: none;
 }
 
 .media-viewer-trigger > img,
@@ -6180,6 +6277,29 @@ button:focus-visible,
 
 .media-viewer-scroll-locked {
   overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.media-viewer-open,
+html.media-viewer-open body,
+html.media-viewer-open .app-shell,
+html.media-viewer-open .phone-stage,
+html.media-viewer-open .timeline,
+html.media-viewer-open .topbar,
+html.media-viewer-open .bottom-nav {
+  transform: none !important;
+  overscroll-behavior: none;
+}
+
+html.media-viewer-open .topbar:active,
+html.media-viewer-open .topbar:has(:active),
+html.media-viewer-open .bottom-nav:active,
+html.media-viewer-open .bottom-nav:has(:active) {
+  transform: none !important;
+}
+
+.media-viewer-trigger.is-open > * {
+  visibility: hidden;
 }
 
 .fullscreen-media-dialog {
@@ -6195,6 +6315,8 @@ button:focus-visible,
   background: transparent;
   color: white;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .fullscreen-media-dialog[open] {
@@ -6280,9 +6402,11 @@ button:focus-visible,
   line-height: 1;
 }
 
+.media-viewer-close:focus,
 .media-viewer-close:focus-visible {
-  outline: 0;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  outline: none;
+  box-shadow: none;
+  text-shadow: none;
 }
 
 .video-frame::after {
@@ -6414,11 +6538,13 @@ button:focus-visible,
 .notification-panel,
 .connected-moment-menu,
 .quick-reaction-control .inline-reaction-picker,
+.note-action-control .inline-note-form,
 .new-moment-composer-dialog.composer-type-picker .composer-sheet,
 :root[data-theme="light"] .title-switcher nav,
 :root[data-theme="light"] .notification-panel,
 :root[data-theme="light"] .connected-moment-menu,
 :root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
+:root[data-theme="light"] .note-action-control .inline-note-form,
 :root[data-theme="light"]
   .new-moment-composer-dialog.composer-type-picker
   .composer-sheet,
@@ -7262,6 +7388,7 @@ button:focus-visible,
 
   .overlay-popover,
   .quick-reaction-control .inline-reaction-picker,
+  .note-action-control .inline-note-form,
   .connected-moment-menu,
   .notification-panel,
   .title-switcher[open] nav,
@@ -7271,6 +7398,7 @@ button:focus-visible,
 
   .overlay-popover.is-closing,
   .inline-reaction-picker.is-closing,
+  .inline-note-form.is-closing,
   .connected-moment-menu.is-closing,
   .notification-panel.is-closing,
   .title-switcher[open] nav.is-closing,
@@ -7315,6 +7443,8 @@ button:focus-visible,
   .overlay-popover.is-closing,
   .quick-reaction-control .inline-reaction-picker,
   .quick-reaction-control .inline-reaction-picker.is-closing,
+  .note-action-control .inline-note-form,
+  .note-action-control .inline-note-form.is-closing,
   .connected-moment-menu,
   .connected-moment-menu.is-closing,
   .notification-panel,

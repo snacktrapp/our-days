@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  publicMapTilerKey,
   staticMapImageSrc,
+  staticMapProxySrc,
 } from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
@@ -19,11 +19,20 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const [failed, setFailed] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
   const coordinates = parsePlaceCoordinates(latitude, longitude);
-  const mapUrl =
-    coordinates && publicMapTilerKey()
-      ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
-      : "";
+
+  useEffect(() => {
+    setFailed(false);
+    setUseProxy(false);
+  }, [latitude, longitude]);
+  const directUrl = coordinates
+    ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
+    : "";
+  const proxyUrl = coordinates
+    ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
+    : "";
+  const mapUrl = useProxy && proxyUrl && proxyUrl !== directUrl ? proxyUrl : directUrl;
   const showLiveMap = Boolean(mapUrl) && !failed;
 
   return (
@@ -34,9 +43,9 @@ export function LocationMapVisual({
     >
       {showLiveMap ? (
         <>
-          {/* Same-origin proxy fetches MapTiler Static Maps so a browser
-              referrer restriction cannot replace a saved pin with the
-              illustration. */}
+          {/* Prefer a direct MapTiler image with no referrer — the same
+              policy that already makes place search work on iPhone. The
+              same-origin proxy is only a fallback if that image errors. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={mapUrl}
@@ -44,7 +53,14 @@ export function LocationMapVisual({
             width={800}
             height={330}
             decoding="async"
-            onError={() => setFailed(true)}
+            referrerPolicy="no-referrer"
+            onError={() => {
+              if (!useProxy && proxyUrl && proxyUrl !== mapUrl) {
+                setUseProxy(true);
+                return;
+              }
+              setFailed(true);
+            }}
           />
           <small className="map-attribution">
             © MapTiler © OpenStreetMap contributors

@@ -1126,6 +1126,7 @@ describe("MomentComposer", () => {
       screen.getByRole("img", { name: "Map of Sand Harbor, NV" }),
     ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(

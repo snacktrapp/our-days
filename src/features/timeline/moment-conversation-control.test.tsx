@@ -429,12 +429,14 @@ describe("MomentConversationControl", () => {
     const user = userEvent.setup();
     renderControl();
 
-    await user.click(
-      screen.getByRole("button", { name: /Add a note to photo/u }),
-    );
+    const trigger = screen.getByRole("button", {
+      name: /Add a note to photo/u,
+    });
+    await user.click(trigger);
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
+    expect(form).toHaveClass("overlay-popover");
     expect(
       within(form)
         .getAllByRole("button")
@@ -444,9 +446,10 @@ describe("MomentConversationControl", () => {
 
     await user.type(note, "Keep this draft?");
     await user.click(within(form).getByRole("button", { name: "Cancel" }));
-    expect(
-      screen.queryByRole("textbox", { name: "Add a family note" }),
-    ).toBeNull();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".inline-note-form")).toHaveClass(
+      "is-closing",
+    );
   });
 
   it("saves a note inline and immediately shows its author and text", async () => {
@@ -491,6 +494,9 @@ describe("MomentConversationControl", () => {
     expect(
       screen.queryByRole("textbox", { name: "Add a family note" }),
     ).toBeNull();
+    expect(document.querySelector(".inline-note-form")).toHaveClass(
+      "is-closing",
+    );
     const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(within(notes).getByText("Brian")).toBeVisible();
     expect(

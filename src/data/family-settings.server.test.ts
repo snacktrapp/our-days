@@ -271,7 +271,7 @@ describe("connected family settings data", () => {
         emailRequestId: "90000000-0000-4000-8000-000000000001",
         displayName: "Grandparent",
         state: "delivered",
-        statusLabel: "Sent",
+        statusLabel: "Pending",
         createdLabel: "Invited Aug 29, 2026",
         expiresLabel: "Expires Aug 31, 2026",
       },

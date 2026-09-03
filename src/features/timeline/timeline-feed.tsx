@@ -183,21 +183,6 @@ export function TimelineFeed({
       ) : null}
       {pendingEntries}
 
-      {model.personalIntro && (
-        <div className="personal-intro">
-          <span
-            className={`profile-orbit dot-${model.personalIntro.accent}`}
-            aria-hidden="true"
-          >
-            {model.personalIntro.initial}
-          </span>
-          <div>
-            <strong>{model.personalIntro.title}</strong>
-            <span>{model.personalIntro.summary}</span>
-          </div>
-        </div>
-      )}
-
       <section
         className="timeline"
         aria-label={model.timelineLabel ?? "Chronological family moments"}
