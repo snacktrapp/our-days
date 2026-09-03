@@ -84,23 +84,47 @@ function boxFromRect(rect: DOMRect | Box): Box {
   };
 }
 
+function readCssPx(name: string): number {
+  if (typeof document === "undefined") return 0;
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function visiblePhotoViewport(): Box {
+  const visual = typeof window !== "undefined" ? window.visualViewport : null;
+  const width = visual?.width ?? window.innerWidth;
+  const height = visual?.height ?? window.innerHeight;
+  const insetLeft = readCssPx("--safe-area-inset-left");
+  const insetRight = readCssPx("--safe-area-inset-right");
+  const insetTop = readCssPx("--safe-area-inset-top");
+  const insetBottom = readCssPx("--safe-area-inset-bottom");
+  return {
+    left: insetLeft,
+    top: insetTop,
+    width: Math.max(1, width - insetLeft - insetRight),
+    height: Math.max(1, height - insetTop - insetBottom),
+  };
+}
+
 export function destinationBox(
   width: number,
   height: number,
-  viewportWidth = window.innerWidth,
-  viewportHeight = window.innerHeight,
+  viewport: Box = visiblePhotoViewport(),
 ): Box {
   const safeWidth = Math.max(width, 1);
   const safeHeight = Math.max(height, 1);
   const scale = Math.min(
-    viewportWidth / safeWidth,
-    viewportHeight / safeHeight,
+    viewport.width / safeWidth,
+    viewport.height / safeHeight,
   );
   const destWidth = safeWidth * scale;
   const destHeight = safeHeight * scale;
   return {
-    left: (viewportWidth - destWidth) / 2,
-    top: (viewportHeight - destHeight) / 2,
+    left: viewport.left + (viewport.width - destWidth) / 2,
+    top: viewport.top + (viewport.height - destHeight) / 2,
     width: destWidth,
     height: destHeight,
   };

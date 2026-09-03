@@ -13,6 +13,7 @@ import {
   PhotoLightboxRoot,
   PhotoLightboxTrigger,
   resetPhotoLightboxSession,
+  visiblePhotoViewport,
 } from "./photo-lightbox";
 
 function mockRect(node: Element, rect: Partial<DOMRect>) {
@@ -92,10 +93,84 @@ function renderPhotos() {
   );
 }
 
+function setSafeAreaInsets(insets: {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}) {
+  const root = document.documentElement.style;
+  root.setProperty("--safe-area-inset-top", `${insets.top ?? 0}px`);
+  root.setProperty("--safe-area-inset-right", `${insets.right ?? 0}px`);
+  root.setProperty("--safe-area-inset-bottom", `${insets.bottom ?? 0}px`);
+  root.setProperty("--safe-area-inset-left", `${insets.left ?? 0}px`);
+}
+
+function clearSafeAreaInsets() {
+  const root = document.documentElement.style;
+  root.removeProperty("--safe-area-inset-top");
+  root.removeProperty("--safe-area-inset-right");
+  root.removeProperty("--safe-area-inset-bottom");
+  root.removeProperty("--safe-area-inset-left");
+}
+
+describe("destinationBox", () => {
+  afterEach(() => {
+    clearSafeAreaInsets();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("fits a tall portrait inside the visible viewport including the home indicator", () => {
+    const viewport = { left: 0, top: 47, width: 390, height: 844 - 47 - 34 };
+    const dest = destinationBox(1080, 2400, viewport);
+    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
+    expect(dest.top + dest.height).toBeLessThanOrEqual(
+      viewport.top + viewport.height,
+    );
+    expect(dest.left).toBeGreaterThanOrEqual(viewport.left);
+    expect(dest.left + dest.width).toBeLessThanOrEqual(
+      viewport.left + viewport.width,
+    );
+    expect(dest.height).toBeCloseTo(viewport.height);
+    expect(dest.width).toBeCloseTo((1080 * viewport.height) / 2400);
+    expect(dest.top).toBeCloseTo(viewport.top);
+  });
+
+  it("centers a landscape photo inside the same safe viewport", () => {
+    const viewport = { left: 0, top: 47, width: 390, height: 763 };
+    const dest = destinationBox(1920, 1080, viewport);
+    expect(dest.width).toBeCloseTo(390);
+    expect(dest.height).toBeCloseTo((1080 * 390) / 1920);
+    expect(dest.left).toBeCloseTo(0);
+    expect(dest.top).toBeCloseTo(47 + (763 - dest.height) / 2);
+    expect(dest.top + dest.height).toBeLessThanOrEqual(47 + 763);
+  });
+
+  it("reads the visual viewport minus safe-area insets", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
+    vi.stubGlobal("visualViewport", {
+      width: 390,
+      height: 844,
+      offsetLeft: 0,
+      offsetTop: 0,
+    });
+    setSafeAreaInsets({ top: 47, bottom: 34 });
+    expect(visiblePhotoViewport()).toEqual({
+      left: 0,
+      top: 47,
+      width: 390,
+      height: 763,
+    });
+  });
+});
+
 describe("photo lightbox", () => {
   afterEach(() => {
     resetPhotoLightboxSession();
     resetIndependentOverlayObjectUrlCache();
+    clearSafeAreaInsets();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -215,6 +290,47 @@ describe("photo lightbox", () => {
     expect(last).toHaveAttribute("src", cardPixelB);
     expect(first).toBeVisible();
     expect(last).toBeVisible();
+  });
+
+  it("keeps a fullscreen portrait inside the safe visible viewport", async () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
+    vi.stubGlobal("visualViewport", {
+      width: 390,
+      height: 844,
+      offsetLeft: 0,
+      offsetTop: 0,
+    });
+    setSafeAreaInsets({ top: 47, bottom: 34 });
+    mockIndependentOverlayDecode();
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src={cardPixelA}
+          alt="Portrait"
+          width={1080}
+          height={2400}
+        >
+          {cardPhoto(cardPixelA, "Portrait card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    const trigger = screen.getByRole("button", {
+      name: "Open photo full screen: Portrait",
+    });
+    mockRect(trigger, { left: 24, top: 180, width: 220, height: 342 });
+    fireEvent.click(trigger);
+    await screen.findByRole("img", { name: "Portrait" });
+    const photo = document.querySelector(
+      ".photo-lightbox-photo",
+    ) as HTMLElement;
+    const dest = destinationBox(1080, 2400);
+    expect(photo.style.left).toBe(`${dest.left}px`);
+    expect(photo.style.top).toBe(`${dest.top}px`);
+    expect(photo.style.width).toBe(`${dest.width}px`);
+    expect(photo.style.height).toBe(`${dest.height}px`);
+    expect(dest.top).toBeGreaterThanOrEqual(47);
+    expect(dest.top + dest.height).toBeLessThanOrEqual(47 + 763);
   });
 
   it("tracks a swipe on the overlay and reverses to the card", async () => {
