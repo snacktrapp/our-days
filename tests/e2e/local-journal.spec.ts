@@ -66,7 +66,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toBeVisible();
   await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("The last warm hour.")).toBeVisible({
+  await expect(
+    page
+      .getByLabel("Chronological family moments")
+      .getByText("The last warm hour."),
+  ).toBeVisible({
     timeout: 20_000,
   });
   await expect(
@@ -85,7 +89,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   });
   await page.getByRole("textbox", { name: "Note" }).fill("A one-second wave.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("A one-second wave.")).toBeVisible({
+  await expect(
+    page
+      .getByLabel("Chronological family moments")
+      .getByText("A one-second wave."),
+  ).toBeVisible({
     timeout: 20_000,
   });
   await expect(
@@ -93,8 +101,9 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toBeVisible();
 
   await page.goto("/memories");
+  await expect(page.getByText("On this day", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "On this day" }),
+    page.getByRole("heading", { name: "This date across years" }),
   ).toBeVisible();
   await page
     .getByRole("link", { name: /Browse memories from \d{4}/u })
