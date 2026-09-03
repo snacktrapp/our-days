@@ -104,9 +104,8 @@ describe("overlay background scroll lock", () => {
       configurable: true,
       get: () => scrollY,
     });
-    const scrollTo = vi.fn((x: number, y: number) => {
-      void x;
-      scrollY = y;
+    const scrollTo = vi.fn((...args: unknown[]) => {
+      if (typeof args[1] === "number") scrollY = args[1];
     });
     window.scrollTo = scrollTo as typeof window.scrollTo;
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
