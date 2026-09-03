@@ -94,10 +94,11 @@ test("managed profiles preserve journal identity and honest empty states", async
   await page.goto("/people/avery");
   await expect(page.getByText("Avery", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("First day of school")).toBeVisible();
-  await expect(page.getByText("The story so far")).toBeVisible();
+  await expect(page.getByText("The story so far")).toHaveCount(0);
   await expect(
     page.getByText("This is the earliest moment kept for Avery."),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.locator(".timeline-whisper")).toHaveCount(0);
 
   for (const name of ["Sam", "June"] as const) {
     await page.goto(`/people/${name.toLowerCase()}`);

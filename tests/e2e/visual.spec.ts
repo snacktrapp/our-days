@@ -90,7 +90,10 @@ test(
         animations: "disabled",
       });
       if (path === "/people/avery") {
-        await page.getByText("The story so far").scrollIntoViewIfNeeded();
+        await page
+          .locator("[data-moment-kind]")
+          .last()
+          .scrollIntoViewIfNeeded();
         await expect(page).toHaveScreenshot(
           "personal-avery-ending-chromium-mobile.png",
           { animations: "disabled" },

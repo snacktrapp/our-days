@@ -329,12 +329,6 @@ const familyEntries = [
       conversation: momentDetail({ notes: [], reactions: [] }),
     },
   },
-  {
-    id: "earlier-years",
-    entryType: "end-message",
-    markerLabel: "Earlier years",
-    message: "Keep scrolling to travel back through your family’s life.",
-  },
 ] as const satisfies readonly TimelineEntryViewModel[];
 
 export function getFamilyTimelineFixture(): TimelineViewModel {
@@ -349,16 +343,7 @@ export function getFamilyTimelineFixture(): TimelineViewModel {
       { label: "Family", href: "/family", current: true },
       { label: "Molly", href: "/people/molly", current: false },
     ],
-    entries: buildTimelineEntries(
-      moments,
-      designPreviewToday,
-      false,
-      undefined,
-      {
-        markerLabel: "Earlier years",
-        message: "Keep scrolling to travel back through your family’s life.",
-      },
-    ),
+    entries: buildTimelineEntries(moments, designPreviewToday, false),
   };
 }
 
@@ -434,15 +419,6 @@ function personalTimelineEntries(
     designPreviewToday,
     false,
     person.name,
-    moments.length === 1
-      ? {
-          markerLabel: "The story so far",
-          message: `This is the earliest moment kept for ${person.name}.`,
-        }
-      : {
-          markerLabel: "Earlier years",
-          message: "Keep scrolling to travel back through this life.",
-        },
   );
 }
 

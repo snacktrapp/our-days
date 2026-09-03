@@ -38,6 +38,11 @@ describe("design preview timeline chronology", () => {
         (entry) => entry.entryType === "elapsed-gap",
       ),
     ).toBe(false);
+    expect(
+      getFamilyTimelineFixture().entries.some(
+        (entry) => entry.entryType === "end-message",
+      ),
+    ).toBe(false);
   });
 
   it("uses the same date-marker grammar in personal journals", () => {
@@ -50,6 +55,9 @@ describe("design preview timeline chronology", () => {
     );
     expect(
       timeline!.entries.some((entry) => entry.entryType === "elapsed-gap"),
+    ).toBe(false);
+    expect(
+      timeline!.entries.some((entry) => entry.entryType === "end-message"),
     ).toBe(false);
   });
 });
