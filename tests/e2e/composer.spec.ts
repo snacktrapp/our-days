@@ -741,7 +741,11 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   const backgroundScroll = await page.evaluate(() => window.scrollY);
   expect(backgroundScroll).toBeGreaterThan(0);
 
-  const dialog = await openComposer(page);
+  // Playwright's locator.click() scrolls the header Add moment into view
+  // and would zero the feed before the overlay opens.
+  await page.getByRole("button", { name: "Add moment" }).dispatchEvent("click");
+  const dialog = page.locator("dialog.new-moment-composer-dialog");
+  await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await selectBiblePassage(dialog, {
     book: "Proverbs",
