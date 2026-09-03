@@ -1009,7 +1009,9 @@ describe("MomentComposer", () => {
 
     confirm.mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(screen.getByRole("button", { name: /^Place, Add a place/u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeVisible();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1180,7 +1182,9 @@ describe("MomentComposer", () => {
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByRole("button", { name: /^Place, Add a place/u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeVisible();
   });
 
   it.each([

@@ -22,7 +22,7 @@
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --header-drawer-padding: 16px;
   --header-drawer-top: calc(63px + env(safe-area-inset-top));
-  --header-drawer-gutter: max(16px, calc((100vw - 430px) / 2 + 16px));
+  --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
 }
 
@@ -54,6 +54,7 @@ html {
   max-width: 100%;
   min-height: 100dvh;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   background: #07110d;
   scroll-padding-bottom: calc(78px + env(safe-area-inset-bottom));
 }
@@ -62,6 +63,7 @@ body {
   max-width: 100%;
   min-height: 100dvh;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   margin: 0;
   background: #07110d;
   color: var(--ink);
@@ -270,11 +272,15 @@ button:focus-visible,
 }
 
 .app-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 100dvh;
   display: grid;
   place-items: start center;
   position: relative;
   overflow: hidden;
+  overflow-x: clip;
   background:
     radial-gradient(
       circle at 15% 15%,
@@ -327,9 +333,12 @@ button:focus-visible,
 
 .phone-stage {
   width: min(100%, 430px);
+  max-width: 100%;
+  min-width: 0;
   min-height: 100dvh;
   position: relative;
   overflow: hidden;
+  overflow-x: clip;
   padding-bottom: calc(78px + env(safe-area-inset-bottom));
   background:
     linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0)),
@@ -542,6 +551,8 @@ button:focus-visible,
 
 .timeline {
   position: relative;
+  max-width: 100%;
+  min-width: 0;
   padding: 5px 14px 80px;
 }
 .time-rail {
@@ -581,6 +592,8 @@ button:focus-visible,
 .moment {
   position: relative;
   z-index: 1;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 28px;
 }
 .connection {
@@ -627,6 +640,8 @@ button:focus-visible,
 }
 .moment-card {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   position: relative;
   border: 1px solid rgba(79, 63, 48, 0.12);
   border-radius: 22px;
@@ -5018,7 +5033,7 @@ button:focus-visible,
   z-index: 35;
   top: 47px;
   right: -44px;
-  width: min(310px, calc(100vw - 32px));
+  width: min(310px, calc(100dvw - 32px));
   padding: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
   color: var(--ink);
@@ -5821,7 +5836,7 @@ button:focus-visible,
 }
 
 .new-moment-composer-dialog .composer-sheet {
-  width: min(310px, calc(100vw - 32px));
+  width: min(310px, calc(100dvw - 32px));
   max-height: calc(100dvh - 72px - env(safe-area-inset-top));
   position: fixed;
   top: var(--header-drawer-top);
@@ -6416,7 +6431,7 @@ button:focus-visible,
   position: fixed;
   z-index: 1000;
   inset: auto 12px calc(64px + env(safe-area-inset-bottom));
-  width: min(calc(100vw - 24px), 360px);
+  width: min(calc(100dvw - 24px), 360px);
   max-width: 360px;
   height: fit-content;
   max-height: min(60vh, 260px);

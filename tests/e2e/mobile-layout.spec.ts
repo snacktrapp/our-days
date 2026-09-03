@@ -62,6 +62,67 @@ for (const route of routes) {
   });
 }
 
+test("iPhone Family feed cannot pan sideways at 1x and still allows pinch-zoom", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+
+  const geometry = await page.evaluate(() => {
+    const root = document.documentElement;
+    const stage = document.querySelector(".phone-stage");
+    const stageRect = stage?.getBoundingClientRect();
+    const overflowing = [
+      ...(stage?.querySelectorAll(
+        ".timeline, .time-rail, .date-marker, .moment, .moment-card",
+      ) ?? []),
+    ]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          className: element.className.toString().split(/\s+/u)[0] ?? "",
+          left: rect.left,
+          right: rect.right,
+        };
+      })
+      .filter((rect) => {
+        if (!stageRect) return true;
+        return (
+          rect.right > stageRect.right + 1 || rect.left < stageRect.left - 1
+        );
+      });
+    const viewport =
+      document
+        .querySelector('meta[name="viewport"]')
+        ?.getAttribute("content") ?? "";
+    const htmlStyle = getComputedStyle(root);
+    const bodyStyle = getComputedStyle(document.body);
+    return {
+      bodyOverflowX: bodyStyle.overflowX,
+      bodyOverscrollX: bodyStyle.overscrollBehaviorX,
+      clientWidth: root.clientWidth,
+      htmlOverflowX: htmlStyle.overflowX,
+      htmlOverscrollX: htmlStyle.overscrollBehaviorX,
+      overflowing,
+      scrollWidth: root.scrollWidth,
+      stageWidth: stageRect?.width ?? 0,
+      viewport,
+    };
+  });
+
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.stageWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.overflowing).toEqual([]);
+  expect(geometry.htmlOverflowX).toMatch(/^(?:clip|hidden)$/u);
+  expect(geometry.bodyOverflowX).toMatch(/^(?:clip|hidden)$/u);
+  expect(geometry.htmlOverscrollX).toBe("none");
+  expect(geometry.bodyOverscrollX).toBe("none");
+  expect(geometry.viewport).not.toMatch(/user-scalable\s*=\s*no/iu);
+  expect(geometry.viewport).not.toMatch(
+    /maximum-scale\s*=\s*1(?:\.0+)?(?:\s|,|$)/iu,
+  );
+});
+
 test("reduced-motion preference removes entrance animations", async ({
   page,
 }) => {
