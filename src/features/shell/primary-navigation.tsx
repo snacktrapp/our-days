@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
@@ -72,6 +72,26 @@ function NavIcon({
   );
 }
 
+function NavSymbol({
+  name,
+  holding,
+}: {
+  name: "family" | "people" | "memories" | "account";
+  holding: boolean;
+}) {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      className={
+        pending || holding ? "nav-symbol nav-symbol-pending" : "nav-symbol"
+      }
+      aria-hidden="true"
+    >
+      <NavIcon name={name} />
+    </span>
+  );
+}
+
 export function PrimaryNavigation({
   section,
   memoriesHref,
@@ -91,6 +111,12 @@ export function PrimaryNavigation({
     pendingSelection?.fromPathname === pathname
       ? pendingSelection.section
       : (sectionFromPathname(pathname) ?? section);
+  const currentSection = sectionFromPathname(pathname) ?? section;
+  const holdingSection =
+    pendingSelection?.fromPathname === pathname &&
+    pendingSelection.section !== currentSection
+      ? pendingSelection.section
+      : null;
 
   const selectImmediately =
     (nextSection: PrimarySection) => (event: MouseEvent<HTMLAnchorElement>) => {
@@ -109,9 +135,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("timeline")}
         prefetch={false}
       >
-        <span className="nav-symbol" aria-hidden="true">
-          <NavIcon name="family" />
-        </span>
+        <NavSymbol name="family" holding={holdingSection === "timeline"} />
         <span>Family</span>
       </Link>
       <Link
@@ -121,9 +145,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("people")}
         prefetch={false}
       >
-        <span className="nav-symbol" aria-hidden="true">
-          <NavIcon name="people" />
-        </span>
+        <NavSymbol name="people" holding={holdingSection === "people"} />
         <span>People</span>
       </Link>
       {memoriesHref === null ? (
@@ -136,9 +158,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("memories")}
           prefetch={false}
         >
-          <span className="nav-symbol" aria-hidden="true">
-            <NavIcon name="memories" />
-          </span>
+          <NavSymbol name="memories" holding={holdingSection === "memories"} />
           <span>Memories</span>
         </Link>
       )}
@@ -152,9 +172,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("settings")}
           prefetch={false}
         >
-          <span className="nav-symbol" aria-hidden="true">
-            <NavIcon name="account" />
-          </span>
+          <NavSymbol name="account" holding={holdingSection === "settings"} />
           <span>Account</span>
         </Link>
       )}

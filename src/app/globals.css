@@ -6894,6 +6894,16 @@ button:focus-visible,
   .bottom-nav:has(:active) {
     transform: scale(0.985);
   }
+
+  .nav-symbol-pending {
+    animation: nav-pending-pulse 900ms ease-in-out infinite;
+  }
+}
+
+@keyframes nav-pending-pulse {
+  50% {
+    opacity: 0.42;
+  }
 }
 
 /* This must follow the drawer animation declaration above. */
@@ -6910,5 +6920,9 @@ button:focus-visible,
 
   .title-switcher-heading svg {
     transition: none;
+  }
+
+  .nav-symbol-pending {
+    animation: none;
   }
 }

@@ -62,6 +62,23 @@ describe("PrimaryNavigation", () => {
     expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
       "active",
     );
+    expect(people.querySelector(".nav-symbol-pending")).not.toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "Family" })
+        .querySelector(".nav-symbol-pending"),
+    ).toBeNull();
+  });
+
+  it("does not pulse the current tab when it is tapped again", async () => {
+    const user = userEvent.setup();
+    render(<PrimaryNavigation section="timeline" />);
+    await user.click(screen.getByRole("link", { name: "Family" }));
+    expect(
+      screen
+        .getByRole("link", { name: "Family" })
+        .querySelector(".nav-symbol-pending"),
+    ).toBeNull();
   });
 
   it("pins the tab bar to the visual viewport while a destination is opening", async () => {

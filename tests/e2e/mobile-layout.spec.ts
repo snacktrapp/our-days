@@ -578,7 +578,7 @@ test("touch-focused composer textareas keep content spacing without a selection 
   expect(keyboardTagFocus.boxShadow).not.toBe("none");
 });
 
-test("real route transitions preserve the nav through every loading frame", async ({
+test("real route transitions hold the last screen and keep the nav put", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 440, height: 844 });
@@ -599,7 +599,10 @@ test("real route transitions preserve the nav through every loading frame", asyn
     const samples: Array<{
       bottomGap: number;
       count: number;
+      emptyJournal: boolean;
+      familyHeld: boolean;
       isOriginalNode: boolean;
+      loadingFrame: boolean;
       position: string;
       top: number;
     }> = [];
@@ -615,7 +618,14 @@ test("real route transitions preserve the nav through every loading frame", asyn
       samples.push({
         bottomGap: window.innerHeight - rect.bottom,
         count: document.querySelectorAll(".bottom-nav").length,
+        emptyJournal: Boolean(document.querySelector(".timeline-empty-state")),
+        familyHeld: Boolean(
+          document
+            .getElementById("journal-focus-target")
+            ?.textContent?.includes("All our days"),
+        ),
         isOriginalNode: navigation === document.querySelector(".bottom-nav"),
+        loadingFrame: Boolean(document.querySelector(".journal-loading")),
         position: style.position,
         top: rect.top,
       });
@@ -627,24 +637,41 @@ test("real route transitions preserve the nav through every loading frame", asyn
   await page
     .getByRole("navigation", { name: "Primary navigation" })
     .getByRole("link", { name: "People" })
-    .click();
+    .click({ noWaitAfter: true });
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "People" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Opening your family’s days…")).toBeVisible();
-  await expect(page.locator(".journal-loading .date-marker")).toHaveText(
-    /opening your family’s days/iu,
-  );
+  await expect(
+    page.getByRole("heading", { name: "All our days" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" })
+      .locator(".nav-symbol-pending"),
+  ).toHaveCount(1);
+  await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
+  await expect(page.locator(".journal-loading")).toHaveCount(0);
+  await expect(page.locator(".timeline-empty-state")).toHaveCount(0);
   await expect(page).toHaveURL(/\/people$/u);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" })
+      .locator(".nav-symbol-pending"),
+  ).toHaveCount(0);
   const samples = await page.evaluate(() => {
     const state = window as typeof window & {
       __navTransitionSamples?: Array<{
         bottomGap: number;
         count: number;
+        emptyJournal: boolean;
+        familyHeld: boolean;
         isOriginalNode: boolean;
+        loadingFrame: boolean;
         position: string;
         top: number;
       }>;
@@ -658,6 +685,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
   expect(samples.every(({ count }) => count === 1)).toBe(true);
   expect(samples.every(({ isOriginalNode }) => isOriginalNode)).toBe(true);
   expect(samples.every(({ position }) => position === "fixed")).toBe(true);
+  expect(samples.every(({ loadingFrame }) => !loadingFrame)).toBe(true);
+  expect(samples.every(({ emptyJournal }) => !emptyJournal)).toBe(true);
+  expect(samples.some(({ familyHeld }) => familyHeld)).toBe(true);
   expect(
     Math.max(...samples.map(({ top }) => top)) -
       Math.min(...samples.map(({ top }) => top)),
