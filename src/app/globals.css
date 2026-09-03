@@ -6284,7 +6284,8 @@ button:focus-visible,
   z-index: 1;
   display: grid;
   place-items: center;
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .photo-lightbox-photo {

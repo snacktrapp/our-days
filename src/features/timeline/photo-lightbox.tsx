@@ -403,6 +403,12 @@ function PhotoLightboxLayer({
   function startPull(event: React.PointerEvent<HTMLDivElement>) {
     if (zoomed || event.pointerType === "mouse") return;
     if (motion === "swipe-out") return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest(".photo-lightbox-close")
+    ) {
+      return;
+    }
     pullRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -512,6 +518,10 @@ function PhotoLightboxLayer({
       aria-labelledby={titleId}
       data-motion={motion}
       onKeyDown={onLayerKeyDown}
+      onPointerDown={startPull}
+      onPointerMove={movePull}
+      onPointerUp={finishPull}
+      onPointerCancel={finishPull}
     >
       <div ref={dimmerRef} className="photo-lightbox-dimmer" />
       <h2 id={titleId} className="sr-only">
@@ -544,10 +554,6 @@ function PhotoLightboxLayer({
             height: dest.height,
           }}
           onDoubleClick={() => setZoomed((current) => !current)}
-          onPointerDown={startPull}
-          onPointerMove={movePull}
-          onPointerUp={finishPull}
-          onPointerCancel={finishPull}
         >
           {objectUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

@@ -461,19 +461,23 @@ describe("photo lightbox", () => {
     mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
     fireEvent.click(trigger);
     await screen.findByRole("img", { name: "Porch" });
+    const overlay = screen.getByRole("dialog");
     const photo = document.querySelector(
       ".photo-lightbox-photo",
     ) as HTMLElement;
-    capturePhoto(photo);
+    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
+    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
+    expect(overlay).not.toHaveStyle({ pointerEvents: "none" });
+    capturePhoto(overlay);
     vi.useFakeTimers();
 
-    fireEvent.pointerDown(photo, {
+    fireEvent.pointerDown(overlay, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 120,
       clientY: 80,
     });
-    fireEvent.pointerMove(photo, {
+    fireEvent.pointerMove(overlay, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 124,
@@ -484,7 +488,7 @@ describe("photo lightbox", () => {
       opacity: "0.808",
     });
 
-    fireEvent.pointerUp(photo, {
+    fireEvent.pointerUp(overlay, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 124,
