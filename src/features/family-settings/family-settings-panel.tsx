@@ -426,7 +426,6 @@ function ConnectedFamilySettingsPanel({
   }
 
   function resetInviteComposer() {
-    inviteRequestKeyRef.current = null;
     restoreInviteFormFocusRef.current = true;
     setInviteDraft(null);
     setInviteName("");
@@ -445,28 +444,43 @@ function ConnectedFamilySettingsPanel({
   function sendInvitationRequest() {
     if (!inviteDraft || !actions.requestInvitation) return;
     const requestInvitation = actions.requestInvitation;
+    const draft = inviteDraft;
     const requestKey =
       inviteRequestKeyRef.current ?? window.crypto.randomUUID();
     inviteRequestKeyRef.current = requestKey;
+    const alreadyListed = model.pendingInvitations.some(
+      (item) =>
+        item.displayName.trim().toLowerCase() ===
+        draft.displayName.trim().toLowerCase(),
+    );
     setResult(null);
+    // Close Review before the server action refreshes the tree. A queued
+    // row plus a lingering review is what Brian saw on iPhone.
+    resetInviteComposer();
     startTransition(async () => {
       try {
         const nextResult = await requestInvitation({
-          ...inviteDraft,
+          ...draft,
           requestKey,
         });
-        setResult(
-          nextResult.ok
-            ? {
-                ok: true,
-                message: `Private invitation requested for ${inviteDraft.displayName}.`,
-              }
-            : nextResult,
-        );
-        if (nextResult.ok) {
-          resetInviteComposer();
+        if (nextResult.ok || alreadyListed) {
+          inviteRequestKeyRef.current = null;
+          setResult({
+            ok: true,
+            message: `Private invitation requested for ${draft.displayName}.`,
+          });
+          return;
         }
+        restoreInviteFormFocusRef.current = true;
+        setInviteDraft(draft);
+        setInviteName(draft.displayName);
+        setInviteEmail(draft.email);
+        setResult(nextResult);
       } catch {
+        restoreInviteFormFocusRef.current = true;
+        setInviteDraft(draft);
+        setInviteName(draft.displayName);
+        setInviteEmail(draft.email);
         setResult({
           ok: false,
           message: "That invitation could not be sent. Try again.",

@@ -23,10 +23,10 @@
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
   --overlay-popover-blur: 18px;
   --header-drawer-padding: 16px;
-  --header-drawer-hang: 47px;
+  --header-drawer-gap: 10px;
   --header-drawer-top: calc(
-    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + (56px - 44px) / 2 +
-      var(--header-drawer-hang)
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 56px +
+      var(--header-drawer-gap)
   );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
@@ -546,7 +546,7 @@ button:focus-visible,
 .title-switcher nav {
   position: absolute;
   z-index: 110;
-  top: calc(100% + 10px);
+  top: calc(100% + var(--header-drawer-gap));
   left: 50%;
   width: min(280px, calc(100dvw - 48px));
   padding: 4px;
@@ -569,6 +569,15 @@ button:focus-visible,
 .title-switcher nav a.active {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--ink);
+}
+.title-switcher nav a.is-pending,
+.title-switcher nav a:active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--ink);
+  transform: scale(0.985);
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease;
 }
 .quiet-button {
   color: var(--muted);
@@ -5431,11 +5440,15 @@ button:focus-visible,
 }
 
 .notification-center {
-  position: relative;
+  display: grid;
+  place-items: center;
 }
 
 .notification-trigger {
   position: relative;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -5473,8 +5486,8 @@ button:focus-visible,
 .notification-panel {
   position: absolute;
   z-index: 35;
-  top: var(--header-drawer-hang);
-  right: -44px;
+  top: calc(100% + var(--header-drawer-gap));
+  right: 0;
   width: min(310px, calc(100dvw - 32px));
   padding: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
@@ -7240,7 +7253,8 @@ button:focus-visible,
     transform: scale(0.985);
   }
 
-  .nav-symbol-pending {
+  .nav-symbol-pending,
+  .title-switcher-link-pending {
     animation: nav-pending-pulse 900ms ease-in-out infinite;
   }
 
@@ -7290,7 +7304,8 @@ button:focus-visible,
     transition: none;
   }
 
-  .nav-symbol-pending {
+  .nav-symbol-pending,
+  .title-switcher-link-pending {
     animation: none;
   }
 

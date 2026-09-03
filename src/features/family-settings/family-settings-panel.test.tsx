@@ -423,14 +423,15 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("heading", { name: "Invite Aunt June" }),
     ).toHaveFocus();
     expect(screen.getByText("june@example.com")).toBeVisible();
-    const send = screen.getByRole("button", {
-      name: "Send private invitation",
-    });
-    await user.click(send);
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That invitation could not be sent. Try again.",
     );
-    await user.click(send);
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
 
     expect(requestInvitation).toHaveBeenCalledTimes(2);
     expect(requestInvitation.mock.calls[0]?.[0]).toMatchObject({
@@ -458,6 +459,50 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.getByRole("button", { name: "Review invitation" }),
     ).toBeVisible();
+    expect(screen.getByText("Sent")).toBeVisible();
+  });
+
+  it("closes Review when that person is already in the queued list", async () => {
+    const user = userEvent.setup();
+    const requestInvitation = vi.fn().mockResolvedValue({
+      ok: false,
+      message: "That invitation could not be sent. Try again.",
+    });
+    render(
+      <FamilySettingsPanel
+        model={connectedInvitationModel}
+        actions={{
+          requestInvitation,
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+      "Grandma",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Email address" }),
+      "grandma@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Private invitation requested for Grandma.",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Invite Grandma" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+    ).toHaveValue("");
     expect(screen.getByText("Sent")).toBeVisible();
   });
 

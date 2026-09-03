@@ -85,7 +85,11 @@ describe("family settings actions", () => {
     mocks.createAnonClient.mockReturnValue({
       auth: { signInWithOtp: mocks.signInWithOtp },
     });
-    mocks.createClient.mockResolvedValue({ from: mocks.from, rpc: mocks.rpc });
+    mocks.createClient.mockResolvedValue({
+      from: mocks.from,
+      rpc: mocks.rpc,
+      auth: { signInWithOtp: mocks.signInWithOtp },
+    });
   });
 
   afterEach(() => {
@@ -318,6 +322,67 @@ describe("family settings actions", () => {
     );
     expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
       email: "grandma@example.com",
+      options: {
+        emailRedirectTo: "https://journal.example.com/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/settings/family",
+    );
+  });
+
+  it("uses the Vercel Preview origin when SITE_URL is a copied staging host", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://our-days-staging.vercel.app");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "our-days-git-preview.vercel.app");
+    mocks.getHeaders.mockResolvedValueOnce(
+      new Headers({ origin: "https://our-days-git-preview.vercel.app" }),
+    );
+    mocks.rpc.mockResolvedValueOnce({ data: emailRequestId, error: null });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "Grandma",
+        email: "grandma@example.com",
+        requestKey,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
+    expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
+      email: "grandma@example.com",
+      options: {
+        emailRedirectTo:
+          "https://our-days-git-preview.vercel.app/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+  });
+
+  it("resends the magic link when the same email is already queued", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        message: "Invitation email could not be requested",
+      },
+    });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "TARS",
+        email: "tars-trapp@agentmail.to",
+        requestKey,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
+    expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
+      email: "tars-trapp@agentmail.to",
       options: {
         emailRedirectTo: "https://journal.example.com/auth/callback",
         shouldCreateUser: false,

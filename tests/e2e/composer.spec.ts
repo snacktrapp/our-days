@@ -363,7 +363,8 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     return {
       aboveNav: Math.round(sheetRect.bottom) <= Math.round(navRect.top) + 1,
       gapAboveNav: Math.round(navRect.top - sheetRect.bottom),
-      nearAdd: sheetRect.top - add.getBoundingClientRect().bottom <= 16,
+      nearAdd: sheetRect.top - add.getBoundingClientRect().bottom <= 20,
+      underHeader: Math.abs(sheetRect.top - (headerRect.bottom + 10)) <= 2,
       alignedToPill: Math.abs(sheetRect.left - headerRect.left) <= 8,
       compact: sheetRect.width <= 280,
       parkedOnNav: navRect.top - sheetRect.bottom <= 24,
@@ -374,6 +375,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(chooserPlacement?.aboveNav).toBe(true);
   expect(chooserPlacement?.gapAboveNav).toBeGreaterThan(80);
   expect(chooserPlacement?.nearAdd).toBe(true);
+  expect(chooserPlacement?.underHeader).toBe(true);
   expect(chooserPlacement?.alignedToPill).toBe(true);
   expect(chooserPlacement?.compact).toBe(true);
   expect(chooserPlacement?.parkedOnNav).toBe(false);

@@ -1,12 +1,10 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
 import {
   invitationDeliveryIsEnabled,
   resolvedSiteOrigin,
@@ -57,7 +55,7 @@ async function hasExpectedOrigin() {
   const requestHeaders = await headers();
   return isExpectedMutationOrigin(
     requestHeaders.get("origin"),
-    process.env.NEXT_PUBLIC_SITE_URL,
+    resolvedSiteOrigin(),
   );
 }
 
@@ -266,7 +264,12 @@ export async function requestFamilyInvitationAction(
     email,
     request_key: requestKey,
   });
-  if (error || typeof data !== "string" || !uuidPattern.test(data)) {
+  const queuedId =
+    typeof data === "string" && uuidPattern.test(data) ? data : null;
+  // A new request key for a live email hits the one-live-email unique index
+  // and comes back as 22023. That is already-queued, not a failed send.
+  const alreadyQueued = !queuedId && error?.code === "22023";
+  if (!queuedId && !alreadyQueued) {
     return {
       ok: false,
       message: "That invitation could not be sent. Try again.",
@@ -281,14 +284,7 @@ async function sendInvitedMagicLink(email: string) {
   const siteOrigin = resolvedSiteOrigin();
   if (!siteOrigin) return false;
   try {
-    const { url, publishableKey } = readSupabasePublicConfig();
-    const mailer = createClient(url, publishableKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    });
+    const mailer = await createOurDaysServerClient();
     const { error } = await mailer.auth.signInWithOtp({
       email,
       options: {

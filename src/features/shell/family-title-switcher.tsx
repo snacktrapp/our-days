@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef } from "react";
+import Link, { useLinkStatus } from "next/link";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
 
@@ -46,6 +46,63 @@ export function StaticJournalTitle({
     <div className="title-lockup">
       <TitleCopy model={model} />
     </div>
+  );
+}
+
+function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    event.button === 0 &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  );
+}
+
+function SwitcherLinkLabel({
+  holding,
+  children,
+}: Readonly<{
+  holding: boolean;
+  children: string;
+}>) {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      className={
+        pending || holding
+          ? "title-switcher-link-label title-switcher-link-pending"
+          : "title-switcher-link-label"
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function SwitcherLink({
+  item,
+}: Readonly<{
+  item: FamilyTimelineSwitcherItem;
+}>) {
+  const [holding, setHolding] = useState(false);
+
+  function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
+    if (item.current || !isUnmodifiedPrimaryClick(event)) return;
+    setHolding(true);
+  }
+
+  return (
+    <Link
+      href={item.href}
+      prefetch={false}
+      aria-current={item.current ? "page" : undefined}
+      className={`${item.current ? "active" : ""}${holding ? " is-pending" : ""}`}
+      onPointerDown={acknowledge}
+      onClick={acknowledge}
+    >
+      <SwitcherLinkLabel holding={holding}>{item.label}</SwitcherLinkLabel>
+    </Link>
   );
 }
 
@@ -119,15 +176,7 @@ export function FamilyTitleSwitcher({
         onAnimationEnd={onAnimationEnd}
       >
         {switcher.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={false}
-            aria-current={item.current ? "page" : undefined}
-            className={item.current ? "active" : ""}
-          >
-            {item.label}
-          </Link>
+          <SwitcherLink key={item.href} item={item} />
         ))}
       </nav>
     </details>

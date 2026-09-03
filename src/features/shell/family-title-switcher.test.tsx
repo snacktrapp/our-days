@@ -76,4 +76,18 @@ describe("FamilyTitleSwitcher", () => {
       }));
     }
   });
+
+  it("pulses a family journal row as soon as it is pressed", () => {
+    render(<FamilyTitleSwitcher model={model} switcher={switcher} />);
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    const molly = screen.getByRole("link", { name: "Molly" });
+    fireEvent.pointerDown(molly, { button: 0 });
+    expect(molly).toHaveClass("is-pending");
+    expect(molly.querySelector(".title-switcher-link-pending")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
+      "is-pending",
+    );
+  });
 });
