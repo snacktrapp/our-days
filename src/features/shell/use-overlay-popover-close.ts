@@ -14,7 +14,14 @@ export function overlayMotionReduced() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function useOverlayPopoverClose() {
+export function useOverlayPopoverClose(
+  options: Readonly<{
+    animationName?: string;
+    durationMs?: number;
+  }> = {},
+) {
+  const animationName = options.animationName ?? "overlay-popover-out";
+  const durationMs = options.durationMs ?? overlayPopoverCloseMs;
   const closingRef = useRef(false);
   const [closing, setClosing] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -54,18 +61,18 @@ export function useOverlayPopoverClose() {
       commitRef.current = commit;
       closingRef.current = true;
       setClosing(true);
-      timerRef.current = window.setTimeout(finish, overlayPopoverCloseMs);
+      timerRef.current = window.setTimeout(finish, durationMs);
     },
-    [cancel, finish],
+    [cancel, durationMs, finish],
   );
 
   const onAnimationEnd = useCallback(
     (event: AnimationEvent<HTMLElement>) => {
       if (event.target !== event.currentTarget) return;
-      if (event.animationName !== "overlay-popover-out") return;
+      if (event.animationName !== animationName) return;
       finish();
     },
-    [finish],
+    [animationName, finish],
   );
 
   useEffect(() => () => clearTimer(), [clearTimer]);

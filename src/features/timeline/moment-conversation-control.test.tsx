@@ -436,7 +436,11 @@ describe("MomentConversationControl", () => {
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
-    expect(form).toHaveClass("overlay-popover");
+    expect(form).toHaveClass("note-drawer");
+    expect(form).not.toHaveClass("overlay-popover");
+    expect(form.closest(".note-action-control")).toBeNull();
+    expect(form.closest(".soft-actions")).toBeNull();
+    expect(window.getComputedStyle(form).position).not.toBe("absolute");
     expect(
       within(form)
         .getAllByRole("button")
@@ -558,6 +562,8 @@ describe("MomentConversationControl", () => {
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor.closest("form")).toHaveClass("inline-note-form");
+    expect(editor.closest("form")).toHaveClass("note-drawer");
+    expect(editor.closest("form")).not.toHaveClass("overlay-popover");
     expect(editor).toHaveValue("Original note.");
     expect(
       within(screen.getByRole("list", { name: "Notes from family" })).getByText(

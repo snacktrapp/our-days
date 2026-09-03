@@ -1421,7 +1421,6 @@ button:focus-visible,
 }
 
 .moment-card:has(.connected-moment-menu),
-.moment-card:has(.inline-note-form),
 .moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
@@ -4457,7 +4456,6 @@ button:focus-visible,
 }
 
 .moment-card:has(.connected-moment-menu),
-.moment-card:has(.inline-note-form),
 .moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
@@ -4692,19 +4690,16 @@ button:focus-visible,
   align-items: center;
 }
 
-.note-action-control .inline-note-form {
-  position: absolute;
-  z-index: 12;
-  bottom: calc(100% + 7px);
-  right: -8px;
-  width: min(280px, calc(100vw - 40px));
-  margin: 0;
-  padding: 10px;
+.inline-note-form.note-drawer {
   display: grid;
-  gap: 8px;
-  border-radius: 16px;
-  /* Comment icon is 44px, overlay hangs 7px above and 8px to the right. */
-  transform-origin: calc(100% - 14px) calc(100% + 29px);
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+.note-drawer-panel {
+  min-height: 0;
+  display: grid;
+  gap: 7px;
 }
 
 .quick-reaction-trigger,
@@ -4763,6 +4758,26 @@ button:focus-visible,
   to {
     opacity: 0;
     transform: scale(0.93);
+  }
+}
+
+@keyframes note-drawer-in {
+  from {
+    grid-template-rows: 0fr;
+  }
+
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+@keyframes note-drawer-out {
+  from {
+    grid-template-rows: 1fr;
+  }
+
+  to {
+    grid-template-rows: 0fr;
   }
 }
 
@@ -6534,13 +6549,11 @@ html.media-viewer-open .bottom-nav:has(:active) {
 .notification-panel,
 .connected-moment-menu,
 .quick-reaction-control .inline-reaction-picker,
-.note-action-control .inline-note-form,
 .new-moment-composer-dialog.composer-type-picker .composer-sheet,
 :root[data-theme="light"] .title-switcher nav,
 :root[data-theme="light"] .notification-panel,
 :root[data-theme="light"] .connected-moment-menu,
 :root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
-:root[data-theme="light"] .note-action-control .inline-note-form,
 :root[data-theme="light"]
   .new-moment-composer-dialog.composer-type-picker
   .composer-sheet,
@@ -7384,7 +7397,6 @@ html.media-viewer-open .bottom-nav:has(:active) {
 
   .overlay-popover,
   .quick-reaction-control .inline-reaction-picker,
-  .note-action-control .inline-note-form,
   .connected-moment-menu,
   .notification-panel,
   .title-switcher[open] nav,
@@ -7392,15 +7404,22 @@ html.media-viewer-open .bottom-nav:has(:active) {
     animation: overlay-popover-in 180ms ease-out backwards;
   }
 
+  .inline-note-form.note-drawer {
+    animation: note-drawer-in 180ms ease-out;
+  }
+
   .overlay-popover.is-closing,
   .inline-reaction-picker.is-closing,
-  .inline-note-form.is-closing,
   .connected-moment-menu.is-closing,
   .notification-panel.is-closing,
   .title-switcher[open] nav.is-closing,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen)
     .composer-sheet.is-closing {
     animation: overlay-popover-out 120ms ease-in forwards;
+  }
+
+  .inline-note-form.note-drawer.is-closing {
+    animation: note-drawer-out 180ms ease-in forwards;
   }
 
   .quick-reaction-trigger:active {
@@ -7439,8 +7458,8 @@ html.media-viewer-open .bottom-nav:has(:active) {
   .overlay-popover.is-closing,
   .quick-reaction-control .inline-reaction-picker,
   .quick-reaction-control .inline-reaction-picker.is-closing,
-  .note-action-control .inline-note-form,
-  .note-action-control .inline-note-form.is-closing,
+  .inline-note-form.note-drawer,
+  .inline-note-form.note-drawer.is-closing,
   .connected-moment-menu,
   .connected-moment-menu.is-closing,
   .notification-panel,
