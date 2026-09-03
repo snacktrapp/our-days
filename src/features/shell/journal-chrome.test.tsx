@@ -74,5 +74,8 @@ describe("JournalChrome", () => {
     expect(header).not.toBeNull();
     expect(stage).not.toBeNull();
     expect(stage?.contains(header)).toBe(false);
+    expect(container.querySelector(".app-shell")?.contains(header)).toBe(
+      false,
+    );
   });
 });

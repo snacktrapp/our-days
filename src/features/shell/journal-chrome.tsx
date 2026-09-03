@@ -75,22 +75,25 @@ export function JournalChrome({
   createMomentAction,
   standaloneNavigation = false,
 }: JournalChromeProps) {
-  return (
-    <main className={`app-shell theme-${model.accent}`}>
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-      <ComposerSessionProvider
-        model={model.composer}
+  const header =
+    section === "trash" ? (
+      <TrashHeader model={model} />
+    ) : (
+      <PrimaryJournalHeader
+        model={model}
         createMomentAction={createMomentAction}
-      >
-        {section === "trash" ? (
-          <TrashHeader model={model} />
-        ) : (
-          <PrimaryJournalHeader
-            model={model}
-            createMomentAction={createMomentAction}
-          />
-        )}
+      />
+    );
+
+  return (
+    <ComposerSessionProvider
+      model={model.composer}
+      createMomentAction={createMomentAction}
+    >
+      {header}
+      <main className={`app-shell theme-${model.accent}`}>
+        <div className="ambient ambient-one" />
+        <div className="ambient ambient-two" />
         <section className="phone-stage" aria-label="Family journal">
           <p
             id="journal-live-region"
@@ -107,7 +110,7 @@ export function JournalChrome({
             />
           ) : null}
         </section>
-      </ComposerSessionProvider>
-    </main>
+      </main>
+    </ComposerSessionProvider>
   );
 }
