@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  mapTilerStaticMapUrl,
+  mapTilerRasterTile,
   publicMapTilerKey,
 } from "@/features/composer/maptiler";
 
@@ -18,11 +18,11 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const [failed, setFailed] = useState(false);
-  const mapUrl =
+  const tile =
     latitude != null && longitude != null
-      ? mapTilerStaticMapUrl(publicMapTilerKey(), latitude, longitude)
-      : "";
-  const showLiveMap = Boolean(mapUrl) && !failed;
+      ? mapTilerRasterTile(publicMapTilerKey(), latitude, longitude)
+      : null;
+  const showLiveMap = Boolean(tile) && !failed;
 
   return (
     <div
@@ -30,17 +30,18 @@ export function LocationMapVisual({
         className ? ` ${className}` : ""
       }`}
     >
-      {showLiveMap ? (
+      {showLiveMap && tile ? (
         <>
-          {/* MapTiler static maps are allowlisted on img-src; this is not a
-              Next public optimizer asset. */}
+          {/* MapTiler raster tiles are allowlisted on img-src. The document
+              referrer policy is no-referrer; origin is required for this key. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={mapUrl}
+            src={tile.url}
             alt={`Map of ${place}`}
-            width={800}
-            height={330}
+            width={256}
+            height={256}
             decoding="async"
+            referrerPolicy="origin"
             onError={() => setFailed(true)}
           />
           <small className="map-attribution">
@@ -54,7 +55,18 @@ export function LocationMapVisual({
           <span className="map-road road-two" />
         </>
       )}
-      <span className="place-pin" aria-hidden="true">
+      <span
+        className="place-pin"
+        aria-hidden="true"
+        style={
+          showLiveMap && tile
+            ? {
+                top: `${tile.yFraction * 100}%`,
+                left: `${tile.xFraction * 100}%`,
+              }
+            : undefined
+        }
+      >
         <i />
       </span>
     </div>

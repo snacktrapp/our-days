@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  mapTilerStaticMapUrl,
+  mapTilerRasterTile,
   reverseGeocodeMapTilerPlace,
   searchMapTilerPlaces,
 } from "./maptiler";
@@ -58,11 +58,14 @@ describe("MapTiler geocoding", () => {
     ).resolves.toBe("Ocean overlook");
   });
 
-  it("builds a static map URL for a saved pin", () => {
-    const url = mapTilerStaticMapUrl("public-key", 39.2, -119.93);
-    expect(url).toContain("api.maptiler.com/maps/streets-v2/static/");
-    expect(url).toContain("-119.93,39.2,14/");
-    expect(url).toContain("key=");
-    expect(mapTilerStaticMapUrl("", 39.2, -119.93)).toBe("");
+  it("builds a raster tile for a saved pin", () => {
+    const harbor = mapTilerRasterTile("public-key", 39.2, -119.93);
+    const pismo = mapTilerRasterTile("public-key", 35.1428, -120.6413);
+    expect(harbor?.url).toContain("api.maptiler.com/maps/streets-v2/256/14/");
+    expect(harbor?.url).toContain("key=");
+    expect(pismo?.url).not.toBe(harbor?.url);
+    expect(harbor?.xFraction).toBeGreaterThanOrEqual(0);
+    expect(harbor?.xFraction).toBeLessThan(1);
+    expect(mapTilerRasterTile("", 39.2, -119.93)).toBeNull();
   });
 });

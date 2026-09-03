@@ -20,7 +20,7 @@ describe("LocationMapVisual", () => {
     unmount();
   });
 
-  it("shows a MapTiler static map for a saved pin", () => {
+  it("shows a MapTiler raster tile for a saved pin", () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     render(
       <LocationMapVisual
@@ -31,16 +31,16 @@ describe("LocationMapVisual", () => {
     );
     const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
     expect(map.getAttribute("src")).toContain(
-      "api.maptiler.com/maps/streets-v2/static/",
+      "api.maptiler.com/maps/streets-v2/256/14/",
     );
-    expect(map.getAttribute("src")).toContain("-119.93,39.2,14/");
+    expect(map).toHaveAttribute("referrerPolicy", "origin");
     expect(document.querySelector(".map-water")).toBeNull();
     expect(
       screen.getByText("© MapTiler © OpenStreetMap contributors"),
     ).toBeVisible();
   });
 
-  it("uses a different static map for a different pin", () => {
+  it("uses a different raster tile for a different pin", () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     const { rerender } = render(
       <LocationMapVisual
@@ -62,8 +62,8 @@ describe("LocationMapVisual", () => {
     const pismo = screen
       .getByRole("img", { name: "Map of Pismo Beach" })
       .getAttribute("src");
-    expect(harbor).toContain("-119.93,39.2,14/");
-    expect(pismo).toContain("-120.6413,35.1428,14/");
+    expect(harbor).toContain("/256/14/");
+    expect(pismo).toContain("/256/14/");
     expect(pismo).not.toBe(harbor);
   });
 });

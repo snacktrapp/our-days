@@ -1501,10 +1501,8 @@ button:focus-visible,
   content: none;
 }
 .memory-map-live .place-pin {
-  top: 50%;
-  left: 50%;
   z-index: 3;
-  transform: translate(-50%, calc(-50% - 21px)) rotate(-45deg);
+  transform: translate(-50%, calc(-100% + 4px)) rotate(-45deg);
 }
 .memory-map-live .map-attribution {
   position: absolute;
