@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { localJournalIsEnabled } from "../../../../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../../../../config/our-days-environment";
 import {
   exchangeAuthorizationCode,
   oauthCallbackUrl,
@@ -17,8 +20,8 @@ const privateHeaders = {
 } as const;
 
 function siteOrigin(request: Request) {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL;
-  if (configured) return new URL(configured).origin;
+  const resolved = resolvedSiteOrigin();
+  if (resolved) return new URL(resolved).origin;
   return new URL(request.url).origin;
 }
 

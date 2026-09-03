@@ -96,6 +96,31 @@ describe("OAuth start route", () => {
     );
   });
 
+  it("uses the Vercel Preview origin for redirect_to when SITE_URL is a copied staging host", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://our-days-staging.vercel.app");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "our-days-git-preview.vercel.app");
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
+
+    const response = await GET(
+      new Request("https://our-days-git-preview.vercel.app/api/auth/oauth/google"),
+      { params: Promise.resolve({ provider: "google" }) },
+    );
+
+    expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: {
+        redirectTo: "https://our-days-git-preview.vercel.app/auth/callback",
+        skipBrowserRedirect: true,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    expect(response.headers.get("location")).toBe(
+      "https://accounts.google.com/hosted",
+    );
+  });
+
   it("starts hosted Preview Google through Supabase even if resource mode was left detached", async () => {
     vi.stubEnv("VERCEL", "1");
     vi.stubEnv("VERCEL_ENV", "preview");

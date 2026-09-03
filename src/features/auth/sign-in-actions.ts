@@ -2,7 +2,10 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { localJournalIsEnabled } from "../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 
@@ -19,7 +22,7 @@ async function hasExpectedOrigin() {
   const requestHeaders = await headers();
   return isExpectedMutationOrigin(
     requestHeaders.get("origin"),
-    process.env.NEXT_PUBLIC_SITE_URL,
+    resolvedSiteOrigin(),
   );
 }
 
@@ -60,7 +63,7 @@ export async function requestSignInLink(
         shouldCreateUser: false,
         emailRedirectTo: new URL(
           "/auth/callback",
-          process.env.NEXT_PUBLIC_SITE_URL,
+          resolvedSiteOrigin(),
         ).toString(),
       },
     });

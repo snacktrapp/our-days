@@ -299,6 +299,13 @@ function hostedVercelHostname(value: string | undefined) {
   return value.replace(/^https?:\/\//, "").replace(/\/$/, "");
 }
 
+function hostedVercelDeploymentOrigin(environment: ProcessEnvironment) {
+  const host = hostedVercelHostname(
+    environment.VERCEL_BRANCH_URL || environment.VERCEL_URL,
+  );
+  return host ? `https://${host}` : undefined;
+}
+
 function hostedVercelSiteOrigin(environment: ProcessEnvironment) {
   const productionOrigin =
     environment.OUR_DAYS_PRODUCTION_SITE_ORIGIN?.trim() ||
@@ -306,12 +313,22 @@ function hostedVercelSiteOrigin(environment: ProcessEnvironment) {
   if (environment.VERCEL_ENV === "production") {
     return environment.NEXT_PUBLIC_SITE_URL?.trim() || productionOrigin;
   }
-  const configured = environment.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured && configured !== productionOrigin) return configured;
-  const host = hostedVercelHostname(
-    environment.VERCEL_BRANCH_URL || environment.VERCEL_URL,
+  return (
+    hostedVercelDeploymentOrigin(environment) ||
+    environment.NEXT_PUBLIC_SITE_URL?.trim()
   );
-  return host ? `https://${host}` : configured;
+}
+
+export function resolvedSiteOrigin(
+  environment: ProcessEnvironment = process.env,
+) {
+  if (isHostedVercelRuntime(environment)) {
+    return hostedVercelSiteOrigin(environment);
+  }
+  return (
+    environment.NEXT_PUBLIC_SITE_URL?.trim() ||
+    hostedVercelDeploymentOrigin(environment)
+  );
 }
 
 function isPublicSupabaseBrowserKey(value: string) {

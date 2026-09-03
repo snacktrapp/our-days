@@ -7,6 +7,7 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
   photoPostingIsEnabled,
+  resolvedSiteOrigin,
   supabaseResourceIsActive,
   OurDaysEnvironmentError,
   validateOurDaysEnvironment,
@@ -480,6 +481,43 @@ describe("Our Days environment isolation", () => {
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
             "sb_publishable_environment_contract_fixture",
         }),
+      ),
+    ).toEqual({
+      identity: "preview",
+      resourceMode: "supabase",
+      siteOrigin: "https://our-days-git-preview.vercel.app",
+      supabaseProjectRef: productionRef,
+    });
+  });
+
+  it("binds a hosted Vercel Preview to VERCEL_URL even when a non-production SITE_URL was copied", () => {
+    const previewWithCopiedStaging = {
+      VERCEL: "1",
+      VERCEL_ENV: "preview",
+      VERCEL_URL: "our-days-git-preview.vercel.app",
+      OUR_DAYS_ENVIRONMENT: "production",
+      OUR_DAYS_RESOURCE_MODE: "detached",
+      OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+      OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+      NEXT_PUBLIC_SITE_URL: "https://our-days-staging.vercel.app",
+      OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://our-days-neon.vercel.app",
+      OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: productionRef,
+      OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF: productionRef,
+      OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS: proofRef,
+      NEXT_PUBLIC_SUPABASE_URL: `https://${productionRef}.supabase.co`,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        "sb_publishable_environment_contract_fixture",
+    } as const;
+
+    expect(environmentForNextConfig(previewWithCopiedStaging)).toMatchObject({
+      NEXT_PUBLIC_SITE_URL: "https://our-days-git-preview.vercel.app",
+    });
+    expect(resolvedSiteOrigin(previewWithCopiedStaging)).toBe(
+      "https://our-days-git-preview.vercel.app",
+    );
+    expect(
+      validateOurDaysEnvironment(
+        environmentForNextConfig(previewWithCopiedStaging),
       ),
     ).toEqual({
       identity: "preview",

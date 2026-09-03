@@ -5,9 +5,11 @@ import {
 } from "./config/our-days-environment";
 import { httpSecurityHeaders } from "./config/http-security";
 
-const environment = validateOurDaysEnvironment(
-  environmentForNextConfig(process.env),
-);
+const resolvedEnvironment = environmentForNextConfig(process.env);
+if (resolvedEnvironment.NEXT_PUBLIC_SITE_URL) {
+  process.env.NEXT_PUBLIC_SITE_URL = resolvedEnvironment.NEXT_PUBLIC_SITE_URL;
+}
+const environment = validateOurDaysEnvironment(resolvedEnvironment);
 
 const privateRoutes = [
   "/",
