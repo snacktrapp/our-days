@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
 
@@ -57,8 +57,38 @@ export function FamilyTitleSwitcher({
   switcher: readonly FamilyTimelineSwitcherItem[];
 }>) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const { closing, requestClose, cancel, onAnimationEnd } =
+  const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
     useOverlayPopoverClose();
+
+  useEffect(() => {
+    const closeIfOpen = () => {
+      const details = detailsRef.current;
+      if (!details?.open || closingRef.current) return;
+      requestClose(() => {
+        details.open = false;
+      });
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (!detailsRef.current?.open) return;
+      event.preventDefault();
+      closeIfOpen();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (!details?.open) return;
+      if (event.target instanceof Node && details.contains(event.target)) {
+        return;
+      }
+      closeIfOpen();
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [closingRef, requestClose]);
 
   return (
     <details

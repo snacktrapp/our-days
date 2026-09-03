@@ -110,6 +110,11 @@ describe("JournalChrome", () => {
       "href",
       "/people/molly",
     );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(
+      screen.queryByRole("navigation", { name: "Choose a family timeline" }),
+    ).toBeNull();
   });
 
   it("keeps Account and other static titles from becoming a family switcher", () => {
