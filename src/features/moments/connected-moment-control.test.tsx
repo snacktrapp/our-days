@@ -2,6 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ThoughtMomentViewModel } from "@/features/timeline/timeline-view-model";
+import { ComposerSessionProvider } from "@/features/composer/composer-session";
+import {
+  formatBibleVerseMoment,
+  selectBiblePassage,
+} from "@/features/composer/bible-verse-catalog";
 import { ConnectedMomentControl } from "./connected-moment-control";
 
 const navigation = vi.hoisted(() => ({
@@ -246,5 +251,69 @@ describe("ConnectedMomentControl", () => {
       ).toBeEnabled(),
     );
     confirm.mockRestore();
+  });
+
+  it("opens a Bible verse in the add-entry pickers instead of Edit this moment", async () => {
+    const user = userEvent.setup();
+    const passage = await selectBiblePassage("Isaiah", 40, 28, 28);
+    expect(passage).not.toBeNull();
+    render(
+      <ComposerSessionProvider
+        model={{
+          previewToday: "2026-09-03",
+          defaultJournalPersonId: "person-1",
+          recorderPersonId: "person-1",
+          recordedByName: "Brian",
+          experience: "connected-family",
+          circleId: "20000000-0000-4000-8000-000000000001",
+          journalPeople: [
+            {
+              id: "person-1",
+              name: "Brian",
+              initial: "B",
+              accent: "teal",
+              contextLabel: "You",
+            },
+          ],
+          taggablePeople: [
+            {
+              id: "molly",
+              name: "Molly",
+              initial: "M",
+              accent: "clay",
+              contextLabel: "Co-organizer",
+            },
+          ],
+        }}
+      >
+        <ConnectedMomentControl
+          moment={{
+            ...moment,
+            text: formatBibleVerseMoment(passage!.reference, passage!.text),
+            taggedPeople: [{ id: "molly", name: "Molly" }],
+          }}
+          actions={actions}
+        />
+      </ComposerSessionProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Moment options/u }));
+    await user.click(screen.getByRole("button", { name: /^Edit/u }));
+
+    expect(
+      screen.queryByRole("heading", { name: "Edit this moment" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Your thought")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Add a Bible verse" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Book, Isaiah/u }),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("everlasting God");
+    });
   });
 });

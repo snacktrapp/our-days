@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
   SaveFamilyMomentAction,
   SaveWrittenMomentAction,
+  UpdateFamilyMomentAction,
 } from "@/features/moments/moment-action-types";
 import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
@@ -36,6 +37,24 @@ import {
   type PlaceSelection,
 } from "@/lib/place-coordinates";
 
+export type ComposerEditDraft = Readonly<{
+  momentId: string;
+  revision: number;
+  mode: "bible-verse";
+  journalPersonId: string;
+  occurredOn: string;
+  maxOccurredOn: string;
+  occurredTime: string;
+  occurredAt: string | null;
+  occurredTimezone: string | null;
+  taggedPersonIds: readonly string[];
+  place: PlaceSelection;
+  verseSelection: BibleVerseSelection;
+  title: string;
+  body: string;
+  save: UpdateFamilyMomentAction;
+}>;
+
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
   open: boolean;
@@ -43,6 +62,7 @@ type MomentComposerProps = Readonly<{
   onRequestClose: () => void;
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
+  editDraft?: ComposerEditDraft | null;
 }>;
 
 export type { SaveFamilyMomentAction, SaveWrittenMomentAction };
@@ -157,26 +177,44 @@ export function MomentComposer({
   onRequestClose,
   saveFamilyMoment,
   saveWrittenMoment,
+  editDraft = null,
 }: MomentComposerProps) {
   const router = useRouter();
-  // Connected saves now detach from this surface before network work begins.
-  const saving = false;
-  const [mode, setMode] = useState<ComposerMode | null>(null);
-  const [choosingMode, setChoosingMode] = useState(false);
+  const pathname = usePathname();
+  const [savingEdit, setSavingEdit] = useState(false);
+  const saving = savingEdit;
+  const [mode, setMode] = useState<ComposerMode | null>(
+    editDraft?.mode ?? null,
+  );
+  const [choosingMode, setChoosingMode] = useState(!editDraft);
   const [reviewing, setReviewing] = useState(false);
-  const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
-  const [body, setBody] = useState("");
-  const [title, setTitle] = useState("");
+  const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
+    Boolean(
+      editDraft &&
+      (editDraft.taggedPersonIds.length > 0 ||
+        editDraft.place.label.trim().length > 0),
+    ),
+  );
+  const [body, setBody] = useState(editDraft?.body ?? "");
+  const [title, setTitle] = useState(editDraft?.title ?? "");
   const [verseSelection, setVerseSelection] = useState<BibleVerseSelection>(
-    emptyBibleVerseSelection,
+    editDraft?.verseSelection ?? emptyBibleVerseSelection,
   );
-  const [occurredOn, setOccurredOn] = useState(model.previewToday);
-  const [occurredTime, setOccurredTime] = useState("");
+  const [occurredOn, setOccurredOn] = useState(
+    editDraft?.occurredOn ?? model.previewToday,
+  );
+  const [occurredTime, setOccurredTime] = useState(
+    editDraft?.occurredTime ?? "",
+  );
   const [journalPersonId, setJournalPersonId] = useState(
-    model.defaultJournalPersonId,
+    editDraft?.journalPersonId ?? model.defaultJournalPersonId,
   );
-  const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>([]);
-  const [place, setPlace] = useState<PlaceSelection>(emptyPlaceSelection);
+  const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
+    editDraft?.taggedPersonIds ?? [],
+  );
+  const [place, setPlace] = useState<PlaceSelection>(
+    editDraft?.place ?? emptyPlaceSelection,
+  );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoDecodeState, setPhotoDecodeState] =
@@ -218,18 +256,31 @@ export function MomentComposer({
     connectedFamily && model.photoPostingEnabled && model.circleId,
   );
   const resolvedPlaceName = mode === "location" ? title : place.label;
-  const isDirty = Boolean(
-    body.length ||
-    title.length ||
-    verseSelection.book ||
-    place.label.length ||
-    place.latitude !== null ||
-    photoFile ||
-    taggedPersonIds.length ||
-    occurredOn !== model.previewToday ||
-    occurredTime.length > 0 ||
-    journalPersonId !== model.defaultJournalPersonId,
-  );
+  const isDirty = editDraft
+    ? body !== editDraft.body ||
+      title !== editDraft.title ||
+      verseSelection.book !== editDraft.verseSelection.book ||
+      verseSelection.chapter !== editDraft.verseSelection.chapter ||
+      verseSelection.startVerse !== editDraft.verseSelection.startVerse ||
+      verseSelection.endVerse !== editDraft.verseSelection.endVerse ||
+      place.label !== editDraft.place.label ||
+      place.latitude !== editDraft.place.latitude ||
+      place.longitude !== editDraft.place.longitude ||
+      taggedPersonIds.join(",") !== editDraft.taggedPersonIds.join(",") ||
+      occurredOn !== editDraft.occurredOn ||
+      occurredTime !== editDraft.occurredTime
+    : Boolean(
+        body.length ||
+        title.length ||
+        verseSelection.book ||
+        place.label.length ||
+        place.latitude !== null ||
+        photoFile ||
+        taggedPersonIds.length ||
+        occurredOn !== model.previewToday ||
+        occurredTime.length > 0 ||
+        journalPersonId !== model.defaultJournalPersonId,
+      );
 
   const revokeCurrentPhotoUrl = useCallback(() => {
     if (photoPreviewUrlRef.current) {
@@ -295,7 +346,11 @@ export function MomentComposer({
       if (
         !discardDraft &&
         isDirty &&
-        !window.confirm("Discard this unfinished moment?")
+        !window.confirm(
+          editDraft
+            ? "Discard your unsaved changes to this moment?"
+            : "Discard this unfinished moment?",
+        )
       ) {
         return;
       }
@@ -304,7 +359,7 @@ export function MomentComposer({
       onRequestClose();
       window.requestAnimationFrame(() => returnFocusRef.current?.focus());
     },
-    [isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
+    [editDraft, isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
   );
 
   useEffect(
@@ -529,13 +584,21 @@ export function MomentComposer({
     if (
       saving ||
       uploadInFlightRef.current ||
-      (!saveFamilyMoment && !saveWrittenMoment) ||
+      (!editDraft && !saveFamilyMoment && !saveWrittenMoment) ||
       !mode
     )
       return;
     let occurredAt: string | null = null;
     let occurredTimezone: string | null = null;
-    if (occurredTime) {
+    if (
+      editDraft &&
+      occurredTime &&
+      occurredOn === editDraft.occurredOn &&
+      occurredTime === editDraft.occurredTime
+    ) {
+      occurredAt = editDraft.occurredAt;
+      occurredTimezone = editDraft.occurredTimezone;
+    } else if (occurredTime) {
       const localMoment = new Date(`${occurredOn}T${occurredTime}:00`);
       if (Number.isNaN(localMoment.getTime())) {
         setSaveError("Check the time and try again.");
@@ -555,6 +618,50 @@ export function MomentComposer({
     const savedJournalPerson = journalPerson;
     setSaveError(null);
     setPhotoRetryable(true);
+
+    if (editDraft) {
+      const savedMode = mode;
+      const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
+      const savedTitle = title.trim();
+      const savedBody =
+        savedMode === "bible-verse"
+          ? formatBibleVerseMoment(savedTitle, capturedBody)
+          : capturedBody;
+      const savedResolvedPlaceName =
+        savedMode === "location" ? savedTitle : savedPlaceName.trim();
+      setSavingEdit(true);
+      try {
+        const result = await editDraft.save({
+          momentId: editDraft.momentId,
+          revision: editDraft.revision,
+          title: savedKind === "milestone" ? savedTitle : "",
+          body: savedBody,
+          placeName: savedResolvedPlaceName,
+          latitude: savedLatitude,
+          longitude: savedLongitude,
+          taggedPersonIds: savedTaggedPersonIds,
+          occurredOn: savedOccurredOn,
+          occurredAt,
+          occurredTimezone,
+        });
+        if (!result.ok) {
+          setSaveError(result.message);
+          return;
+        }
+        const region = document.getElementById("journal-live-region");
+        if (region) region.textContent = "Changes to this moment were saved.";
+        resetDraft();
+        onRequestClose();
+        window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+        router.replace(pathname);
+        router.refresh();
+      } catch {
+        setSaveError("That moment could not be changed. Try again.");
+      } finally {
+        setSavingEdit(false);
+      }
+      return;
+    }
 
     if (mode === "photo" || mode === "video") {
       if (
@@ -673,7 +780,7 @@ export function MomentComposer({
 
   const submitDraft = async () => {
     if (!validateDraft()) return;
-    if (connectedExperience) {
+    if (editDraft || connectedExperience) {
       await saveConnectedMoment();
       return;
     }
@@ -980,13 +1087,15 @@ export function MomentComposer({
             }}
           >
             <header className="composer-editor-header">
-              <button
-                className="composer-back"
-                type="button"
-                onClick={() => setChoosingMode(true)}
-              >
-                ← Choose another
-              </button>
+              {editDraft ? null : (
+                <button
+                  className="composer-back"
+                  type="button"
+                  onClick={() => setChoosingMode(true)}
+                >
+                  ← Choose another
+                </button>
+              )}
               <span id="composer-privacy" className="private-label">
                 {copy.title}
               </span>
@@ -1204,7 +1313,7 @@ export function MomentComposer({
               <div className="composer-core-fields">
                 <DateTimeFields
                   date={occurredOn}
-                  maxDate={model.previewToday}
+                  maxDate={editDraft?.maxOccurredOn ?? model.previewToday}
                   time={occurredTime}
                   onDateChange={setOccurredOn}
                   onTimeChange={setOccurredTime}
@@ -1223,11 +1332,13 @@ export function MomentComposer({
                 </button>
                 {optionalDetailsOpen ? (
                   <div id="composer-optional-fields">
-                    <JournalPickerField
-                      options={model.journalPeople}
-                      value={journalPersonId}
-                      onChange={chooseJournalPerson}
-                    />
+                    {editDraft ? null : (
+                      <JournalPickerField
+                        options={model.journalPeople}
+                        value={journalPersonId}
+                        onChange={chooseJournalPerson}
+                      />
+                    )}
                     <fieldset className="people-tags">
                       <legend>Who else was part of this?</legend>
                       <div>

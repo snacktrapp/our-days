@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "./moment-composer";
+import { selectBiblePassage } from "./bible-verse-catalog";
+import { emptyPlaceSelection } from "@/lib/place-coordinates";
 import { PhotoUploadError } from "./photo-upload";
 import {
   clearOptimisticMediaUploads,
@@ -26,6 +28,7 @@ const videoUpload = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
+  usePathname: () => "/family",
 }));
 vi.mock("./photo-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./photo-upload")>()),
@@ -983,6 +986,98 @@ describe("MomentComposer", () => {
         }),
       ),
     );
+  });
+
+  it("edits a saved Bible verse with the same pickers and WEB preview", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const create = vi.fn();
+    const onRequestClose = vi.fn();
+    const triggerRef = { current: null };
+    const passage = await selectBiblePassage("Isaiah", 40, 28, 28);
+    expect(passage).not.toBeNull();
+    const user = userEvent.setup();
+    render(
+      <>
+        <p id="journal-live-region" aria-live="assertive" />
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open
+          editDraft={{
+            momentId: "moment-verse",
+            revision: 3,
+            mode: "bible-verse",
+            journalPersonId: "brian",
+            occurredOn: "2026-09-02",
+            maxOccurredOn: "2026-09-03",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: ["molly"],
+            place: emptyPlaceSelection(),
+            verseSelection: {
+              book: "Isaiah",
+              chapter: 40,
+              startVerse: 28,
+              endVerse: 28,
+            },
+            title: passage!.reference,
+            body: passage!.text,
+            save: update,
+          }}
+          returnFocusRef={triggerRef}
+          onRequestClose={onRequestClose}
+          saveFamilyMoment={create}
+        />
+      </>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Add a Bible verse" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Edit this moment" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Choose another/u }),
+    ).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Your thought" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Entry" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^Book, Isaiah/u }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Chapter, 40/u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Starting verse, 28/u }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Ending verse, 28/u }),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("everlasting God");
+    });
+    expect(screen.getByRole("checkbox", { name: "Molly" })).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        momentId: "moment-verse",
+        revision: 3,
+        title: "",
+        body: expect.stringContaining("— Isaiah 40:28 · World English Bible"),
+        taggedPersonIds: ["molly"],
+      }),
+    );
+    expect(onRequestClose).toHaveBeenCalledOnce();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
 
   it("preserves a draft while choosing and confirms an incompatible type change", async () => {

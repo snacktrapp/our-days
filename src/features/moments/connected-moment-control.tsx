@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { DateTimeFields } from "@/features/composer/date-time-fields";
 import { LocationFields } from "@/features/composer/location-fields";
+import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { useComposerSession } from "@/features/composer/composer-session";
 import { type PlaceSelection } from "@/lib/place-coordinates";
 import type {
   MomentInteractionViewModel,
@@ -86,6 +88,7 @@ function ChangeableMomentControl({
 }: ConnectedMomentControlProps & { actions: ConnectedMomentActions }) {
   const pathname = usePathname();
   const router = useRouter();
+  const composerSession = useComposerSession();
   const [pending, setPending] = useState(false);
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -318,6 +321,36 @@ function ChangeableMomentControl({
                 aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
                 onClick={() => {
                   setMenuOpen(false);
+                  const parsed =
+                    moment.kind === "thought"
+                      ? parseBibleVerseMoment(moment.text)
+                      : null;
+                  if (parsed && composerSession && moment.revision) {
+                    composerSession.openEdit(
+                      {
+                        momentId: moment.id,
+                        revision: moment.revision,
+                        mode: "bible-verse",
+                        journalPersonId: moment.journalPersonId,
+                        occurredOn: moment.occurredOn,
+                        maxOccurredOn:
+                          moment.maxOccurredOn ?? moment.occurredOn,
+                        occurredTime: originalTime,
+                        occurredAt: moment.editOccurrence?.occurredAt ?? null,
+                        occurredTimezone:
+                          moment.editOccurrence?.timeZone ?? null,
+                        taggedPersonIds:
+                          moment.taggedPeople?.map((person) => person.id) ?? [],
+                        place: originalPlace,
+                        verseSelection: parsed.selection,
+                        title: parsed.reference,
+                        body: parsed.text,
+                        save: actions.update,
+                      },
+                      menuTriggerRef.current,
+                    );
+                    return;
+                  }
                   setOpen(true);
                 }}
               >

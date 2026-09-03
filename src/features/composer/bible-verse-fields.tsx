@@ -10,6 +10,7 @@ import {
   loadWebCatalog,
   previewBiblePassage,
   selectBiblePassage,
+  formatBibleVerseReference,
   versesInChapter,
 } from "./bible-verse-catalog";
 
@@ -48,11 +49,79 @@ export function BibleVerseFields({
   const rootRef = useRef<HTMLDivElement>(null);
   const passageRequestRef = useRef(0);
   const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
-  const [preview, setPreview] = useState<BibleVerse | null>(null);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [asyncPreview, setAsyncPreview] = useState<BibleVerse | null>(null);
 
   useEffect(() => {
-    void loadWebCatalog();
+    void loadWebCatalog().then(() => setCatalogReady(true));
   }, []);
+
+  const complete = Boolean(
+    value.book && value.chapter && value.startVerse && value.endVerse,
+  );
+  const requestedReference =
+    complete &&
+    value.book &&
+    value.chapter &&
+    value.startVerse &&
+    value.endVerse
+      ? formatBibleVerseReference(
+          value.book,
+          value.chapter,
+          value.startVerse,
+          value.endVerse,
+        )
+      : null;
+  const syncPreview =
+    catalogReady &&
+    value.book &&
+    value.chapter &&
+    value.startVerse &&
+    value.endVerse
+      ? previewBiblePassage(
+          value.book,
+          value.chapter,
+          value.startVerse,
+          value.endVerse,
+        )
+      : null;
+  const preview =
+    syncPreview ??
+    (asyncPreview &&
+    requestedReference &&
+    asyncPreview.reference === requestedReference
+      ? asyncPreview
+      : null);
+
+  useEffect(() => {
+    if (!complete || syncPreview || !requestedReference) return;
+    if (
+      value.book == null ||
+      value.chapter == null ||
+      value.startVerse == null ||
+      value.endVerse == null
+    ) {
+      return;
+    }
+    const requestId = ++passageRequestRef.current;
+    void selectBiblePassage(
+      value.book,
+      value.chapter,
+      value.startVerse,
+      value.endVerse,
+    ).then((passage) => {
+      if (passageRequestRef.current !== requestId) return;
+      setAsyncPreview(passage);
+    });
+  }, [
+    complete,
+    requestedReference,
+    syncPreview,
+    value.book,
+    value.chapter,
+    value.endVerse,
+    value.startVerse,
+  ]);
 
   useEffect(() => {
     if (!openPicker) return;
@@ -81,11 +150,11 @@ export function BibleVerseFields({
 
   const commit = (next: BibleVerseSelection) => {
     const requestId = ++passageRequestRef.current;
-    const complete = Boolean(
+    const nextComplete = Boolean(
       next.book && next.chapter && next.startVerse && next.endVerse,
     );
-    if (!complete) {
-      setPreview(null);
+    if (!nextComplete) {
+      setAsyncPreview(null);
       onChange(next, null);
       return;
     }
@@ -96,10 +165,13 @@ export function BibleVerseFields({
       next.startVerse!,
       next.endVerse!,
     );
-    setPreview(immediate);
-    onChange(next, immediate);
-    if (immediate) return;
+    if (immediate) {
+      setAsyncPreview(immediate);
+      onChange(next, immediate);
+      return;
+    }
 
+    onChange(next, null);
     void selectBiblePassage(
       next.book!,
       next.chapter!,
@@ -107,7 +179,7 @@ export function BibleVerseFields({
       next.endVerse!,
     ).then((passage) => {
       if (passageRequestRef.current !== requestId) return;
-      setPreview(passage);
+      setAsyncPreview(passage);
       onChange(next, passage);
     });
   };

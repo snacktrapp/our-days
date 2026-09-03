@@ -5,6 +5,8 @@ import {
   endingVersesInChapter,
   formatBibleVerseMoment,
   loadWebCatalog,
+  parseBibleVerseMoment,
+  parseBibleVerseReference,
   previewBiblePassage,
   selectBiblePassage,
   versesInChapter,
@@ -54,5 +56,41 @@ describe("Bible verse catalog", () => {
     expect(formatBibleVerseMoment("John 3:16", "  A verse.  ")).toBe(
       "A verse.\n\n— John 3:16 · World English Bible",
     );
+  });
+
+  it("reads a saved WEB moment back into cascaded pickers", () => {
+    expect(parseBibleVerseReference("John 3:16")).toEqual({
+      book: "John",
+      chapter: 3,
+      startVerse: 16,
+      endVerse: 16,
+    });
+    expect(parseBibleVerseReference("1 Corinthians 13:4–7")).toEqual({
+      book: "1 Corinthians",
+      chapter: 13,
+      startVerse: 4,
+      endVerse: 7,
+    });
+    expect(parseBibleVerseReference("1 John 1:1")).toEqual({
+      book: "1 John",
+      chapter: 1,
+      startVerse: 1,
+      endVerse: 1,
+    });
+    expect(parseBibleVerseMoment("Just a note.")).toBeNull();
+    expect(
+      parseBibleVerseMoment(
+        formatBibleVerseMoment("John 3:16", "For God so loved the world."),
+      ),
+    ).toEqual({
+      text: "For God so loved the world.",
+      reference: "John 3:16",
+      selection: {
+        book: "John",
+        chapter: 3,
+        startVerse: 16,
+        endVerse: 16,
+      },
+    });
   });
 });

@@ -71,6 +71,44 @@ export function formatBibleVerseMoment(reference: string, text: string) {
   return `${text.trim()}\n\n— ${reference.trim()} · World English Bible`;
 }
 
+const bibleVerseMomentPattern =
+  /^([\s\S]+)\n\n— ([^\n]+) · World English Bible$/u;
+
+export function parseBibleVerseReference(
+  reference: string,
+): BibleVerseSelection | null {
+  const trimmed = reference.trim();
+  const book = [...bibleBookNames()]
+    .sort((left, right) => right.length - left.length)
+    .find((name) => trimmed === name || trimmed.startsWith(`${name} `));
+  if (!book) return null;
+  const rest = trimmed.slice(book.length).trim();
+  const match = /^(\d+):(\d+)(?:[–-](\d+))?$/u.exec(rest);
+  if (!match) return null;
+  const chapter = Number(match[1]);
+  const startVerse = Number(match[2]);
+  const endVerse = match[3] ? Number(match[3]) : startVerse;
+  const available = versesInChapter(book, chapter);
+  if (
+    !available.includes(startVerse) ||
+    !available.includes(endVerse) ||
+    endVerse < startVerse
+  ) {
+    return null;
+  }
+  return { book, chapter, startVerse, endVerse };
+}
+
+export function parseBibleVerseMoment(body: string) {
+  const match = bibleVerseMomentPattern.exec(body);
+  if (!match) return null;
+  const text = match[1];
+  const reference = match[2];
+  const selection = parseBibleVerseReference(reference);
+  if (!selection) return null;
+  return { text, reference, selection };
+}
+
 export function loadWebCatalog() {
   catalogPromise ??= import("./data/web-catalog.json").then((module) => {
     loadedCatalog = module.default as WebCatalog;

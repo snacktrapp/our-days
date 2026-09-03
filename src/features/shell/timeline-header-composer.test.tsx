@@ -5,6 +5,7 @@ import { TimelineHeaderComposer } from "./timeline-header-composer";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/family",
 }));
 
 const composer = {
