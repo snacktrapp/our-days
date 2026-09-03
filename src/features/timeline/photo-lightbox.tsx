@@ -276,7 +276,7 @@ function PhotoLightboxLayer({
   });
 
   useLayoutEffect(() => {
-    if (openedRef.current) return;
+    if (!objectUrl || openedRef.current) return;
     openedRef.current = true;
     const origin = request.origin;
     if (overlayMotionReduced()) {
@@ -294,7 +294,7 @@ function PhotoLightboxLayer({
         window.setTimeout(() => setMotion("open"), motionMs);
       });
     });
-  }, [dest, request.origin]);
+  }, [dest, objectUrl, request.origin]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -410,6 +410,8 @@ function PhotoLightboxLayer({
       first.focus();
     }
   }
+
+  if (!objectUrl) return null;
 
   return (
     <div

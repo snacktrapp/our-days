@@ -217,8 +217,7 @@ describe("photo lightbox", () => {
     expect(last).toBeVisible();
   });
 
-  it("tracks a swipe on the overlay and reverses to the card", () => {
-    vi.useFakeTimers();
+  it("tracks a swipe on the overlay and reverses to the card", async () => {
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
     mockIndependentOverlayDecode();
     render(
@@ -238,10 +237,12 @@ describe("photo lightbox", () => {
     });
     mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
     fireEvent.click(trigger);
+    await screen.findByRole("img", { name: "Porch" });
     const photo = document.querySelector(
       ".photo-lightbox-photo",
     ) as HTMLElement;
     capturePhoto(photo);
+    vi.useFakeTimers();
 
     fireEvent.pointerDown(photo, {
       pointerId: 1,
@@ -275,7 +276,7 @@ describe("photo lightbox", () => {
     expect(screen.getByRole("img", { name: "Porch card" })).toBeVisible();
   });
 
-  it("dismisses instantly when motion is reduced", () => {
+  it("dismisses instantly when motion is reduced", async () => {
     const media = vi.mocked(window.matchMedia);
     media.mockImplementation((query: string) => ({
       matches: query === "(prefers-reduced-motion: reduce)",
@@ -303,6 +304,7 @@ describe("photo lightbox", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Open photo full screen: Porch" }),
     );
+    await screen.findByRole("button", { name: "Close full-screen media" });
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
