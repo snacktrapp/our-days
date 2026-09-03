@@ -2,6 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   backgroundScrollLockClass,
+  backgroundScrollLockSheetId,
   overlayBackgroundScrollShouldStop,
   overlayScrollParent,
   useLockBackgroundScroll,
@@ -30,6 +31,7 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
+    document.getElementById(backgroundScrollLockSheetId)?.remove();
     vi.restoreAllMocks();
   });
 
@@ -79,7 +81,10 @@ describe("overlay background scroll lock", () => {
     expect(overlayBackgroundScrollShouldStop(map, "down")).toBe(false);
   });
 
-  it("keeps the locked page at its current scroll offset", () => {
+  it("pins the locked page with a nonceable scroll offset", () => {
+    const nonceHost = document.createElement("meta");
+    nonceHost.setAttribute("nonce", "test-nonce");
+    document.head.append(nonceHost);
     const scrollTo = vi.fn();
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -87,9 +92,15 @@ describe("overlay background scroll lock", () => {
     });
     window.scrollTo = scrollTo as typeof window.scrollTo;
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
-    expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    const sheet = document.getElementById(backgroundScrollLockSheetId);
+    expect(sheet).toBeInstanceOf(HTMLStyleElement);
+    expect(sheet).toHaveAttribute("nonce", "test-nonce");
+    expect(sheet?.textContent).toBe(":root{--composer-scroll-lock-top:-160px}");
+    expect(scrollTo).not.toHaveBeenCalled();
     unmount();
-    expect(scrollTo).toHaveBeenLastCalledWith(0, 160);
+    expect(document.getElementById(backgroundScrollLockSheetId)).toBeNull();
+    expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    nonceHost.remove();
   });
 
   it("locks html and body while an overlay is open", () => {

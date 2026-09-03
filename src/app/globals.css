@@ -24,6 +24,7 @@
   --header-drawer-top: calc(63px + env(safe-area-inset-top));
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
+  --composer-scroll-lock-top: 0px;
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
 }
@@ -77,6 +78,14 @@ html.composer-scroll-locked,
 body.composer-scroll-locked {
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+html.composer-scroll-locked body {
+  position: fixed;
+  top: var(--composer-scroll-lock-top, 0px);
+  left: 0;
+  right: 0;
+  width: 100%;
 }
 
 html.composer-scroll-locked .app-shell,

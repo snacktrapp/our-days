@@ -737,6 +737,12 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await page.evaluate(() => window.scrollTo(0, 160));
   const backgroundScroll = await page.evaluate(() => window.scrollY);
   expect(backgroundScroll).toBeGreaterThan(0);
+  const feedTop = async () =>
+    page
+      .locator("[data-moment-kind]")
+      .first()
+      .evaluate((element) => Math.round(element.getBoundingClientRect().top));
+  const originTop = await feedTop();
 
   const dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
@@ -749,6 +755,7 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/upright/u);
   await expect(page.locator("html")).toHaveClass(/composer-scroll-locked/u);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
+  expect(await feedTop()).toBe(originTop);
 
   await page.getByRole("button", { name: /^Chapter,/u }).hover();
   if (browserName === "webkit") {
@@ -765,7 +772,7 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   } else {
     await page.mouse.wheel(0, 480);
   }
-  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
+  expect(await feedTop()).toBe(originTop);
 
   const verse = page.getByLabel("Verse text");
   await verse.evaluate((element) => {
@@ -777,6 +784,11 @@ test("an open entry overlay does not scroll the family feed underneath", async (
       element instanceof HTMLTextAreaElement ? element.scrollTop : 0,
     ),
   ).toBeGreaterThan(0);
+  expect(await feedTop()).toBe(originTop);
+
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await dialog.getByRole("button", { name: "Close moment composer" }).click();
+  await expect(dialog).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
 });
 

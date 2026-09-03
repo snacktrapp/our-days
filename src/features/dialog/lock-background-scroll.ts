@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
+export const backgroundScrollLockSheetId = "composer-scroll-lock-sheet";
+const lockTopVariable = "--composer-scroll-lock-top";
 
 const exemptOverlaySelector = "iframe, .composer-location-map";
 
@@ -40,6 +42,30 @@ export function overlayBackgroundScrollShouldStop(
   return false;
 }
 
+function pageNonce(doc: Document) {
+  const withNonce = doc.querySelector<HTMLElement>("[nonce]");
+  return withNonce?.nonce || withNonce?.getAttribute("nonce") || "";
+}
+
+function writeLockSheet(doc: Document, topPx: number) {
+  const existing = doc.getElementById(backgroundScrollLockSheetId);
+  const sheet =
+    existing instanceof HTMLStyleElement
+      ? existing
+      : doc.createElement("style");
+  if (!(existing instanceof HTMLStyleElement)) {
+    sheet.id = backgroundScrollLockSheetId;
+    const nonce = pageNonce(doc);
+    if (nonce) sheet.setAttribute("nonce", nonce);
+    doc.head.append(sheet);
+  }
+  sheet.textContent = `:root{${lockTopVariable}:${topPx}px}`;
+}
+
+function clearLockSheet(doc: Document) {
+  doc.getElementById(backgroundScrollLockSheetId)?.remove();
+}
+
 export function useLockBackgroundScroll(active: boolean) {
   useEffect(() => {
     if (!active) return;
@@ -48,9 +74,9 @@ export function useLockBackgroundScroll(active: boolean) {
     const htmlWasLocked = html.classList.contains(backgroundScrollLockClass);
     const bodyWasLocked = body.classList.contains(backgroundScrollLockClass);
     const scrollY = window.scrollY;
+    writeLockSheet(document, -scrollY);
     html.classList.add(backgroundScrollLockClass);
     body.classList.add(backgroundScrollLockClass);
-    if (scrollY > 0) window.scrollTo(0, scrollY);
 
     let lastTouchY = 0;
     const onTouchStart = (event: TouchEvent) => {
@@ -88,6 +114,7 @@ export function useLockBackgroundScroll(active: boolean) {
     return () => {
       if (!htmlWasLocked) html.classList.remove(backgroundScrollLockClass);
       if (!bodyWasLocked) body.classList.remove(backgroundScrollLockClass);
+      if (!htmlWasLocked && !bodyWasLocked) clearLockSheet(document);
       if (scrollY > 0) window.scrollTo(0, scrollY);
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
