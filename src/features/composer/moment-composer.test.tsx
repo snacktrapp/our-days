@@ -841,6 +841,63 @@ describe("MomentComposer", () => {
     });
   });
 
+  it("pops the type-selection window and rises the composer after a type is chosen", async () => {
+    const user = await openComposer();
+    const dialog = screen.getByRole("dialog");
+    const chooser = dialog.querySelector(".composer-sheet");
+    expect(dialog).not.toHaveClass("composer-editor-fullscreen");
+    expect(chooser).toHaveClass("overlay-popover");
+    expect(chooser).not.toHaveClass("is-closing");
+
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(dialog).toHaveClass("composer-editor-fullscreen");
+    expect(dialog.querySelector(".composer-sheet")).not.toHaveClass(
+      "overlay-popover",
+    );
+  });
+
+  it("dismisses the type-selection window with a reverse pop", async () => {
+    const user = await openComposer();
+    await user.click(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    );
+    const dialog = document.querySelector("dialog.new-moment-composer-dialog");
+    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+    expect(dialog).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("dismisses the type-selection window instantly when motion is reduced", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = await openComposer();
+      await user.click(
+        screen.getByRole("button", { name: "Close moment composer" }),
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
+  });
+
   it("saves a backdated local design entry without a review step", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Written entry/ }));

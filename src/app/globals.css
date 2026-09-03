@@ -5509,10 +5509,10 @@ button:focus-visible,
   }
 }
 
-/* Entry choices use the same compact header-drawer pattern as Activity. */
-.new-moment-composer-dialog .composer-sheet {
-  padding: var(--header-drawer-padding) var(--header-drawer-padding)
-    max(var(--header-drawer-padding), env(safe-area-inset-bottom));
+/* Entry choices stay the existing compact list. The window sits above the
+   bottom bar and pops in place; it is not a header drawer or a sheet. */
+.new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+  padding: var(--header-drawer-padding);
 }
 
 .new-moment-composer-dialog .composer-sheet > .sheet-close {
@@ -6081,22 +6081,30 @@ button:focus-visible,
   max-height: 360px;
 }
 
-/* The new-entry composer is visually attached to the header Add control. */
-.new-moment-composer-dialog[open] {
-  align-items: flex-start;
-  justify-content: flex-start;
+/* Type selection pops in place above the bottom bar. The full composer is a
+   separate surface and still rises from the bottom after a type is chosen. */
+.new-moment-composer-dialog[open]:not(.composer-editor-fullscreen) {
+  align-items: flex-end;
+  justify-content: center;
 }
 
-.new-moment-composer-dialog .composer-sheet {
-  width: min(310px, calc(100dvw - 32px));
+.new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
   max-height: calc(100dvh - 72px - env(safe-area-inset-top));
   position: fixed;
-  top: var(--header-drawer-top);
-  left: var(--header-drawer-gutter);
-  margin-top: 0;
-  padding-inline: var(--header-drawer-padding);
+  top: auto;
+  right: 0;
+  bottom: calc(
+    56px + (2 * var(--bottom-nav-float-gap)) + env(safe-area-inset-bottom)
+  );
+  left: 0;
+  margin: 0 auto;
   border-radius: var(--header-drawer-radius);
-  transform-origin: 28px 0;
+  transform-origin: 50% 100%;
+  animation: none;
 }
 
 .new-moment-composer-dialog,
@@ -6186,7 +6194,7 @@ button:focus-visible,
 }
 
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
-  .new-moment-composer-dialog .composer-sheet {
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
     max-height: calc(100dvh - 92px);
   }
 }

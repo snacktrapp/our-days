@@ -146,6 +146,51 @@ async function openComposer(page: Page) {
   return page.locator("dialog.new-moment-composer-dialog");
 }
 
+test("type selection pops in place above the bottom bar and dismisses faster", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  const sheet = dialog.locator(".composer-sheet");
+  await expect(sheet).toHaveCSS("animation-name", "overlay-popover-in");
+  await expect(sheet).toHaveCSS("animation-duration", "0.18s");
+  await expect(sheet).toHaveCSS("animation-timing-function", /ease-out/u);
+  await sheet.evaluate(async (element) => {
+    await Promise.all(
+      element.getAnimations().map((animation) => animation.finished),
+    );
+  });
+
+  const dismiss = sheet.evaluate((element) => {
+    return new Promise<{ name: string; durationMs: number }>(
+      (resolve, reject) => {
+        const finish = window.setTimeout(() => {
+          reject(new Error("Type selection never played overlay-popover-out."));
+        }, 1000);
+        const read = () => {
+          const style = getComputedStyle(element);
+          if (style.animationName !== "overlay-popover-out") return;
+          window.clearTimeout(finish);
+          const duration = style.animationDuration;
+          resolve({
+            name: style.animationName,
+            durationMs:
+              Number.parseFloat(duration) *
+              (duration.endsWith("ms") ? 1 : 1000),
+          });
+        };
+        element.addEventListener("animationstart", read);
+        requestAnimationFrame(read);
+      },
+    );
+  });
+  await dialog.getByRole("button", { name: "Close moment composer" }).click();
+  await expect(dismiss).resolves.toEqual({
+    name: "overlay-popover-out",
+    durationMs: 120,
+  });
+});
+
 async function selectMomentDate(dialog: Locator, dateLabel: string) {
   await dialog.getByRole("button", { name: /^Moment date,/u }).click();
   await dialog
@@ -284,33 +329,42 @@ test("composer is modal, contains focus, protects every draft, and restores focu
       name: style.animationName,
       durationMs:
         Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000),
+      timing: style.animationTimingFunction,
     };
   });
   expect(overlayMotion.name).toBe("overlay-popover-in");
   expect(overlayMotion.durationMs).toBe(180);
+  expect(overlayMotion.timing).toMatch(/ease-out/u);
   await overlaySheet.evaluate(async (sheet) => {
     await Promise.all(
       sheet.getAnimations().map((animation) => animation.finished),
     );
   });
   await expect(overlaySheet).toHaveCSS("transform", "none");
-  const drawerPlacement = await page.evaluate(() => {
+  const chooserPlacement = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>(".topbar");
+    const nav = document.querySelector<HTMLElement>(".bottom-nav");
+    const add = document.querySelector<HTMLElement>(".header-add-moment");
     const sheet = document.querySelector<HTMLElement>(
       ".new-moment-composer-dialog .composer-sheet",
     );
-    if (!header || !sheet) return null;
+    if (!header || !nav || !add || !sheet) return null;
     const headerRect = header.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
     const sheetRect = sheet.getBoundingClientRect();
     return {
-      distanceFromHeader: Math.round(sheetRect.top - headerRect.bottom),
-      opensFromTop: sheetRect.top < window.innerHeight / 2,
+      aboveNav: Math.round(sheetRect.bottom) <= Math.round(navRect.top) + 1,
+      gapAboveNav: Math.round(navRect.top - sheetRect.bottom),
+      belowHeader: sheetRect.top > headerRect.bottom,
       top: Math.round(sheetRect.top),
+      addAnimation: getComputedStyle(add).animationName,
     };
   });
-  expect(drawerPlacement?.distanceFromHeader).toBeLessThan(0);
-  expect(drawerPlacement?.opensFromTop).toBe(true);
-  expect(drawerPlacement?.top).toBe(notificationTop);
+  expect(chooserPlacement?.aboveNav).toBe(true);
+  expect(chooserPlacement?.gapAboveNav).toBeGreaterThanOrEqual(8);
+  expect(chooserPlacement?.belowHeader).toBe(true);
+  expect(chooserPlacement?.top).not.toBe(notificationTop);
+  expect(chooserPlacement?.addAnimation).toBe("none");
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 
