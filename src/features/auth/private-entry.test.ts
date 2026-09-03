@@ -44,6 +44,10 @@ describe("sign-in cleanup gate", () => {
   it("shows Google and X first, with the email magic link as backup", () => {
     render(createElement(PrivateEntry, { connected: true }));
 
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Open your family journal." }),
+    ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeVisible();

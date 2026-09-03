@@ -5186,16 +5186,163 @@ button:focus-visible,
   color: var(--ink);
 }
 
+.private-entry-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px
+    max(24px, env(safe-area-inset-bottom));
+  background-color: var(--grid-surface);
+  background-image: none;
+}
+
+.private-entry-shell::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(134, 166, 151, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(134, 166, 151, 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
 .private-entry-card {
-  padding: 36px 28px;
-  border-radius: 12px;
-  background: var(--cream);
-  box-shadow: none;
+  position: relative;
+  z-index: 1;
+  width: min(100%, 390px);
+  padding: 28px 22px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--header-drawer-radius);
+  background: var(--overlay-popover-fill);
+  box-shadow: var(--header-drawer-shadow);
+  backdrop-filter: blur(var(--overlay-popover-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
+  text-align: center;
+}
+
+.private-entry-card > p,
+.private-entry-card > .eyebrow {
+  display: block;
+  margin: 18px 0 4px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
 }
 
 .private-entry-card h1 {
-  font-size: 24px;
-  font-weight: 680;
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.private-entry-card > span:last-child {
+  display: block;
+  margin-top: 14px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.private-entry-content {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.private-entry-content > p,
+.private-entry-backup > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.private-entry-content label {
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.private-entry-content input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 13px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: #13211b;
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 16px;
+  box-shadow: none;
+}
+
+.private-entry-content input[aria-invalid="true"] {
+  border-color: var(--clay);
+}
+
+.private-entry-oauth {
+  display: grid;
+  gap: 8px;
+}
+
+.private-entry-content button {
+  min-height: 48px;
+  margin-top: 3px;
+  padding: 10px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.private-entry-backup button[type="submit"] {
+  border-color: color-mix(in srgb, var(--ochre) 72%, transparent);
+  background: var(--ochre);
+  color: #101711;
+}
+
+.private-entry-oauth button {
+  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  color: var(--ink);
+}
+
+.private-entry-backup {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.private-entry-backup a,
+.private-entry-content a {
+  color: var(--teal);
+  font-family: var(--font-interface);
+  font-size: 13px;
+}
+
+.private-entry-content .auth-status {
+  color: var(--muted);
+}
+
+.private-entry-content .auth-error {
+  color: #e09292;
 }
 
 .private-entry-mark i {
@@ -5464,10 +5611,15 @@ button:focus-visible,
   background-color: var(--grid-surface);
 }
 
-:root[data-theme="light"] .app-shell::before {
+:root[data-theme="light"] .app-shell::before,
+:root[data-theme="light"] .private-entry-shell::before {
   background-image:
     linear-gradient(rgba(57, 123, 118, 0.07) 1px, transparent 1px),
     linear-gradient(90deg, rgba(57, 123, 118, 0.07) 1px, transparent 1px);
+}
+
+:root[data-theme="light"] .private-entry-content .auth-error {
+  color: #8b3e36;
 }
 
 :root[data-theme="light"] .bottom-nav,

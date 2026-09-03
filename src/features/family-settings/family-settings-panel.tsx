@@ -425,6 +425,16 @@ function ConnectedFamilySettingsPanel({
     setInviteDraft({ displayName, email });
   }
 
+  function resetInviteComposer() {
+    inviteRequestKeyRef.current = null;
+    restoreInviteFormFocusRef.current = true;
+    setInviteDraft(null);
+    setInviteName("");
+    setInviteEmail("");
+    setInviteFormError("");
+    setInviteFormErrorField(null);
+  }
+
   function editInvitationRequest() {
     restoreInviteFormFocusRef.current = true;
     inviteRequestKeyRef.current = null;
@@ -454,10 +464,7 @@ function ConnectedFamilySettingsPanel({
             : nextResult,
         );
         if (nextResult.ok) {
-          inviteRequestKeyRef.current = null;
-          setInviteDraft(null);
-          setInviteName("");
-          setInviteEmail("");
+          resetInviteComposer();
         }
       } catch {
         setResult({

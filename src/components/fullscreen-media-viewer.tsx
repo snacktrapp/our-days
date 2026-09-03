@@ -160,7 +160,7 @@ export function FullscreenMediaViewer({
     if (overlayMotionReduced()) {
       setDimmer("1", "none");
       setPhotoTransform("", "none");
-      setMotion("open");
+      window.requestAnimationFrame(() => setMotion("open"));
       return;
     }
 
@@ -169,7 +169,7 @@ export function FullscreenMediaViewer({
     const transform = origin && dest ? flipTransform(origin, dest) : "";
     if (!transform) {
       setDimmer("1", "none");
-      setMotion("open");
+      window.requestAnimationFrame(() => setMotion("open"));
       return;
     }
 
@@ -203,11 +203,7 @@ export function FullscreenMediaViewer({
 
   function startPull(event: React.PointerEvent<HTMLDivElement>) {
     if (!isPhoto || zoomed || event.pointerType === "mouse") return;
-    if (
-      motion === "opening" ||
-      motion === "closing" ||
-      motion === "swipe-out"
-    ) {
+    if (motion === "closing" || motion === "swipe-out") {
       return;
     }
     pullRef.current = {

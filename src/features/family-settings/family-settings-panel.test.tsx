@@ -444,11 +444,21 @@ describe("FamilySettingsPanel", () => {
       "Private invitation requested for Aunt June.",
     );
     expect(
+      screen.queryByRole("heading", { name: "Invite Aunt June" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Send private invitation" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole("textbox", { name: "Family member’s name" }),
     ).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Email address" })).toHaveValue(
       "",
     );
+    expect(
+      screen.getByRole("button", { name: "Review invitation" }),
+    ).toBeVisible();
+    expect(screen.getByText("Sent")).toBeVisible();
   });
 
   it("uses a new request key after returning to edit invitation identity", async () => {

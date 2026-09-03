@@ -66,7 +66,7 @@ export function PrivateEntry({
           <i />
           <i />
         </span>
-        <p>Private family journal</p>
+        <span className="eyebrow">Our Days</span>
         <h1 id="private-entry-title">
           {connected
             ? "Open your family journal."

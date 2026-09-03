@@ -272,12 +272,7 @@ export async function requestFamilyInvitationAction(
       message: "That invitation could not be sent. Try again.",
     };
   }
-  if (!(await sendInvitedMagicLink(email))) {
-    return {
-      ok: false,
-      message: "That invitation could not be sent. Try again.",
-    };
-  }
+  await sendInvitedMagicLink(email);
   revalidatePath("/settings/family");
   return { ok: true, message: "Private invitation requested." };
 }

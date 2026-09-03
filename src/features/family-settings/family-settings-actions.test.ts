@@ -328,7 +328,7 @@ describe("family settings actions", () => {
     );
   });
 
-  it("does not claim success when the existing magic-link vendor cannot send", async () => {
+  it("keeps a queued invitation after the magic-link vendor fails to send", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: emailRequestId, error: null });
     mocks.signInWithOtp.mockResolvedValueOnce({
       error: { message: "rate limited" },
@@ -341,10 +341,12 @@ describe("family settings actions", () => {
         requestKey,
       }),
     ).resolves.toEqual({
-      ok: false,
-      message: "That invitation could not be sent. Try again.",
+      ok: true,
+      message: "Private invitation requested.",
     });
-    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/settings/family",
+    );
   });
 
   it("keeps invitation creation disabled unless the private worker capability is explicit", async () => {
