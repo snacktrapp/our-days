@@ -1,6 +1,5 @@
 import "server-only";
 
-import { elapsedCalendarLabel } from "@/features/memories/memory-date";
 import type {
   TimelineEntryViewModel,
   TimelineMomentViewModel,
@@ -183,13 +182,6 @@ export function buildTimelineEntries(
   let previousDate: string | undefined;
   for (const moment of moments) {
     if (moment.occurredOn !== previousDate) {
-      if (previousDate) {
-        entries.push({
-          id: `gap-${previousDate}-${moment.occurredOn}`,
-          entryType: "elapsed-gap",
-          label: elapsedCalendarLabel(previousDate, moment.occurredOn),
-        });
-      }
       entries.push({
         id: `date-${moment.occurredOn}`,
         entryType: "date-marker",

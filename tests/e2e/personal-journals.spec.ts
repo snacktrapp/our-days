@@ -7,7 +7,6 @@ const journals = [
     summary: "2 moments · 2022–2026",
     momentIds: ["moment-sunset", "moment-late-summer-2022"],
     dates: ["2026-08-28", "2022-08-28"],
-    gaps: ["4 years earlier"],
     years: ["Aug 28, 2022"],
   },
   {
@@ -16,7 +15,6 @@ const journals = [
     summary: "3 moments · 2019–2026",
     momentIds: ["moment-kitchen", "moment-lake", "moment-porch-light-2019"],
     dates: ["2026-08-14", "2026-07-06", "2019-08-28"],
-    gaps: ["one month earlier", "7 years earlier"],
     years: ["Aug 28, 2019"],
   },
   {
@@ -25,7 +23,6 @@ const journals = [
     summary: "1 moment · 2023",
     momentIds: ["moment-first-day"],
     dates: ["2023-08-21"],
-    gaps: [],
     years: [],
   },
   {
@@ -34,7 +31,6 @@ const journals = [
     summary: "No moments yet",
     momentIds: [],
     dates: [],
-    gaps: [],
     years: [],
   },
   {
@@ -43,7 +39,6 @@ const journals = [
     summary: "No moments yet",
     momentIds: [],
     dates: [],
-    gaps: [],
     years: [],
   },
 ] as const;
@@ -81,7 +76,7 @@ test("People links to five distinct, owner-correct life journals", async ({
           times.map((time) => time.getAttribute("datetime")),
         ),
     ).toEqual(journal.dates);
-    await expect(page.locator(".elapsed-gap")).toHaveText(journal.gaps);
+    await expect(page.locator(".elapsed-gap")).toHaveCount(0);
     await expect(page.locator(".year-divider")).toHaveText(journal.years);
     await page.locator(".view-switch summary").click();
     await expect(

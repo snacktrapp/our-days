@@ -181,11 +181,6 @@ const familyEntries = [
     },
   },
   {
-    id: "two-weeks",
-    entryType: "elapsed-gap",
-    label: elapsedCalendarLabel("2026-08-28", "2026-08-14"),
-  },
-  {
     id: "kitchen",
     entryType: "moment",
     moment: {
@@ -214,11 +209,6 @@ const familyEntries = [
         reactions: [],
       }),
     },
-  },
-  {
-    id: "five-weeks",
-    entryType: "elapsed-gap",
-    label: elapsedCalendarLabel("2026-08-14", "2026-07-06"),
   },
   {
     id: "lake",
@@ -252,11 +242,6 @@ const familyEntries = [
       mapLabel: "TAHOE",
       taggedPeopleLabel: "Avery",
     },
-  },
-  {
-    id: "three-years",
-    entryType: "elapsed-gap",
-    label: elapsedCalendarLabel("2026-07-06", "2023-08-21"),
   },
   { id: "year-2023", entryType: "date-marker", label: "2023", divider: true },
   {
@@ -300,11 +285,6 @@ const familyEntries = [
       yearLabel: "2023",
     },
   },
-  {
-    id: "one-year",
-    entryType: "elapsed-gap",
-    label: elapsedCalendarLabel("2023-08-21", "2022-08-28"),
-  },
   { id: "year-2022", entryType: "date-marker", label: "2022", divider: true },
   {
     id: "late-summer-2022",
@@ -329,11 +309,6 @@ const familyEntries = [
       },
       taggedPeopleLabel: "Molly + 3",
     },
-  },
-  {
-    id: "three-more-years",
-    entryType: "elapsed-gap",
-    label: elapsedCalendarLabel("2022-08-28", "2019-08-28"),
   },
   { id: "year-2019", entryType: "date-marker", label: "2019", divider: true },
   {

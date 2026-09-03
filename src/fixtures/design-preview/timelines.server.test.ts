@@ -33,6 +33,11 @@ describe("design preview timeline chronology", () => {
       "Aug 28, 2022",
       "Aug 28, 2019",
     ]);
+    expect(
+      getFamilyTimelineFixture().entries.some(
+        (entry) => entry.entryType === "elapsed-gap",
+      ),
+    ).toBe(false);
   });
 
   it("uses the same date-marker grammar in personal journals", () => {
@@ -43,5 +48,8 @@ describe("design preview timeline chronology", () => {
     expect(markers.every((entry) => entry?.entryType === "date-marker")).toBe(
       true,
     );
+    expect(
+      timeline!.entries.some((entry) => entry.entryType === "elapsed-gap"),
+    ).toBe(false);
   });
 });

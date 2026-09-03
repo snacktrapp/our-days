@@ -16,6 +16,13 @@ test("route-based journal navigation preserves the approved views", async ({
       .getByRole("link", { name: "Family", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
+  await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
+  await expect(page.locator(".elapsed-gap")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      /days earlier|one day earlier|weeks earlier|one month earlier|months earlier|years earlier|yesterday/iu,
+    ),
+  ).toHaveCount(0);
 
   await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/people$/);
