@@ -79,11 +79,6 @@ body.composer-scroll-locked {
   overscroll-behavior: none;
 }
 
-html.composer-scroll-locked,
-html.composer-scroll-locked body {
-  max-height: 100dvh;
-}
-
 html.composer-scroll-locked .app-shell,
 html.composer-scroll-locked .phone-stage {
   overscroll-behavior: none;
@@ -644,6 +639,9 @@ button:focus-visible,
   white-space: nowrap;
 }
 .moment-meta strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: var(--ink);
   font-size: 11px;
@@ -4209,6 +4207,10 @@ button:focus-visible,
   box-shadow: none;
 }
 
+.moment-card:has(.connected-moment-menu) {
+  overflow: visible;
+}
+
 .photo-frame {
   height: 248px;
   background: #17231e;
@@ -6344,7 +6346,7 @@ button:focus-visible,
 
 .composer-picker-secondary,
 .composer-picker-primary {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 15px;
   border: 1px solid var(--hairline);
   border-radius: 7px;

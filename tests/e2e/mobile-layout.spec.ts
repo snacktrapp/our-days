@@ -202,7 +202,7 @@ test("moment options open as a compact popover under the trigger without inline 
     actions.append(trigger, menu);
     card.append(actions);
   });
-  const menu = page.getByRole("group", { name: "Moment options" });
+  const menu = page.locator(".moment-card .connected-moment-menu").last();
   await expect(menu).toBeVisible();
   await expect(menu).not.toHaveAttribute("style");
 

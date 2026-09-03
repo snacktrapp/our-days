@@ -47,8 +47,10 @@ export function useLockBackgroundScroll(active: boolean) {
     const body = document.body;
     const htmlWasLocked = html.classList.contains(backgroundScrollLockClass);
     const bodyWasLocked = body.classList.contains(backgroundScrollLockClass);
+    const scrollY = window.scrollY;
     html.classList.add(backgroundScrollLockClass);
     body.classList.add(backgroundScrollLockClass);
+    if (scrollY > 0) window.scrollTo(0, scrollY);
 
     let lastTouchY = 0;
     const onTouchStart = (event: TouchEvent) => {
@@ -86,6 +88,7 @@ export function useLockBackgroundScroll(active: boolean) {
     return () => {
       if (!htmlWasLocked) html.classList.remove(backgroundScrollLockClass);
       if (!bodyWasLocked) body.classList.remove(backgroundScrollLockClass);
+      if (scrollY > 0) window.scrollTo(0, scrollY);
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       document.removeEventListener("wheel", onWheel, true);

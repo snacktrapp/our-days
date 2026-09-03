@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
@@ -30,6 +30,7 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
+    vi.restoreAllMocks();
   });
 
   it("stops a drag that is not on an inner scroller", () => {
@@ -76,6 +77,19 @@ describe("overlay background scroll lock", () => {
   it("leaves the place map iframe free to pan", () => {
     const map = document.createElement("iframe");
     expect(overlayBackgroundScrollShouldStop(map, "down")).toBe(false);
+  });
+
+  it("keeps the locked page at its current scroll offset", () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 160,
+    });
+    window.scrollTo = scrollTo as typeof window.scrollTo;
+    const { unmount } = renderHook(() => useLockBackgroundScroll(true));
+    expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    unmount();
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 160);
   });
 
   it("locks html and body while an overlay is open", () => {
