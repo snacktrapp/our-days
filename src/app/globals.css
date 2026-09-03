@@ -375,7 +375,7 @@ button:focus-visible,
   min-height: 56px;
   padding: 3px 8px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 88px;
+  grid-template-columns: 88px minmax(0, 1fr) 88px;
   align-items: center;
   position: fixed;
   z-index: 100;
@@ -6130,7 +6130,7 @@ button:focus-visible,
   left: 0;
   margin: 0 auto;
   border-radius: var(--header-drawer-radius);
-  transform-origin: 50% 100%;
+  transform-origin: 50% 0;
   animation: none;
 }
 
