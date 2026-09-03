@@ -30,10 +30,9 @@ describe("LocationMapVisual", () => {
       />,
     );
     const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
-    expect(map.getAttribute("src")).toContain(
-      "api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/",
+    expect(map.getAttribute("src")).toBe(
+      "/api/maps/static?lat=39.2&lng=-119.93",
     );
-    expect(map).toHaveAttribute("referrerPolicy", "origin");
     expect(document.querySelector(".map-water")).toBeNull();
     expect(
       screen.getByText("© MapTiler © OpenStreetMap contributors"),
@@ -66,8 +65,8 @@ describe("LocationMapVisual", () => {
     const pismo = screen
       .getByRole("img", { name: "Map of Pismo Beach" })
       .getAttribute("src");
-    expect(harbor).toContain("/static/-119.93,39.2,14/");
-    expect(pismo).toContain("/static/-120.6413,35.1428,14/");
+    expect(harbor).toBe("/api/maps/static?lat=39.2&lng=-119.93");
+    expect(pismo).toBe("/api/maps/static?lat=35.1428&lng=-120.6413");
     expect(pismo).not.toBe(harbor);
   });
 });

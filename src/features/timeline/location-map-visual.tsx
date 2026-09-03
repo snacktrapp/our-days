@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import {
-  mapTilerStaticMapUrl,
   publicMapTilerKey,
+  staticMapImageSrc,
 } from "@/features/composer/maptiler";
+import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
 export function LocationMapVisual({
   place,
@@ -18,9 +19,10 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const [failed, setFailed] = useState(false);
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
   const mapUrl =
-    latitude != null && longitude != null
-      ? mapTilerStaticMapUrl(publicMapTilerKey(), latitude, longitude)
+    coordinates && publicMapTilerKey()
+      ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
       : "";
   const showLiveMap = Boolean(mapUrl) && !failed;
 
@@ -32,8 +34,9 @@ export function LocationMapVisual({
     >
       {showLiveMap ? (
         <>
-          {/* MapTiler Static Maps are allowlisted on img-src. The document
-              referrer policy is no-referrer; origin is required for this key. */}
+          {/* Same-origin proxy fetches MapTiler Static Maps so a browser
+              referrer restriction cannot replace a saved pin with the
+              illustration. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={mapUrl}
@@ -41,7 +44,6 @@ export function LocationMapVisual({
             width={800}
             height={330}
             decoding="async"
-            referrerPolicy="origin"
             onError={() => setFailed(true)}
           />
           <small className="map-attribution">

@@ -853,3 +853,31 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   await photoChoice.scrollIntoViewIfNeeded();
   await expect(photoChoice).toBeInViewport({ ratio: 1 });
 });
+
+test("a timeline photo expands over the floating header", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await page.locator(".photo-viewer-trigger").first().click();
+  const dialog = page.locator(".fullscreen-media-dialog");
+  await expect(dialog).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const viewer = document.querySelector(".fullscreen-media-dialog");
+    if (!(viewer instanceof HTMLElement)) return null;
+    const rect = viewer.getBoundingClientRect();
+    const header = document.querySelector(".topbar");
+    const headerRect = header?.getBoundingClientRect();
+    const headerHit =
+      headerRect &&
+      document.elementFromPoint(headerRect.left + 12, headerRect.top + 12);
+    return {
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      coversHeader: !headerHit?.closest(".topbar"),
+    };
+  });
+  expect(geometry?.top).toBe(0);
+  expect(geometry?.width).toBe(390);
+  expect(geometry?.height).toBe(844);
+  expect(geometry?.coversHeader).toBe(true);
+});

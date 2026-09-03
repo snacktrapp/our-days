@@ -27,20 +27,7 @@ export default async function FamilySettingsPage() {
   if (access.mode === "preview") {
     const model = getFamilySettingsFixture();
     return (
-      <JournalChrome
-        model={model.chrome}
-        section="settings"
-        switcher={[
-          { label: "Family", href: "/family", current: false },
-          ...model.panel.members
-            .filter((member) => member.profileKind === "account")
-            .map((member) => ({
-              label: member.name,
-              href: `/people/${member.id}`,
-              current: false,
-            })),
-        ]}
-      >
+      <JournalChrome model={model.chrome} section="settings">
         <FamilySettingsPanel model={model.panel}>
           <AccountTools />
         </FamilySettingsPanel>
@@ -68,14 +55,6 @@ export default async function FamilySettingsPage() {
         }}
         section="settings"
         createMomentAction={createFamilyMomentAction}
-        switcher={[
-          { label: "Family", href: "/family", current: false },
-          ...context.people.map((person) => ({
-            label: person.name,
-            href: `/people/${person.id}`,
-            current: false,
-          })),
-        ]}
       >
         <AccountPanelInterrupted>
           <AccountTools />
@@ -96,14 +75,6 @@ export default async function FamilySettingsPage() {
       model={model.chrome}
       section="settings"
       createMomentAction={createFamilyMomentAction}
-      switcher={[
-        { label: "Family", href: "/family", current: false },
-        ...context.people.map((person) => ({
-          label: person.name,
-          href: `/people/${person.id}`,
-          current: false,
-        })),
-      ]}
     >
       <FamilySettingsPanel
         model={model.panel}

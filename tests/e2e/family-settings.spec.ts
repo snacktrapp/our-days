@@ -39,6 +39,10 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await page.getByRole("link", { name: "Family access & invitations" }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation", { name: "Choose a family timeline" }),
+  ).toHaveCount(0);
   await expect(page.locator(".family-settings-panel")).toHaveCSS(
     "min-height",
     "0px",
@@ -200,6 +204,7 @@ test("the shared Account navigation opens settings and returns through the prima
     page.getByRole("heading", { name: "This page couldn’t load" }),
   ).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Journal tools" }),
   ).toBeVisible();

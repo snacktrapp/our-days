@@ -44,6 +44,16 @@ export function mapTilerStaticMapUrl(
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/static/${longitude},${latitude},14/${size.width}x${size.height}.png?key=${encodeURIComponent(key)}`;
 }
 
+export function staticMapImageSrc(latitude: number, longitude: number) {
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
+  if (!coordinates) return "";
+  const params = new URLSearchParams({
+    lat: String(coordinates.latitude),
+    lng: String(coordinates.longitude),
+  });
+  return `/api/maps/static?${params}`;
+}
+
 function featureLabel(feature: MapTilerFeature) {
   if (typeof feature.place_name === "string" && feature.place_name.trim()) {
     return trimmedPlaceLabel(feature.place_name);

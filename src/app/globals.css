@@ -19,7 +19,9 @@
   --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
   --header-drawer-radius: 10px;
-  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
+  --overlay-popover-blur: 18px;
   --header-drawer-padding: 16px;
   --header-drawer-hang: 47px;
   --header-drawer-top: calc(
@@ -30,15 +32,11 @@
   --bottom-nav-visual-inset: 0px;
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
-  --type-picker-gap: 8px;
   --type-picker-width: min(
     260px,
     calc(100dvw - 2 * var(--bottom-nav-inline-gap))
   );
-  --type-picker-top: calc(
-    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 56px +
-      var(--type-picker-gap)
-  );
+  --type-picker-top: var(--header-drawer-top);
   --type-picker-left: max(
     var(--bottom-nav-inline-gap),
     calc((100dvw - 430px) / 2 + var(--bottom-nav-inline-gap))
@@ -70,6 +68,8 @@
   --slate: #59677d;
   --moss: #58764e;
   --nav-pill-fill: rgba(243, 238, 228, 0.7);
+  --header-drawer-shadow: 0 18px 42px rgba(58, 44, 31, 0.18);
+  --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
 }
 
 * {
@@ -553,10 +553,8 @@ button:focus-visible,
   display: grid;
   translate: -50% 0;
   transform-origin: top center;
-  border: 1px solid var(--hairline);
+  pointer-events: auto;
   border-radius: var(--header-drawer-radius);
-  background: var(--cream);
-  box-shadow: var(--header-drawer-shadow);
 }
 .title-switcher nav a {
   min-height: 44px;
@@ -6025,7 +6023,9 @@ button:focus-visible,
   margin: 0;
   padding: 0;
   border: 0;
-  background: #020403;
+  position: fixed;
+  inset: 0;
+  background: transparent;
   color: white;
   overflow: hidden;
 }
@@ -6036,7 +6036,14 @@ button:focus-visible,
 }
 
 .fullscreen-media-dialog::backdrop {
+  background: transparent;
+}
+
+.media-viewer-dimmer {
+  position: absolute;
+  inset: 0;
   background: #020403;
+  pointer-events: none;
 }
 
 .media-viewer-photo,
@@ -6053,14 +6060,11 @@ button:focus-visible,
 }
 
 .media-viewer-photo {
+  z-index: 1;
   touch-action: pinch-zoom;
-  transition:
-    transform 180ms ease,
-    opacity 180ms ease;
 }
 
 .media-viewer-photo.is-pulling {
-  opacity: 0.86;
   transition: none;
 }
 
@@ -6234,6 +6238,35 @@ button:focus-visible,
   background: var(--cream);
   box-shadow: var(--header-drawer-shadow);
   color: var(--ink);
+}
+
+/* Compact overlay windows share the family-switcher / ⋯ chrome. Type picker
+   and notifications previously dropped the hairline, which is why they
+   vanished into the grid. Do not restyle the fullscreen composer. */
+.title-switcher nav,
+.notification-panel,
+.connected-moment-menu,
+.quick-reaction-control .inline-reaction-picker,
+.new-moment-composer-dialog.composer-type-picker .composer-sheet,
+:root[data-theme="light"] .title-switcher nav,
+:root[data-theme="light"] .notification-panel,
+:root[data-theme="light"] .connected-moment-menu,
+:root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .composer-sheet,
+.header-drawer-surface.notification-panel,
+:root[data-theme="light"] .header-drawer-surface.notification-panel,
+.new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet {
+  border: 1px solid var(--hairline);
+  background: var(--overlay-popover-fill);
+  box-shadow: var(--header-drawer-shadow);
+  backdrop-filter: blur(var(--overlay-popover-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
 }
 
 .header-drawer-close {
@@ -7127,6 +7160,11 @@ button:focus-visible,
 
   .quick-reaction-trigger {
     transform: none;
+  }
+
+  .media-viewer-photo,
+  .media-viewer-dimmer {
+    transition: none !important;
   }
 }
 

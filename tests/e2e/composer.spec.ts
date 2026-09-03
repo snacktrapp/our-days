@@ -303,6 +303,14 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   const notificationTop = await notificationPanel.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
+  const notificationChrome = await notificationPanel.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderWidth: style.borderTopWidth,
+      borderColor: style.borderTopColor,
+    };
+  });
+  expect(notificationChrome.borderWidth).toBe("1px");
   await page.getByRole("button", { name: "Close notifications" }).click();
 
   const trigger = page.getByRole("button", { name: "Add moment" });
@@ -355,7 +363,6 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     return {
       aboveNav: Math.round(sheetRect.bottom) <= Math.round(navRect.top) + 1,
       gapAboveNav: Math.round(navRect.top - sheetRect.bottom),
-      belowHeader: sheetRect.top >= headerRect.bottom - 2,
       nearAdd: sheetRect.top - add.getBoundingClientRect().bottom <= 16,
       alignedToPill: Math.abs(sheetRect.left - headerRect.left) <= 8,
       compact: sheetRect.width <= 280,
@@ -366,13 +373,22 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   });
   expect(chooserPlacement?.aboveNav).toBe(true);
   expect(chooserPlacement?.gapAboveNav).toBeGreaterThan(80);
-  expect(chooserPlacement?.belowHeader).toBe(true);
   expect(chooserPlacement?.nearAdd).toBe(true);
   expect(chooserPlacement?.alignedToPill).toBe(true);
   expect(chooserPlacement?.compact).toBe(true);
   expect(chooserPlacement?.parkedOnNav).toBe(false);
-  expect(chooserPlacement?.top).not.toBe(notificationTop);
+  expect(chooserPlacement?.top).toBe(notificationTop);
   expect(chooserPlacement?.addAnimation).toBe("none");
+  await expect(overlaySheet).toHaveCSS("border-top-width", "1px");
+  expect(
+    await overlaySheet.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        borderWidth: style.borderTopWidth,
+        borderColor: style.borderTopColor,
+      };
+    }),
+  ).toEqual(notificationChrome);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 

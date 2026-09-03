@@ -1,8 +1,51 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FullscreenMediaViewer } from "./fullscreen-media-viewer";
 
+function mockRect(node: Element, rect: Partial<DOMRect>) {
+  vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
+    x: rect.x ?? 0,
+    y: rect.y ?? 0,
+    top: rect.top ?? 0,
+    left: rect.left ?? 0,
+    right: rect.right ?? (rect.left ?? 0) + (rect.width ?? 0),
+    bottom: rect.bottom ?? (rect.top ?? 0) + (rect.height ?? 0),
+    width: rect.width ?? 0,
+    height: rect.height ?? 0,
+    toJSON: () => ({}),
+  });
+}
+
+function openPhoto() {
+  render(
+    <FullscreenMediaViewer
+      kind="photo"
+      label="Family outside"
+      preview={<span>Photo preview</span>}
+      fullscreenMedia={<span>Full photo</span>}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Open photo full screen: Family outside",
+    }),
+  );
+  return screen.getByText("Full photo").parentElement as HTMLElement;
+}
+
+function capturePhoto(photo: HTMLElement) {
+  Object.defineProperties(photo, {
+    setPointerCapture: { configurable: true, value: vi.fn() },
+    hasPointerCapture: { configurable: true, value: () => false },
+  });
+}
+
 describe("FullscreenMediaViewer", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it("opens a photo full screen, supports direct zoom, and returns focus on close", () => {
     render(
       <FullscreenMediaViewer
@@ -39,7 +82,8 @@ describe("FullscreenMediaViewer", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("dismisses a photo with a deliberate downward pull", () => {
+  it("expands a photo from the card and reverses that motion on close", () => {
+    vi.useFakeTimers();
     render(
       <FullscreenMediaViewer
         kind="photo"
@@ -48,36 +92,148 @@ describe("FullscreenMediaViewer", () => {
         fullscreenMedia={<span>Full photo</span>}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open photo full screen: Family outside",
-      }),
-    );
-    const photo = screen.getByText("Full photo").parentElement as HTMLElement;
-    Object.defineProperties(photo, {
-      setPointerCapture: { configurable: true, value: vi.fn() },
-      hasPointerCapture: { configurable: true, value: () => false },
+    const trigger = screen.getByRole("button", {
+      name: "Open photo full screen: Family outside",
     });
+    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
+    fireEvent.click(trigger);
+
+    const photo = screen.getByText("Full photo").parentElement as HTMLElement;
+    mockRect(photo, { left: 0, top: 80, width: 390, height: 680 });
+    const dimmer = document.querySelector(
+      ".media-viewer-dimmer",
+    ) as HTMLElement;
+    expect(photo.style.transform).toBe("");
+    expect(dimmer.style.opacity).toBe("1");
+
+    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
+    mockRect(photo, { left: 0, top: 80, width: 390, height: 680 });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    expect(photo.style.transform).toContain("translate3d");
+    expect(photo.style.transition).toContain("ease-in");
+    expect(dimmer.style.opacity).toBe("0");
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("follows a downward swipe and dismisses past a short threshold", () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
+    const photo = openPhoto();
+    capturePhoto(photo);
+
     fireEvent.pointerDown(photo, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 120,
-      clientY: 200,
+      clientY: 80,
     });
     fireEvent.pointerMove(photo, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 124,
-      clientY: 320,
+      clientY: 200,
     });
-    expect(photo.style.transform).toBe("translate3d(0, 120px, 0)");
+    expect(photo.style.transform).toBe(
+      "translate3d(0, 120px, 0) scale(0.9808)",
+    );
+    expect(document.querySelector(".media-viewer-dimmer")).toHaveStyle({
+      opacity: "0.808",
+    });
+
     fireEvent.pointerUp(photo, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 124,
-      clientY: 320,
+      clientY: 200,
     });
+    expect(photo.style.transition).toContain("ease-in");
+    expect(screen.getByRole("dialog")).toBeVisible();
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 
+  it("snaps the photo and dimmer back when the swipe is short", () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
+    const photo = openPhoto();
+    capturePhoto(photo);
+
+    fireEvent.pointerDown(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 122,
+      clientY: 120,
+    });
+    expect(photo.style.transform).toContain("40px");
+
+    fireEvent.pointerUp(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 122,
+      clientY: 120,
+    });
+    expect(photo.style.transform).toBe("");
+    expect(photo.style.transition).toContain("ease-out");
+    expect(document.querySelector(".media-viewer-dimmer")).toHaveStyle({
+      opacity: "1",
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+  });
+
+  it("dismisses instantly when motion is reduced", () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
+    const photo = openPhoto();
+    capturePhoto(photo);
+    fireEvent.pointerDown(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 200,
+    });
+    expect(photo.style.transform).toBe("");
+    fireEvent.pointerUp(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 200,
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

@@ -15,11 +15,30 @@ test("route-based journal navigation preserves the approved views", async ({
     "animation-name",
     "overlay-popover-in",
   );
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "border-top-width",
+    "1px",
+  );
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
       .getByRole("link", { name: "Family", exact: true }),
   ).toHaveAttribute("aria-current", "page");
+  await page
+    .getByRole("navigation", { name: "Choose a family timeline" })
+    .getByRole("link", { name: "Molly", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/people\/molly$/);
+  await expect(
+    page.getByRole("heading", { name: "Molly’s days" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Family", exact: true }).click();
+  await expect(page).toHaveURL(/\/family$/);
+  await expect(
+    page.getByRole("heading", { name: "All our days" }),
+  ).toBeVisible();
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
   await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
   await expect(page.getByText(/earliest entry/i)).toBeVisible();

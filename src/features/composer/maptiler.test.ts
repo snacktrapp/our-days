@@ -3,6 +3,7 @@ import {
   mapTilerStaticMapUrl,
   reverseGeocodeMapTilerPlace,
   searchMapTilerPlaces,
+  staticMapImageSrc,
 } from "./maptiler";
 
 describe("MapTiler geocoding", () => {
@@ -68,5 +69,11 @@ describe("MapTiler geocoding", () => {
     expect(pismo).toContain("/static/-120.6413,35.1428,14/");
     expect(pismo).not.toBe(harbor);
     expect(mapTilerStaticMapUrl("", 39.2, -119.93)).toBe("");
+    expect(staticMapImageSrc(39.2, -119.93)).toBe(
+      "/api/maps/static?lat=39.2&lng=-119.93",
+    );
+    expect(staticMapImageSrc(35.1428, -120.6413)).toBe(
+      "/api/maps/static?lat=35.1428&lng=-120.6413",
+    );
   });
 });
