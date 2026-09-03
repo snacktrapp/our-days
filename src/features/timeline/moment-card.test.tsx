@@ -5,7 +5,9 @@ import {
   formatBibleVerseMoment,
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
+import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import { MomentCard } from "./moment-card";
+import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
   MomentInteractionViewModel,
@@ -185,6 +187,8 @@ describe("MomentCard long thought copy", () => {
 
 describe("MomentCard timeline media", () => {
   afterEach(() => {
+    resetPhotoLightboxSession();
+    resetIndependentOverlayObjectUrlCache();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -257,7 +261,7 @@ describe("MomentCard timeline media", () => {
     );
 
     render(
-      <>
+      <PhotoLightboxRoot>
         <MomentCard
           moment={{
             ...thought,
@@ -290,7 +294,7 @@ describe("MomentCard timeline media", () => {
             },
           }}
         />
-      </>,
+      </PhotoLightboxRoot>,
     );
 
     const first = screen.getByRole("img", { name: "First light" });

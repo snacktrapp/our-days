@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
+import { PhotoLightboxRoot } from "@/features/timeline/photo-lightbox";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
 import { ThemeToggle } from "./theme-toggle";
@@ -99,27 +100,29 @@ export function JournalChrome({
       model={model.composer}
       createMomentAction={createMomentAction}
     >
-      {header}
-      <main className={`app-shell theme-${model.accent}`}>
-        <div className="ambient ambient-one" />
-        <div className="ambient ambient-two" />
-        <section className="phone-stage" aria-label="Family journal">
-          <p
-            id="journal-live-region"
-            className="sr-only"
-            aria-live="assertive"
-            aria-atomic="true"
-          />
-          {children}
-          {standaloneNavigation ? (
-            <PrimaryNavigation
-              section={section}
-              memoriesHref={model.memoriesHref}
-              settingsHref={model.settingsHref}
+      <PhotoLightboxRoot>
+        {header}
+        <main className={`app-shell theme-${model.accent}`}>
+          <div className="ambient ambient-one" />
+          <div className="ambient ambient-two" />
+          <section className="phone-stage" aria-label="Family journal">
+            <p
+              id="journal-live-region"
+              className="sr-only"
+              aria-live="assertive"
+              aria-atomic="true"
             />
-          ) : null}
-        </section>
-      </main>
+            {children}
+            {standaloneNavigation ? (
+              <PrimaryNavigation
+                section={section}
+                memoriesHref={model.memoriesHref}
+                settingsHref={model.settingsHref}
+              />
+            ) : null}
+          </section>
+        </main>
+      </PhotoLightboxRoot>
     </ComposerSessionProvider>
   );
 }

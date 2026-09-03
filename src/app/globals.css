@@ -6257,9 +6257,58 @@ button:focus-visible,
   backdrop-filter: blur(8px);
 }
 
-.media-viewer-scroll-locked {
+.photo-lightbox {
+  width: 100dvw;
+  height: 100dvh;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: none;
+}
+
+.photo-lightbox-dimmer {
+  position: absolute;
+  inset: 0;
+  background: #020403;
+}
+
+.photo-lightbox-photo {
+  position: fixed;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  transform-origin: center center;
+  will-change: transform;
+  touch-action: pinch-zoom;
+}
+
+.photo-lightbox-photo.is-pulling {
+  transition: none;
+}
+
+.photo-lightbox-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+}
+
+.photo-lightbox-photo.is-zoomed {
+  place-items: start;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+.photo-lightbox-photo.is-zoomed img {
+  width: 200%;
+  height: 200%;
+}
+
+.photo-lightbox-close {
+  position: fixed;
+  z-index: 2;
 }
 
 .fullscreen-media-dialog {
@@ -7415,7 +7464,9 @@ button:focus-visible,
   }
 
   .media-viewer-photo,
-  .media-viewer-dimmer {
+  .media-viewer-dimmer,
+  .photo-lightbox-photo,
+  .photo-lightbox-dimmer {
     transition: none !important;
   }
 }

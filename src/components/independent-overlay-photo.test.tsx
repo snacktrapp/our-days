@@ -1,12 +1,15 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IndependentOverlayPhoto } from "./independent-overlay-photo";
+import {
+  IndependentOverlayPhoto,
+  resetIndependentOverlayObjectUrlCache,
+} from "./independent-overlay-photo";
 
-const asset =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+const asset = "/private-photo-overlay.jpg";
 
 describe("IndependentOverlayPhoto", () => {
   afterEach(() => {
+    resetIndependentOverlayObjectUrlCache();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -23,7 +26,6 @@ describe("IndependentOverlayPhoto", () => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue(
       "blob:independent-overlay",
     );
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
 
     render(<IndependentOverlayPhoto src={asset} alt="Overlay porch" />);
 
@@ -37,31 +39,5 @@ describe("IndependentOverlayPhoto", () => {
         credentials: "same-origin",
       }),
     );
-  });
-
-  it("revokes the object URL when the overlay unmounts", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
-      })),
-    );
-    const revoke = vi
-      .spyOn(URL, "revokeObjectURL")
-      .mockImplementation(() => undefined);
-    vi.spyOn(URL, "createObjectURL").mockReturnValue(
-      "blob:independent-overlay",
-    );
-
-    const view = render(
-      <IndependentOverlayPhoto src={asset} alt="Overlay porch" />,
-    );
-    await screen.findByRole("img", { name: "Overlay porch" });
-    view.unmount();
-
-    await waitFor(() => {
-      expect(revoke).toHaveBeenCalledWith("blob:independent-overlay");
-    });
   });
 });

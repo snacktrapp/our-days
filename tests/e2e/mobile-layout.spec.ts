@@ -866,10 +866,10 @@ test("a timeline photo expands over the floating header", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family");
   await page.locator(".photo-viewer-trigger").first().click();
-  const dialog = page.locator(".fullscreen-media-dialog");
+  const dialog = page.locator(".photo-lightbox");
   await expect(dialog).toBeVisible();
   const geometry = await page.evaluate(() => {
-    const viewer = document.querySelector(".fullscreen-media-dialog");
+    const viewer = document.querySelector(".photo-lightbox");
     if (!(viewer instanceof HTMLElement)) return null;
     const rect = viewer.getBoundingClientRect();
     const header = document.querySelector(".topbar");
