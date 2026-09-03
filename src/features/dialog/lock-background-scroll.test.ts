@@ -98,7 +98,7 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
-  it("holds the page scroll offset while an overlay is open", () => {
+  it("restores window scroll after the overlay closes", () => {
     let scrollY = 160;
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -112,10 +112,21 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).not.toHaveBeenCalled();
     scrollY = 0;
     window.dispatchEvent(new Event("scroll"));
-    expect(scrollTo).toHaveBeenCalledWith(0, 160);
-    scrollY = 0;
     document.body.dispatchEvent(new Event("focusin", { bubbles: true }));
+    expect(scrollTo).not.toHaveBeenCalled();
+    unmount();
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
+  });
+
+  it("prevents wheel default on overlay chrome while locked", () => {
+    const { unmount } = renderHook(() => useLockBackgroundScroll(true));
+    const event = new WheelEvent("wheel", {
+      deltaY: 480,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
     unmount();
   });
 

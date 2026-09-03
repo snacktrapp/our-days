@@ -227,6 +227,7 @@ function VideoFeasibilityDialog({
 
   useLockBackgroundScroll(open);
 
+  // Lock is declared first so React cleanup closes the dialog, then restores scroll.
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
