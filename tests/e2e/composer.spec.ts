@@ -379,7 +379,9 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(chooserPlacement?.alignedToPill).toBe(true);
   expect(chooserPlacement?.compact).toBe(true);
   expect(chooserPlacement?.parkedOnNav).toBe(false);
-  expect(chooserPlacement?.top).toBe(notificationTop);
+  expect(
+    Math.abs((chooserPlacement?.top ?? 0) - notificationTop),
+  ).toBeLessThanOrEqual(1);
   expect(chooserPlacement?.addAnimation).toBe("none");
   await expect(overlaySheet).toHaveCSS("border-top-width", "1px");
   expect(

@@ -24,8 +24,10 @@
   --overlay-popover-blur: 18px;
   --header-drawer-padding: 16px;
   --header-drawer-gap: 10px;
+  /* 55px is the topbar padding-box (56px border-box minus 1px borders),
+     matching `top: 100%` on drawers positioned against the header. */
   --header-drawer-top: calc(
-    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 56px +
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 55px +
       var(--header-drawer-gap)
   );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
