@@ -2,21 +2,45 @@
 
 import { useEffect } from "react";
 
-const scrollPositionKey = "ourDaysTimelineScrollY";
-const scrollUrlKey = "ourDaysTimelineScrollUrl";
+const storageKey = "our-days:timeline-scroll";
+
+function readPositions() {
+  try {
+    const parsed: unknown = JSON.parse(
+      sessionStorage.getItem(storageKey) ?? "{}",
+    );
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function savedPositionFor(route: string) {
+  const value = readPositions()[route];
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : 0;
+}
+
+function rememberPosition(route: string, y: number) {
+  try {
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({ ...readPositions(), [route]: y }),
+    );
+  } catch {
+    // Private mode or quota must not take down the timeline.
+  }
+}
 
 export function TimelineScrollMemory() {
   useEffect(() => {
     const route = `${window.location.pathname}${window.location.search}`;
-    const existingState =
-      window.history.state && typeof window.history.state === "object"
-        ? window.history.state
-        : {};
-    const savedPosition = existingState[scrollPositionKey];
-    const shouldRestore =
-      existingState[scrollUrlKey] === route &&
-      typeof savedPosition === "number" &&
-      savedPosition > 0;
+    const savedPosition = savedPositionFor(route);
+    const shouldRestore = savedPosition > 0;
     let ready = !shouldRestore;
     let scrollFrame = 0;
     const previousRestoration = window.history.scrollRestoration;
@@ -26,19 +50,7 @@ export function TimelineScrollMemory() {
       if (!ready) return;
       window.cancelAnimationFrame(scrollFrame);
       scrollFrame = window.requestAnimationFrame(() => {
-        const state =
-          window.history.state && typeof window.history.state === "object"
-            ? window.history.state
-            : {};
-        window.history.replaceState(
-          {
-            ...state,
-            [scrollPositionKey]: window.scrollY,
-            [scrollUrlKey]: route,
-          },
-          "",
-          window.location.href,
-        );
+        rememberPosition(route, window.scrollY);
       });
     };
 
