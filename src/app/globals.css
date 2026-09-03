@@ -23,6 +23,7 @@
   --header-drawer-padding: 16px;
   --header-drawer-top: calc(63px + env(safe-area-inset-top));
   --header-drawer-gutter: max(16px, calc((100vw - 430px) / 2 + 16px));
+  --bottom-nav-visual-inset: 0px;
 }
 
 :root[data-theme="dark"] {
@@ -51,6 +52,7 @@
 html {
   width: 100%;
   max-width: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
   background: #07110d;
   scroll-padding-bottom: calc(78px + env(safe-area-inset-bottom));
@@ -58,6 +60,7 @@ html {
 body {
   width: 100%;
   max-width: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
   margin: 0;
   background: #07110d;
@@ -267,7 +270,7 @@ button:focus-visible,
 }
 
 .app-shell {
-  min-height: 100svh;
+  min-height: 100dvh;
   display: grid;
   place-items: start center;
   position: relative;
@@ -324,7 +327,7 @@ button:focus-visible,
 
 .phone-stage {
   width: min(100%, 430px);
-  min-height: 100svh;
+  min-height: 100dvh;
   position: relative;
   overflow: hidden;
   padding-bottom: calc(78px + env(safe-area-inset-bottom));
@@ -3740,10 +3743,11 @@ button:focus-visible,
   height: calc(56px + env(safe-area-inset-bottom));
   position: fixed;
   z-index: 100;
-  bottom: 0;
-  left: 50%;
+  bottom: var(--bottom-nav-visual-inset, 0px);
+  left: 0;
+  right: 0;
   width: min(100%, 430px);
-  transform: translate3d(-50%, 0, 0);
+  margin-inline: auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
@@ -3789,7 +3793,7 @@ button:focus-visible,
   cursor: pointer;
 }
 .journal-loading {
-  min-height: calc(100svh - 56px - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
   display: grid;
   place-items: center;
   position: relative;

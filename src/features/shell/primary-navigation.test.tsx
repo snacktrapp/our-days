@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrimaryNavigation } from "./primary-navigation";
 
 const navigation = vi.hoisted(() => ({ pathname: "/family" }));
@@ -12,6 +12,10 @@ vi.mock("next/navigation", () => ({
 describe("PrimaryNavigation", () => {
   beforeEach(() => {
     navigation.pathname = "/family";
+  });
+
+  afterEach(() => {
+    document.documentElement.style.removeProperty("--bottom-nav-visual-inset");
   });
 
   it("contains destinations only", () => {
@@ -49,5 +53,31 @@ describe("PrimaryNavigation", () => {
     expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
       "active",
     );
+  });
+
+  it("pins the tab bar to the visual viewport while a destination is opening", async () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        addEventListener: vi.fn(),
+        height: 760,
+        offsetTop: 0,
+        removeEventListener: vi.fn(),
+      },
+    });
+    const user = userEvent.setup();
+    render(<PrimaryNavigation section="timeline" />);
+
+    await user.click(screen.getByRole("link", { name: "People" }));
+
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--bottom-nav-visual-inset",
+      ),
+    ).toBe("84px");
   });
 });

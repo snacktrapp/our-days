@@ -297,6 +297,16 @@ test("primary navigation stays compact above the device safe area", async ({
   });
 
   expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
+  await expect(page.locator(".bottom-nav")).toHaveCSS("transform", "none");
+  const rest = await page.locator(".bottom-nav").evaluate((navigation) => {
+    const rect = navigation.getBoundingClientRect();
+    return {
+      bottom: window.getComputedStyle(navigation).bottom,
+      bottomGap: window.innerHeight - rect.bottom,
+    };
+  });
+  expect(rest.bottom).toBe("0px");
+  expect(Math.abs(rest.bottomGap)).toBeLessThanOrEqual(2);
 });
 
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
@@ -441,6 +451,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
     Math.max(...samples.map(({ bottomGap }) => bottomGap)) -
       Math.min(...samples.map(({ bottomGap }) => bottomGap)),
   ).toBeLessThanOrEqual(1);
+  expect(
+    Math.max(...samples.map(({ bottomGap }) => Math.abs(bottomGap))),
+  ).toBeLessThanOrEqual(2);
   expect(
     await navigationNode!.evaluate(
       (element) =>

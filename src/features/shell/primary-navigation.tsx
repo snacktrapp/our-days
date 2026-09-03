@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
+import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
 type PrimarySection = Extract<
   JournalSection,
@@ -80,6 +81,7 @@ export function PrimaryNavigation({
   settingsHref?: string | null;
 }) {
   const pathname = usePathname();
+  const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;
     section: PrimarySection;
@@ -92,6 +94,7 @@ export function PrimaryNavigation({
   const selectImmediately =
     (nextSection: PrimarySection) => (event: MouseEvent<HTMLAnchorElement>) => {
       if (!event.defaultPrevented && isUnmodifiedPrimaryClick(event)) {
+        pinToVisualViewport();
         setPendingSelection({ fromPathname: pathname, section: nextSection });
       }
     };
