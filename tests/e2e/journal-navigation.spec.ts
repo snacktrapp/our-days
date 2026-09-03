@@ -31,6 +31,11 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/people$/);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(page.locator(".phone-stage")).toHaveCSS("transform", "none");
+  await expect(page.locator(".phone-stage")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
 
   await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(page).toHaveURL(/\/people\/molly$/);

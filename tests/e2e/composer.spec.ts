@@ -272,11 +272,24 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     page.getByText(/Local design preview · Nothing is saved/u),
   ).toHaveCount(0);
   await expect(dialog).toHaveClass(/new-moment-composer-dialog/u);
-  await dialog.locator(".composer-sheet").evaluate(async (sheet) => {
+  const overlaySheet = dialog.locator(".composer-sheet");
+  const overlayMotion = await overlaySheet.evaluate((sheet) => {
+    const style = getComputedStyle(sheet);
+    const duration = style.animationDuration;
+    return {
+      name: style.animationName,
+      durationMs:
+        Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000),
+    };
+  });
+  expect(overlayMotion.name).toBe("composer-ease-up");
+  expect(overlayMotion.durationMs).toBe(180);
+  await overlaySheet.evaluate(async (sheet) => {
     await Promise.all(
       sheet.getAnimations().map((animation) => animation.finished),
     );
   });
+  await expect(overlaySheet).toHaveCSS("transform", "none");
   const drawerPlacement = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>(".topbar");
     const sheet = document.querySelector<HTMLElement>(

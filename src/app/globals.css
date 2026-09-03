@@ -21,8 +21,10 @@
   --header-drawer-radius: 10px;
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --header-drawer-padding: 16px;
+  --header-drawer-hang: 47px;
   --header-drawer-top: calc(
-    var(--bottom-nav-float-gap) + 47px + env(safe-area-inset-top)
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + (56px - 44px) / 2 +
+      var(--header-drawer-hang)
   );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
@@ -5226,7 +5228,7 @@ button:focus-visible,
 .notification-panel {
   position: absolute;
   z-index: 35;
-  top: 47px;
+  top: var(--header-drawer-hang);
   right: -44px;
   width: min(310px, calc(100dvw - 32px));
   padding: var(--header-drawer-padding);
@@ -6065,7 +6067,8 @@ button:focus-visible,
   margin-top: 0;
   padding-inline: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
-  animation: composer-ease-up 180ms ease;
+  /* 180ms ease-up; backwards fill so no leftover translateY after it ends. */
+  animation: composer-ease-up 180ms ease backwards;
 }
 
 .new-moment-composer-dialog,
@@ -6132,17 +6135,6 @@ button:focus-visible,
   color: var(--ink);
 }
 
-@keyframes composer-sheet-down {
-  from {
-    transform: translateY(-24px);
-    opacity: 0.72;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 @keyframes composer-ease-up {
   from {
     opacity: 0;
@@ -6155,10 +6147,6 @@ button:focus-visible,
 }
 
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
-  :root {
-    --header-drawer-top: calc(var(--bottom-nav-float-gap) + 47px);
-  }
-
   .new-moment-composer-dialog .composer-sheet {
     max-height: calc(100dvh - 92px);
   }
@@ -6900,8 +6888,11 @@ button:focus-visible,
     transition: transform 90ms ease;
   }
 
+  /* Scale the pill, not each tab, so a child tap still presses on iOS. */
   .topbar:active,
-  .bottom-nav:active {
+  .topbar:has(:active),
+  .bottom-nav:active,
+  .bottom-nav:has(:active) {
     transform: scale(0.985);
   }
 }
@@ -6910,6 +6901,12 @@ button:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .new-moment-composer-dialog .composer-sheet {
     animation: none;
+  }
+
+  .topbar,
+  .bottom-nav {
+    transition: none;
+    transform: none;
   }
 
   .title-switcher-heading svg {

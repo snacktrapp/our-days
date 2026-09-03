@@ -98,7 +98,9 @@ test("managed profiles preserve journal identity and honest empty states", async
   page,
 }) => {
   await page.goto("/people/avery");
-  await expect(page.getByText("Avery", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Avery’s days" }),
+  ).toBeVisible();
   await expect(page.getByText("First day of school")).toBeVisible();
   await expect(page.getByText(/earliest entry/i)).toBeVisible();
   await expect(page.getByText("The story so far")).toHaveCount(0);

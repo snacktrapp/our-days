@@ -1,5 +1,27 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 import { expect, test } from "./test";
+
+async function applicationInlineStyles(page: Page) {
+  return page.locator("[style]").evaluateAll((elements) =>
+    elements
+      .filter((element) => {
+        if (element === document.documentElement || element === document.body) {
+          return false;
+        }
+        const root = element.getRootNode();
+        return !(
+          element.closest("next-route-announcer") ||
+          (root instanceof ShadowRoot &&
+            root.host.matches("next-route-announcer"))
+        );
+      })
+      .map((element) => ({
+        tag: element.tagName,
+        value: element.getAttribute("style"),
+      })),
+  );
+}
 
 test.skip(
   ({ browserName }) => browserName !== "chromium",
@@ -137,24 +159,7 @@ test("timeline, memories, and composer render without application style attribut
       await expect(image).toHaveAttribute("loading", "lazy");
       await expect(image).toHaveAttribute("sizes", "360px");
     }
-    const applicationStyles = await page
-      .locator("[style]")
-      .evaluateAll((elements) =>
-        elements
-          .filter((element) => {
-            const root = element.getRootNode();
-            return !(
-              element.closest("next-route-announcer") ||
-              (root instanceof ShadowRoot &&
-                root.host.matches("next-route-announcer"))
-            );
-          })
-          .map((element) => ({
-            tag: element.tagName,
-            value: element.getAttribute("style"),
-          })),
-      );
-    expect(applicationStyles).toEqual([]);
+    expect(await applicationInlineStyles(page)).toEqual([]);
   }
 
   await page.goto("/family");
@@ -169,24 +174,7 @@ test("timeline, memories, and composer render without application style attribut
     "src",
     /^blob:/u,
   );
-  const applicationStyles = await page
-    .locator("[style]")
-    .evaluateAll((elements) =>
-      elements
-        .filter((element) => {
-          const root = element.getRootNode();
-          return !(
-            element.closest("next-route-announcer") ||
-            (root instanceof ShadowRoot &&
-              root.host.matches("next-route-announcer"))
-          );
-        })
-        .map((element) => ({
-          tag: element.tagName,
-          value: element.getAttribute("style"),
-        })),
-    );
-  expect(applicationStyles).toEqual([]);
+  expect(await applicationInlineStyles(page)).toEqual([]);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
 });
 
@@ -239,8 +227,8 @@ test("an unhandled route error uses the CSP-compatible global boundary", async (
     page.getByRole("heading", { name: "This page couldn’t load" }),
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
-  const applicationStyles = await page.locator("[style]").count();
-  expect(applicationStyles).toBe(0);
+  expect(await applicationInlineStyles(page)).toEqual([]);
+  await expect(page.locator(".journal-error-shell [style]")).toHaveCount(0);
 
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
