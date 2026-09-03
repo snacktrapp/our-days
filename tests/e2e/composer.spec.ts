@@ -13,11 +13,13 @@ const focusableSelector = [
 ].join(",");
 
 async function setComposerPlace(scope: Page | Locator, name: string) {
+  const page = "keyboard" in scope ? scope : scope.page();
   const field = scope.getByLabel("Place name");
   if (!(await field.isVisible())) {
     await scope.getByRole("button", { name: /^Place,/u }).click();
   }
   await field.fill(name);
+  await page.keyboard.press("Escape");
 }
 
 async function expectReachable(control: Locator) {
@@ -141,7 +143,7 @@ async function expectCompleteFocusTraversal(
 
 async function openComposer(page: Page) {
   await page.getByRole("button", { name: "Add moment" }).click();
-  return page.getByRole("dialog");
+  return page.locator("dialog.new-moment-composer-dialog");
 }
 
 async function selectMomentDate(dialog: Locator, dateLabel: string) {
@@ -728,6 +730,7 @@ test("expanded capture states have no serious axe violations", async ({
 
 test("an open entry overlay does not scroll the family feed underneath", async ({
   page,
+  browserName,
 }) => {
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/family");
@@ -748,7 +751,20 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
 
   await page.getByRole("button", { name: /^Chapter,/u }).hover();
-  await page.evaluate(() => window.scrollBy(0, 480));
+  if (browserName === "webkit") {
+    const prevented = await page.evaluate(() => {
+      const event = new WheelEvent("wheel", {
+        deltaY: 480,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(prevented).toBe(true);
+  } else {
+    await page.mouse.wheel(0, 480);
+  }
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
 
   const verse = page.getByLabel("Verse text");

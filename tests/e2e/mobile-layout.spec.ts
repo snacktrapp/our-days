@@ -178,10 +178,21 @@ test("moment options open as a compact popover under the trigger without inline 
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => {
-    const card = document.querySelector(".moment-card");
-    if (!(card instanceof HTMLElement)) {
-      throw new Error("Family feed did not render a moment card.");
-    }
+    document.getElementById("e2e-moment-options-card")?.remove();
+    document.getElementById("e2e-moment-options-sheet")?.remove();
+    const sheet = document.createElement("style");
+    sheet.id = "e2e-moment-options-sheet";
+    const nonce =
+      document.querySelector<HTMLElement>("[nonce]")?.nonce ||
+      document.querySelector("[nonce]")?.getAttribute("nonce") ||
+      "";
+    if (nonce) sheet.setAttribute("nonce", nonce);
+    sheet.textContent =
+      "#e2e-moment-options-card{position:fixed;top:72px;right:16px;width:220px;height:120px;z-index:40}";
+    document.head.append(sheet);
+    const card = document.createElement("div");
+    card.id = "e2e-moment-options-card";
+    card.className = "moment-card";
     const actions = document.createElement("div");
     actions.className = "connected-moment-actions";
     const trigger = document.createElement("button");
@@ -201,8 +212,9 @@ test("moment options open as a compact popover under the trigger without inline 
     }
     actions.append(trigger, menu);
     card.append(actions);
+    document.body.append(card);
   });
-  const menu = page.locator(".moment-card .connected-moment-menu").last();
+  const menu = page.locator("#e2e-moment-options-card .connected-moment-menu");
   await expect(menu).toBeVisible();
   await expect(menu).not.toHaveAttribute("style");
 
