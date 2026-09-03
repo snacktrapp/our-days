@@ -109,8 +109,23 @@ test("timeline, memories, and composer render without application style attribut
           Math.abs(imageRect.height - frameRect!.height) < 0.5,
       };
     });
-    expect(crop).toEqual({ objectFit: "cover", fillsFrame: true });
     if (path === "/family") {
+      expect(crop.objectFit).toBe("contain");
+      const timelineFrame = await image.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          aspectRatio: style.aspectRatio,
+          height: rect.height,
+          maxHeightPx: Number.parseFloat(style.maxHeight),
+          width: rect.width,
+        };
+      });
+      expect(timelineFrame.aspectRatio).toBe("auto");
+      expect(timelineFrame.height).toBeLessThan(timelineFrame.width);
+      expect(timelineFrame.height).toBeLessThanOrEqual(
+        timelineFrame.maxHeightPx + 1,
+      );
       await expect(image).toHaveAttribute("loading", "eager");
       await expect(image).toHaveAttribute("fetchpriority", "high");
       await expect(image).toHaveAttribute(
@@ -118,6 +133,7 @@ test("timeline, memories, and composer render without application style attribut
         "(max-width: 520px) 92vw, 410px",
       );
     } else {
+      expect(crop).toEqual({ objectFit: "cover", fillsFrame: true });
       await expect(image).toHaveAttribute("loading", "lazy");
       await expect(image).toHaveAttribute("sizes", "360px");
     }

@@ -95,6 +95,8 @@ export function MomentCard({
                   label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
                   preload={preload ? "metadata" : "none"}
                   controls={false}
+                  width={moment.video.width}
+                  height={moment.video.height}
                 />
               }
               fullscreenMedia={
@@ -102,6 +104,8 @@ export function MomentCard({
                   src={moment.video.src}
                   label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
                   preload="metadata"
+                  width={moment.video.width}
+                  height={moment.video.height}
                 />
               }
             />
@@ -115,16 +119,16 @@ export function MomentCard({
                   <PrivatePhotoImage
                     src={moment.image.src}
                     alt={moment.image.alt}
-                    width={1200}
-                    height={801}
+                    width={moment.image.width}
+                    height={moment.image.height}
                     highPriority={preload}
                   />
                 ) : (
                   <CspPublicImage
                     src={moment.image.src}
                     alt={moment.image.alt}
-                    width={1200}
-                    height={801}
+                    width={moment.image.width ?? 1200}
+                    height={moment.image.height ?? 801}
                     highPriority={preload}
                     sizes="(max-width: 520px) 92vw, 410px"
                   />
@@ -135,16 +139,16 @@ export function MomentCard({
                   <PrivatePhotoImage
                     src={moment.image.src}
                     alt={moment.image.alt}
-                    width={1600}
-                    height={1068}
+                    width={moment.image.width}
+                    height={moment.image.height}
                     highPriority
                   />
                 ) : (
                   <CspPublicImage
                     src={moment.image.src}
                     alt={moment.image.alt}
-                    width={1600}
-                    height={1068}
+                    width={moment.image.width ?? 1200}
+                    height={moment.image.height ?? 801}
                     highPriority
                     sizes="100vw"
                   />

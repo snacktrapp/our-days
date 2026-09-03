@@ -182,3 +182,56 @@ describe("MomentCard long thought copy", () => {
     vi.mocked(thoughtCopyOverflows).mockReset();
   });
 });
+
+describe("MomentCard timeline media", () => {
+  it("keeps a landscape photo at its native frame instead of a cropped box", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "landscape-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Evening on the porch",
+            badgeLabel: "AUG 28",
+            width: 1200,
+            height: 801,
+          },
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", { name: "Evening on the porch" });
+    expect(image).toHaveAttribute("width", "1200");
+    expect(image).toHaveAttribute("height", "801");
+    expect(image.closest(".photo-frame")).not.toBeNull();
+  });
+
+  it("keeps a portrait photo at its native 9:16 frame", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "portrait-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Standing in the doorway",
+            badgeLabel: "AUG 28",
+            width: 1080,
+            height: 1920,
+          },
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", {
+      name: "Standing in the doorway",
+    });
+    expect(image).toHaveAttribute("width", "1080");
+    expect(image).toHaveAttribute("height", "1920");
+  });
+});

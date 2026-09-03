@@ -765,7 +765,8 @@ button:focus-visible,
   max-height: var(--timeline-media-max-height);
   position: relative;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-items: center;
   overflow: hidden;
   border-start-start-radius: inherit;
   border-start-end-radius: inherit;
@@ -777,7 +778,9 @@ button:focus-visible,
   height: auto;
   max-width: 100%;
   max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
+  justify-self: center;
   object-fit: contain;
   object-position: center;
   filter: saturate(0.84) contrast(0.97);
@@ -5843,6 +5846,7 @@ button:focus-visible,
   height: auto;
   max-width: 100%;
   max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
   border: 0;
   background: #050b08;
@@ -5855,7 +5859,8 @@ button:focus-visible,
   max-height: var(--timeline-media-max-height);
   position: relative;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-items: center;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -5878,6 +5883,9 @@ button:focus-visible,
   height: auto;
   max-width: 100%;
   max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
 }
 
 .video-viewer-trigger {
@@ -6702,6 +6710,7 @@ button:focus-visible,
   height: auto;
   max-width: 100%;
   max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
   object-fit: contain;
 }
