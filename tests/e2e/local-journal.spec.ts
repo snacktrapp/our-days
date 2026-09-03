@@ -48,11 +48,13 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     .getByRole("textbox", { name: "Entry" })
     .fill("Casey left a pebble on the porch.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("Casey left a pebble on the porch.")).toBeVisible(
-    {
-      timeout: 15_000,
-    },
-  );
+  await expect(
+    page
+      .getByLabel("Chronological family moments")
+      .getByText("Casey left a pebble on the porch."),
+  ).toBeVisible({
+    timeout: 15_000,
+  });
 
   await page.getByRole("button", { name: "Add moment" }).click();
   await page
@@ -94,7 +96,10 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(
     page.getByRole("heading", { name: "On this day" }),
   ).toBeVisible();
-  await page.goto("/memories/years/2026");
+  await page
+    .getByRole("link", { name: /Browse memories from \d{4}/u })
+    .first()
+    .click();
   await expect(
     page.getByText("Casey left a pebble on the porch."),
   ).toBeVisible();
@@ -112,7 +117,10 @@ test("unconfigured Google and X stay on the invitation gate", async ({
   page,
 }) => {
   await page.goto("/sign-in");
-  await page.getByRole("button", { name: "Sign in with Google" }).click();
+  await expect(
+    page.getByRole("button", { name: "Sign in with Google" }),
+  ).toBeVisible();
+  await page.goto("/api/auth/oauth/google");
   await expect(page).toHaveURL(/\/sign-in\?oauth=unavailable/u);
   await expect(
     page.getByText("That sign-in method is unavailable right now."),
