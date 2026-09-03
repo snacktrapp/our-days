@@ -25,6 +25,7 @@ export function MapPickerCanvas() {
     let map: import("maplibre-gl").Map | undefined;
     let marker: import("maplibre-gl").Marker | undefined;
     let maplibre: typeof import("maplibre-gl") | undefined;
+    let observer: ResizeObserver | null = null;
 
     const post = (message: MapPickerToParent) => {
       window.parent.postMessage(message, parentOrigin);
@@ -79,10 +80,17 @@ export function MapPickerCanvas() {
         });
       });
       const coordinates = parsePlaceCoordinates(latitude, longitude);
+      const resize = () => map?.resize();
       map.on("load", () => {
+        resize();
         if (coordinates)
           placeMarker(coordinates.latitude, coordinates.longitude);
       });
+      observer =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(resize);
+      observer?.observe(container);
     };
 
     const onMessage = (event: MessageEvent) => {
@@ -115,6 +123,7 @@ export function MapPickerCanvas() {
       window.removeEventListener("keydown", onKeyDown);
       marker?.remove();
       map?.remove();
+      observer?.disconnect();
     };
   }, []);
 

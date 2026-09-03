@@ -177,6 +177,8 @@ afterEach(() => {
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 async function openComposer() {
@@ -203,7 +205,10 @@ async function setComposerPlace(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
 ) {
-  await user.click(screen.getByRole("button", { name: /^Place,/u }));
+  const field = screen.queryByLabelText("Place name");
+  if (!field) {
+    await user.click(screen.getByRole("button", { name: /^Place,/u }));
+  }
   await user.type(screen.getByLabelText("Place name"), name);
 }
 
@@ -929,7 +934,6 @@ describe("MomentComposer", () => {
       await user.click(
         screen.getByRole("button", { name: new RegExp(choice) }),
       );
-      await user.click(screen.getByRole("button", { name: /^Place,/u }));
       const requiredTitle = screen.getByLabelText(label);
       expect(requiredTitle).toHaveAttribute("aria-required", "true");
       await user.type(requiredTitle, value);
@@ -1079,6 +1083,61 @@ describe("MomentComposer", () => {
         }),
       ),
     );
+  });
+
+  it("saves a chosen MapTiler place with coordinates from the location sheet", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          features: [
+            {
+              place_name: "Sand Harbor, NV",
+              center: [-119.93, 39.2],
+            },
+          ],
+        }),
+      }),
+    );
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedFamilyHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Location/ }));
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
+    expect(
+      screen.queryByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
+    await user.type(screen.getByLabelText("Place name"), "Sand");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Sand Harbor, NV" }),
+      ).toBeVisible(),
+    );
+    await user.click(screen.getByRole("button", { name: "Sand Harbor, NV" }));
+    expect(
+      screen.getByRole("img", { name: "Map of Sand Harbor, NV" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "location",
+          title: "",
+          placeName: "Sand Harbor, NV",
+          latitude: 39.2,
+          longitude: -119.93,
+        }),
+      ),
+    );
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("saves a selected Bible verse as a compatible written moment", async () => {
@@ -1368,9 +1427,8 @@ describe("MomentComposer", () => {
 
     confirm.mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1541,9 +1599,8 @@ describe("MomentComposer", () => {
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
   });
 
   it.each([
@@ -1556,21 +1613,15 @@ describe("MomentComposer", () => {
       await user.click(
         screen.getByRole("button", { name: new RegExp(choice) }),
       );
-      if (choice === "Location") {
-        await user.click(screen.getByRole("button", { name: /^Place,/u }));
-      }
       const field = screen.getByLabelText(label);
       fireEvent.change(field, { target: { value: " \n " } });
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent(error);
-      if (choice === "Location") {
-        expect(
-          screen.getByRole("dialog", { name: "Choose a place" }),
-        ).toBeVisible();
-      } else {
-        expect(field).toHaveFocus();
-      }
+      expect(field).toHaveFocus();
+      expect(
+        screen.queryByRole("dialog", { name: "Choose a place" }),
+      ).toBeNull();
       expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     },
   );

@@ -176,6 +176,7 @@ describe("ConnectedMomentControl", () => {
       addListener: vi.fn(),
       removeListener: vi.fn(),
       addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }));
     try {
@@ -199,6 +200,7 @@ describe("ConnectedMomentControl", () => {
         addListener: vi.fn(),
         removeListener: vi.fn(),
         addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       }));
     }
@@ -473,8 +475,10 @@ describe("ConnectedMomentControl", () => {
       screen.getByRole("heading", { name: "New location entry" }),
     ).toBeVisible();
     expect(
-      screen.getByRole("button", { name: /^Place, Cedar Park/u }),
-    ).toBeVisible();
+      screen.queryByRole("button", { name: /^Place, Cedar Park/u }),
+    ).toBeNull();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Cedar Park");
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
     expect(screen.getByLabelText("Details")).toHaveValue(
       "The wind made everyone laugh.",
     );

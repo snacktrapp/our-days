@@ -449,9 +449,6 @@ test("required content rejects whitespace and future dates before review", async
   for (const testCase of cases) {
     const dialog = await openComposer(page);
     await dialog.getByRole("button", { name: testCase.choice }).click();
-    if (testCase.choice.source.includes("Location")) {
-      await dialog.getByRole("button", { name: /^Place,/u }).click();
-    }
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
     await dialog.getByRole("button", { name: "Save" }).click();

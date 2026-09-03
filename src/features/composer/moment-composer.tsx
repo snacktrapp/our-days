@@ -434,6 +434,8 @@ export function MomentComposer({
           editorHeadingRef.current?.focus({ preventScroll: true });
         else if (mode === "thought") bodyTextareaRef.current?.focus();
         else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
+        else if (mode === "location")
+          locationSearchRef.current?.focus({ preventScroll: true });
         else titleInputRef.current?.focus();
       } else chooserHeadingRef.current?.focus({ preventScroll: true });
     });

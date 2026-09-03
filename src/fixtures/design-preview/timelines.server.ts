@@ -242,6 +242,8 @@ const familyEntries = [
       }),
       place: "Sand Harbor · Lake Tahoe",
       mapLabel: "TAHOE",
+      latitude: 39.2,
+      longitude: -119.93,
       taggedPeopleLabel: "Avery",
     },
   },

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { reverseGeocodeMapTilerPlace, searchMapTilerPlaces } from "./maptiler";
+import {
+  mapTilerStaticMapUrl,
+  reverseGeocodeMapTilerPlace,
+  searchMapTilerPlaces,
+} from "./maptiler";
 
 describe("MapTiler geocoding", () => {
   afterEach(() => {
@@ -52,5 +56,13 @@ describe("MapTiler geocoding", () => {
     await expect(
       reverseGeocodeMapTilerPlace(37.8, -122.4, "public-key"),
     ).resolves.toBe("Ocean overlook");
+  });
+
+  it("builds a static map URL for a saved pin", () => {
+    const url = mapTilerStaticMapUrl("public-key", 39.2, -119.93);
+    expect(url).toContain("api.maptiler.com/maps/streets-v2/static/");
+    expect(url).toContain("-119.93,39.2,14/");
+    expect(url).toContain("key=");
+    expect(mapTilerStaticMapUrl("", 39.2, -119.93)).toBe("");
   });
 });

@@ -10,7 +10,7 @@ describe("location fields", () => {
     vi.unstubAllGlobals();
   });
 
-  it("matches date/time picker chrome and stays calm without a MapTiler key", async () => {
+  it("opens search in the location sheet without a nested tap", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(
@@ -21,19 +21,18 @@ describe("location fields", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    );
     expect(
-      screen.getByRole("dialog", { name: "Choose a place" }),
-    ).toBeVisible();
+      screen.queryByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
     expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
     expect(screen.getByLabelText("Place name")).toHaveAttribute(
       "placeholder",
       "Add a place by hand",
     );
     expect(screen.getByRole("status")).toHaveTextContent("Map unavailable");
-    expect(screen.queryByTitle("Place map")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Use my location" }),
     ).toBeNull();
@@ -46,10 +45,10 @@ describe("location fields", () => {
     });
 
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
   });
 
-  it("keeps a typed label and offers MapTiler suggestions when a public key exists", async () => {
+  it("keeps a typed label and shows a map of the chosen MapTiler place", async () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     vi.stubGlobal(
       "fetch",
@@ -67,7 +66,7 @@ describe("location fields", () => {
     );
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(
+    const { rerender } = render(
       <LocationFields
         required
         value={emptyPlaceSelection()}
@@ -75,11 +74,10 @@ describe("location fields", () => {
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    );
     expect(screen.getByText("Search")).toBeVisible();
-    expect(screen.getByTitle("Place map")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Search to see this place on a map",
+    );
     expect(screen.queryByText("Map unavailable")).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "Sand");
@@ -100,5 +98,71 @@ describe("location fields", () => {
       latitude: 39.2,
       longitude: -119.93,
     });
+
+    rerender(
+      <LocationFields
+        required
+        value={{
+          label: "Sand Harbor, NV",
+          latitude: 39.2,
+          longitude: -119.93,
+        }}
+        onChange={onChange}
+      />,
+    );
+    const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
+    expect(map).toBeVisible();
+    expect(map.getAttribute("src")).toContain(
+      "api.maptiler.com/maps/streets-v2/static/",
+    );
+    expect(map.getAttribute("src")).toContain("-119.93,39.2,14/");
+    expect(map.getAttribute("src")).toContain("key=");
+    expect(
+      screen.getByText("© MapTiler © OpenStreetMap contributors"),
+    ).toBeVisible();
+  });
+
+  it("keeps optional Details place behind a compact trigger", async () => {
+    const user = userEvent.setup();
+    render(
+      <LocationFields
+        optional
+        value={emptyPlaceSelection()}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeVisible();
+    expect(screen.queryByLabelText("Place name")).toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: /^Place, Add a place/u }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Choose a place" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
+  });
+
+  it("puts current location on the search field when MapTiler can geolocate", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      geolocation: { getCurrentPosition: vi.fn() },
+    });
+    render(
+      <LocationFields
+        required
+        value={emptyPlaceSelection()}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Use my location" }),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
   });
 });

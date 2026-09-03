@@ -193,7 +193,6 @@ test(
       .getByRole("dialog")
       .getByRole("button", { name: /Location/u })
       .click();
-    await page.getByRole("button", { name: /^Place,/u }).click();
     await page.getByLabel("Place name").fill("The little beach");
     await page
       .getByRole("textbox", { name: "Details" })
@@ -223,7 +222,6 @@ test(
       .getByRole("dialog")
       .getByRole("button", { name: /Location/u })
       .click();
-    await page.getByRole("button", { name: /^Place,/u }).click();
     await page.getByLabel("Place name").fill("The little beach");
     await page.locator(".composer-sheet").evaluate((sheet) => {
       sheet.scrollTop = 0;
