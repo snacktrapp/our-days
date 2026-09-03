@@ -254,14 +254,15 @@ test("the timeline selector scrolls beneath the sticky header", async ({
   const selector = page.locator(".view-switch");
   await expect(selector).toBeVisible();
 
-  await stage.evaluate((element) => {
-    const topbar = element.querySelector<HTMLElement>(".topbar");
-    const viewSwitch = element.querySelector<HTMLElement>(".view-switch");
-    if (!topbar || !viewSwitch) return;
+  await page.evaluate(() => {
+    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const viewSwitch = document.querySelector<HTMLElement>(".view-switch");
+    const stage = document.querySelector<HTMLElement>(".phone-stage");
+    if (!topbar || !viewSwitch || !stage) return;
 
     const headerRect = topbar.getBoundingClientRect();
     const selectorRect = viewSwitch.getBoundingClientRect();
-    element.scrollTop += selectorRect.top - headerRect.bottom + 8;
+    stage.scrollTop += selectorRect.top - headerRect.bottom + 8;
   });
 
   await expect

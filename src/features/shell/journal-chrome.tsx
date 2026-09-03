@@ -83,6 +83,14 @@ export function JournalChrome({
         model={model.composer}
         createMomentAction={createMomentAction}
       >
+        {section === "trash" ? (
+          <TrashHeader model={model} />
+        ) : (
+          <PrimaryJournalHeader
+            model={model}
+            createMomentAction={createMomentAction}
+          />
+        )}
         <section className="phone-stage" aria-label="Family journal">
           <p
             id="journal-live-region"
@@ -90,14 +98,6 @@ export function JournalChrome({
             aria-live="assertive"
             aria-atomic="true"
           />
-          {section === "trash" ? (
-            <TrashHeader model={model} />
-          ) : (
-            <PrimaryJournalHeader
-              model={model}
-              createMomentAction={createMomentAction}
-            />
-          )}
           {children}
           {standaloneNavigation ? (
             <PrimaryNavigation

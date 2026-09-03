@@ -62,4 +62,17 @@ describe("JournalChrome", () => {
       ).not.toBeInTheDocument();
     },
   );
+
+  it("keeps the floating top pill outside the scrolling journal stage", () => {
+    const { container } = render(
+      <JournalChrome model={model} section="timeline">
+        <p>Page content</p>
+      </JournalChrome>,
+    );
+    const stage = container.querySelector(".phone-stage");
+    const header = container.querySelector(".topbar");
+    expect(header).not.toBeNull();
+    expect(stage).not.toBeNull();
+    expect(stage?.contains(header)).toBe(false);
+  });
 });
