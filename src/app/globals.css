@@ -1528,6 +1528,8 @@ button:focus-visible,
   display: grid;
   align-content: start;
   gap: 16px;
+  min-height: 0;
+  padding: 18px 18px 24px;
 }
 .family-settings-panel .section-intro {
   margin-bottom: 2px;
@@ -1988,12 +1990,11 @@ button:focus-visible,
   line-height: 1.45;
 }
 .settings-delivery-boundary {
-  margin: 0;
-  padding: 13px 16px 16px;
-  border: 0;
-  border-top: 1px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
+  margin: 12px;
+  padding: 14px;
+  border: 1px dashed var(--hairline);
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.48);
 }
 .settings-delivery-boundary strong {
   display: block;
@@ -5091,10 +5092,9 @@ button:focus-visible,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 11px 16px;
-  border: 0;
-  border-top: 1px solid var(--hairline);
-  border-radius: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -5196,6 +5196,7 @@ button:focus-visible,
 :root[data-theme="light"] .invite-review,
 :root[data-theme="light"] .settings-role-card,
 :root[data-theme="light"] .guardian-options li,
+:root[data-theme="light"] .settings-delivery-boundary,
 :root[data-theme="light"] .invite-section form input,
 :root[data-theme="light"] .access-review > button,
 :root[data-theme="light"] .invite-review button,
@@ -5413,7 +5414,8 @@ button:focus-visible,
 .access-review,
 .invite-review,
 .settings-role-card,
-.guardian-options li {
+.guardian-options li,
+.settings-delivery-boundary {
   border-color: var(--hairline);
   border-radius: 8px;
   background: #14231c;
@@ -6570,11 +6572,12 @@ button:focus-visible,
   box-shadow: none;
 }
 
-/* Account has Journal tools as a sibling after this panel. Do not stretch the
-   panel to the visual bottom or the tools card is pushed onto the tab bar. */
+/* Account used to wrap everything in the leftover full-page section-panel card
+   (min-height 100svh and 120px bottom padding). That empty shell sat under
+   Journal tools after the inner cards. Size to content only. */
 .family-settings-panel {
   min-height: 0;
-  padding-bottom: 16px;
+  padding-bottom: 24px;
 }
 
 /* Hard-coded dark-theme display colors need explicit light equivalents. */

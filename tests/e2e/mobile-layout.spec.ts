@@ -473,7 +473,9 @@ test("primary navigation remains above every secondary page canvas", async ({
 
   for (const path of ["/people", "/memories", "/settings/family"]) {
     await page.goto(path);
-    const panel = page.locator(".section-panel").first();
+    const panel = page.locator(
+      path === "/settings/family" ? ".family-settings-panel" : ".section-panel",
+    );
     await expect(panel).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(panel).toHaveCSS("border-top-width", "0px");
     if (path === "/settings/family") {

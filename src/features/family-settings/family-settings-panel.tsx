@@ -190,7 +190,7 @@ function PreviewFamilySettingsPanel({
   }
 
   return (
-    <section className="section-panel family-settings-panel">
+    <section className="family-settings-panel">
       <p className="section-intro">{model.intro}</p>
       <p className="settings-preview-banner">
         Local design preview · Access labels are illustrative; no accounts or
@@ -578,7 +578,7 @@ function ConnectedFamilySettingsPanel({
   }
 
   return (
-    <section className="section-panel family-settings-panel">
+    <section className="family-settings-panel">
       <p className="section-intro">{model.intro}</p>
       <p className="settings-live-banner">
         Private circle · Access changes take effect at the next request
