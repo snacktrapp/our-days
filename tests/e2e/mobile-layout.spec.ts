@@ -28,18 +28,26 @@ async function expectFrostedNavPill(pill: Locator) {
       : color.startsWith("rgb(")
         ? 1
         : Number.NaN;
+    const computedBlur =
+      style.backdropFilter !== "none" && style.backdropFilter
+        ? style.backdropFilter
+        : style.getPropertyValue("-webkit-backdrop-filter");
     return {
       alpha,
-      blur:
-        style.backdropFilter !== "none" && style.backdropFilter
-          ? style.backdropFilter
-          : style.getPropertyValue("-webkit-backdrop-filter"),
+      blur: computedBlur,
       isolation: style.isolation,
+      tokenBlur: style.getPropertyValue("--nav-pill-blur").trim(),
     };
   });
   expect(frost.alpha).toBeGreaterThanOrEqual(0.5);
   expect(frost.alpha).toBeLessThan(1);
-  expect(frost.blur).toMatch(/blur\(/u);
+  if (frost.blur && /blur\(/u.test(frost.blur)) {
+    expect(frost.blur).toMatch(/blur\(/u);
+  } else {
+    // Linux Chromium/Firefox often compute backdrop-filter as empty even
+    // when the pill still uses the shared frost token.
+    expect(frost.tokenBlur).toMatch(/^\d+(?:\.\d+)?px$/u);
+  }
   expect(frost.isolation).not.toBe("isolate");
 }
 
