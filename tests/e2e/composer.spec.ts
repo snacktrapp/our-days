@@ -146,7 +146,7 @@ async function openComposer(page: Page) {
   return page.locator("dialog.new-moment-composer-dialog");
 }
 
-test("type selection pops in place above the bottom bar and dismisses faster", async ({
+test("type selection pops from the header add control and dismisses faster", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -355,14 +355,22 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     return {
       aboveNav: Math.round(sheetRect.bottom) <= Math.round(navRect.top) + 1,
       gapAboveNav: Math.round(navRect.top - sheetRect.bottom),
-      belowHeader: sheetRect.top > headerRect.bottom,
+      belowHeader: sheetRect.top >= headerRect.bottom - 2,
+      nearAdd: sheetRect.top - add.getBoundingClientRect().bottom <= 16,
+      alignedToPill: Math.abs(sheetRect.left - headerRect.left) <= 8,
+      compact: sheetRect.width <= 280,
+      parkedOnNav: navRect.top - sheetRect.bottom <= 24,
       top: Math.round(sheetRect.top),
       addAnimation: getComputedStyle(add).animationName,
     };
   });
   expect(chooserPlacement?.aboveNav).toBe(true);
-  expect(chooserPlacement?.gapAboveNav).toBeGreaterThanOrEqual(8);
+  expect(chooserPlacement?.gapAboveNav).toBeGreaterThan(80);
   expect(chooserPlacement?.belowHeader).toBe(true);
+  expect(chooserPlacement?.nearAdd).toBe(true);
+  expect(chooserPlacement?.alignedToPill).toBe(true);
+  expect(chooserPlacement?.compact).toBe(true);
+  expect(chooserPlacement?.parkedOnNav).toBe(false);
   expect(chooserPlacement?.top).not.toBe(notificationTop);
   expect(chooserPlacement?.addAnimation).toBe("none");
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);

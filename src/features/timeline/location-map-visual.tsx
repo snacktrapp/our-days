@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  mapTilerRasterTile,
+  mapTilerStaticMapUrl,
   publicMapTilerKey,
 } from "@/features/composer/maptiler";
 
@@ -18,11 +18,11 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const [failed, setFailed] = useState(false);
-  const tile =
+  const mapUrl =
     latitude != null && longitude != null
-      ? mapTilerRasterTile(publicMapTilerKey(), latitude, longitude)
-      : null;
-  const showLiveMap = Boolean(tile) && !failed;
+      ? mapTilerStaticMapUrl(publicMapTilerKey(), latitude, longitude)
+      : "";
+  const showLiveMap = Boolean(mapUrl) && !failed;
 
   return (
     <div
@@ -30,16 +30,16 @@ export function LocationMapVisual({
         className ? ` ${className}` : ""
       }`}
     >
-      {showLiveMap && tile ? (
+      {showLiveMap ? (
         <>
-          {/* MapTiler raster tiles are allowlisted on img-src. The document
+          {/* MapTiler Static Maps are allowlisted on img-src. The document
               referrer policy is no-referrer; origin is required for this key. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={tile.url}
+            src={mapUrl}
             alt={`Map of ${place}`}
-            width={256}
-            height={256}
+            width={800}
+            height={330}
             decoding="async"
             referrerPolicy="origin"
             onError={() => setFailed(true)}
@@ -59,10 +59,10 @@ export function LocationMapVisual({
         className="place-pin"
         aria-hidden="true"
         style={
-          showLiveMap && tile
+          showLiveMap
             ? {
-                top: `${tile.yFraction * 100}%`,
-                left: `${tile.xFraction * 100}%`,
+                top: "50%",
+                left: "50%",
               }
             : undefined
         }

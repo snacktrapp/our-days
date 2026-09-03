@@ -754,6 +754,10 @@ export function invitationDeliveryIsEnabled(
   environment: ProcessEnvironment = process.env,
 ) {
   if (!supabaseResourceIsActive(environment)) return false;
+  // Preview organizers must be able to send. An explicit `disabled` flag still
+  // hides the form in Production/local; Preview ignores that hide-the-form gate
+  // because the hosted email_delivery capability and Resend SMTP are live.
+  if (environment.VERCEL_ENV === "preview") return true;
   if (environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "disabled")
     return false;
   if (environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "enabled") return true;

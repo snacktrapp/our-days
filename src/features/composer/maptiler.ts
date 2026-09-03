@@ -31,32 +31,17 @@ export function mapTilerStyleUrl(key: string) {
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
 }
 
-const rasterTileZoom = 14;
-
-function webMercatorTile(latitude: number, longitude: number, zoom: number) {
-  const n = 2 ** zoom;
-  const x = ((longitude + 180) / 360) * n;
-  const latRad = (latitude * Math.PI) / 180;
-  const y =
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
-  return { x, y };
-}
-
-export function mapTilerRasterTile(
+export function mapTilerStaticMapUrl(
   key: string,
   latitude: number,
   longitude: number,
-  zoom = rasterTileZoom,
+  size: Readonly<{ width: number; height: number }> = {
+    width: 800,
+    height: 330,
+  },
 ) {
-  if (!key) return null;
-  const { x, y } = webMercatorTile(latitude, longitude, zoom);
-  const tileX = Math.floor(x);
-  const tileY = Math.floor(y);
-  return {
-    url: `${MAPTILER_API_ORIGIN}/maps/streets-v2/256/${zoom}/${tileX}/${tileY}.png?key=${encodeURIComponent(key)}`,
-    xFraction: x - tileX,
-    yFraction: y - tileY,
-  };
+  if (!key) return "";
+  return `${MAPTILER_API_ORIGIN}/maps/streets-v2/static/${longitude},${latitude},14/${size.width}x${size.height}.png?key=${encodeURIComponent(key)}`;
 }
 
 function featureLabel(feature: MapTilerFeature) {

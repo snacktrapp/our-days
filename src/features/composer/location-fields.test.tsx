@@ -113,7 +113,7 @@ describe("location fields", () => {
     const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
     expect(map).toBeVisible();
     expect(map.getAttribute("src")).toContain(
-      "api.maptiler.com/maps/streets-v2/256/14/",
+      "api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/",
     );
     expect(map).toHaveAttribute("referrerPolicy", "origin");
     expect(map.getAttribute("src")).toContain("key=");

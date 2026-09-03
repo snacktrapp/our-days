@@ -851,11 +851,13 @@ describe("MomentComposer", () => {
     const dialog = screen.getByRole("dialog");
     const chooser = dialog.querySelector(".composer-sheet");
     expect(dialog).not.toHaveClass("composer-editor-fullscreen");
+    expect(dialog).toHaveClass("composer-type-picker");
     expect(chooser).toHaveClass("overlay-popover");
     expect(chooser).not.toHaveClass("is-closing");
 
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     expect(dialog).toHaveClass("composer-editor-fullscreen");
+    expect(dialog).not.toHaveClass("composer-type-picker");
     expect(dialog.querySelector(".composer-sheet")).not.toHaveClass(
       "overlay-popover",
     );

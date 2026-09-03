@@ -536,6 +536,51 @@ test("top chrome floats as a compact rounded pill above the feed", async ({
   expect(afterScroll.top).toBeCloseTo(geometry.topGap, 0);
 });
 
+test("family title is tappable and optically centered in the top pill", async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/family");
+    const header = page.locator(".topbar");
+    const heading = page.getByRole("heading", { name: "All our days" });
+    const summary = page.locator(".title-switcher summary");
+    await expect(summary).toHaveCSS("pointer-events", "auto");
+    await expect(page.locator(".title-switcher")).toHaveCSS(
+      "pointer-events",
+      "none",
+    );
+
+    const alignment = await page.evaluate(() => {
+      const bar = document.querySelector(".topbar")!;
+      const title = document.querySelector(".title-switcher-heading h1")!;
+      const barRect = bar.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      return {
+        offset:
+          (titleRect.left + titleRect.right) / 2 -
+          (barRect.left + barRect.right) / 2,
+        paddingInlineStart: getComputedStyle(
+          document.querySelector(".title-switcher summary")!,
+        ).paddingInlineStart,
+      };
+    });
+    expect(Math.abs(alignment.offset)).toBeLessThanOrEqual(2);
+    expect(alignment.paddingInlineStart).toBe("0px");
+
+    await summary.click();
+    await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+    await expect(
+      page.getByRole("navigation", { name: "Choose a family timeline" }),
+    ).toBeVisible();
+    await heading.click();
+  }
+});
+
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
   page,
 }) => {

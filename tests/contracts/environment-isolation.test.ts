@@ -73,7 +73,7 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_RESOURCE_MODE: "supabase",
         OUR_DAYS_INVITATION_DELIVERY_MODE: "disabled",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("rejects malformed or detached invitation-delivery activation", () => {

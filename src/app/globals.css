@@ -30,9 +30,25 @@
   --bottom-nav-visual-inset: 0px;
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
+  --type-picker-gap: 8px;
+  --type-picker-width: min(
+    260px,
+    calc(100dvw - 2 * var(--bottom-nav-inline-gap))
+  );
+  --type-picker-top: calc(
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 56px +
+      var(--type-picker-gap)
+  );
+  --type-picker-left: max(
+    var(--bottom-nav-inline-gap),
+    calc((100dvw - 430px) / 2 + var(--bottom-nav-inline-gap))
+  );
   --nav-pill-fill: rgba(7, 17, 13, 0.64);
   --nav-pill-blur: 14px;
-  --timeline-media-max-height: min(56dvh, 22.5rem);
+  --timeline-media-max-height: min(
+    90dvh,
+    calc((min(100vw, 430px) - 24px) * 16 / 9)
+  );
 }
 
 :root[data-theme="dark"] {
@@ -374,9 +390,9 @@ button:focus-visible,
   height: 56px;
   min-height: 56px;
   padding: 3px 8px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   position: fixed;
   z-index: 100;
   top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
@@ -449,10 +465,7 @@ button:focus-visible,
   background: var(--moss);
 }
 .title-lockup {
-  position: absolute;
-  inset-inline: 0;
   text-align: center;
-  pointer-events: none;
 }
 .title-lockup .eyebrow {
   display: block;
@@ -474,33 +487,52 @@ button:focus-visible,
   white-space: nowrap;
 }
 .title-switcher {
-  position: absolute;
-  inset-inline: 0;
   overflow: visible;
   text-align: center;
 }
+.topbar > .title-switcher,
+.topbar > .title-lockup {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+  align-self: center;
+  z-index: 1;
+  width: max-content;
+  max-width: calc(100% - 88px);
+  pointer-events: none;
+}
 .title-switcher > summary {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 0;
   list-style: none;
   cursor: pointer;
+  pointer-events: auto;
 }
-.title-switcher > summary::-webkit-details-marker {
+.title-switcher > summary::-webkit-details-marker,
+.title-switcher > summary::marker {
   display: none;
+  content: none;
 }
 .title-switcher-heading {
+  position: relative;
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
 }
 .title-switcher-heading h1 {
   min-width: 0;
 }
 .title-switcher-heading svg {
-  flex: 0 0 auto;
   width: 14px;
   height: 14px;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 4px);
+  margin-top: -7px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
@@ -547,7 +579,10 @@ button:focus-visible,
 .topbar-actions {
   display: flex;
   align-items: center;
-  margin-left: auto;
+  grid-column: 3;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: end;
 }
 .topbar-actions > :is(button, a) {
   width: 44px;
@@ -564,12 +599,24 @@ button:focus-visible,
   cursor: pointer;
 }
 .topbar > .header-add-moment,
-.topbar-leading-spacer {
+.topbar-leading-spacer,
+.topbar > .family-mark {
   width: 44px;
   min-width: 44px;
   min-height: 44px;
   display: grid;
   place-items: center;
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: start;
+}
+.topbar > .quiet-button,
+.topbar > .settings-close-link {
+  grid-column: 3;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: end;
 }
 .header-add-moment svg {
   width: 20px;
@@ -782,8 +829,8 @@ button:focus-visible,
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
   display: block;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center;
   filter: saturate(0.84) contrast(0.97);
 }
 .private-photo-unavailable {
@@ -5905,8 +5952,8 @@ button:focus-visible,
   display: block;
   border: 0;
   background: #050b08;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center;
 }
 
 .media-viewer-trigger {
@@ -5939,8 +5986,8 @@ button:focus-visible,
   height: auto;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center;
 }
 
 .video-viewer-trigger {
@@ -6019,14 +6066,15 @@ button:focus-visible,
 
 .media-viewer-photo img,
 .media-viewer-video video {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   display: block;
-  position: absolute;
-  inset: 0;
+  position: relative;
+  inset: auto;
   object-fit: contain;
+  object-position: center;
 }
 
 .media-viewer-photo.is-zoomed {
@@ -6105,8 +6153,8 @@ button:focus-visible,
   max-height: 360px;
 }
 
-/* Type selection pops in place above the bottom bar. The full composer is a
-   separate surface and still rises from the bottom after a type is chosen. */
+/* Review stays a compact panel above the tab bar. Type selection is a
+   separate popover under the header + and is positioned below. */
 .new-moment-composer-dialog[open]:not(.composer-editor-fullscreen) {
   align-items: flex-end;
   justify-content: center;
@@ -6129,6 +6177,22 @@ button:focus-visible,
   border-radius: var(--header-drawer-radius);
   transform-origin: 50% 0;
   animation: none;
+}
+
+.new-moment-composer-dialog.composer-type-picker[open] {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.new-moment-composer-dialog.composer-type-picker .composer-sheet {
+  width: var(--type-picker-width);
+  max-height: calc(100dvh - var(--type-picker-top) - 24px);
+  top: var(--type-picker-top);
+  right: auto;
+  bottom: auto;
+  left: var(--type-picker-left);
+  margin: 0;
+  transform-origin: 30px 0;
 }
 
 .new-moment-composer-dialog,
@@ -6794,8 +6858,8 @@ button:focus-visible,
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
   display: block;
-  object-fit: cover;
-  object-position: center top;
+  object-fit: contain;
+  object-position: center;
 }
 
 .optimistic-media-overlay {
