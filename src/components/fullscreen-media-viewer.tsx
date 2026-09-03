@@ -47,6 +47,51 @@ function pullTransform(distance: number, viewportHeight: number) {
   return `translate3d(0, ${distance}px, 0) scale(${scale})`;
 }
 
+type OverlayPaint = Readonly<{
+  width: number;
+  height: number;
+  source: HTMLImageElement;
+}>;
+
+function snapshotOverlayPaint(
+  trigger: HTMLElement | null,
+): OverlayPaint | null {
+  const img = trigger?.querySelector("img");
+  if (!(img instanceof HTMLImageElement)) return null;
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+  if (width < 1 || height < 1) return null;
+  return { width, height, source: img };
+}
+
+function OverlayPhotoClone({
+  paint,
+  label,
+}: Readonly<{
+  paint: OverlayPaint;
+  label: string;
+}>) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.drawImage(paint.source, 0, 0, paint.width, paint.height);
+  }, [paint]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="media-viewer-photo-clone"
+      width={paint.width}
+      height={paint.height}
+      role="img"
+      aria-label={label}
+    />
+  );
+}
+
 export function FullscreenMediaViewer({
   kind,
   label,
@@ -63,6 +108,7 @@ export function FullscreenMediaViewer({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const originRef = useRef<DOMRect | null>(null);
   const openedRef = useRef(false);
+  const [overlayPaint, setOverlayPaint] = useState<OverlayPaint | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const pullRef = useRef<{
     pointerId: number;
@@ -80,6 +126,7 @@ export function FullscreenMediaViewer({
     },
     onSingleTap: () => {
       originRef.current = mediaFrame(triggerRef.current);
+      setOverlayPaint(snapshotOverlayPaint(triggerRef.current));
       setMotion("opening");
       setOpen(true);
     },
@@ -118,6 +165,7 @@ export function FullscreenMediaViewer({
     openedRef.current = false;
     originRef.current = null;
     pullRef.current = null;
+    setOverlayPaint(null);
     setOpen(false);
     setZoomed(false);
     setMotion("open");
@@ -378,7 +426,11 @@ export function FullscreenMediaViewer({
               onPointerUp={finishPull}
               onPointerCancel={finishPull}
             >
-              {fullscreenMedia}
+              {overlayPaint ? (
+                <OverlayPhotoClone paint={overlayPaint} label={label} />
+              ) : (
+                fullscreenMedia
+              )}
             </div>
           ) : (
             <div className="media-viewer-video">{fullscreenMedia}</div>

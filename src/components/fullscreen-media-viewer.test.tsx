@@ -40,6 +40,38 @@ function capturePhoto(photo: HTMLElement) {
   });
 }
 
+const cardPixelA =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+const cardPixelB =
+  "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs=";
+
+function paintableCardPhoto(src: string, alt: string) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      width={80}
+      height={50}
+      ref={(node) => {
+        if (!node) return;
+        Object.defineProperties(node, {
+          naturalWidth: { configurable: true, value: 80 },
+          naturalHeight: { configurable: true, value: 50 },
+        });
+      }}
+    />
+  );
+}
+
+function openNamedPhoto(label: string) {
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: `Open photo full screen: ${label}`,
+    }),
+  );
+}
+
 describe("FullscreenMediaViewer", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -334,5 +366,103 @@ describe("FullscreenMediaViewer", () => {
     expect(heart).toHaveBeenCalledOnce();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     reactionTarget.remove();
+  });
+
+  it("paints the overlay from a canvas copy so the card img keeps its frame", () => {
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+
+    render(
+      <FullscreenMediaViewer
+        kind="photo"
+        label="Porch"
+        preview={paintableCardPhoto(cardPixelA, "Porch card")}
+        fullscreenMedia={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cardPixelA} alt="Porch overlay" />
+        }
+      />,
+    );
+    const card = screen.getByRole("img", { name: "Porch card" });
+    openNamedPhoto("Porch");
+
+    expect(screen.getByRole("img", { name: "Porch card" })).toBe(card);
+    expect(card).toBeVisible();
+    expect(card).toHaveAttribute("src", cardPixelA);
+    expect(drawImage).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("img", { name: "Porch overlay" })).toBeNull();
+    const overlay = screen.getByRole("img", { name: "Porch" });
+    expect(overlay.tagName).toBe("CANVAS");
+    expect(
+      screen.getByRole("dialog").querySelector(`img[src="${cardPixelA}"]`),
+    ).toBeNull();
+  });
+
+  it("keeps each card photo painted when two photos are opened in either order", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+
+    render(
+      <>
+        <FullscreenMediaViewer
+          kind="photo"
+          label="First light"
+          preview={paintableCardPhoto(cardPixelA, "First light card")}
+          fullscreenMedia={
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cardPixelA} alt="First light overlay" />
+          }
+        />
+        <FullscreenMediaViewer
+          kind="photo"
+          label="Last light"
+          preview={paintableCardPhoto(cardPixelB, "Last light card")}
+          fullscreenMedia={
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cardPixelB} alt="Last light overlay" />
+          }
+        />
+      </>,
+    );
+    const first = screen.getByRole("img", { name: "First light card" });
+    const last = screen.getByRole("img", { name: "Last light card" });
+
+    openNamedPhoto("First light");
+    expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
+    expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
+    expect(screen.getByRole("img", { name: "First light" }).tagName).toBe(
+      "CANVAS",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+
+    openNamedPhoto("Last light");
+    expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
+    expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
+    expect(screen.getByRole("img", { name: "Last light" }).tagName).toBe(
+      "CANVAS",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+
+    openNamedPhoto("Last light");
+    expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    openNamedPhoto("First light");
+    expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
+    expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
+    expect(
+      screen.queryByRole("img", { name: "First light overlay" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("img", { name: "Last light overlay" }),
+    ).toBeNull();
   });
 });

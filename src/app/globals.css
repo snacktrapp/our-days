@@ -6352,6 +6352,7 @@ html.media-viewer-open .bottom-nav:has(:active) {
 }
 
 .media-viewer-photo img,
+.media-viewer-photo canvas,
 .media-viewer-video video {
   width: auto;
   height: auto;
@@ -6369,7 +6370,8 @@ html.media-viewer-open .bottom-nav:has(:active) {
   touch-action: pan-x pan-y pinch-zoom;
 }
 
-.media-viewer-photo.is-zoomed img {
+.media-viewer-photo.is-zoomed img,
+.media-viewer-photo.is-zoomed canvas {
   width: 200%;
   height: 200%;
   max-width: none;
