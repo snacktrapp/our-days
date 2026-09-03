@@ -8,9 +8,17 @@ import {
   chaptersInBook,
   endingVersesInChapter,
   loadWebCatalog,
+  previewBiblePassage,
   selectBiblePassage,
   versesInChapter,
 } from "./bible-verse-catalog";
+
+// Composer spec: Bible verse stays its own † mode on the entry tab. Book,
+// chapter, starting verse, and ending verse use the same closed-row custom
+// pickers as moment date/time. Selecting a range fills a WEB moment. A live
+// preview of that World English Bible text sits below the pickers and updates
+// as soon as a starting verse exists, then expands or shrinks when the ending
+// verse changes. No search box, no licensed translation, no new tab.
 
 type BibleVerseFieldsProps = Readonly<{
   value: BibleVerseSelection;
@@ -40,6 +48,7 @@ export function BibleVerseFields({
   const rootRef = useRef<HTMLDivElement>(null);
   const passageRequestRef = useRef(0);
   const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+  const [preview, setPreview] = useState<BibleVerse | null>(null);
 
   useEffect(() => {
     void loadWebCatalog();
@@ -76,10 +85,21 @@ export function BibleVerseFields({
       next.book && next.chapter && next.startVerse && next.endVerse,
     );
     if (!complete) {
+      setPreview(null);
       onChange(next, null);
       return;
     }
-    onChange(next, null);
+
+    const immediate = previewBiblePassage(
+      next.book!,
+      next.chapter!,
+      next.startVerse!,
+      next.endVerse!,
+    );
+    setPreview(immediate);
+    onChange(next, immediate);
+    if (immediate) return;
+
     void selectBiblePassage(
       next.book!,
       next.chapter!,
@@ -87,6 +107,7 @@ export function BibleVerseFields({
       next.endVerse!,
     ).then((passage) => {
       if (passageRequestRef.current !== requestId) return;
+      setPreview(passage);
       onChange(next, passage);
     });
   };
@@ -272,6 +293,20 @@ export function BibleVerseFields({
             setOpenPicker(null);
           }}
         />
+      ) : null}
+
+      {preview ? (
+        <label className="composer-field">
+          <span>
+            Verse text <small>WEB</small>
+          </span>
+          <textarea
+            readOnly
+            aria-label="Verse text"
+            aria-live="polite"
+            value={preview.text}
+          />
+        </label>
       ) : null}
     </div>
   );

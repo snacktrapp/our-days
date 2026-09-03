@@ -5,6 +5,7 @@ import {
   endingVersesInChapter,
   formatBibleVerseMoment,
   loadWebCatalog,
+  previewBiblePassage,
   selectBiblePassage,
   versesInChapter,
 } from "./bible-verse-catalog";
@@ -36,6 +37,9 @@ describe("Bible verse catalog", () => {
       reference: "John 3:16",
       text: "For God so loved the world, that he gave his only born Son, that whoever believes in him should not perish, but have eternal life.",
     });
+    expect(previewBiblePassage("John", 3, 16, 17)?.text).toContain(
+      "should be saved through him",
+    );
 
     const corinthians = await selectBiblePassage("1 Corinthians", 13, 4, 7);
     expect(corinthians?.reference).toBe("1 Corinthians 13:4–7");

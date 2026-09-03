@@ -854,6 +854,44 @@ describe("MomentComposer", () => {
     },
   );
 
+  it("previews WEB text as soon as a starting verse is chosen and updates when the ending verse changes", async () => {
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+
+    await user.click(screen.getByRole("button", { name: /^Book,/u }));
+    await user.click(
+      screen.getByRole("menuitemradio", {
+        name: (accessibleName) => accessibleName === "John",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Chapter,/u }));
+    await user.click(screen.getByRole("button", { name: "Chapter 3" }));
+    expect(screen.queryByLabelText("Verse text")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /^Starting verse,/u }));
+    await user.click(screen.getByRole("button", { name: "Starting verse 16" }));
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("only born Son");
+    });
+    expect(
+      (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+    ).not.toContain("should be saved through him");
+
+    await user.click(screen.getByRole("button", { name: /^Ending verse,/u }));
+    await user.click(screen.getByRole("button", { name: "Ending verse 17" }));
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("should be saved through him");
+    });
+    expect(
+      (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+    ).toContain("only born Son");
+    expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
+  });
+
   it("fills a Bible verse from cascaded book, chapter, and verse pickers", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));

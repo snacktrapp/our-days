@@ -1137,21 +1137,7 @@ export function MomentComposer({
                 </label>
               ) : null}
 
-              {mode === "bible-verse" ? (
-                body ? (
-                  <label className="composer-field">
-                    <span>{copy.bodyLabel}</span>
-                    <textarea
-                      readOnly
-                      value={body}
-                      aria-invalid={contentError ? true : undefined}
-                      aria-describedby={
-                        contentError ? "composer-content-error" : undefined
-                      }
-                    />
-                  </label>
-                ) : null
-              ) : (
+              {mode === "bible-verse" ? null : (
                 <label className="composer-field">
                   <span>{copy.bodyLabel}</span>
                   <textarea

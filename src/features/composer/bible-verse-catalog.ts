@@ -113,6 +113,16 @@ function passageFromLoadedCatalog(
   return { reference, text };
 }
 
+export function previewBiblePassage(
+  book: string,
+  chapter: number,
+  startVerse: number,
+  endVerse: number,
+) {
+  if (!loadedCatalog) return null;
+  return passageFromLoadedCatalog(book, chapter, startVerse, endVerse);
+}
+
 export async function selectBiblePassage(
   book: string,
   chapter: number,
