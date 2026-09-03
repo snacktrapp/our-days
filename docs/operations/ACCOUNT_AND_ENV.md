@@ -56,7 +56,7 @@ Required public / non-secret names:
 
 Optional:
 
-- `NEXT_PUBLIC_MAPTILER_KEY` — MapTiler public web key for the add-entry Place map. Leave unset until it exists in the Vercel dashboard; the Place row still matches date/time chrome and shows “Map unavailable.”
+- `NEXT_PUBLIC_MAPTILER_KEY` — MapTiler public web key for the shared Place picker (Location entry and Details on every other type). Leave unset until it exists in the Vercel dashboard; typed labels still save, the closed row still matches date/time chrome, and the map shows “Map unavailable.”
 
 Also enable Preview for the current Production values of `OUR_DAYS_PHOTO_POSTING_MODE`, `OUR_DAYS_MEDIA_DELIVERY_MODE`, and `OUR_DAYS_PHOTO_WORKER_EMAIL` / `OUR_DAYS_PHOTO_WORKER_PASSWORD` when Production already uses the verified photo worker.
 

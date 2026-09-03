@@ -332,6 +332,8 @@ describe("MomentComposer", () => {
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
     await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    await setComposerPlace(user, "The porch");
     await setComposerTime(user, "2", "45", "PM");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -355,6 +357,9 @@ describe("MomentComposer", () => {
         body: "Kept exactly once.",
         journalPersonId: "brian",
         occurredAt: expect.any(String),
+        placeName: "The porch",
+        latitude: null,
+        longitude: null,
       }),
       expect.objectContaining({
         requestKey: expect.any(String),
@@ -959,6 +964,59 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Select a verse before saving this entry.",
+    );
+  });
+
+  it("saves a typed Details place label without coordinates", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedFamilyHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    await setComposerPlace(user, "Oak Street School");
+    expect(screen.getByText("Map unavailable")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "thought",
+          title: "",
+          body: "The kitchen was loud.",
+          placeName: "Oak Street School",
+          latitude: null,
+          longitude: null,
+        }),
+      ),
+    );
+  });
+
+  it("saves a typed Location place label without coordinates", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedFamilyHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Location/ }));
+    await setComposerPlace(user, "Sand Harbor");
+    expect(screen.getByText("Map unavailable")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "location",
+          title: "",
+          placeName: "Sand Harbor",
+          latitude: null,
+          longitude: null,
+        }),
+      ),
     );
   });
 

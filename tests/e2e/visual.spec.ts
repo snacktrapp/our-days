@@ -132,7 +132,8 @@ test(
       .selectOption("avery");
     await page.getByRole("button", { name: /Details/u }).click();
     await page.getByRole("checkbox", { name: /Molly/u }).check();
-    await page.getByLabel(/^Place/u).fill("Oak Street School");
+    await page.getByRole("button", { name: /^Place,/u }).click();
+    await page.getByLabel("Place name").fill("Oak Street School");
     await expect(page).toHaveScreenshot(
       "composer-written-chromium-mobile.png",
       { animations: "disabled", caret: "hide" },

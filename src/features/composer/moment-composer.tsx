@@ -633,7 +633,7 @@ export function MomentComposer({
     const savedOccurredOn = occurredOn;
     const savedOccurredTime = occurredTime;
     const savedJournalPersonId = journalPersonId;
-    const savedPlaceName = mode === "location" ? title : place.label;
+    const savedPlaceName = (mode === "location" ? title : place.label).trim();
     const savedLatitude = place.latitude;
     const savedLongitude = place.longitude;
     const savedTaggedPersonIds = [...taggedPersonIds];

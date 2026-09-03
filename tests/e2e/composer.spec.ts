@@ -12,6 +12,14 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+async function setComposerPlace(scope: Page | Locator, name: string) {
+  const field = scope.getByLabel("Place name");
+  if (!(await field.isVisible())) {
+    await scope.getByRole("button", { name: /^Place,/u }).click();
+  }
+  await field.fill(name);
+}
+
 async function expectReachable(control: Locator) {
   await control.scrollIntoViewIfNeeded();
   await expect(control).toBeInViewport({ ratio: 1 });
@@ -325,7 +333,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(averyTag).not.toBeChecked();
   await expect(averyTag).toBeDisabled();
   await page.getByRole("checkbox", { name: /Molly/u }).check();
-  await page.getByLabel(/^Place/u).fill("Oak Street School");
+  await setComposerPlace(dialog, "Oak Street School");
   await expectMinimumTargets(dialog);
   await expectReadableInputType(dialog);
   await expectCompleteFocusTraversal(
@@ -465,8 +473,7 @@ test("all four capture modes save directly without a confirmation screen", async
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Location/u }).click();
   await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
-  await dialog.getByRole("button", { name: /^Place,/u }).click();
-  await page.getByLabel("Place name").fill("Sand Harbor");
+  await setComposerPlace(dialog, "Sand Harbor");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 });
@@ -786,7 +793,7 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     dialog.getByRole("button", { name: /^Journal,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
-    page.getByLabel(/^Place/u),
+    page.getByRole("button", { name: /^Place,/u }),
     page.getByRole("button", { name: "Save" }),
   ]) {
     await expectReachable(control);

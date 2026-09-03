@@ -254,7 +254,7 @@ export function LocationFields({
           aria-label="Choose a place"
         >
           <label className="composer-field">
-            <span>Search</span>
+            <span>{mapAvailable ? "Search" : "Place name"}</span>
             <input
               ref={searchInputRef}
               type="text"
