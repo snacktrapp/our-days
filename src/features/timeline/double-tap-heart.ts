@@ -22,8 +22,11 @@ export function usePairedTap({
   const timerRef = useRef<number | null>(null);
   const onDoubleTapRef = useRef(onDoubleTap);
   const onSingleTapRef = useRef(onSingleTap);
-  onDoubleTapRef.current = onDoubleTap;
-  onSingleTapRef.current = onSingleTap;
+
+  useEffect(() => {
+    onDoubleTapRef.current = onDoubleTap;
+    onSingleTapRef.current = onSingleTap;
+  });
 
   useEffect(
     () => () => {
