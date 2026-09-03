@@ -13,6 +13,8 @@ import {
   PhotoLightboxRoot,
   PhotoLightboxTrigger,
   resetPhotoLightboxSession,
+  restTransform,
+  safariChromeBottomReserve,
   visiblePhotoViewport,
 } from "./photo-lightbox";
 
@@ -147,7 +149,7 @@ describe("destinationBox", () => {
     expect(dest.top + dest.height).toBeLessThanOrEqual(47 + 763);
   });
 
-  it("reads the visual viewport minus safe-area insets", () => {
+  it("reserves space for the Safari URL pill when visualViewport does not shrink", () => {
     vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
     vi.stubGlobal("visualViewport", {
@@ -161,7 +163,7 @@ describe("destinationBox", () => {
       left: 0,
       top: 47,
       width: 390,
-      height: 763,
+      height: 844 - 47 - 34 - safariChromeBottomReserve,
     });
   });
 
@@ -221,9 +223,15 @@ describe("photo lightbox", () => {
     const photo = overlay.parentElement as HTMLElement;
     const dest = destinationBox(80, 50);
     const origin = { left: 24, top: 180, width: 342, height: 220 };
+    const stage = document.querySelector(
+      ".photo-lightbox-stage",
+    ) as HTMLElement;
     expect(photo).toHaveClass("photo-lightbox-photo");
-    expect(photo.style.left).toBe(`${dest.left}px`);
-    expect(photo.style.top).toBe(`${dest.top}px`);
+    expect(photo.style.left).toBe("");
+    expect(photo.style.top).toBe("");
+    expect(stage).toBeTruthy();
+    expect(stage.contains(photo)).toBe(true);
+    expect(photo.style.transform).toBe(restTransform);
     expect(photo.style.transition).toContain("transform");
     expect(photo.style.transition).toContain("ease-out");
     expect(screen.getByRole("dialog")).toHaveClass("photo-lightbox");
@@ -351,13 +359,71 @@ describe("photo lightbox", () => {
     const photo = document.querySelector(
       ".photo-lightbox-photo",
     ) as HTMLElement;
-    const dest = destinationBox(1080, 2400);
-    expect(photo.style.left).toBe(`${dest.left}px`);
-    expect(photo.style.top).toBe(`${dest.top}px`);
-    expect(photo.style.width).toBe(`${dest.width}px`);
-    expect(photo.style.height).toBe(`${dest.height}px`);
-    expect(dest.top).toBeGreaterThanOrEqual(47);
-    expect(dest.top + dest.height).toBeLessThanOrEqual(47 + 763);
+    const stage = document.querySelector(
+      ".photo-lightbox-stage",
+    ) as HTMLElement;
+    const viewport = visiblePhotoViewport();
+    const dest = destinationBox(1080, 2400, viewport);
+    expect(stage.style.left).toBe(`${viewport.left}px`);
+    expect(stage.style.top).toBe(`${viewport.top}px`);
+    expect(stage.style.height).toBe(`${viewport.height}px`);
+    expect(photo.style.left).toBe("");
+    expect(photo.style.top).toBe("");
+    expect(photo.style.transform).toBe(restTransform);
+    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
+    expect(dest.top + dest.height).toBeLessThanOrEqual(
+      viewport.top + viewport.height,
+    );
+    expect(dest.top).toBeCloseTo(
+      viewport.top + (viewport.height - dest.height) / 2,
+    );
+  });
+
+  it("centers a landscape photo in the stage instead of pinning it to a corner", async () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
+    vi.stubGlobal("visualViewport", {
+      width: 390,
+      height: 844,
+      offsetLeft: 0,
+      offsetTop: 0,
+    });
+    setSafeAreaInsets({ top: 47, bottom: 34 });
+    mockIndependentOverlayDecode();
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src={cardPixelA}
+          alt="Chairs"
+          width={1920}
+          height={1080}
+        >
+          {cardPhoto(cardPixelA, "Chairs card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    mockRect(
+      screen.getByRole("button", { name: "Open photo full screen: Chairs" }),
+      { left: 16, top: 520, width: 358, height: 200 },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open photo full screen: Chairs" }),
+    );
+    await screen.findByRole("img", { name: "Chairs" });
+    const photo = document.querySelector(
+      ".photo-lightbox-photo",
+    ) as HTMLElement;
+    const viewport = visiblePhotoViewport();
+    const dest = destinationBox(1920, 1080, viewport);
+    expect(photo.style.transform).toBe(restTransform);
+    expect(photo.style.left).toBe("");
+    expect(photo.style.top).toBe("");
+    expect(dest.width).toBeCloseTo(viewport.width);
+    expect(dest.top).toBeGreaterThan(viewport.top);
+    expect(dest.top).toBeCloseTo(
+      viewport.top + (viewport.height - dest.height) / 2,
+    );
+    expect(dest.top + dest.height).toBeLessThan(844 - 34);
   });
 
   it("tracks a swipe on the overlay and reverses to the card", async () => {

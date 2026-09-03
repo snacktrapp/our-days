@@ -84,6 +84,9 @@ function boxFromRect(rect: DOMRect | Box): Box {
   };
 }
 
+export const restTransform = "translate3d(0, 0, 0) scale(1)";
+export const safariChromeBottomReserve = 56;
+
 function parsePx(value: string): number {
   const n = Number.parseFloat(value);
   return Number.isFinite(n) ? n : 0;
@@ -124,22 +127,6 @@ function readSafeAreaInsets() {
   };
 }
 
-function measureCssBox(css: string): Box | null {
-  if (typeof document === "undefined") return null;
-  const probe = document.createElement("div");
-  probe.style.cssText = `${css};visibility:hidden;pointer-events:none`;
-  document.documentElement.append(probe);
-  const rect = probe.getBoundingClientRect();
-  probe.remove();
-  if (rect.width < 2 || rect.height < 2) return null;
-  return {
-    left: rect.left,
-    top: rect.top,
-    width: rect.width,
-    height: rect.height,
-  };
-}
-
 function smallestPositive(values: readonly (number | null | undefined)[]) {
   const usable = values.filter(
     (value): value is number => typeof value === "number" && value > 1,
@@ -149,31 +136,25 @@ function smallestPositive(values: readonly (number | null | undefined)[]) {
 
 export function visiblePhotoViewport(): Box {
   const insets = readSafeAreaInsets();
-  const measured = measureCssBox(
-    "position:fixed;top:env(safe-area-inset-top,0px);left:env(safe-area-inset-left,0px);width:calc(100svw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));height:calc(100svh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))",
-  );
   const visual = typeof window !== "undefined" ? window.visualViewport : null;
-  const width = smallestPositive([window.innerWidth, visual?.width]);
-  const height = smallestPositive([
-    window.innerHeight,
-    visual?.height,
-    document.documentElement?.clientHeight,
-    measured ? measured.height + insets.top + insets.bottom : undefined,
-  ]);
-  const fallback = {
+  const width = smallestPositive([visual?.width, window.innerWidth]);
+  const height = smallestPositive([visual?.height, window.innerHeight]);
+  const reportedChromeBottom = Math.max(
+    0,
+    window.innerHeight - height - (visual?.offsetTop ?? 0),
+  );
+  // iOS Safari's floating URL pill overlays the visual viewport and is not
+  // included in env(safe-area-inset-bottom). Reserve space only when that
+  // chrome is not already reported as a visualViewport gap.
+  const bottomInset =
+    reportedChromeBottom > 1
+      ? insets.bottom
+      : insets.bottom + safariChromeBottomReserve;
+  return {
     left: insets.left,
     top: insets.top,
     width: Math.max(1, width - insets.left - insets.right),
-    height: Math.max(1, height - insets.top - insets.bottom),
-  };
-  if (!measured) return fallback;
-  const destWidth = Math.min(fallback.width, measured.width);
-  const destHeight = Math.min(fallback.height, measured.height);
-  return {
-    left: measured.left + (measured.width - destWidth) / 2,
-    top: measured.top + (measured.height - destHeight) / 2,
-    width: destWidth,
-    height: destHeight,
+    height: Math.max(1, height - insets.top - bottomInset),
   };
 }
 
@@ -292,7 +273,10 @@ function PhotoLightboxLayer({
     distance: number;
   } | null>(null);
   const titleId = useId();
-  const dest = destinationBox(request.width ?? 1200, request.height ?? 801);
+  const [stage, setStage] = useState(visiblePhotoViewport);
+  const destRef = useRef<Box>(
+    destinationBox(request.width ?? 1200, request.height ?? 801, stage),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -349,7 +333,7 @@ function PhotoLightboxLayer({
     const origin = measureTrigger(request.trigger);
     setMotion("swipe-out");
     setPhotoLayer(
-      invertTransform(origin, dest),
+      invertTransform(origin, destRef.current),
       `transform ${motionMs}ms ease-in`,
     );
     setDimmer("0", `opacity ${motionMs}ms ease-in`);
@@ -367,26 +351,43 @@ function PhotoLightboxLayer({
     closeRef.current = close;
   });
 
+  useEffect(() => {
+    const updateStage = () => setStage(visiblePhotoViewport());
+    window.addEventListener("resize", updateStage);
+    const visual = window.visualViewport;
+    visual?.addEventListener?.("resize", updateStage);
+    return () => {
+      window.removeEventListener("resize", updateStage);
+      visual?.removeEventListener?.("resize", updateStage);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (!objectUrl || openedRef.current) return;
+    const photo = photoRef.current;
+    const painted = photo?.getBoundingClientRect();
+    destRef.current =
+      painted && painted.width >= 2 && painted.height >= 2
+        ? boxFromRect(painted)
+        : destinationBox(request.width ?? 1200, request.height ?? 801, stage);
     openedRef.current = true;
     const origin = request.origin;
     if (overlayMotionReduced()) {
       setDimmer("1", "none");
-      setPhotoLayer("", "none");
+      setPhotoLayer(restTransform, "none");
       window.requestAnimationFrame(() => setMotion("open"));
       return;
     }
-    setPhotoLayer(invertTransform(origin, dest), "none");
+    setPhotoLayer(invertTransform(origin, destRef.current), "none");
     setDimmer("0", "none");
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        setPhotoLayer("", `transform ${motionMs}ms ease-out`);
+        setPhotoLayer(restTransform, `transform ${motionMs}ms ease-out`);
         setDimmer("1", `opacity ${motionMs}ms ease-out`);
         window.setTimeout(() => setMotion("open"), motionMs);
       });
     });
-  }, [dest, objectUrl, request.origin]);
+  }, [objectUrl, request.origin, stage]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -442,7 +443,7 @@ function PhotoLightboxLayer({
     if (event.type !== "pointerup") {
       if (!overlayMotionReduced()) {
         setMotion("snap-back");
-        setPhotoLayer("", `transform ${motionMs}ms ease-out`);
+        setPhotoLayer(restTransform, `transform ${motionMs}ms ease-out`);
         setDimmer("1", `opacity ${motionMs}ms ease-out`);
         clearCloseTimer();
         closeTimerRef.current = window.setTimeout(
@@ -469,7 +470,7 @@ function PhotoLightboxLayer({
         return;
       }
       setMotion("snap-back");
-      setPhotoLayer("", `transform ${motionMs}ms ease-out`);
+      setPhotoLayer(restTransform, `transform ${motionMs}ms ease-out`);
       setDimmer("1", `opacity ${motionMs}ms ease-out`);
       clearCloseTimer();
       closeTimerRef.current = window.setTimeout(
@@ -527,26 +528,41 @@ function PhotoLightboxLayer({
         ×
       </button>
       <div
-        ref={photoRef}
-        className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""} ${
-          motion === "pulling" ? "is-pulling" : ""
-        }`}
+        className="photo-lightbox-stage"
         style={{
-          left: dest.left,
-          top: dest.top,
-          width: dest.width,
-          height: dest.height,
+          left: stage.left,
+          top: stage.top,
+          width: stage.width,
+          height: stage.height,
         }}
-        onDoubleClick={() => setZoomed((current) => !current)}
-        onPointerDown={startPull}
-        onPointerMove={movePull}
-        onPointerUp={finishPull}
-        onPointerCancel={finishPull}
       >
-        {objectUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={objectUrl} alt={request.alt} />
-        ) : null}
+        <div
+          ref={photoRef}
+          className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""} ${
+            motion === "pulling" ? "is-pulling" : ""
+          }`}
+          onDoubleClick={() => setZoomed((current) => !current)}
+          onPointerDown={startPull}
+          onPointerMove={movePull}
+          onPointerUp={finishPull}
+          onPointerCancel={finishPull}
+        >
+          {objectUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={objectUrl}
+              alt={request.alt}
+              width={request.width}
+              height={request.height}
+              onLoad={() => {
+                const painted = photoRef.current?.getBoundingClientRect();
+                if (painted && painted.width >= 2 && painted.height >= 2) {
+                  destRef.current = boxFromRect(painted);
+                }
+              }}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
