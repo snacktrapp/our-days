@@ -18,9 +18,11 @@ import {
   type VideoUploadStage,
 } from "./video-upload";
 import {
+  emptyBibleVerseSelection,
   formatBibleVerseMoment,
-  searchBibleVerses,
+  type BibleVerseSelection,
 } from "./bible-verse-catalog";
+import { BibleVerseFields } from "./bible-verse-fields";
 import {
   startOptimisticPhotoUpload,
   startOptimisticVideoUpload,
@@ -85,7 +87,7 @@ const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
     kindLabel: "Bible verse",
     title: "Add a Bible verse",
     bodyLabel: "Verse text",
-    bodyPlaceholder: "Select a result or enter the verse text…",
+    bodyPlaceholder: "Choose a passage to fill this entry…",
     bodyRequired: true,
   },
   location: {
@@ -160,7 +162,9 @@ export function MomentComposer({
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
   const [body, setBody] = useState("");
   const [title, setTitle] = useState("");
-  const [verseQuery, setVerseQuery] = useState("");
+  const [verseSelection, setVerseSelection] = useState<BibleVerseSelection>(
+    emptyBibleVerseSelection,
+  );
   const [occurredOn, setOccurredOn] = useState(model.previewToday);
   const [occurredTime, setOccurredTime] = useState("");
   const [journalPersonId, setJournalPersonId] = useState(
@@ -183,7 +187,7 @@ export function MomentComposer({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const chooserHeadingRef = useRef<HTMLHeadingElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const verseSearchRef = useRef<HTMLInputElement>(null);
+  const verseBookTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const editorHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -201,7 +205,6 @@ export function MomentComposer({
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
-  const verseMatches = searchBibleVerses(verseQuery).slice(0, 6);
   const connectedFamily = model.experience === "connected-family";
   const connectedExperience =
     connectedFamily || model.experience === "connected-written";
@@ -212,6 +215,7 @@ export function MomentComposer({
   const isDirty = Boolean(
     body.length ||
     title.length ||
+    verseSelection.book ||
     placeName.length ||
     photoFile ||
     taggedPersonIds.length ||
@@ -255,7 +259,7 @@ export function MomentComposer({
       setOptionalDetailsOpen(false);
       setBody("");
       setTitle("");
-      setVerseQuery("");
+      setVerseSelection(emptyBibleVerseSelection);
       setOccurredOn(model.previewToday);
       setOccurredTime("");
       setJournalPersonId(model.defaultJournalPersonId);
@@ -329,7 +333,7 @@ export function MomentComposer({
         if (mode === "photo" || mode === "video")
           editorHeadingRef.current?.focus({ preventScroll: true });
         else if (mode === "thought") bodyTextareaRef.current?.focus();
-        else if (mode === "bible-verse") verseSearchRef.current?.focus();
+        else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
         else titleInputRef.current?.focus();
       } else chooserHeadingRef.current?.focus({ preventScroll: true });
     });
@@ -505,7 +509,7 @@ export function MomentComposer({
     }
     if (mode === "bible-verse" && (!title.trim() || !body.trim())) {
       setContentError("Select a verse before saving this entry.");
-      verseSearchRef.current?.focus();
+      verseBookTriggerRef.current?.focus();
       return false;
     }
     setContentError(null);
@@ -773,7 +777,7 @@ export function MomentComposer({
                     †
                   </span>
                   <strong>Bible verse</strong>
-                  <small>Search and include scripture</small>
+                  <small>Choose a passage</small>
                 </button>
               ) : null}
               {!connectedExperience || connectedFamily ? (
@@ -1093,64 +1097,22 @@ export function MomentComposer({
               ) : null}
 
               {mode === "bible-verse" ? (
-                <section
-                  className="bible-verse-search"
-                  aria-labelledby="bible-search-heading"
-                >
-                  <div>
-                    <strong id="bible-search-heading">Find a verse</strong>
-                    <small>World English Bible · Public domain</small>
-                  </div>
-                  <label className="composer-field">
-                    <span>Reference or words</span>
-                    <input
-                      ref={verseSearchRef}
-                      type="search"
-                      value={verseQuery}
-                      placeholder="John 3:16 or love is patient"
-                      autoComplete="off"
-                      onChange={(event) => setVerseQuery(event.target.value)}
-                    />
-                  </label>
-                  <div className="bible-verse-results" aria-live="polite">
-                    {verseMatches.length > 0 ? (
-                      verseMatches.map((verse) => (
-                        <button
-                          key={verse.reference}
-                          type="button"
-                          aria-pressed={
-                            title === verse.reference && body === verse.text
-                          }
-                          onClick={() => {
-                            setTitle(verse.reference);
-                            setBody(verse.text);
-                            setContentError(null);
-                          }}
-                        >
-                          <strong>{verse.reference}</strong>
-                          <span>{verse.text}</span>
-                        </button>
-                      ))
-                    ) : (
-                      <p>
-                        No match in the starter library. Enter the reference and
-                        verse text below.
-                      </p>
-                    )}
-                  </div>
-                </section>
+                <BibleVerseFields
+                  value={verseSelection}
+                  bookTriggerRef={verseBookTriggerRef}
+                  onChange={(next, passage) => {
+                    setVerseSelection(next);
+                    setTitle(passage?.reference ?? "");
+                    setBody(passage?.text ?? "");
+                    if (passage) setContentError(null);
+                  }}
+                />
               ) : null}
 
-              {mode === "milestone" ||
-              mode === "location" ||
-              mode === "bible-verse" ? (
+              {mode === "milestone" || mode === "location" ? (
                 <label className="composer-field">
                   <span>
-                    {mode === "milestone"
-                      ? "Milestone"
-                      : mode === "bible-verse"
-                        ? "Reference"
-                        : "Place name"}
+                    {mode === "milestone" ? "Milestone" : "Place name"}
                   </span>
                   <input
                     ref={titleInputRef}
@@ -1165,9 +1127,7 @@ export function MomentComposer({
                     placeholder={
                       mode === "milestone"
                         ? "A meaningful first"
-                        : mode === "bible-verse"
-                          ? "Select above or enter a reference"
-                          : "Somewhere worth remembering"
+                        : "Somewhere worth remembering"
                     }
                     onChange={(event) => {
                       setTitle(event.target.value);
@@ -1177,37 +1137,46 @@ export function MomentComposer({
                 </label>
               ) : null}
 
-              <label className="composer-field">
-                <span>{copy.bodyLabel}</span>
-                <textarea
-                  ref={bodyTextareaRef}
-                  placeholder={copy.bodyPlaceholder}
-                  value={body}
-                  required={copy.bodyRequired}
-                  aria-invalid={
-                    (mode === "thought" || mode === "bible-verse") &&
-                    contentError
-                      ? true
-                      : undefined
-                  }
-                  aria-describedby={
-                    (mode === "thought" || mode === "bible-verse") &&
-                    contentError
-                      ? "composer-content-error"
-                      : undefined
-                  }
-                  maxLength={4000}
-                  onChange={(event) => {
-                    setBody(event.target.value);
-                    if (
-                      (mode === "thought" || mode === "bible-verse") &&
-                      event.target.value.trim()
-                    ) {
-                      setContentError(null);
+              {mode === "bible-verse" ? (
+                body ? (
+                  <label className="composer-field">
+                    <span>{copy.bodyLabel}</span>
+                    <textarea
+                      readOnly
+                      value={body}
+                      aria-invalid={contentError ? true : undefined}
+                      aria-describedby={
+                        contentError ? "composer-content-error" : undefined
+                      }
+                    />
+                  </label>
+                ) : null
+              ) : (
+                <label className="composer-field">
+                  <span>{copy.bodyLabel}</span>
+                  <textarea
+                    ref={bodyTextareaRef}
+                    placeholder={copy.bodyPlaceholder}
+                    value={body}
+                    required={copy.bodyRequired}
+                    aria-invalid={
+                      mode === "thought" && contentError ? true : undefined
                     }
-                  }}
-                />
-              </label>
+                    aria-describedby={
+                      mode === "thought" && contentError
+                        ? "composer-content-error"
+                        : undefined
+                    }
+                    maxLength={4000}
+                    onChange={(event) => {
+                      setBody(event.target.value);
+                      if (mode === "thought" && event.target.value.trim()) {
+                        setContentError(null);
+                      }
+                    }}
+                  />
+                </label>
+              )}
               {contentError ? (
                 <p
                   id="composer-content-error"

@@ -5204,8 +5204,7 @@ button:focus-visible,
 :root[data-theme="light"] .settings-review-actions button,
 :root[data-theme="light"] .settings-role-card button,
 :root[data-theme="light"] .guardian-options button,
-:root[data-theme="light"] .settings-removal-zone > button,
-:root[data-theme="light"] .bible-verse-results {
+:root[data-theme="light"] .settings-removal-zone > button {
   background: var(--cream);
 }
 
@@ -5230,11 +5229,6 @@ button:focus-visible,
 :root[data-theme="light"] .composer-field > span small,
 :root[data-theme="light"] .composer-optional-toggle span {
   color: #59645e;
-}
-
-:root[data-theme="light"] .bible-verse-results button span,
-:root[data-theme="light"] .bible-verse-results p {
-  color: var(--ink);
 }
 
 .notification-trigger {
@@ -5493,94 +5487,6 @@ button:focus-visible,
 .bible-choice {
   color: var(--ochre);
   font-family: Georgia, "Times New Roman", serif;
-}
-
-.bible-verse-search {
-  display: grid;
-  gap: 10px;
-}
-
-.bible-verse-search > div:first-child {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.bible-verse-search > div:first-child strong {
-  color: var(--ink);
-  font-size: 12px;
-}
-
-.bible-verse-search > div:first-child small {
-  color: var(--muted);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 7px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.bible-verse-results {
-  max-height: 220px;
-  overflow-y: auto;
-  display: grid;
-  grid-auto-rows: max-content;
-  align-items: start;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: #0e1b16;
-}
-
-.bible-verse-results button {
-  width: 100%;
-  height: auto;
-  min-height: 62px;
-  padding: 10px 11px;
-  display: block;
-  align-self: stretch;
-  overflow: visible;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  white-space: normal;
-}
-
-.bible-verse-results button:last-child {
-  border-bottom: 0;
-}
-
-.bible-verse-results button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--ochre) 11%, transparent);
-  box-shadow: inset 2px 0 var(--ochre);
-}
-
-.bible-verse-results button strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ochre);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.bible-verse-results button span,
-.bible-verse-results p {
-  margin: 0;
-  display: block;
-  color: #c5cec8;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.bible-verse-results p {
-  padding: 14px 11px;
 }
 
 .view-switch {
@@ -6235,6 +6141,30 @@ button:focus-visible,
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 12%, transparent);
 }
 
+.composer-picker-trigger:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.35;
+}
+
+.composer-picker-trigger:disabled:hover,
+.composer-picker-trigger:disabled:focus-visible {
+  border-color: var(--hairline);
+  box-shadow: none;
+}
+
+.composer-bible-verse-fields .composer-picker-panel {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.composer-bible-verse-fields .composer-journal-menu {
+  position: static;
+  width: 100%;
+  margin-top: 0;
+  padding: 0;
+}
+
 .composer-picker-trigger > span:last-child {
   flex: none;
   color: var(--teal);
@@ -6651,15 +6581,6 @@ button:focus-visible,
 :root[data-theme="light"] .milestone-copy > span,
 :root[data-theme="light"] .milestone-seal span,
 :root[data-theme="light"] .milestone-seal strong {
-  color: #7d520f;
-}
-
-:root[data-theme="light"] .bible-verse-results button span,
-:root[data-theme="light"] .bible-verse-results p {
-  color: var(--ink);
-}
-
-:root[data-theme="light"] .bible-verse-results button strong {
   color: #7d520f;
 }
 

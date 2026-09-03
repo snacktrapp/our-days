@@ -144,6 +144,39 @@ async function selectMomentDate(dialog: Locator, dateLabel: string) {
     .click();
 }
 
+async function selectBiblePassage(
+  dialog: Locator,
+  passage: Readonly<{
+    book: string;
+    chapter: number;
+    start: number;
+    end?: number;
+  }>,
+) {
+  await dialog.getByRole("button", { name: /^Book,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose book" })
+    .getByRole("menuitemradio", { name: passage.book, exact: true })
+    .click();
+  await dialog.getByRole("button", { name: /^Chapter,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose chapter" })
+    .getByRole("button", { name: `Chapter ${passage.chapter}` })
+    .click();
+  await dialog.getByRole("button", { name: /^Starting verse,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose starting verse" })
+    .getByRole("button", { name: `Starting verse ${passage.start}` })
+    .click();
+  if (passage.end && passage.end !== passage.start) {
+    await dialog.getByRole("button", { name: /^Ending verse,/u }).click();
+    await dialog
+      .getByRole("dialog", { name: "Choose ending verse" })
+      .getByRole("button", { name: `Ending verse ${passage.end}` })
+      .click();
+  }
+}
+
 test("date, time, and journal stay separated inside every phone-width drawer", async ({
   page,
 }) => {
@@ -421,10 +454,8 @@ test("all four capture modes save directly without a confirmation screen", async
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
-  await dialog
-    .getByRole("searchbox", { name: "Reference or words" })
-    .fill("John 3:16");
-  await dialog.getByRole("button", { name: /John 3:16/u }).click();
+  await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 
@@ -677,10 +708,8 @@ test("expanded capture states have no serious axe violations", async ({
   const dialog = await openComposer(page);
   await scan();
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
-  await dialog
-    .getByRole("searchbox", { name: "Reference or words" })
-    .fill("John 3:16");
-  await dialog.getByRole("button", { name: /John 3:16/u }).click();
+  await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
   await page.getByRole("button", { name: /Details/u }).click();
   await scan();
   await scan();

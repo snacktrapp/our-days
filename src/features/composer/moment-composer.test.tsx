@@ -218,6 +218,37 @@ async function setComposerDate(
   );
 }
 
+async function selectComposerBiblePassage(
+  user: ReturnType<typeof userEvent.setup>,
+  passage: Readonly<{
+    book: string;
+    chapter: number;
+    start: number;
+    end?: number;
+  }>,
+) {
+  await user.click(screen.getByRole("button", { name: /^Book,/u }));
+  await user.click(
+    screen.getByRole("menuitemradio", {
+      name: (accessibleName) => accessibleName === passage.book,
+    }),
+  );
+  await user.click(screen.getByRole("button", { name: /^Chapter,/u }));
+  await user.click(
+    screen.getByRole("button", { name: `Chapter ${passage.chapter}` }),
+  );
+  await user.click(screen.getByRole("button", { name: /^Starting verse,/u }));
+  await user.click(
+    screen.getByRole("button", { name: `Starting verse ${passage.start}` }),
+  );
+  if (passage.end && passage.end !== passage.start) {
+    await user.click(screen.getByRole("button", { name: /^Ending verse,/u }));
+    await user.click(
+      screen.getByRole("button", { name: `Ending verse ${passage.end}` }),
+    );
+  }
+}
+
 async function selectComposerJournal(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
@@ -823,23 +854,57 @@ describe("MomentComposer", () => {
     },
   );
 
-  it("searches the local Bible library and includes a selected verse", async () => {
+  it("fills a Bible verse from cascaded book, chapter, and verse pickers", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
 
-    const search = screen.getByRole("searchbox", {
-      name: "Reference or words",
-    });
-    await user.type(search, "love is patient");
-    await user.click(screen.getByRole("button", { name: /1 Corinthians 13/u }));
+    expect(screen.getByRole("button", { name: /^Chapter,/u })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /^Starting verse,/u }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /^Ending verse,/u }),
+    ).toBeDisabled();
 
-    expect(screen.getByLabelText("Reference")).toHaveValue(
-      "1 Corinthians 13:4–7",
-    );
+    await selectComposerBiblePassage(user, {
+      book: "1 Corinthians",
+      chapter: 13,
+      start: 4,
+      end: 7,
+    });
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("Love is patient");
+    });
+    expect(
+      screen.getByRole("button", { name: /^Book, 1 Corinthians/u }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Chapter, 13/u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Starting verse, 4/u }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Ending verse, 7/u }),
+    ).toBeVisible();
     expect(
       (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
     ).toContain("Love is patient");
+    expect(
+      (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+    ).toContain("endures all things.");
+    expect(screen.getByLabelText("Verse text")).toHaveAttribute("readonly");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
+  });
+
+  it("requires a selected Bible verse before save", async () => {
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Select a verse before saving this entry.",
+    );
   });
 
   it("saves a selected Bible verse as a compatible written moment", async () => {
@@ -850,11 +915,16 @@ describe("MomentComposer", () => {
       screen.getByRole("button", { name: "Open connected family composer" }),
     );
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
-    await user.type(
-      screen.getByRole("searchbox", { name: "Reference or words" }),
-      "John 3:16",
-    );
-    await user.click(screen.getByRole("button", { name: /John 3:16/u }));
+    await selectComposerBiblePassage(user, {
+      book: "John",
+      chapter: 3,
+      start: 16,
+    });
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
+      ).toContain("only born Son");
+    });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>

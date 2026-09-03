@@ -1,4 +1,38 @@
+import type { Locator } from "@playwright/test";
 import { expect, test } from "./test";
+
+async function selectBiblePassage(
+  dialog: Locator,
+  passage: Readonly<{
+    book: string;
+    chapter: number;
+    start: number;
+    end?: number;
+  }>,
+) {
+  await dialog.getByRole("button", { name: /^Book,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose book" })
+    .getByRole("menuitemradio", { name: passage.book, exact: true })
+    .click();
+  await dialog.getByRole("button", { name: /^Chapter,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose chapter" })
+    .getByRole("button", { name: `Chapter ${passage.chapter}` })
+    .click();
+  await dialog.getByRole("button", { name: /^Starting verse,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose starting verse" })
+    .getByRole("button", { name: `Starting verse ${passage.start}` })
+    .click();
+  if (passage.end && passage.end !== passage.start) {
+    await dialog.getByRole("button", { name: /^Ending verse,/u }).click();
+    await dialog
+      .getByRole("dialog", { name: "Choose ending verse" })
+      .getByRole("button", { name: `Ending verse ${passage.end}` })
+      .click();
+  }
+}
 
 test.skip(
   ({ browserName }) => browserName !== "chromium",
@@ -134,14 +168,15 @@ test(
       .getByRole("dialog")
       .getByRole("button", { name: /Bible verse/u })
       .click();
-    await page
-      .getByRole("dialog")
-      .getByRole("searchbox", { name: "Reference or words" })
-      .fill("John 3:16");
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /John 3:16/u })
-      .click();
+    const bibleDialog = page.getByRole("dialog").first();
+    await selectBiblePassage(bibleDialog, {
+      book: "John",
+      chapter: 3,
+      start: 16,
+    });
+    await expect(bibleDialog.getByLabel("Verse text")).toHaveValue(
+      /only born Son/u,
+    );
     await expect(page).toHaveScreenshot(
       "composer-bible-verse-chromium-mobile.png",
       { animations: "disabled", caret: "hide" },
