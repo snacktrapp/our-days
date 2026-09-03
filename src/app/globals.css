@@ -1988,11 +1988,12 @@ button:focus-visible,
   line-height: 1.45;
 }
 .settings-delivery-boundary {
-  margin: 12px;
-  padding: 14px;
-  border: 1px dashed var(--hairline);
-  border-radius: 16px;
-  background: rgba(255, 253, 248, 0.48);
+  margin: 0;
+  padding: 13px 16px 16px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
 }
 .settings-delivery-boundary strong {
   display: block;
@@ -5090,9 +5091,10 @@ button:focus-visible,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 11px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 7px;
+  padding: 11px 16px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
   color: var(--ink);
   text-decoration: none;
 }
@@ -5194,7 +5196,6 @@ button:focus-visible,
 :root[data-theme="light"] .invite-review,
 :root[data-theme="light"] .settings-role-card,
 :root[data-theme="light"] .guardian-options li,
-:root[data-theme="light"] .settings-delivery-boundary,
 :root[data-theme="light"] .invite-section form input,
 :root[data-theme="light"] .access-review > button,
 :root[data-theme="light"] .invite-review button,
@@ -5412,8 +5413,7 @@ button:focus-visible,
 .access-review,
 .invite-review,
 .settings-role-card,
-.guardian-options li,
-.settings-delivery-boundary {
+.guardian-options li {
   border-color: var(--hairline);
   border-radius: 8px;
   background: #14231c;
