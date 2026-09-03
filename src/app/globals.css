@@ -374,9 +374,9 @@ button:focus-visible,
   height: 56px;
   min-height: 56px;
   padding: 3px 8px;
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   position: fixed;
   z-index: 100;
   top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
@@ -449,8 +449,10 @@ button:focus-visible,
   background: var(--moss);
 }
 .title-lockup {
-  min-width: 0;
+  position: absolute;
+  inset-inline: 0;
   text-align: center;
+  pointer-events: none;
 }
 .title-lockup .eyebrow {
   display: block;
@@ -472,10 +474,10 @@ button:focus-visible,
   white-space: nowrap;
 }
 .title-switcher {
-  min-width: 0;
-  position: relative;
-  justify-self: stretch;
+  position: absolute;
+  inset-inline: 0;
   overflow: visible;
+  text-align: center;
 }
 .title-switcher > summary {
   display: block;
@@ -539,14 +541,13 @@ button:focus-visible,
   color: var(--ink);
 }
 .quiet-button {
-  justify-self: end;
   color: var(--muted);
   letter-spacing: 2px;
 }
 .topbar-actions {
-  justify-self: end;
   display: flex;
   align-items: center;
+  margin-left: auto;
 }
 .topbar-actions > :is(button, a) {
   width: 44px;
@@ -564,7 +565,6 @@ button:focus-visible,
 }
 .topbar > .header-add-moment,
 .topbar-leading-spacer {
-  justify-self: start;
   width: 44px;
   min-width: 44px;
   min-height: 44px;
