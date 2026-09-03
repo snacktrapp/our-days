@@ -6577,6 +6577,13 @@ button:focus-visible,
   box-shadow: none;
 }
 
+/* Account has Journal tools as a sibling after this panel. Do not stretch the
+   panel to the visual bottom or the tools card is pushed onto the tab bar. */
+.family-settings-panel {
+  min-height: 0;
+  padding-bottom: 16px;
+}
+
 /* Hard-coded dark-theme display colors need explicit light equivalents. */
 :root[data-theme="light"] .date-marker span {
   color: var(--muted);

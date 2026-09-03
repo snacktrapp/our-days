@@ -39,6 +39,10 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await page.getByRole("link", { name: "Family access & invitations" }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page.locator(".family-settings-panel")).toHaveCSS(
+    "min-height",
+    "0px",
+  );
   await expect(page.getByText("Managed profile · No sign-in")).toHaveCount(3);
   await expect(page.getByText("Account · Can sign in")).toHaveCount(2);
   await expect(
