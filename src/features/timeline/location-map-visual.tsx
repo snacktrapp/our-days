@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   staticMapImageSrc,
   staticMapProxySrc,
@@ -18,20 +18,41 @@ export function LocationMapVisual({
   longitude?: number | null;
   className?: string;
 }>) {
-  const [failed, setFailed] = useState(false);
-  const [useProxy, setUseProxy] = useState(false);
   const coordinates = parsePlaceCoordinates(latitude, longitude);
-
-  useEffect(() => {
-    setFailed(false);
-    setUseProxy(false);
-  }, [latitude, longitude]);
   const directUrl = coordinates
     ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
     : "";
   const proxyUrl = coordinates
     ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
     : "";
+  const mapKey = coordinates
+    ? `${coordinates.latitude},${coordinates.longitude}`
+    : "illustration";
+
+  return (
+    <LocationMapFrame
+      key={mapKey}
+      place={place}
+      className={className}
+      directUrl={directUrl}
+      proxyUrl={proxyUrl}
+    />
+  );
+}
+
+function LocationMapFrame({
+  place,
+  className,
+  directUrl,
+  proxyUrl,
+}: Readonly<{
+  place: string;
+  className?: string;
+  directUrl: string;
+  proxyUrl: string;
+}>) {
+  const [failed, setFailed] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
   const mapUrl =
     useProxy && proxyUrl && proxyUrl !== directUrl ? proxyUrl : directUrl;
   const showLiveMap = Boolean(mapUrl) && !failed;
