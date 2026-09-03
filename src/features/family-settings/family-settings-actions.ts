@@ -305,7 +305,10 @@ async function sendInvitedMagicLink(email: string) {
       email,
       options: {
         shouldCreateUser: false,
-        emailRedirectTo: new URL("/auth/complete", siteOrigin).toString(),
+        // Use /auth/callback — that path is already on the hosted redirect
+        // allowlist. Implicit tokens arrive in the hash; the callback forwards
+        // hash-only visits to /auth/complete.
+        emailRedirectTo: new URL("/auth/callback", siteOrigin).toString(),
       },
     });
     return !error;

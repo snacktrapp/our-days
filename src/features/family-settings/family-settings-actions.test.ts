@@ -330,7 +330,7 @@ describe("family settings actions", () => {
     expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
       email: "grandma@example.com",
       options: {
-        emailRedirectTo: "https://journal.example.com/auth/complete",
+        emailRedirectTo: "https://journal.example.com/auth/callback",
         shouldCreateUser: false,
       },
     });
@@ -363,7 +363,7 @@ describe("family settings actions", () => {
       email: "grandma@example.com",
       options: {
         emailRedirectTo:
-          "https://our-days-git-preview.vercel.app/auth/complete",
+          "https://our-days-git-preview.vercel.app/auth/callback",
         shouldCreateUser: false,
       },
     });
@@ -391,7 +391,7 @@ describe("family settings actions", () => {
     expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
       email: "tars-trapp@agentmail.to",
       options: {
-        emailRedirectTo: "https://journal.example.com/auth/complete",
+        emailRedirectTo: "https://journal.example.com/auth/callback",
         shouldCreateUser: false,
       },
     });

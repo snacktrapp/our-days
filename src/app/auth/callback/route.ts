@@ -11,7 +11,11 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const otpType = url.searchParams.get("type");
-  if (!code && !tokenHash) return appRedirect(request, "/sign-in?link=invalid");
+  if (!code && !tokenHash) {
+    // Implicit invite tokens live in the URL hash, which this route never
+    // sees. Hand the browser to the client completer; it keeps the hash.
+    return appRedirect(request, "/auth/complete");
+  }
 
   try {
     const supabase = await createOurDaysServerClient();

@@ -61,7 +61,7 @@ describe("magic-link callback", () => {
       new Request("https://journal.example.com/auth/callback"),
     );
     expect(missing.headers.get("location")).toBe(
-      "https://journal.example.com/sign-in?link=invalid",
+      "https://journal.example.com/auth/complete",
     );
 
     mocks.exchangeCodeForSession.mockResolvedValueOnce({
