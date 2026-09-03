@@ -777,15 +777,13 @@ button:focus-visible,
 }
 .photo-frame img,
 .photo-frame video {
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: 100%;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
   display: block;
-  justify-self: center;
-  object-fit: contain;
-  object-position: center;
+  object-fit: cover;
+  object-position: center top;
   filter: saturate(0.84) contrast(0.97);
 }
 .private-photo-unavailable {
@@ -5900,15 +5898,15 @@ button:focus-visible,
 /* Video shares the photo card, but keeps its native frame. */
 .video-frame video,
 .composer-video-preview video {
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: 100%;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
   display: block;
   border: 0;
   background: #050b08;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: center top;
 }
 
 .media-viewer-trigger {
@@ -5937,13 +5935,12 @@ button:focus-visible,
 .media-viewer-trigger > video,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: 100%;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
-  object-fit: contain;
-  object-position: center;
+  object-fit: cover;
+  object-position: center top;
 }
 
 .video-viewer-trigger {
@@ -6792,13 +6789,13 @@ button:focus-visible,
 }
 
 .optimistic-media-card .photo-frame video {
-  width: auto;
+  width: 100%;
   height: auto;
-  max-width: 100%;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: center top;
 }
 
 .optimistic-media-overlay {

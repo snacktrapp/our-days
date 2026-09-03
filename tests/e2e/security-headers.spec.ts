@@ -132,7 +132,7 @@ test("timeline, memories, and composer render without application style attribut
       };
     });
     if (path === "/family") {
-      expect(crop.objectFit).toBe("contain");
+      expect(crop.objectFit).toBe("cover");
       const timelineFrame = await image.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
