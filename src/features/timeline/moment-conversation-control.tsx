@@ -197,7 +197,9 @@ export function MomentConversationControl({
   useEffect(() => {
     if (panel !== "reactions" && panel !== "note") return;
     const root =
-      panel === "reactions" ? reactionControlRef.current : noteControlRef.current;
+      panel === "reactions"
+        ? reactionControlRef.current
+        : noteControlRef.current;
     const closeOnOutsidePress = (event: PointerEvent) => {
       if (event.target instanceof Node && !root?.contains(event.target)) {
         if (panel === "reactions") requestReactionPickerClose();

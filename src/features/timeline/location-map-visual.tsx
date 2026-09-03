@@ -32,7 +32,8 @@ export function LocationMapVisual({
   const proxyUrl = coordinates
     ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
     : "";
-  const mapUrl = useProxy && proxyUrl && proxyUrl !== directUrl ? proxyUrl : directUrl;
+  const mapUrl =
+    useProxy && proxyUrl && proxyUrl !== directUrl ? proxyUrl : directUrl;
   const showLiveMap = Boolean(mapUrl) && !failed;
 
   return (

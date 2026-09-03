@@ -15,10 +15,9 @@ describe("LocationMapVisual", () => {
         longitude={-119.93}
       />,
     );
-    expect(screen.getByRole("img", { name: "Map of The porch" })).toHaveAttribute(
-      "src",
-      "/api/maps/static?lat=39.2&lng=-119.93",
-    );
+    expect(
+      screen.getByRole("img", { name: "Map of The porch" }),
+    ).toHaveAttribute("src", "/api/maps/static?lat=39.2&lng=-119.93");
   });
 
   it("keeps the illustration when coordinates are missing", () => {

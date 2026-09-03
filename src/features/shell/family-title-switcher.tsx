@@ -123,8 +123,7 @@ export function FamilyTitleSwitcher({
   const [chosenHref, setChosenHref] = useState<string | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
     useOverlayPopoverClose();
-  const serverCurrentHref =
-    switcher.find((item) => item.current)?.href ?? null;
+  const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
   const currentHref = chosenHref ?? serverCurrentHref;
   const chosenItem = switcher.find((item) => item.href === currentHref);
   const displayModel =

@@ -302,9 +302,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.queryByText(/Local design preview/u)).toBeNull();
     expect(screen.queryByText(/Access changes take effect/u)).toBeNull();
-    expect(
-      screen.queryByText(/invitation-only circle/u),
-    ).toBeNull();
+    expect(screen.queryByText(/invitation-only circle/u)).toBeNull();
     await user.click(
       screen.getByRole("button", {
         name: "Manage role and access for Other organizer",
