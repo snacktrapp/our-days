@@ -1,21 +1,10 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import {
-  destinationBox,
-  invertTransform,
   PhotoLightboxRoot,
   PhotoLightboxTrigger,
   resetPhotoLightboxSession,
-  restTransform,
-  safariChromeBottomReserve,
-  visiblePhotoViewport,
 } from "./photo-lightbox";
 
 function mockRect(node: Element, rect: Partial<DOMRect>) {
@@ -35,7 +24,7 @@ function mockRect(node: Element, rect: Partial<DOMRect>) {
 const cardPixelA =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
 const cardPixelB =
-  "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs=";
+  "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAEAAAICRAEAOw==";
 
 function cardPhoto(src: string, alt: string) {
   return (
@@ -57,13 +46,6 @@ function mockIndependentOverlayDecode() {
       blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
     })),
   );
-}
-
-function capturePhoto(photo: HTMLElement) {
-  Object.defineProperties(photo, {
-    setPointerCapture: { configurable: true, value: vi.fn() },
-    hasPointerCapture: { configurable: true, value: () => false },
-  });
 }
 
 function renderPhotos() {
@@ -95,117 +77,16 @@ function renderPhotos() {
   );
 }
 
-function setSafeAreaInsets(insets: {
-  top?: number;
-  right?: number;
-  bottom?: number;
-  left?: number;
-}) {
-  const root = document.documentElement.style;
-  root.setProperty("--safe-area-inset-top", `${insets.top ?? 0}px`);
-  root.setProperty("--safe-area-inset-right", `${insets.right ?? 0}px`);
-  root.setProperty("--safe-area-inset-bottom", `${insets.bottom ?? 0}px`);
-  root.setProperty("--safe-area-inset-left", `${insets.left ?? 0}px`);
-}
-
-function clearSafeAreaInsets() {
-  const root = document.documentElement.style;
-  root.removeProperty("--safe-area-inset-top");
-  root.removeProperty("--safe-area-inset-right");
-  root.removeProperty("--safe-area-inset-bottom");
-  root.removeProperty("--safe-area-inset-left");
-}
-
-describe("destinationBox", () => {
-  afterEach(() => {
-    clearSafeAreaInsets();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  it("fits a tall portrait inside the visible viewport including the home indicator", () => {
-    const viewport = { left: 0, top: 47, width: 390, height: 844 - 47 - 34 };
-    const dest = destinationBox(1080, 2400, viewport);
-    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
-    expect(dest.top + dest.height).toBeLessThanOrEqual(
-      viewport.top + viewport.height,
-    );
-    expect(dest.left).toBeGreaterThanOrEqual(viewport.left);
-    expect(dest.left + dest.width).toBeLessThanOrEqual(
-      viewport.left + viewport.width,
-    );
-    expect(dest.height).toBeCloseTo(viewport.height);
-    expect(dest.width).toBeCloseTo((1080 * viewport.height) / 2400);
-    expect(dest.top).toBeCloseTo(viewport.top);
-  });
-
-  it("centers a landscape photo inside the same safe viewport", () => {
-    const viewport = { left: 0, top: 47, width: 390, height: 763 };
-    const dest = destinationBox(1920, 1080, viewport);
-    expect(dest.width).toBeCloseTo(390);
-    expect(dest.height).toBeCloseTo((1080 * 390) / 1920);
-    expect(dest.left).toBeCloseTo(0);
-    expect(dest.top).toBeCloseTo(47 + (763 - dest.height) / 2);
-    expect(dest.top + dest.height).toBeLessThanOrEqual(47 + 763);
-  });
-
-  it("reserves space for the Safari URL pill when visualViewport does not shrink", () => {
-    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
-    vi.stubGlobal("visualViewport", {
-      width: 390,
-      height: 844,
-      offsetLeft: 0,
-      offsetTop: 0,
-    });
-    setSafeAreaInsets({ top: 47, bottom: 34 });
-    expect(visiblePhotoViewport()).toEqual({
-      left: 0,
-      top: 47,
-      width: 390,
-      height: 844 - 47 - 34 - safariChromeBottomReserve,
-    });
-  });
-
-  it("uses the smaller of innerHeight and visualViewport so Safari chrome is not ignored", () => {
-    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
-    Object.defineProperty(document.documentElement, "clientHeight", {
-      configurable: true,
-      value: 844,
-    });
-    vi.stubGlobal("visualViewport", {
-      width: 390,
-      height: 720,
-      offsetLeft: 0,
-      offsetTop: 0,
-    });
-    setSafeAreaInsets({ top: 47, bottom: 34 });
-    const viewport = visiblePhotoViewport();
-    expect(viewport.height).toBe(720 - 47 - 34);
-    expect(viewport.top).toBe(47);
-    const dest = destinationBox(1080, 2400, viewport);
-    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
-    expect(dest.top + dest.height).toBeLessThanOrEqual(
-      viewport.top + viewport.height,
-    );
-    expect(dest.top).toBeCloseTo(
-      viewport.top + (viewport.height - dest.height) / 2,
-    );
-  });
-});
-
 describe("photo lightbox", () => {
   afterEach(() => {
     resetPhotoLightboxSession();
     resetIndependentOverlayObjectUrlCache();
-    clearSafeAreaInsets();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("expands a portaled overlay from the card rect without remounting the card img", async () => {
+  it("fades a portaled overlay without remounting the card img", async () => {
     mockIndependentOverlayDecode();
     renderPhotos();
     const trigger = screen.getByRole("button", {
@@ -220,26 +101,20 @@ describe("photo lightbox", () => {
     fireEvent.click(trigger);
 
     const overlay = await screen.findByRole("img", { name: "First light" });
-    const photo = overlay.parentElement as HTMLElement;
-    const dest = destinationBox(80, 50);
-    const origin = { left: 24, top: 180, width: 342, height: 220 };
     const stage = document.querySelector(
       ".photo-lightbox-stage",
     ) as HTMLElement;
-    expect(photo).toHaveClass("photo-lightbox-photo");
-    expect(photo.style.left).toBe("");
-    expect(photo.style.top).toBe("");
-    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
-    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
-    expect(photo.style.width).toBe(`${dest.width}px`);
-    expect(photo.style.height).toBe(`${dest.height}px`);
+    expect(overlay).toHaveClass("photo-lightbox-photo");
+    expect(overlay.style.left).toBe("");
+    expect(overlay.style.top).toBe("");
+    expect(overlay.style.width).toBe("");
+    expect(overlay.style.height).toBe("");
     expect(overlay).toBeVisible();
     expect(overlay).not.toHaveStyle({ opacity: "0" });
+    expect(overlay.style.opacity).toBe("1");
+    expect(overlay.style.transform).toBe("scale(1)");
     expect(stage).toBeTruthy();
-    expect(stage.contains(photo)).toBe(true);
-    expect(photo.style.transform).toBe(restTransform);
-    expect(photo.style.transition).toContain("transform");
-    expect(photo.style.transition).toContain("ease-out");
+    expect(stage.contains(overlay)).toBe(true);
     expect(screen.getByRole("dialog")).toHaveClass("photo-lightbox");
     expect(screen.getByRole("dialog").closest(".timeline")).toBeNull();
     expect(screen.getByRole("dialog").closest(".photo-frame")).toBeNull();
@@ -252,12 +127,10 @@ describe("photo lightbox", () => {
     expect(overlay).toHaveAttribute("src", "blob:overlay-1");
     expect(overlay).not.toBe(card);
 
-    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
-    expect(photo.style.transform).toBe(invertTransform(origin, dest));
-    expect(photo.style.transition).toContain("ease-in");
+    expect(overlay.style.opacity).toBe("0");
     expect(document.querySelector(".photo-lightbox-dimmer")).toHaveStyle({
       opacity: "0",
     });
@@ -333,16 +206,7 @@ describe("photo lightbox", () => {
     expect(last).toBeVisible();
   });
 
-  it("keeps a fullscreen portrait inside the safe visible viewport", async () => {
-    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
-    vi.stubGlobal("visualViewport", {
-      width: 390,
-      height: 844,
-      offsetLeft: 0,
-      offsetTop: 0,
-    });
-    setSafeAreaInsets({ top: 47, bottom: 34 });
+  it("contain-fits a portrait in an explicit-height flex stage", async () => {
     mockIndependentOverlayDecode();
     render(
       <PhotoLightboxRoot>
@@ -350,157 +214,61 @@ describe("photo lightbox", () => {
           src={cardPixelA}
           alt="Portrait"
           width={1080}
-          height={2400}
+          height={1920}
         >
           {cardPhoto(cardPixelA, "Portrait card")}
         </PhotoLightboxTrigger>
       </PhotoLightboxRoot>,
     );
-    const trigger = screen.getByRole("button", {
-      name: "Open photo full screen: Portrait",
-    });
-    mockRect(trigger, { left: 24, top: 180, width: 220, height: 342 });
-    fireEvent.click(trigger);
-    await screen.findByRole("img", { name: "Portrait" });
-    const photo = document.querySelector(
-      ".photo-lightbox-photo",
-    ) as HTMLElement;
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: Portrait",
+      }),
+    );
+    const overlay = await screen.findByRole("img", { name: "Portrait" });
     const stage = document.querySelector(
       ".photo-lightbox-stage",
     ) as HTMLElement;
-    const viewport = visiblePhotoViewport();
-    const dest = destinationBox(1080, 2400, viewport);
-    expect(stage.style.left).toBe(`${viewport.left}px`);
-    expect(stage.style.top).toBe(`${viewport.top}px`);
-    expect(stage.style.height).toBe(`${viewport.height}px`);
-    expect(photo.style.left).toBe("");
-    expect(photo.style.top).toBe("");
-    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
-    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
-    expect(photo.style.width).toBe(`${dest.width}px`);
-    expect(photo.style.height).toBe(`${dest.height}px`);
-    expect(photo.style.transform).toBe(restTransform);
-    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
-    expect(dest.top + dest.height).toBeLessThanOrEqual(
-      viewport.top + viewport.height,
-    );
-    expect(dest.top).toBeCloseTo(
-      viewport.top + (viewport.height - dest.height) / 2,
-    );
+    expect(overlay).toHaveClass("photo-lightbox-photo");
+    expect(overlay.style.left).toBe("");
+    expect(overlay.style.top).toBe("");
+    expect(overlay).toBeVisible();
+    expect(overlay).not.toHaveStyle({ opacity: "0" });
+    expect(overlay.style.width).toBe("");
+    expect(overlay.style.height).toBe("");
+    expect(stage).toHaveClass("photo-lightbox-stage");
+    expect(stage.contains(overlay)).toBe(true);
   });
 
-  it("centers a landscape photo in the stage instead of pinning it to a corner", async () => {
-    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
-    vi.stubGlobal("visualViewport", {
-      width: 390,
-      height: 844,
-      offsetLeft: 0,
-      offsetTop: 0,
-    });
-    setSafeAreaInsets({ top: 47, bottom: 34 });
+  it("does not capture pointermove, so native pinch is not blocked", async () => {
     mockIndependentOverlayDecode();
     render(
       <PhotoLightboxRoot>
-        <PhotoLightboxTrigger
-          src={cardPixelA}
-          alt="Chairs"
-          width={1920}
-          height={1080}
-        >
-          {cardPhoto(cardPixelA, "Chairs card")}
-        </PhotoLightboxTrigger>
-      </PhotoLightboxRoot>,
-    );
-    mockRect(
-      screen.getByRole("button", { name: "Open photo full screen: Chairs" }),
-      { left: 16, top: 520, width: 358, height: 200 },
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open photo full screen: Chairs" }),
-    );
-    await screen.findByRole("img", { name: "Chairs" });
-    const photo = document.querySelector(
-      ".photo-lightbox-photo",
-    ) as HTMLElement;
-    const viewport = visiblePhotoViewport();
-    const dest = destinationBox(1920, 1080, viewport);
-    expect(photo.style.transform).toBe(restTransform);
-    expect(photo.style.left).toBe("");
-    expect(photo.style.top).toBe("");
-    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
-    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
-    expect(photo.style.width).toBe(`${dest.width}px`);
-    expect(photo.style.height).toBe(`${dest.height}px`);
-    expect(dest.width).toBeCloseTo(viewport.width);
-    expect(dest.top).toBeGreaterThan(viewport.top);
-    expect(dest.top).toBeCloseTo(
-      viewport.top + (viewport.height - dest.height) / 2,
-    );
-    expect(dest.top + dest.height).toBeLessThan(844 - 34);
-  });
-
-  it("tracks a swipe on the overlay and reverses to the card", async () => {
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
-    mockIndependentOverlayDecode();
-    render(
-      <PhotoLightboxRoot>
-        <PhotoLightboxTrigger
-          src={cardPixelA}
-          alt="Porch"
-          width={80}
-          height={50}
-        >
+        <PhotoLightboxTrigger src={cardPixelA} alt="Porch">
           {cardPhoto(cardPixelA, "Porch card")}
         </PhotoLightboxTrigger>
       </PhotoLightboxRoot>,
     );
-    const trigger = screen.getByRole("button", {
-      name: "Open photo full screen: Porch",
-    });
-    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
-    fireEvent.click(trigger);
-    await screen.findByRole("img", { name: "Porch" });
-    const overlay = screen.getByRole("dialog");
-    const photo = document.querySelector(
-      ".photo-lightbox-photo",
-    ) as HTMLElement;
-    expect(Number.parseFloat(photo.style.width)).toBeGreaterThan(2);
-    expect(Number.parseFloat(photo.style.height)).toBeGreaterThan(2);
-    expect(overlay).not.toHaveStyle({ pointerEvents: "none" });
-    capturePhoto(overlay);
-    vi.useFakeTimers();
-
-    fireEvent.pointerDown(overlay, {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open photo full screen: Porch" }),
+    );
+    const overlay = await screen.findByRole("img", { name: "Porch" });
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).not.toHaveStyle({ touchAction: "none" });
+    fireEvent.pointerDown(dialog, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 120,
       clientY: 80,
     });
-    fireEvent.pointerMove(overlay, {
+    fireEvent.pointerMove(dialog, {
       pointerId: 1,
       pointerType: "touch",
       clientX: 124,
       clientY: 200,
     });
-    expect(photo.style.transform).toBe("translate3d(0, 120px, 0)");
-    expect(document.querySelector(".photo-lightbox-dimmer")).toHaveStyle({
-      opacity: "0.808",
-    });
-
-    fireEvent.pointerUp(overlay, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 124,
-      clientY: 200,
-    });
-    expect(photo.style.transform).toContain("scale");
-    expect(photo.style.transition).toContain("ease-in");
-    act(() => {
-      vi.advanceTimersByTime(180);
-    });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Porch card" })).toBeVisible();
+    expect(overlay.style.transform).toBe("scale(1)");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("dismisses instantly when motion is reduced", async () => {
@@ -518,12 +286,7 @@ describe("photo lightbox", () => {
     mockIndependentOverlayDecode();
     render(
       <PhotoLightboxRoot>
-        <PhotoLightboxTrigger
-          src={cardPixelA}
-          alt="Porch"
-          width={80}
-          height={50}
-        >
+        <PhotoLightboxTrigger src={cardPixelA} alt="Porch">
           {cardPhoto(cardPixelA, "Porch card")}
         </PhotoLightboxTrigger>
       </PhotoLightboxRoot>,
