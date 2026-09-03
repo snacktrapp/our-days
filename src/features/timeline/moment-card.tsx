@@ -115,6 +115,7 @@ export function MomentCard({
               kind="photo"
               label={moment.image.alt}
               reactionTargetId={moment.id}
+              overlaySrc={moment.image.src}
               preview={
                 moment.image.delivery === "private" ? (
                   <PrivatePhotoImage
@@ -132,26 +133,6 @@ export function MomentCard({
                     height={moment.image.height ?? 801}
                     highPriority={preload}
                     sizes="(max-width: 520px) 92vw, 410px"
-                  />
-                )
-              }
-              fullscreenMedia={
-                moment.image.delivery === "private" ? (
-                  <PrivatePhotoImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={moment.image.width}
-                    height={moment.image.height}
-                    highPriority
-                  />
-                ) : (
-                  <CspPublicImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={moment.image.width ?? 1200}
-                    height={moment.image.height ?? 801}
-                    highPriority
-                    sizes="100vw"
                   />
                 )
               }

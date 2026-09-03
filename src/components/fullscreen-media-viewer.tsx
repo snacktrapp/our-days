@@ -8,88 +8,25 @@ import {
   usePairedTap,
 } from "@/features/timeline/double-tap-heart";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import { useIndependentOverlayObjectUrl } from "./independent-overlay-photo";
 
 const motionMs = 180;
 const dismissDistanceRatio = 0.2;
 const flickVelocity = 0.65;
-const dragScaleRange = 0.08;
 
 type FullscreenMediaViewerProps = Readonly<{
   kind: "photo" | "video";
   label: string;
   preview: ReactNode;
-  fullscreenMedia: ReactNode;
+  fullscreenMedia?: ReactNode;
+  overlaySrc?: string;
   reactionTargetId?: string;
 }>;
 
-type PhotoMotion =
-  "opening" | "open" | "pulling" | "snap-back" | "swipe-out" | "closing";
+type PhotoMotion = "opening" | "open" | "pulling" | "snap-back" | "swipe-out";
 
-function mediaFrame(node: HTMLElement | null) {
-  if (!node) return null;
-  const media = node.querySelector("img, video") ?? node;
-  return media.getBoundingClientRect();
-}
-
-function flipTransform(from: DOMRect, to: DOMRect) {
-  if (from.width < 1 || from.height < 1 || to.width < 1 || to.height < 1) {
-    return "";
-  }
-  const scale = Math.min(from.width / to.width, from.height / to.height);
-  const x = from.left + from.width / 2 - (to.left + to.width / 2);
-  const y = from.top + from.height / 2 - (to.top + to.height / 2);
-  return `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
-}
-
-function pullTransform(distance: number, viewportHeight: number) {
-  const progress = Math.min(1, distance / Math.max(viewportHeight, 1));
-  const scale = 1 - dragScaleRange * progress;
-  return `translate3d(0, ${distance}px, 0) scale(${scale})`;
-}
-
-type OverlayPaint = Readonly<{
-  width: number;
-  height: number;
-  source: HTMLImageElement;
-}>;
-
-function snapshotOverlayPaint(
-  trigger: HTMLElement | null,
-): OverlayPaint | null {
-  const img = trigger?.querySelector("img");
-  if (!(img instanceof HTMLImageElement)) return null;
-  const width = img.naturalWidth || img.width;
-  const height = img.naturalHeight || img.height;
-  if (width < 1 || height < 1) return null;
-  return { width, height, source: img };
-}
-
-function OverlayPhotoClone({
-  paint,
-  label,
-}: Readonly<{
-  paint: OverlayPaint;
-  label: string;
-}>) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    context.drawImage(paint.source, 0, 0, paint.width, paint.height);
-  }, [paint]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="media-viewer-photo-clone"
-      width={paint.width}
-      height={paint.height}
-      role="img"
-      aria-label={label}
-    />
-  );
+function pullTranslate(distance: number) {
+  return `translate3d(0, ${distance}px, 0)`;
 }
 
 export function FullscreenMediaViewer({
@@ -97,6 +34,7 @@ export function FullscreenMediaViewer({
   label,
   preview,
   fullscreenMedia,
+  overlaySrc,
   reactionTargetId,
 }: FullscreenMediaViewerProps) {
   const [open, setOpen] = useState(false);
@@ -106,9 +44,7 @@ export function FullscreenMediaViewer({
   const photoRef = useRef<HTMLDivElement>(null);
   const dimmerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const originRef = useRef<DOMRect | null>(null);
   const openedRef = useRef(false);
-  const [overlayPaint, setOverlayPaint] = useState<OverlayPaint | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const pullRef = useRef<{
     pointerId: number;
@@ -119,14 +55,15 @@ export function FullscreenMediaViewer({
   } | null>(null);
   const titleId = useId();
   const isPhoto = kind === "photo";
+  const overlayObjectUrl = useIndependentOverlayObjectUrl(
+    isPhoto ? overlaySrc : undefined,
+  );
   const handlePreviewTap = usePairedTap({
     enabled: Boolean(reactionTargetId),
     onDoubleTap: () => {
       if (reactionTargetId) dispatchMomentHeart(reactionTargetId);
     },
     onSingleTap: () => {
-      originRef.current = mediaFrame(triggerRef.current);
-      setOverlayPaint(snapshotOverlayPaint(triggerRef.current));
       setMotion("opening");
       setOpen(true);
     },
@@ -145,11 +82,16 @@ export function FullscreenMediaViewer({
     dimmer.style.opacity = opacity;
   }
 
-  function setPhotoTransform(transform: string, transition: string) {
+  function setOverlayLayer(
+    transform: string,
+    opacity: string,
+    transition: string,
+  ) {
     const photo = photoRef.current;
     if (!photo) return;
     photo.style.transition = transition;
     photo.style.transform = transform;
+    photo.style.opacity = opacity;
   }
 
   function teardown() {
@@ -157,15 +99,14 @@ export function FullscreenMediaViewer({
     if (photoRef.current) {
       photoRef.current.style.transform = "";
       photoRef.current.style.transition = "";
+      photoRef.current.style.opacity = "";
     }
     if (dimmerRef.current) {
       dimmerRef.current.style.opacity = "";
       dimmerRef.current.style.transition = "";
     }
     openedRef.current = false;
-    originRef.current = null;
     pullRef.current = null;
-    setOverlayPaint(null);
     setOpen(false);
     setZoomed(false);
     setMotion("open");
@@ -184,29 +125,21 @@ export function FullscreenMediaViewer({
     );
   }
 
-  function closeToCard() {
+  function fadeOutOverlay() {
     if (!isPhoto || overlayMotionReduced()) {
       teardown();
       return;
     }
-    const photo = photoRef.current;
-    const origin = mediaFrame(triggerRef.current);
-    const current = photo ? photo.getBoundingClientRect() : null;
-    const transform = origin && current ? flipTransform(origin, current) : "";
-    if (!transform) {
-      teardown();
-      return;
-    }
-    setMotion("closing");
-    setPhotoTransform(transform, `transform ${motionMs}ms ease-in`);
+    setMotion("swipe-out");
+    setOverlayLayer("", "0", `opacity ${motionMs}ms ease-in`);
     setDimmer("0", `opacity ${motionMs}ms ease-in`);
     clearCloseTimer();
     closeTimerRef.current = window.setTimeout(teardown, motionMs);
   }
 
   function close() {
-    if (motion === "swipe-out" || motion === "closing") return;
-    closeToCard();
+    if (motion === "swipe-out") return;
+    fadeOutOverlay();
   }
 
   useLayoutEffect(() => {
@@ -219,25 +152,16 @@ export function FullscreenMediaViewer({
 
     if (overlayMotionReduced()) {
       setDimmer("1", "none");
-      setPhotoTransform("", "none");
+      setOverlayLayer("", "1", "none");
       window.requestAnimationFrame(() => setMotion("open"));
       return;
     }
 
-    const dest = photoRef.current?.getBoundingClientRect() ?? null;
-    const origin = originRef.current;
-    const transform = origin && dest ? flipTransform(origin, dest) : "";
-    if (!transform) {
-      setDimmer("1", "none");
-      window.requestAnimationFrame(() => setMotion("open"));
-      return;
-    }
-
-    setPhotoTransform(transform, "none");
+    setOverlayLayer("", "0", "none");
     setDimmer("0", "none");
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        setPhotoTransform("", `transform ${motionMs}ms ease-out`);
+        setOverlayLayer("", "1", `opacity ${motionMs}ms ease-out`);
         setDimmer("1", `opacity ${motionMs}ms ease-out`);
         window.setTimeout(() => setMotion("open"), motionMs);
       });
@@ -252,7 +176,6 @@ export function FullscreenMediaViewer({
       "media-viewer-scroll-locked",
     );
     document.body.classList.add("media-viewer-scroll-locked");
-    document.documentElement.classList.add("media-viewer-open");
 
     const blockPageScroll = (event: TouchEvent) => {
       if (
@@ -269,7 +192,6 @@ export function FullscreenMediaViewer({
     return () => {
       clearCloseTimer();
       document.removeEventListener("touchmove", blockPageScroll);
-      document.documentElement.classList.remove("media-viewer-open");
       if (!bodyWasLocked)
         document.body.classList.remove("media-viewer-scroll-locked");
       if (dialog.open) dialog.close();
@@ -278,9 +200,7 @@ export function FullscreenMediaViewer({
 
   function startPull(event: React.PointerEvent<HTMLDivElement>) {
     if (!isPhoto || zoomed || event.pointerType === "mouse") return;
-    if (motion === "closing" || motion === "swipe-out") {
-      return;
-    }
+    if (motion === "swipe-out") return;
     pullRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -302,7 +222,7 @@ export function FullscreenMediaViewer({
     if (overlayMotionReduced()) return;
     setMotion("pulling");
     const viewportHeight = window.innerHeight;
-    setPhotoTransform(pullTransform(deltaY, viewportHeight), "none");
+    setOverlayLayer(pullTranslate(deltaY), "1", "none");
     setDimmer(
       String(Math.max(0.2, 1 - (deltaY / Math.max(viewportHeight, 1)) * 0.8)),
       "none",
@@ -319,7 +239,7 @@ export function FullscreenMediaViewer({
     if (event.type !== "pointerup") {
       if (!overlayMotionReduced()) {
         setMotion("snap-back");
-        setPhotoTransform("", `transform ${motionMs}ms ease-out`);
+        setOverlayLayer("", "1", `transform ${motionMs}ms ease-out`);
         setDimmer("1", `opacity ${motionMs}ms ease-out`);
         clearCloseTimer();
         closeTimerRef.current = window.setTimeout(
@@ -346,7 +266,7 @@ export function FullscreenMediaViewer({
         return;
       }
       setMotion("snap-back");
-      setPhotoTransform("", `transform ${motionMs}ms ease-out`);
+      setOverlayLayer("", "1", `transform ${motionMs}ms ease-out`);
       setDimmer("1", `opacity ${motionMs}ms ease-out`);
       clearCloseTimer();
       closeTimerRef.current = window.setTimeout(
@@ -363,14 +283,25 @@ export function FullscreenMediaViewer({
 
     setMotion("swipe-out");
     const rest = Math.max(window.innerHeight, pull.distance + 120);
-    setPhotoTransform(
-      `translate3d(0, ${rest}px, 0) scale(0.88)`,
+    setOverlayLayer(
+      pullTranslate(rest),
+      "1",
       `transform ${motionMs}ms ease-in`,
     );
     setDimmer("0", `opacity ${motionMs}ms ease-in`);
     clearCloseTimer();
     closeTimerRef.current = window.setTimeout(teardown, motionMs);
   }
+
+  const overlay =
+    isPhoto && overlaySrc ? (
+      overlayObjectUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={overlayObjectUrl} alt={label} />
+      ) : null
+    ) : (
+      fullscreenMedia
+    );
 
   return (
     <>
@@ -426,11 +357,7 @@ export function FullscreenMediaViewer({
               onPointerUp={finishPull}
               onPointerCancel={finishPull}
             >
-              {overlayPaint ? (
-                <OverlayPhotoClone paint={overlayPaint} label={label} />
-              ) : (
-                fullscreenMedia
-              )}
+              {overlay}
             </div>
           ) : (
             <div className="media-viewer-video">{fullscreenMedia}</div>

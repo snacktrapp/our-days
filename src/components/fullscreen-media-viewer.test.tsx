@@ -1,20 +1,12 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FullscreenMediaViewer } from "./fullscreen-media-viewer";
-
-function mockRect(node: Element, rect: Partial<DOMRect>) {
-  vi.spyOn(node, "getBoundingClientRect").mockReturnValue({
-    x: rect.x ?? 0,
-    y: rect.y ?? 0,
-    top: rect.top ?? 0,
-    left: rect.left ?? 0,
-    right: rect.right ?? (rect.left ?? 0) + (rect.width ?? 0),
-    bottom: rect.bottom ?? (rect.top ?? 0) + (rect.height ?? 0),
-    width: rect.width ?? 0,
-    height: rect.height ?? 0,
-    toJSON: () => ({}),
-  });
-}
 
 function openPhoto() {
   render(
@@ -45,22 +37,10 @@ const cardPixelA =
 const cardPixelB =
   "data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs=";
 
-function paintableCardPhoto(src: string, alt: string) {
+function cardPhoto(src: string, alt: string) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      width={80}
-      height={50}
-      ref={(node) => {
-        if (!node) return;
-        Object.defineProperties(node, {
-          naturalWidth: { configurable: true, value: 80 },
-          naturalHeight: { configurable: true, value: 50 },
-        });
-      }}
-    />
+    <img src={src} alt={alt} width={80} height={50} />
   );
 }
 
@@ -72,13 +52,39 @@ function openNamedPhoto(label: string) {
   );
 }
 
+function mockIndependentOverlayDecode() {
+  let created = 0;
+  vi.spyOn(URL, "createObjectURL").mockImplementation(
+    () => `blob:overlay-${++created}`,
+  );
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
+    })),
+  );
+}
+
+async function flushOverlayFade() {
+  await act(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  });
+}
+
 describe("FullscreenMediaViewer", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("opens a photo full screen, supports direct zoom, and returns focus on close", () => {
+  it("opens a photo full screen, supports direct zoom, and returns focus on close", async () => {
     render(
       <FullscreenMediaViewer
         kind="photo"
@@ -103,6 +109,7 @@ describe("FullscreenMediaViewer", () => {
     expect(trigger).not.toHaveClass("is-open");
     expect(window.getComputedStyle(preview).visibility).not.toBe("hidden");
     expect(window.getComputedStyle(preview).opacity).not.toBe("0");
+    expect(document.documentElement).not.toHaveClass("media-viewer-open");
     const photo = screen.getByText("Full photo").parentElement;
     expect(photo).toHaveClass("media-viewer-photo");
     fireEvent.doubleClick(photo as HTMLElement);
@@ -113,13 +120,14 @@ describe("FullscreenMediaViewer", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     expect(screen.getByText("Photo preview")).toBe(preview);
     expect(trigger).toHaveFocus();
   });
 
-  it("expands a photo from the card and reverses that motion on close", () => {
-    vi.useFakeTimers();
+  it("fades the overlay in and out without interpolating the card", async () => {
     render(
       <FullscreenMediaViewer
         kind="photo"
@@ -131,31 +139,38 @@ describe("FullscreenMediaViewer", () => {
     const trigger = screen.getByRole("button", {
       name: "Open photo full screen: Family outside",
     });
-    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
     fireEvent.click(trigger);
 
     const photo = screen.getByText("Full photo").parentElement as HTMLElement;
-    mockRect(photo, { left: 0, top: 80, width: 390, height: 680 });
     const dimmer = document.querySelector(
       ".media-viewer-dimmer",
     ) as HTMLElement;
     expect(photo.style.transform).toBe("");
-    expect(dimmer.style.opacity).toBe("1");
 
-    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
-    mockRect(photo, { left: 0, top: 80, width: 390, height: 680 });
+    await flushOverlayFade();
+    expect(photo.style.opacity).toBe("1");
+    expect(dimmer.style.opacity).toBe("1");
+    expect(photo.style.transform).toBe("");
+    expect(photo.style.transition).toContain("opacity");
+    expect(photo.style.transition).not.toContain("transform");
+
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
-    expect(photo.style.transform).toContain("translate3d");
-    expect(photo.style.transition).toContain("ease-in");
+    expect(photo.style.opacity).toBe("0");
+    expect(photo.style.transform).toBe("");
+    expect(photo.style.transition).toContain("opacity");
+    expect(photo.style.transition).not.toContain("transform");
     expect(dimmer.style.opacity).toBe("0");
     expect(screen.getByRole("dialog")).toBeVisible();
 
-    act(() => {
-      vi.advanceTimersByTime(180);
+    await act(async () => {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 180);
+      });
     });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Photo preview")).toBeVisible();
   });
 
   it("keeps the card photo painted while a swipe dismisses the overlay", () => {
@@ -200,7 +215,7 @@ describe("FullscreenMediaViewer", () => {
     expect(preview).toBeVisible();
   });
 
-  it("follows a downward swipe and dismisses past a short threshold", () => {
+  it("follows a downward swipe on the overlay only and dismisses past a short threshold", () => {
     vi.useFakeTimers();
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
     const photo = openPhoto();
@@ -218,9 +233,8 @@ describe("FullscreenMediaViewer", () => {
       clientX: 124,
       clientY: 200,
     });
-    expect(photo.style.transform).toBe(
-      "translate3d(0, 120px, 0) scale(0.9808)",
-    );
+    expect(photo.style.transform).toBe("translate3d(0, 120px, 0)");
+    expect(photo.style.transform).not.toContain("scale");
     expect(document.querySelector(".media-viewer-dimmer")).toHaveStyle({
       opacity: "0.808",
     });
@@ -231,6 +245,7 @@ describe("FullscreenMediaViewer", () => {
       clientX: 124,
       clientY: 200,
     });
+    expect(photo.style.transition).toContain("transform");
     expect(photo.style.transition).toContain("ease-in");
     expect(screen.getByRole("dialog")).toBeVisible();
     act(() => {
@@ -239,7 +254,7 @@ describe("FullscreenMediaViewer", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("snaps the photo and dimmer back when the swipe is short", () => {
+  it("snaps the overlay and dimmer back when the swipe is short", () => {
     vi.useFakeTimers();
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
     const photo = openPhoto();
@@ -257,7 +272,7 @@ describe("FullscreenMediaViewer", () => {
       clientX: 122,
       clientY: 120,
     });
-    expect(photo.style.transform).toContain("40px");
+    expect(photo.style.transform).toBe("translate3d(0, 40px, 0)");
 
     fireEvent.pointerUp(photo, {
       pointerId: 1,
@@ -368,101 +383,106 @@ describe("FullscreenMediaViewer", () => {
     reactionTarget.remove();
   });
 
-  it("paints the overlay from a canvas copy so the card img keeps its frame", () => {
-    const drawImage = vi.fn();
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      drawImage,
-    } as unknown as CanvasRenderingContext2D);
+  it("decodes the overlay from a blob URL that is not the card img", async () => {
+    mockIndependentOverlayDecode();
 
     render(
       <FullscreenMediaViewer
         kind="photo"
         label="Porch"
-        preview={paintableCardPhoto(cardPixelA, "Porch card")}
-        fullscreenMedia={
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cardPixelA} alt="Porch overlay" />
-        }
+        overlaySrc={cardPixelA}
+        preview={cardPhoto(cardPixelA, "Porch card")}
       />,
     );
     const card = screen.getByRole("img", { name: "Porch card" });
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalled();
+    });
     openNamedPhoto("Porch");
 
     expect(screen.getByRole("img", { name: "Porch card" })).toBe(card);
     expect(card).toBeVisible();
     expect(card).toHaveAttribute("src", cardPixelA);
-    expect(drawImage).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("img", { name: "Porch overlay" })).toBeNull();
-    const overlay = screen.getByRole("img", { name: "Porch" });
-    expect(overlay.tagName).toBe("CANVAS");
+    const overlay = await screen.findByRole("img", { name: "Porch" });
+    expect(overlay.tagName).toBe("IMG");
+    expect(overlay).toHaveAttribute("src", "blob:overlay-1");
     expect(
       screen.getByRole("dialog").querySelector(`img[src="${cardPixelA}"]`),
     ).toBeNull();
+    expect(overlay).not.toBe(card);
   });
 
-  it("keeps each card photo painted when two photos are opened in either order", () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-      drawImage: vi.fn(),
-    } as unknown as CanvasRenderingContext2D);
+  it("keeps each card photo painted when two photos are opened A then B then A", async () => {
+    mockIndependentOverlayDecode();
 
     render(
       <>
         <FullscreenMediaViewer
           kind="photo"
           label="First light"
-          preview={paintableCardPhoto(cardPixelA, "First light card")}
-          fullscreenMedia={
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={cardPixelA} alt="First light overlay" />
-          }
+          overlaySrc={cardPixelA}
+          preview={cardPhoto(cardPixelA, "First light card")}
         />
         <FullscreenMediaViewer
           kind="photo"
           label="Last light"
-          preview={paintableCardPhoto(cardPixelB, "Last light card")}
-          fullscreenMedia={
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={cardPixelB} alt="Last light overlay" />
-          }
+          overlaySrc={cardPixelB}
+          preview={cardPhoto(cardPixelB, "Last light card")}
         />
       </>,
     );
     const first = screen.getByRole("img", { name: "First light card" });
     const last = screen.getByRole("img", { name: "Last light card" });
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    });
 
     openNamedPhoto("First light");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
-    expect(screen.getByRole("img", { name: "First light" }).tagName).toBe(
-      "CANVAS",
-    );
+    expect(
+      await screen.findByRole("img", { name: "First light" }),
+    ).toHaveAttribute("src", "blob:overlay-1");
+    expect(
+      screen.getByRole("dialog").querySelector(`img[src="${cardPixelA}"]`),
+    ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     openNamedPhoto("Last light");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
-    expect(screen.getByRole("img", { name: "Last light" }).tagName).toBe(
-      "CANVAS",
-    );
+    expect(
+      await screen.findByRole("img", { name: "Last light" }),
+    ).toHaveAttribute("src", "blob:overlay-2");
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
 
     openNamedPhoto("Last light");
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
     openNamedPhoto("First light");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
+    expect(first).toHaveAttribute("src", cardPixelA);
+    expect(last).toHaveAttribute("src", cardPixelB);
+    expect(first).toBeVisible();
+    expect(last).toBeVisible();
     expect(
-      screen.queryByRole("img", { name: "First light overlay" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("img", { name: "Last light overlay" }),
-    ).toBeNull();
+      await screen.findByRole("img", { name: "First light" }),
+    ).toHaveAttribute("src", "blob:overlay-1");
   });
 });

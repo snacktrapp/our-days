@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatBibleVerseMoment,
   selectBiblePassage,
@@ -184,6 +184,11 @@ describe("MomentCard long thought copy", () => {
 });
 
 describe("MomentCard timeline media", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it("keeps a landscape photo at its native frame instead of a cropped box", () => {
     render(
       <MomentCard
@@ -233,5 +238,115 @@ describe("MomentCard timeline media", () => {
     });
     expect(image).toHaveAttribute("width", "1080");
     expect(image).toHaveAttribute("height", "1920");
+  });
+
+  it("leaves both card images in place when opening A then B then A", async () => {
+    const firstSrc = "/private-photo-a.jpg";
+    const lastSrc = "/private-photo-b.jpg";
+    let created = 0;
+    vi.spyOn(URL, "createObjectURL").mockImplementation(
+      () => `blob:card-overlay-${++created}`,
+    );
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
+      })),
+    );
+
+    render(
+      <>
+        <MomentCard
+          moment={{
+            ...thought,
+            id: "photo-a",
+            kind: "photo",
+            kicker: "A photo",
+            image: {
+              src: firstSrc,
+              alt: "First light",
+              badgeLabel: "AUG 28",
+              delivery: "private",
+              width: 80,
+              height: 50,
+            },
+          }}
+        />
+        <MomentCard
+          moment={{
+            ...thought,
+            id: "photo-b",
+            kind: "photo",
+            kicker: "A photo",
+            image: {
+              src: lastSrc,
+              alt: "Last light",
+              badgeLabel: "AUG 28",
+              delivery: "private",
+              width: 80,
+              height: 50,
+            },
+          }}
+        />
+      </>,
+    );
+
+    const first = screen.getByRole("img", { name: "First light" });
+    const last = screen.getByRole("img", { name: "Last light" });
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    expect(first).toHaveAttribute("src", firstSrc);
+    expect(last).toHaveAttribute("src", lastSrc);
+    expect(
+      screen.getByRole("dialog").querySelector(`img[src="${firstSrc}"]`),
+    ).toBeNull();
+    expect(screen.getByRole("dialog").querySelector("img")?.src).toMatch(
+      /^blob:/u,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: Last light",
+      }),
+    );
+    expect(screen.getByRole("img", { name: "First light" })).toBe(first);
+    expect(last).toHaveAttribute("src", lastSrc);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    expect(screen.getByRole("img", { name: "Last light" })).toBe(last);
+    expect(first).toBeVisible();
+    expect(last).toBeVisible();
+    expect(first).toHaveAttribute("src", firstSrc);
+    expect(last).toHaveAttribute("src", lastSrc);
+    expect(window.getComputedStyle(first).visibility).not.toBe("hidden");
+    expect(window.getComputedStyle(last).visibility).not.toBe("hidden");
+    expect(document.documentElement).not.toHaveClass("media-viewer-open");
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });
