@@ -653,6 +653,8 @@ button:focus-visible,
   height: 270px;
   position: relative;
   overflow: hidden;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
   background: #cab8a3;
 }
 .photo-frame img {
@@ -1155,6 +1157,18 @@ button:focus-visible,
   right: 12px;
 }
 
+.connected-moment-actions:has(.connected-moment-menu) {
+  z-index: 8;
+}
+
+.moment:has(.connected-moment-menu) {
+  z-index: 6;
+}
+
+.moment-card:has(.connected-moment-menu) {
+  overflow: visible;
+}
+
 .connected-moment-menu-trigger {
   display: grid;
   width: 44px;
@@ -1173,16 +1187,21 @@ button:focus-visible,
 
 .connected-moment-menu {
   position: absolute;
-  top: 48px;
+  top: calc(100% + 4px);
   right: 0;
   display: grid;
   width: max-content;
   min-width: 154px;
-  padding: 5px;
+  padding: 4px;
   border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   border-radius: 15px;
   background: var(--cream);
   box-shadow: 0 12px 30px rgb(49 39 31 / 16%);
+}
+
+.connected-moment-menu[data-placement="above"] {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .connected-moment-menu button {
@@ -1300,6 +1319,8 @@ button:focus-visible,
   height: 165px;
   position: relative;
   overflow: hidden;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
   background:
     repeating-radial-gradient(
       ellipse at 28% 30%,
@@ -5606,11 +5627,6 @@ button:focus-visible,
   margin: -7px;
 }
 
-.photo-card-heading .connected-moment-menu,
-.location-card-heading .connected-moment-menu {
-  top: 32px;
-}
-
 /* All moment kind labels share the same compact journal-index treatment. */
 .photo-card-heading > .moment-kicker,
 .location-card-heading > .moment-kicker {
@@ -6418,24 +6434,6 @@ button:focus-visible,
   border: 1px solid var(--hairline);
   border-radius: 8px;
   background: #101d17;
-}
-
-/* The menu is portalled to the viewport so a media card's rounded clipping
-   never cuts it off. */
-.connected-moment-menu-portal {
-  position: fixed;
-  z-index: 1000;
-  inset: auto 12px calc(64px + env(safe-area-inset-bottom));
-  width: min(calc(100dvw - 24px), 360px);
-  max-width: 360px;
-  height: fit-content;
-  max-height: min(60vh, 260px);
-  margin: 0 auto;
-  transform: none;
-  grid-auto-rows: max-content;
-  align-content: start;
-  overflow: auto;
-  outline: none;
 }
 
 .pending-media-shelf {

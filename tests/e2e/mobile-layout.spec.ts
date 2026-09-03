@@ -172,47 +172,72 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
   });
 });
 
-test("portalled moment options stay visible above navigation without inline positioning", async ({
+test("moment options open as a compact popover under the trigger without inline positioning", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => {
+    const card = document.querySelector(".moment-card");
+    if (!(card instanceof HTMLElement)) {
+      throw new Error("Family feed did not render a moment card.");
+    }
+    const actions = document.createElement("div");
+    actions.className = "connected-moment-actions";
+    const trigger = document.createElement("button");
+    trigger.className = "connected-moment-menu-trigger";
+    trigger.type = "button";
+    trigger.setAttribute("aria-label", "Moment options");
+    trigger.textContent = "•••";
     const menu = document.createElement("div");
-    menu.className = "connected-moment-menu connected-moment-menu-portal";
+    menu.className = "connected-moment-menu";
     menu.setAttribute("role", "group");
     menu.setAttribute("aria-label", "Moment options");
+    menu.dataset.placement = "below";
     for (const text of ["Copy text", "Edit moment", "Move to trash"]) {
       const button = document.createElement("button");
       button.textContent = text;
       menu.append(button);
     }
-    document.body.append(menu);
+    actions.append(trigger, menu);
+    card.append(actions);
   });
   const menu = page.getByRole("group", { name: "Moment options" });
   await expect(menu).toBeVisible();
   await expect(menu).not.toHaveAttribute("style");
 
   const geometry = await menu.evaluate((element) => {
+    const trigger = element
+      .closest(".connected-moment-actions")
+      ?.querySelector("button");
+    if (!(trigger instanceof HTMLElement)) {
+      throw new Error("Popover is missing its three-dots trigger.");
+    }
     const rect = element.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
     const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    const style = getComputedStyle(element);
     return {
-      bottom: rect.bottom,
+      alignedToTrigger: Math.abs(rect.right - triggerRect.right) <= 2,
+      belowTrigger: rect.top >= triggerRect.bottom - 1,
+      compactWidth: rect.width < document.documentElement.clientWidth / 2,
       height: rect.height,
       insideViewport:
         rect.left >= 0 &&
         rect.right <= document.documentElement.clientWidth &&
         rect.top >= 0,
       navTop: nav.top,
-      position: getComputedStyle(element).position,
-      scrollY: window.scrollY,
-      top: rect.top,
-      viewportHeight: window.innerHeight,
+      position: style.position,
+      width: rect.width,
     };
   });
+  expect(geometry.position).toBe("absolute");
+  expect(geometry.compactWidth).toBe(true);
+  expect(geometry.alignedToTrigger).toBe(true);
+  expect(geometry.belowTrigger).toBe(true);
   expect(geometry.insideViewport).toBe(true);
-  expect(geometry.position).toBe("fixed");
-  expect(geometry.bottom).toBeLessThanOrEqual(geometry.navTop);
+  expect(geometry.height).toBeLessThan(200);
+  expect(geometry.width).toBeLessThan(240);
 });
 
 test("maximum-length family names stay bounded beside the mobile timeline", async ({

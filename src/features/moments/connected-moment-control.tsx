@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
 import { useComposerSession } from "@/features/composer/composer-session";
 import type {
@@ -26,6 +25,21 @@ function restoreJournalFocusAfterRefresh() {
     window.requestAnimationFrame(focusJournalContext),
   );
   window.setTimeout(focusJournalContext, 150);
+}
+
+const compactMenuHeight = 3 * 44 + 8;
+
+function compactMenuPlacement(trigger: HTMLElement): "above" | "below" {
+  const rect = trigger.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return "below";
+  const nav = document.querySelector(".bottom-nav");
+  const topbar = document.querySelector(".topbar");
+  const ceiling = topbar?.getBoundingClientRect().bottom ?? 0;
+  const floor = nav?.getBoundingClientRect().top ?? window.innerHeight;
+  const spaceBelow = floor - rect.bottom - 4;
+  const spaceAbove = rect.top - ceiling - 4;
+  if (spaceBelow >= compactMenuHeight) return "below";
+  return spaceAbove > spaceBelow ? "above" : "below";
 }
 
 function actionMomentLabel(moment: TimelineMomentViewModel) {
@@ -68,19 +82,18 @@ function ChangeableMomentControl({
   const composerSession = useComposerSession();
   const [pending, setPending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPlacement, setMenuPlacement] = useState<"above" | "below">(
+    "below",
+  );
   const [message, setMessage] = useState<string | null>(null);
   const menuWrapperRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
     const closeOutside = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (
-        !menuWrapperRef.current?.contains(target) &&
-        !menuRef.current?.contains(target)
-      ) {
+      if (!menuWrapperRef.current?.contains(target)) {
         setMenuOpen(false);
       }
     };
@@ -94,6 +107,21 @@ function ChangeableMomentControl({
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const updatePlacement = () => {
+      const trigger = menuTriggerRef.current;
+      if (trigger) setMenuPlacement(compactMenuPlacement(trigger));
+    };
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+    window.addEventListener("scroll", updatePlacement, true);
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+      window.removeEventListener("scroll", updatePlacement, true);
     };
   }, [menuOpen]);
 
@@ -154,42 +182,47 @@ function ChangeableMomentControl({
           aria-controls={menuOpen ? `moment-actions-${moment.id}` : undefined}
           aria-expanded={menuOpen}
           aria-label={`Moment options — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-          onClick={() => setMenuOpen((current) => !current)}
+          onClick={() => {
+            if (menuOpen) {
+              setMenuOpen(false);
+              return;
+            }
+            const trigger = menuTriggerRef.current;
+            setMenuPlacement(trigger ? compactMenuPlacement(trigger) : "below");
+            setMenuOpen(true);
+          }}
         >
           <span aria-hidden="true">•••</span>
         </button>
-      </div>
-      {menuOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="connected-moment-menu connected-moment-menu-portal"
-              id={`moment-actions-${moment.id}`}
-              role="group"
-              aria-label="Moment options"
+        {menuOpen ? (
+          <div
+            className="connected-moment-menu"
+            id={`moment-actions-${moment.id}`}
+            role="group"
+            aria-label="Moment options"
+            data-placement={menuPlacement}
+          >
+            <button type="button" onClick={copyText}>
+              Copy text
+            </button>
+            <button
+              type="button"
+              aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+              onClick={editMoment}
             >
-              <button type="button" onClick={copyText}>
-                Copy text
-              </button>
-              <button
-                type="button"
-                aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-                onClick={editMoment}
-              >
-                Edit moment
-              </button>
-              <button
-                type="button"
-                aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-                disabled={pending}
-                onClick={trash}
-              >
-                {pending ? "Moving…" : "Move to trash"}
-              </button>
-            </div>,
-            document.body,
-          )
-        : null}
+              Edit moment
+            </button>
+            <button
+              type="button"
+              aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+              disabled={pending}
+              onClick={trash}
+            >
+              {pending ? "Moving…" : "Move to trash"}
+            </button>
+          </div>
+        ) : null}
+      </div>
       {message ? (
         <p className="connected-moment-message" role="alert">
           {message}

@@ -136,8 +136,13 @@ describe("ConnectedMomentControl", () => {
     expect(trashButton).toBeInTheDocument();
     const menu = screen.getByRole("group", { name: "Moment options" });
     expect(menu.tagName).toBe("DIV");
-    expect(document.body).toContainElement(menu);
+    expect(optionButtons[1].parentElement).toContainElement(menu);
+    expect(menu).not.toHaveClass("connected-moment-menu-portal");
+    expect(menu).toHaveAttribute("data-placement", "below");
     expect(menu).not.toHaveAttribute("style");
+    expect(menu).toHaveTextContent("Copy text");
+    expect(menu).toHaveTextContent("Edit moment");
+    expect(menu).toHaveTextContent("Move to trash");
   });
 
   it("closes the compact options menu from its trigger or an outside press", async () => {
@@ -156,6 +161,44 @@ describe("ConnectedMomentControl", () => {
     await user.click(trigger);
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("group", { name: "Moment options" })).toBeNull();
+  });
+
+  it("flips the compact options menu above the trigger when the nav would cover it", async () => {
+    const nav = document.createElement("nav");
+    nav.className = "bottom-nav";
+    document.body.append(nav);
+    vi.spyOn(nav, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 400,
+      top: 400,
+      right: 320,
+      bottom: 456,
+      left: 0,
+      width: 320,
+      height: 56,
+      toJSON: () => ({}),
+    });
+    const user = userEvent.setup();
+    render(<ConnectedMomentControl moment={moment} actions={actions} />);
+
+    const trigger = screen.getByRole("button", { name: /^Moment options/u });
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+      x: 260,
+      y: 360,
+      top: 360,
+      right: 304,
+      bottom: 404,
+      left: 260,
+      width: 44,
+      height: 44,
+      toJSON: () => ({}),
+    });
+    await user.click(trigger);
+
+    expect(
+      screen.getByRole("group", { name: "Moment options" }),
+    ).toHaveAttribute("data-placement", "above");
+    nav.remove();
   });
 
   it("constrains backdating to today and confirms before discarding a draft", async () => {
