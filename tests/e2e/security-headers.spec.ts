@@ -48,6 +48,10 @@ test("private HTML receives fresh strict nonces and baseline headers", async ({
   const html = await first.text();
   expect(html).toContain(`name="csp-nonce"`);
   expect(html).toContain(`content="${firstNonce}"`);
+  const dynamicStyle = html.match(
+    /<style\b[^>]*id="our-days-dynamic-css"[^>]*>/u,
+  )?.[0];
+  expect(dynamicStyle).toContain(`nonce="${firstNonce}"`);
   const scriptTags = html.match(/<script\b[^>]*>/gu) ?? [];
   expect(scriptTags.length).toBeGreaterThan(0);
   for (const tag of scriptTags) expect(tag).toContain(`nonce="${firstNonce}"`);

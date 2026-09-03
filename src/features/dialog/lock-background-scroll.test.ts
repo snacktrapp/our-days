@@ -1,9 +1,8 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pageCspNonceMetaName } from "@/lib/page-csp-nonce";
+import { dynamicCssStyleId } from "@/lib/page-csp-nonce";
 import {
   backgroundScrollLockClass,
-  backgroundScrollLockSheetId,
   overlayBackgroundScrollShouldStop,
   overlayScrollParent,
   useLockBackgroundScroll,
@@ -32,8 +31,7 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
-    document.getElementById(backgroundScrollLockSheetId)?.remove();
-    document.querySelector(`meta[name="${pageCspNonceMetaName}"]`)?.remove();
+    document.getElementById(dynamicCssStyleId)?.remove();
     vi.restoreAllMocks();
   });
 
@@ -84,10 +82,10 @@ describe("overlay background scroll lock", () => {
   });
 
   it("pins the locked page with a nonceable scroll offset", () => {
-    const nonceHost = document.createElement("meta");
-    nonceHost.setAttribute("name", pageCspNonceMetaName);
-    nonceHost.setAttribute("content", "test-nonce");
-    document.head.append(nonceHost);
+    const sheet = document.createElement("style");
+    sheet.id = dynamicCssStyleId;
+    sheet.setAttribute("nonce", "test-nonce");
+    document.head.append(sheet);
     const scrollTo = vi.fn();
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -95,15 +93,14 @@ describe("overlay background scroll lock", () => {
     });
     window.scrollTo = scrollTo as typeof window.scrollTo;
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
-    const sheet = document.getElementById(backgroundScrollLockSheetId);
-    expect(sheet).toBeInstanceOf(HTMLStyleElement);
+    expect(document.getElementById(dynamicCssStyleId)).toBe(sheet);
     expect(sheet).toHaveAttribute("nonce", "test-nonce");
-    expect(sheet?.textContent).toBe(":root{--composer-scroll-lock-top:-160px}");
+    expect(sheet.textContent).toBe(":root{--composer-scroll-lock-top:-160px}");
     expect(scrollTo).not.toHaveBeenCalled();
     unmount();
-    expect(document.getElementById(backgroundScrollLockSheetId)).toBeNull();
+    expect(sheet.textContent).toBe("");
+    expect(sheet.parentNode).toBe(document.head);
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
-    nonceHost.remove();
   });
 
   it("locks html and body while an overlay is open", () => {

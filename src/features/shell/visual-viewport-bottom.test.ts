@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { dynamicCssStyleId } from "@/lib/page-csp-nonce";
 import {
   clearBottomNavVisualInset,
   syncBottomNavVisualInset,
@@ -6,7 +7,7 @@ import {
 } from "./visual-viewport-bottom";
 
 afterEach(() => {
-  document.getElementById("bottom-nav-visual-inset-sheet")?.remove();
+  document.getElementById(dynamicCssStyleId)?.remove();
 });
 
 describe("visual viewport bottom inset", () => {
@@ -35,9 +36,10 @@ describe("visual viewport bottom inset", () => {
   });
 
   it("writes a nonceable stylesheet without lifting the tab bar off the layout bottom", () => {
-    const nonce = document.createElement("script");
-    nonce.setAttribute("nonce", "test-nonce");
-    document.head.append(nonce);
+    const sheet = document.createElement("style");
+    sheet.id = dynamicCssStyleId;
+    sheet.setAttribute("nonce", "test-nonce");
+    document.head.append(sheet);
 
     syncBottomNavVisualInset({
       innerHeight: 800,
@@ -47,13 +49,12 @@ describe("visual viewport bottom inset", () => {
       } as VisualViewport,
       document,
     });
-    const sheet = document.getElementById("bottom-nav-visual-inset-sheet");
-    expect(sheet).toBeInstanceOf(HTMLStyleElement);
-    expect(sheet?.getAttribute("nonce")).toBe("test-nonce");
-    expect(sheet?.textContent).toBe(":root{--bottom-nav-visual-inset:0px}");
+    expect(document.getElementById(dynamicCssStyleId)).toBe(sheet);
+    expect(sheet.getAttribute("nonce")).toBe("test-nonce");
+    expect(sheet.textContent).toBe(":root{--bottom-nav-visual-inset:0px}");
     expect(document.documentElement.getAttribute("style")).toBeNull();
     clearBottomNavVisualInset(document.documentElement);
-    expect(document.getElementById("bottom-nav-visual-inset-sheet")).toBeNull();
-    nonce.remove();
+    expect(sheet.textContent).toBe("");
+    expect(sheet.parentNode).toBe(document.head);
   });
 });

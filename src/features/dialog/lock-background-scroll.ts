@@ -1,10 +1,9 @@
 "use client";
 
 import { useLayoutEffect } from "react";
-import { replaceNonceableStyleSheet } from "@/lib/page-csp-nonce";
+import { deleteDynamicCssVar, setDynamicCssVar } from "@/lib/page-csp-nonce";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
-export const backgroundScrollLockSheetId = "composer-scroll-lock-sheet";
 const lockTopVariable = "--composer-scroll-lock-top";
 
 const exemptOverlaySelector = "iframe, .composer-location-map";
@@ -44,15 +43,11 @@ export function overlayBackgroundScrollShouldStop(
 }
 
 function writeLockSheet(doc: Document, topPx: number) {
-  replaceNonceableStyleSheet(
-    doc,
-    backgroundScrollLockSheetId,
-    `:root{${lockTopVariable}:${topPx}px}`,
-  );
+  setDynamicCssVar(doc, lockTopVariable, `${topPx}px`);
 }
 
 function clearLockSheet(doc: Document) {
-  doc.getElementById(backgroundScrollLockSheetId)?.remove();
+  deleteDynamicCssVar(doc, lockTopVariable);
 }
 
 export function useLockBackgroundScroll(active: boolean) {

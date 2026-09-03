@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { connection } from "next/server";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
-import { pageCspNonceMetaName } from "@/lib/page-csp-nonce";
+import { dynamicCssStyleId, pageCspNonceMetaName } from "@/lib/page-csp-nonce";
 import { ServiceWorkerCleanup } from "./service-worker-registration";
 import "./globals.css";
 
@@ -70,6 +70,11 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         {nonce ? <meta name={pageCspNonceMetaName} content={nonce} /> : null}
+        <style
+          id={dynamicCssStyleId}
+          nonce={nonce || undefined}
+          suppressHydrationWarning
+        />
         <Script
           id="our-days-theme"
           strategy="beforeInteractive"

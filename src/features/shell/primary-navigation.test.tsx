@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { dynamicCssStyleId } from "@/lib/page-csp-nonce";
 import { PrimaryNavigation } from "./primary-navigation";
 
 const navigation = vi.hoisted(() => ({ pathname: "/family" }));
@@ -15,7 +16,7 @@ describe("PrimaryNavigation", () => {
   });
 
   afterEach(() => {
-    document.getElementById("bottom-nav-visual-inset-sheet")?.remove();
+    document.getElementById(dynamicCssStyleId)?.remove();
   });
 
   it("contains destinations only", () => {
@@ -74,8 +75,8 @@ describe("PrimaryNavigation", () => {
 
     await user.click(screen.getByRole("link", { name: "People" }));
 
-    expect(
-      document.getElementById("bottom-nav-visual-inset-sheet")?.textContent,
-    ).toBe(":root{--bottom-nav-visual-inset:0px}");
+    expect(document.getElementById(dynamicCssStyleId)?.textContent).toBe(
+      ":root{--bottom-nav-visual-inset:0px}",
+    );
   });
 });
