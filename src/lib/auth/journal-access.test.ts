@@ -85,6 +85,29 @@ describe("journal access boundary", () => {
     );
   });
 
+  it("uses the attached Our Days Supabase on hosted Vercel even if resource mode was left detached", async () => {
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "detached");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+    );
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "sb_publishable_access_test",
+    );
+
+    await expect(requireJournalAccess()).resolves.toEqual({
+      mode: "authenticated",
+      circleId: "circle-a",
+      membershipId: "membership-a",
+      personId: "person-a",
+      role: "organizer",
+    });
+    expect(mocks.createClient).toHaveBeenCalled();
+  });
+
   it("requires a valid server-verified identity", async () => {
     mocks.getClaims.mockResolvedValueOnce({ data: null, error: new Error() });
 

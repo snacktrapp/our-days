@@ -6,6 +6,7 @@ import type {
 } from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
+  hostedVercelClientRuntime,
   readOptionalSupabasePublicConfig,
   readSupabasePublicConfig,
 } from "@/lib/supabase/public-config";
@@ -661,6 +662,12 @@ export async function uploadPhotoMoment(
   const sha256 = await hash(file, signal);
   throwIfAborted(signal);
   if (!readOptionalSupabasePublicConfig()) {
+    if (hostedVercelClientRuntime()) {
+      throw new PhotoUploadError(
+        "Photo upload needs the connected Our Days storage.",
+        false,
+      );
+    }
     return uploadLocalPhotoMoment(
       file,
       draft,

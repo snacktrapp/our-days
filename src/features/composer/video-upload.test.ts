@@ -187,3 +187,23 @@ describe("connected private video upload", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 });
+
+describe("hosted Vercel video upload", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("does not fall through to the local file journal on Vercel", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", "preview");
+    const createClient = vi.fn();
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient },
+      ),
+    ).rejects.toThrow("connected Our Days storage");
+    expect(createClient).not.toHaveBeenCalled();
+  });
+});

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { localJournalIsEnabled } from "../../../../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  supabaseResourceIsActive,
+} from "../../../../../../config/our-days-environment";
 import {
   isOAuthProvider,
   oauthAuthorizationUrl,
@@ -59,7 +62,7 @@ export async function GET(
     return response;
   }
 
-  if (process.env.OUR_DAYS_RESOURCE_MODE !== "supabase") {
+  if (!supabaseResourceIsActive()) {
     return appRedirect(request, "/sign-in?oauth=unavailable");
   }
 

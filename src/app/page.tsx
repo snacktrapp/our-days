@@ -1,3 +1,4 @@
+import { journalPersistenceIsConnected } from "../../config/our-days-environment";
 import { PrivateEntry } from "@/features/auth/private-entry";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
@@ -9,20 +10,11 @@ export default async function Home() {
 
   if (isDesignPreviewEnabled()) redirect("/family");
 
-  if (
-    process.env.OUR_DAYS_RESOURCE_MODE === "supabase" ||
-    process.env.OUR_DAYS_LOCAL_JOURNAL_MODE === "enabled"
-  ) {
+  const connected = journalPersistenceIsConnected();
+  if (connected) {
     const access = await requireJournalAccess();
     if (access.mode === "authenticated") redirect("/family");
   }
 
-  return (
-    <PrivateEntry
-      connected={
-        process.env.OUR_DAYS_RESOURCE_MODE === "supabase" ||
-        process.env.OUR_DAYS_LOCAL_JOURNAL_MODE === "enabled"
-      }
-    />
-  );
+  return <PrivateEntry connected={connected} />;
 }

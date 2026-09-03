@@ -3,7 +3,10 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
-import { localJournalIsEnabled } from "../../../config/our-days-environment";
+import {
+  localJournalIsEnabled,
+  supabaseResourceIsActive,
+} from "../../../config/our-days-environment";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -41,7 +44,7 @@ async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
     if (!localAccess) return { mode: "anonymous" };
     return { mode: "authenticated", ...localAccess };
   }
-  if (process.env.OUR_DAYS_RESOURCE_MODE !== "supabase") {
+  if (!supabaseResourceIsActive()) {
     return { mode: "anonymous" };
   }
 

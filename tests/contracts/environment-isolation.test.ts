@@ -3,9 +3,11 @@ import { isDesignPreviewEnvironment } from "../../config/design-preview-policy";
 import {
   environmentForNextConfig,
   invitationDeliveryIsEnabled,
+  journalPersistenceIsConnected,
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
   photoPostingIsEnabled,
+  supabaseResourceIsActive,
   OurDaysEnvironmentError,
   validateOurDaysEnvironment,
 } from "../../config/our-days-environment";
@@ -126,6 +128,21 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_RESOURCE_MODE: "supabase",
       }),
     ).toBe(true);
+    expect(
+      photoPostingIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+    expect(
+      photoPostingIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+        OUR_DAYS_PHOTO_POSTING_MODE: "disabled",
+      }),
+    ).toBe(false);
   });
 
   it("rejects malformed or detached photo-posting activation", () => {
@@ -167,6 +184,23 @@ describe("Our Days environment isolation", () => {
         NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
       }),
     ).toBe(true);
+    expect(
+      localJournalIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "false",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+      }),
+    ).toBe(false);
+    expect(
+      journalPersistenceIsConnected({
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+    expect(supabaseResourceIsActive({})).toBe(false);
   });
 
   it("rejects a hosted or Supabase local-journal activation", () => {
@@ -192,6 +226,17 @@ describe("Our Days environment isolation", () => {
           "sb_publishable_environment_contract_fixture",
       },
       "requires detached resource mode",
+    );
+    expectUnsafe(
+      {
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+      },
+      "cannot be enabled on Vercel",
     );
   });
 
@@ -351,6 +396,15 @@ describe("Our Days environment isolation", () => {
     expect(
       isDesignPreviewEnvironment({
         ...safe,
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_ENVIRONMENT: "preview",
+        NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
+      }),
+    ).toBe(false);
+    expect(
+      isDesignPreviewEnvironment({
+        ...safe,
         OUR_DAYS_RESOURCE_MODE: "supabase",
       }),
     ).toBe(false);
@@ -392,17 +446,63 @@ describe("Our Days environment isolation", () => {
     ).toMatchObject({ identity: "local", supabaseProjectRef: "local" });
   });
 
-  it("accepts Preview only when it is isolated from Production", () => {
+  it("accepts Preview when it uses the Production Our Days Supabase and a distinct site origin", () => {
     expect(
       validateOurDaysEnvironment({
         ...productionEnvironment,
         VERCEL_ENV: "preview",
         OUR_DAYS_ENVIRONMENT: "preview",
-        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: previewRef,
         NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
-        NEXT_PUBLIC_SUPABASE_URL: `https://${previewRef}.supabase.co`,
       }),
-    ).toMatchObject({ identity: "preview", supabaseProjectRef: previewRef });
+    ).toMatchObject({
+      identity: "preview",
+      supabaseProjectRef: productionRef,
+    });
+  });
+
+  it("binds a hosted Vercel Preview to the existing Our Days Supabase even when stale local flags were copied", () => {
+    expect(
+      validateOurDaysEnvironment(
+        environmentForNextConfig({
+          VERCEL: "1",
+          VERCEL_ENV: "preview",
+          VERCEL_URL: "our-days-git-preview.vercel.app",
+          OUR_DAYS_ENVIRONMENT: "production",
+          OUR_DAYS_RESOURCE_MODE: "detached",
+          OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+          OUR_DAYS_LOCAL_JOURNAL_MODE: "enabled",
+          NEXT_PUBLIC_SITE_URL: "https://our-days-neon.vercel.app",
+          OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://our-days-neon.vercel.app",
+          OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: productionRef,
+          OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF: productionRef,
+          OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS: proofRef,
+          NEXT_PUBLIC_SUPABASE_URL: `https://${productionRef}.supabase.co`,
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+            "sb_publishable_environment_contract_fixture",
+        }),
+      ),
+    ).toEqual({
+      identity: "preview",
+      resourceMode: "supabase",
+      siteOrigin: "https://our-days-git-preview.vercel.app",
+      supabaseProjectRef: productionRef,
+    });
+  });
+
+  it("rejects a hosted Vercel Preview that is still missing the Our Days public Supabase values", () => {
+    expectUnsafe(
+      environmentForNextConfig({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        VERCEL_URL: "our-days-git-preview.vercel.app",
+        OUR_DAYS_ENVIRONMENT: "preview",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+        NEXT_PUBLIC_SITE_URL: "https://our-days-git-preview.vercel.app",
+        OUR_DAYS_PRODUCTION_SITE_ORIGIN: "https://our-days-neon.vercel.app",
+      }),
+      "NEXT_PUBLIC_SUPABASE_URL is required",
+    );
   });
 
   it("rejects Preview using the Production origin and Production using another origin", () => {
@@ -440,7 +540,7 @@ describe("Our Days environment isolation", () => {
     );
   });
 
-  it("rejects project URL mismatch, Preview-to-Production wiring, and Proof refs", () => {
+  it("rejects project URL mismatch, a second Preview Supabase project, and Proof refs", () => {
     expectUnsafe(
       {
         ...productionEnvironment,
@@ -454,7 +554,18 @@ describe("Our Days environment isolation", () => {
         VERCEL_ENV: "preview",
         OUR_DAYS_ENVIRONMENT: "preview",
       },
-      "Preview must not use",
+      "Preview must not use the Production site origin",
+    );
+    expectUnsafe(
+      {
+        ...productionEnvironment,
+        VERCEL_ENV: "preview",
+        OUR_DAYS_ENVIRONMENT: "preview",
+        OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: previewRef,
+        NEXT_PUBLIC_SITE_URL: "https://preview.example.com",
+        NEXT_PUBLIC_SUPABASE_URL: `https://${previewRef}.supabase.co`,
+      },
+      "Preview must use the existing Our Days Supabase project",
     );
     expectUnsafe(
       {
@@ -493,8 +604,17 @@ describe("Our Days environment isolation", () => {
         ...productionEnvironment,
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "legacy-anon-key",
       },
-      "current publishable key",
+      "current publishable key or public anon JWT",
     );
+    expect(
+      validateOurDaysEnvironment({
+        ...productionEnvironment,
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: `e30.${Buffer.from(JSON.stringify({ role: "anon" })).toString("base64url")}.fixture`,
+      }),
+    ).toMatchObject({
+      identity: "production",
+      supabaseProjectRef: productionRef,
+    });
     expectUnsafe(
       {
         ...productionEnvironment,

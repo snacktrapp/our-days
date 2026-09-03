@@ -6,6 +6,7 @@ import type {
 } from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
+  hostedVercelClientRuntime,
   readOptionalSupabasePublicConfig,
   readSupabasePublicConfig,
 } from "@/lib/supabase/public-config";
@@ -332,6 +333,12 @@ export async function uploadVideoMoment(
   onStage({ state: "preparing" });
   const mimeType = inspectVideo(file, draft.durationMs);
   if (!readOptionalSupabasePublicConfig()) {
+    if (hostedVercelClientRuntime()) {
+      throw new VideoUploadError(
+        "Video upload needs the connected Our Days storage.",
+        false,
+      );
+    }
     return uploadLocalVideoMoment(file, draft, attempt, signal, onStage);
   }
   const createClient = dependencies.createClient ?? createOurDaysBrowserClient;

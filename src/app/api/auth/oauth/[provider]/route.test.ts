@@ -96,6 +96,30 @@ describe("OAuth start route", () => {
     );
   });
 
+  it("starts hosted Preview Google through Supabase even if resource mode was left detached", async () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "detached");
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+    );
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "sb_publishable_oauth_test",
+    );
+
+    const response = await GET(
+      new Request("https://journal.example.com/api/auth/oauth/google"),
+      { params: Promise.resolve({ provider: "google" }) },
+    );
+
+    expect(mocks.signInWithOAuth).toHaveBeenCalled();
+    expect(response.headers.get("location")).toBe(
+      "https://accounts.google.com/hosted",
+    );
+  });
+
   it("maps X to the Twitter Supabase provider", async () => {
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.signInWithOAuth.mockResolvedValueOnce({

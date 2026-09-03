@@ -1,3 +1,4 @@
+import { journalPersistenceIsConnected } from "../../../../config/our-days-environment";
 import { PrivateEntry } from "@/features/auth/private-entry";
 
 type SignInPageProps = Readonly<{
@@ -15,10 +16,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const { cleanup, link, oauth } = await searchParams;
   return (
     <PrivateEntry
-      connected={
-        process.env.OUR_DAYS_RESOURCE_MODE === "supabase" ||
-        process.env.OUR_DAYS_LOCAL_JOURNAL_MODE === "enabled"
-      }
+      connected={journalPersistenceIsConnected()}
       cleanupIncomplete={cleanup === "incomplete"}
       linkIssue={
         link === "invalid" || link === "unavailable" ? link : undefined

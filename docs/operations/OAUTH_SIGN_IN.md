@@ -10,14 +10,14 @@ This repository does not invent or ship provider credentials. The UI, start rout
 
 Set these on the web app (`.env.local` for the file-backed local journal, and the **existing** Vercel project `our-days` / `https://our-days-neon.vercel.app` for a hosted first-party callback). Do not create a new Vercel project.
 
-| Variable | Purpose |
-| --- | --- |
-| `OUR_DAYS_GOOGLE_CLIENT_ID` | Google OAuth 2.0 Web client ID |
-| `OUR_DAYS_GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 Web client secret |
-| `OUR_DAYS_X_CLIENT_ID` | X (Twitter) OAuth 2.0 client ID |
-| `OUR_DAYS_X_CLIENT_SECRET` | X (Twitter) OAuth 2.0 client secret |
-| `OUR_DAYS_OAUTH_STATE_SECRET` | Optional HMAC secret for the short-lived PKCE state cookie. Falls back to `OUR_DAYS_LOCAL_JOURNAL_SECRET`, then a local-only default. Set an explicit value anywhere the app is reachable. |
-| `NEXT_PUBLIC_SITE_URL` | Exact public origin. Redirect URIs are derived from this origin. |
+| Variable                        | Purpose                                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OUR_DAYS_GOOGLE_CLIENT_ID`     | Google OAuth 2.0 Web client ID                                                                                                                                                             |
+| `OUR_DAYS_GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 Web client secret                                                                                                                                                         |
+| `OUR_DAYS_X_CLIENT_ID`          | X (Twitter) OAuth 2.0 client ID                                                                                                                                                            |
+| `OUR_DAYS_X_CLIENT_SECRET`      | X (Twitter) OAuth 2.0 client secret                                                                                                                                                        |
+| `OUR_DAYS_OAUTH_STATE_SECRET`   | Optional HMAC secret for the short-lived PKCE state cookie. Falls back to `OUR_DAYS_LOCAL_JOURNAL_SECRET`, then a local-only default. Set an explicit value anywhere the app is reachable. |
+| `NEXT_PUBLIC_SITE_URL`          | Exact public origin. Redirect URIs are derived from this origin.                                                                                                                           |
 
 Pairs must be complete: a client ID without its secret (or the reverse) fails startup validation. Leaving all four provider values empty is valid; the buttons still render and return “That sign-in method is unavailable right now.”
 
@@ -74,8 +74,8 @@ When `OUR_DAYS_RESOURCE_MODE=supabase`, the Google and X buttons start `signInWi
 2. Enable **Google** and **Twitter**. Paste the same client ID and secret created above.
 3. Confirm Authentication → Providers / Settings still has **public signup disabled**.
 4. Authentication → URL configuration:
-   - Site URL: `NEXT_PUBLIC_SITE_URL`
-   - Redirect allow list: `{NEXT_PUBLIC_SITE_URL}/auth/callback`
+   - Site URL: Production origin `https://our-days-neon.vercel.app`
+   - Redirect allow list: Production `{origin}/auth/callback` **and** the Vercel Preview wildcard (`https://*-snacktrapps-projects.vercel.app/auth/callback` or the project’s Preview URL) so hosted Preview Google/X/email links return to that deployment
 5. The Next.js Google/X env vars are unused in this mode; Supabase holds the provider secrets. Keep public signup disabled so an uninvited Google/X identity cannot mint an Auth user.
 
 `/auth/callback` already refuses a session with no `circle_memberships` row (`/access-unavailable`). OAuth does not bypass that check.
