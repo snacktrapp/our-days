@@ -755,6 +755,8 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/upright/u);
   await expect(page.locator("html")).toHaveClass(/composer-scroll-locked/u);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
+  await expect(page.locator("body")).toHaveCSS("position", "fixed");
+  await expect(page.locator("body")).toHaveCSS("top", `-${backgroundScroll}px`);
   expect(await feedTop()).toBe(originTop);
 
   await page.getByRole("button", { name: /^Chapter,/u }).hover();

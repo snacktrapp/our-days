@@ -82,9 +82,13 @@ describe("overlay background scroll lock", () => {
   });
 
   it("pins the locked page with a nonceable scroll offset", () => {
-    const nonceHost = document.createElement("meta");
-    nonceHost.setAttribute("nonce", "test-nonce");
+    const nonceHost = document.createElement("script");
+    Object.defineProperty(nonceHost, "nonce", {
+      configurable: true,
+      get: () => "test-nonce",
+    });
     document.head.append(nonceHost);
+    expect(document.querySelector("[nonce]")).toBeNull();
     const scrollTo = vi.fn();
     Object.defineProperty(window, "scrollY", {
       configurable: true,
