@@ -38,6 +38,14 @@ const privateHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["sharp"],
+  outputFileTracingIncludes: {
+    "/api/photos/process": [
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/sharp-linux*/**/*",
+      "./node_modules/@img/sharp-libvips-linux*/**/*",
+    ],
+  },
   images: {
     qualities: [75],
     maximumRedirects: 0,

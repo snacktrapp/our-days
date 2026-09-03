@@ -20,7 +20,7 @@ const displayBucket = "our-days-display";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
-export const PHOTO_WORKER_VERSION = "2026-09-01-iphone-hdr-gain-map-v1";
+export const PHOTO_WORKER_VERSION = "2026-09-03-family-jpeg-mpf-v1";
 
 type WorkerClient = SupabaseClient<Database>;
 type ValidationLease =
