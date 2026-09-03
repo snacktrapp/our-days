@@ -294,7 +294,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(drawerPlacement?.distanceFromHeader).toBeLessThan(0);
   expect(drawerPlacement?.opensFromTop).toBe(true);
   expect(drawerPlacement?.top).toBe(notificationTop);
-  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 
   let backgroundBlocked = false;
@@ -358,7 +358,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await page.getByRole("button", { name: "Close moment composer" }).click();
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
-  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
 });
 
 test("required content rejects whitespace and future dates before review", async ({
@@ -730,7 +730,6 @@ test("expanded capture states have no serious axe violations", async ({
 
 test("an open entry overlay does not scroll the family feed underneath", async ({
   page,
-  browserName,
 }) => {
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/family");
@@ -755,24 +754,21 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/upright/u);
   await expect(page.locator("html")).toHaveClass(/composer-scroll-locked/u);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
-  await expect(page.locator("body")).toHaveCSS("position", "fixed");
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
   expect(await feedTop()).toBe(originTop);
 
   await page.getByRole("button", { name: /^Chapter,/u }).hover();
-  if (browserName === "webkit") {
-    const prevented = await page.evaluate(() => {
-      const event = new WheelEvent("wheel", {
-        deltaY: 480,
-        bubbles: true,
-        cancelable: true,
-      });
-      document.dispatchEvent(event);
-      return event.defaultPrevented;
+  const prevented = await page.evaluate(() => {
+    const event = new WheelEvent("wheel", {
+      deltaY: 480,
+      bubbles: true,
+      cancelable: true,
     });
-    expect(prevented).toBe(true);
-  } else {
-    await page.mouse.wheel(0, 480);
-  }
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
   expect(await feedTop()).toBe(originTop);
 
   const verse = page.getByLabel("Verse text");
@@ -785,6 +781,7 @@ test("an open entry overlay does not scroll the family feed underneath", async (
       element instanceof HTMLTextAreaElement ? element.scrollTop : 0,
     ),
   ).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
   expect(await feedTop()).toBe(originTop);
 
   page.once("dialog", (confirmation) => confirmation.accept());

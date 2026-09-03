@@ -1,6 +1,5 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dynamicCssStyleId } from "@/lib/page-csp-nonce";
 import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
@@ -31,7 +30,6 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
-    document.getElementById(dynamicCssStyleId)?.remove();
     vi.restoreAllMocks();
   });
 
@@ -81,11 +79,7 @@ describe("overlay background scroll lock", () => {
     expect(overlayBackgroundScrollShouldStop(map, "down")).toBe(false);
   });
 
-  it("pins the locked page with a nonceable scroll offset", () => {
-    const sheet = document.createElement("style");
-    sheet.id = dynamicCssStyleId;
-    sheet.setAttribute("nonce", "test-nonce");
-    document.head.append(sheet);
+  it("does not reset the page scroll while an overlay is open", () => {
     const scrollTo = vi.fn();
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -93,13 +87,8 @@ describe("overlay background scroll lock", () => {
     });
     window.scrollTo = scrollTo as typeof window.scrollTo;
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
-    expect(document.getElementById(dynamicCssStyleId)).toBe(sheet);
-    expect(sheet).toHaveAttribute("nonce", "test-nonce");
-    expect(sheet.textContent).toBe(":root{--composer-scroll-lock-top:-160px}");
     expect(scrollTo).not.toHaveBeenCalled();
     unmount();
-    expect(sheet.textContent).toBe("");
-    expect(sheet.parentNode).toBe(document.head);
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 

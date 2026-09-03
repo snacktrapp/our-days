@@ -1,10 +1,8 @@
 "use client";
 
 import { useLayoutEffect } from "react";
-import { deleteDynamicCssVar, setDynamicCssVar } from "@/lib/page-csp-nonce";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
-const lockTopVariable = "--composer-scroll-lock-top";
 
 const exemptOverlaySelector = "iframe, .composer-location-map";
 
@@ -42,14 +40,6 @@ export function overlayBackgroundScrollShouldStop(
   return false;
 }
 
-function writeLockSheet(doc: Document, topPx: number) {
-  setDynamicCssVar(doc, lockTopVariable, `${topPx}px`);
-}
-
-function clearLockSheet(doc: Document) {
-  deleteDynamicCssVar(doc, lockTopVariable);
-}
-
 export function useLockBackgroundScroll(active: boolean) {
   useLayoutEffect(() => {
     if (!active) return;
@@ -58,7 +48,6 @@ export function useLockBackgroundScroll(active: boolean) {
     const htmlWasLocked = html.classList.contains(backgroundScrollLockClass);
     const bodyWasLocked = body.classList.contains(backgroundScrollLockClass);
     const scrollY = window.scrollY;
-    writeLockSheet(document, -scrollY);
     html.classList.add(backgroundScrollLockClass);
     body.classList.add(backgroundScrollLockClass);
 
@@ -98,7 +87,6 @@ export function useLockBackgroundScroll(active: boolean) {
     return () => {
       if (!htmlWasLocked) html.classList.remove(backgroundScrollLockClass);
       if (!bodyWasLocked) body.classList.remove(backgroundScrollLockClass);
-      if (!htmlWasLocked && !bodyWasLocked) clearLockSheet(document);
       if (scrollY > 0) window.scrollTo(0, scrollY);
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);

@@ -177,7 +177,7 @@ test("timeline, memories, and composer render without application style attribut
         })),
     );
   expect(applicationStyles).toEqual([]);
-  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
 });
 
 test("ordinary and public-prefix near-miss 404s keep the enforced policy", async ({

@@ -27,17 +27,17 @@ describe("page CSP nonce", () => {
     sheet.setAttribute("nonce", "test-nonce");
     document.head.append(sheet);
 
-    setDynamicCssVar(document, "--composer-scroll-lock-top", "-160px");
+    setDynamicCssVar(document, "--pin", "-160px");
     expect(document.getElementById(dynamicCssStyleId)).toBe(sheet);
     expect(sheet).toHaveAttribute("nonce", "test-nonce");
-    expect(sheet.textContent).toBe(":root{--composer-scroll-lock-top:-160px}");
+    expect(sheet.textContent).toBe(":root{--pin:-160px}");
 
     setDynamicCssVar(document, "--bottom-nav-visual-inset", "0px");
     expect(sheet.textContent).toBe(
-      ":root{--composer-scroll-lock-top:-160px;--bottom-nav-visual-inset:0px}",
+      ":root{--pin:-160px;--bottom-nav-visual-inset:0px}",
     );
 
-    deleteDynamicCssVar(document, "--composer-scroll-lock-top");
+    deleteDynamicCssVar(document, "--pin");
     expect(sheet.textContent).toBe(":root{--bottom-nav-visual-inset:0px}");
     expect(sheet.parentNode).toBe(document.head);
   });
