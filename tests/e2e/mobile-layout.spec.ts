@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { expect, test } from "./test";
 
 const routes = [
@@ -17,6 +18,30 @@ const routes = [
   "/quality/video-feasibility",
   "/quality/photo-status",
 ];
+
+async function expectFrostedNavPill(pill: Locator) {
+  const frost = await pill.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const color = style.backgroundColor;
+    const alpha = color.startsWith("rgba(")
+      ? Number.parseFloat(color.slice(color.lastIndexOf(",") + 1, -1))
+      : color.startsWith("rgb(")
+        ? 1
+        : Number.NaN;
+    return {
+      alpha,
+      blur:
+        style.backdropFilter !== "none" && style.backdropFilter
+          ? style.backdropFilter
+          : style.getPropertyValue("-webkit-backdrop-filter"),
+      isolation: style.isolation,
+    };
+  });
+  expect(frost.alpha).toBeGreaterThanOrEqual(0.5);
+  expect(frost.alpha).toBeLessThan(1);
+  expect(frost.blur).toMatch(/blur\(/u);
+  expect(frost.isolation).not.toBe("isolate");
+}
 
 for (const route of routes) {
   test(`${route} reflows without horizontal overflow or undersized actions`, async ({
@@ -390,6 +415,7 @@ test("primary navigation floats as a compact rounded bar above the safe area", a
   const navigation = page.locator(".bottom-nav");
   await expect(navigation).toHaveCSS("position", "fixed");
   await expect(navigation).toHaveCSS("transform", "none");
+  await expectFrostedNavPill(navigation);
 
   const geometry = await navigation.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -438,6 +464,11 @@ test("top chrome floats as a compact rounded pill above the feed", async ({
   const header = page.locator(".topbar");
   await expect(header).toHaveCSS("position", "fixed");
   await expect(header).toHaveCSS("transform", "none");
+  await expectFrostedNavPill(header);
+  await expect(page.locator(".phone-stage")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
   await expect(header.locator(".nav-item")).toHaveCount(0);
   await expect(
     header.getByRole("button", { name: "Add moment" }),

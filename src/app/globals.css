@@ -30,7 +30,8 @@
   --bottom-nav-visual-inset: 0px;
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
-  --nav-pill-fill: rgba(7, 17, 13, 0.76);
+  --nav-pill-fill: rgba(7, 17, 13, 0.64);
+  --nav-pill-blur: 14px;
   --timeline-media-max-height: min(56dvh, 22.5rem);
 }
 
@@ -52,7 +53,7 @@
   --ochre: #9b6d24;
   --slate: #59677d;
   --moss: #58764e;
-  --nav-pill-fill: rgba(243, 238, 228, 0.76);
+  --nav-pill-fill: rgba(243, 238, 228, 0.7);
 }
 
 * {
@@ -386,14 +387,13 @@ button:focus-visible,
     calc(430px - 2 * var(--bottom-nav-inline-gap))
   );
   margin-inline: auto;
-  isolation: isolate;
   overflow: visible;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background: var(--nav-pill-fill);
+  background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 .family-mark,
 .quiet-button {
@@ -3945,13 +3945,12 @@ button:focus-visible,
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
   padding: 3px 8px;
-  isolation: isolate;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background: var(--nav-pill-fill);
+  background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 .nav-item {
   height: 54px;
@@ -4106,12 +4105,12 @@ button:focus-visible,
   height: 56px;
   min-height: 56px;
   padding: 3px 8px;
-  background: var(--nav-pill-fill);
+  background-color: var(--nav-pill-fill);
   border: 1px solid var(--hairline);
   border-radius: 18px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 
 .family-mark,
@@ -5373,7 +5372,7 @@ button:focus-visible,
 
 :root[data-theme="light"] .bottom-nav,
 :root[data-theme="light"] .topbar {
-  background: var(--nav-pill-fill);
+  background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
