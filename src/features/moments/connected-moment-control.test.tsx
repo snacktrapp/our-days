@@ -137,6 +137,7 @@ describe("ConnectedMomentControl", () => {
     const menu = screen.getByRole("group", { name: "Moment options" });
     expect(menu.tagName).toBe("DIV");
     expect(optionButtons[1].parentElement).toContainElement(menu);
+    expect(menu).toHaveClass("overlay-popover");
     expect(menu).not.toHaveClass("connected-moment-menu-portal");
     expect(menu).toHaveAttribute("data-placement", "below");
     expect(menu).not.toHaveAttribute("style");
@@ -157,10 +158,50 @@ describe("ConnectedMomentControl", () => {
 
     await user.click(trigger);
     expect(screen.queryByRole("group", { name: "Moment options" })).toBeNull();
+    expect(document.querySelector(".connected-moment-menu")).toHaveClass(
+      "is-closing",
+    );
 
     await user.click(trigger);
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("group", { name: "Moment options" })).toBeNull();
+  });
+
+  it("closes the compact options menu instantly when motion is reduced", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = userEvent.setup();
+      render(<ConnectedMomentControl moment={moment} actions={actions} />);
+      const trigger = screen.getByRole("button", { name: /^Moment options/u });
+      await user.click(trigger);
+      expect(screen.getByRole("group", { name: "Moment options" })).toHaveClass(
+        "overlay-popover",
+      );
+      await user.click(trigger);
+      expect(
+        screen.queryByRole("group", { name: "Moment options" }),
+      ).toBeNull();
+      expect(document.querySelector(".connected-moment-menu")).toBeNull();
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
   });
 
   it("flips the compact options menu above the trigger when the nav would cover it", async () => {

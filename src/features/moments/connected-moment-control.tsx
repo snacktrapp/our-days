@@ -215,11 +215,9 @@ function ChangeableMomentControl({
         </button>
         {menuOpen ? (
           <div
-            className={
-              closing
-                ? "connected-moment-menu is-closing"
-                : "connected-moment-menu"
-            }
+            className={`connected-moment-menu overlay-popover${
+              closing ? " is-closing" : ""
+            }`}
             id={`moment-actions-${moment.id}`}
             role="group"
             aria-label="Moment options"

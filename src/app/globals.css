@@ -6472,6 +6472,7 @@ button:focus-visible,
   background: #101d17;
   color: var(--ink);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
+  animation: none;
 }
 
 .composer-calendar-heading {
@@ -7016,4 +7017,11 @@ button:focus-visible,
   .quick-reaction-trigger {
     transform: none;
   }
+}
+
+/* Date / time / verse / place panels stay in the composer sheet. They scroll
+   into view and never use the compact overlay pop. */
+.composer-picker-panel,
+.composer-picker-panel.is-closing {
+  animation: none;
 }

@@ -60,6 +60,9 @@ describe("DateTimeFields", () => {
     expect(
       screen.getByRole("dialog", { name: "Choose moment date" }),
     ).toBeVisible();
+    expect(
+      screen.getByRole("dialog", { name: "Choose moment date" }),
+    ).not.toHaveClass("overlay-popover");
     expect(scroller.scrollTop).toBe(172);
   });
 

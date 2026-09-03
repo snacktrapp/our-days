@@ -146,11 +146,9 @@ export function NotificationCenter({
       {open ? (
         <section
           id={panelId}
-          className={
-            closing
-              ? "notification-panel header-drawer-surface is-closing"
-              : "notification-panel header-drawer-surface"
-          }
+          className={`notification-panel header-drawer-surface overlay-popover${
+            closing ? " is-closing" : ""
+          }`}
           aria-label="Notifications"
           aria-hidden={closing ? true : undefined}
           onAnimationEnd={onAnimationEnd}

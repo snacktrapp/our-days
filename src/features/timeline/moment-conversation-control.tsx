@@ -528,11 +528,9 @@ export function MomentConversationControl({
           {panel === "reactions" ? (
             <div
               id={`${panelId}-reactions`}
-              className={
-                reactionsClosing
-                  ? "inline-reaction-picker is-closing"
-                  : "inline-reaction-picker"
-              }
+              className={`inline-reaction-picker overlay-popover${
+                reactionsClosing ? " is-closing" : ""
+              }`}
               role="menu"
               aria-label="Choose a reaction"
               aria-hidden={reactionsClosing ? true : undefined}

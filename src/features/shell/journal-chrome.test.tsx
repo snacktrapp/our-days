@@ -112,6 +112,9 @@ describe("JournalChrome", () => {
     );
 
     fireEvent.keyDown(window, { key: "Escape" });
+    expect(container.querySelector(".title-switcher nav")).toHaveClass(
+      "is-closing",
+    );
     expect(
       screen.queryByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeNull();

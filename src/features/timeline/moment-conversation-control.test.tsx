@@ -326,6 +326,9 @@ describe("MomentConversationControl", () => {
       name: /Choose a reaction for photo/u,
     });
     await user.click(trigger);
+    expect(screen.getByRole("menu", { name: "Choose a reaction" })).toHaveClass(
+      "overlay-popover",
+    );
     expect(
       screen.getByRole("menu", { name: "Choose a reaction" }),
     ).toBeVisible();
