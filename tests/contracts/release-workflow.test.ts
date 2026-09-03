@@ -33,9 +33,11 @@ describe("staging and release workflow", () => {
     );
   });
 
-  it("keeps staging data isolated and requires an exact approved release", () => {
-    expect(runbook).toContain("Staging must never use the Production Supabase");
-    expect(runbook).toContain("synthetic staging family");
+  it("binds Vercel Preview to the attached Our Days Supabase and requires an exact approved release", () => {
+    expect(runbook).toContain(
+      "Vercel Preview for this repository uses the Our Days Supabase already attached",
+    );
+    expect(runbook).toContain("point Preview at LiftSync, Proof");
     expect(runbook).toContain("exact Git commit");
     expect(runbook).toContain("staged Production Vercel deployment");
     expect(runbook).toContain("Supabase branches consume paid compute");
