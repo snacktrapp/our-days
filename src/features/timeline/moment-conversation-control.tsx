@@ -127,7 +127,12 @@ export function MomentConversationControl({
     useState<MomentReactionId | null>(() =>
       currentReaction(model.conversation),
     );
+  const [reactionsClosing, setReactionsClosing] = useState(false);
   const reactionWriteGen = useRef(0);
+  const panelRef = useRef<InlinePanel>(null);
+  const reactionsClosingRef = useRef(false);
+  const reactionCloseTimerRef = useRef<number | null>(null);
+  panelRef.current = panel;
 
   const reactionOptions = useMemo(
     () =>
@@ -140,6 +145,60 @@ export function MomentConversationControl({
   });
   const kindLabel = momentKindLabel(model);
   const controlLabel = conciseLabel(model.text);
+
+  const clearReactionCloseTimer = useCallback(() => {
+    if (reactionCloseTimerRef.current == null) return;
+    window.clearTimeout(reactionCloseTimerRef.current);
+    reactionCloseTimerRef.current = null;
+  }, []);
+
+  const finishReactionPickerClose = useCallback(() => {
+    clearReactionCloseTimer();
+    reactionsClosingRef.current = false;
+    setReactionsClosing(false);
+    setPanel((current) => (current === "reactions" ? null : current));
+  }, [clearReactionCloseTimer]);
+
+  const cancelReactionPickerClose = useCallback(() => {
+    if (!reactionsClosingRef.current) return;
+    clearReactionCloseTimer();
+    reactionsClosingRef.current = false;
+    setReactionsClosing(false);
+  }, [clearReactionCloseTimer]);
+
+  const requestReactionPickerClose = useCallback(
+    (restoreFocus = false) => {
+      const restoreTriggerFocus = () => {
+        if (!restoreFocus) return;
+        window.requestAnimationFrame(() =>
+          reactionTriggerRef.current?.focus({ preventScroll: true }),
+        );
+      };
+      if (panelRef.current !== "reactions") {
+        restoreTriggerFocus();
+        return;
+      }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        finishReactionPickerClose();
+        restoreTriggerFocus();
+        return;
+      }
+      if (reactionsClosingRef.current) {
+        restoreTriggerFocus();
+        return;
+      }
+      reactionsClosingRef.current = true;
+      setReactionsClosing(true);
+      reactionCloseTimerRef.current = window.setTimeout(
+        finishReactionPickerClose,
+        140,
+      );
+      restoreTriggerFocus();
+    },
+    [finishReactionPickerClose],
+  );
+
+  useEffect(() => () => clearReactionCloseTimer(), [clearReactionCloseTimer]);
 
   useEffect(() => {
     if (panel !== "note") return;
@@ -156,15 +215,12 @@ export function MomentConversationControl({
         event.target instanceof Node &&
         !reactionControlRef.current?.contains(event.target)
       ) {
-        setPanel(null);
+        requestReactionPickerClose();
       }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setPanel(null);
-      window.requestAnimationFrame(() =>
-        reactionTriggerRef.current?.focus({ preventScroll: true }),
-      );
+      requestReactionPickerClose(true);
     };
     document.addEventListener("pointerdown", closeOnOutsidePress);
     window.addEventListener("keydown", closeOnEscape);
@@ -172,7 +228,7 @@ export function MomentConversationControl({
       document.removeEventListener("pointerdown", closeOnOutsidePress);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [panel]);
+  }, [panel, requestReactionPickerClose]);
 
   const applyLoadedConversation = useCallback(
     (next: MomentConversationViewModel, startedWriteGen: number) => {
@@ -226,16 +282,26 @@ export function MomentConversationControl({
 
   const togglePanel = async (nextPanel: Exclude<InlinePanel, null>) => {
     setError(null);
+    if (nextPanel === "reactions" && panel === "reactions") {
+      if (reactionsClosingRef.current) {
+        cancelReactionPickerClose();
+        return;
+      }
+      requestReactionPickerClose();
+      return;
+    }
     if (panel === nextPanel) {
       setPanel(null);
       return;
     }
+    cancelReactionPickerClose();
     setPanel(nextPanel);
     await loadConversation();
   };
 
   const openReactionPicker = () => {
     setError(null);
+    cancelReactionPickerClose();
     setPanel("reactions");
     void loadConversation();
   };
@@ -250,11 +316,8 @@ export function MomentConversationControl({
     setConversation((current) =>
       withCurrentMemberReaction(current, interaction.currentPerson, next),
     );
-    setPanel(null);
     setError(null);
-    window.requestAnimationFrame(() =>
-      reactionTriggerRef.current?.focus({ preventScroll: true }),
-    );
+    requestReactionPickerClose(true);
     if (!actions) {
       return;
     }
@@ -471,7 +534,7 @@ export function MomentConversationControl({
             ref={reactionTriggerRef}
             className="quick-reaction-trigger"
             type="button"
-            aria-expanded={panel === "reactions"}
+            aria-expanded={panel === "reactions" && !reactionsClosing}
             aria-haspopup="menu"
             aria-controls={`${panelId}-reactions`}
             aria-label={`Choose a reaction for ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
@@ -496,9 +559,19 @@ export function MomentConversationControl({
           {panel === "reactions" ? (
             <div
               id={`${panelId}-reactions`}
-              className="inline-reaction-picker"
+              className={
+                reactionsClosing
+                  ? "inline-reaction-picker is-closing"
+                  : "inline-reaction-picker"
+              }
               role="menu"
               aria-label="Choose a reaction"
+              aria-hidden={reactionsClosing ? true : undefined}
+              onAnimationEnd={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.animationName !== "reaction-picker-out") return;
+                finishReactionPickerClose();
+              }}
             >
               {interaction.reactionOptions.map((option) => {
                 const presentation = reactionPresentation[option.id];

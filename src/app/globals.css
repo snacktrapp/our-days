@@ -4591,6 +4591,32 @@ button:focus-visible,
   border-radius: 999px;
   background: #17261f;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  /* Heart is 44px, picker is shifted 7px left and 7px above it. */
+  transform-origin: 29px calc(100% + 29px);
+}
+
+@keyframes reaction-picker-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes reaction-picker-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
 }
 
 .quick-reaction-control .inline-reaction-picker button {
@@ -6898,6 +6924,18 @@ button:focus-visible,
   .nav-symbol-pending {
     animation: nav-pending-pulse 900ms ease-in-out infinite;
   }
+
+  .quick-reaction-control .inline-reaction-picker {
+    animation: reaction-picker-in 180ms ease-out backwards;
+  }
+
+  .quick-reaction-control .inline-reaction-picker.is-closing {
+    animation: reaction-picker-out 120ms ease-in forwards;
+  }
+
+  .quick-reaction-trigger:active {
+    transform: translateY(1px);
+  }
 }
 
 @keyframes nav-pending-pulse {
@@ -6924,5 +6962,14 @@ button:focus-visible,
 
   .nav-symbol-pending {
     animation: none;
+  }
+
+  .quick-reaction-control .inline-reaction-picker,
+  .quick-reaction-control .inline-reaction-picker.is-closing {
+    animation: none;
+  }
+
+  .quick-reaction-trigger {
+    transform: none;
   }
 }

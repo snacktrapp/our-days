@@ -34,6 +34,30 @@ test("family activity is visible inline and reactions open as a picker", async (
   const picker = card.getByRole("menu", { name: "Choose a reaction" });
   await expect(picker).toBeVisible();
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(picker).toHaveCSS("position", "absolute");
+  const pickerBox = await picker.boundingBox();
+  const triggerBox = await trigger.boundingBox();
+  expect(pickerBox).toBeTruthy();
+  expect(triggerBox).toBeTruthy();
+  expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(
+    triggerBox!.y + 2,
+  );
+  expect(pickerBox!.height).toBeLessThan(120);
+  const motion = await picker.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const originY = Number.parseFloat(
+      style.transformOrigin.split(" ")[1] ?? "",
+    );
+    return {
+      animationName: style.animationName,
+      animationDuration: style.animationDuration,
+      originY,
+      height: element.getBoundingClientRect().height,
+    };
+  });
+  expect(motion.animationName).toContain("reaction-picker-in");
+  expect(Number.parseFloat(motion.animationDuration)).toBeCloseTo(0.18, 2);
+  expect(motion.originY).toBeGreaterThan(motion.height);
   await expect(picker.getByRole("menuitemradio")).toHaveCount(3);
   await picker.getByRole("menuitemradio", { name: "Laugh" }).click();
   await expect(picker).toBeHidden();
@@ -42,6 +66,24 @@ test("family activity is visible inline and reactions open as a picker", async (
   await trigger.click();
   await picker.getByRole("menuitemradio", { name: "Heart" }).click();
   await expect(trigger).toHaveText("❤️");
+});
+
+test("reduced motion opens the heart picker without scale or fade", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const trigger = card.getByRole("button", {
+    name: /Choose a reaction for photo/u,
+  });
+  await trigger.click();
+  const picker = card.getByRole("menu", { name: "Choose a reaction" });
+  await expect(picker).toBeVisible();
+  await expect(picker).toHaveCSS("position", "absolute");
+  await expect(picker).toHaveCSS("animation-name", "none");
+  await picker.getByRole("menuitemradio", { name: "Laugh" }).click();
+  await expect(picker).toBeHidden();
 });
 
 test("inline note drafts save safely and remain reversible", async ({

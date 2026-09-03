@@ -319,6 +319,65 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("✨");
   });
 
+  it("hides the reaction menu as soon as the picker starts closing", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    const trigger = screen.getByRole("button", {
+      name: /Choose a reaction for photo/u,
+    });
+    await user.click(trigger);
+    expect(
+      screen.getByRole("menu", { name: "Choose a reaction" }),
+    ).toBeVisible();
+
+    await user.click(trigger);
+
+    expect(
+      screen.queryByRole("menu", { name: "Choose a reaction" }),
+    ).toBeNull();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".inline-reaction-picker")).toHaveClass(
+      "is-closing",
+    );
+  });
+
+  it("closes the reaction picker immediately when motion is reduced", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = userEvent.setup();
+      renderControl();
+      const trigger = screen.getByRole("button", {
+        name: /Choose a reaction for photo/u,
+      });
+      await user.click(trigger);
+      await user.click(trigger);
+
+      expect(document.querySelector(".inline-reaction-picker")).toBeNull();
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
+  });
+
   it("closes the picker and restores the prior response when saving fails", async () => {
     const actions = connectedActions();
     actions.setReaction.mockResolvedValue({
