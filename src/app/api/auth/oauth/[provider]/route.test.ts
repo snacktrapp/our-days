@@ -104,7 +104,9 @@ describe("OAuth start route", () => {
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
 
     const response = await GET(
-      new Request("https://our-days-git-preview.vercel.app/api/auth/oauth/google"),
+      new Request(
+        "https://our-days-git-preview.vercel.app/api/auth/oauth/google",
+      ),
       { params: Promise.resolve({ provider: "google" }) },
     );
 

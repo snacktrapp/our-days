@@ -122,7 +122,8 @@ describe("passwordless email sign-in actions", () => {
     expect(mocks.signInWithOtp).toHaveBeenCalledWith({
       email: "family@example.com",
       options: {
-        emailRedirectTo: "https://our-days-git-preview.vercel.app/auth/callback",
+        emailRedirectTo:
+          "https://our-days-git-preview.vercel.app/auth/callback",
         shouldCreateUser: false,
       },
     });
