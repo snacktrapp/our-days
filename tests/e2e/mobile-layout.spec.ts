@@ -370,29 +370,52 @@ test("deep memory actions can scroll above the fixed navigation", async ({
   }
 });
 
-test("primary navigation stays compact above the device safe area", async ({
+test("primary navigation floats as a compact rounded bar above the safe area", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family");
-  const geometry = await page.locator(".bottom-nav").evaluate((navigation) => {
-    const style = window.getComputedStyle(navigation);
+  const navigation = page.locator(".bottom-nav");
+  await expect(navigation).toHaveCSS("position", "fixed");
+  await expect(navigation).toHaveCSS("transform", "none");
+
+  const geometry = await navigation.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const stage = document
+      .querySelector(".phone-stage")!
+      .getBoundingClientRect();
+    const below = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      Math.min(window.innerHeight - 1, rect.bottom + 4),
+    );
+    const beside = document.elementFromPoint(
+      Math.max(1, rect.left - 4),
+      rect.top + rect.height / 2,
+    );
     return {
-      height: navigation.getBoundingClientRect().height,
-      paddingBottom: Number.parseFloat(style.paddingBottom),
+      belowIsNav: Boolean(below?.closest(".bottom-nav")),
+      besideIsNav: Boolean(beside?.closest(".bottom-nav")),
+      bottom: style.bottom,
+      bottomGap: window.innerHeight - rect.bottom,
+      height: rect.height,
+      leftGap: rect.left - stage.left,
+      radius: Number.parseFloat(style.borderRadius),
+      rightGap: stage.right - rect.right,
+      stageWidth: stage.width,
+      width: rect.width,
     };
   });
 
-  expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
-  await expect(page.locator(".bottom-nav")).toHaveCSS("transform", "none");
-  const rest = await page.locator(".bottom-nav").evaluate((navigation) => {
-    const rect = navigation.getBoundingClientRect();
-    return {
-      bottom: window.getComputedStyle(navigation).bottom,
-      bottomGap: window.innerHeight - rect.bottom,
-    };
-  });
-  expect(rest.bottom).toBe("0px");
-  expect(Math.abs(rest.bottomGap)).toBeLessThanOrEqual(2);
+  expect(geometry.height).toBeLessThanOrEqual(58);
+  expect(geometry.radius).toBeGreaterThanOrEqual(12);
+  expect(geometry.leftGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.rightGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.bottomGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.width).toBeLessThan(geometry.stageWidth);
+  expect(geometry.belowIsNav).toBe(false);
+  expect(geometry.besideIsNav).toBe(false);
+  expect(geometry.bottom).not.toBe("0px");
 });
 
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
@@ -541,8 +564,8 @@ test("real route transitions preserve the nav through every loading frame", asyn
       Math.min(...samples.map(({ bottomGap }) => bottomGap)),
   ).toBeLessThanOrEqual(1);
   expect(
-    Math.max(...samples.map(({ bottomGap }) => Math.abs(bottomGap))),
-  ).toBeLessThanOrEqual(2);
+    Math.min(...samples.map(({ bottomGap }) => bottomGap)),
+  ).toBeGreaterThanOrEqual(8);
   expect(
     await navigationNode!.evaluate(
       (element) =>

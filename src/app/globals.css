@@ -24,6 +24,8 @@
   --header-drawer-top: calc(63px + env(safe-area-inset-top));
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
+  --bottom-nav-float-gap: 10px;
+  --bottom-nav-inline-gap: 12px;
 }
 
 :root[data-theme="dark"] {
@@ -56,7 +58,9 @@ html {
   overflow-x: clip;
   overscroll-behavior-x: none;
   background: #07110d;
-  scroll-padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
 }
 body {
   width: 100%;
@@ -350,7 +354,9 @@ button:focus-visible,
   position: relative;
   overflow: hidden;
   overflow-x: clip;
-  padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
   background:
     linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0)),
     var(--paper);
@@ -3809,21 +3815,26 @@ button:focus-visible,
 }
 
 .bottom-nav {
-  height: calc(56px + env(safe-area-inset-bottom));
+  height: 56px;
   position: fixed;
   z-index: 100;
-  bottom: 0;
+  bottom: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
-  width: min(100%, 430px);
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
   margin-inline: auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;
-  padding: 3px 12px max(2px, env(safe-area-inset-bottom));
+  align-items: center;
+  padding: 3px 8px;
   isolation: isolate;
-  border-top: 1px solid var(--hairline);
-  background: rgba(7, 17, 13, 0.96);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: rgba(7, 17, 13, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(18px);
 }
 .nav-item {
@@ -5218,7 +5229,8 @@ button:focus-visible,
 }
 
 :root[data-theme="light"] .bottom-nav {
-  background: rgba(243, 238, 228, 0.96);
+  background: rgba(243, 238, 228, 0.94);
+  box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
 :root[data-theme="light"] .nav-item {
