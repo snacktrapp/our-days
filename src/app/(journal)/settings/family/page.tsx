@@ -1,5 +1,9 @@
 import { FamilySettingsPanel } from "@/features/family-settings/family-settings-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  AccountPanelInterrupted,
+  JournalRefreshInterrupted,
+} from "@/features/shell/journal-interrupted";
 import { getFamilySettingsFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import {
@@ -31,10 +35,34 @@ export default async function FamilySettingsPage() {
     );
   }
 
-  const [context, familyAccess] = await Promise.all([
-    loadConnectedJournalContext(access),
-    loadConnectedFamilyAccess(access),
-  ]);
+  let context;
+  try {
+    context = await loadConnectedJournalContext(access);
+  } catch {
+    return <JournalRefreshInterrupted />;
+  }
+
+  let familyAccess;
+  try {
+    familyAccess = await loadConnectedFamilyAccess(access);
+  } catch {
+    return (
+      <JournalChrome
+        model={{
+          ...context.chrome,
+          title: "Account",
+          settingsHref: "/settings/family",
+        }}
+        section="settings"
+        createMomentAction={createFamilyMomentAction}
+      >
+        <AccountPanelInterrupted>
+          <AccountTools />
+        </AccountPanelInterrupted>
+      </JournalChrome>
+    );
+  }
+
   const model = buildConnectedFamilySettingsModel(
     access,
     context,

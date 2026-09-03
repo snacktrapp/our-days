@@ -34,6 +34,40 @@ function isUnavailableFamilySession(error: unknown) {
   );
 }
 
+function isTransientFamilySessionError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    code?: unknown;
+    message?: unknown;
+    status?: unknown;
+  };
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message =
+    typeof candidate.message === "string" ? candidate.message : "";
+  return (
+    code === "PGRST301" ||
+    code === "08000" ||
+    code === "08003" ||
+    code === "08006" ||
+    code === "57014" ||
+    candidate.status === 503 ||
+    /jwt expired|fetch failed|failed to fetch|network|timeout/iu.test(message)
+  );
+}
+
+async function readActiveMemberships(
+  supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
+  userId: string,
+) {
+  return supabase
+    .from("circle_memberships")
+    .select("id, circle_id, person_id, role")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("joined_at", { ascending: true })
+    .limit(2);
+}
+
 async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
   await connection();
 
@@ -49,18 +83,27 @@ async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
   }
 
   const supabase = await createOurDaysServerClient();
-  const { data: claimsData, error: claimsError } =
-    await supabase.auth.getClaims();
+  let claimsData;
+  let claimsError;
+  try {
+    ({ data: claimsData, error: claimsError } =
+      await supabase.auth.getClaims());
+  } catch (error) {
+    if (!isTransientFamilySessionError(error)) throw error;
+    try {
+      ({ data: claimsData, error: claimsError } =
+        await supabase.auth.getClaims());
+    } catch {
+      return { mode: "anonymous" };
+    }
+  }
   const userId = claimsData?.claims?.sub;
   if (claimsError || typeof userId !== "string") return { mode: "anonymous" };
 
-  const { data, error } = await supabase
-    .from("circle_memberships")
-    .select("id, circle_id, person_id, role")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("joined_at", { ascending: true })
-    .limit(2);
+  let { data, error } = await readActiveMemberships(supabase, userId);
+  if (error && isTransientFamilySessionError(error)) {
+    ({ data, error } = await readActiveMemberships(supabase, userId));
+  }
 
   if (error) {
     if (isUnavailableFamilySession(error)) return { mode: "anonymous" };

@@ -217,13 +217,14 @@ test("an unhandled route error uses the CSP-compatible global boundary", async (
   expect(response?.headers()["content-security-policy"]).toContain(
     "style-src-attr 'none'",
   );
+  await expect(page.getByRole("heading", { name: "Our Days" })).toBeVisible();
+  await expect(page.getByText("Something interrupted the story")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "We couldn’t open Our Days." }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: "This page couldn’t load" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   const applicationStyles = await page.locator("[style]").count();
   expect(applicationStyles).toBe(0);
-  await expect(page.locator("body")).toHaveCSS("display", "grid");
 
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -242,7 +243,8 @@ test("an unhandled route error uses the CSP-compatible global boundary", async (
   await page.keyboard.press("Tab");
   await expect(retry).toBeFocused();
   await retry.click();
+  await expect(page.getByRole("heading", { name: "Our Days" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "We couldn’t open Our Days." }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: "This page couldn’t load" }),
+  ).toHaveCount(0);
 });

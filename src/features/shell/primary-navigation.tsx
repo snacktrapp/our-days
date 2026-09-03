@@ -11,13 +11,14 @@ type PrimarySection = Extract<
   "timeline" | "people" | "memories" | "settings"
 >;
 
-function sectionFromPathname(pathname: string): PrimarySection | null {
-  if (pathname === "/family" || pathname.startsWith("/journal")) {
+function sectionFromPathname(pathname: string | null): PrimarySection | null {
+  const path = pathname ?? "";
+  if (path === "/family" || path.startsWith("/journal")) {
     return "timeline";
   }
-  if (pathname.startsWith("/people")) return "people";
-  if (pathname.startsWith("/memories")) return "memories";
-  if (pathname.startsWith("/settings")) return "settings";
+  if (path.startsWith("/people")) return "people";
+  if (path.startsWith("/memories")) return "memories";
+  if (path.startsWith("/settings")) return "settings";
   return null;
 }
 
@@ -80,7 +81,7 @@ export function PrimaryNavigation({
   memoriesHref?: string | null;
   settingsHref?: string | null;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;

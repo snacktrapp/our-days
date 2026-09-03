@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
+
 export function JournalInterrupted({
   retry,
   reset,
@@ -45,5 +48,36 @@ export function JournalInterrupted({
         </section>
       </section>
     </main>
+  );
+}
+
+export function JournalRefreshInterrupted() {
+  const router = useRouter();
+  return <JournalInterrupted retry={() => router.refresh()} />;
+}
+
+export function AccountPanelInterrupted({
+  children,
+}: Readonly<{ children?: ReactNode }>) {
+  const router = useRouter();
+
+  return (
+    <section className="family-settings-panel">
+      <div className="timeline-empty-state" role="alert">
+        <strong>Something interrupted the story</strong>
+        <span>We couldn’t open Account just now.</span>
+        <button
+          className="retry-button"
+          type="button"
+          onClick={() => router.refresh()}
+        >
+          Try again
+        </button>
+        <a className="journal-error-back" href="/family">
+          Back to Family
+        </a>
+      </div>
+      {children}
+    </section>
   );
 }

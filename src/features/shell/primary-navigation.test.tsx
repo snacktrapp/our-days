@@ -41,6 +41,15 @@ describe("PrimaryNavigation", () => {
     );
   });
 
+  it("keeps the tab bar from crashing while the route pathname is still warming", () => {
+    navigation.pathname = null as unknown as string;
+    render(<PrimaryNavigation section="timeline" />);
+    expect(screen.getByRole("link", { name: "Family" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("selects a destination immediately while navigation is pending", async () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);

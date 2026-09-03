@@ -41,11 +41,11 @@ type FamilyAccessData = Readonly<{
 
 function invitationStatus(
   value: string,
-): "queued" | "provisioned" | "delivered" {
+): "queued" | "provisioned" | "delivered" | null {
   if (value === "queued" || value === "provisioned" || value === "delivered") {
     return value;
   }
-  throw new Error("Invitation status is unavailable");
+  return null;
 }
 
 function invitationStatusLabel(state: "queued" | "provisioned" | "delivered") {
@@ -59,12 +59,14 @@ function initialFor(name: string) {
 }
 
 function invitationDateLabel(value: string, timeZone: string, prefix: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return prefix;
   return `${prefix} ${new Intl.DateTimeFormat("en-US", {
     timeZone,
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value))}`;
+  }).format(date)}`;
 }
 
 export async function loadConnectedFamilyAccess(
@@ -128,13 +130,19 @@ export async function loadConnectedFamilyAccess(
       managedPersonId: guardian.managed_person_id,
       guardianMembershipId: guardian.guardian_membership_id,
     })),
-    pendingInvitations: (pendingResult.data ?? []).map((invitation) => ({
-      emailRequestId: invitation.email_request_id,
-      displayName: invitation.invited_display_name,
-      state: invitationStatus(invitation.state),
-      createdAt: invitation.requested_at,
-      expiresAt: invitation.expires_at,
-    })),
+    pendingInvitations: (pendingResult.data ?? []).flatMap((invitation) => {
+      const state = invitationStatus(invitation.state);
+      if (!state) return [];
+      return [
+        {
+          emailRequestId: invitation.email_request_id,
+          displayName: invitation.invited_display_name,
+          state,
+          createdAt: invitation.requested_at,
+          expiresAt: invitation.expires_at,
+        },
+      ];
+    }),
   };
 }
 

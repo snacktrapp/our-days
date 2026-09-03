@@ -10,6 +10,7 @@ import {
   useTransition,
 } from "react";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
+import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
@@ -60,10 +61,11 @@ export function FamilySettingsPanel({
       </PreviewFamilySettingsPanel>
     );
   }
-  if (!actions)
-    throw new Error("Connected family settings actions are required");
-  if (model.invitationDelivery === "enabled" && !actions.requestInvitation) {
-    throw new Error("Connected invitation delivery action is required");
+  if (
+    !actions ||
+    (model.invitationDelivery === "enabled" && !actions.requestInvitation)
+  ) {
+    return <AccountPanelInterrupted>{children}</AccountPanelInterrupted>;
   }
   return (
     <ConnectedFamilySettingsPanel model={model} actions={actions}>

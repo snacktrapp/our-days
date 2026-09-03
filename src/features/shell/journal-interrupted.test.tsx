@@ -1,8 +1,21 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { JournalInterrupted } from "./journal-interrupted";
+import {
+  AccountPanelInterrupted,
+  JournalInterrupted,
+  JournalRefreshInterrupted,
+} from "./journal-interrupted";
 
-afterEach(cleanup);
+const refresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
+
+afterEach(() => {
+  cleanup();
+  refresh.mockClear();
+});
 
 describe("JournalInterrupted", () => {
   it("retries the journal without showing Next’s default error page", () => {
@@ -27,5 +40,30 @@ describe("JournalInterrupted", () => {
     render(<JournalInterrupted reset={reset} />);
     screen.getByRole("button", { name: "Try again" }).click();
     expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes Account in place instead of showing Next’s crash page", () => {
+    render(
+      <AccountPanelInterrupted>
+        <div data-testid="journal-tools">tools</div>
+      </AccountPanelInterrupted>,
+    );
+
+    expect(
+      screen.getByText("We couldn’t open Account just now."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "This page couldn’t load" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("journal-tools")).toBeVisible();
+
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("retries a warming journal session from the route boundary", () => {
+    render(<JournalRefreshInterrupted />);
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });

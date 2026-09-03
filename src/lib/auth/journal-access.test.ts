@@ -163,6 +163,34 @@ describe("journal access boundary", () => {
     );
   });
 
+  it("retries a warming family session once before failing closed", async () => {
+    mocks.limit
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST301", message: "JWT expired" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            circle_id: "circle-a",
+            id: "membership-a",
+            person_id: "person-a",
+            role: "organizer",
+          },
+        ],
+        error: null,
+      });
+
+    await expect(requireJournalAccess()).resolves.toEqual({
+      mode: "authenticated",
+      circleId: "circle-a",
+      membershipId: "membership-a",
+      personId: "person-a",
+      role: "organizer",
+    });
+    expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
   it("fails a server-revoked Auth session closed at the sign-in boundary", async () => {
     mocks.limit.mockResolvedValueOnce({
       data: null,

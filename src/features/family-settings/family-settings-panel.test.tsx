@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilySettingsPanel } from "./family-settings-panel";
 
+const refresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
+
 const model = {
   mode: "preview",
   intro: "A small, invitation-only circle.",
@@ -118,6 +124,7 @@ const connectedMemberModel = {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  refresh.mockClear();
 });
 
 describe("FamilySettingsPanel", () => {
@@ -749,5 +756,26 @@ describe("FamilySettingsPanel", () => {
       screen.getByText(/An organizer can withdraw pending invitations/u),
     ).toBeVisible();
     expect(screen.queryByText("Grandma")).toBeNull();
+  });
+
+  it("retries Account instead of crashing when connected actions are still warming up", () => {
+    expect(() =>
+      render(
+        <FamilySettingsPanel model={connectedInvitationModel}>
+          <div data-testid="journal-tools">tools</div>
+        </FamilySettingsPanel>,
+      ),
+    ).not.toThrow();
+
+    expect(
+      screen.getByText("We couldn’t open Account just now."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "This page couldn’t load" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("journal-tools")).toBeVisible();
+
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });

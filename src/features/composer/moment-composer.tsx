@@ -267,10 +267,12 @@ export function MomentComposer({
   const photoUploadAbortRef = useRef<AbortController | null>(null);
   const uploadInFlightRef = useRef(false);
 
+  const journalPeople = model.journalPeople ?? [];
+  const taggablePeople = model.taggablePeople ?? [];
   const journalPerson =
-    model.journalPeople.find((person) => person.id === journalPersonId) ??
-    model.journalPeople[0];
-  const taggedPeople = model.taggablePeople.filter((person) =>
+    journalPeople.find((person) => person.id === journalPersonId) ??
+    journalPeople[0];
+  const taggedPeople = taggablePeople.filter((person) =>
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
@@ -548,7 +550,7 @@ export function MomentComposer({
   };
 
   const chooseJournalPerson = (personId: string) => {
-    if (!model.journalPeople.some((person) => person.id === personId)) return;
+    if (!journalPeople.some((person) => person.id === personId)) return;
     setJournalPersonId(personId);
     setTaggedPersonIds((current) =>
       current.filter((taggedPersonId) => taggedPersonId !== personId),
@@ -1380,7 +1382,7 @@ export function MomentComposer({
                   <div id="composer-optional-fields">
                     {editDraft ? null : (
                       <JournalPickerField
-                        options={model.journalPeople}
+                        options={journalPeople}
                         value={journalPersonId}
                         onChange={chooseJournalPerson}
                       />
@@ -1388,7 +1390,7 @@ export function MomentComposer({
                     <fieldset className="people-tags">
                       <legend>Who else was part of this?</legend>
                       <div>
-                        {model.taggablePeople
+                        {taggablePeople
                           .filter(
                             (person) =>
                               !connectedExperience ||

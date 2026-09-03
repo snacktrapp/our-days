@@ -332,6 +332,41 @@ describe("connected family settings data", () => {
     );
   });
 
+  it("skips an unrecognized invitation state instead of crashing Account", async () => {
+    connectedClient({
+      pending: [
+        {
+          email_request_id: "90000000-0000-4000-8000-000000000001",
+          invited_display_name: "Grandparent",
+          state: "delivered",
+          requested_at: "2026-08-30T06:30:00.000Z",
+          expires_at: "2026-09-01T06:30:00.000Z",
+        },
+        {
+          email_request_id: "90000000-0000-4000-8000-000000000002",
+          invited_display_name: "Neighbor",
+          state: "unknown-worker-state",
+          requested_at: "2026-08-30T06:30:00.000Z",
+          expires_at: "2026-09-01T06:30:00.000Z",
+        },
+      ],
+    });
+
+    await expect(loadConnectedFamilyAccess(organizerAccess)).resolves.toEqual(
+      expect.objectContaining({
+        pendingInvitations: [
+          {
+            emailRequestId: "90000000-0000-4000-8000-000000000001",
+            displayName: "Grandparent",
+            state: "delivered",
+            createdAt: "2026-08-30T06:30:00.000Z",
+            expiresAt: "2026-09-01T06:30:00.000Z",
+          },
+        ],
+      }),
+    );
+  });
+
   it("does not turn a guardian-query failure into an empty assignment list", async () => {
     connectedClient({ guardiansError: new Error("guardian list unavailable") });
 

@@ -10,6 +10,7 @@ test("route-based journal navigation preserves the approved views", async ({
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
   await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
@@ -38,6 +39,7 @@ test("route-based journal navigation preserves the approved views", async ({
   ).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
   await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
@@ -257,6 +259,7 @@ test("the family feed scrolls beneath the sticky title selector", async ({
   await expect(moment).toBeVisible();
 
   await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>(".phone-stage");
     const topbar = document.querySelector<HTMLElement>(".topbar");
     const firstMoment =
       document.querySelector<HTMLElement>("[data-moment-kind]");
@@ -264,7 +267,12 @@ test("the family feed scrolls beneath the sticky title selector", async ({
 
     const headerRect = topbar.getBoundingClientRect();
     const momentRect = firstMoment.getBoundingClientRect();
-    window.scrollBy(0, momentRect.top - headerRect.bottom + 24);
+    const delta = momentRect.top - headerRect.bottom + 24;
+    if (stage && stage.scrollHeight > stage.clientHeight + 1) {
+      stage.scrollTop += delta;
+      return;
+    }
+    window.scrollBy(0, delta);
   });
 
   await expect
