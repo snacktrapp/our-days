@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ComposerPickerPanel } from "./composer-picker-panel";
 
 type DateTimeFieldsProps = Readonly<{
   date: string;
@@ -189,7 +190,7 @@ export function DateTimeFields({
       </div>
 
       {openPicker === "date" ? (
-        <section
+        <ComposerPickerPanel
           className="composer-picker-panel composer-calendar-panel"
           role="dialog"
           aria-label="Choose moment date"
@@ -259,11 +260,11 @@ export function DateTimeFields({
           >
             Today
           </button>
-        </section>
+        </ComposerPickerPanel>
       ) : null}
 
       {openPicker === "time" ? (
-        <section
+        <ComposerPickerPanel
           className="composer-picker-panel composer-time-panel"
           role="dialog"
           aria-label="Choose optional time"
@@ -349,7 +350,7 @@ export function DateTimeFields({
               Set time
             </button>
           </div>
-        </section>
+        </ComposerPickerPanel>
       ) : null}
     </div>
   );

@@ -13,6 +13,7 @@ import {
   searchMapTilerPlaces,
   type GeocodedPlace,
 } from "./maptiler";
+import { ComposerPickerPanel } from "./composer-picker-panel";
 import {
   emptyPlaceSelection,
   type PlaceSelection,
@@ -247,7 +248,7 @@ export function LocationFields({
       </div>
 
       {panelOpen ? (
-        <section
+        <ComposerPickerPanel
           className="composer-picker-panel composer-location-panel"
           role="dialog"
           aria-label="Choose a place"
@@ -340,7 +341,7 @@ export function LocationFields({
               Clear place
             </button>
           ) : null}
-        </section>
+        </ComposerPickerPanel>
       ) : null}
     </div>
   );

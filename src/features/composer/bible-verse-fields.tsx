@@ -13,6 +13,7 @@ import {
   formatBibleVerseReference,
   versesInChapter,
 } from "./bible-verse-catalog";
+import { ComposerPickerPanel } from "./composer-picker-panel";
 
 // Composer spec: Bible verse stays its own † mode on the entry tab. Book,
 // chapter, starting verse, and ending verse use the same closed-row custom
@@ -277,7 +278,7 @@ export function BibleVerseFields({
       </div>
 
       {openPicker === "book" ? (
-        <section
+        <ComposerPickerPanel
           className="composer-picker-panel"
           role="dialog"
           aria-label="Choose book"
@@ -309,7 +310,7 @@ export function BibleVerseFields({
               );
             })}
           </div>
-        </section>
+        </ComposerPickerPanel>
       ) : null}
 
       {openPicker === "chapter" ? (
@@ -398,7 +399,7 @@ function NumberPickerPanel({
   onSelect: (value: number) => void;
 }>) {
   return (
-    <section
+    <ComposerPickerPanel
       className="composer-picker-panel composer-calendar-panel"
       role="dialog"
       aria-label={label}
@@ -416,6 +417,6 @@ function NumberPickerPanel({
           </button>
         ))}
       </div>
-    </section>
+    </ComposerPickerPanel>
   );
 }
