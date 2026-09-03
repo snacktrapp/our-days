@@ -164,6 +164,33 @@ describe("destinationBox", () => {
       height: 763,
     });
   });
+
+  it("uses the smaller of innerHeight and visualViewport so Safari chrome is not ignored", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(390);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(844);
+    Object.defineProperty(document.documentElement, "clientHeight", {
+      configurable: true,
+      value: 844,
+    });
+    vi.stubGlobal("visualViewport", {
+      width: 390,
+      height: 720,
+      offsetLeft: 0,
+      offsetTop: 0,
+    });
+    setSafeAreaInsets({ top: 47, bottom: 34 });
+    const viewport = visiblePhotoViewport();
+    expect(viewport.height).toBe(720 - 47 - 34);
+    expect(viewport.top).toBe(47);
+    const dest = destinationBox(1080, 2400, viewport);
+    expect(dest.top).toBeGreaterThanOrEqual(viewport.top);
+    expect(dest.top + dest.height).toBeLessThanOrEqual(
+      viewport.top + viewport.height,
+    );
+    expect(dest.top).toBeCloseTo(
+      viewport.top + (viewport.height - dest.height) / 2,
+    );
+  });
 });
 
 describe("photo lightbox", () => {

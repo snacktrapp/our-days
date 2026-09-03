@@ -84,28 +84,96 @@ function boxFromRect(rect: DOMRect | Box): Box {
   };
 }
 
-function readCssPx(name: string): number {
-  if (typeof document === "undefined") return 0;
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  const n = Number.parseFloat(raw);
+function parsePx(value: string): number {
+  const n = Number.parseFloat(value);
   return Number.isFinite(n) ? n : 0;
 }
 
-export function visiblePhotoViewport(): Box {
-  const visual = typeof window !== "undefined" ? window.visualViewport : null;
-  const width = visual?.width ?? window.innerWidth;
-  const height = visual?.height ?? window.innerHeight;
-  const insetLeft = readCssPx("--safe-area-inset-left");
-  const insetRight = readCssPx("--safe-area-inset-right");
-  const insetTop = readCssPx("--safe-area-inset-top");
-  const insetBottom = readCssPx("--safe-area-inset-bottom");
+function readCssPx(name: string): number {
+  if (typeof document === "undefined") return 0;
+  return parsePx(
+    getComputedStyle(document.documentElement).getPropertyValue(name),
+  );
+}
+
+function readSafeAreaInsets() {
+  const fromVars = {
+    top: readCssPx("--safe-area-inset-top"),
+    right: readCssPx("--safe-area-inset-right"),
+    bottom: readCssPx("--safe-area-inset-bottom"),
+    left: readCssPx("--safe-area-inset-left"),
+  };
+  if (typeof document === "undefined") return fromVars;
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:0;left:0;width:0;height:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);visibility:hidden;pointer-events:none";
+  document.documentElement.append(probe);
+  const style = getComputedStyle(probe);
+  const fromEnv = {
+    top: parsePx(style.paddingTop),
+    right: parsePx(style.paddingRight),
+    bottom: parsePx(style.paddingBottom),
+    left: parsePx(style.paddingLeft),
+  };
+  probe.remove();
   return {
-    left: insetLeft,
-    top: insetTop,
-    width: Math.max(1, width - insetLeft - insetRight),
-    height: Math.max(1, height - insetTop - insetBottom),
+    top: Math.max(fromVars.top, fromEnv.top),
+    right: Math.max(fromVars.right, fromEnv.right),
+    bottom: Math.max(fromVars.bottom, fromEnv.bottom),
+    left: Math.max(fromVars.left, fromEnv.left),
+  };
+}
+
+function measureCssBox(css: string): Box | null {
+  if (typeof document === "undefined") return null;
+  const probe = document.createElement("div");
+  probe.style.cssText = `${css};visibility:hidden;pointer-events:none`;
+  document.documentElement.append(probe);
+  const rect = probe.getBoundingClientRect();
+  probe.remove();
+  if (rect.width < 2 || rect.height < 2) return null;
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function smallestPositive(values: readonly (number | null | undefined)[]) {
+  const usable = values.filter(
+    (value): value is number => typeof value === "number" && value > 1,
+  );
+  return usable.length > 0 ? Math.min(...usable) : 1;
+}
+
+export function visiblePhotoViewport(): Box {
+  const insets = readSafeAreaInsets();
+  const measured = measureCssBox(
+    "position:fixed;top:env(safe-area-inset-top,0px);left:env(safe-area-inset-left,0px);width:calc(100svw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));height:calc(100svh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))",
+  );
+  const visual = typeof window !== "undefined" ? window.visualViewport : null;
+  const width = smallestPositive([window.innerWidth, visual?.width]);
+  const height = smallestPositive([
+    window.innerHeight,
+    visual?.height,
+    document.documentElement?.clientHeight,
+    measured ? measured.height + insets.top + insets.bottom : undefined,
+  ]);
+  const fallback = {
+    left: insets.left,
+    top: insets.top,
+    width: Math.max(1, width - insets.left - insets.right),
+    height: Math.max(1, height - insets.top - insets.bottom),
+  };
+  if (!measured) return fallback;
+  const destWidth = Math.min(fallback.width, measured.width);
+  const destHeight = Math.min(fallback.height, measured.height);
+  return {
+    left: measured.left + (measured.width - destWidth) / 2,
+    top: measured.top + (measured.height - destHeight) / 2,
+    width: destWidth,
+    height: destHeight,
   };
 }
 
