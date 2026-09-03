@@ -4,6 +4,12 @@ import { useLayoutEffect } from "react";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 
+export function showModalPreservingScroll(dialog: HTMLDialogElement) {
+  const scrollY = window.scrollY;
+  if (!dialog.open) dialog.showModal();
+  if (scrollY > 0) window.scrollTo(0, scrollY);
+}
+
 const exemptOverlaySelector = "iframe, .composer-location-map";
 
 function overflowYCanScroll(element: HTMLElement) {

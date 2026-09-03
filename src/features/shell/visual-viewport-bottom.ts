@@ -1,7 +1,3 @@
-import { deleteDynamicCssVar, setDynamicCssVar } from "@/lib/page-csp-nonce";
-
-const insetVariable = "--bottom-nav-visual-inset";
-
 export function visualViewportBottomInset(
   view: Pick<Window, "innerHeight" | "visualViewport"> = window,
 ) {
@@ -15,12 +11,13 @@ export function syncBottomNavVisualInset(
     document: Document;
   } = window,
 ) {
+  void view;
   // iOS already pins position:fixed to the visual viewport. Applying the
   // leftover layout gap as `bottom` lifts the bar and leaves a beige hole
-  // above the home indicator.
-  setDynamicCssVar(view.document, insetVariable, "0px");
+  // above the home indicator. globals.css already keeps the inset at 0px,
+  // so this must not write a stylesheet (production style-src blocks it).
 }
 
 export function clearBottomNavVisualInset(root: HTMLElement) {
-  deleteDynamicCssVar(root.ownerDocument, insetVariable);
+  void root;
 }

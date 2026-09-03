@@ -4,6 +4,7 @@ import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
   overlayScrollParent,
+  showModalPreservingScroll,
   useLockBackgroundScroll,
 } from "./lock-background-scroll";
 
@@ -77,6 +78,24 @@ describe("overlay background scroll lock", () => {
   it("leaves the place map iframe free to pan", () => {
     const map = document.createElement("iframe");
     expect(overlayBackgroundScrollShouldStop(map, "down")).toBe(false);
+  });
+
+  it("restores scroll after a native modal dialog opens", () => {
+    const dialog = document.createElement("dialog");
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      value: 160,
+    });
+    window.scrollTo = scrollTo as typeof window.scrollTo;
+    dialog.showModal = () => {
+      Object.defineProperty(window, "scrollY", {
+        configurable: true,
+        value: 0,
+      });
+    };
+    showModalPreservingScroll(dialog);
+    expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
   it("does not reset the page scroll while an overlay is open", () => {

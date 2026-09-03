@@ -1,8 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import { useLockBackgroundScroll } from "@/features/dialog/lock-background-scroll";
+import {
+  showModalPreservingScroll,
+  useLockBackgroundScroll,
+} from "@/features/dialog/lock-background-scroll";
 
 type InspectionState = "empty" | "inspecting" | "ready" | "error";
 
@@ -218,10 +227,10 @@ function VideoFeasibilityDialog({
 
   useLockBackgroundScroll(open);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
-    if (!dialog.open) dialog.showModal();
+    showModalPreservingScroll(dialog);
     const focusFrame = window.requestAnimationFrame(() =>
       inputRef.current?.focus(),
     );

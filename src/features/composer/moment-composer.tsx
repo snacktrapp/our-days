@@ -1,9 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import { useLockBackgroundScroll } from "@/features/dialog/lock-background-scroll";
+import {
+  showModalPreservingScroll,
+  useLockBackgroundScroll,
+} from "@/features/dialog/lock-background-scroll";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
@@ -398,10 +407,10 @@ export function MomentComposer({
 
   useLockBackgroundScroll(open);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!open || !dialog) return;
-    if (!dialog.open) dialog.showModal();
+    showModalPreservingScroll(dialog);
 
     return () => {
       if (dialog.open) dialog.close();
