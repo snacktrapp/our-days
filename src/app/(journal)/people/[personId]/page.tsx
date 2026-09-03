@@ -29,7 +29,11 @@ export default async function PersonJournalPage({
     const model = getPersonalTimelineFixture(personId);
     if (!model) notFound();
     return (
-      <JournalChrome model={model.chrome} section="people">
+      <JournalChrome
+        model={model.chrome}
+        section="people"
+        switcher={model.switcher}
+      >
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -49,6 +53,7 @@ export default async function PersonJournalPage({
       model={model.chrome}
       section="people"
       createMomentAction={createFamilyMomentAction}
+      switcher={model.switcher}
     >
       <TimelineFeed
         model={model}

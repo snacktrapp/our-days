@@ -3,11 +3,15 @@
 import styles from "./global-error.module.css";
 
 export default function GlobalError({
+  retry,
   reset,
 }: Readonly<{
   error: Error & { digest?: string };
-  reset: () => void;
+  retry?: () => void;
+  reset?: () => void;
 }>) {
+  const recover = retry ?? reset;
+
   return (
     <html lang="en">
       <head>
@@ -22,9 +26,11 @@ export default function GlobalError({
           </span>
           <p>Something interrupted the story</p>
           <h1 id="global-error-title">We couldn’t open Our Days.</h1>
-          <button className={styles.retryButton} onClick={reset}>
-            Try again
-          </button>
+          {recover ? (
+            <button className={styles.retryButton} onClick={recover}>
+              Try again
+            </button>
+          ) : null}
         </main>
       </body>
     </html>

@@ -127,16 +127,17 @@ const model = {
 } as const satisfies TimelineViewModel;
 
 describe("TimelineFeed", () => {
-  it("renders pending entries immediately below the timeline selector", () => {
+  it("renders pending entries at the start of the feed, without a timeline selector", () => {
     const { container } = render(
       <TimelineFeed
         model={model}
         pendingEntries={<section data-testid="pending-entry">Adding…</section>}
       />,
     );
-    const selector = container.querySelector(".view-switch");
     const pending = screen.getByTestId("pending-entry");
-    expect(selector?.nextElementSibling).toBe(pending);
+    expect(container.querySelector(".view-switch")).toBeNull();
+    expect(container.querySelector(".title-switcher")).toBeNull();
+    expect(pending.nextElementSibling).toHaveClass("timeline");
   });
 
   it("renders the rail sequence and all four moment treatments semantically", () => {

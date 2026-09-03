@@ -78,7 +78,7 @@ test("People links to five distinct, owner-correct life journals", async ({
     ).toEqual(journal.dates);
     await expect(page.locator(".elapsed-gap")).toHaveCount(0);
     await expect(page.locator(".year-divider")).toHaveText(journal.years);
-    await page.locator(".view-switch summary").click();
+    await page.locator(".title-switcher summary").click();
     await expect(
       page
         .getByRole("navigation", { name: "Choose a family timeline" })

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   JournalChromeViewModel,
@@ -74,8 +74,55 @@ describe("JournalChrome", () => {
     expect(header).not.toBeNull();
     expect(stage).not.toBeNull();
     expect(stage?.contains(header)).toBe(false);
-    expect(container.querySelector(".app-shell")?.contains(header)).toBe(
-      false,
+    expect(container.querySelector(".app-shell")?.contains(header)).toBe(false);
+  });
+
+  it("opens the family switcher from the middle title", () => {
+    const { container } = render(
+      <JournalChrome
+        model={{ ...model, title: "All our days" }}
+        section="timeline"
+        switcher={[
+          { label: "Family", href: "/family", current: true },
+          { label: "Molly", href: "/people/molly", current: false },
+        ]}
+      >
+        <p>Moments</p>
+      </JournalChrome>,
     );
+
+    const switcher = container.querySelector(".title-switcher");
+    expect(switcher).not.toHaveAttribute("open");
+
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+
+    expect(switcher).toHaveAttribute("open");
+    expect(
+      screen.getByRole("navigation", { name: "Choose a family timeline" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Family" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Molly" })).toHaveAttribute(
+      "href",
+      "/people/molly",
+    );
+  });
+
+  it("keeps Account and other static titles from becoming a family switcher", () => {
+    const { container } = render(
+      <JournalChrome model={model} section="settings">
+        <p>Account</p>
+      </JournalChrome>,
+    );
+
+    expect(container.querySelector(".title-switcher")).toBeNull();
+    expect(
+      screen.queryByRole("navigation", { name: "Choose a family timeline" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
   });
 });

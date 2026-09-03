@@ -2,7 +2,7 @@
 
 import { JournalInterrupted } from "@/features/shell/journal-interrupted";
 
-export default function JournalError({
+export default function RootError({
   retry,
   reset,
 }: Readonly<{

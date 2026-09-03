@@ -9,7 +9,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
-  await page.locator(".view-switch summary").click();
+  await page.locator(".title-switcher summary").click();
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
@@ -37,7 +37,7 @@ test("route-based journal navigation preserves the approved views", async ({
     page.getByRole("heading", { name: "Molly’s days" }),
   ).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
-  await page.locator(".view-switch summary").click();
+  await page.locator(".title-switcher summary").click();
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
@@ -238,7 +238,7 @@ test("appearance preference persists and the journal grid stays fixed", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
-test("the timeline selector scrolls beneath the sticky header", async ({
+test("the family feed scrolls beneath the sticky title selector", async ({
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
@@ -249,20 +249,22 @@ test("the timeline selector scrolls beneath the sticky header", async ({
   const page = await context.newPage();
   await page.goto("/family");
 
-  const stage = page.locator(".phone-stage");
   const header = page.locator(".topbar");
-  const selector = page.locator(".view-switch");
-  await expect(selector).toBeVisible();
+  const moment = page.locator("[data-moment-kind]").first();
+  await expect(header).toBeVisible();
+  await expect(page.locator(".title-switcher")).toBeVisible();
+  await expect(page.locator(".view-switch")).toHaveCount(0);
+  await expect(moment).toBeVisible();
 
   await page.evaluate(() => {
     const topbar = document.querySelector<HTMLElement>(".topbar");
-    const viewSwitch = document.querySelector<HTMLElement>(".view-switch");
-    const stage = document.querySelector<HTMLElement>(".phone-stage");
-    if (!topbar || !viewSwitch || !stage) return;
+    const firstMoment =
+      document.querySelector<HTMLElement>("[data-moment-kind]");
+    if (!topbar || !firstMoment) return;
 
     const headerRect = topbar.getBoundingClientRect();
-    const selectorRect = viewSwitch.getBoundingClientRect();
-    stage.scrollTop += selectorRect.top - headerRect.bottom + 8;
+    const momentRect = firstMoment.getBoundingClientRect();
+    window.scrollBy(0, momentRect.top - headerRect.bottom + 24);
   });
 
   await expect
@@ -270,29 +272,30 @@ test("the timeline selector scrolls beneath the sticky header", async ({
       const headerBottom = await header.evaluate(
         (element) => element.getBoundingClientRect().bottom,
       );
-      const selectorTop = await selector.evaluate(
+      const momentTop = await moment.evaluate(
         (element) => element.getBoundingClientRect().top,
       );
-      return selectorTop < headerBottom;
+      return momentTop < headerBottom;
     })
     .toBe(true);
 
   const layering = await page.evaluate(() => {
     const topbar = document.querySelector<HTMLElement>(".topbar");
-    const viewSwitch = document.querySelector<HTMLElement>(".view-switch");
-    if (!topbar || !viewSwitch) return null;
+    const firstMoment =
+      document.querySelector<HTMLElement>("[data-moment-kind]");
+    if (!topbar || !firstMoment) return null;
 
     const headerRect = topbar.getBoundingClientRect();
-    const selectorRect = viewSwitch.getBoundingClientRect();
-    const sampleX = selectorRect.left + selectorRect.width / 2;
+    const momentRect = firstMoment.getBoundingClientRect();
+    const sampleX = momentRect.left + momentRect.width / 2;
     const sampleY = Math.max(
       headerRect.top + 1,
-      Math.min(headerRect.bottom - 1, selectorRect.top + 1),
+      Math.min(headerRect.bottom - 1, momentRect.top + 1),
     );
     const topElement = document.elementFromPoint(sampleX, sampleY);
 
     return {
-      overlaps: selectorRect.top < headerRect.bottom,
+      overlaps: momentRect.top < headerRect.bottom,
       topElementIsHeader: Boolean(topElement?.closest(".topbar")),
     };
   });

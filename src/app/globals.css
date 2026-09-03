@@ -28,6 +28,8 @@
   --bottom-nav-visual-inset: 0px;
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
+  --nav-pill-fill: rgba(7, 17, 13, 0.76);
+  --timeline-media-max-height: min(56dvh, 22.5rem);
 }
 
 :root[data-theme="dark"] {
@@ -48,6 +50,7 @@
   --ochre: #9b6d24;
   --slate: #59677d;
   --moss: #58764e;
+  --nav-pill-fill: rgba(243, 238, 228, 0.76);
 }
 
 * {
@@ -384,9 +387,10 @@ button:focus-visible,
   isolation: isolate;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background: rgba(7, 17, 13, 0.92);
+  background: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 .family-mark,
 .quiet-button {
@@ -463,6 +467,70 @@ button:focus-visible,
   letter-spacing: -0.025em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.title-switcher {
+  min-width: 0;
+  position: relative;
+  justify-self: stretch;
+}
+.title-switcher > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.title-switcher > summary::-webkit-details-marker {
+  display: none;
+}
+.title-switcher-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.title-switcher-heading h1 {
+  min-width: 0;
+}
+.title-switcher-heading svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+.title-switcher[open] .title-switcher-heading svg {
+  transform: rotate(180deg);
+}
+.title-switcher nav {
+  position: absolute;
+  z-index: 110;
+  top: calc(100% + 10px);
+  left: 50%;
+  width: min(280px, calc(100dvw - 48px));
+  padding: 4px;
+  display: grid;
+  transform: translateX(-50%);
+  border: 1px solid var(--hairline);
+  border-radius: var(--header-drawer-radius);
+  background: var(--cream);
+  box-shadow: var(--header-drawer-shadow);
+}
+.title-switcher nav a {
+  min-height: 44px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.title-switcher nav a.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink);
 }
 .quiet-button {
   justify-self: end;
@@ -690,18 +758,25 @@ button:focus-visible,
   overflow: hidden;
 }
 .photo-frame {
-  height: 270px;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   position: relative;
+  display: grid;
+  place-items: center;
   overflow: hidden;
   border-start-start-radius: inherit;
   border-start-end-radius: inherit;
   background: #cab8a3;
 }
-.photo-frame img {
-  width: 100%;
-  height: 100%;
+.photo-frame img,
+.photo-frame video {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--timeline-media-max-height);
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   filter: saturate(0.84) contrast(0.97);
 }
 .private-photo-unavailable {
@@ -1182,6 +1257,15 @@ button:focus-visible,
   color: var(--cream);
   font-weight: 700;
   cursor: pointer;
+}
+
+.journal-error-back {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: none;
 }
 
 .timeline-pagination {
@@ -3856,9 +3940,10 @@ button:focus-visible,
   isolation: isolate;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background: rgba(7, 17, 13, 0.92);
+  background: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 .nav-item {
   height: 54px;
@@ -4013,11 +4098,12 @@ button:focus-visible,
   height: 56px;
   min-height: 56px;
   padding: 3px 8px;
-  background: rgba(7, 17, 13, 0.92);
+  background: var(--nav-pill-fill);
   border: 1px solid var(--hairline);
   border-radius: 18px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .family-mark,
@@ -4239,11 +4325,13 @@ button:focus-visible,
 }
 
 .photo-frame {
-  height: 248px;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   background: #17231e;
 }
 
-.photo-frame img {
+.photo-frame img,
+.photo-frame video {
   filter: saturate(0.9) contrast(1.02);
 }
 
@@ -5277,7 +5365,7 @@ button:focus-visible,
 
 :root[data-theme="light"] .bottom-nav,
 :root[data-theme="light"] .topbar {
-  background: rgba(243, 238, 228, 0.94);
+  background: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
@@ -5745,11 +5833,13 @@ button:focus-visible,
   text-transform: uppercase;
 }
 
-/* Video deliberately shares the photo card geometry. */
+/* Video shares the photo card, but keeps its native frame. */
 .video-frame video,
 .composer-video-preview video {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--timeline-media-max-height);
   display: block;
   border: 0;
   background: #050b08;
@@ -5758,9 +5848,11 @@ button:focus-visible,
 
 .media-viewer-trigger {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   position: relative;
-  display: block;
+  display: grid;
+  place-items: center;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -5779,8 +5871,10 @@ button:focus-visible,
 .media-viewer-trigger > video,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--timeline-media-max-height);
 }
 
 .video-viewer-trigger {
@@ -5960,7 +6054,7 @@ button:focus-visible,
   margin-top: 0;
   padding-inline: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
-  animation: none;
+  animation: composer-ease-up 180ms ease;
 }
 
 .new-moment-composer-dialog,
@@ -6038,6 +6132,17 @@ button:focus-visible,
   }
 }
 
+@keyframes composer-ease-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   :root {
     --header-drawer-top: calc(var(--bottom-nav-float-gap) + 56px + 8px);
@@ -6067,6 +6172,7 @@ button:focus-visible,
   overflow: hidden;
   border: 0;
   border-radius: 0;
+  animation: none;
 }
 
 .composer-editor-fullscreen .composer-sheet > .sheet-close {
@@ -6585,14 +6691,16 @@ button:focus-visible,
 }
 
 .optimistic-media-card .photo-frame {
-  min-height: 210px;
+  min-height: 0;
 }
 
 .optimistic-media-card .photo-frame video {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--timeline-media-max-height);
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .optimistic-media-overlay {
@@ -6774,9 +6882,25 @@ button:focus-visible,
   color: #7d520f;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .topbar,
+  .bottom-nav {
+    transition: transform 90ms ease;
+  }
+
+  .topbar:active,
+  .bottom-nav:active {
+    transform: scale(0.985);
+  }
+}
+
 /* This must follow the drawer animation declaration above. */
 @media (prefers-reduced-motion: reduce) {
   .new-moment-composer-dialog .composer-sheet {
     animation: none;
+  }
+
+  .title-switcher-heading svg {
+    transition: none;
   }
 }

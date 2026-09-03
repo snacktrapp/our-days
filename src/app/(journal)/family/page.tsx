@@ -25,7 +25,11 @@ export default async function FamilyPage({
   if (access.mode === "preview") {
     const model = getFamilyTimelineFixture();
     return (
-      <JournalChrome model={model.chrome} section="timeline">
+      <JournalChrome
+        model={model.chrome}
+        section="timeline"
+        switcher={model.switcher}
+      >
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -41,6 +45,7 @@ export default async function FamilyPage({
       model={model.chrome}
       section="timeline"
       createMomentAction={createFamilyMomentAction}
+      switcher={model.switcher}
     >
       <TimelineFeed
         model={model}

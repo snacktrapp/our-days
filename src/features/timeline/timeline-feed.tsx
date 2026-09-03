@@ -181,32 +181,6 @@ export function TimelineFeed({
           }
         />
       ) : null}
-      {model.switcher.length > 0 && (
-        <details className="view-switch">
-          <summary>
-            <span>
-              {model.switcher.find((item) => item.current)?.label ?? "Timeline"}
-            </span>
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m4.5 6 3.5 3.5L11.5 6" />
-            </svg>
-          </summary>
-          <nav aria-label="Choose a family timeline">
-            {model.switcher.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                prefetch={false}
-                aria-current={item.current ? "page" : undefined}
-                className={item.current ? "active" : ""}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </details>
-      )}
-
       {pendingEntries}
 
       {model.personalIntro && (
