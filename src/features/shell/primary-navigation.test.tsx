@@ -15,7 +15,7 @@ describe("PrimaryNavigation", () => {
   });
 
   afterEach(() => {
-    document.documentElement.style.removeProperty("--bottom-nav-visual-inset");
+    document.getElementById("bottom-nav-visual-inset-sheet")?.remove();
   });
 
   it("contains destinations only", () => {
@@ -75,9 +75,7 @@ describe("PrimaryNavigation", () => {
     await user.click(screen.getByRole("link", { name: "People" }));
 
     expect(
-      document.documentElement.style.getPropertyValue(
-        "--bottom-nav-visual-inset",
-      ),
-    ).toBe("84px");
+      document.getElementById("bottom-nav-visual-inset-sheet")?.textContent,
+    ).toBe(":root{--bottom-nav-visual-inset:84px}");
   });
 });

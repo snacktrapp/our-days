@@ -6,7 +6,7 @@ import {
 } from "./visual-viewport-bottom";
 
 afterEach(() => {
-  document.documentElement.style.removeProperty("--bottom-nav-visual-inset");
+  document.getElementById("bottom-nav-visual-inset-sheet")?.remove();
 });
 
 describe("visual viewport bottom inset", () => {
@@ -34,7 +34,11 @@ describe("visual viewport bottom inset", () => {
     ).toBe(124);
   });
 
-  it("writes the inset onto the document so the tab bar can follow it", () => {
+  it("writes the inset through a nonceable stylesheet instead of a style attribute", () => {
+    const nonce = document.createElement("script");
+    nonce.setAttribute("nonce", "test-nonce");
+    document.head.append(nonce);
+
     syncBottomNavVisualInset({
       innerHeight: 800,
       visualViewport: {
@@ -43,16 +47,13 @@ describe("visual viewport bottom inset", () => {
       } as VisualViewport,
       document,
     });
-    expect(
-      document.documentElement.style.getPropertyValue(
-        "--bottom-nav-visual-inset",
-      ),
-    ).toBe("48px");
+    const sheet = document.getElementById("bottom-nav-visual-inset-sheet");
+    expect(sheet).toBeInstanceOf(HTMLStyleElement);
+    expect(sheet?.getAttribute("nonce")).toBe("test-nonce");
+    expect(sheet?.textContent).toBe(":root{--bottom-nav-visual-inset:48px}");
+    expect(document.documentElement.getAttribute("style")).toBeNull();
     clearBottomNavVisualInset(document.documentElement);
-    expect(
-      document.documentElement.style.getPropertyValue(
-        "--bottom-nav-visual-inset",
-      ),
-    ).toBe("");
+    expect(document.getElementById("bottom-nav-visual-inset-sheet")).toBeNull();
+    nonce.remove();
   });
 });
