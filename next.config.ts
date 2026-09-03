@@ -28,6 +28,7 @@ const privateRoutes = [
   "/settings/:path*",
   "/memories/:path*",
   "/quality/:path*",
+  "/internal/map-picker",
 ];
 const privateHeaders = [
   { key: "Cache-Control", value: "private, no-store, max-age=0" },
@@ -54,7 +55,13 @@ const nextConfig: NextConfig = {
     return [
       ...privateRoutes.map((source) => ({ source, headers: privateHeaders })),
       {
-        source: "/(.*)",
+        source: "/internal/map-picker",
+        headers: httpSecurityHeaders(environment.identity, {
+          allowSameOriginFrame: true,
+        }),
+      },
+      {
+        source: "/((?!internal/map-picker).*)",
         headers: httpSecurityHeaders(environment.identity),
       },
     ];

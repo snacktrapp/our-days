@@ -6340,6 +6340,76 @@ button:focus-visible,
   box-shadow: 0 16px 34px rgba(48, 43, 34, 0.16);
 }
 
+.composer-location-fields {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.composer-location-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.composer-location-geolocate {
+  width: 100%;
+  background: transparent;
+  color: var(--teal);
+}
+
+.composer-location-status,
+.composer-location-unavailable,
+.composer-location-note {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-record);
+  font-size: 13px;
+}
+
+.composer-location-unavailable {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--hairline);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 40%, transparent);
+}
+
+.composer-location-suggestions {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-location-suggestions button {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-record);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-location-suggestions button:hover,
+.composer-location-suggestions button:focus-visible {
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
+  outline: none;
+}
+
+.composer-location-map {
+  width: 100%;
+  height: 180px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: #101d17;
+}
+
 /* The menu is portalled to the viewport so a media card's rounded clipping
    never cuts it off. */
 .connected-moment-menu-portal {

@@ -42,6 +42,8 @@ export type PhotoMomentDraft = Readonly<{
   journalPersonId: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
@@ -606,6 +608,8 @@ async function uploadLocalPhotoMoment(
   body.set("journalPersonId", draft.journalPersonId);
   body.set("body", draft.body);
   body.set("placeName", draft.placeName);
+  if (draft.latitude != null) body.set("latitude", String(draft.latitude));
+  if (draft.longitude != null) body.set("longitude", String(draft.longitude));
   body.set("taggedPersonIds", JSON.stringify([...draft.taggedPersonIds]));
   body.set("occurredOn", draft.occurredOn);
   body.set("occurredAt", draft.occurredAt ?? "");

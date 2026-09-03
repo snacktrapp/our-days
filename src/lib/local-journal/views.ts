@@ -90,6 +90,8 @@ function momentToTimelineRow(
     moment_kind: moment.kind,
     moment_title: moment.title || null,
     place_name: moment.placeName || null,
+    latitude: moment.latitude ?? null,
+    longitude: moment.longitude ?? null,
     tagged_people: moment.taggedPersonIds.flatMap((personId) => {
       const person = document.people.find(
         (candidate) => candidate.id === personId,

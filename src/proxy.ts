@@ -8,11 +8,15 @@ import { readOptionalSupabasePublicConfig } from "@/lib/supabase/public-config";
 
 export async function proxy(request: NextRequest) {
   const nonce = randomBytes(18).toString("base64");
+  const embeddableMap =
+    request.nextUrl.pathname === "/internal/map-picker" ||
+    request.nextUrl.pathname === "/internal/map-picker/";
   const contentSecurityPolicy = buildContentSecurityPolicy({
     nonce,
     development: process.env.NODE_ENV === "development",
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    embeddableMap,
   });
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

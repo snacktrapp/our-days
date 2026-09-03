@@ -12,9 +12,16 @@ const sharedSecurityHeaders = [
   },
 ] as const;
 
-export function httpSecurityHeaders(identity: HttpSecurityEnvironment) {
+export function httpSecurityHeaders(
+  identity: HttpSecurityEnvironment,
+  options: Readonly<{ allowSameOriginFrame?: boolean }> = {},
+) {
   return [
-    ...sharedSecurityHeaders,
+    ...sharedSecurityHeaders.map((header) =>
+      header.key === "X-Frame-Options" && options.allowSameOriginFrame
+        ? { key: "X-Frame-Options", value: "SAMEORIGIN" }
+        : header,
+    ),
     ...(identity === "production"
       ? [
           {

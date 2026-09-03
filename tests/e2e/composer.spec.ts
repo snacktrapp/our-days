@@ -363,6 +363,9 @@ test("required content rejects whitespace and future dates before review", async
   for (const testCase of cases) {
     const dialog = await openComposer(page);
     await dialog.getByRole("button", { name: testCase.choice }).click();
+    if (testCase.choice.source.includes("Location")) {
+      await dialog.getByRole("button", { name: /^Place,/u }).click();
+    }
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
     await dialog.getByRole("button", { name: "Save" }).click();
@@ -462,6 +465,7 @@ test("all four capture modes save directly without a confirmation screen", async
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Location/u }).click();
   await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
+  await dialog.getByRole("button", { name: /^Place,/u }).click();
   await page.getByLabel("Place name").fill("Sand Harbor");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();

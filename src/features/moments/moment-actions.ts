@@ -11,6 +11,10 @@ import type {
   EditableMomentKind,
   MomentActionResult,
 } from "./moment-action-types";
+import {
+  parsePlaceCoordinates,
+  validPlaceCoordinates,
+} from "@/lib/place-coordinates";
 import type {
   MomentConversationViewModel,
   MomentReactionId,
@@ -88,6 +92,24 @@ function validFamilyPayload(input: {
   );
 }
 
+function missingRpc(error: { message?: string; code?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    error?.code === "PGRST202" || /could not find the function/i.test(message)
+  );
+}
+
+function coordinateRpcFields(input: {
+  latitude?: number | null;
+  longitude?: number | null;
+}) {
+  const parsed = parsePlaceCoordinates(input.latitude, input.longitude);
+  return {
+    latitude: parsed?.latitude ?? null,
+    longitude: parsed?.longitude ?? null,
+  };
+}
+
 function validOccurrence(
   occurredOn: unknown,
   occurredAt: unknown,
@@ -134,6 +156,8 @@ export async function createFamilyMomentAction(input: {
   title: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
@@ -148,7 +172,12 @@ export async function createFamilyMomentAction(input: {
   }
   if (
     !validFamilyPayload(input) ||
-    !validOccurrence(input.occurredOn, input.occurredAt, input.occurredTimezone)
+    !validOccurrence(
+      input.occurredOn,
+      input.occurredAt,
+      input.occurredTimezone,
+    ) ||
+    !validPlaceCoordinates(input.latitude, input.longitude)
   ) {
     return { ok: false, message: "Check the moment and try again." };
   }
@@ -161,6 +190,12 @@ export async function createFamilyMomentAction(input: {
         title: input.title.trim(),
         body: input.body.trim(),
         placeName: input.placeName.trim(),
+        latitude:
+          parsePlaceCoordinates(input.latitude, input.longitude)?.latitude ??
+          null,
+        longitude:
+          parsePlaceCoordinates(input.latitude, input.longitude)?.longitude ??
+          null,
         taggedPersonIds: input.taggedPersonIds,
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
@@ -180,7 +215,8 @@ export async function createFamilyMomentAction(input: {
   }
 
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("create_family_moment", {
+  const coordinates = coordinateRpcFields(input);
+  const payload = {
     circle_id: access.circleId,
     journal_person_id: input.journalPersonId,
     moment_kind: input.kind,
@@ -191,7 +227,15 @@ export async function createFamilyMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
-  });
+    ...coordinates,
+  };
+  let { data, error } = await supabase.rpc("create_family_moment", payload);
+  if (error && missingRpc(error)) {
+    const fallback = { ...payload };
+    delete (fallback as { latitude?: number | null }).latitude;
+    delete (fallback as { longitude?: number | null }).longitude;
+    ({ data, error } = await supabase.rpc("create_family_moment", fallback));
+  }
   if (error || !data) {
     return {
       ok: false,
@@ -208,6 +252,8 @@ export async function updateFamilyMomentAction(input: {
   title: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
@@ -236,7 +282,12 @@ export async function updateFamilyMomentAction(input: {
     input.title.trim().length > 120 ||
     input.body.trim().length > 4000 ||
     input.placeName.trim().length > 160 ||
-    !validOccurrence(input.occurredOn, input.occurredAt, input.occurredTimezone)
+    !validOccurrence(
+      input.occurredOn,
+      input.occurredAt,
+      input.occurredTimezone,
+    ) ||
+    !validPlaceCoordinates(input.latitude, input.longitude)
   ) {
     return { ok: false, message: "Check the moment and try again." };
   }
@@ -249,6 +300,12 @@ export async function updateFamilyMomentAction(input: {
         title: input.title.trim(),
         body: input.body.trim(),
         placeName: input.placeName.trim(),
+        latitude:
+          parsePlaceCoordinates(input.latitude, input.longitude)?.latitude ??
+          null,
+        longitude:
+          parsePlaceCoordinates(input.latitude, input.longitude)?.longitude ??
+          null,
         taggedPersonIds: input.taggedPersonIds,
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
@@ -269,7 +326,8 @@ export async function updateFamilyMomentAction(input: {
   }
 
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("update_family_moment", {
+  const coordinates = coordinateRpcFields(input);
+  const payload = {
     moment_id: input.momentId,
     expected_revision: input.revision,
     moment_title: input.title.trim(),
@@ -279,7 +337,15 @@ export async function updateFamilyMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
-  });
+    ...coordinates,
+  };
+  let { data, error } = await supabase.rpc("update_family_moment", payload);
+  if (error && missingRpc(error)) {
+    const fallback = { ...payload };
+    delete (fallback as { latitude?: number | null }).latitude;
+    delete (fallback as { longitude?: number | null }).longitude;
+    ({ data, error } = await supabase.rpc("update_family_moment", fallback));
+  }
   if (error) {
     return {
       ok: false,
@@ -290,7 +356,7 @@ export async function updateFamilyMomentAction(input: {
     };
   }
   refreshMomentSurfaces();
-  return { ok: true, message: "Moment updated.", revision: data };
+  return { ok: true, message: "Moment updated.", revision: data ?? undefined };
 }
 
 async function setMomentTrashed(

@@ -249,6 +249,8 @@ export async function createLocalWrittenMoment(
     title: string;
     body: string;
     placeName: string;
+    latitude?: number | null;
+    longitude?: number | null;
     taggedPersonIds: readonly string[];
     occurredOn: string;
     occurredAt: string | null;
@@ -278,6 +280,8 @@ export async function createLocalWrittenMoment(
       title: input.title,
       body: input.body,
       placeName: input.placeName,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
@@ -304,6 +308,8 @@ export async function updateLocalWrittenMoment(
     title: string;
     body: string;
     placeName: string;
+    latitude?: number | null;
+    longitude?: number | null;
     taggedPersonIds: readonly string[];
     occurredOn: string;
     occurredAt: string | null;
@@ -333,6 +339,8 @@ export async function updateLocalWrittenMoment(
       title: input.title,
       body: input.body,
       placeName: input.placeName,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
@@ -393,6 +401,8 @@ export async function publishLocalMediaMoment(
     journalPersonId: string;
     body: string;
     placeName: string;
+    latitude?: number | null;
+    longitude?: number | null;
     taggedPersonIds: readonly string[];
     occurredOn: string;
     occurredAt: string | null;
@@ -415,6 +425,8 @@ export async function publishLocalMediaMoment(
       title: "",
       body: input.body,
       placeName: input.placeName,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,

@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { DateTimeFields } from "@/features/composer/date-time-fields";
+import { LocationFields } from "@/features/composer/location-fields";
+import { type PlaceSelection } from "@/lib/place-coordinates";
 import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
@@ -91,9 +93,12 @@ function ChangeableMomentControl({
   const [title, setTitle] = useState(
     moment.kind === "milestone" ? moment.milestone : "",
   );
-  const [placeName, setPlaceName] = useState(
-    moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
-  );
+  const originalPlace: PlaceSelection = {
+    label: moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
+    latitude: moment.latitude ?? null,
+    longitude: moment.longitude ?? null,
+  };
+  const [place, setPlace] = useState<PlaceSelection>(originalPlace);
   const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
     moment.taggedPeople?.map((person) => person.id) ?? [],
   );
@@ -151,8 +156,9 @@ function ChangeableMomentControl({
   const draftIsDirty =
     body !== moment.text ||
     title !== (moment.kind === "milestone" ? moment.milestone : "") ||
-    placeName !==
-      (moment.placeName ?? (moment.kind === "location" ? moment.place : "")) ||
+    place.label !== originalPlace.label ||
+    place.latitude !== originalPlace.latitude ||
+    place.longitude !== originalPlace.longitude ||
     taggedPersonIds.join(",") !==
       (moment.taggedPeople?.map((person) => person.id) ?? []).join(",") ||
     occurredOn !== moment.occurredOn ||
@@ -168,9 +174,7 @@ function ChangeableMomentControl({
     }
     setBody(moment.text);
     setTitle(moment.kind === "milestone" ? moment.milestone : "");
-    setPlaceName(
-      moment.placeName ?? (moment.kind === "location" ? moment.place : ""),
-    );
+    setPlace(originalPlace);
     setTaggedPersonIds(moment.taggedPeople?.map((person) => person.id) ?? []);
     setOccurredOn(moment.occurredOn);
     setOccurredTime(originalTime);
@@ -190,7 +194,7 @@ function ChangeableMomentControl({
       setMessage("Name the milestone before saving.");
       return;
     }
-    if (moment.kind === "location" && !placeName.trim()) {
+    if (moment.kind === "location" && !place.label.trim()) {
       setMessage("Name the place before saving.");
       return;
     }
@@ -219,7 +223,9 @@ function ChangeableMomentControl({
         revision: moment.revision!,
         title: title.trim(),
         body: trimmedBody,
-        placeName: placeName.trim(),
+        placeName: place.label.trim(),
+        latitude: place.latitude,
+        longitude: place.longitude,
         taggedPersonIds,
         occurredOn,
         occurredAt,
@@ -373,30 +379,10 @@ function ChangeableMomentControl({
               </label>
             ) : null}
             {moment.kind === "location" ? (
-              <label className="composer-field">
-                <span>Place name</span>
-                <input
-                  type="text"
-                  value={placeName}
-                  maxLength={160}
-                  onChange={(event) => setPlaceName(event.target.value)}
-                />
-              </label>
-            ) : null}
-            {moment.kind !== "location" ? (
-              <label className="composer-field">
-                <span>
-                  Place <small>Optional</small>
-                </span>
-                <input
-                  type="text"
-                  value={placeName}
-                  maxLength={160}
-                  placeholder="Add a place by hand"
-                  onChange={(event) => setPlaceName(event.target.value)}
-                />
-              </label>
-            ) : null}
+              <LocationFields required value={place} onChange={setPlace} />
+            ) : (
+              <LocationFields optional value={place} onChange={setPlace} />
+            )}
             <label className="composer-field">
               <span>
                 {moment.kind === "thought" ? "Your thought" : "Details"}

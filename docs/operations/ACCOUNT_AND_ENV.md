@@ -36,6 +36,7 @@ Local no-Docker development does not need GitHub, Vercel, or Supabase credential
 | `OUR_DAYS_X_CLIENT_ID` / `OUR_DAYS_X_CLIENT_SECRET`              | Set here for first-party local OAuth       | Same as Google, on the existing Vercel project                                                                                                             | Also paste the same X client into Auth → Providers → Twitter       |
 | `OUR_DAYS_OAUTH_STATE_SECRET`                                    | Optional local HMAC                        | Set on the existing Vercel project if first-party OAuth is enabled there                                                                                   | —                                                                  |
 | `OUR_DAYS_PHOTO_WORKER_EMAIL` / `OUR_DAYS_PHOTO_WORKER_PASSWORD` | empty unless running photo workers locally | Only if Production already uses them                                                                                                                       | Allowlisted Auth identity with **no** family membership            |
+| `NEXT_PUBLIC_MAPTILER_KEY`                                       | Optional MapTiler **public** web key. Leave empty for “Map unavailable”. | Optional on Production **and** Preview. Public key only — never an admin/secret MapTiler token.                                                             | —                                                                  |
 
 Google and X app setup (redirect URIs, email permission, no public signup) is in `docs/operations/OAUTH_SIGN_IN.md`.
 
@@ -52,6 +53,10 @@ Required public / non-secret names:
 - `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS`
 - `OUR_DAYS_RESOURCE_MODE` = `supabase`
 - `OUR_DAYS_PRODUCTION_SITE_ORIGIN` = `https://our-days-neon.vercel.app`
+
+Optional:
+
+- `NEXT_PUBLIC_MAPTILER_KEY` — MapTiler public web key for the add-entry Place map. Leave unset until it exists in the Vercel dashboard; the Place row still matches date/time chrome and shows “Map unavailable.”
 
 Also enable Preview for the current Production values of `OUR_DAYS_PHOTO_POSTING_MODE`, `OUR_DAYS_MEDIA_DELIVERY_MODE`, and `OUR_DAYS_PHOTO_WORKER_EMAIL` / `OUR_DAYS_PHOTO_WORKER_PASSWORD` when Production already uses the verified photo worker.
 

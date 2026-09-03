@@ -17,6 +17,16 @@ describe("static HTTP security headers", () => {
     },
   );
 
+  it("keeps X-Frame-Options SAMEORIGIN only for the first-party map picker", () => {
+    expect(
+      httpSecurityHeaders("production", { allowSameOriginFrame: true }),
+    ).toContainEqual({ key: "X-Frame-Options", value: "SAMEORIGIN" });
+    expect(httpSecurityHeaders("production")).toContainEqual({
+      key: "X-Frame-Options",
+      value: "DENY",
+    });
+  });
+
   it("emits HSTS only for the exact Production identity", () => {
     const hsts = {
       key: "Strict-Transport-Security",

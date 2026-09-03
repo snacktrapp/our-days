@@ -23,12 +23,16 @@ export type TimelineRow = Omit<
   | "moment_kind"
   | "moment_title"
   | "place_name"
+  | "latitude"
+  | "longitude"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
   moment_kind?: string;
   moment_title?: string | null;
   place_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   tagged_people?: unknown;
 };
 
@@ -112,6 +116,8 @@ export function mapTimelineRow(
     taggedPeopleLabel:
       taggedPeople.map((person) => person.name).join(", ") || undefined,
     placeName: row.place_name ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
   };
   if (row.moment_kind === "milestone") {
     return {

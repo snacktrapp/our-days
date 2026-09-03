@@ -144,6 +144,8 @@ export async function publishVerifiedPhotoMoment(
     journalPersonId: string;
     body: string;
     placeName: string;
+    latitude?: number | null;
+    longitude?: number | null;
     taggedPersonIds: readonly string[];
     occurredOn: string;
     occurredAt: string | null;
@@ -175,6 +177,8 @@ export async function publishVerifiedPhotoMoment(
     journalPersonId: input.journalPersonId,
     body: input.body,
     placeName: input.placeName,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
     taggedPersonIds: input.taggedPersonIds,
     occurredOn: input.occurredOn,
     occurredAt: input.occurredAt,
@@ -190,6 +194,8 @@ export async function publishVerifiedVideoMoment(
     journalPersonId: string;
     body: string;
     placeName: string;
+    latitude?: number | null;
+    longitude?: number | null;
     taggedPersonIds: readonly string[];
     occurredOn: string;
     occurredAt: string | null;
@@ -229,6 +235,8 @@ export async function publishVerifiedVideoMoment(
     journalPersonId: input.journalPersonId,
     body: input.body,
     placeName: input.placeName,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
     taggedPersonIds: input.taggedPersonIds,
     occurredOn: input.occurredOn,
     occurredAt: input.occurredAt,

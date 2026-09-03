@@ -30,6 +30,11 @@ import {
 import { startOptimisticMomentSave } from "./optimistic-moment-save";
 import { DateTimeFields } from "./date-time-fields";
 import { JournalPickerField } from "./journal-picker-field";
+import { LocationFields } from "./location-fields";
+import {
+  emptyPlaceSelection,
+  type PlaceSelection,
+} from "@/lib/place-coordinates";
 
 type MomentComposerProps = Readonly<{
   model: MomentComposerViewModel;
@@ -171,7 +176,7 @@ export function MomentComposer({
     model.defaultJournalPersonId,
   );
   const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>([]);
-  const [placeName, setPlaceName] = useState("");
+  const [place, setPlace] = useState<PlaceSelection>(emptyPlaceSelection);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoDecodeState, setPhotoDecodeState] =
@@ -187,6 +192,7 @@ export function MomentComposer({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const chooserHeadingRef = useRef<HTMLHeadingElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const locationSearchRef = useRef<HTMLInputElement>(null);
   const verseBookTriggerRef = useRef<HTMLButtonElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -211,12 +217,13 @@ export function MomentComposer({
   const connectedPhotoAvailable = Boolean(
     connectedFamily && model.photoPostingEnabled && model.circleId,
   );
-  const resolvedPlaceName = mode === "location" ? title : placeName;
+  const resolvedPlaceName = mode === "location" ? title : place.label;
   const isDirty = Boolean(
     body.length ||
     title.length ||
     verseSelection.book ||
-    placeName.length ||
+    place.label.length ||
+    place.latitude !== null ||
     photoFile ||
     taggedPersonIds.length ||
     occurredOn !== model.previewToday ||
@@ -264,7 +271,7 @@ export function MomentComposer({
       setOccurredTime("");
       setJournalPersonId(model.defaultJournalPersonId);
       setTaggedPersonIds([]);
-      setPlaceName("");
+      setPlace(emptyPlaceSelection);
       setPhotoFile(null);
       setPhotoDecodeState("empty");
       setVideoDurationMs(null);
@@ -498,13 +505,14 @@ export function MomentComposer({
       bodyTextareaRef.current?.focus();
       return false;
     }
-    if ((mode === "milestone" || mode === "location") && !title.trim()) {
-      setContentError(
-        mode === "milestone"
-          ? "Name the milestone before saving this moment."
-          : "Name the place before saving this moment.",
-      );
+    if (mode === "milestone" && !title.trim()) {
+      setContentError("Name the milestone before saving this moment.");
       titleInputRef.current?.focus();
+      return false;
+    }
+    if (mode === "location" && !title.trim()) {
+      setContentError("Name the place before saving this moment.");
+      locationSearchRef.current?.focus();
       return false;
     }
     if (mode === "bible-verse" && (!title.trim() || !body.trim())) {
@@ -540,7 +548,9 @@ export function MomentComposer({
     const savedOccurredOn = occurredOn;
     const savedOccurredTime = occurredTime;
     const savedJournalPersonId = journalPersonId;
-    const savedPlaceName = placeName;
+    const savedPlaceName = mode === "location" ? title : place.label;
+    const savedLatitude = place.latitude;
+    const savedLongitude = place.longitude;
     const savedTaggedPersonIds = [...taggedPersonIds];
     const savedJournalPerson = journalPerson;
     setSaveError(null);
@@ -578,6 +588,8 @@ export function MomentComposer({
             occurredOn: savedOccurredOn,
             occurredTimezone,
             placeName: savedPlaceName,
+            latitude: savedLatitude,
+            longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
           },
         });
@@ -593,6 +605,8 @@ export function MomentComposer({
             occurredOn: savedOccurredOn,
             occurredTimezone,
             placeName: savedPlaceName,
+            latitude: savedLatitude,
+            longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
           },
         });
@@ -635,6 +649,8 @@ export function MomentComposer({
               title: savedKind === "milestone" ? savedTitle : "",
               body: savedBody,
               placeName: savedResolvedPlaceName,
+              latitude: savedLatitude,
+              longitude: savedLongitude,
               taggedPersonIds: savedTaggedPersonIds,
               occurredOn: savedOccurredOn,
               occurredAt,
@@ -1109,11 +1125,27 @@ export function MomentComposer({
                 />
               ) : null}
 
-              {mode === "milestone" || mode === "location" ? (
+              {mode === "location" ? (
+                <LocationFields
+                  required
+                  invalid={Boolean(contentError)}
+                  searchInputRef={locationSearchRef}
+                  value={{
+                    label: title,
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                  }}
+                  onChange={(next) => {
+                    setTitle(next.label);
+                    setPlace(next);
+                    if (next.label.trim()) setContentError(null);
+                  }}
+                />
+              ) : null}
+
+              {mode === "milestone" ? (
                 <label className="composer-field">
-                  <span>
-                    {mode === "milestone" ? "Milestone" : "Place name"}
-                  </span>
+                  <span>Milestone</span>
                   <input
                     ref={titleInputRef}
                     type="text"
@@ -1124,11 +1156,7 @@ export function MomentComposer({
                       contentError ? "composer-content-error" : undefined
                     }
                     maxLength={120}
-                    placeholder={
-                      mode === "milestone"
-                        ? "A meaningful first"
-                        : "Somewhere worth remembering"
-                    }
+                    placeholder="A meaningful first"
                     onChange={(event) => {
                       setTitle(event.target.value);
                       if (event.target.value.trim()) setContentError(null);
@@ -1234,17 +1262,16 @@ export function MomentComposer({
                       </div>
                     </fieldset>
                     {mode !== "location" ? (
-                      <label className="composer-field">
-                        <span>Place</span>
-                        <input
-                          type="text"
-                          value={placeName}
-                          maxLength={160}
-                          placeholder="Add a place by hand"
-                          onChange={(event) => setPlaceName(event.target.value)}
+                      <>
+                        <LocationFields
+                          optional
+                          value={place}
+                          onChange={setPlace}
                         />
-                        <small>No location is read from your media.</small>
-                      </label>
+                        <small className="composer-location-note">
+                          No location is read from your media.
+                        </small>
+                      </>
                     ) : null}
                   </div>
                 ) : null}

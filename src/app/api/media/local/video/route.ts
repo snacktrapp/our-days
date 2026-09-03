@@ -1,3 +1,4 @@
+import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 import { localJournalIsEnabled } from "../../../../../../config/our-days-environment";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { readLocalJournalAccess } from "@/lib/local-journal/auth";
@@ -58,11 +59,17 @@ export async function POST(request: Request) {
   }
 
   try {
+    const coordinates = parsePlaceCoordinates(
+      readString(form, "latitude"),
+      readString(form, "longitude"),
+    );
     const moment = await publishVerifiedVideoMoment(access, {
       file,
       journalPersonId: readString(form, "journalPersonId"),
       body: readString(form, "body").trim(),
       placeName: readString(form, "placeName").trim(),
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null,
       taggedPersonIds,
       occurredOn: readString(form, "occurredOn"),
       occurredAt: readString(form, "occurredAt") || null,

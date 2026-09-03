@@ -352,6 +352,8 @@ export type Database = {
           id: string;
           journal_person_id: string;
           kind: string;
+          latitude: number | null;
+          longitude: number | null;
           occurred_at: string | null;
           occurred_on: string;
           occurred_timezone: string | null;
@@ -371,6 +373,8 @@ export type Database = {
           id?: string;
           journal_person_id: string;
           kind?: string;
+          latitude?: number | null;
+          longitude?: number | null;
           occurred_at?: string | null;
           occurred_on: string;
           occurred_timezone?: string | null;
@@ -390,6 +394,8 @@ export type Database = {
           id?: string;
           journal_person_id?: string;
           kind?: string;
+          latitude?: number | null;
+          longitude?: number | null;
           occurred_at?: string | null;
           occurred_on?: string;
           occurred_timezone?: string | null;
@@ -694,6 +700,8 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           place_name: string;
+          latitude?: number | null;
+          longitude?: number | null;
           tagged_person_ids: string[];
         };
         Returns: string;
@@ -937,6 +945,8 @@ export type Database = {
           journal_person_accent: string;
           journal_person_kind: string;
           journal_person_name: string;
+          latitude: number | null;
+          longitude: number | null;
           moment_circle_id: string;
           moment_id: string;
           moment_journal_person_id: string;
@@ -1189,6 +1199,8 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           place_name: string;
+          latitude?: number | null;
+          longitude?: number | null;
           tagged_person_ids: string[];
         };
         Returns: number;

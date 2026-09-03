@@ -25,6 +25,8 @@ function row(overrides: Partial<Row> = {}): Row {
     journal_person_accent: "sage",
     journal_person_kind: "managed",
     journal_person_name: "Child",
+    latitude: null,
+    longitude: null,
     moment_circle_id: "circle",
     moment_id: "moment-2",
     moment_journal_person_id: "child",

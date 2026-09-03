@@ -193,6 +193,14 @@ async function setComposerTime(
   await user.click(screen.getByRole("button", { name: "Set time" }));
 }
 
+async function setComposerPlace(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.click(screen.getByRole("button", { name: /^Place,/u }));
+  await user.type(screen.getByLabelText("Place name"), name);
+}
+
 async function setComposerDate(
   user: ReturnType<typeof userEvent.setup>,
   target: string,
@@ -831,7 +839,7 @@ describe("MomentComposer", () => {
     await setComposerDate(user, "2023-08-21");
     await selectComposerJournal(user, "Avery");
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
-    await user.type(screen.getByLabelText(/^Place/u), "Oak Street School");
+    await setComposerPlace(user, "Oak Street School");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -847,8 +855,9 @@ describe("MomentComposer", () => {
       await user.click(
         screen.getByRole("button", { name: new RegExp(choice) }),
       );
+      await user.click(screen.getByRole("button", { name: /^Place,/u }));
       const requiredTitle = screen.getByLabelText(label);
-      expect(requiredTitle).toBeRequired();
+      expect(requiredTitle).toHaveAttribute("aria-required", "true");
       await user.type(requiredTitle, value);
       expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     },
@@ -1000,7 +1009,7 @@ describe("MomentComposer", () => {
 
     confirm.mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(screen.getByLabelText("Place name")).toHaveValue("");
+    expect(screen.getByRole("button", { name: /^Place, Add a place/u })).toBeVisible();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1171,7 +1180,7 @@ describe("MomentComposer", () => {
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Place, Add a place/u })).toBeVisible();
   });
 
   it.each([
@@ -1184,13 +1193,22 @@ describe("MomentComposer", () => {
       await user.click(
         screen.getByRole("button", { name: new RegExp(choice) }),
       );
+      if (choice === "Location") {
+        await user.click(screen.getByRole("button", { name: /^Place,/u }));
+      }
       const field = screen.getByLabelText(label);
       fireEvent.change(field, { target: { value: " \n " } });
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent(error);
-      expect(field).toHaveFocus();
-      expect(screen.getByRole("dialog")).toBeVisible();
+      if (choice === "Location") {
+        expect(
+          screen.getByRole("dialog", { name: "Choose a place" }),
+        ).toBeVisible();
+      } else {
+        expect(field).toHaveFocus();
+      }
+      expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     },
   );
 
@@ -1237,7 +1255,7 @@ describe("MomentComposer", () => {
       "place",
       async (user: ReturnType<typeof userEvent.setup>) => {
         await user.click(screen.getByRole("button", { name: /Details/ }));
-        await user.type(screen.getByLabelText(/^Place/u), "The porch");
+        await setComposerPlace(user, "The porch");
       },
     ],
   ])("treats a changed %s as a protected draft", async (_, mutate) => {
