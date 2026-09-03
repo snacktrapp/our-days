@@ -329,9 +329,7 @@ export function FullscreenMediaViewer({
       <button
         ref={triggerRef}
         type="button"
-        className={`media-viewer-trigger ${isPhoto ? "photo-viewer-trigger" : "video-viewer-trigger"}${
-          open ? " is-open" : ""
-        }`}
+        className={`media-viewer-trigger ${isPhoto ? "photo-viewer-trigger" : "video-viewer-trigger"}`}
         aria-label={`Open ${kind} full screen: ${label}`}
         onClick={(event) => handlePreviewTap(event.detail)}
       >

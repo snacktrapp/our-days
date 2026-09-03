@@ -67,6 +67,10 @@ describe("FullscreenMediaViewer", () => {
     });
     expect(dialog).toBeVisible();
     expect(screen.getByText("Photo preview")).toBe(preview);
+    expect(preview).toBeVisible();
+    expect(trigger).not.toHaveClass("is-open");
+    expect(window.getComputedStyle(preview).visibility).not.toBe("hidden");
+    expect(window.getComputedStyle(preview).opacity).not.toBe("0");
     const photo = screen.getByText("Full photo").parentElement;
     expect(photo).toHaveClass("media-viewer-photo");
     fireEvent.doubleClick(photo as HTMLElement);
@@ -120,6 +124,48 @@ describe("FullscreenMediaViewer", () => {
       vi.advanceTimersByTime(180);
     });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the card photo painted while a swipe dismisses the overlay", () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(500);
+    const photo = openPhoto();
+    const preview = screen.getByText("Photo preview");
+    capturePhoto(photo);
+
+    expect(screen.getByText("Photo preview")).toBe(preview);
+    expect(preview).toBeVisible();
+    expect(window.getComputedStyle(preview).visibility).not.toBe("hidden");
+
+    fireEvent.pointerDown(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 200,
+    });
+    expect(screen.getByText("Photo preview")).toBe(preview);
+    expect(preview).toBeVisible();
+
+    fireEvent.pointerUp(photo, {
+      pointerId: 1,
+      pointerType: "touch",
+      clientX: 124,
+      clientY: 200,
+    });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByText("Photo preview")).toBe(preview);
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Photo preview")).toBe(preview);
+    expect(preview).toBeVisible();
   });
 
   it("follows a downward swipe and dismisses past a short threshold", () => {

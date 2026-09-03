@@ -6281,25 +6281,19 @@ button:focus-visible,
 }
 
 html.media-viewer-open,
-html.media-viewer-open body,
-html.media-viewer-open .app-shell,
-html.media-viewer-open .phone-stage,
-html.media-viewer-open .timeline,
-html.media-viewer-open .topbar,
-html.media-viewer-open .bottom-nav {
-  transform: none !important;
+html.media-viewer-open body {
   overscroll-behavior: none;
 }
 
+/* Lock only the floating chrome. Do not touch the timeline — applying
+   transform:none to the feed was itself a zoom/reflow on iPhone dismiss. */
+html.media-viewer-open .topbar,
+html.media-viewer-open .bottom-nav,
 html.media-viewer-open .topbar:active,
 html.media-viewer-open .topbar:has(:active),
 html.media-viewer-open .bottom-nav:active,
 html.media-viewer-open .bottom-nav:has(:active) {
   transform: none !important;
-}
-
-.media-viewer-trigger.is-open > * {
-  visibility: hidden;
 }
 
 .fullscreen-media-dialog {
