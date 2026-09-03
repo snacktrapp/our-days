@@ -217,7 +217,9 @@ function VideoFeasibilityDialog({
       return;
     resetSelection();
     onRequestClose();
-    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+    window.requestAnimationFrame(() =>
+      returnFocusRef.current?.focus({ preventScroll: true }),
+    );
   }, [onRequestClose, resetSelection, returnFocusRef]);
 
   useEffect(() => () => revokeActiveUrl(), [revokeActiveUrl]);

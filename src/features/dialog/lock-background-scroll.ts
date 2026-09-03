@@ -48,7 +48,20 @@ export function overlayBackgroundScrollShouldStop(
 }
 
 function restoreWindowScroll(scrollY: number) {
-  if (scrollY > 0) window.scrollTo(0, scrollY);
+  if (scrollY > 0 && window.scrollY !== scrollY) window.scrollTo(0, scrollY);
+}
+
+function restoreWindowScrollAfterModal(scrollY: number) {
+  const pin = () => restoreWindowScroll(scrollY);
+  pin();
+  window.addEventListener("scroll", pin);
+  requestAnimationFrame(() => {
+    pin();
+    requestAnimationFrame(() => {
+      window.removeEventListener("scroll", pin);
+      pin();
+    });
+  });
 }
 
 export function useLockBackgroundScroll(active: boolean) {
@@ -101,12 +114,7 @@ export function useLockBackgroundScroll(active: boolean) {
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       document.removeEventListener("wheel", onWheel, true);
-      restoreWindowScroll(scrollY);
-      // Native modal unblock can reset scroll after this cleanup.
-      requestAnimationFrame(() => {
-        restoreWindowScroll(scrollY);
-        requestAnimationFrame(() => restoreWindowScroll(scrollY));
-      });
+      restoreWindowScrollAfterModal(scrollY);
     };
   }, [active]);
 }
@@ -124,10 +132,13 @@ export function useModalDialog(
     const dialog = dialogRef.current;
     if (!mounted || !dialog) return;
     if (open) {
+      const scrollY = window.scrollY;
       showModalPreservingScroll(dialog);
-      return;
+      return () => {
+        if (dialog.open) dialog.close();
+        restoreWindowScrollAfterModal(scrollY);
+      };
     }
-    if (dialog.open) dialog.close();
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) setMounted(false);

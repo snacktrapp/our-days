@@ -383,7 +383,9 @@ export function MomentComposer({
 
       resetDraft();
       onRequestClose();
-      window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+      window.requestAnimationFrame(() =>
+        returnFocusRef.current?.focus({ preventScroll: true }),
+      );
     },
     [editDraft, isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
   );
@@ -732,7 +734,9 @@ export function MomentComposer({
       }
       resetDraft();
       onRequestClose();
-      window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+      window.requestAnimationFrame(() =>
+        returnFocusRef.current?.focus({ preventScroll: true }),
+      );
       router.replace("/family");
       return;
     }
@@ -786,7 +790,9 @@ export function MomentComposer({
     });
     resetDraft();
     onRequestClose();
-    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+    window.requestAnimationFrame(() =>
+      returnFocusRef.current?.focus({ preventScroll: true }),
+    );
     router.replace("/family");
   };
 
