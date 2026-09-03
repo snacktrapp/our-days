@@ -55,8 +55,9 @@ export default async function FamilySettingsPage() {
           setGuardian: setManagedProfileGuardianAction,
           withdrawInvitation: withdrawFamilyInvitationEmailRequestAction,
         }}
-      />
-      <AccountTools />
+      >
+        <AccountTools />
+      </FamilySettingsPanel>
     </JournalChrome>
   );
 }

@@ -76,6 +76,6 @@ describe("PrimaryNavigation", () => {
 
     expect(
       document.getElementById("bottom-nav-visual-inset-sheet")?.textContent,
-    ).toBe(":root{--bottom-nav-visual-inset:84px}");
+    ).toBe(":root{--bottom-nav-visual-inset:0px}");
   });
 });

@@ -34,7 +34,7 @@ describe("visual viewport bottom inset", () => {
     ).toBe(124);
   });
 
-  it("writes the inset through a nonceable stylesheet instead of a style attribute", () => {
+  it("writes a nonceable stylesheet without lifting the tab bar off the layout bottom", () => {
     const nonce = document.createElement("script");
     nonce.setAttribute("nonce", "test-nonce");
     document.head.append(nonce);
@@ -50,7 +50,7 @@ describe("visual viewport bottom inset", () => {
     const sheet = document.getElementById("bottom-nav-visual-inset-sheet");
     expect(sheet).toBeInstanceOf(HTMLStyleElement);
     expect(sheet?.getAttribute("nonce")).toBe("test-nonce");
-    expect(sheet?.textContent).toBe(":root{--bottom-nav-visual-inset:48px}");
+    expect(sheet?.textContent).toBe(":root{--bottom-nav-visual-inset:0px}");
     expect(document.documentElement.getAttribute("style")).toBeNull();
     clearBottomNavVisualInset(document.documentElement);
     expect(document.getElementById("bottom-nav-visual-inset-sheet")).toBeNull();

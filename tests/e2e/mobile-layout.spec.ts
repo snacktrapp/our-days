@@ -422,6 +422,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
       .getByRole("link", { name: "People" }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Opening your family’s days…")).toBeVisible();
+  await expect(page.locator(".journal-loading .date-marker")).toHaveText(
+    /opening your family’s days/iu,
+  );
   await expect(page).toHaveURL(/\/people$/u);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
   const samples = await page.evaluate(() => {

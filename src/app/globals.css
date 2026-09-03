@@ -3743,7 +3743,7 @@ button:focus-visible,
   height: calc(56px + env(safe-area-inset-bottom));
   position: fixed;
   z-index: 100;
-  bottom: var(--bottom-nav-visual-inset, 0px);
+  bottom: 0;
   left: 0;
   right: 0;
   width: min(100%, 430px);
@@ -3798,13 +3798,8 @@ button:focus-visible,
   place-items: center;
   position: relative;
 }
-.journal-loading p {
-  position: relative;
+.journal-loading .date-marker {
   z-index: 1;
-  padding: 8px 12px;
-  background: var(--paper);
-  color: var(--muted);
-  font-family: Georgia, serif;
 }
 .loading-rail {
   width: 1px;
@@ -4897,12 +4892,6 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.journal-loading p {
-  background: var(--paper);
-  color: var(--muted);
-  font-family: inherit;
-}
-
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .phone-stage {
     border-color: var(--hairline);
@@ -5089,6 +5078,10 @@ button:focus-visible,
 
 .account-tools {
   margin: 0 18px 24px;
+}
+
+.family-settings-panel .account-tools {
+  margin: 0;
 }
 
 .account-tool-link {

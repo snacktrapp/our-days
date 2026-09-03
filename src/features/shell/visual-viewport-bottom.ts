@@ -30,8 +30,10 @@ export function syncBottomNavVisualInset(
     document: Document;
   } = window,
 ) {
-  insetSheet(view.document).textContent =
-    `:root{${insetVariable}:${visualViewportBottomInset(view)}px}`;
+  // iOS already pins position:fixed to the visual viewport. Applying the
+  // leftover layout gap as `bottom` lifts the bar and leaves a beige hole
+  // above the home indicator.
+  insetSheet(view.document).textContent = `:root{${insetVariable}:0px}`;
 }
 
 export function clearBottomNavVisualInset(root: HTMLElement) {
