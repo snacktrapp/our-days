@@ -66,4 +66,40 @@ describe("family activity notifications", () => {
       }),
     ]);
   });
+
+  it("notifies other members when someone posts a moment, but not the author", () => {
+    const notifications = buildActivityNotifications(
+      [],
+      [],
+      new Set(["brian-photo"]),
+      new Map([
+        ["tars", "TARS"],
+        ["brian", "Brian"],
+      ]),
+      [
+        {
+          id: "tars-note",
+          author_membership_id: "tars",
+          moment_kind: "thought",
+          created_at: "2026-09-03T18:00:00.000Z",
+        },
+        {
+          id: "brian-own",
+          author_membership_id: "brian",
+          moment_kind: "photo",
+          created_at: "2026-09-03T19:00:00.000Z",
+        },
+      ],
+      "brian",
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        id: "moment:tars-note",
+        actorName: "TARS",
+        message: "posted a note.",
+        href: "/family#moment-tars-note",
+      }),
+    ]);
+  });
 });

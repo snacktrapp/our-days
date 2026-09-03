@@ -63,11 +63,28 @@ type ActivityNote = Readonly<{
 
 type ActivityReaction = ActivityNote & Readonly<{ reaction_type: string }>;
 
+type ActivityMoment = Readonly<{
+  id: string;
+  author_membership_id: string;
+  moment_kind: string;
+  created_at: string;
+}>;
+
+const momentMessages: Readonly<Record<string, string>> = {
+  thought: "posted a note.",
+  photo: "posted a photo.",
+  video: "posted a video.",
+  location: "posted a place.",
+  milestone: "posted a milestone.",
+};
+
 export function buildActivityNotifications(
   notes: readonly ActivityNote[],
   reactions: readonly ActivityReaction[],
   ownedMomentIds: ReadonlySet<string>,
   memberNames: ReadonlyMap<string, string>,
+  familyMoments: readonly ActivityMoment[] = [],
+  viewerMembershipId?: string,
 ): NonNullable<JournalChromeViewModel["notifications"]> {
   const displayDate = (createdAt: string) =>
     new Intl.DateTimeFormat("en-US", {
@@ -82,6 +99,16 @@ export function buildActivityNotifications(
   };
 
   return [
+    ...familyMoments
+      .filter((moment) => moment.author_membership_id !== viewerMembershipId)
+      .map((moment) => ({
+        id: `moment:${moment.id}`,
+        actorName: memberNames.get(moment.author_membership_id) ?? "Family",
+        message: momentMessages[moment.moment_kind] ?? "posted an entry.",
+        displayDate: displayDate(moment.created_at),
+        href: `/family#moment-${moment.id}`,
+        createdAt: moment.created_at,
+      })),
     ...notes
       .filter((note) => ownedMomentIds.has(note.moment_id))
       .map((note) => ({
@@ -130,6 +157,7 @@ export async function loadConnectedJournalContext(
     membershipsResult,
     guardiansResult,
     momentsResult,
+    familyMomentsResult,
     notesResult,
     reactionsResult,
   ] = await Promise.all([
@@ -159,6 +187,14 @@ export async function loadConnectedJournalContext(
       .eq("recorded_by_membership_id", access.membershipId)
       .is("trashed_at", null),
     supabase
+      .from("moments")
+      .select("id, recorded_by_membership_id, kind, created_at")
+      .eq("circle_id", access.circleId)
+      .neq("recorded_by_membership_id", access.membershipId)
+      .is("trashed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(40),
+    supabase
       .from("moment_notes")
       .select("id, moment_id, author_membership_id, created_at")
       .eq("circle_id", access.circleId)
@@ -182,6 +218,7 @@ export async function loadConnectedJournalContext(
     membershipsResult.error ??
     guardiansResult.error ??
     momentsResult.error ??
+    familyMomentsResult.error ??
     notesResult.error ??
     reactionsResult.error;
   if (error) throw error;
@@ -275,6 +312,13 @@ export async function loadConnectedJournalContext(
       reactionsResult.data ?? [],
       new Set((momentsResult.data ?? []).map((moment) => moment.id)),
       memberNames,
+      (familyMomentsResult.data ?? []).map((moment) => ({
+        id: moment.id,
+        author_membership_id: moment.recorded_by_membership_id,
+        moment_kind: moment.kind,
+        created_at: moment.created_at,
+      })),
+      access.membershipId,
     ),
   };
 
