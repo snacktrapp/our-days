@@ -19,6 +19,7 @@ describe("content security policy", () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("frame-src 'self'");
     expect(policy).toContain("upgrade-insecure-requests");
     expect(policy).not.toContain("'unsafe-inline'");
     expect(policy).not.toContain("'unsafe-eval'");
@@ -32,16 +33,40 @@ describe("content security policy", () => {
     });
 
     expect(policy).toContain(
-      "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co https://api.maptiler.com https://cdn.maptiler.com",
     );
     expect(policy).toContain(
-      "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://api.maptiler.com https://cdn.maptiler.com",
     );
     expect(policy).toContain(
       "media-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
     );
     expect(policy).not.toContain("*.supabase.co");
     expect(policy).not.toContain("*.storage.supabase.co");
+  });
+
+  it("does not upgrade loopback HTTP production servers to HTTPS", () => {
+    const policy = buildContentSecurityPolicy({
+      nonce,
+      development: false,
+      siteUrl: "http://127.0.0.1:3100",
+    });
+
+    expect(policy).not.toContain("upgrade-insecure-requests");
+  });
+
+  it("relaxes only the map picker document for MapLibre inline styles", () => {
+    const policy = buildContentSecurityPolicy({
+      nonce,
+      development: false,
+      embeddableMap: true,
+    });
+
+    expect(policy).toContain("style-src 'self' 'unsafe-inline'");
+    expect(policy).toContain("style-src-attr 'unsafe-inline'");
+    expect(policy).toContain("frame-ancestors 'self'");
+    expect(policy).toContain("https://api.maptiler.com");
+    expect(policy).not.toContain("'unsafe-eval'");
   });
 
   it("permits only development tooling escapes and local Supabase", () => {
@@ -54,7 +79,7 @@ describe("content security policy", () => {
     expect(policy).toContain("'unsafe-eval'");
     expect(policy).toContain("style-src 'self' 'unsafe-inline'");
     expect(policy).toContain(
-      "connect-src 'self' blob: ws: http://127.0.0.1:54321 ws://127.0.0.1:54321",
+      "connect-src 'self' blob: ws: http://127.0.0.1:54321 ws://127.0.0.1:54321 https://api.maptiler.com https://cdn.maptiler.com",
     );
     expect(policy).not.toContain("upgrade-insecure-requests");
   });
@@ -67,7 +92,7 @@ describe("content security policy", () => {
     });
 
     expect(policy).toContain(
-      "connect-src 'self' blob: http://journal.localhost:54321 ws://journal.localhost:54321",
+      "connect-src 'self' blob: http://journal.localhost:54321 ws://journal.localhost:54321 https://api.maptiler.com https://cdn.maptiler.com",
     );
   });
 

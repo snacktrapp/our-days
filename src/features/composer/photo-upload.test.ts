@@ -985,3 +985,28 @@ describe("connected private photo upload", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("hosted Vercel photo upload", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not fall through to the local file journal on Vercel", async () => {
+    vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", "preview");
+    const fetchFn = vi.fn();
+    vi.stubGlobal("fetch", fetchFn);
+
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        { fetch: fetchFn, hash: vi.fn(async () => "a".repeat(64)) },
+      ),
+    ).rejects.toThrow("connected Our Days storage");
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+});

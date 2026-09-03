@@ -22,7 +22,10 @@
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --header-drawer-padding: 16px;
   --header-drawer-top: calc(63px + env(safe-area-inset-top));
-  --header-drawer-gutter: max(16px, calc((100vw - 430px) / 2 + 16px));
+  --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
+  --bottom-nav-visual-inset: 0px;
+  --bottom-nav-float-gap: 10px;
+  --bottom-nav-inline-gap: 12px;
 }
 
 :root[data-theme="dark"] {
@@ -51,21 +54,32 @@
 html {
   width: 100%;
   max-width: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   background: #07110d;
-  scroll-padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
 }
 body {
   width: 100%;
   max-width: 100%;
+  min-height: 100dvh;
   overflow-x: clip;
+  overscroll-behavior-x: none;
   margin: 0;
   background: #07110d;
   color: var(--ink);
   font-family: var(--font-interface);
 }
+html.composer-scroll-locked,
 body.composer-scroll-locked {
-  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.composer-scroll-locked .app-shell,
+html.composer-scroll-locked .phone-stage {
   overscroll-behavior: none;
 }
 button {
@@ -147,6 +161,23 @@ button:focus-visible,
   margin-top: 22px;
   padding-top: 20px;
   border-top: 1px solid var(--hairline);
+}
+.private-entry-oauth {
+  display: grid;
+  gap: 9px;
+}
+.private-entry-oauth form + form {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.private-entry-backup {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hairline);
+}
+.private-entry-backup > p:first-child {
+  margin-bottom: 12px;
 }
 .private-entry-content label {
   color: var(--ink);
@@ -250,11 +281,15 @@ button:focus-visible,
 }
 
 .app-shell {
-  min-height: 100svh;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
   display: grid;
   place-items: start center;
   position: relative;
   overflow: hidden;
+  overflow-x: clip;
   background:
     radial-gradient(
       circle at 15% 15%,
@@ -307,10 +342,15 @@ button:focus-visible,
 
 .phone-stage {
   width: min(100%, 430px);
-  min-height: 100svh;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 100dvh;
   position: relative;
   overflow: hidden;
-  padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  overflow-x: clip;
+  padding-bottom: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
   background:
     linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0)),
     var(--paper);
@@ -522,6 +562,8 @@ button:focus-visible,
 
 .timeline {
   position: relative;
+  max-width: 100%;
+  min-width: 0;
   padding: 5px 14px 80px;
 }
 .time-rail {
@@ -561,6 +603,8 @@ button:focus-visible,
 .moment {
   position: relative;
   z-index: 1;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 28px;
 }
 .connection {
@@ -594,6 +638,9 @@ button:focus-visible,
   white-space: nowrap;
 }
 .moment-meta strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: var(--ink);
   font-size: 11px;
@@ -607,6 +654,8 @@ button:focus-visible,
 }
 .moment-card {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   position: relative;
   border: 1px solid rgba(79, 63, 48, 0.12);
   border-radius: 22px;
@@ -618,6 +667,8 @@ button:focus-visible,
   height: 270px;
   position: relative;
   overflow: hidden;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
   background: #cab8a3;
 }
 .photo-frame img {
@@ -990,6 +1041,31 @@ button:focus-visible,
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.thought-more {
+  display: inline-grid;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px 0 -10px;
+  padding: 0;
+  place-items: center start;
+  border: 0;
+  background: transparent;
+  color: var(--clay);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.thought-card blockquote.thought-copy-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  overflow: hidden;
+}
 .thought-card blockquote {
   margin: 11px 0 0;
   font-family: Georgia, "Times New Roman", serif;
@@ -1120,6 +1196,18 @@ button:focus-visible,
   right: 12px;
 }
 
+.connected-moment-actions:has(.connected-moment-menu) {
+  z-index: 8;
+}
+
+.moment:has(.connected-moment-menu) {
+  z-index: 6;
+}
+
+.moment-card:has(.connected-moment-menu) {
+  overflow: visible;
+}
+
 .connected-moment-menu-trigger {
   display: grid;
   width: 44px;
@@ -1138,16 +1226,21 @@ button:focus-visible,
 
 .connected-moment-menu {
   position: absolute;
-  top: 48px;
+  top: calc(100% + 4px);
   right: 0;
   display: grid;
   width: max-content;
   min-width: 154px;
-  padding: 5px;
+  padding: 4px;
   border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   border-radius: 15px;
   background: var(--cream);
   box-shadow: 0 12px 30px rgb(49 39 31 / 16%);
+}
+
+.connected-moment-menu[data-placement="above"] {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .connected-moment-menu button {
@@ -1169,11 +1262,6 @@ button:focus-visible,
 
 .connected-moment-menu button:last-child {
   color: #8b3e36;
-}
-
-.connected-edit-sheet {
-  display: grid;
-  gap: 1rem;
 }
 
 .composer-saved {
@@ -1270,6 +1358,8 @@ button:focus-visible,
   height: 165px;
   position: relative;
   overflow: hidden;
+  border-start-start-radius: inherit;
+  border-start-end-radius: inherit;
   background:
     repeating-radial-gradient(
       ellipse at 28% 30%,
@@ -1508,6 +1598,8 @@ button:focus-visible,
   display: grid;
   align-content: start;
   gap: 16px;
+  min-height: 0;
+  padding: 18px 18px 24px;
 }
 .family-settings-panel .section-intro {
   margin-bottom: 2px;
@@ -3720,20 +3812,26 @@ button:focus-visible,
 }
 
 .bottom-nav {
-  height: calc(56px + env(safe-area-inset-bottom));
+  height: 56px;
   position: fixed;
   z-index: 100;
-  bottom: 0;
-  left: 50%;
-  width: min(100%, 430px);
-  transform: translate3d(-50%, 0, 0);
+  bottom: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
+  margin-inline: auto;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;
-  padding: 3px 12px max(2px, env(safe-area-inset-bottom));
+  align-items: center;
+  padding: 3px 8px;
   isolation: isolate;
-  border-top: 1px solid var(--hairline);
-  background: rgba(7, 17, 13, 0.96);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: rgba(7, 17, 13, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(18px);
 }
 .nav-item {
@@ -3772,18 +3870,13 @@ button:focus-visible,
   cursor: pointer;
 }
 .journal-loading {
-  min-height: calc(100svh - 56px - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
   display: grid;
   place-items: center;
   position: relative;
 }
-.journal-loading p {
-  position: relative;
+.journal-loading .date-marker {
   z-index: 1;
-  padding: 8px 12px;
-  background: var(--paper);
-  color: var(--muted);
-  font-family: Georgia, serif;
 }
 .loading-rail {
   width: 1px;
@@ -3929,6 +4022,7 @@ button:focus-visible,
 .memory-journey-heading > span,
 .moment-kicker,
 .thought-label,
+.thought-more,
 .milestone-copy > span,
 .composer-review-details dt,
 .photo-date {
@@ -4112,6 +4206,10 @@ button:focus-visible,
   box-shadow: none;
 }
 
+.moment-card:has(.connected-moment-menu) {
+  overflow: visible;
+}
+
 .photo-frame {
   height: 248px;
   background: #17231e;
@@ -4199,6 +4297,10 @@ button:focus-visible,
   color: var(--clay);
 }
 
+.thought-more {
+  color: var(--clay);
+}
+
 .thought-card blockquote {
   margin: 10px 0 0;
   font-family: Georgia, "Times New Roman", serif;
@@ -4212,6 +4314,10 @@ button:focus-visible,
 .thought-card .bible-verse-copy {
   display: grid;
   gap: 12px;
+}
+
+.thought-card .bible-verse-copy.thought-copy-clamped {
+  display: -webkit-box;
 }
 
 .bible-verse-copy cite {
@@ -4876,12 +4982,6 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.journal-loading p {
-  background: var(--paper);
-  color: var(--muted);
-  font-family: inherit;
-}
-
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .phone-stage {
     border-color: var(--hairline);
@@ -5006,7 +5106,7 @@ button:focus-visible,
   z-index: 35;
   top: 47px;
   right: -44px;
-  width: min(310px, calc(100vw - 32px));
+  width: min(310px, calc(100dvw - 32px));
   padding: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
   color: var(--ink);
@@ -5070,6 +5170,10 @@ button:focus-visible,
   margin: 0 18px 24px;
 }
 
+.family-settings-panel .account-tools {
+  margin: 0;
+}
+
 .account-tool-link {
   min-height: 58px;
   display: grid;
@@ -5126,7 +5230,8 @@ button:focus-visible,
 }
 
 :root[data-theme="light"] .bottom-nav {
-  background: rgba(243, 238, 228, 0.96);
+  background: rgba(243, 238, 228, 0.94);
+  box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
 :root[data-theme="light"] .nav-item {
@@ -5187,8 +5292,7 @@ button:focus-visible,
 :root[data-theme="light"] .settings-review-actions button,
 :root[data-theme="light"] .settings-role-card button,
 :root[data-theme="light"] .guardian-options button,
-:root[data-theme="light"] .settings-removal-zone > button,
-:root[data-theme="light"] .bible-verse-results {
+:root[data-theme="light"] .settings-removal-zone > button {
   background: var(--cream);
 }
 
@@ -5213,11 +5317,6 @@ button:focus-visible,
 :root[data-theme="light"] .composer-field > span small,
 :root[data-theme="light"] .composer-optional-toggle span {
   color: #59645e;
-}
-
-:root[data-theme="light"] .bible-verse-results button span,
-:root[data-theme="light"] .bible-verse-results p {
-  color: var(--ink);
 }
 
 .notification-trigger {
@@ -5478,94 +5577,6 @@ button:focus-visible,
   font-family: Georgia, "Times New Roman", serif;
 }
 
-.bible-verse-search {
-  display: grid;
-  gap: 10px;
-}
-
-.bible-verse-search > div:first-child {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.bible-verse-search > div:first-child strong {
-  color: var(--ink);
-  font-size: 12px;
-}
-
-.bible-verse-search > div:first-child small {
-  color: var(--muted);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 7px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.bible-verse-results {
-  max-height: 220px;
-  overflow-y: auto;
-  display: grid;
-  grid-auto-rows: max-content;
-  align-items: start;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: #0e1b16;
-}
-
-.bible-verse-results button {
-  width: 100%;
-  height: auto;
-  min-height: 62px;
-  padding: 10px 11px;
-  display: block;
-  align-self: stretch;
-  overflow: visible;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  white-space: normal;
-}
-
-.bible-verse-results button:last-child {
-  border-bottom: 0;
-}
-
-.bible-verse-results button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--ochre) 11%, transparent);
-  box-shadow: inset 2px 0 var(--ochre);
-}
-
-.bible-verse-results button strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ochre);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.bible-verse-results button span,
-.bible-verse-results p {
-  margin: 0;
-  display: block;
-  color: #c5cec8;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.bible-verse-results p {
-  padding: 14px 11px;
-}
-
 .view-switch {
   width: 144px;
   display: block;
@@ -5672,11 +5683,6 @@ button:focus-visible,
   width: 44px;
   min-height: 44px;
   margin: -7px;
-}
-
-.photo-card-heading .connected-moment-menu,
-.location-card-heading .connected-moment-menu {
-  top: 32px;
 }
 
 /* All moment kind labels share the same compact journal-index treatment. */
@@ -5899,7 +5905,7 @@ button:focus-visible,
 }
 
 .new-moment-composer-dialog .composer-sheet {
-  width: min(310px, calc(100vw - 32px));
+  width: min(310px, calc(100dvw - 32px));
   max-height: calc(100dvh - 72px - env(safe-area-inset-top));
   position: fixed;
   top: var(--header-drawer-top);
@@ -6218,6 +6224,30 @@ button:focus-visible,
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 12%, transparent);
 }
 
+.composer-picker-trigger:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.35;
+}
+
+.composer-picker-trigger:disabled:hover,
+.composer-picker-trigger:disabled:focus-visible {
+  border-color: var(--hairline);
+  box-shadow: none;
+}
+
+.composer-bible-verse-fields .composer-picker-panel {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.composer-bible-verse-fields .composer-journal-menu {
+  position: static;
+  width: 100%;
+  margin-top: 0;
+  padding: 0;
+}
+
 .composer-picker-trigger > span:last-child {
   flex: none;
   color: var(--teal);
@@ -6315,7 +6345,7 @@ button:focus-visible,
 
 .composer-picker-secondary,
 .composer-picker-primary {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 15px;
   border: 1px solid var(--hairline);
   border-radius: 7px;
@@ -6394,22 +6424,74 @@ button:focus-visible,
   box-shadow: 0 16px 34px rgba(48, 43, 34, 0.16);
 }
 
-/* The menu is portalled to the viewport so a media card's rounded clipping
-   never cuts it off. */
-.connected-moment-menu-portal {
-  position: fixed;
-  z-index: 1000;
-  inset: auto 12px calc(64px + env(safe-area-inset-bottom));
-  width: min(calc(100vw - 24px), 360px);
-  max-width: 360px;
-  height: fit-content;
-  max-height: min(60vh, 260px);
-  margin: 0 auto;
-  transform: none;
-  grid-auto-rows: max-content;
-  align-content: start;
-  overflow: auto;
+.composer-location-fields {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.composer-location-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.composer-location-geolocate {
+  width: 100%;
+  background: transparent;
+  color: var(--teal);
+}
+
+.composer-location-status,
+.composer-location-unavailable,
+.composer-location-note {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-record);
+  font-size: 13px;
+}
+
+.composer-location-unavailable {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--hairline);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--paper) 40%, transparent);
+}
+
+.composer-location-suggestions {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-location-suggestions button {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-record);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-location-suggestions button:hover,
+.composer-location-suggestions button:focus-visible {
+  background: color-mix(in srgb, var(--teal) 14%, transparent);
   outline: none;
+}
+
+.composer-location-map {
+  width: 100%;
+  height: 180px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: #101d17;
 }
 
 .pending-media-shelf {
@@ -6626,6 +6708,14 @@ button:focus-visible,
   box-shadow: none;
 }
 
+/* Account used to wrap everything in the leftover full-page section-panel card
+   (min-height 100svh and 120px bottom padding). That empty shell sat under
+   Journal tools after the inner cards. Size to content only. */
+.family-settings-panel {
+  min-height: 0;
+  padding-bottom: 24px;
+}
+
 /* Hard-coded dark-theme display colors need explicit light equivalents. */
 :root[data-theme="light"] .date-marker span {
   color: var(--muted);
@@ -6634,15 +6724,6 @@ button:focus-visible,
 :root[data-theme="light"] .milestone-copy > span,
 :root[data-theme="light"] .milestone-seal span,
 :root[data-theme="light"] .milestone-seal strong {
-  color: #7d520f;
-}
-
-:root[data-theme="light"] .bible-verse-results button span,
-:root[data-theme="light"] .bible-verse-results p {
-  color: var(--ink);
-}
-
-:root[data-theme="light"] .bible-verse-results button strong {
   color: #7d520f;
 }
 

@@ -187,6 +187,74 @@ describe("photo byte validator", () => {
     });
   });
 
+  it("accepts a JPEG with a smaller MPF-style preview stream", async () => {
+    const primary = await sharp({
+      create: {
+        background: "#1a6b8a",
+        channels: 3,
+        height: 64,
+        width: 96,
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    const preview = await sharp({
+      create: {
+        background: "#112233",
+        channels: 3,
+        height: 16,
+        width: 24,
+      },
+    })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    const bytes = Buffer.concat([primary, preview]);
+
+    await expect(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/jpeg"),
+      ),
+    ).resolves.toMatchObject({
+      height: 64,
+      mimeType: "image/jpeg",
+      pages: 1,
+      width: 96,
+    });
+  });
+
+  it("still rejects a second JPEG that is large enough to be another photo", async () => {
+    const primary = await sharp({
+      create: {
+        background: "#526f82",
+        channels: 3,
+        height: 40,
+        width: 48,
+      },
+    })
+      .jpeg()
+      .toBuffer();
+    const other = await sharp({
+      create: {
+        background: "#814d52",
+        channels: 3,
+        height: 36,
+        width: 40,
+      },
+    })
+      .jpeg()
+      .toBuffer();
+    const bytes = Buffer.concat([primary, other]);
+
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/jpeg"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+  });
+
   it("opens its spool exclusively with owner-only permissions", async () => {
     const bytes = await sharp({
       create: {

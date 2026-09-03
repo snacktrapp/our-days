@@ -12,6 +12,16 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+async function setComposerPlace(scope: Page | Locator, name: string) {
+  const page = "keyboard" in scope ? scope : scope.page();
+  const field = scope.getByLabel("Place name");
+  if (!(await field.isVisible())) {
+    await scope.getByRole("button", { name: /^Place,/u }).click();
+  }
+  await field.fill(name);
+  await page.keyboard.press("Escape");
+}
+
 async function expectReachable(control: Locator) {
   await control.scrollIntoViewIfNeeded();
   await expect(control).toBeInViewport({ ratio: 1 });
@@ -133,7 +143,7 @@ async function expectCompleteFocusTraversal(
 
 async function openComposer(page: Page) {
   await page.getByRole("button", { name: "Add moment" }).click();
-  return page.getByRole("dialog");
+  return page.locator("dialog.new-moment-composer-dialog");
 }
 
 async function selectMomentDate(dialog: Locator, dateLabel: string) {
@@ -142,6 +152,39 @@ async function selectMomentDate(dialog: Locator, dateLabel: string) {
     .getByRole("dialog", { name: "Choose moment date" })
     .getByRole("button", { name: dateLabel, exact: true })
     .click();
+}
+
+async function selectBiblePassage(
+  dialog: Locator,
+  passage: Readonly<{
+    book: string;
+    chapter: number;
+    start: number;
+    end?: number;
+  }>,
+) {
+  await dialog.getByRole("button", { name: /^Book,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose book" })
+    .getByRole("menuitemradio", { name: passage.book, exact: true })
+    .click();
+  await dialog.getByRole("button", { name: /^Chapter,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose chapter" })
+    .getByRole("button", { name: `Chapter ${passage.chapter}` })
+    .click();
+  await dialog.getByRole("button", { name: /^Starting verse,/u }).click();
+  await dialog
+    .getByRole("dialog", { name: "Choose starting verse" })
+    .getByRole("button", { name: `Starting verse ${passage.start}` })
+    .click();
+  if (passage.end && passage.end !== passage.start) {
+    await dialog.getByRole("button", { name: /^Ending verse,/u }).click();
+    await dialog
+      .getByRole("dialog", { name: "Choose ending verse" })
+      .getByRole("button", { name: `Ending verse ${passage.end}` })
+      .click();
+  }
 }
 
 test("date, time, and journal stay separated inside every phone-width drawer", async ({
@@ -251,7 +294,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(drawerPlacement?.distanceFromHeader).toBeLessThan(0);
   expect(drawerPlacement?.opensFromTop).toBe(true);
   expect(drawerPlacement?.top).toBe(notificationTop);
-  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 
   let backgroundBlocked = false;
@@ -292,7 +335,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(averyTag).not.toBeChecked();
   await expect(averyTag).toBeDisabled();
   await page.getByRole("checkbox", { name: /Molly/u }).check();
-  await page.getByLabel(/^Place/u).fill("Oak Street School");
+  await setComposerPlace(dialog, "Oak Street School");
   await expectMinimumTargets(dialog);
   await expectReadableInputType(dialog);
   await expectCompleteFocusTraversal(
@@ -315,7 +358,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await page.getByRole("button", { name: "Close moment composer" }).click();
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
-  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
 });
 
 test("required content rejects whitespace and future dates before review", async ({
@@ -330,6 +373,9 @@ test("required content rejects whitespace and future dates before review", async
   for (const testCase of cases) {
     const dialog = await openComposer(page);
     await dialog.getByRole("button", { name: testCase.choice }).click();
+    if (testCase.choice.source.includes("Location")) {
+      await dialog.getByRole("button", { name: /^Place,/u }).click();
+    }
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
     await dialog.getByRole("button", { name: "Save" }).click();
@@ -421,17 +467,15 @@ test("all four capture modes save directly without a confirmation screen", async
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
-  await dialog
-    .getByRole("searchbox", { name: "Reference or words" })
-    .fill("John 3:16");
-  await dialog.getByRole("button", { name: /John 3:16/u }).click();
+  await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Location/u }).click();
   await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
-  await page.getByLabel("Place name").fill("Sand Harbor");
+  await setComposerPlace(dialog, "Sand Harbor");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 });
@@ -677,13 +721,75 @@ test("expanded capture states have no serious axe violations", async ({
   const dialog = await openComposer(page);
   await scan();
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
-  await dialog
-    .getByRole("searchbox", { name: "Reference or words" })
-    .fill("John 3:16");
-  await dialog.getByRole("button", { name: /John 3:16/u }).click();
+  await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
   await page.getByRole("button", { name: /Details/u }).click();
   await scan();
   await scan();
+});
+
+test("an open entry overlay does not scroll the family feed underneath", async ({
+  allowedConsoleErrors,
+  page,
+}) => {
+  allowedConsoleErrors.push(
+    "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive",
+  );
+  await page.setViewportSize({ width: 390, height: 568 });
+  await page.goto("/family");
+  await page.evaluate(() => window.scrollTo(0, 160));
+  const backgroundScroll = await page.evaluate(() => window.scrollY);
+  expect(backgroundScroll).toBeGreaterThan(0);
+
+  // Playwright's locator.click() scrolls the header Add moment into view
+  // and would zero the feed before the overlay opens.
+  await page.getByRole("button", { name: "Add moment" }).dispatchEvent("click");
+  const dialog = page.locator("dialog.new-moment-composer-dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /Bible verse/u }).click();
+  await selectBiblePassage(dialog, {
+    book: "Proverbs",
+    chapter: 28,
+    start: 10,
+    end: 21,
+  });
+  await expect(dialog.getByLabel("Verse text")).toHaveValue(/upright/u);
+  await expect(page.locator("html")).toHaveClass(/composer-scroll-locked/u);
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
+
+  // Native <dialog>.showModal() makes document scrolling a no-op, so
+  // window.scrollY reads 0 until close. Assert the lock and that wheel on
+  // overlay chrome is cancelled; restore the feed offset after close.
+  const prevented = await page.evaluate(() => {
+    const event = new WheelEvent("wheel", {
+      deltaY: 480,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+
+  const verse = page.getByLabel("Verse text");
+  await verse.evaluate((element) => {
+    if (!(element instanceof HTMLTextAreaElement)) return;
+    element.scrollTop = 48;
+  });
+  expect(
+    await verse.evaluate((element) =>
+      element instanceof HTMLTextAreaElement ? element.scrollTop : 0,
+    ),
+  ).toBeGreaterThan(0);
+
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await dialog.getByRole("button", { name: "Close moment composer" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("html")).not.toHaveClass(/composer-scroll-locked/u);
+  await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
+  await expect
+    .poll(async () => page.evaluate(() => window.scrollY))
+    .toBe(backgroundScroll);
 });
 
 test("keyboard-sized viewport keeps every capture and review control reachable", async ({
@@ -715,7 +821,7 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     dialog.getByRole("button", { name: /^Journal,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
-    page.getByLabel(/^Place/u),
+    page.getByRole("button", { name: /^Place,/u }),
     page.getByRole("button", { name: "Save" }),
   ]) {
     await expectReachable(control);

@@ -11,6 +11,7 @@ import type {
 import type { TimelineMomentViewModel } from "@/features/timeline/timeline-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import type { Database } from "@/lib/supabase/database.types";
+import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import {
   plainToday,
@@ -129,6 +130,10 @@ export async function loadConnectedMemories(
   context: ConnectedJournalContext,
   options: Readonly<{ beforeYear?: number }> = {},
 ): Promise<MemoriesViewModel> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalMemories } = await import("@/lib/local-journal/views");
+    return loadLocalMemories(access, context, options);
+  }
   const supabase = await createOurDaysServerClient();
   const anniversary = anniversaryFromToday(context.today);
   const [yearsResult, featureResult] = await Promise.all([
@@ -226,6 +231,11 @@ export async function loadConnectedMemoryJourney(
   context: ConnectedJournalContext,
   options: MemoryJourneyOptions,
 ): Promise<MemoryJourneyViewModel> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalMemoryJourney } =
+      await import("@/lib/local-journal/views");
+    return loadLocalMemoryJourney(access, context, options);
+  }
   const supabase = await createOurDaysServerClient();
   const pageCount = requestedPageCount(options.pages);
   let snapshotAt = requestedSnapshot(options.snapshotAt);

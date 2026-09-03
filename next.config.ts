@@ -5,9 +5,11 @@ import {
 } from "./config/our-days-environment";
 import { httpSecurityHeaders } from "./config/http-security";
 
-const environment = validateOurDaysEnvironment(
-  environmentForNextConfig(process.env),
-);
+const resolvedEnvironment = environmentForNextConfig(process.env);
+if (resolvedEnvironment.NEXT_PUBLIC_SITE_URL) {
+  process.env.NEXT_PUBLIC_SITE_URL = resolvedEnvironment.NEXT_PUBLIC_SITE_URL;
+}
+const environment = validateOurDaysEnvironment(resolvedEnvironment);
 
 const privateRoutes = [
   "/",
@@ -26,6 +28,7 @@ const privateRoutes = [
   "/settings/:path*",
   "/memories/:path*",
   "/quality/:path*",
+  "/internal/map-picker",
 ];
 const privateHeaders = [
   { key: "Cache-Control", value: "private, no-store, max-age=0" },
@@ -36,6 +39,14 @@ const privateHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["sharp"],
+  outputFileTracingIncludes: {
+    "/api/photos/process": [
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/sharp-linux*/**/*",
+      "./node_modules/@img/sharp-libvips-linux*/**/*",
+    ],
+  },
   images: {
     qualities: [75],
     maximumRedirects: 0,
@@ -44,7 +55,13 @@ const nextConfig: NextConfig = {
     return [
       ...privateRoutes.map((source) => ({ source, headers: privateHeaders })),
       {
-        source: "/(.*)",
+        source: "/internal/map-picker",
+        headers: httpSecurityHeaders(environment.identity, {
+          allowSameOriginFrame: true,
+        }),
+      },
+      {
+        source: "/((?!internal/map-picker).*)",
         headers: httpSecurityHeaders(environment.identity),
       },
     ];

@@ -4,6 +4,10 @@ Our Days is a private, mobile-first family journal built around a chronological 
 
 The current route-based shell preserves the approved interactive design baseline. Backend/auth work intentionally follows the privacy and acceptance gates in `docs/`.
 
+The default local path now runs that same product without Docker Desktop or the multi-container Supabase Studio stack. Sign-in, written moments, and photo/video coordinators use a file-backed local journal; hosted Supabase remains the production backend.
+
+Accounts and env vars live in `docs/operations/ACCOUNT_AND_ENV.md`. Use `snacktrapp/our-days`, the existing Vercel project **our-days** (`https://our-days-neon.vercel.app`), and the Our Days Supabase project already attached there. Do not create a new Vercel project. Do not use Proof, LiftSync, or Bee Line Tech credentials. Do not paste secrets into chat.
+
 ## Local development
 
 ```bash
@@ -12,11 +16,11 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>; local development redirects the locked root to `/family` for design work.
+Open <http://localhost:3000>. The public gate is the invitation-only sign-in screen: Sign in with Google and Sign in with X first, with “Email me a sign-in link” as backup. For the local journal without OAuth secrets, use `family@example.com` (a synthetic organizer, not a production family member). Data stays in `.data/our-days-local/`. Google and X work once the client IDs/secrets in `.env.example` are filled; an uninvited Google/X account still cannot enter. Setup steps are in `docs/operations/OAUTH_SIGN_IN.md`.
 
 Requires Node.js 22 or newer. `.node-version` pins the locally verified and CI runtime; the checked-in package lock is authoritative.
 
-The Phase 2 database foundation is local and unlinked. Running it requires a Docker-compatible container runtime, then:
+The Phase 2 database foundation is local and unlinked. It is optional and not on the happy path. Running it requires a Docker-compatible container runtime, then:
 
 ```bash
 npm run supabase:start
@@ -79,6 +83,8 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/PHASE_7C_ACCOUNT_CLOSURE_PREPARATION_REPORT.md` — private closure intent, atomic all-circle access detachment, and remaining external-deletion gates
 - `docs/quality/PHASE_8A_LOCAL_RECOVERY_FOUNDATION_REPORT.md` — same-container synthetic database restore evidence and remaining production recovery gates
 - `docs/operations/LOCAL_RECOVERY_DRILL.md` — destructive local-fixture drill procedure, safety boundary, and production recovery prerequisites
+- `docs/operations/ACCOUNT_AND_ENV.md` — GitHub / Vercel / Supabase account map and where each env var is set
+- `docs/operations/OAUTH_SIGN_IN.md` — Google and X OAuth app setup, env vars, and invitation-bound identity
 - `docs/quality/PRIVATE_ARTIFACT_SCAN_REPORT.md` — credential and private client-artifact gate
 - `docs/quality/SECURITY_HEADERS_REPORT.md` — nonce CSP and browser isolation evidence
 

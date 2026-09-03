@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { expireOurDaysAuthCookies } from "@/lib/auth/session-cookies.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -19,6 +20,13 @@ export async function signOutCurrentDevice(): Promise<SignOutResult> {
     )
   ) {
     return { ok: false, message: "Sign out could not be verified." };
+  }
+
+  if (localJournalIsEnabled()) {
+    const { expireLocalJournalSession } =
+      await import("@/lib/local-journal/auth");
+    await expireLocalJournalSession();
+    return { ok: true };
   }
 
   try {

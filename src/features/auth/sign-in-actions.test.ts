@@ -104,6 +104,46 @@ describe("passwordless email sign-in actions", () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
+  it("uses the Vercel Preview origin when SITE_URL is a copied staging host", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://our-days-staging.vercel.app");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "our-days-git-preview.vercel.app");
+    mocks.getHeaders.mockResolvedValueOnce(
+      new Headers({ origin: "https://our-days-git-preview.vercel.app" }),
+    );
+
+    await expect(
+      requestSignInLink(
+        initialSignInActionState,
+        form({ email: "family@example.com" }),
+      ),
+    ).resolves.toMatchObject({ status: "sent" });
+    expect(mocks.signInWithOtp).toHaveBeenCalledWith({
+      email: "family@example.com",
+      options: {
+        emailRedirectTo:
+          "https://our-days-git-preview.vercel.app/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+  });
+
+  it("does not treat the request Origin as the expected origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    mocks.getHeaders.mockResolvedValueOnce(
+      new Headers({ origin: "https://attacker.example" }),
+    );
+
+    await expect(
+      requestSignInLink(
+        initialSignInActionState,
+        form({ email: "family@example.com" }),
+      ),
+    ).resolves.toMatchObject({ status: "denied" });
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
   it("verifies one code and checks current RLS membership", async () => {
     await expect(
       verifySignInCode(

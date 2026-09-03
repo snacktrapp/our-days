@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useComposerSession } from "@/features/composer/composer-session";
 import {
   MomentComposer,
   type SaveFamilyMomentAction,
@@ -14,8 +15,25 @@ export function TimelineHeaderComposer({
   composer: MomentComposerViewModel;
   createMomentAction?: SaveFamilyMomentAction;
 }>) {
+  const session = useComposerSession();
   const [composerOpen, setComposerOpen] = useState(false);
   const addMomentRef = useRef<HTMLButtonElement>(null);
+
+  if (session) {
+    return (
+      <button
+        ref={addMomentRef}
+        className="header-add-moment"
+        type="button"
+        aria-label="Add moment"
+        onClick={() => session.openCreate(addMomentRef.current)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+    );
+  }
 
   return (
     <>

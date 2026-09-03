@@ -30,7 +30,7 @@ test("private HTML receives fresh strict nonces and baseline headers", async ({
   expect(firstPolicy).toContain("frame-ancestors 'none'");
   expect(firstPolicy).toContain("object-src 'none'");
   expect(firstPolicy).toContain("base-uri 'none'");
-  expect(firstPolicy).toContain("upgrade-insecure-requests");
+  expect(firstPolicy).not.toContain("upgrade-insecure-requests");
   expect(firstPolicy).not.toContain("'unsafe-inline'");
   expect(firstPolicy).not.toContain("'unsafe-eval'");
   expect(first.headers()["x-nonce"]).toBeUndefined();
@@ -171,7 +171,7 @@ test("timeline, memories, and composer render without application style attribut
         })),
     );
   expect(applicationStyles).toEqual([]);
-  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+  await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
 });
 
 test("ordinary and public-prefix near-miss 404s keep the enforced policy", async ({

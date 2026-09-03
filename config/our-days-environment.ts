@@ -9,6 +9,7 @@ export type OurDaysResourceMode = "detached" | "supabase";
 export type OurDaysInvitationDeliveryMode = "disabled" | "enabled";
 export type OurDaysMediaDeliveryMode = "disabled" | "enabled";
 export type OurDaysPhotoPostingMode = "disabled" | "enabled";
+export type OurDaysLocalJournalMode = "disabled" | "enabled";
 
 export type OurDaysEnvironment = Readonly<{
   identity: OurDaysEnvironmentIdentity;
@@ -35,7 +36,12 @@ const photoPostingModes = new Set<OurDaysPhotoPostingMode>([
   "disabled",
   "enabled",
 ]);
+const localJournalModes = new Set<OurDaysLocalJournalMode>([
+  "disabled",
+  "enabled",
+]);
 const projectRefPattern = /^[a-z0-9]{20}$/;
+const ourDaysProductionSiteOrigin = "https://our-days-neon.vercel.app";
 const allowedPublicSupabaseEnvironmentNames = new Set([
   "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -278,6 +284,67 @@ function configuredForbiddenRefs(
   return new Set(refs);
 }
 
+export function isHostedVercelRuntime(
+  environment: ProcessEnvironment = process.env,
+) {
+  return (
+    environment.VERCEL === "1" &&
+    (environment.VERCEL_ENV === "preview" ||
+      environment.VERCEL_ENV === "production")
+  );
+}
+
+function hostedVercelHostname(value: string | undefined) {
+  if (!value) return undefined;
+  return value.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
+function hostedVercelDeploymentOrigin(environment: ProcessEnvironment) {
+  const host = hostedVercelHostname(
+    environment.VERCEL_BRANCH_URL || environment.VERCEL_URL,
+  );
+  return host ? `https://${host}` : undefined;
+}
+
+function hostedVercelSiteOrigin(environment: ProcessEnvironment) {
+  const productionOrigin =
+    environment.OUR_DAYS_PRODUCTION_SITE_ORIGIN?.trim() ||
+    ourDaysProductionSiteOrigin;
+  if (environment.VERCEL_ENV === "production") {
+    return environment.NEXT_PUBLIC_SITE_URL?.trim() || productionOrigin;
+  }
+  return (
+    hostedVercelDeploymentOrigin(environment) ||
+    environment.NEXT_PUBLIC_SITE_URL?.trim()
+  );
+}
+
+export function resolvedSiteOrigin(
+  environment: ProcessEnvironment = process.env,
+) {
+  if (isHostedVercelRuntime(environment)) {
+    return hostedVercelSiteOrigin(environment);
+  }
+  return (
+    environment.NEXT_PUBLIC_SITE_URL?.trim() ||
+    hostedVercelDeploymentOrigin(environment)
+  );
+}
+
+function isPublicSupabaseBrowserKey(value: string) {
+  if (value.startsWith("sb_publishable_") && value.length >= 24) return true;
+  const segments = value.split(".");
+  if (segments.length !== 3) return false;
+  try {
+    const payload = JSON.parse(
+      Buffer.from(segments[1], "base64url").toString("utf8"),
+    ) as { role?: unknown };
+    return payload.role === "anon";
+  } catch {
+    return false;
+  }
+}
+
 function rejectPrivilegedWebCredentials(
   environment: ProcessEnvironment,
   issues: string[],
@@ -402,6 +469,74 @@ export function validateOurDaysEnvironment(
   if (photoPostingMode === "enabled" && resourceMode !== "supabase") {
     issues.push(
       "OUR_DAYS_PHOTO_POSTING_MODE=enabled requires supabase resource mode",
+    );
+  }
+  const localJournalMode = configuredValue(
+    environment,
+    "OUR_DAYS_LOCAL_JOURNAL_MODE",
+    issues,
+  );
+  if (
+    localJournalMode &&
+    !localJournalModes.has(localJournalMode as OurDaysLocalJournalMode)
+  ) {
+    issues.push("OUR_DAYS_LOCAL_JOURNAL_MODE must be disabled or enabled");
+  }
+  if (localJournalMode === "enabled") {
+    if (environment.VERCEL === "1") {
+      issues.push(
+        "OUR_DAYS_LOCAL_JOURNAL_MODE cannot be enabled on Vercel Preview or Production",
+      );
+    }
+    if (resourceMode !== "detached") {
+      issues.push(
+        "OUR_DAYS_LOCAL_JOURNAL_MODE=enabled requires detached resource mode",
+      );
+    }
+    if (identity && identity !== "local") {
+      issues.push(
+        "OUR_DAYS_LOCAL_JOURNAL_MODE=enabled requires a local environment",
+      );
+    }
+  }
+  const googleClientId = configuredValue(
+    environment,
+    "OUR_DAYS_GOOGLE_CLIENT_ID",
+    issues,
+  );
+  const googleClientSecret = configuredValue(
+    environment,
+    "OUR_DAYS_GOOGLE_CLIENT_SECRET",
+    issues,
+  );
+  if (googleClientId && !googleClientSecret) {
+    issues.push(
+      "OUR_DAYS_GOOGLE_CLIENT_SECRET is required when OUR_DAYS_GOOGLE_CLIENT_ID is set",
+    );
+  }
+  if (googleClientSecret && !googleClientId) {
+    issues.push(
+      "OUR_DAYS_GOOGLE_CLIENT_ID is required when OUR_DAYS_GOOGLE_CLIENT_SECRET is set",
+    );
+  }
+  const xClientId = configuredValue(
+    environment,
+    "OUR_DAYS_X_CLIENT_ID",
+    issues,
+  );
+  const xClientSecret = configuredValue(
+    environment,
+    "OUR_DAYS_X_CLIENT_SECRET",
+    issues,
+  );
+  if (xClientId && !xClientSecret) {
+    issues.push(
+      "OUR_DAYS_X_CLIENT_SECRET is required when OUR_DAYS_X_CLIENT_ID is set",
+    );
+  }
+  if (xClientSecret && !xClientId) {
+    issues.push(
+      "OUR_DAYS_X_CLIENT_ID is required when OUR_DAYS_X_CLIENT_SECRET is set",
     );
   }
   const designPreview = configuredValue(
@@ -534,12 +669,9 @@ export function validateOurDaysEnvironment(
       issues.push(
         "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is required in supabase mode",
       );
-    } else if (
-      !publishableKey.startsWith("sb_publishable_") ||
-      publishableKey.length < 24
-    ) {
+    } else if (!isPublicSupabaseBrowserKey(publishableKey)) {
       issues.push(
-        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must use a current publishable key",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must use a current publishable key or public anon JWT",
       );
     }
     if (expectedRef && urlRef && expectedRef !== urlRef) {
@@ -558,8 +690,10 @@ export function validateOurDaysEnvironment(
         issues.push(
           "OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF is required in Preview",
         );
-      } else if (expectedRef === productionRef) {
-        issues.push("Preview must not use the Production Supabase project");
+      } else if (expectedRef && expectedRef !== productionRef) {
+        issues.push(
+          "Preview must use the existing Our Days Supabase project attached to Production",
+        );
       }
       if (
         siteOrigin &&
@@ -625,27 +759,74 @@ export function invitationDeliveryIsEnabled(
   );
 }
 
-export function mediaDeliveryIsEnabled(
+export function supabaseResourceIsActive(
+  environment: ProcessEnvironment = process.env,
+) {
+  if (environment.OUR_DAYS_RESOURCE_MODE === "supabase") return true;
+  return (
+    isHostedVercelRuntime(environment) &&
+    Boolean(environment.NEXT_PUBLIC_SUPABASE_URL) &&
+    Boolean(environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
+  );
+}
+
+export function journalPersistenceIsConnected(
   environment: ProcessEnvironment = process.env,
 ) {
   return (
-    environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "enabled" &&
-    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+    supabaseResourceIsActive(environment) || localJournalIsEnabled(environment)
   );
+}
+
+export function mediaDeliveryIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  if (!supabaseResourceIsActive(environment)) return false;
+  if (environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "disabled") return false;
+  if (environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "enabled") return true;
+  return isHostedVercelRuntime(environment);
 }
 
 export function photoPostingIsEnabled(
   environment: ProcessEnvironment = process.env,
 ) {
+  if (!supabaseResourceIsActive(environment)) return false;
+  if (environment.OUR_DAYS_PHOTO_POSTING_MODE === "disabled") return false;
+  if (environment.OUR_DAYS_PHOTO_POSTING_MODE === "enabled") return true;
+  return isHostedVercelRuntime(environment);
+}
+
+export function localJournalIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
   return (
-    environment.OUR_DAYS_PHOTO_POSTING_MODE === "enabled" &&
-    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
+    environment.OUR_DAYS_LOCAL_JOURNAL_MODE === "enabled" &&
+    environment.OUR_DAYS_RESOURCE_MODE === "detached" &&
+    environment.OUR_DAYS_ENVIRONMENT === "local" &&
+    environment.VERCEL !== "1" &&
+    !isDesignPreviewEnvironment(environment)
   );
 }
 
 export function environmentForNextConfig(
   environment: ProcessEnvironment,
 ): ProcessEnvironment {
+  if (isHostedVercelRuntime(environment)) {
+    const identity =
+      environment.VERCEL_ENV === "production" ? "production" : "preview";
+    return {
+      ...environment,
+      OUR_DAYS_ENVIRONMENT: identity,
+      OUR_DAYS_RESOURCE_MODE: "supabase",
+      OUR_DAYS_LOCAL_JOURNAL_MODE: "disabled",
+      OUR_DAYS_ENABLE_DESIGN_PREVIEW: "false",
+      OUR_DAYS_PRODUCTION_SITE_ORIGIN:
+        environment.OUR_DAYS_PRODUCTION_SITE_ORIGIN?.trim() ||
+        ourDaysProductionSiteOrigin,
+      NEXT_PUBLIC_SITE_URL: hostedVercelSiteOrigin(environment),
+    };
+  }
+
   const managedExecution =
     environment.CI === "true" || Boolean(environment.VERCEL_ENV);
   if (managedExecution) return environment;

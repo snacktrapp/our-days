@@ -25,6 +25,8 @@ function row(overrides: Partial<Row> = {}): Row {
     journal_person_accent: "sage",
     journal_person_kind: "managed",
     journal_person_name: "Child",
+    latitude: null,
+    longitude: null,
     moment_circle_id: "circle",
     moment_id: "moment-2",
     moment_journal_person_id: "child",
@@ -153,23 +155,33 @@ describe("connected timeline mapping", () => {
     });
   });
 
-  it("builds visible dates and gaps once and withholds the ending while more exists", () => {
-    const newer = mapTimelineRow(row(), "2026-08-30");
+  it("builds visible dates once without relative elapsed-gap pills and withholds the ending while more exists", () => {
+    const today = mapTimelineRow(
+      row({ moment_id: "moment-today", occurred_on: "2026-08-30" }),
+      "2026-08-30",
+    );
     const older = mapTimelineRow(
       row({ moment_id: "moment-1", occurred_on: "2021-04-03" }),
       "2026-08-30",
     );
-    const entries = buildTimelineEntries([newer, older], "2026-08-30", true);
+    const entries = buildTimelineEntries([today, older], "2026-08-30", true);
     expect(entries.map((entry) => entry.entryType)).toEqual([
       "date-marker",
       "moment",
-      "elapsed-gap",
       "date-marker",
       "moment",
     ]);
+    expect(
+      entries
+        .filter((entry) => entry.entryType === "date-marker")
+        .map((entry) => (entry.entryType === "date-marker" ? entry.label : "")),
+    ).toEqual(["Today", "Apr 3, 2021"]);
+    expect(entries.some((entry) => entry.entryType === "elapsed-gap")).toBe(
+      false,
+    );
   });
 
-  it("keeps the rail grammar honest for empty and completed journals", () => {
+  it("keeps empty journals honest and closes a completed family feed with the earliest-entry marker", () => {
     expect(buildTimelineEntries([], "2026-08-30", false, "Child")).toEqual([
       expect.objectContaining({
         entryType: "empty-state",
@@ -183,6 +195,7 @@ describe("connected timeline mapping", () => {
     );
     expect(entries.at(-1)).toMatchObject({
       entryType: "end-message",
+      markerLabel: "The beginning",
       message: "You’ve reached the earliest moment kept here.",
     });
   });

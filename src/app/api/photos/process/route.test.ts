@@ -114,6 +114,39 @@ describe("private photo processing route", () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
+  it("accepts hosted Preview origin even when Vercel forwards a ported host", async () => {
+    const previewHost =
+      "our-days-git-cursor-local-journal-n-6b5630-snacktrapps-projects.vercel.app";
+    const response = await request(
+      { intakeId },
+      {
+        host: `${previewHost}:443`,
+        origin: `https://${previewHost}`,
+        "x-forwarded-host": `${previewHost}:443, ${previewHost}`,
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.process).toHaveBeenCalledWith(intakeId);
+  });
+
+  it("accepts hosted Preview origin when it matches the derived site origin", async () => {
+    const previewHost =
+      "our-days-git-cursor-local-journal-n-6b5630-snacktrapps-projects.vercel.app";
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", previewHost);
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
+    const response = await request(
+      { intakeId },
+      {
+        host: "localhost:3000",
+        origin: `https://${previewHost}`,
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.process).toHaveBeenCalledWith(intakeId);
+  });
+
   it("verifies family access, processes, and confirms publication", async () => {
     const response = await request();
     expect(response.status).toBe(200);

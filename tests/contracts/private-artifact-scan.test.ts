@@ -320,6 +320,12 @@ describe("private artifact scanner", () => {
       mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), content);
     }
+    mkdirSync(join(root, ".next/node_modules"), { recursive: true });
+    writeFileSync(join(root, "sharp-package-fixture"), "native-module");
+    symlinkSync(
+      join(root, "sharp-package-fixture"),
+      join(root, ".next/node_modules/sharp-20c6a5da84e2135f"),
+    );
     writeFileSync(join(root, ".gitignore"), ".next\n");
     expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
 

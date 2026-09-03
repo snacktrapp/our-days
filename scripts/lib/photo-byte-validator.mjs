@@ -388,10 +388,14 @@ async function validateExactJpegCodestream(
         phase = "complete";
         return;
       }
-      // Modern iPhone JPEGs can carry one HDR gain-map image as a second,
-      // complete JPEG codestream. The caller separately requires Sharp to
-      // recognise the MPF/gain-map relationship before accepting two streams.
-      if (!allowAuxiliaryCodestream || codestreamCount !== 1) {
+      // Family camera JPEGs can carry one or two complete auxiliary streams
+      // after the primary still: an HDR gain map and/or a small MPF preview.
+      // The caller still has to prove each extra stream is a bounded still.
+      if (
+        !allowAuxiliaryCodestream ||
+        codestreamCount < 1 ||
+        codestreamCount > 2
+      ) {
         jpegStructureFailure();
       }
       sawScan = false;
@@ -568,7 +572,9 @@ async function decodeCompletely(input, mimeType, limits) {
   try {
     metadata = await sharp(input, {
       animated: false,
-      failOn: "warning",
+      // Camera JPEGs (Display P3 ICC, HDR gain maps) often emit libvips
+      // warnings while still decoding to a safe still. Fail on errors only.
+      failOn: "error",
       limitInputChannels: limits.maxChannels,
       // Header inspection does not decode pixels. The dimensions are checked
       // below before the second, strictly bounded full-decode pipeline.
@@ -593,7 +599,10 @@ async function decodeCompletely(input, mimeType, limits) {
   const width = metadata.autoOrient?.width ?? metadata.width;
   const height = metadata.autoOrient?.height ?? metadata.height;
   const channels = metadata.channels;
-  const pages = metadata.pages ?? 1;
+  const reportedPages = metadata.pages ?? 1;
+  // MPF / HDR JPEGs may report a second container page for the auxiliary
+  // gain-map or preview stream. The published still is always page 1.
+  const pages = mimeType === "image/jpeg" ? 1 : reportedPages;
 
   if (
     !Number.isSafeInteger(width) ||
@@ -627,7 +636,7 @@ async function decodeCompletely(input, mimeType, limits) {
   try {
     const decoder = sharp(input, {
       animated: false,
-      failOn: "warning",
+      failOn: "error",
       limitInputChannels: limits.maxChannels,
       limitInputPixels: limits.maxPixels,
       pages: 1,
@@ -671,6 +680,45 @@ async function decodeCompletely(input, mimeType, limits) {
     pages,
     width,
   };
+}
+
+async function assertSafeJpegAuxiliary(
+  decoded,
+  auxiliaryBytes,
+  options,
+  recognizedGainMap,
+) {
+  const maxAuxiliaryPixels = recognizedGainMap
+    ? Math.min(
+        MAX_GAIN_MAP_PIXELS,
+        options.maxPixels,
+        decoded.width * decoded.height,
+      )
+    : Math.min(
+        MAX_GAIN_MAP_PIXELS,
+        options.maxPixels,
+        Math.floor((decoded.width * decoded.height) / 4),
+      );
+  if (maxAuxiliaryPixels < 1) jpegStructureFailure();
+  let auxiliary;
+  try {
+    auxiliary = await decodeCompletely(auxiliaryBytes, "image/jpeg", {
+      ...options,
+      maxPixels: maxAuxiliaryPixels,
+    });
+  } catch (error) {
+    if (error instanceof PhotoByteValidationError) jpegStructureFailure();
+    throw error;
+  }
+  if (
+    auxiliary.gainMapImage ||
+    auxiliary.width > decoded.width ||
+    auxiliary.height > decoded.height ||
+    (!recognizedGainMap &&
+      auxiliary.width * auxiliary.height >= decoded.width * decoded.height)
+  ) {
+    jpegStructureFailure();
+  }
 }
 
 function sameDigest(actual, expected) {
@@ -847,36 +895,30 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
     }
 
     const decoded = await decodeCompletely(path, detectedMimeType, options);
+    if (jpegCodestreams.length > 3) jpegStructureFailure();
     if (jpegCodestreams.length > 1) {
-      const auxiliaryRange = jpegCodestreams[1];
-      const auxiliaryBytes = await readExactAt(
-        readHandle,
-        auxiliaryRange.end - auxiliaryRange.start,
-        auxiliaryRange.start,
-      );
-      if (
-        !decoded.gainMapImage ||
-        !decoded.gainMapImage.equals(auxiliaryBytes)
-      ) {
-        jpegStructureFailure();
-      }
-      const auxiliary = await decodeCompletely(auxiliaryBytes, "image/jpeg", {
-        ...options,
-        maxPixels: Math.min(
-          MAX_GAIN_MAP_PIXELS,
-          options.maxPixels,
-          decoded.width * decoded.height,
-        ),
-      });
-      if (
-        auxiliary.gainMapImage ||
-        auxiliary.width > decoded.width ||
-        auxiliary.height > decoded.height
-      ) {
-        jpegStructureFailure();
+      for (const auxiliaryRange of jpegCodestreams.slice(1)) {
+        const auxiliaryBytes = await readExactAt(
+          readHandle,
+          auxiliaryRange.end - auxiliaryRange.start,
+          auxiliaryRange.start,
+        );
+        await assertSafeJpegAuxiliary(
+          decoded,
+          auxiliaryBytes,
+          options,
+          Boolean(
+            decoded.gainMapImage && decoded.gainMapImage.equals(auxiliaryBytes),
+          ),
+        );
       }
     } else if (decoded.gainMapImage) {
-      jpegStructureFailure();
+      await assertSafeJpegAuxiliary(
+        decoded,
+        decoded.gainMapImage,
+        options,
+        true,
+      );
     }
     result = Object.freeze({
       channels: decoded.channels,

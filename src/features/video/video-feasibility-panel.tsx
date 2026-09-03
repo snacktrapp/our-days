@@ -1,7 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 
 type InspectionState = "empty" | "inspecting" | "ready" | "error";
 
@@ -210,32 +217,24 @@ function VideoFeasibilityDialog({
       return;
     resetSelection();
     onRequestClose();
-    window.requestAnimationFrame(() => returnFocusRef.current?.focus());
+    window.requestAnimationFrame(() =>
+      returnFocusRef.current?.focus({ preventScroll: true }),
+    );
   }, [onRequestClose, resetSelection, returnFocusRef]);
 
   useEffect(() => () => revokeActiveUrl(), [revokeActiveUrl]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!open || !dialog) return;
-    const bodyWasLocked = document.body.classList.contains(
-      "composer-scroll-locked",
-    );
-    document.body.classList.add("composer-scroll-locked");
-    if (!dialog.open) dialog.showModal();
+  const dialogMounted = useModalDialog(open, dialogRef);
+
+  useLayoutEffect(() => {
+    if (!open) return;
     const focusFrame = window.requestAnimationFrame(() =>
       inputRef.current?.focus(),
     );
-
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      if (!bodyWasLocked)
-        document.body.classList.remove("composer-scroll-locked");
-      if (dialog.open) dialog.close();
-    };
+    return () => window.cancelAnimationFrame(focusFrame);
   }, [open]);
 
-  if (!open) return null;
+  if (!dialogMounted) return null;
 
   const status =
     inspectionState === "ready"

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { connection } from "next/server";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
@@ -62,11 +63,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   await connection();
+  const nonce = (await headers()).get("x-nonce") ?? "";
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Script id="our-days-theme" strategy="beforeInteractive">
+        <Script
+          id="our-days-theme"
+          strategy="beforeInteractive"
+          nonce={nonce || undefined}
+        >
           {themeBootstrap}
         </Script>
         {children}

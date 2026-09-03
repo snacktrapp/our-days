@@ -3,6 +3,7 @@
 import {
   type FormEvent,
   type MutableRefObject,
+  type ReactNode,
   useEffect,
   useRef,
   useState,
@@ -46,9 +47,11 @@ type ConnectedActions = Readonly<{
 export function FamilySettingsPanel({
   model,
   actions,
+  children,
 }: {
   model: FamilySettingsPanelViewModel;
   actions?: ConnectedActions;
+  children?: ReactNode;
 }) {
   if (model.mode === "preview") {
     return <PreviewFamilySettingsPanel model={model} />;
@@ -58,7 +61,11 @@ export function FamilySettingsPanel({
   if (model.invitationDelivery === "enabled" && !actions.requestInvitation) {
     throw new Error("Connected invitation delivery action is required");
   }
-  return <ConnectedFamilySettingsPanel model={model} actions={actions} />;
+  return (
+    <ConnectedFamilySettingsPanel model={model} actions={actions}>
+      {children}
+    </ConnectedFamilySettingsPanel>
+  );
 }
 
 function MemberList({
@@ -183,7 +190,7 @@ function PreviewFamilySettingsPanel({
   }
 
   return (
-    <section className="section-panel family-settings-panel">
+    <section className="family-settings-panel">
       <p className="section-intro">{model.intro}</p>
       <p className="settings-preview-banner">
         Local design preview · Access labels are illustrative; no accounts or
@@ -302,9 +309,11 @@ function PreviewFamilySettingsPanel({
 function ConnectedFamilySettingsPanel({
   model,
   actions,
+  children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
+  children?: ReactNode;
 }) {
   const [accessReviewId, setAccessReviewId] = useState<string | null>(null);
   const [invitationReviewId, setInvitationReviewId] = useState<string | null>(
@@ -569,7 +578,7 @@ function ConnectedFamilySettingsPanel({
   }
 
   return (
-    <section className="section-panel family-settings-panel">
+    <section className="family-settings-panel">
       <p className="section-intro">{model.intro}</p>
       <p className="settings-live-banner">
         Private circle · Access changes take effect at the next request
@@ -928,6 +937,7 @@ function ConnectedFamilySettingsPanel({
           </p>
         )}
       </section>
+      {children}
     </section>
   );
 }

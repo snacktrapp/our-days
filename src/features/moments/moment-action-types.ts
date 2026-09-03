@@ -13,6 +13,8 @@ export type SaveFamilyMomentAction = (input: {
   title: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
@@ -33,6 +35,8 @@ export type UpdateFamilyMomentAction = (input: {
   title: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;

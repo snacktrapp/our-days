@@ -4,6 +4,8 @@ import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
+import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import type {
   ConnectedMomentActions,
   MomentConversationActions,
@@ -13,9 +15,6 @@ import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
 } from "./timeline-view-model";
-
-const bibleVerseMomentPattern =
-  /^([\s\S]+)\n\n— ([^\n]+) · World English Bible$/u;
 
 function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   const base = {
@@ -62,11 +61,9 @@ export function MomentCard({
   connectedTotal,
 }: MomentCardProps) {
   const bibleVerseMatch =
-    moment.kind === "thought"
-      ? bibleVerseMomentPattern.exec(moment.text)
-      : null;
+    moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
   const bibleVerse = bibleVerseMatch
-    ? { verse: bibleVerseMatch[1], reference: bibleVerseMatch[2] }
+    ? { verse: bibleVerseMatch.text, reference: bibleVerseMatch.reference }
     : null;
   const typeLabel =
     moment.kind === "thought"
@@ -193,12 +190,17 @@ export function MomentCard({
           {bibleVerse ? "Bible verse" : typeLabel}
         </span>
         {bibleVerse ? (
-          <blockquote className="bible-verse-copy">
+          <ExpandableThoughtCopy
+            momentId={moment.id}
+            className="bible-verse-copy"
+          >
             <span>“{bibleVerse.verse}”</span>
             <cite>{bibleVerse.reference} · World English Bible</cite>
-          </blockquote>
+          </ExpandableThoughtCopy>
         ) : (
-          <blockquote>“{moment.text}”</blockquote>
+          <ExpandableThoughtCopy momentId={moment.id}>
+            “{moment.text}”
+          </ExpandableThoughtCopy>
         )}
         {moment.placeName ? (
           <p className="moment-place-label">⌖ {moment.placeName}</p>

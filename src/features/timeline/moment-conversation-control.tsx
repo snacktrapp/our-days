@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
 import type {
   MomentConversationViewModel,
@@ -47,6 +54,52 @@ function currentReaction(
   );
 }
 
+function withCurrentMemberReaction(
+  conversation: MomentConversationViewModel,
+  person: MomentInteractionViewModel["currentPerson"],
+  reactionId: MomentReactionId | null,
+): MomentConversationViewModel {
+  const others = conversation.reactions.filter(
+    (reaction) => !reaction.isCurrentMember,
+  );
+  if (!reactionId) {
+    return { ...conversation, reactions: others };
+  }
+  const existing = conversation.reactions.find(
+    (reaction) => reaction.isCurrentMember,
+  );
+  return {
+    ...conversation,
+    reactions: [
+      ...others,
+      {
+        id: existing?.id ?? "optimistic-current-reaction",
+        personName: person.name,
+        personInitial: person.initial,
+        personAccent: person.accent,
+        reactionId,
+        isCurrentMember: true,
+      },
+    ],
+  };
+}
+
+function overlayCurrentMemberReaction(
+  server: MomentConversationViewModel,
+  local: MomentConversationViewModel,
+): MomentConversationViewModel {
+  const localCurrent = local.reactions.find(
+    (reaction) => reaction.isCurrentMember,
+  );
+  const others = server.reactions.filter(
+    (reaction) => !reaction.isCurrentMember,
+  );
+  return {
+    ...server,
+    reactions: localCurrent ? [...others, localCurrent] : others,
+  };
+}
+
 export function MomentConversationControl({
   interaction,
   model,
@@ -74,6 +127,7 @@ export function MomentConversationControl({
     useState<MomentReactionId | null>(() =>
       currentReaction(model.conversation),
     );
+  const reactionWriteGen = useRef(0);
 
   const reactionOptions = useMemo(
     () =>
@@ -120,22 +174,38 @@ export function MomentConversationControl({
     };
   }, [panel]);
 
+  const applyLoadedConversation = useCallback(
+    (next: MomentConversationViewModel, startedWriteGen: number) => {
+      if (startedWriteGen !== reactionWriteGen.current) {
+        setConversation((current) =>
+          overlayCurrentMemberReaction(next, current),
+        );
+        setConversationLoaded(true);
+        return;
+      }
+      setConversation(next);
+      setSelectedReactionId(currentReaction(next));
+      setConversationLoaded(true);
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!actions) return;
     let active = true;
+    const startedWriteGen = reactionWriteGen.current;
     void actions.load({ momentId: model.id }).then((result) => {
       if (!active || !result.ok) return;
-      setConversation(result.conversation);
-      setSelectedReactionId(currentReaction(result.conversation));
-      setConversationLoaded(true);
+      applyLoadedConversation(result.conversation, startedWriteGen);
     });
     return () => {
       active = false;
     };
-  }, [actions, model.id]);
+  }, [actions, applyLoadedConversation, model.id]);
 
   const loadConversation = async (force = false) => {
     if (!actions || (conversationLoaded && !force)) return true;
+    const startedWriteGen = reactionWriteGen.current;
     setLoading(true);
     setError(null);
     try {
@@ -144,9 +214,7 @@ export function MomentConversationControl({
         setError(result.message);
         return false;
       }
-      setConversation(result.conversation);
-      setSelectedReactionId(currentReaction(result.conversation));
-      setConversationLoaded(true);
+      applyLoadedConversation(result.conversation, startedWriteGen);
       return true;
     } catch {
       setError("This family conversation could not be loaded. Try again.");
@@ -173,10 +241,15 @@ export function MomentConversationControl({
   };
 
   const chooseReaction = async (reactionId: MomentReactionId) => {
-    if (pending || loading) return;
-    const prior = selectedReactionId;
-    const next = prior === reactionId ? null : reactionId;
+    const priorReactionId = selectedReactionId;
+    const priorConversation = conversation;
+    const next = priorReactionId === reactionId ? null : reactionId;
+    reactionWriteGen.current += 1;
+    const writeGen = reactionWriteGen.current;
     setSelectedReactionId(next);
+    setConversation((current) =>
+      withCurrentMemberReaction(current, interaction.currentPerson, next),
+    );
     setPanel(null);
     setError(null);
     window.requestAnimationFrame(() =>
@@ -192,18 +265,20 @@ export function MomentConversationControl({
         momentId: model.id,
         reactionId: next,
       });
+      if (writeGen !== reactionWriteGen.current) return;
       if (!result.ok) {
-        setSelectedReactionId(prior);
+        setSelectedReactionId(priorReactionId);
+        setConversation(priorConversation);
         setError(result.message);
         return;
       }
-      const loaded = await loadConversation(true);
-      if (!loaded) setSelectedReactionId(next);
     } catch {
-      setSelectedReactionId(prior);
+      if (writeGen !== reactionWriteGen.current) return;
+      setSelectedReactionId(priorReactionId);
+      setConversation(priorConversation);
       setError("That response could not be saved. Try again.");
     } finally {
-      setPending(false);
+      if (writeGen === reactionWriteGen.current) setPending(false);
     }
   };
 
@@ -434,7 +509,7 @@ export function MomentConversationControl({
                     role="menuitemradio"
                     aria-label={presentation.label}
                     aria-checked={selectedReactionId === option.id}
-                    disabled={loading || pending}
+                    disabled={pending}
                     onClick={() => void chooseReaction(option.id)}
                   >
                     <span aria-hidden="true">{presentation.emoji}</span>

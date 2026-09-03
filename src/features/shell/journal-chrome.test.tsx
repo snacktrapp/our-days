@@ -9,6 +9,14 @@ import { JournalChrome } from "./journal-chrome";
 vi.mock("./timeline-header-composer", () => ({
   TimelineHeaderComposer: () => <button type="button">Add moment</button>,
 }));
+vi.mock("@/features/composer/composer-session", () => ({
+  ComposerSessionProvider: ({
+    children,
+  }: {
+    children: import("react").ReactNode;
+  }) => children,
+  useComposerSession: () => null,
+}));
 vi.mock("./notification-center", () => ({
   NotificationCenter: () => <button type="button">Open notifications</button>,
 }));

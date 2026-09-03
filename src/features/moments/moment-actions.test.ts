@@ -190,6 +190,8 @@ describe("written moment actions", () => {
       occurred_on: "2026-08-28",
       occurred_at: undefined,
       occurred_timezone: undefined,
+      latitude: null,
+      longitude: null,
     });
   });
 
@@ -236,6 +238,8 @@ describe("written moment actions", () => {
       occurred_on: "2026-08-28",
       occurred_at: undefined,
       occurred_timezone: undefined,
+      latitude: null,
+      longitude: null,
     });
   });
 

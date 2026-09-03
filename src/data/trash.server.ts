@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { mapDatabaseAccent } from "./journal-context.server";
 
@@ -21,6 +22,10 @@ export type TrashedMomentViewModel = Readonly<{
 export async function loadManageableTrash(
   access: AuthenticatedAccess,
 ): Promise<readonly TrashedMomentViewModel[]> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalTrash } = await import("@/lib/local-journal/views");
+    return loadLocalTrash(access);
+  }
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc(
     "list_manageable_trashed_written_moments",

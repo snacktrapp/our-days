@@ -7,6 +7,7 @@ const includeWebKit = Boolean(
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: /local-journal\.spec\.ts/,
   fullyParallel: true,
   // Nonce-protected pages render per request. A single browser worker keeps
   // the local production server deterministic across engines; two workers

@@ -2,6 +2,7 @@ type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
 
 export function isDesignPreviewEnvironment(environment: ProcessEnvironment) {
   if (
+    environment.VERCEL === "1" ||
     environment.OUR_DAYS_ENABLE_DESIGN_PREVIEW !== "true" ||
     environment.OUR_DAYS_RESOURCE_MODE !== "detached"
   ) {

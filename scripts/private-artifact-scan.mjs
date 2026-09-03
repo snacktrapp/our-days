@@ -354,7 +354,8 @@ export function scanRepository(root) {
       const relativePath = posixPath(relative(rootPath, path));
       return (
         !relativePath.startsWith(".next/cache/") &&
-        !relativePath.startsWith(".next/dev/")
+        !relativePath.startsWith(".next/dev/") &&
+        !relativePath.startsWith(".next/node_modules/")
       );
     })
     .flatMap((path) => {

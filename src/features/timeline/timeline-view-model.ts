@@ -69,6 +69,8 @@ type TimelineMomentBase = Readonly<{
   taggedPeopleLabel?: string;
   taggedPeople?: readonly Readonly<{ id: string; name: string }>[];
   placeName?: string;
+  latitude?: number;
+  longitude?: number;
 }>;
 
 export type PhotoMomentViewModel = TimelineMomentBase &

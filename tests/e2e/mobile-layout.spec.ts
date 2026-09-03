@@ -62,6 +62,67 @@ for (const route of routes) {
   });
 }
 
+test("iPhone Family feed cannot pan sideways at 1x and still allows pinch-zoom", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+
+  const geometry = await page.evaluate(() => {
+    const root = document.documentElement;
+    const stage = document.querySelector(".phone-stage");
+    const stageRect = stage?.getBoundingClientRect();
+    const overflowing = [
+      ...(stage?.querySelectorAll(
+        ".timeline, .time-rail, .date-marker, .moment, .moment-card",
+      ) ?? []),
+    ]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          className: element.className.toString().split(/\s+/u)[0] ?? "",
+          left: rect.left,
+          right: rect.right,
+        };
+      })
+      .filter((rect) => {
+        if (!stageRect) return true;
+        return (
+          rect.right > stageRect.right + 1 || rect.left < stageRect.left - 1
+        );
+      });
+    const viewport =
+      document
+        .querySelector('meta[name="viewport"]')
+        ?.getAttribute("content") ?? "";
+    const htmlStyle = getComputedStyle(root);
+    const bodyStyle = getComputedStyle(document.body);
+    return {
+      bodyOverflowX: bodyStyle.overflowX,
+      bodyOverscrollX: bodyStyle.overscrollBehaviorX,
+      clientWidth: root.clientWidth,
+      htmlOverflowX: htmlStyle.overflowX,
+      htmlOverscrollX: htmlStyle.overscrollBehaviorX,
+      overflowing,
+      scrollWidth: root.scrollWidth,
+      stageWidth: stageRect?.width ?? 0,
+      viewport,
+    };
+  });
+
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.stageWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.overflowing).toEqual([]);
+  expect(geometry.htmlOverflowX).toMatch(/^(?:clip|hidden)$/u);
+  expect(geometry.bodyOverflowX).toMatch(/^(?:clip|hidden)$/u);
+  expect(geometry.htmlOverscrollX).toBe("none");
+  expect(geometry.bodyOverscrollX).toBe("none");
+  expect(geometry.viewport).not.toMatch(/user-scalable\s*=\s*no/iu);
+  expect(geometry.viewport).not.toMatch(
+    /maximum-scale\s*=\s*1(?:\.0+)?(?:\s|,|$)/iu,
+  );
+});
+
 test("reduced-motion preference removes entrance animations", async ({
   page,
 }) => {
@@ -111,47 +172,84 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
   });
 });
 
-test("portalled moment options stay visible above navigation without inline positioning", async ({
+test("moment options open as a compact popover under the trigger without inline positioning", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => {
+    document.getElementById("e2e-moment-options-card")?.remove();
+    document.getElementById("e2e-moment-options-sheet")?.remove();
+    const sheet = document.createElement("style");
+    sheet.id = "e2e-moment-options-sheet";
+    const nonce =
+      document.querySelector<HTMLElement>("[nonce]")?.nonce ||
+      document.querySelector("[nonce]")?.getAttribute("nonce") ||
+      "";
+    if (nonce) sheet.setAttribute("nonce", nonce);
+    sheet.textContent =
+      "#e2e-moment-options-card{position:fixed;top:72px;right:16px;width:220px;height:120px;z-index:40}";
+    document.head.append(sheet);
+    const card = document.createElement("div");
+    card.id = "e2e-moment-options-card";
+    card.className = "moment-card";
+    const actions = document.createElement("div");
+    actions.className = "connected-moment-actions";
+    const trigger = document.createElement("button");
+    trigger.className = "connected-moment-menu-trigger";
+    trigger.type = "button";
+    trigger.setAttribute("aria-label", "Moment options");
+    trigger.textContent = "•••";
     const menu = document.createElement("div");
-    menu.className = "connected-moment-menu connected-moment-menu-portal";
+    menu.className = "connected-moment-menu";
     menu.setAttribute("role", "group");
     menu.setAttribute("aria-label", "Moment options");
+    menu.dataset.placement = "below";
     for (const text of ["Copy text", "Edit moment", "Move to trash"]) {
       const button = document.createElement("button");
       button.textContent = text;
       menu.append(button);
     }
-    document.body.append(menu);
+    actions.append(trigger, menu);
+    card.append(actions);
+    document.body.append(card);
   });
-  const menu = page.getByRole("group", { name: "Moment options" });
+  const menu = page.locator("#e2e-moment-options-card .connected-moment-menu");
   await expect(menu).toBeVisible();
   await expect(menu).not.toHaveAttribute("style");
 
   const geometry = await menu.evaluate((element) => {
+    const trigger = element
+      .closest(".connected-moment-actions")
+      ?.querySelector("button");
+    if (!(trigger instanceof HTMLElement)) {
+      throw new Error("Popover is missing its three-dots trigger.");
+    }
     const rect = element.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
     const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    const style = getComputedStyle(element);
     return {
-      bottom: rect.bottom,
+      alignedToTrigger: Math.abs(rect.right - triggerRect.right) <= 2,
+      belowTrigger: rect.top >= triggerRect.bottom - 1,
+      compactWidth: rect.width < document.documentElement.clientWidth / 2,
       height: rect.height,
       insideViewport:
         rect.left >= 0 &&
         rect.right <= document.documentElement.clientWidth &&
         rect.top >= 0,
       navTop: nav.top,
-      position: getComputedStyle(element).position,
-      scrollY: window.scrollY,
-      top: rect.top,
-      viewportHeight: window.innerHeight,
+      position: style.position,
+      width: rect.width,
     };
   });
+  expect(geometry.position).toBe("absolute");
+  expect(geometry.compactWidth).toBe(true);
+  expect(geometry.alignedToTrigger).toBe(true);
+  expect(geometry.belowTrigger).toBe(true);
   expect(geometry.insideViewport).toBe(true);
-  expect(geometry.position).toBe("fixed");
-  expect(geometry.bottom).toBeLessThanOrEqual(geometry.navTop);
+  expect(geometry.height).toBeLessThan(200);
+  expect(geometry.width).toBeLessThan(240);
 });
 
 test("maximum-length family names stay bounded beside the mobile timeline", async ({
@@ -284,19 +382,52 @@ test("deep memory actions can scroll above the fixed navigation", async ({
   }
 });
 
-test("primary navigation stays compact above the device safe area", async ({
+test("primary navigation floats as a compact rounded bar above the safe area", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family");
-  const geometry = await page.locator(".bottom-nav").evaluate((navigation) => {
-    const style = window.getComputedStyle(navigation);
+  const navigation = page.locator(".bottom-nav");
+  await expect(navigation).toHaveCSS("position", "fixed");
+  await expect(navigation).toHaveCSS("transform", "none");
+
+  const geometry = await navigation.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const stage = document
+      .querySelector(".phone-stage")!
+      .getBoundingClientRect();
+    const below = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      Math.min(window.innerHeight - 1, rect.bottom + 4),
+    );
+    const beside = document.elementFromPoint(
+      Math.max(1, rect.left - 4),
+      rect.top + rect.height / 2,
+    );
     return {
-      height: navigation.getBoundingClientRect().height,
-      paddingBottom: Number.parseFloat(style.paddingBottom),
+      belowIsNav: Boolean(below?.closest(".bottom-nav")),
+      besideIsNav: Boolean(beside?.closest(".bottom-nav")),
+      bottom: style.bottom,
+      bottomGap: window.innerHeight - rect.bottom,
+      height: rect.height,
+      leftGap: rect.left - stage.left,
+      radius: Number.parseFloat(style.borderRadius),
+      rightGap: stage.right - rect.right,
+      stageWidth: stage.width,
+      width: rect.width,
     };
   });
 
-  expect(geometry.height - geometry.paddingBottom).toBeLessThanOrEqual(58);
+  expect(geometry.height).toBeLessThanOrEqual(58);
+  expect(geometry.radius).toBeGreaterThanOrEqual(12);
+  expect(geometry.leftGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.rightGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.bottomGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.width).toBeLessThan(geometry.stageWidth);
+  expect(geometry.belowIsNav).toBe(false);
+  expect(geometry.besideIsNav).toBe(false);
+  expect(geometry.bottom).not.toBe("0px");
 });
 
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
@@ -412,6 +543,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
       .getByRole("link", { name: "People" }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Opening your family’s days…")).toBeVisible();
+  await expect(page.locator(".journal-loading .date-marker")).toHaveText(
+    /opening your family’s days/iu,
+  );
   await expect(page).toHaveURL(/\/people$/u);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
   const samples = await page.evaluate(() => {
@@ -442,6 +576,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
       Math.min(...samples.map(({ bottomGap }) => bottomGap)),
   ).toBeLessThanOrEqual(1);
   expect(
+    Math.min(...samples.map(({ bottomGap }) => bottomGap)),
+  ).toBeGreaterThanOrEqual(8);
+  expect(
     await navigationNode!.evaluate(
       (element) =>
         element.isConnected &&
@@ -457,9 +594,14 @@ test("primary navigation remains above every secondary page canvas", async ({
 
   for (const path of ["/people", "/memories", "/settings/family"]) {
     await page.goto(path);
-    const panel = page.locator(".section-panel").first();
+    const panel = page.locator(
+      path === "/settings/family" ? ".family-settings-panel" : ".section-panel",
+    );
     await expect(panel).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(panel).toHaveCSS("border-top-width", "0px");
+    if (path === "/settings/family") {
+      await expect(panel).toHaveCSS("min-height", "0px");
+    }
 
     for (const scrollY of [
       0,

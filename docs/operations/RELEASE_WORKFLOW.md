@@ -6,15 +6,19 @@ Production receives only a committed, verified release candidate.
 
 ## Environment boundary
 
-| Environment | Git source     | Vercel                                      | Supabase                                       | Permitted data                                     |
-| ----------- | -------------- | ------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- |
-| Local       | working branch | local server                                | local stack                                    | synthetic fixtures only                            |
-| Staging     | `staging`      | protected staging/preview deployment        | dedicated persistent staging branch or project | synthetic staging family and disposable media only |
-| Production  | `main`         | staged Production deployment, then promoted | dedicated Our Days Production project          | private family data                                |
+| Environment | Git source     | Vercel                                      | Supabase                                                                                                                                       | Permitted data                                                                |
+| ----------- | -------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Local       | working branch | local server                                | local stack                                                                                                                                    | synthetic fixtures only                                                       |
+| Staging     | `staging`      | protected staging/preview deployment        | existing Our Days Supabase already attached to Vercel project `our-days` (same project as Production until a dedicated staging project exists) | live family data on that attached project; Preview site origin stays distinct |
+| Production  | `main`         | staged Production deployment, then promoted | dedicated Our Days Production project                                                                                                          | private family data                                                           |
 
-Staging must never use the Production Supabase URL, publishable key, Auth users,
-database rows, or Storage objects. Production and staging must both list every
-known Proof project reference in `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS`.
+Vercel Preview for this repository uses the Our Days Supabase already attached
+to the `our-days` Vercel project — the same project Production uses. Do not
+point Preview at LiftSync, Proof, or a newly created project. Preview still
+must use its own `*.vercel.app` site origin, not `https://our-days-neon.vercel.app`.
+A later dedicated staging project remains optional. Production and Preview must
+both list every known Proof project reference in
+`OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS`.
 The web deployment never receives a service-role key, database password, direct
 database URL, JWT secret, or Supabase management token.
 
@@ -27,11 +31,12 @@ database URL, JWT secret, or Supabase management token.
    branches. Require the Quality, Functional browsers, Local Supabase
    authorization, and Visual checks before merging.
 3. Connect the GitHub repository to the existing Our Days Vercel project.
-4. Assign a stable protected staging hostname to the `staging` branch. Configure
-   Preview variables specifically for that branch; do not use Production values.
-5. Create an isolated Supabase staging branch/project without Production data,
-   apply committed migrations, provision only test identities, and seed a
-   synthetic family plus disposable media.
+4. Assign a stable protected staging hostname to the `staging` branch when one
+   exists. Enable the Production Our Days public Supabase values on Preview
+   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, project
+   refs, photo/media flags). Do not enable service-role or database URLs.
+5. Do not create a second Supabase project for Preview. Auth redirects for
+   Preview `*.vercel.app` origins belong on the existing Our Days project.
 6. Configure staging Auth redirects for the stable staging origin. Keep design
    fixtures disabled in every hosted environment.
 
@@ -42,18 +47,19 @@ pause or delete unused branches where the selected staging model permits it.
 
 Configure values in Vercel, never in committed environment files.
 
-| Variable                                   | Staging                     | Production                 |
-| ------------------------------------------ | --------------------------- | -------------------------- |
-| `OUR_DAYS_ENVIRONMENT`                     | `preview`                   | `production`               |
-| `OUR_DAYS_RESOURCE_MODE`                   | `supabase`                  | `supabase`                 |
-| `NEXT_PUBLIC_SITE_URL`                     | stable staging HTTPS origin | Production HTTPS origin    |
-| `OUR_DAYS_PRODUCTION_SITE_ORIGIN`          | Production HTTPS origin     | Production HTTPS origin    |
-| `OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF`   | staging ref                 | Production ref             |
-| `OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF` | Production ref              | Production ref             |
-| `NEXT_PUBLIC_SUPABASE_URL`                 | staging base URL            | Production base URL        |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | staging publishable key     | Production publishable key |
-| `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS` | complete Proof denylist     | complete Proof denylist    |
-| `OUR_DAYS_ENABLE_DESIGN_PREVIEW`           | `false`                     | `false`                    |
+| Variable                                   | Staging                      | Production                 |
+| ------------------------------------------ | ---------------------------- | -------------------------- |
+| `OUR_DAYS_ENVIRONMENT`                     | `preview`                    | `production`               |
+| `OUR_DAYS_RESOURCE_MODE`                   | `supabase`                   | `supabase`                 |
+| `NEXT_PUBLIC_SITE_URL`                     | stable staging HTTPS origin  | Production HTTPS origin    |
+| `OUR_DAYS_PRODUCTION_SITE_ORIGIN`          | Production HTTPS origin      | Production HTTPS origin    |
+| `OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF`   | same Our Days Production ref | Production ref             |
+| `OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF` | Production ref               | Production ref             |
+| `NEXT_PUBLIC_SUPABASE_URL`                 | same Our Days Production URL | Production base URL        |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`     | same Our Days Production key | Production publishable key |
+| `OUR_DAYS_LOCAL_JOURNAL_MODE`              | unset / `disabled`           | unset / `disabled`         |
+| `OUR_DAYS_FORBIDDEN_SUPABASE_PROJECT_REFS` | complete Proof denylist      | complete Proof denylist    |
+| `OUR_DAYS_ENABLE_DESIGN_PREVIEW`           | `false`                      | `false`                    |
 
 Invitation, media delivery, photo posting, and worker credentials must be scoped
 independently. A feature is enabled in staging only after its isolated backend is

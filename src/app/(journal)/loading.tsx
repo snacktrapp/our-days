@@ -4,7 +4,9 @@ export default function JournalLoading() {
       <section className="phone-stage journal-loading-shell">
         <div className="journal-loading">
           <span className="loading-rail" aria-hidden="true" />
-          <p>Opening your family’s days…</p>
+          <div className="date-marker">
+            <span>Opening your family’s days…</span>
+          </div>
         </div>
       </section>
     </main>

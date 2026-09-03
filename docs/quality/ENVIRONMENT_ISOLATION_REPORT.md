@@ -1,6 +1,6 @@
 # Environment-isolation contract
 
-Date: 2026-08-29 (America/Los_Angeles)
+Date: 2026-09-02 (America/Los_Angeles)
 
 Status: local contract implemented. No Supabase, GitHub, or Vercel resource has been created or connected.
 
@@ -22,7 +22,8 @@ When `OUR_DAYS_RESOURCE_MODE=supabase` is eventually enabled, the contract requi
 - a current `sb_publishable_` browser key;
 - the Production reference in Preview and Production;
 - a comma-separated denylist containing every known Proof project reference;
-- Preview and Production to use different project references.
+- hosted Vercel Preview to use that same attached Our Days project (not a second Supabase, not Proof, not LiftSync), while keeping a distinct Preview site origin;
+- local-file journal mode and fixture design-preview to stay off on Vercel Preview and Production.
 
 The ordinary web process fails if it contains alternate/legacy Supabase connection variables, a Supabase management token, secret/service-role or signing/private key, Supabase JWT secret, Supabase database URL/password, Postgres/libpq connection fields, or generic/direct database URL. Detection covers canonical and prefixed variable names plus `sb_secret_`, `sbp_`, Postgres URI, PEM private-key, and decoded service-role JWT value patterns. A future worker may receive narrow bypass credentials only in a separate deployment after its own import-boundary and artifact tests exist.
 
@@ -32,12 +33,12 @@ The ordinary web process fails if it contains alternate/legacy Supabase connecti
 
 - explicit local detached success;
 - safe local defaults that are not applied to managed CI/Vercel execution;
-- valid isolated Preview and Production bindings;
+- valid hosted Preview and Production bindings to the same Our Days Supabase;
 - Preview/Production site-origin separation;
 - missing and contradictory environment identity;
-- detached hosted deployment denial;
+- detached hosted deployment denial unless rewritten through the hosted Vercel normalizer;
 - expected-reference/base-URL mismatch;
-- Preview wired to Production;
+- Preview pointed at a second Supabase project;
 - a configured Proof reference;
 - partial Supabase configuration;
 - legacy/non-publishable key format;

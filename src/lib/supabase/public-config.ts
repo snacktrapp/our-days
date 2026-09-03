@@ -36,3 +36,8 @@ export function readOptionalSupabasePublicConfig(
   if (!hasUrl && !hasKey) return null;
   return readSupabasePublicConfig(environment);
 }
+
+export function hostedVercelClientRuntime() {
+  const value = process.env.NEXT_PUBLIC_VERCEL_ENV;
+  return value === "preview" || value === "production";
+}

@@ -1,4 +1,7 @@
-import { photoPostingIsEnabled } from "../../../../../config/our-days-environment";
+import {
+  photoPostingIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../../../config/our-days-environment";
 import {
   processPhotoIntake,
   PhotoWorkerError,
@@ -21,13 +24,35 @@ function response(body: object, status: number) {
   return Response.json(body, { status, headers: privateHeaders });
 }
 
+function normalizeHost(value: string | null) {
+  if (!value) return "";
+  return value
+    .split(",")[0]!
+    .trim()
+    .toLowerCase()
+    .replace(/:(?:80|443)$/u, "");
+}
+
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  const host =
-    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!origin || !host) return false;
+  if (!origin) return false;
+  let originHost = "";
   try {
-    return new URL(origin).host === host;
+    originHost = normalizeHost(new URL(origin).host);
+  } catch {
+    return false;
+  }
+  if (!originHost) return false;
+
+  const requestHost = normalizeHost(
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+  );
+  if (requestHost && originHost === requestHost) return true;
+
+  const siteOrigin = resolvedSiteOrigin();
+  if (!siteOrigin) return false;
+  try {
+    return originHost === normalizeHost(new URL(siteOrigin).host);
   } catch {
     return false;
   }

@@ -5,7 +5,11 @@ import type {
   Upload as TusUpload,
 } from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
-import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
+import {
+  hostedVercelClientRuntime,
+  readOptionalSupabasePublicConfig,
+  readSupabasePublicConfig,
+} from "@/lib/supabase/public-config";
 import { hashPhotoInWorker } from "./photo-hash";
 import {
   photoUploadResumeStore,
@@ -38,6 +42,8 @@ export type PhotoMomentDraft = Readonly<{
   journalPersonId: string;
   body: string;
   placeName: string;
+  latitude?: number | null;
+  longitude?: number | null;
   taggedPersonIds: readonly string[];
   occurredOn: string;
   occurredAt: string | null;
@@ -586,6 +592,64 @@ async function requestPhotoProcessing(intakeId: string, signal: AbortSignal) {
   }
 }
 
+async function uploadLocalPhotoMoment(
+  file: File,
+  draft: PhotoMomentDraft,
+  attempt: PhotoUploadAttempt,
+  signal: AbortSignal,
+  onStage: (stage: PhotoUploadStage) => void,
+  sha256: string,
+  fetchFn: typeof globalThis.fetch,
+): Promise<PhotoUploadResult> {
+  throwIfAborted(signal);
+  onStage({ state: "uploading", progress: 0.2 });
+  const body = new FormData();
+  body.set("file", file);
+  body.set("journalPersonId", draft.journalPersonId);
+  body.set("body", draft.body);
+  body.set("placeName", draft.placeName);
+  if (draft.latitude != null) body.set("latitude", String(draft.latitude));
+  if (draft.longitude != null) body.set("longitude", String(draft.longitude));
+  body.set("taggedPersonIds", JSON.stringify([...draft.taggedPersonIds]));
+  body.set("occurredOn", draft.occurredOn);
+  body.set("occurredAt", draft.occurredAt ?? "");
+  body.set("occurredTimezone", draft.occurredTimezone ?? "");
+  body.set("sha256", sha256);
+  body.set("requestKey", attempt.requestKey);
+  const response = await fetchFn("/api/media/local/photo", {
+    body,
+    credentials: "same-origin",
+    method: "POST",
+    signal,
+  });
+  throwIfAborted(signal);
+  onStage({ state: "finishing" });
+  let payload: { intakeId?: string; momentId?: string; message?: string } = {};
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    payload = {};
+  }
+  if (
+    !response.ok ||
+    typeof payload.momentId !== "string" ||
+    !uuidPattern.test(payload.momentId)
+  ) {
+    throw new PhotoUploadError(
+      payload.message ?? "That photo could not be uploaded.",
+      response.status >= 500,
+    );
+  }
+  attempt.intakeId = payload.intakeId ?? payload.momentId;
+  attempt.momentId = payload.momentId;
+  onStage({ state: "processing" });
+  return {
+    state: "published",
+    intakeId: attempt.intakeId,
+    momentId: payload.momentId,
+  };
+}
+
 export async function uploadPhotoMoment(
   file: File,
   draft: PhotoMomentDraft,
@@ -601,6 +665,23 @@ export async function uploadPhotoMoment(
   const hash = dependencies.hash ?? hashPhotoInWorker;
   const sha256 = await hash(file, signal);
   throwIfAborted(signal);
+  if (!readOptionalSupabasePublicConfig()) {
+    if (hostedVercelClientRuntime()) {
+      throw new PhotoUploadError(
+        "Photo upload needs the connected Our Days storage.",
+        false,
+      );
+    }
+    return uploadLocalPhotoMoment(
+      file,
+      draft,
+      attempt,
+      signal,
+      onStage,
+      sha256,
+      dependencies.fetch ?? globalThis.fetch,
+    );
+  }
   const createClient = dependencies.createClient ?? createOurDaysBrowserClient;
   const supabase = createClient();
   const { url, publishableKey } = readSupabasePublicConfig();

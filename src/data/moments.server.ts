@@ -1,6 +1,5 @@
 import "server-only";
 
-import { elapsedCalendarLabel } from "@/features/memories/memory-date";
 import type {
   TimelineEntryViewModel,
   TimelineMomentViewModel,
@@ -8,6 +7,7 @@ import type {
 } from "@/features/timeline/timeline-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import type { Database } from "@/lib/supabase/database.types";
+import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type { ConnectedJournalContext } from "./journal-context.server";
 import { mapDatabaseAccent } from "./journal-context.server";
@@ -23,12 +23,16 @@ export type TimelineRow = Omit<
   | "moment_kind"
   | "moment_title"
   | "place_name"
+  | "latitude"
+  | "longitude"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
   moment_kind?: string;
   moment_title?: string | null;
   place_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   tagged_people?: unknown;
 };
 
@@ -112,6 +116,8 @@ export function mapTimelineRow(
     taggedPeopleLabel:
       taggedPeople.map((person) => person.name).join(", ") || undefined,
     placeName: row.place_name ?? undefined,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
   };
   if (row.moment_kind === "milestone") {
     return {
@@ -182,13 +188,6 @@ export function buildTimelineEntries(
   let previousDate: string | undefined;
   for (const moment of moments) {
     if (moment.occurredOn !== previousDate) {
-      if (previousDate) {
-        entries.push({
-          id: `gap-${previousDate}-${moment.occurredOn}`,
-          entryType: "elapsed-gap",
-          label: elapsedCalendarLabel(previousDate, moment.occurredOn),
-        });
-      }
       entries.push({
         id: `date-${moment.occurredOn}`,
         entryType: "date-marker",
@@ -270,6 +269,10 @@ export async function loadConnectedTimeline(
     snapshotAt?: string;
   }>,
 ): Promise<TimelineViewModel> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalTimeline } = await import("@/lib/local-journal/views");
+    return loadLocalTimeline(access, context, options);
+  }
   const supabase = await createOurDaysServerClient();
   const pageCount = requestedPageCount(options.pages);
   const rows: TimelineRow[] = [];

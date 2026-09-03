@@ -3,6 +3,10 @@
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import {
+  dispatchMomentHeart,
+  usePairedTap,
+} from "@/features/timeline/double-tap-heart";
 
 type FullscreenMediaViewerProps = Readonly<{
   kind: "photo" | "video";
@@ -25,7 +29,6 @@ export function FullscreenMediaViewer({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const photoRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const singleTapTimerRef = useRef<number | null>(null);
   const pullRef = useRef<{
     pointerId: number;
     startX: number;
@@ -34,6 +37,13 @@ export function FullscreenMediaViewer({
   } | null>(null);
   const titleId = useId();
   const isPhoto = kind === "photo";
+  const handlePreviewTap = usePairedTap({
+    enabled: Boolean(reactionTargetId),
+    onDoubleTap: () => {
+      if (reactionTargetId) dispatchMomentHeart(reactionTargetId);
+    },
+    onSingleTap: () => setOpen(true),
+  });
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -51,39 +61,6 @@ export function FullscreenMediaViewer({
       if (dialog.open) dialog.close();
     };
   }, [open]);
-
-  useEffect(
-    () => () => {
-      if (singleTapTimerRef.current !== null) {
-        window.clearTimeout(singleTapTimerRef.current);
-      }
-    },
-    [],
-  );
-
-  function heartFromDoubleTap() {
-    if (!reactionTargetId) return;
-    document
-      .getElementById(`moment-conversation-${reactionTargetId}`)
-      ?.dispatchEvent(new Event("our-days:heart", { bubbles: false }));
-  }
-
-  function openFromTap(detail: number) {
-    if (!reactionTargetId || detail === 0) {
-      setOpen(true);
-      return;
-    }
-    if (singleTapTimerRef.current !== null) {
-      window.clearTimeout(singleTapTimerRef.current);
-      singleTapTimerRef.current = null;
-      heartFromDoubleTap();
-      return;
-    }
-    singleTapTimerRef.current = window.setTimeout(() => {
-      singleTapTimerRef.current = null;
-      setOpen(true);
-    }, 240);
-  }
 
   function close() {
     if (photoRef.current) photoRef.current.style.transform = "";
@@ -140,7 +117,7 @@ export function FullscreenMediaViewer({
         type="button"
         className={`media-viewer-trigger ${isPhoto ? "photo-viewer-trigger" : "video-viewer-trigger"}`}
         aria-label={`Open ${kind} full screen: ${label}`}
-        onClick={(event) => openFromTap(event.detail)}
+        onClick={(event) => handlePreviewTap(event.detail)}
       >
         {preview}
         {isPhoto ? null : (

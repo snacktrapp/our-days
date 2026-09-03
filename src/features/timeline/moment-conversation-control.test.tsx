@@ -177,6 +177,128 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("❤️Brian");
   });
 
+  it("shows the chosen extra reaction on the card before saving finishes", async () => {
+    let finishSave: (value: { ok: true; message: string }) => void = () => {};
+    const actions = connectedActions({ notes: [], reactions: [] });
+    actions.load.mockResolvedValue({
+      ok: true,
+      conversation: { notes: [], reactions: [] },
+    });
+    actions.setReaction.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderControl(actions, { notes: [], reactions: [] });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Choose a reaction for photo .* entry 2 of 5/u,
+      }),
+    );
+    await user.click(
+      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
+        "menuitemradio",
+        { name: "Laugh" },
+      ),
+    );
+
+    expect(actions.setReaction).toHaveBeenCalledWith({
+      momentId: "moment-one",
+      reactionId: "made-me-smile",
+    });
+    expect(
+      screen.getByRole("button", { name: /Choose a reaction/u }),
+    ).toHaveTextContent("😂");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("😂Brian");
+
+    finishSave({ ok: true, message: "Saved" });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("list", { name: "Family responses" }),
+      ).toHaveTextContent("😂Brian"),
+    );
+  });
+
+  it("keeps the chosen reaction when a slow conversation load finishes later", async () => {
+    let finishLoad: (value: {
+      ok: true;
+      conversation: MomentConversationViewModel;
+    }) => void = () => {};
+    const actions = connectedActions({ notes: [], reactions: [] });
+    actions.load.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishLoad = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderControl(actions, { notes: [], reactions: [] });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Choose a reaction for photo/u,
+      }),
+    );
+    await user.click(
+      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
+        "menuitemradio",
+        { name: "Meaningful" },
+      ),
+    );
+
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("✨Brian");
+
+    finishLoad({
+      ok: true,
+      conversation: { notes: [], reactions: [] },
+    });
+
+    await waitFor(() =>
+      expect(actions.setReaction).toHaveBeenCalledWith({
+        momentId: "moment-one",
+        reactionId: "remember-this",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: /Choose a reaction/u }),
+    ).toHaveTextContent("✨");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("✨Brian");
+  });
+
+  it("shows the chosen response on the card immediately without a network action", async () => {
+    const user = userEvent.setup();
+    renderControl();
+
+    await user.click(
+      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
+    );
+    await user.click(
+      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
+        "menuitemradio",
+        { name: "Laugh" },
+      ),
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Choose a reaction/u }),
+    ).toHaveTextContent("😂");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Molly");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("😂Brian");
+  });
+
   it("shows standard emoji choices without relying on a long press", async () => {
     const user = userEvent.setup();
     renderControl();
@@ -222,6 +344,13 @@ describe("MomentConversationControl", () => {
       screen.queryByRole("menu", { name: "Choose a reaction" }),
     ).toBeNull();
     expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveTextContent("♡");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Molly");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).not.toHaveTextContent("Brian");
   });
 
   it("loads connected comments without waiting for a reaction tap", async () => {

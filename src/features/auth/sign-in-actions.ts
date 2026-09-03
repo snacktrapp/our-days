@@ -2,6 +2,10 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  localJournalIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 
@@ -18,7 +22,7 @@ async function hasExpectedOrigin() {
   const requestHeaders = await headers();
   return isExpectedMutationOrigin(
     requestHeaders.get("origin"),
-    process.env.NEXT_PUBLIC_SITE_URL,
+    resolvedSiteOrigin(),
   );
 }
 
@@ -39,6 +43,18 @@ export async function requestSignInLink(
     return { status: "denied", message: "Sign-in is unavailable right now." };
   }
 
+  if (localJournalIsEnabled()) {
+    const { createLocalJournalSession } =
+      await import("@/lib/local-journal/auth");
+    const session = await createLocalJournalSession(email);
+    if (session) redirect("/family");
+    return {
+      status: "sent",
+      email,
+      message: "If this address has access, we sent a private sign-in link.",
+    };
+  }
+
   try {
     const supabase = await createOurDaysServerClient();
     await supabase.auth.signInWithOtp({
@@ -47,7 +63,7 @@ export async function requestSignInLink(
         shouldCreateUser: false,
         emailRedirectTo: new URL(
           "/auth/callback",
-          process.env.NEXT_PUBLIC_SITE_URL,
+          resolvedSiteOrigin(),
         ).toString(),
       },
     });
