@@ -6174,6 +6174,17 @@ button:focus-visible,
   }
 }
 
+@keyframes composer-editor-ease-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   .new-moment-composer-dialog .composer-sheet {
     max-height: calc(100dvh - 92px);
@@ -6199,7 +6210,7 @@ button:focus-visible,
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  animation: none;
+  animation: composer-editor-ease-up 180ms ease backwards;
 }
 
 .composer-editor-fullscreen .composer-sheet > .sheet-close {
@@ -6932,7 +6943,7 @@ button:focus-visible,
   .quick-reaction-control .inline-reaction-picker,
   .connected-moment-menu,
   .notification-panel,
-  .title-switcher nav,
+  .title-switcher[open] nav,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
     animation: overlay-popover-in 180ms ease-out backwards;
   }
@@ -6941,7 +6952,7 @@ button:focus-visible,
   .inline-reaction-picker.is-closing,
   .connected-moment-menu.is-closing,
   .notification-panel.is-closing,
-  .title-switcher nav.is-closing,
+  .title-switcher[open] nav.is-closing,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen)
     .composer-sheet.is-closing {
     animation: overlay-popover-out 120ms ease-in forwards;
@@ -6986,8 +6997,8 @@ button:focus-visible,
   .connected-moment-menu.is-closing,
   .notification-panel,
   .notification-panel.is-closing,
-  .title-switcher nav,
-  .title-switcher nav.is-closing,
+  .title-switcher[open] nav,
+  .title-switcher[open] nav.is-closing,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen)
     .composer-sheet.is-closing {

@@ -334,6 +334,11 @@ test("composer is modal, contains focus, protects every draft, and restores focu
       exact: true,
     })
     .click();
+  await expect(dialog).toHaveClass(/composer-editor-fullscreen/u);
+  await expect(overlaySheet).toHaveCSS(
+    "animation-name",
+    "composer-editor-ease-up",
+  );
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
