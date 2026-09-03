@@ -1,11 +1,16 @@
 "use server";
 
+import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { invitationDeliveryIsEnabled } from "../../../config/our-days-environment";
+import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
+import {
+  invitationDeliveryIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../config/our-days-environment";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -267,8 +272,39 @@ export async function requestFamilyInvitationAction(
       message: "That invitation could not be sent. Try again.",
     };
   }
+  if (!(await sendInvitedMagicLink(email))) {
+    return {
+      ok: false,
+      message: "That invitation could not be sent. Try again.",
+    };
+  }
   revalidatePath("/settings/family");
   return { ok: true, message: "Private invitation requested." };
+}
+
+async function sendInvitedMagicLink(email: string) {
+  const siteOrigin = resolvedSiteOrigin();
+  if (!siteOrigin) return false;
+  try {
+    const { url, publishableKey } = readSupabasePublicConfig();
+    const mailer = createClient(url, publishableKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
+    const { error } = await mailer.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: new URL("/auth/callback", siteOrigin).toString(),
+      },
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function withdrawFamilyInvitationEmailRequestAction(

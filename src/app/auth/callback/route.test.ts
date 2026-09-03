@@ -8,10 +8,14 @@ const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   limit: vi.fn(),
   signOut: vi.fn(),
+  acceptPending: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
+}));
+vi.mock("@/lib/auth/accept-pending-invitation.server", () => ({
+  acceptPendingInvitationForSession: mocks.acceptPending,
 }));
 
 import { GET } from "./route";
@@ -25,6 +29,7 @@ describe("magic-link callback", () => {
     });
     mocks.select.mockReturnValue({ limit: mocks.limit });
     mocks.signOut.mockResolvedValue({ error: null });
+    mocks.acceptPending.mockResolvedValue(false);
     mocks.createClient.mockResolvedValue({
       auth: {
         exchangeCodeForSession: mocks.exchangeCodeForSession,
@@ -64,6 +69,20 @@ describe("magic-link callback", () => {
     );
     expect(invalid.headers.get("location")).toBe(
       "https://journal.example.com/sign-in?link=invalid",
+    );
+  });
+
+  it("opens the journal after an invited account accepts a pending invitation", async () => {
+    mocks.limit.mockResolvedValueOnce({ data: [], error: null });
+    mocks.acceptPending.mockResolvedValueOnce(true);
+
+    const response = await GET(
+      new Request("https://journal.example.com/auth/callback?code=one-time"),
+    );
+
+    expect(mocks.acceptPending).toHaveBeenCalledOnce();
+    expect(response.headers.get("location")).toBe(
+      "https://journal.example.com/family",
     );
   });
 

@@ -430,6 +430,66 @@ test("primary navigation floats as a compact rounded bar above the safe area", a
   expect(geometry.bottom).not.toBe("0px");
 });
 
+test("top chrome floats as a compact rounded pill above the feed", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  const header = page.locator(".topbar");
+  await expect(header).toHaveCSS("position", "fixed");
+  await expect(header).toHaveCSS("transform", "none");
+  await expect(header.locator(".nav-item")).toHaveCount(0);
+  await expect(
+    header.getByRole("button", { name: "Add moment" }),
+  ).toBeVisible();
+
+  const geometry = await header.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const stage = document
+      .querySelector(".phone-stage")!
+      .getBoundingClientRect();
+    const above = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      Math.max(1, rect.top - 4),
+    );
+    const beside = document.elementFromPoint(
+      Math.max(1, rect.left - 4),
+      rect.top + rect.height / 2,
+    );
+    return {
+      aboveIsHeader: Boolean(above?.closest(".topbar")),
+      besideIsHeader: Boolean(beside?.closest(".topbar")),
+      height: rect.height,
+      leftGap: rect.left - stage.left,
+      radius: Number.parseFloat(style.borderRadius),
+      rightGap: stage.right - rect.right,
+      stageWidth: stage.width,
+      top: style.top,
+      topGap: rect.top,
+      width: rect.width,
+    };
+  });
+
+  expect(geometry.height).toBeLessThanOrEqual(58);
+  expect(geometry.radius).toBeGreaterThanOrEqual(12);
+  expect(geometry.leftGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.rightGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.topGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.width).toBeLessThan(geometry.stageWidth);
+  expect(geometry.aboveIsHeader).toBe(false);
+  expect(geometry.besideIsHeader).toBe(false);
+  expect(geometry.top).not.toBe("0px");
+
+  await page.evaluate(() => window.scrollTo(0, 240));
+  const afterScroll = await header.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top, position: getComputedStyle(element).position };
+  });
+  expect(afterScroll.position).toBe("fixed");
+  expect(afterScroll.top).toBeCloseTo(geometry.topGap, 0);
+});
+
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
   page,
 }) => {

@@ -54,7 +54,11 @@ export function FamilySettingsPanel({
   children?: ReactNode;
 }) {
   if (model.mode === "preview") {
-    return <PreviewFamilySettingsPanel model={model} />;
+    return (
+      <PreviewFamilySettingsPanel model={model}>
+        {children}
+      </PreviewFamilySettingsPanel>
+    );
   }
   if (!actions)
     throw new Error("Connected family settings actions are required");
@@ -135,8 +139,10 @@ function MemberList({
 
 function PreviewFamilySettingsPanel({
   model,
+  children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
+  children?: ReactNode;
 }) {
   const [email, setEmail] = useState("");
   const [reviewEmail, setReviewEmail] = useState<string | null>(null);
@@ -302,6 +308,7 @@ function PreviewFamilySettingsPanel({
           </form>
         )}
       </section>
+      {children}
     </section>
   );
 }

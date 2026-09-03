@@ -753,10 +753,10 @@ export function validateOurDaysEnvironment(
 export function invitationDeliveryIsEnabled(
   environment: ProcessEnvironment = process.env,
 ) {
-  return (
-    environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "enabled" &&
-    environment.OUR_DAYS_RESOURCE_MODE === "supabase"
-  );
+  if (!supabaseResourceIsActive(environment)) return false;
+  if (environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "disabled") return false;
+  if (environment.OUR_DAYS_INVITATION_DELIVERY_MODE === "enabled") return true;
+  return isHostedVercelRuntime(environment);
 }
 
 export function supabaseResourceIsActive(

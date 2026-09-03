@@ -137,6 +137,15 @@ describe("FamilySettingsPanel", () => {
     ).toHaveLength(1);
   });
 
+  it("renders journal tools inside the invitation-only account panel", () => {
+    render(
+      <FamilySettingsPanel model={model}>
+        <div data-testid="journal-tools">tools</div>
+      </FamilySettingsPanel>,
+    );
+    expect(screen.getByTestId("journal-tools")).toBeVisible();
+  });
+
   it("validates, trims, previews, edits, and clears an invitation locally", async () => {
     const user = userEvent.setup();
     render(<FamilySettingsPanel model={model} />);

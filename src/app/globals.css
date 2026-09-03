@@ -21,7 +21,9 @@
   --header-drawer-radius: 10px;
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
   --header-drawer-padding: 16px;
-  --header-drawer-top: calc(63px + env(safe-area-inset-top));
+  --header-drawer-top: calc(
+    var(--bottom-nav-float-gap) + 56px + 8px + env(safe-area-inset-top)
+  );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
   --bottom-nav-float-gap: 10px;
@@ -60,6 +62,9 @@ html {
   background: #07110d;
   scroll-padding-bottom: calc(
     78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
+  scroll-padding-top: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
   );
 }
 body {
@@ -348,6 +353,9 @@ button:focus-visible,
   position: relative;
   overflow: hidden;
   overflow-x: clip;
+  padding-top: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
+  );
   padding-bottom: calc(
     78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
   );
@@ -357,14 +365,28 @@ button:focus-visible,
   box-shadow: 0 24px 80px rgba(58, 45, 33, 0.18);
 }
 .topbar {
-  min-height: calc(88px + env(safe-area-inset-top));
-  padding: calc(18px + env(safe-area-inset-top)) 18px 12px;
+  height: 56px;
+  min-height: 56px;
+  padding: 3px 8px;
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  grid-template-columns: 44px minmax(0, 1fr) 88px;
   align-items: center;
-  position: relative;
-  z-index: 5;
-  background: linear-gradient(var(--paper) 74%, rgba(243, 238, 228, 0));
+  position: fixed;
+  z-index: 100;
+  top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
+  margin-inline: auto;
+  isolation: isolate;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: rgba(7, 17, 13, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(18px);
 }
 .family-mark,
 .quiet-button {
@@ -420,6 +442,7 @@ button:focus-visible,
   background: var(--moss);
 }
 .title-lockup {
+  min-width: 0;
   text-align: center;
 }
 .title-lockup .eyebrow {
@@ -433,10 +456,13 @@ button:focus-visible,
 }
 .title-lockup h1 {
   margin: 0;
+  overflow: hidden;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .quiet-button {
   justify-self: end;
@@ -3907,8 +3933,7 @@ button:focus-visible,
     border-radius: 38px;
   }
   .topbar {
-    position: sticky;
-    top: 0;
+    position: fixed;
   }
 }
 @media (max-width: 360px) {
@@ -3985,11 +4010,14 @@ button:focus-visible,
 }
 
 .topbar {
-  min-height: calc(72px + env(safe-area-inset-top));
-  padding: calc(13px + env(safe-area-inset-top)) 18px 8px;
-  background: color-mix(in srgb, var(--paper) 96%, transparent);
-  border-bottom: 1px solid var(--hairline);
-  backdrop-filter: blur(16px);
+  height: 56px;
+  min-height: 56px;
+  padding: 3px 8px;
+  background: rgba(7, 17, 13, 0.92);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(18px);
 }
 
 .family-mark,
@@ -5174,46 +5202,64 @@ button:focus-visible,
   margin: 0;
 }
 
+.account-tool-link,
+.account-sign-out button {
+  min-height: 72px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 13px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 .account-tool-link {
-  min-height: 58px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 11px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 7px;
-  color: var(--ink);
-  text-decoration: none;
 }
 
 .account-tool-link > span:first-child {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
-.account-tool-link strong {
-  font-size: 13px;
+.account-tool-link strong,
+.account-sign-out button {
+  overflow-wrap: anywhere;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .account-tool-link small {
   color: var(--muted);
-  font: 500 9px/1.3 var(--font-record);
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.04em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
-.account-sign-out {
-  margin-top: 10px;
+.account-tool-link > span:last-child {
+  color: var(--teal);
+  font-size: 16px;
+  line-height: 1;
 }
 
-.account-sign-out button {
-  min-height: 42px;
-  width: 100%;
-  border: 1px solid var(--hairline);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
+.account-sign-out {
+  margin: 0;
+}
+
+.account-sign-out button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 :root[data-theme="light"],
@@ -5229,7 +5275,8 @@ button:focus-visible,
     linear-gradient(90deg, rgba(57, 123, 118, 0.07) 1px, transparent 1px);
 }
 
-:root[data-theme="light"] .bottom-nav {
+:root[data-theme="light"] .bottom-nav,
+:root[data-theme="light"] .topbar {
   background: rgba(243, 238, 228, 0.94);
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
@@ -5993,7 +6040,7 @@ button:focus-visible,
 
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
   :root {
-    --header-drawer-top: 92px;
+    --header-drawer-top: calc(var(--bottom-nav-float-gap) + 56px + 8px);
   }
 
   .new-moment-composer-dialog .composer-sheet {

@@ -34,8 +34,8 @@ select is(
 select is(
   (select enabled from private.invitation_delivery_capabilities
     where capability = 'email_delivery'),
-  false,
-  'the invitation delivery capability is disabled by default'
+  true,
+  'the invitation delivery capability is enabled for organizer sending'
 );
 
 set local role service_role;
@@ -327,6 +327,12 @@ select throws_ok(
   '42501', 'Invitation worker identity separation failed',
   'an allowlisted worker cannot later acquire family membership'
 );
+
+-- Fail-closed coverage still requires an explicit owner disable. Organizer
+-- sending is on by default after 20260903120000.
+update private.invitation_delivery_capabilities
+   set enabled = false, updated_at = statement_timestamp()
+ where capability = 'email_delivery';
 
 set local role authenticated;
 select set_config(
@@ -1106,9 +1112,9 @@ select public.request_invitation_email(
   'a1000000-0000-4000-8000-000000000031'
 ) as request_id \gset drift_
 reset role;
-insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
-values ('10000000-0000-4000-8000-000000000079',
-  'email-drift@example.test', null, '{}');
+select id as auth_user_id from auth.users
+ where lower(btrim(email)) = 'email-drift@example.test'
+ \gset drift_target_
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000071', true
@@ -1118,11 +1124,11 @@ select set_config(
 );
 select * from public.complete_invitation_email_provisioning(
   :'drift_request_id'::uuid,
-  '10000000-0000-4000-8000-000000000079'
+  :'drift_target_auth_user_id'::uuid
 ) \gset drift_provisioned_
 reset role;
 update auth.users set email = 'changed-address@example.test'
- where id = '10000000-0000-4000-8000-000000000079';
+ where id = :'drift_target_auth_user_id'::uuid;
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000072', true
@@ -1156,9 +1162,9 @@ select public.request_invitation_email(
   'a1000000-0000-4000-8000-000000000032'
 ) as request_id \gset provisioner_revoke_
 reset role;
-insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
-values ('10000000-0000-4000-8000-000000000080',
-  'provisioner-revoke@example.test', null, '{}');
+select id as auth_user_id from auth.users
+ where lower(btrim(email)) = 'provisioner-revoke@example.test'
+ \gset provisioner_revoke_target_
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000076', true
@@ -1168,7 +1174,7 @@ select set_config(
 );
 select * from public.complete_invitation_email_provisioning(
   :'provisioner_revoke_request_id'::uuid,
-  '10000000-0000-4000-8000-000000000080'
+  :'provisioner_revoke_target_auth_user_id'::uuid
 ) \gset provisioner_revoke_bound_
 reset role;
 update private.invitation_provisioner_allowlist
@@ -1193,15 +1199,55 @@ select is(
   'provisioner revocation terminalizes the linked job'
 );
 select lives_ok(
-  $$delete from auth.users
-     where id = '10000000-0000-4000-8000-000000000080'$$,
+  format(
+    'delete from auth.users where id = %L::uuid',
+    :'provisioner_revoke_target_auth_user_id'
+  ),
   'prepared target Auth deletion is not structurally blocked by request history'
 );
 select is(
   (select target_auth_user_id from private.invitation_email_requests
     where id = :'provisioner_revoke_request_id'::uuid),
-  '10000000-0000-4000-8000-000000000080'::uuid,
+  :'provisioner_revoke_target_auth_user_id'::uuid,
   'durable request history retains only the detached target UUID evidence'
+);
+
+-- Magic-link path: a queued request plus the confirmed Auth user can join
+-- without a delivery token.
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select public.request_invitation_email(
+  '20000000-0000-4000-8000-000000000001',
+  'magic-link-invitee@example.test', 'Magic Link Guest',
+  'a1000000-0000-4000-8000-000000000099'
+) as request_id \gset magic_invite_
+reset role;
+select id as auth_user_id from auth.users
+ where lower(btrim(email)) = 'magic-link-invitee@example.test'
+ \gset magic_invitee_
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', :'magic_invitee_auth_user_id', true
+);
+select public.accept_pending_invitation_for_current_user()
+  as membership_id \gset magic_accepted_
+reset role;
+select ok(
+  exists (
+    select 1 from public.circle_memberships
+     where id = :'magic_accepted_membership_id'::uuid
+       and user_id = :'magic_invitee_auth_user_id'::uuid
+       and status = 'active'
+  ),
+  'an invited confirmed Auth user can accept without a delivery token'
+);
+select is(
+  (select invalidation_reason from private.invitation_email_requests
+    where id = :'magic_invite_request_id'::uuid),
+  'target_became_active',
+  'accepting a pending invitation consumes the queued request'
 );
 
 select is(

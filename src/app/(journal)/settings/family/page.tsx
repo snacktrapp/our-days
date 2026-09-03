@@ -24,7 +24,9 @@ export default async function FamilySettingsPage() {
     const model = getFamilySettingsFixture();
     return (
       <JournalChrome model={model.chrome} section="settings">
-        <FamilySettingsPanel model={model.panel} />
+        <FamilySettingsPanel model={model.panel}>
+          <AccountTools />
+        </FamilySettingsPanel>
       </JournalChrome>
     );
   }

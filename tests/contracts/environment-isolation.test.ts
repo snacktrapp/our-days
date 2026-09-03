@@ -45,7 +45,7 @@ function expectUnsafe(
 }
 
 describe("Our Days environment isolation", () => {
-  it("keeps invitation delivery disabled unless both the capability and Supabase mode are explicit", () => {
+  it("enables invitation delivery for hosted Vercel unless it is explicitly disabled", () => {
     expect(invitationDeliveryIsEnabled({})).toBe(false);
     expect(
       invitationDeliveryIsEnabled({
@@ -59,6 +59,21 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_RESOURCE_MODE: "supabase",
       }),
     ).toBe(true);
+    expect(
+      invitationDeliveryIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+      }),
+    ).toBe(true);
+    expect(
+      invitationDeliveryIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+        OUR_DAYS_INVITATION_DELIVERY_MODE: "disabled",
+      }),
+    ).toBe(false);
   });
 
   it("rejects malformed or detached invitation-delivery activation", () => {

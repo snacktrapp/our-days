@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { acceptPendingInvitationForSession } from "@/lib/auth/accept-pending-invitation.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 function appRedirect(request: Request, path: string) {
@@ -29,7 +30,10 @@ export async function GET(request: Request) {
     }
 
     if (!data || data.length === 0) {
-      return appRedirect(request, "/access-unavailable");
+      const accepted = await acceptPendingInvitationForSession(supabase);
+      if (!accepted) {
+        return appRedirect(request, "/access-unavailable");
+      }
     }
 
     return appRedirect(request, "/family");
