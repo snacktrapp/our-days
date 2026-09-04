@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocationMapVisual } from "./location-map-visual";
 
@@ -7,7 +7,7 @@ describe("LocationMapVisual", () => {
     vi.unstubAllEnvs();
   });
 
-  it("keeps the illustration when the public key is missing", () => {
+  it("loads the same-origin static proxy when the public key is missing", () => {
     render(
       <LocationMapVisual
         place="The porch"
@@ -15,6 +15,23 @@ describe("LocationMapVisual", () => {
         longitude={-119.93}
       />,
     );
+    const map = screen.getByRole("img", { name: "Map of The porch" });
+    expect(map.getAttribute("src")).toBe(
+      "/api/maps/static?lat=39.2&lng=-119.93",
+    );
+    expect(document.querySelector(".map-water")).toBeNull();
+    expect(document.querySelector(".memory-map-live")).toBeTruthy();
+  });
+
+  it("falls back to the illustration after the proxy image errors", () => {
+    render(
+      <LocationMapVisual
+        place="The porch"
+        latitude={39.2}
+        longitude={-119.93}
+      />,
+    );
+    fireEvent.error(screen.getByRole("img", { name: "Map of The porch" }));
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(document.querySelector(".map-water")).toBeInTheDocument();
     expect(document.querySelector(".memory-map-live")).toBeNull();

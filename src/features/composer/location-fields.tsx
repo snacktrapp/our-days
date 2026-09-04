@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   publicMapTilerKey,
-  reverseGeocodeMapTilerPlace,
-  searchMapTilerPlaces,
+  reverseGeocodeForComposer,
+  searchPlacesForComposer,
   type GeocodedPlace,
 } from "./maptiler";
 import { ComposerPickerPanel } from "./composer-picker-panel";
@@ -46,27 +46,22 @@ export function LocationFields({
   const [searching, setSearching] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const mapKey = publicMapTilerKey();
-  const mapAvailable = mapKey.length > 0;
   const canGeolocate =
-    mapAvailable &&
-    typeof navigator !== "undefined" &&
-    "geolocation" in navigator;
+    typeof navigator !== "undefined" && "geolocation" in navigator;
   const panelOpen = required || open || invalid;
 
   const applyMapMove = useCallback(
     async (latitude: number, longitude: number) => {
       let label = valueRef.current.label.trim();
-      if (mapKey) {
-        try {
-          const reversed = await reverseGeocodeMapTilerPlace(
-            latitude,
-            longitude,
-            mapKey,
-          );
-          if (reversed) label = reversed;
-        } catch {
-          // Keep the label the family already typed.
-        }
+      try {
+        const reversed = await reverseGeocodeForComposer(
+          latitude,
+          longitude,
+          mapKey,
+        );
+        if (reversed) label = reversed;
+      } catch {
+        // Keep the label the family already typed.
       }
       const nextLabel =
         label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
@@ -121,13 +116,13 @@ export function LocationFields({
   }, [panelOpen, required]);
 
   useEffect(() => {
-    if (!panelOpen || !mapAvailable || search.trim().length < 2) return;
+    if (!panelOpen || search.trim().length < 2) return;
     const requestId = searchRequestRef.current + 1;
     searchRequestRef.current = requestId;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void searchMapTilerPlaces(search.trim(), mapKey, controller.signal)
+      void searchPlacesForComposer(search.trim(), mapKey, controller.signal)
         .then((places) => {
           if (searchRequestRef.current !== requestId) return;
           setSuggestions(places);
@@ -144,7 +139,7 @@ export function LocationFields({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [mapAvailable, mapKey, panelOpen, search]);
+  }, [mapKey, panelOpen, search]);
 
   const chooseSuggestion = (place: GeocodedPlace) => {
     onChange(place);
@@ -172,7 +167,7 @@ export function LocationFields({
   const searchField = (
     <div className="composer-location-search">
       <label className="composer-field">
-        <span>{mapAvailable ? "Search" : heading}</span>
+        <span>Search</span>
         <input
           ref={inputRef}
           type="text"
@@ -182,9 +177,7 @@ export function LocationFields({
           aria-required={required || undefined}
           aria-invalid={invalid ? true : undefined}
           aria-label="Place name"
-          placeholder={
-            mapAvailable ? "Search for a place" : "Add a place by hand"
-          }
+          placeholder="Search for a place"
           onChange={(event) => {
             const nextLabel = event.target.value;
             setSearch(nextLabel);
@@ -243,13 +236,9 @@ export function LocationFields({
           latitude={value.latitude}
           longitude={value.longitude}
         />
-      ) : mapAvailable ? (
-        <p className="composer-location-unavailable" role="status">
-          Search to see this place on a map
-        </p>
       ) : (
         <p className="composer-location-unavailable" role="status">
-          Map unavailable
+          Search to see this place on a map
         </p>
       )}
 

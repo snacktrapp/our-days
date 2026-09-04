@@ -3,6 +3,8 @@ import {
   mapTilerStaticMapUrl,
   reverseGeocodeMapTilerPlace,
   searchMapTilerPlaces,
+  searchPlacesForComposer,
+  serverMapTilerKey,
   staticMapImageSrc,
 } from "./maptiler";
 
@@ -75,6 +77,29 @@ describe("MapTiler geocoding", () => {
     );
     expect(staticMapImageSrc(35.1428, -120.6413)).toBe(
       "/api/maps/static?lat=35.1428&lng=-120.6413",
+    );
+  });
+
+  it("reads the server MapTiler key from runtime env names", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "");
+    vi.stubEnv("MAPTILER_KEY", "server-key");
+    expect(serverMapTilerKey()).toBe("server-key");
+    vi.unstubAllEnvs();
+  });
+
+  it("searches through the same-origin geocode proxy without a public key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(searchPlacesForComposer("Harbor", "")).resolves.toEqual([
+      { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+    ]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "/api/maps/geocode?q=Harbor",
     );
   });
 

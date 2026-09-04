@@ -29,13 +29,12 @@ describe("location fields", () => {
     expect(screen.getByLabelText("Place name")).toHaveFocus();
     expect(screen.getByLabelText("Place name")).toHaveAttribute(
       "placeholder",
-      "Add a place by hand",
+      "Search for a place",
     );
-    expect(screen.getByRole("status")).toHaveTextContent("Map unavailable");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Search to see this place on a map",
+    );
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Use my location" }),
-    ).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "The porch");
     expect(onChange).toHaveBeenLastCalledWith({

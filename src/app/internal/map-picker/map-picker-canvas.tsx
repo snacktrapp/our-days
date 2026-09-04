@@ -9,7 +9,10 @@ import {
   isParentToMapPicker,
   type MapPickerToParent,
 } from "@/features/composer/map-picker-protocol";
-import { mapTilerStyleUrl } from "@/features/composer/maptiler";
+import {
+  mapTilerStyleProxySrc,
+  mapTilerStyleUrl,
+} from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
 export function MapPickerCanvas() {
@@ -65,7 +68,7 @@ export function MapPickerCanvas() {
       if (cancelled || !container) return;
       map = new maplibre.Map({
         container,
-        style: mapTilerStyleUrl(key),
+        style: key ? mapTilerStyleUrl(key) : mapTilerStyleProxySrc,
         center: [DEFAULT_MAP_CENTER.longitude, DEFAULT_MAP_CENTER.latitude],
         zoom: DEFAULT_MAP_CENTER.zoom,
         attributionControl: { compact: true },

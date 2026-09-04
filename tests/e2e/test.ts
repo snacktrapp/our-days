@@ -46,7 +46,9 @@ export const test = base.extend<{
           ) &&
           !allowedConsoleErrors.some((allowedError) =>
             error.includes(allowedError),
-          ),
+          ) &&
+          !(/\/api\/maps\/static\?/u.test(error) &&
+            /status of 50[23]/u.test(error)),
       );
       expect(
         unexpectedErrors,
@@ -67,7 +69,8 @@ export const test = base.extend<{
               failure.includes("/_next/image?") ||
               /\/apple-touch-icon\.png(?:\?|$)/u.test(failure)) &&
             /(ERR_ABORTED|NS_BINDING_ABORTED|cancel)/i.test(failure)
-          ),
+          ) &&
+          !/\/api\/maps\/static\?/u.test(failure),
       );
       expect(
         unexpectedRequestFailures,

@@ -23,18 +23,27 @@ type MapTilerGeocodeResponse = Readonly<{
   features?: readonly MapTilerFeature[];
 }>;
 
+const serverMapTilerKeyNames = [
+  "NEXT_PUBLIC_MAPTILER_KEY",
+  "MAPTILER_KEY",
+  "MAPTILER_API_KEY",
+] as const;
+
 export function publicMapTilerKey() {
   return process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim() ?? "";
 }
 
 export function serverMapTilerKey() {
-  return (
-    publicMapTilerKey() ||
-    process.env.MAPTILER_KEY?.trim() ||
-    process.env.MAPTILER_API_KEY?.trim() ||
-    ""
-  );
+  // Bracket access keeps the server route reading Vercel's runtime env even
+  // when NEXT_PUBLIC_MAPTILER_KEY was empty at build time and got inlined.
+  for (const name of serverMapTilerKeyNames) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return publicMapTilerKey();
 }
+
+export const mapTilerStyleProxySrc = "/api/maps/style";
 
 export function mapTilerStyleUrl(key: string) {
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
@@ -139,4 +148,46 @@ export async function reverseGeocodeMapTilerPlace(
   if (!key) return "";
   const [place] = await geocode(`${longitude},${latitude}`, key, signal);
   return place?.label ?? "";
+}
+
+export async function searchPlacesForComposer(
+  query: string,
+  key: string,
+  signal?: AbortSignal,
+): Promise<readonly GeocodedPlace[]> {
+  if (key) return searchMapTilerPlaces(query, key, signal);
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const response = await fetch(
+    `/api/maps/geocode?${new URLSearchParams({ q: trimmed })}`,
+    { signal },
+  );
+  if (!response.ok) return [];
+  const payload: unknown = await response.json();
+  return Array.isArray(payload) ? (payload as readonly GeocodedPlace[]) : [];
+}
+
+export async function reverseGeocodeForComposer(
+  latitude: number,
+  longitude: number,
+  key: string,
+  signal?: AbortSignal,
+) {
+  if (key) return reverseGeocodeMapTilerPlace(latitude, longitude, key, signal);
+  const params = new URLSearchParams({
+    lat: String(latitude),
+    lng: String(longitude),
+  });
+  const response = await fetch(`/api/maps/geocode?${params}`, { signal });
+  if (!response.ok) return "";
+  const payload: unknown = await response.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "label" in payload &&
+    typeof payload.label === "string"
+  ) {
+    return payload.label;
+  }
+  return "";
 }

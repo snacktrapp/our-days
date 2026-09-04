@@ -1,0 +1,33 @@
+import {
+  mapTilerStyleUrl,
+  serverMapTilerKey,
+} from "@/features/composer/maptiler";
+import { mapsApiHeaders, mapsApiText } from "../response";
+
+export async function GET() {
+  const key = serverMapTilerKey();
+  if (!key) return mapsApiText(503, "maptiler_key_missing");
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(mapTilerStyleUrl(key), {
+      method: "GET",
+      referrerPolicy: "no-referrer",
+    });
+  } catch {
+    return mapsApiText(502, "maptiler_upstream_failed");
+  }
+  if (!upstream.ok) {
+    return mapsApiText(502, `maptiler_upstream_failed ${upstream.status}`);
+  }
+
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      ...mapsApiHeaders,
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=3600",
+    },
+  });
+}

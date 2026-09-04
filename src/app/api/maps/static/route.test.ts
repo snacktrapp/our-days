@@ -29,12 +29,26 @@ describe("static map proxy", () => {
 
   it("fails closed when the MapTiler key is missing", async () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "");
+    vi.stubEnv("MAPTILER_KEY", "");
+    vi.stubEnv("MAPTILER_API_KEY", "");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    await expect(request("?lat=39.2&lng=-119.93")).resolves.toMatchObject({
-      status: 404,
-    });
+    const response = await request("?lat=39.2&lng=-119.93");
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("maptiler_key_missing");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports an upstream failure without leaking the key", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      headers: new Headers({ "content-type": "text/plain" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await request("?lat=39.2&lng=-119.93");
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe("maptiler_upstream_failed 403");
   });
 
   it("returns a MapTiler static map centered on the pin", async () => {

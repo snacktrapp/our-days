@@ -3,15 +3,7 @@ import {
   mapTilerStaticMapUrl,
   serverMapTilerKey,
 } from "@/features/composer/maptiler";
-
-const headers = {
-  "X-Content-Type-Options": "nosniff",
-  "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
-} as const;
-
-function unavailable(status = 404) {
-  return new Response(null, { status, headers });
-}
+import { mapsApiHeaders, mapsApiText } from "../response";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -19,7 +11,7 @@ export async function GET(request: Request) {
     url.searchParams.get("lat"),
     url.searchParams.get("lng"),
   );
-  if (!coordinates) return unavailable(400);
+  if (!coordinates) return mapsApiText(400, "invalid_coordinates");
 
   const key = serverMapTilerKey();
   const mapUrl = mapTilerStaticMapUrl(
@@ -27,7 +19,7 @@ export async function GET(request: Request) {
     coordinates.latitude,
     coordinates.longitude,
   );
-  if (!mapUrl) return unavailable();
+  if (!mapUrl) return mapsApiText(503, "maptiler_key_missing");
 
   let upstream: Response;
   try {
@@ -36,17 +28,21 @@ export async function GET(request: Request) {
       referrerPolicy: "no-referrer",
     });
   } catch {
-    return unavailable();
+    return mapsApiText(502, "maptiler_upstream_failed");
   }
-  if (!upstream.ok) return unavailable();
+  if (!upstream.ok) {
+    return mapsApiText(502, `maptiler_upstream_failed ${upstream.status}`);
+  }
 
   const contentType = upstream.headers.get("content-type") ?? "image/png";
-  if (contentType && !contentType.startsWith("image/")) return unavailable();
+  if (contentType && !contentType.startsWith("image/")) {
+    return mapsApiText(502, "maptiler_upstream_failed");
+  }
 
   return new Response(upstream.body, {
     status: 200,
     headers: {
-      ...headers,
+      ...mapsApiHeaders,
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=86400",
     },

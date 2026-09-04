@@ -1045,7 +1045,7 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
     await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "Oak Street School");
-    expect(screen.getByText("Map unavailable")).toBeVisible();
+    expect(screen.getByText("Search to see this place on a map")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -1071,7 +1071,7 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Location/ }));
     await setComposerPlace(user, "Sand Harbor");
-    expect(screen.getByText("Map unavailable")).toBeVisible();
+    expect(screen.getByText("Search to see this place on a map")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
