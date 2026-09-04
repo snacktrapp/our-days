@@ -12,22 +12,29 @@ async function pullFeed(
       const startX = 180;
       const startY = 220;
       const fire = (type: string, x: number, y: number) => {
-        const touch = new Touch({
+        const touch = {
           identifier: 1,
           target,
           clientX: x,
           clientY: y,
+          pageX: x,
+          pageY: y,
+          screenX: x,
+          screenY: y,
+          radiusX: 2,
+          radiusY: 2,
+          rotationAngle: 0,
+          force: 1,
+        };
+        const ended = type === "touchend";
+        // WebKit forbids `new Touch()` / `new TouchEvent()` from script.
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.assign(event, {
+          touches: ended ? [] : [touch],
+          targetTouches: ended ? [] : [touch],
+          changedTouches: [touch],
         });
-        target.dispatchEvent(
-          new TouchEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            composed: true,
-            touches: type === "touchend" ? [] : [touch],
-            targetTouches: type === "touchend" ? [] : [touch],
-            changedTouches: [touch],
-          }),
-        );
+        target.dispatchEvent(event);
       };
       fire("touchstart", startX, startY);
       fire("touchmove", startX + dx / 2, startY + distance / 2);
@@ -38,13 +45,22 @@ async function pullFeed(
   );
 }
 
+async function waitForFamilyFeed(page: Page) {
+  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(page.locator(".timeline-pull-shell")).toHaveAttribute(
+    "data-pull-state",
+    "idle",
+  );
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
 test("pulling the Family feed at the top refreshes moments", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/family");
+  await page.goto("/family", { waitUntil: "networkidle" });
   const shell = page.locator(".timeline-pull-shell");
-  await expect(shell).toHaveAttribute("data-pull-state", "idle");
+  await waitForFamilyFeed(page);
   await expect(page.locator(".timeline-refresh-mark")).toHaveCount(1);
 
   let rscRefreshes = 0;
@@ -72,8 +88,9 @@ test("a sideways swipe at the top of Family does not refresh", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/family");
+  await page.goto("/family", { waitUntil: "networkidle" });
   const shell = page.locator(".timeline-pull-shell");
+  await waitForFamilyFeed(page);
 
   let rscRefreshes = 0;
   page.on("request", (request) => {
@@ -93,7 +110,7 @@ test("personal journals share the same pull-to-refresh shell", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/people/molly");
+  await page.goto("/people/molly", { waitUntil: "networkidle" });
   await expect(page.locator(".timeline-pull-shell")).toHaveAttribute(
     "data-pull-state",
     "idle",
@@ -106,7 +123,8 @@ test("personal journals share the same pull-to-refresh shell", async ({
 test("reduced motion keeps the refresh mark from pulsing", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/family");
+  await page.goto("/family", { waitUntil: "networkidle" });
+  await waitForFamilyFeed(page);
   await pullFeed(page, 90);
   const animation = await page
     .locator(".timeline-refresh-mark")
