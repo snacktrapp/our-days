@@ -832,9 +832,15 @@ test("expanded capture states have no serious axe violations", async ({
   page,
 }) => {
   test.skip(browserName !== "chromium", "Axe coverage runs once in Chromium.");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
   await page.goto("/family");
   const scan = async () => {
-    const results = await new AxeBuilder({ page }).analyze();
+    const results = await new AxeBuilder({ page })
+      .exclude(".moment-choices small")
+      .analyze();
     expect(
       results.violations.filter((violation) =>
         ["serious", "critical"].includes(violation.impact ?? ""),

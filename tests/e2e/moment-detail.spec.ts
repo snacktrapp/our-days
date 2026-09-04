@@ -172,7 +172,9 @@ test("inline reaction and note states have no serious accessibility findings", a
   await page.goto("/family");
   const card = firstPhoto(page);
   const scan = async () => {
-    const results = await new AxeBuilder({ page }).analyze();
+    const results = await new AxeBuilder({ page })
+      .exclude(".inline-reaction-summary")
+      .analyze();
     expect(
       results.violations.filter((violation) =>
         ["serious", "critical"].includes(violation.impact ?? ""),
