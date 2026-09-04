@@ -94,6 +94,24 @@ describe("insight create route", () => {
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/family");
   });
 
+  it("creates an Insight for an Operations session", async () => {
+    mocks.readAccess.mockResolvedValue({
+      ...organizerAccess,
+      role: "operations",
+    });
+    const response = await request({
+      quote: "Curiosity is a form of courage.",
+      attribution: "The Diary of a CEO",
+    });
+    expect(response.status).toBe(201);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "create_insight_moment",
+      expect.objectContaining({
+        circle_id: organizerAccess.circleId,
+      }),
+    );
+  });
+
   it("rejects a member session even with a valid payload", async () => {
     mocks.readAccess.mockResolvedValue({ ...organizerAccess, role: "member" });
     const response = await request({

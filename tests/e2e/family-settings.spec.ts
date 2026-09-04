@@ -48,7 +48,9 @@ test("family settings makes access and invitation boundaries explicit", async ({
     "0px",
   );
   await expect(page.getByText("Managed profile · No sign-in")).toHaveCount(3);
-  await expect(page.getByText("Account · Can sign in")).toHaveCount(2);
+  await expect(page.getByText("Account · Can sign in")).toHaveCount(3);
+  await expect(page.getByText("Operations")).toBeVisible();
+  await expect(page.getByText("TARS")).toBeVisible();
   await expect(
     page.getByText(/no accounts or permissions are active/u),
   ).toBeVisible();

@@ -127,6 +127,28 @@ afterEach(() => {
   refresh.mockClear();
 });
 
+const connectedOperationsModel = {
+  ...connectedOrganizerModel,
+  members: [
+    ...connectedOrganizerModel.members,
+    {
+      id: "tars",
+      membershipId: "tars-membership",
+      profileKind: "account" as const,
+      role: "operations" as const,
+      name: "TARS",
+      initial: "T",
+      accent: "slate" as const,
+      relationshipLabel: "Operations",
+      accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: true,
+    },
+  ],
+};
+
 describe("FamilySettingsPanel", () => {
   it("distinguishes account access from managed journal profiles", () => {
     render(<FamilySettingsPanel model={model} />);
@@ -142,6 +164,40 @@ describe("FamilySettingsPanel", () => {
         name: "Review access for Other organizer",
       }),
     ).toHaveLength(1);
+  });
+
+  it("keeps Operations visible on Account and explains the role without a journal toggle", async () => {
+    const user = userEvent.setup();
+    render(
+      <FamilySettingsPanel
+        model={connectedOperationsModel}
+        actions={{
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText("TARS")).toBeVisible();
+    expect(screen.getByText("Operations")).toBeVisible();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Manage role and access for TARS",
+      }),
+    );
+    expect(screen.getByText("Current role: Operations")).toBeVisible();
+    expect(screen.getByText(/not a family journal person/u)).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Make organizer: TARS" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Change to family member: TARS" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Remove access for TARS" }),
+    ).toBeVisible();
   });
 
   it("renders journal tools inside the invitation-only account panel", () => {

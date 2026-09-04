@@ -9,6 +9,11 @@ import {
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import {
+  isOperationsRole,
+  journalContextLabel,
+  journalDirectoryRoleLabel,
+} from "@/lib/circle-roles";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
@@ -53,6 +58,54 @@ export type ConnectedJournalContext = Readonly<{
   chrome: JournalChromeViewModel;
   people: PeopleViewModel["people"];
 }>;
+
+export type JournalPersonOption = Readonly<{
+  id: string;
+  name: string;
+  initial: string;
+  accent: AccentToken;
+  contextLabel: string;
+  profileKind: string;
+  role?: string | null;
+}>;
+
+export function buildJournalPersonSurface(
+  personOptions: readonly JournalPersonOption[],
+  access: Readonly<{ personId: string; role: string }>,
+  guardedPersonIds: ReadonlySet<string>,
+) {
+  const visible = personOptions.filter(
+    (person) => !isOperationsRole(person.role),
+  );
+  return {
+    people: visible.map((person) => ({
+      id: person.id,
+      name: person.name,
+      initial: person.initial,
+      accent: person.accent,
+      roleLabel: journalDirectoryRoleLabel(person.profileKind, person.role),
+      journalHref: `/people/${person.id}`,
+    })),
+    familyMark: visible.slice(0, 5).map((person) => ({
+      id: person.id,
+      initial: person.initial,
+      accent: person.accent,
+    })),
+    journalPeople: visible.filter(
+      (person) =>
+        person.id === access.personId ||
+        (person.profileKind === "managed" &&
+          (access.role === "organizer" || guardedPersonIds.has(person.id))),
+    ),
+    taggablePeople: visible.map((person) => ({
+      id: person.id,
+      name: person.name,
+      initial: person.initial,
+      accent: person.accent,
+      contextLabel: person.contextLabel,
+    })),
+  };
+}
 
 type ActivityNote = Readonly<{
   id: string;
@@ -257,14 +310,11 @@ export async function loadConnectedJournalContext(
       name: person.display_name,
       initial: initialFor(person.display_name),
       accent,
-      contextLabel:
-        person.id === access.personId
-          ? "You"
-          : person.profile_kind === "managed"
-            ? "Managed journal"
-            : membership?.role === "organizer"
-              ? "Organizer"
-              : "Family member",
+      contextLabel: journalContextLabel(
+        person.id === access.personId,
+        person.profile_kind,
+        membership?.role,
+      ),
       profileKind: person.profile_kind,
       role: membership?.role,
     };
@@ -274,11 +324,10 @@ export async function loadConnectedJournalContext(
   );
   if (!recorder) throw new Error("Member profile is unavailable");
 
-  const journalPeople = personOptions.filter(
-    (person) =>
-      person.id === access.personId ||
-      (person.profileKind === "managed" &&
-        (access.role === "organizer" || guardedPersonIds.has(person.id))),
+  const surface = buildJournalPersonSurface(
+    personOptions,
+    access,
+    guardedPersonIds,
   );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
@@ -288,25 +337,14 @@ export async function loadConnectedJournalContext(
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,
     recordedByName: recorder.name,
-    journalPeople,
-    taggablePeople: personOptions.map((person) => ({
-      id: person.id,
-      name: person.name,
-      initial: person.initial,
-      accent: person.accent,
-      contextLabel: person.contextLabel,
-    })),
+    journalPeople: surface.journalPeople,
+    taggablePeople: surface.taggablePeople,
   };
-  const familyMark = personOptions.slice(0, 5).map((person) => ({
-    id: person.id,
-    initial: person.initial,
-    accent: person.accent,
-  }));
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: circleResult.data.name,
     eyebrow: "Our family",
-    familyMark,
+    familyMark: surface.familyMark,
     composer,
     timelineOptionsHref: "/trash",
     settingsHref: "/settings/family",
@@ -333,18 +371,6 @@ export async function loadConnectedJournalContext(
     circleTimeZone: circleResult.data.time_zone,
     today: composer.previewToday,
     chrome,
-    people: personOptions.map((person) => ({
-      id: person.id,
-      name: person.name,
-      initial: person.initial,
-      accent: person.accent,
-      roleLabel:
-        person.profileKind === "managed"
-          ? "Managed profile · No sign-in"
-          : person.role === "organizer"
-            ? "Organizer"
-            : "Family member",
-      journalHref: `/people/${person.id}`,
-    })),
+    people: surface.people,
   };
 }

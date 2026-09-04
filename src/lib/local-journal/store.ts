@@ -224,6 +224,7 @@ function canWriteJournal(
   access: LocalAccess,
   journalPersonId: string | null,
 ) {
+  if (access.role === "operations") return false;
   if (!journalPersonId) return access.role === "organizer";
   if (journalPersonId === access.personId) return true;
   const person = document.people.find(
@@ -315,8 +316,8 @@ export async function createLocalInsightMoment(
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
     requireMembership(document, access);
-    if (access.role !== "organizer") {
-      throw new Error("Only an organizer can create an Insight.");
+    if (access.role !== "organizer" && access.role !== "operations") {
+      throw new Error("Only an organizer or Operations can create an Insight.");
     }
     const createdAt = nowIso();
     const moment: LocalMoment = {

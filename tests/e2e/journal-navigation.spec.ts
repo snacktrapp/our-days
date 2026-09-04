@@ -24,6 +24,11 @@ test("route-based journal navigation preserves the approved views", async ({
       .getByRole("navigation", { name: "Choose a family timeline" })
       .getByRole("link", { name: "Family", exact: true }),
   ).toHaveAttribute("aria-current", "page");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Choose a family timeline" })
+      .getByRole("link", { name: "TARS" }),
+  ).toHaveCount(0);
   await page
     .getByRole("navigation", { name: "Choose a family timeline" })
     .getByRole("link", { name: "Molly", exact: true })
@@ -54,6 +59,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/people$/);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(page.getByText("TARS")).toHaveCount(0);
   await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
   await expect(page.locator(".journal-loading")).toHaveCount(0);
   await expect(page.locator(".phone-stage")).toHaveCSS("transform", "none");

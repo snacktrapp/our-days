@@ -8,6 +8,11 @@ import type {
   FamilySettingsViewModel,
 } from "@/features/family-settings/family-settings-view-model";
 import {
+  familyMembershipRoleLabel,
+  isOperationsRole,
+  parseCircleMembershipRole,
+} from "@/lib/circle-roles";
+import {
   mapDatabaseAccent,
   type ConnectedJournalContext,
 } from "./journal-context.server";
@@ -167,25 +172,21 @@ export function buildConnectedFamilySettingsModel(
       const membership = membershipByPerson.get(person.id);
       if (!membership && person.profileKind !== "managed") return [];
       const isManaged = person.profileKind === "managed";
+      const role = isManaged
+        ? null
+        : (parseCircleMembershipRole(membership?.role) ?? "member");
       return [
         {
           id: person.id,
           membershipId: membership?.id ?? null,
           profileKind: isManaged ? "managed" : "account",
-          role:
-            membership?.role === "organizer"
-              ? "organizer"
-              : isManaged
-                ? null
-                : "member",
+          role,
           name: person.displayName,
           initial: initialFor(person.displayName),
           accent: mapDatabaseAccent(person.accentToken),
           relationshipLabel: isManaged
             ? "Managed journal"
-            : membership?.role === "organizer"
-              ? "Organizer"
-              : "Family member",
+            : familyMembershipRoleLabel(role),
           accessLabel: isManaged
             ? "Managed profile · No sign-in"
             : "Account · Can sign in",
@@ -194,7 +195,8 @@ export function buildConnectedFamilySettingsModel(
           canManageRole:
             canManageAccess &&
             membership !== undefined &&
-            membership.id !== access.membershipId,
+            membership.id !== access.membershipId &&
+            !isOperationsRole(membership.role),
           canManageJournal: canManageAccess && isManaged,
           canReviewRemoval:
             canManageAccess &&
@@ -222,7 +224,13 @@ export function buildConnectedFamilySettingsModel(
             const person = data.people.find(
               (candidate) => candidate.id === membership.personId,
             );
-            if (!person || person.profileKind !== "account") return [];
+            if (
+              !person ||
+              person.profileKind !== "account" ||
+              isOperationsRole(membership.role)
+            ) {
+              return [];
+            }
             return [
               {
                 membershipId: membership.id,

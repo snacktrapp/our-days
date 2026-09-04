@@ -12,7 +12,7 @@ export type LocalPerson = Readonly<{
 export type LocalMembership = Readonly<{
   id: string;
   personId: string;
-  role: "organizer" | "member";
+  role: "organizer" | "member" | "operations";
   status: "active";
   joinedAt: string;
 }>;

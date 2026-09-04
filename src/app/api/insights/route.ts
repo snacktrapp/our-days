@@ -7,6 +7,7 @@ import {
   validInsightQuote,
 } from "@/features/insights/insight-source";
 import { readJournalAccessState } from "@/lib/auth/journal-access";
+import { canCreateInsight } from "@/lib/circle-roles";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
@@ -41,16 +42,17 @@ function sameOrigin(request: Request) {
   );
 }
 
-type OrganizerAccess = Readonly<{
+type InsightWriterAccess = Readonly<{
   circleId: string;
   membershipId: string;
   personId: string;
+  role: "organizer" | "operations";
 }>;
 
-async function resolveOrganizerAccess(
+async function resolveInsightWriterAccess(
   request: Request,
 ): Promise<
-  | { ok: true; access: OrganizerAccess }
+  | { ok: true; access: InsightWriterAccess }
   | { ok: false; status: number; message: string }
 > {
   const token = bearerToken(request);
@@ -74,22 +76,24 @@ async function resolveOrganizerAccess(
     if (memberships.error) {
       return { ok: false, status: 401, message: "Sign in to continue." };
     }
-    const organizers = (memberships.data ?? []).filter(
-      (membership) => membership.role === "organizer",
+    const writers = (memberships.data ?? []).filter((membership) =>
+      canCreateInsight(membership.role),
     );
-    if (organizers.length === 0) {
+    if (writers.length === 0) {
       return {
         ok: false,
         status: 403,
-        message: "Only an organizer can create an Insight.",
+        message: "Only an organizer or Operations can create an Insight.",
       };
     }
+    const writer = writers[0]!;
     return {
       ok: true,
       access: {
-        circleId: organizers[0]!.circle_id,
-        membershipId: organizers[0]!.id,
-        personId: organizers[0]!.person_id,
+        circleId: writer.circle_id,
+        membershipId: writer.id,
+        personId: writer.person_id,
+        role: writer.role === "operations" ? "operations" : "organizer",
       },
     };
   }
@@ -113,11 +117,11 @@ async function resolveOrganizerAccess(
       message: "Preview moments are not saved.",
     };
   }
-  if (access.role !== "organizer") {
+  if (!canCreateInsight(access.role)) {
     return {
       ok: false,
       status: 403,
-      message: "Only an organizer can create an Insight.",
+      message: "Only an organizer or Operations can create an Insight.",
     };
   }
   return {
@@ -126,6 +130,7 @@ async function resolveOrganizerAccess(
       circleId: access.circleId,
       membershipId: access.membershipId,
       personId: access.personId,
+      role: access.role === "operations" ? "operations" : "organizer",
     },
   };
 }
@@ -186,7 +191,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const resolved = await resolveOrganizerAccess(request);
+  const resolved = await resolveInsightWriterAccess(request);
   if (!resolved.ok) {
     return response({ ok: false, message: resolved.message }, resolved.status);
   }
@@ -212,7 +217,7 @@ export async function POST(request: Request) {
       const momentId = await createLocalInsightMoment(
         {
           ...resolved.access,
-          role: "organizer",
+          role: resolved.access.role,
         },
         {
           quote: body.quote.trim(),
@@ -261,7 +266,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         message: denied
-          ? "Only an organizer can create an Insight."
+          ? "Only an organizer or Operations can create an Insight."
           : "Insight could not be created.",
       },
       denied ? 403 : 400,
