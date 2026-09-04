@@ -10,6 +10,7 @@ import type {
   ConnectedMomentActions,
   MomentConversationActions,
 } from "@/features/moments/moment-action-types";
+import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
 const connectionMonths = [
@@ -181,56 +182,58 @@ export function TimelineFeed({
           }
         />
       ) : null}
-      {pendingEntries}
+      <TimelineRefreshControl>
+        {pendingEntries}
 
-      <section
-        className="timeline"
-        aria-label={model.timelineLabel ?? "Chronological family moments"}
-        tabIndex={-1}
-      >
-        <div className="time-rail" aria-hidden="true" />
-        {model.entries.map((entry) => (
-          <TimelineEntry
-            key={entry.id}
-            entry={entry}
-            firstMomentId={firstMomentId}
-            interaction={model.interaction}
-            connectedActions={connectedActions}
-            conversationActions={conversationActions}
-            connectedPosition={
-              entry.entryType === "moment"
-                ? connectedPositionById.get(entry.moment.id)
-                : undefined
-            }
-            connectedTotal={connectedMomentIds.length}
-          />
-        ))}
-        {model.pagination ? (
-          <div className="timeline-pagination">
-            <Link
-              href={model.pagination.nextHref}
-              prefetch={false}
-              replace
-              scroll={false}
-            >
-              {model.pagination.label}
-            </Link>
-          </div>
-        ) : null}
-        {model.paginationError ? (
-          <div className="timeline-pagination-error" role="alert">
-            <span>{model.paginationError.message}</span>
-            <Link
-              href={model.paginationError.retryHref}
-              prefetch={false}
-              replace
-              scroll={false}
-            >
-              {model.paginationError.label}
-            </Link>
-          </div>
-        ) : null}
-      </section>
+        <section
+          className="timeline"
+          aria-label={model.timelineLabel ?? "Chronological family moments"}
+          tabIndex={-1}
+        >
+          <div className="time-rail" aria-hidden="true" />
+          {model.entries.map((entry) => (
+            <TimelineEntry
+              key={entry.id}
+              entry={entry}
+              firstMomentId={firstMomentId}
+              interaction={model.interaction}
+              connectedActions={connectedActions}
+              conversationActions={conversationActions}
+              connectedPosition={
+                entry.entryType === "moment"
+                  ? connectedPositionById.get(entry.moment.id)
+                  : undefined
+              }
+              connectedTotal={connectedMomentIds.length}
+            />
+          ))}
+          {model.pagination ? (
+            <div className="timeline-pagination">
+              <Link
+                href={model.pagination.nextHref}
+                prefetch={false}
+                replace
+                scroll={false}
+              >
+                {model.pagination.label}
+              </Link>
+            </div>
+          ) : null}
+          {model.paginationError ? (
+            <div className="timeline-pagination-error" role="alert">
+              <span>{model.paginationError.message}</span>
+              <Link
+                href={model.paginationError.retryHref}
+                prefetch={false}
+                replace
+                scroll={false}
+              >
+                {model.paginationError.label}
+              </Link>
+            </div>
+          ) : null}
+        </section>
+      </TimelineRefreshControl>
     </>
   );
 }

@@ -137,6 +137,10 @@ describe("TimelineFeed", () => {
     const pending = screen.getByTestId("pending-entry");
     expect(container.querySelector(".view-switch")).toBeNull();
     expect(container.querySelector(".title-switcher")).toBeNull();
+    expect(container.querySelector(".timeline-pull-shell")).toHaveAttribute(
+      "data-pull-state",
+      "idle",
+    );
     expect(pending.nextElementSibling).toHaveClass("timeline");
   });
 

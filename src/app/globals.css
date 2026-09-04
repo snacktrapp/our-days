@@ -7624,6 +7624,27 @@ iframe.composer-location-map {
     animation: overlay-popover-out 120ms ease-in forwards;
   }
 
+  .timeline-pull-shell[data-pull-state="settling"] .timeline-pull-root,
+  .timeline-pull-shell[data-pull-state="refreshing"] .timeline-pull-root {
+    transition: transform 220ms ease;
+  }
+
+  .timeline-refresh-mark {
+    transition:
+      opacity 160ms ease,
+      transform 160ms ease;
+  }
+
+  .timeline-pull-shell[data-pull-state="refreshing"] .timeline-refresh-mark {
+    animation: timeline-refresh-breathe 1.6s ease-in-out infinite;
+  }
+
+  @keyframes timeline-refresh-breathe {
+    50% {
+      opacity: 0.32;
+    }
+  }
+
   .quick-reaction-trigger:active {
     transform: translateY(1px);
   }
@@ -7708,6 +7729,12 @@ iframe.composer-location-map {
     animation: none;
   }
 
+  .timeline-pull-root,
+  .timeline-refresh-mark {
+    transition: none;
+    animation: none;
+  }
+
   .media-viewer-photo,
   .media-viewer-dimmer,
   .photo-lightbox-photo,
@@ -7726,6 +7753,51 @@ iframe.composer-location-map {
   .photo-lightbox[data-motion="opening"] .photo-lightbox-dimmer {
     opacity: 1;
   }
+}
+
+.timeline-pull-shell {
+  position: relative;
+}
+
+.timeline-pull-root {
+  --timeline-pull: 0px;
+  transform: translate3d(0, var(--timeline-pull), 0);
+}
+
+.timeline-pull-shell[data-pull-state="pulling"] .timeline-pull-root,
+.timeline-pull-shell[data-pull-state="armed"] .timeline-pull-root {
+  will-change: transform;
+}
+
+.timeline-refresh {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  right: 0;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.timeline-refresh-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 62%, var(--muted));
+  opacity: 0;
+  transform: scale(0.72);
+}
+
+.timeline-pull-shell[data-pull-state="pulling"] .timeline-refresh-mark {
+  opacity: 0.45;
+}
+
+.timeline-pull-shell[data-pull-state="armed"] .timeline-refresh-mark,
+.timeline-pull-shell[data-pull-state="refreshing"] .timeline-refresh-mark {
+  opacity: 0.8;
+  transform: scale(1);
 }
 
 /* Date / time / verse / place panels stay in the composer sheet. They scroll
