@@ -4097,6 +4097,20 @@ button:focus-visible,
   backdrop-filter: blur(var(--nav-pill-blur));
   -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
+
+.bottom-nav.is-compact {
+  height: 48px;
+  padding: 1px 8px;
+}
+
+.bottom-nav.is-compact .nav-item {
+  height: 46px;
+}
+
+.bottom-nav.is-compact .nav-symbol {
+  font-size: 18px;
+  line-height: 17px;
+}
 .nav-item {
   height: 54px;
   border: 0;
@@ -7496,12 +7510,18 @@ iframe.composer-location-map {
 @media (prefers-reduced-motion: no-preference) {
   .topbar,
   .bottom-nav {
-    transition: transform 180ms ease;
+    transition:
+      transform 180ms ease,
+      height 180ms ease,
+      padding 180ms ease;
   }
 
-  .bottom-nav.is-compact {
-    transform: scale(0.92);
-    transform-origin: 50% 100%;
+  .bottom-nav .nav-item,
+  .bottom-nav .nav-symbol {
+    transition:
+      height 180ms ease,
+      font-size 180ms ease,
+      line-height 180ms ease;
   }
 
   /* Scale the pill, not each tab, so a child tap still presses on iOS. */
@@ -7510,11 +7530,6 @@ iframe.composer-location-map {
   .bottom-nav:active,
   .bottom-nav:has(:active) {
     transform: scale(0.985);
-  }
-
-  .bottom-nav.is-compact:active,
-  .bottom-nav.is-compact:has(:active) {
-    transform: scale(0.91);
   }
 
   .nav-symbol-pending,

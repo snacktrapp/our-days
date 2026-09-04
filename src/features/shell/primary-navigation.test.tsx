@@ -146,4 +146,25 @@ describe("PrimaryNavigation", () => {
     });
     expect(nav).not.toHaveClass("is-compact");
   });
+
+  it("restores the tab bar after scrolling goes idle", () => {
+    vi.useFakeTimers();
+    let scrollY = 0;
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => scrollY,
+    });
+    render(<PrimaryNavigation section="timeline" />);
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    scrollY = 64;
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(nav).toHaveClass("is-compact");
+    act(() => {
+      vi.advanceTimersByTime(900);
+    });
+    expect(nav).not.toHaveClass("is-compact");
+    vi.useRealTimers();
+  });
 });
