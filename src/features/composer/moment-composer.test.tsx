@@ -972,6 +972,7 @@ describe("MomentComposer", () => {
     render(<Harness />);
     await user.click(screen.getByRole("button", { name: "Open composer" }));
     expect(screen.queryByRole("button", { name: /Location/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Insight/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
     expect(screen.getByRole("button", { name: /Bible verse/ })).toBeVisible();
   });

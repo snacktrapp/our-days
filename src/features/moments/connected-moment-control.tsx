@@ -44,6 +44,14 @@ function compactMenuPlacement(trigger: HTMLElement): "above" | "below" {
 }
 
 function actionMomentLabel(moment: TimelineMomentViewModel) {
+  if (moment.kind === "insight") {
+    const normalized = moment.text.replace(/\s+/gu, " ").trim();
+    const excerpt =
+      normalized.length <= 72
+        ? normalized
+        : `${normalized.slice(0, 48)}…${normalized.slice(-20)}`;
+    return `Insight “${excerpt}” from ${moment.displayDate}`;
+  }
   const source =
     moment.kind === "milestone"
       ? moment.milestone
@@ -228,13 +236,15 @@ function ChangeableMomentControl({
             <button type="button" onClick={copyText}>
               Copy text
             </button>
-            <button
-              type="button"
-              aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-              onClick={editMoment}
-            >
-              Edit moment
-            </button>
+            {moment.kind === "insight" ? null : (
+              <button
+                type="button"
+                aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+                onClick={editMoment}
+              >
+                Edit moment
+              </button>
+            )}
             <button
               type="button"
               aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}

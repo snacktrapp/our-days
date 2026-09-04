@@ -2,7 +2,7 @@ import type { AccentToken } from "@/features/accent-token";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
 export type MomentKind =
-  "photo" | "video" | "thought" | "milestone" | "location";
+  "photo" | "video" | "thought" | "milestone" | "location" | "insight";
 
 export type MomentReactionId = "held-close" | "made-me-smile" | "remember-this";
 
@@ -115,12 +115,21 @@ export type MilestoneMomentViewModel = TimelineMomentBase &
     yearLabel?: string;
   }>;
 
+export type InsightMomentViewModel = TimelineMomentBase &
+  Readonly<{
+    kind: "insight";
+    attribution: string;
+    sourceUrl?: string;
+    sourceLabel?: string;
+  }>;
+
 export type TimelineMomentViewModel =
   | PhotoMomentViewModel
   | VideoMomentViewModel
   | ThoughtMomentViewModel
   | LocationMomentViewModel
-  | MilestoneMomentViewModel;
+  | MilestoneMomentViewModel
+  | InsightMomentViewModel;
 
 type MomentDetailBase = Readonly<{
   id: string;
@@ -147,6 +156,13 @@ export type MomentDetailViewModel =
       Readonly<{
         kind: "milestone";
         milestone: string;
+      }>)
+  | (MomentDetailBase &
+      Readonly<{
+        kind: "insight";
+        attribution: string;
+        sourceUrl?: string;
+        sourceLabel?: string;
       }>);
 
 export type TimelineEntryViewModel =

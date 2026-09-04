@@ -197,6 +197,44 @@ describe("TimelineFeed", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders an Insight without a person byline", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            {
+              id: "insight",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "insight-moment",
+                kind: "insight",
+                personName: "TARS",
+                personInitial: "T",
+                text: "Morning sunlight sets the clock.",
+                attribution: "Huberman Lab — Master Your Sleep",
+                sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
+                sourceLabel: "Listen",
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      container.querySelector("[data-moment-kind='insight']"),
+    ).not.toBeNull();
+    expect(container.querySelector(".avatar-node")).toBeNull();
+    expect(screen.queryByText("TARS")).toBeNull();
+    expect(screen.queryByText("Person")).toBeNull();
+    expect(screen.getByText("Insight")).toBeVisible();
+    expect(screen.getByText(/Morning sunlight sets the clock/u)).toBeVisible();
+    expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Listen" })).toBeVisible();
+  });
+
   it("keeps the date but omits a timestamp when no time was recorded", () => {
     render(
       <TimelineFeed

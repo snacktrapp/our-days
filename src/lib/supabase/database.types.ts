@@ -350,7 +350,7 @@ export type Database = {
           circle_id: string;
           created_at: string;
           id: string;
-          journal_person_id: string;
+          journal_person_id: string | null;
           kind: string;
           latitude: number | null;
           longitude: number | null;
@@ -360,6 +360,7 @@ export type Database = {
           place_name: string | null;
           recorded_by_membership_id: string;
           revision: number;
+          source_url: string | null;
           time_precision: string;
           title: string | null;
           trashed_at: string | null;
@@ -371,7 +372,7 @@ export type Database = {
           circle_id: string;
           created_at?: string;
           id?: string;
-          journal_person_id: string;
+          journal_person_id?: string | null;
           kind?: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -381,6 +382,7 @@ export type Database = {
           place_name?: string | null;
           recorded_by_membership_id: string;
           revision?: number;
+          source_url?: string | null;
           time_precision?: string;
           title?: string | null;
           trashed_at?: string | null;
@@ -392,7 +394,7 @@ export type Database = {
           circle_id?: string;
           created_at?: string;
           id?: string;
-          journal_person_id?: string;
+          journal_person_id?: string | null;
           kind?: string;
           latitude?: number | null;
           longitude?: number | null;
@@ -402,6 +404,7 @@ export type Database = {
           place_name?: string | null;
           recorded_by_membership_id?: string;
           revision?: number;
+          source_url?: string | null;
           time_precision?: string;
           title?: string | null;
           trashed_at?: string | null;
@@ -710,6 +713,18 @@ export type Database = {
         };
         Returns: string;
       };
+      create_insight_moment: {
+        Args: {
+          attribution: string;
+          circle_id: string;
+          occurred_at?: string;
+          occurred_on?: string;
+          occurred_timezone?: string;
+          quote: string;
+          source_url?: string | null;
+        };
+        Returns: string;
+      };
       create_invitation: {
         Args: {
           circle_id: string;
@@ -806,9 +821,9 @@ export type Database = {
         Args: { circle_id: string };
         Returns: {
           body: string;
-          journal_person_accent: string;
-          journal_person_id: string;
-          journal_person_name: string;
+          journal_person_accent: string | null;
+          journal_person_id: string | null;
+          journal_person_name: string | null;
           moment_id: string;
           moment_kind: string;
           moment_title: string;
@@ -946,14 +961,14 @@ export type Database = {
           can_change: boolean;
           created_at: string;
           feed_snapshot_at: string;
-          journal_person_accent: string;
-          journal_person_kind: string;
-          journal_person_name: string;
+          journal_person_accent: string | null;
+          journal_person_kind: string | null;
+          journal_person_name: string | null;
           latitude: number | null;
           longitude: number | null;
           moment_circle_id: string;
           moment_id: string;
-          moment_journal_person_id: string;
+          moment_journal_person_id: string | null;
           moment_kind: string;
           moment_title: string;
           occurred_at: string;
@@ -963,6 +978,7 @@ export type Database = {
           recorder_person_id: string;
           recorder_person_name: string;
           revision: number;
+          source_url: string | null;
           tagged_people: Json;
           time_precision: string;
           updated_at: string;

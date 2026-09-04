@@ -99,6 +99,7 @@ function momentKindLabel(moment: TimelineMomentViewModel) {
   if (moment.kind === "location") return "Place";
   if (moment.kind === "photo") return "Photo";
   if (moment.kind === "video") return "Video";
+  if (moment.kind === "insight") return "Insight";
   return "Thought";
 }
 

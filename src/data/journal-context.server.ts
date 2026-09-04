@@ -100,7 +100,11 @@ export function buildActivityNotifications(
 
   return [
     ...familyMoments
-      .filter((moment) => moment.author_membership_id !== viewerMembershipId)
+      .filter(
+        (moment) =>
+          moment.author_membership_id !== viewerMembershipId &&
+          moment.moment_kind !== "insight",
+      )
       .map((moment) => ({
         id: `moment:${moment.id}`,
         actorName: memberNames.get(moment.author_membership_id) ?? "Family",
@@ -312,12 +316,14 @@ export async function loadConnectedJournalContext(
       reactionsResult.data ?? [],
       new Set((momentsResult.data ?? []).map((moment) => moment.id)),
       memberNames,
-      (familyMomentsResult.data ?? []).map((moment) => ({
-        id: moment.id,
-        author_membership_id: moment.recorded_by_membership_id,
-        moment_kind: moment.kind,
-        created_at: moment.created_at,
-      })),
+      (familyMomentsResult.data ?? [])
+        .filter((moment) => moment.kind !== "insight")
+        .map((moment) => ({
+          id: moment.id,
+          author_membership_id: moment.recorded_by_membership_id,
+          moment_kind: moment.kind,
+          created_at: moment.created_at,
+        })),
       access.membershipId,
     ),
   };

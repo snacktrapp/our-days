@@ -10,6 +10,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type { ConnectedJournalContext } from "./journal-context.server";
+import { insightSourceLabel } from "@/features/insights/insight-source";
 import { mapDatabaseAccent } from "./journal-context.server";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
@@ -25,6 +26,10 @@ export type TimelineRow = Omit<
   | "place_name"
   | "latitude"
   | "longitude"
+  | "source_url"
+  | "moment_journal_person_id"
+  | "journal_person_name"
+  | "journal_person_accent"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
@@ -33,6 +38,10 @@ export type TimelineRow = Omit<
   place_name?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  source_url?: string | null;
+  moment_journal_person_id: string | null;
+  journal_person_name: string | null;
+  journal_person_accent: string | null;
   tagged_people?: unknown;
 };
 
@@ -77,15 +86,15 @@ export function mapTimelineRow(
         return [];
       })
     : [];
+  const journalPersonName = row.journal_person_name ?? "";
   const base = {
     id: row.moment_id,
-    journalPersonId: row.moment_journal_person_id,
-    personName: row.journal_person_name,
+    journalPersonId: row.moment_journal_person_id ?? "",
+    personName: journalPersonName,
     personInitial:
-      Array.from(row.journal_person_name.trim())[0]?.toLocaleUpperCase(
-        "en-US",
-      ) ?? "•",
-    personAccent: mapDatabaseAccent(row.journal_person_accent),
+      Array.from(journalPersonName.trim())[0]?.toLocaleUpperCase("en-US") ??
+      "•",
+    personAccent: mapDatabaseAccent(row.journal_person_accent ?? "slate"),
     displayTime: row.occurred_at
       ? formatPreciseTime(row.occurred_at, row.occurred_timezone)
       : undefined,
@@ -93,17 +102,19 @@ export function mapTimelineRow(
     occurredOn: row.occurred_on,
     maxOccurredOn: today,
     kicker:
-      row.recorder_person_id === row.moment_journal_person_id
-        ? row.moment_kind === "milestone"
-          ? "A milestone"
-          : row.moment_kind === "location"
-            ? "A place"
-            : row.moment_kind === "photo"
-              ? "A photo"
-              : row.moment_kind === "video"
-                ? "A video"
-                : "A thought"
-        : `Recorded by ${row.recorder_person_name}`,
+      row.moment_kind === "insight"
+        ? "An insight"
+        : row.recorder_person_id === row.moment_journal_person_id
+          ? row.moment_kind === "milestone"
+            ? "A milestone"
+            : row.moment_kind === "location"
+              ? "A place"
+              : row.moment_kind === "photo"
+                ? "A photo"
+                : row.moment_kind === "video"
+                  ? "A video"
+                  : "A thought"
+          : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
     conversation: { notes: [], reactions: [] },
     canChange: row.can_change,
@@ -154,6 +165,16 @@ export function mapTimelineRow(
       video: {
         src: `/api/media/videos/${row.moment_id}`,
       },
+    };
+  }
+  if (row.moment_kind === "insight") {
+    const sourceUrl = row.source_url ?? undefined;
+    return {
+      ...base,
+      kind: "insight",
+      attribution: row.moment_title ?? "Insight",
+      sourceUrl,
+      sourceLabel: sourceUrl ? insightSourceLabel(sourceUrl) : undefined,
     };
   }
   return { ...base, kind: "thought" };

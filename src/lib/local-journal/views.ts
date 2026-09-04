@@ -77,9 +77,11 @@ function momentToTimelineRow(
   return {
     moment_id: moment.id,
     moment_journal_person_id: moment.journalPersonId,
-    journal_person_name: journalPerson?.displayName ?? "Family",
-    journal_person_accent: journalPerson?.accentToken ?? "clay",
-    recorder_person_id: recorderMembership?.personId ?? moment.journalPersonId,
+    journal_person_name: journalPerson?.displayName ?? null,
+    journal_person_accent: journalPerson?.accentToken ?? null,
+    recorder_person_id:
+      recorderMembership?.personId ?? moment.journalPersonId ?? "",
+    source_url: moment.sourceUrl ?? null,
     recorder_person_name: recorderPerson?.displayName ?? "Family",
     body: moment.body,
     can_change: true,
@@ -217,6 +219,7 @@ export async function loadLocalJournalContext(
         .filter(
           (moment) =>
             moment.trashedAt === null &&
+            moment.kind !== "insight" &&
             moment.recordedByMembershipId !== access.membershipId,
         )
         .map((moment) => ({
@@ -355,6 +358,7 @@ function momentKindLabel(moment: TimelineMomentViewModel) {
   if (moment.kind === "location") return "Place";
   if (moment.kind === "photo") return "Photo";
   if (moment.kind === "video") return "Video";
+  if (moment.kind === "insight") return "Insight";
   return "Thought";
 }
 
@@ -645,10 +649,15 @@ export async function loadLocalTrash(
       );
       return {
         id: moment.id,
-        journalPersonName: person?.displayName ?? "Family",
+        journalPersonName:
+          moment.kind === "insight"
+            ? "Insight"
+            : (person?.displayName ?? "Family"),
         journalPersonAccent: mapDatabaseAccent(person?.accentToken ?? "clay"),
         kind:
-          moment.kind === "milestone" || moment.kind === "location"
+          moment.kind === "milestone" ||
+          moment.kind === "location" ||
+          moment.kind === "insight"
             ? moment.kind
             : "thought",
         title: moment.title || undefined,

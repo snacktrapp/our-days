@@ -183,6 +183,27 @@ const familyEntries = [
     },
   },
   {
+    id: "sleep-insight",
+    entryType: "moment",
+    moment: {
+      id: "sleep-insight",
+      journalPersonId: "",
+      kind: "insight",
+      personName: "",
+      personInitial: "",
+      personAccent: "slate",
+      displayTime: undefined,
+      displayDate: "Aug 27, 2026",
+      occurredOn: "2026-08-27",
+      kicker: "An insight",
+      text: "Morning sunlight is the most powerful stimulus for setting your circadian rhythm.",
+      attribution: "Huberman Lab — Master Your Sleep",
+      sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
+      sourceLabel: "Listen",
+      conversation: momentDetail({ notes: [], reactions: [] }),
+    },
+  },
+  {
     id: "kitchen",
     entryType: "moment",
     moment: {

@@ -6,6 +6,7 @@ import { PhotoLightboxTrigger } from "./photo-lightbox";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { insightSourceLabel } from "@/features/insights/insight-source";
 import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import type {
   ConnectedMomentActions,
@@ -38,6 +39,15 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   }
   if (moment.kind === "milestone") {
     return { ...base, kind: moment.kind, milestone: moment.milestone };
+  }
+  if (moment.kind === "insight") {
+    return {
+      ...base,
+      kind: moment.kind,
+      attribution: moment.attribution,
+      sourceUrl: moment.sourceUrl,
+      sourceLabel: moment.sourceLabel,
+    };
   }
   return { ...base, kind: moment.kind };
 }
@@ -75,7 +85,9 @@ export function MomentCard({
           ? "Location"
           : moment.kind === "milestone"
             ? "Milestone"
-            : "Photo";
+            : moment.kind === "insight"
+              ? "Insight"
+              : "Photo";
 
   if (moment.kind === "photo" || moment.kind === "video") {
     return (
@@ -191,6 +203,58 @@ export function MomentCard({
         {moment.placeName ? (
           <p className="moment-place-label">⌖ {moment.placeName}</p>
         ) : null}
+        {interaction ? (
+          <MomentConversationControl
+            interaction={interaction}
+            model={detailModel(moment)}
+            actions={conversationActions}
+            position={connectedPosition}
+            total={connectedTotal}
+          />
+        ) : null}
+        {connectedActions && moment.canChange ? (
+          <ConnectedMomentControl
+            moment={moment}
+            actions={connectedActions}
+            position={connectedPosition}
+            total={connectedTotal}
+            taggablePeople={interaction?.taggablePeople ?? []}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (moment.kind === "insight") {
+    const sourceHref = moment.sourceUrl;
+    const sourceText =
+      moment.sourceLabel ??
+      (sourceHref ? insightSourceLabel(sourceHref) : undefined);
+    return (
+      <div className="moment-card thought-card bible-verse-card insight-card">
+        <span className="thought-label">Insight</span>
+        <ExpandableThoughtCopy
+          momentId={moment.id}
+          className="bible-verse-copy"
+        >
+          <span>“{moment.text}”</span>
+          <cite>
+            {moment.attribution}
+            {sourceHref ? (
+              <>
+                {" · "}
+                <a
+                  className="insight-source"
+                  href={sourceHref}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {sourceText}
+                </a>
+              </>
+            ) : null}
+          </cite>
+        </ExpandableThoughtCopy>
         {interaction ? (
           <MomentConversationControl
             interaction={interaction}

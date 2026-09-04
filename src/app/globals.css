@@ -4639,6 +4639,21 @@ button:focus-visible,
   letter-spacing: 0.05em;
 }
 
+.insight-rail-node {
+  width: 10px;
+  height: 10px;
+  margin: 7px 0;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--cream);
+}
+
+.insight-source {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
 .thought-card:has(.connected-moment-actions) blockquote {
   margin-top: 16px;
 }

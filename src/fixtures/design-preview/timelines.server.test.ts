@@ -27,6 +27,7 @@ describe("design preview timeline chronology", () => {
       ),
     ).toEqual([
       "Today",
+      "Aug 27, 2026",
       "Aug 14, 2026",
       "Jul 6, 2026",
       "Aug 21, 2023",

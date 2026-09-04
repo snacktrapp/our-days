@@ -89,6 +89,12 @@ describe("family activity notifications", () => {
           moment_kind: "photo",
           created_at: "2026-09-03T19:00:00.000Z",
         },
+        {
+          id: "tars-insight",
+          author_membership_id: "tars",
+          moment_kind: "insight",
+          created_at: "2026-09-03T20:00:00.000Z",
+        },
       ],
       "brian",
     );
