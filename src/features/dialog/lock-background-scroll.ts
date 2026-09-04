@@ -1,10 +1,6 @@
 "use client";
 
 import { useLayoutEffect, useState, type RefObject } from "react";
-import {
-  lockOverlayChrome,
-  unlockOverlayChrome,
-} from "@/features/shell/overlay-chrome";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 
@@ -116,7 +112,6 @@ export function useLockBackgroundScroll(active: boolean) {
     const scrollY = window.scrollY;
     html.classList.add(backgroundScrollLockClass);
     body.classList.add(backgroundScrollLockClass);
-    lockOverlayChrome();
 
     let lastTouchY = 0;
     const onTouchStart = (event: TouchEvent) => {
@@ -154,7 +149,6 @@ export function useLockBackgroundScroll(active: boolean) {
     return () => {
       if (!htmlWasLocked) html.classList.remove(backgroundScrollLockClass);
       if (!bodyWasLocked) body.classList.remove(backgroundScrollLockClass);
-      unlockOverlayChrome();
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       document.removeEventListener("wheel", onWheel, true);

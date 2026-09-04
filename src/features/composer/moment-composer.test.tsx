@@ -954,37 +954,14 @@ describe("MomentComposer", () => {
     expect(screen.queryByDisplayValue("A brave blue door.")).toBeNull();
   }, 10_000);
 
-  it("hides Location when place search returns no places", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => [],
-      }),
-    );
+  it("does not offer Location in New moment", async () => {
     const user = userEvent.setup();
     render(<Harness />);
     await user.click(screen.getByRole("button", { name: "Open composer" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /Location/ })).toBeNull(),
-    );
+    expect(screen.queryByRole("button", { name: /Location/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
-    vi.unstubAllGlobals();
+    expect(screen.getByRole("button", { name: /Bible verse/ })).toBeVisible();
   });
-
-  it.each([["Location", "Place name", "Sand Harbor"]])(
-    "gives %s a distinct required title",
-    async (choice, label, value) => {
-      const user = await openComposer();
-      await user.click(
-        screen.getByRole("button", { name: new RegExp(choice) }),
-      );
-      const requiredTitle = screen.getByLabelText(label);
-      expect(requiredTitle).toHaveAttribute("aria-required", "true");
-      await user.type(requiredTitle, value);
-      expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
-    },
-  );
 
   it("previews WEB text as soon as a starting verse is chosen and updates when the ending verse changes", async () => {
     const user = await openComposer();
@@ -1088,7 +1065,6 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
     await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "Oak Street School");
-    expect(screen.getByText("Search to see this place on a map")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -1103,87 +1079,6 @@ describe("MomentComposer", () => {
         }),
       ),
     );
-  });
-
-  it("saves a typed Location place label without coordinates", async () => {
-    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
-    const user = userEvent.setup();
-    render(<ConnectedFamilyHarness save={save} />);
-    await user.click(
-      screen.getByRole("button", { name: "Open connected family composer" }),
-    );
-    await user.click(screen.getByRole("button", { name: /Location/ }));
-    await setComposerPlace(user, "Sand Harbor");
-    expect(screen.getByText("Search to see this place on a map")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: "location",
-          title: "",
-          placeName: "Sand Harbor",
-          latitude: null,
-          longitude: null,
-        }),
-      ),
-    );
-  });
-
-  it("saves a chosen MapTiler place with coordinates from the location sheet", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => [
-          {
-            label: "Sand Harbor, NV",
-            latitude: 39.2,
-            longitude: -119.93,
-          },
-        ],
-      }),
-    );
-    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
-    const user = userEvent.setup();
-    render(<ConnectedFamilyHarness save={save} />);
-    await user.click(
-      screen.getByRole("button", { name: "Open connected family composer" }),
-    );
-    await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(screen.getByLabelText("Place name")).toHaveFocus();
-    expect(
-      screen.queryByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeNull();
-    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
-    await user.type(screen.getByLabelText("Place name"), "Sand");
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Sand Harbor, NV" }),
-      ).toBeVisible(),
-    );
-    await user.click(screen.getByRole("button", { name: "Sand Harbor, NV" }));
-    expect(screen.getByTitle("Map of Sand Harbor, NV")).toBeVisible();
-    expect(screen.getByTitle("Map of Sand Harbor, NV")).toHaveAttribute(
-      "src",
-      "/internal/map-picker",
-    );
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
-
-    await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: "location",
-          title: "",
-          placeName: "Sand Harbor, NV",
-          latitude: 39.2,
-          longitude: -119.93,
-        }),
-      ),
-    );
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
   });
 
   it("saves a selected Bible verse as a compatible written moment", async () => {
@@ -1465,16 +1360,15 @@ describe("MomentComposer", () => {
       "Keep this",
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Location/ }));
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
     confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(screen.getByLabelText("Place name")).toBeVisible();
-    expect(screen.getByLabelText("Place name")).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1638,21 +1532,17 @@ describe("MomentComposer", () => {
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Location/ }));
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
 
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByLabelText("Place name")).toBeVisible();
-    expect(screen.getByLabelText("Place name")).toHaveFocus();
+    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
-  it.each([
-    ["Written entry", "Entry", "Write a thought"],
-    ["Location", "Place name", "Name the place"],
-  ])(
+  it.each([["Written entry", "Entry", "Write a thought"]])(
     "rejects whitespace-only required content for %s",
     async (choice, label, error) => {
       const user = await openComposer();

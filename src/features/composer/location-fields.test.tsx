@@ -31,9 +31,6 @@ describe("location fields", () => {
       "placeholder",
       "Search for a place",
     );
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Search to see this place on a map",
-    );
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Place name"), "The porch");
@@ -47,7 +44,7 @@ describe("location fields", () => {
     expect(screen.getByLabelText("Place name")).toBeVisible();
   });
 
-  it("keeps a typed label and shows a map of the chosen MapTiler place", async () => {
+  it("keeps a typed label after choosing a searched place", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -68,9 +65,6 @@ describe("location fields", () => {
     );
 
     expect(screen.getByText("Search")).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Search to see this place on a map",
-    );
     expect(screen.queryByText("Map unavailable")).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "Sand");
@@ -103,10 +97,11 @@ describe("location fields", () => {
         onChange={onChange}
       />,
     );
-    const map = screen.getByTitle("Map of Sand Harbor, NV");
-    expect(map).toBeVisible();
-    expect(map).toHaveAttribute("src", "/internal/map-picker");
-    expect(map.tagName).toBe("IFRAME");
+    expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor, NV");
+    expect(
+      screen.queryByTitle("Map of Sand Harbor, NV"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
   it("keeps optional Details place behind a compact trigger", async () => {

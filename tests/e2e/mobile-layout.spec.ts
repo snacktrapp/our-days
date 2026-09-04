@@ -228,6 +228,7 @@ async function expectTypePickerKeepsFrostedNav(page: Page) {
     ".new-moment-composer-dialog.composer-type-picker",
   );
   await expect(picker).toBeVisible();
+  await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(0);
   expect(await picker.evaluate((element) => element.tagName)).toBe("DIV");
   expect(await picker.evaluate((element) => element.matches(":modal"))).toBe(
     false,
@@ -281,16 +282,29 @@ async function expectTypePickerKeepsFrostedNav(page: Page) {
   expect(corners.bottomLeft).toBe(corners.topLeft);
   expect(corners.bottomRight).toBe(corners.topRight);
   expect(Number.parseFloat(corners.topLeft)).toBeGreaterThan(0);
-  const canvas = await page.evaluate(() => ({
-    html: getComputedStyle(document.documentElement).backgroundColor,
-    body: getComputedStyle(document.body).backgroundColor,
-  }));
-  expect(canvas.html).toBe("rgb(0, 0, 0)");
-  expect(canvas.body).toBe("rgb(0, 0, 0)");
+  const canvas = await page.evaluate(() => {
+    const root = document.documentElement;
+    const rootStyle = getComputedStyle(root);
+    const shell = document.querySelector(".app-shell");
+    const layer = shell ? getComputedStyle(shell, "::before") : null;
+    return {
+      html: rootStyle.backgroundColor,
+      htmlImage: rootStyle.backgroundImage,
+      body: getComputedStyle(document.body).backgroundColor,
+      grid: layer?.backgroundImage ?? "",
+      theme: root.dataset.theme,
+    };
+  });
+  const expectedCanvas =
+    canvas.theme === "light" ? "rgb(231, 223, 211)" : "rgb(11, 23, 18)";
+  expect(canvas.html).toBe(expectedCanvas);
+  expect(canvas.body).toBe(expectedCanvas);
+  expect(canvas.htmlImage).toContain("linear-gradient");
+  expect(canvas.grid).toContain("linear-gradient");
   const themeColor = await page
     .locator('meta[name="theme-color"]')
     .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
-  expect(themeColor.every((color) => color === "#000000")).toBe(true);
+  expect(themeColor.includes("#000000")).toBe(false);
 }
 
 test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
@@ -697,8 +711,8 @@ test("touch-focused composer textareas keep content spacing without a selection 
   await page.goto("/family");
   await page.getByRole("button", { name: "Add moment" }).click();
   const composer = page.getByRole("dialog");
-  await composer.getByRole("button", { name: /Location/u }).click();
-  const details = composer.getByRole("textbox", { name: "Details" });
+  await composer.getByRole("button", { name: /Written entry/u }).click();
+  const details = composer.getByRole("textbox", { name: "Entry" });
   await details.fill("Vroom vroom");
 
   const focusedField = await details.evaluate((textarea) => {

@@ -119,24 +119,17 @@ body.composer-scroll-locked {
   overscroll-behavior: none;
 }
 
-/* Safari paints html/body in the home-indicator gap. Journal green
-   (--grid-surface) shows as a slab under New moment and photo fullscreen.
-   Paint that canvas black only while those overlays are open so closed
-   frost still samples the grid. */
+/* Safari paints html/body and theme-color in the toolbar / home-indicator
+   gap. Photo fullscreen covers the journal, so that canvas goes black.
+   New moment is a popover: frost must keep sampling the grid, so
+   composer-scroll-locked does not paint over --grid-surface. */
 html.overlay-open,
 html.overlay-open body,
-html.composer-scroll-locked,
-html.composer-scroll-locked body,
 html[data-theme].overlay-open,
 html[data-theme].overlay-open body,
-html[data-theme].composer-scroll-locked,
-html[data-theme].composer-scroll-locked body,
 :root[data-theme="light"].overlay-open,
 :root[data-theme="light"].overlay-open body,
-:root[data-theme="light"].composer-scroll-locked,
-:root[data-theme="light"].composer-scroll-locked body,
-body.overlay-open,
-body.composer-scroll-locked {
+body.overlay-open {
   background-color: #000;
   background-image: none;
 }

@@ -189,22 +189,8 @@ test(
     await page.getByRole("button", { name: "Close preview" }).click();
 
     await page.getByRole("button", { name: "Add moment" }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /Location/u })
-      .click();
-    await page.getByLabel("Place name").fill("The little beach");
-    await page
-      .getByRole("textbox", { name: "Details" })
-      .fill("Avery finally put both feet in the water.");
-    await expect(page).toHaveScreenshot("composer-place-chromium-mobile.png", {
-      animations: "disabled",
-      caret: "hide",
-    });
-    await page.getByRole("button", { name: "Preview moment" }).click();
-    await expect(page).toHaveScreenshot(
-      "composer-place-review-chromium-mobile.png",
-      { animations: "disabled", caret: "hide" },
+    await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(
+      0,
     );
   },
 );
@@ -218,11 +204,14 @@ test(
     await page.goto("/family");
     await page.evaluate(() => document.fonts.ready);
     await page.getByRole("button", { name: "Add moment" }).click();
+    await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(
+      0,
+    );
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: /Location/u })
+      .getByRole("button", { name: /Written entry/u })
       .click();
-    await page.getByLabel("Place name").fill("The little beach");
+    await page.getByRole("textbox", { name: "Entry" }).fill("The little beach");
     await page.locator(".composer-sheet").evaluate((sheet) => {
       sheet.scrollTop = 0;
     });

@@ -7,7 +7,6 @@ import {
   type GeocodedPlace,
 } from "./maptiler";
 import { ComposerPickerPanel } from "./composer-picker-panel";
-import { MapPickerFrame } from "./map-picker-frame";
 import {
   emptyPlaceSelection,
   type PlaceSelection,
@@ -227,22 +226,6 @@ export function LocationFields({
           ))}
         </ul>
       ) : null}
-
-      {value.latitude != null && value.longitude != null ? (
-        <MapPickerFrame
-          className="composer-location-map"
-          title={`Map of ${value.label}`}
-          latitude={value.latitude}
-          longitude={value.longitude}
-          onMoved={(latitude, longitude) => {
-            void applyMapMove(latitude, longitude);
-          }}
-        />
-      ) : (
-        <p className="composer-location-unavailable" role="status">
-          Search to see this place on a map
-        </p>
-      )}
 
       {value.label.trim() ? (
         <button

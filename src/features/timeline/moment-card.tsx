@@ -1,4 +1,3 @@
-import { LocationMapVisual } from "./location-map-visual";
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
@@ -217,11 +216,6 @@ export function MomentCard({
   if (moment.kind === "location") {
     return (
       <div className="moment-card location-card">
-        <LocationMapVisual
-          place={moment.place}
-          latitude={moment.latitude}
-          longitude={moment.longitude}
-        />
         <div className="card-copy">
           <div className="location-card-heading">
             <p className="moment-kicker">{typeLabel}</p>

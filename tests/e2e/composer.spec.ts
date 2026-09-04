@@ -486,7 +486,6 @@ test("required content rejects whitespace and future dates before review", async
   await page.goto("/family");
   const cases = [
     { choice: /Written entry/u, field: "Entry", error: "Write a thought" },
-    { choice: /Location/u, field: "Place name", error: "Name the place" },
   ] as const;
 
   for (const testCase of cases) {
@@ -537,7 +536,7 @@ test("Escape and backdrop dismissal restore focus without a draft", async ({
   await expect(trigger).toBeFocused();
 });
 
-test("all four capture modes save directly without a confirmation screen", async ({
+test("photo, written, and verse capture modes save directly without a confirmation screen", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -585,13 +584,6 @@ test("all four capture modes save directly without a confirmation screen", async
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(dialog).toBeHidden();
-
-  dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /Location/u }).click();
-  await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
-  await setComposerPlace(dialog, "Sand Harbor");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
 });
