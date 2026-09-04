@@ -138,7 +138,8 @@ describe("journal person surface", () => {
       accent: "slate" as const,
       contextLabel: "Operations",
       profileKind: "account",
-      role: "operations",
+      role: "organizer",
+      directoryKind: "operations",
     },
     {
       id: "avery",
@@ -182,14 +183,14 @@ describe("journal person surface", () => {
     ).toBeUndefined();
   });
 
-  it("does not give an Operations viewer a journal compose target", () => {
+  it("lets an Operations viewer compose for family journals they administer", () => {
     const surface = buildJournalPersonSurface(
       people,
-      { personId: "tars", role: "operations" },
+      { personId: "tars", role: "organizer" },
       new Set(),
     );
 
-    expect(surface.journalPeople).toEqual([]);
+    expect(surface.journalPeople.map((person) => person.id)).toEqual(["avery"]);
     expect(surface.people.map((person) => person.id)).toEqual([
       "brian",
       "molly",

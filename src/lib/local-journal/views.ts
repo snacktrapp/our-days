@@ -144,6 +144,7 @@ export async function loadLocalJournalContext(
       ),
       profileKind: person.profileKind,
       role: membership?.role,
+      directoryKind: membership?.directoryKind,
     };
   });
   const recorder = personOptions.find(
@@ -661,6 +662,7 @@ export async function loadLocalFamilyAccess(access: LocalAccess) {
       id: membership.id,
       personId: membership.personId,
       role: membership.role,
+      directoryKind: membership.directoryKind ?? "journal",
     })),
     guardians: document.guardians.map((guardian) => ({
       managedPersonId: guardian.managedPersonId,

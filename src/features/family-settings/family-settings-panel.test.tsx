@@ -188,6 +188,7 @@ describe("FamilySettingsPanel", () => {
       }),
     );
     expect(screen.getByText("Current role: Operations")).toBeVisible();
+    expect(screen.getByText(/full organizer access/u)).toBeVisible();
     expect(screen.getByText(/not a family journal person/u)).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Make organizer: TARS" }),

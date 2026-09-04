@@ -20,6 +20,7 @@ import {
   localJordanPersonId,
   localRileyPersonId,
 } from "./ids";
+import { canCreateInsight, hasOrganizerPrivilege } from "@/lib/circle-roles";
 import type {
   LocalJournalDocument,
   LocalMedia,
@@ -224,14 +225,13 @@ function canWriteJournal(
   access: LocalAccess,
   journalPersonId: string | null,
 ) {
-  if (access.role === "operations") return false;
-  if (!journalPersonId) return access.role === "organizer";
+  if (!journalPersonId) return hasOrganizerPrivilege(access.role);
   if (journalPersonId === access.personId) return true;
   const person = document.people.find(
     (candidate) => candidate.id === journalPersonId,
   );
   if (!person || person.profileKind !== "managed") return false;
-  if (access.role === "organizer") return true;
+  if (hasOrganizerPrivilege(access.role)) return true;
   return document.guardians.some(
     (guardian) =>
       guardian.managedPersonId === journalPersonId &&
@@ -316,7 +316,7 @@ export async function createLocalInsightMoment(
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
     requireMembership(document, access);
-    if (access.role !== "organizer" && access.role !== "operations") {
+    if (!canCreateInsight(access.role)) {
       throw new Error("Only an organizer or Operations can create an Insight.");
     }
     const createdAt = nowIso();

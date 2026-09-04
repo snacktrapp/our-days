@@ -112,24 +112,25 @@ describe("local journal happy path", () => {
     expect(moment.media?.sha256).toHaveLength(64);
   });
 
-  it("lets Operations post Insights but not personal journal moments", async () => {
+  it("lets Operations post Insights and write with organizer privileges", async () => {
     const operationsAccess: LocalAccess = {
       ...access,
       role: "operations",
     };
-    await expect(
-      createLocalWrittenMoment(operationsAccess, {
-        journalPersonId: localAlexPersonId,
-        kind: "thought",
-        title: "",
-        body: "Operations should not keep a personal journal.",
-        placeName: "",
-        taggedPersonIds: [],
-        occurredOn: "2026-08-21",
-        occurredAt: null,
-        occurredTimezone: null,
-      }),
-    ).rejects.toThrow("That journal cannot be written from this account.");
+    const thoughtId = await createLocalWrittenMoment(operationsAccess, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "Operations keeps organizer write access.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+    });
+    expect(thoughtId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
+    );
 
     const momentId = await createLocalInsightMoment(operationsAccess, {
       quote: "Curiosity is a form of courage.",

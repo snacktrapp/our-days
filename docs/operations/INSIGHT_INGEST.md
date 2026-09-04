@@ -6,18 +6,18 @@ show a family-member byline.
 
 Ordinary members never see Insight in **+ New moment**. Humans post thoughts,
 verses, photos, and the rest through the existing composer. Insights are
-created only by an organizer or an **Operations** membership (TARS) that
-authenticates as itself.
+created only by an organizer — including the **Operations** organizer
+membership (TARS) that authenticates as itself.
 
 ## Authorization
 
 | Gate | Rule |
 | --- | --- |
-| Who | Active **organizer** or **Operations** membership of the target circle |
+| Who | Active **organizer** of the target circle, including an Operations organizer |
 | Circle | Server-derived from that session. A client `circleId` is accepted only when it matches the active circle. |
 | Browser writes | Cookie session + same-origin `Origin` matching `NEXT_PUBLIC_SITE_URL` |
 | Agent writes | Organizer or Operations access token (`Authorization: Bearer …`) **or** the same RPC against Supabase with that JWT |
-| Database | `create_insight_moment` independently rechecks `auth.uid()` and an active organizer or Operations membership |
+| Database | `create_insight_moment` independently rechecks `auth.uid()` and `is_circle_organizer` |
 
 Public signup stays disabled. This path does not provision accounts, use a
 service-role key, or impersonate another adult's journal. `recorded_by_membership_id`
@@ -50,8 +50,8 @@ is stored for audit only and is not rendered as an author.
 
 Success: `201 { "ok": true, "momentId": "<uuid>" }`
 
-Failures: `400` invalid payload, `401` unsigned, `403` not an organizer or
-Operations membership / wrong circle / failed same-origin check.
+Failures: `400` invalid payload, `401` unsigned, `403` not an organizer /
+wrong circle / failed same-origin check.
 
 ## RPC (preferred for scheduled posts)
 
@@ -73,9 +73,9 @@ Content-Type: application/json
 ```
 
 A later worker should authenticate as the circle’s Operations membership
-(`tars-trapp@agentmail.to` after the role migration). Do not put a
-service-role key in the web deployment. Operations is not an organizer and
-cannot invite, change roles, or write a personal journal.
+(`tars-trapp@agentmail.to`). That membership stays a full organizer; the
+Operations label only hides it from Family and People. Do not put a
+service-role key in the web deployment.
 
 ## Timeline behavior
 

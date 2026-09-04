@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
+import { hasOrganizerPrivilege } from "@/lib/circle-roles";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createClient } from "@supabase/supabase-js";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -64,7 +65,7 @@ async function hasExpectedOrigin() {
 async function requireOrganizer() {
   if (!(await hasExpectedOrigin())) return null;
   const access = await requireJournalAccess();
-  if (access.mode !== "authenticated" || access.role !== "organizer") {
+  if (access.mode !== "authenticated" || !hasOrganizerPrivilege(access.role)) {
     return null;
   }
   return access;

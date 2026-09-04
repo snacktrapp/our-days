@@ -351,7 +351,8 @@ describe("connected family settings data", () => {
         {
           id: operationsMembershipId,
           personId: operationsPersonId,
-          role: "operations",
+          role: "organizer",
+          directoryKind: "operations",
         },
       ],
       guardians: [],
@@ -374,11 +375,14 @@ describe("connected family settings data", () => {
         }),
       ]),
     );
-    expect(
-      model.panel.guardianOptions.some(
-        (option) => option.membershipId === operationsMembershipId,
-      ),
-    ).toBe(false);
+    expect(model.panel.guardianOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          membershipId: operationsMembershipId,
+          role: "organizer",
+        }),
+      ]),
+    );
     expect(
       model.panel.members.some(
         (member) => member.relationshipLabel === "Operations",

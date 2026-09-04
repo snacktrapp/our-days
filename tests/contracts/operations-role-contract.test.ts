@@ -11,29 +11,25 @@ const migration = readFileSync(
 );
 
 describe("operations membership database contract", () => {
-  it("adds Operations without collapsing organizer or member", () => {
+  it("adds a directory label without weakening organizer privileges", () => {
+    expect(migration).toContain("add column directory_kind text");
     expect(migration).toContain(
-      "check (role in ('member', 'organizer', 'operations'))",
+      "check (directory_kind in ('journal', 'operations'))",
     );
-    expect(migration).toContain("membership.role <> 'operations'");
-    expect(migration).toContain(
-      "membership.role in ('organizer', 'operations')",
-    );
+    expect(migration).toContain("role = 'organizer'");
+    expect(migration).not.toContain("membership.role <> 'operations'");
   });
 
   it("migrates TARS by Auth email, not display name", () => {
     expect(migration).toContain("tars-trapp@agentmail.to");
     expect(migration).not.toMatch(/display_name\s*=\s*'TARS'/iu);
-    expect(migration).toContain("and other.role = 'organizer'");
+    expect(migration).toContain("directory_kind = 'operations'");
   });
 
-  it("lets Operations create Insights without organizer family-admin power", () => {
+  it("keeps Operations people off journal tag lists only", () => {
+    expect(migration).toContain("membership.directory_kind = 'operations'");
     expect(migration).toContain(
-      "create or replace function private.create_insight_moment(",
-    );
-    expect(migration).toContain("actor_role = 'organizer'");
-    expect(migration).toContain(
-      "private.is_circle_organizer(requested_circle_id)",
+      "create or replace function private.tags_are_valid(",
     );
   });
 });

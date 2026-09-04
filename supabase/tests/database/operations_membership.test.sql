@@ -1,6 +1,6 @@
 begin;
 
-select plan(7);
+select plan(6);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values (
@@ -33,6 +33,7 @@ insert into public.circle_memberships (
   user_id,
   person_id,
   role,
+  directory_kind,
   status
 )
 values (
@@ -40,18 +41,19 @@ values (
   '20000000-0000-4000-8000-000000000001',
   '10000000-0000-4000-8000-000000000008',
   '30000000-0000-4000-8000-000000000010',
+  'organizer',
   'operations',
   'active'
 );
 
 select is(
   (
-    select role
+    select role || '|' || directory_kind
       from public.circle_memberships
      where id = '40000000-0000-4000-8000-000000000008'
   ),
-  'operations',
-  'circle memberships accept the Operations role'
+  'organizer|operations',
+  'Operations is an organizer membership with a directory label'
 );
 
 set local role authenticated;
@@ -68,25 +70,22 @@ select ok(
   'Operations can create a circle Insight'
 );
 
-select throws_ok(
-  $$select public.create_family_moment(
+select ok(
+  public.create_family_moment(
     '20000000-0000-4000-8000-000000000001',
-    '30000000-0000-4000-8000-000000000010',
-    'thought', null, 'Operations should not keep a personal journal.',
+    '30000000-0000-4000-8000-000000000008',
+    'thought', null, 'Operations keeps organizer journal write access.',
     null, '{}', '2026-08-28'
-  )$$,
-  '42501', 'Moment could not be created',
-  'Operations cannot write a personal journal moment'
+  ) is not null,
+  'Operations can write a managed child journal like an organizer'
 );
 
-select throws_ok(
+select lives_ok(
   $$select public.set_membership_role(
     '40000000-0000-4000-8000-000000000003',
     'organizer'
   )$$,
-  '22023',
-  'Role could not be changed',
-  'Operations cannot change family roles'
+  'Operations can change family roles like an organizer'
 );
 
 select is(
@@ -99,7 +98,7 @@ select is(
 );
 
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
 
 select throws_ok(
   $$select public.create_insight_moment(
@@ -111,18 +110,6 @@ select throws_ok(
   )$$,
   '42501', 'Insight could not be created',
   'an ordinary member still cannot create an Insight'
-);
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
-
-select throws_ok(
-  $$select public.set_membership_role(
-    '40000000-0000-4000-8000-000000000001',
-    'operations'
-  )$$,
-  '22023', 'Role could not be changed',
-  'organizers cannot casually assign Operations through the family role RPC'
 );
 
 select * from finish();

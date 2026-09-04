@@ -130,6 +130,28 @@ describe("family settings actions", () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
+  it("lets an Operations organizer withdraw an invitation", async () => {
+    mocks.requireAccess.mockResolvedValueOnce({
+      mode: "authenticated",
+      membershipId: organizerMembershipId,
+      circleId: "20000000-0000-4000-8000-000000000001",
+      personId: "30000000-0000-4000-8000-000000000001",
+      role: "operations",
+    });
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      withdrawFamilyInvitationEmailRequestAction({ emailRequestId }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Invitation withdrawn.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "withdraw_invitation_email_request",
+      { email_request_id: emailRequestId },
+    );
+  });
+
   it.each([
     [
       "role changes",

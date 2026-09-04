@@ -12,6 +12,7 @@ export type Database = {
       circle_memberships: {
         Row: {
           circle_id: string;
+          directory_kind: string;
           id: string;
           joined_at: string;
           person_id: string;
@@ -24,6 +25,7 @@ export type Database = {
         };
         Insert: {
           circle_id: string;
+          directory_kind?: string;
           id?: string;
           joined_at?: string;
           person_id: string;
@@ -36,6 +38,7 @@ export type Database = {
         };
         Update: {
           circle_id?: string;
+          directory_kind?: string;
           id?: string;
           joined_at?: string;
           person_id?: string;

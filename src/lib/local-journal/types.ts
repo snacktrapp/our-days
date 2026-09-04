@@ -13,6 +13,7 @@ export type LocalMembership = Readonly<{
   id: string;
   personId: string;
   role: "organizer" | "member" | "operations";
+  directoryKind?: "journal" | "operations";
   status: "active";
   joinedAt: string;
 }>;

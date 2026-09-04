@@ -10,7 +10,8 @@ import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import {
-  isOperationsRole,
+  hasOrganizerPrivilege,
+  isOperationsMembership,
   journalContextLabel,
   journalDirectoryRoleLabel,
 } from "@/lib/circle-roles";
@@ -67,6 +68,7 @@ export type JournalPersonOption = Readonly<{
   contextLabel: string;
   profileKind: string;
   role?: string | null;
+  directoryKind?: string | null;
 }>;
 
 export function buildJournalPersonSurface(
@@ -75,7 +77,7 @@ export function buildJournalPersonSurface(
   guardedPersonIds: ReadonlySet<string>,
 ) {
   const visible = personOptions.filter(
-    (person) => !isOperationsRole(person.role),
+    (person) => !isOperationsMembership(person),
   );
   return {
     people: visible.map((person) => ({
@@ -95,7 +97,8 @@ export function buildJournalPersonSurface(
       (person) =>
         person.id === access.personId ||
         (person.profileKind === "managed" &&
-          (access.role === "organizer" || guardedPersonIds.has(person.id))),
+          (hasOrganizerPrivilege(access.role) ||
+            guardedPersonIds.has(person.id))),
     ),
     taggablePeople: visible.map((person) => ({
       id: person.id,
@@ -230,7 +233,7 @@ export async function loadConnectedJournalContext(
       .order("created_at", { ascending: true }),
     supabase
       .from("circle_memberships")
-      .select("id, person_id, role, status")
+      .select("id, person_id, role, status, directory_kind")
       .eq("circle_id", access.circleId),
     supabase
       .from("person_guardians")
@@ -317,6 +320,7 @@ export async function loadConnectedJournalContext(
       ),
       profileKind: person.profile_kind,
       role: membership?.role,
+      directoryKind: membership?.directory_kind,
     };
   });
   const recorder = personOptions.find(

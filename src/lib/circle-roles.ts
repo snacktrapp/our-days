@@ -1,6 +1,8 @@
 export const OPERATIONS_ROLE = "operations" as const;
+export const OPERATIONS_DIRECTORY = "operations" as const;
 
 export type CircleMembershipRole = "member" | "organizer" | "operations";
+export type MembershipDirectoryKind = "journal" | "operations";
 
 export function isOperationsRole(
   role: string | null | undefined,
@@ -8,8 +10,30 @@ export function isOperationsRole(
   return role === OPERATIONS_ROLE;
 }
 
-export function canCreateInsight(role: string | null | undefined) {
+export function isOperationsDirectory(
+  directoryKind: string | null | undefined,
+) {
+  return directoryKind === OPERATIONS_DIRECTORY;
+}
+
+export function isOperationsMembership(
+  membership: Readonly<{
+    role?: string | null;
+    directoryKind?: string | null;
+  }>,
+) {
+  return (
+    isOperationsDirectory(membership.directoryKind) ||
+    isOperationsRole(membership.role)
+  );
+}
+
+export function hasOrganizerPrivilege(role: string | null | undefined) {
   return role === "organizer" || role === OPERATIONS_ROLE;
+}
+
+export function canCreateInsight(role: string | null | undefined) {
+  return hasOrganizerPrivilege(role);
 }
 
 export function familyMembershipRoleLabel(
@@ -45,4 +69,14 @@ export function parseCircleMembershipRole(
     return role;
   }
   return null;
+}
+
+export function presentedMembershipRole(
+  membership: Readonly<{
+    role?: string | null;
+    directoryKind?: string | null;
+  }>,
+): CircleMembershipRole | null {
+  if (isOperationsMembership(membership)) return OPERATIONS_ROLE;
+  return parseCircleMembershipRole(membership.role);
 }

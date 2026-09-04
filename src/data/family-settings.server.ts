@@ -9,8 +9,9 @@ import type {
 } from "@/features/family-settings/family-settings-view-model";
 import {
   familyMembershipRoleLabel,
-  isOperationsRole,
-  parseCircleMembershipRole,
+  hasOrganizerPrivilege,
+  isOperationsMembership,
+  presentedMembershipRole,
 } from "@/lib/circle-roles";
 import {
   mapDatabaseAccent,
@@ -30,6 +31,7 @@ type FamilyAccessData = Readonly<{
     id: string;
     personId: string;
     role: string;
+    directoryKind?: string | null;
   }>[];
   guardians: readonly Readonly<{
     managedPersonId: string;
@@ -81,20 +83,18 @@ export async function loadConnectedFamilyAccess(
     return loadLocalFamilyAccess(access);
   }
   const supabase = await createOurDaysServerClient();
-  const pendingPromise =
-    access.role === "organizer"
-      ? supabase.rpc("list_pending_invitation_email_requests", {
-          circle_id: access.circleId,
-        })
-      : Promise.resolve({ data: [], error: null });
-  const guardiansPromise =
-    access.role === "organizer"
-      ? supabase
-          .from("person_guardians")
-          .select("managed_person_id, guardian_membership_id")
-          .eq("circle_id", access.circleId)
-          .is("revoked_at", null)
-      : Promise.resolve({ data: [], error: null });
+  const pendingPromise = hasOrganizerPrivilege(access.role)
+    ? supabase.rpc("list_pending_invitation_email_requests", {
+        circle_id: access.circleId,
+      })
+    : Promise.resolve({ data: [], error: null });
+  const guardiansPromise = hasOrganizerPrivilege(access.role)
+    ? supabase
+        .from("person_guardians")
+        .select("managed_person_id, guardian_membership_id")
+        .eq("circle_id", access.circleId)
+        .is("revoked_at", null)
+    : Promise.resolve({ data: [], error: null });
   const [peopleResult, membershipsResult, guardiansResult, pendingResult] =
     await Promise.all([
       supabase
@@ -104,7 +104,7 @@ export async function loadConnectedFamilyAccess(
         .order("created_at", { ascending: true }),
       supabase
         .from("circle_memberships")
-        .select("id, person_id, role")
+        .select("id, person_id, role, directory_kind")
         .eq("circle_id", access.circleId)
         .eq("status", "active")
         .order("joined_at", { ascending: true }),
@@ -129,6 +129,7 @@ export async function loadConnectedFamilyAccess(
       id: membership.id,
       personId: membership.person_id,
       role: membership.role,
+      directoryKind: membership.directory_kind,
     })),
     guardians: (guardiansResult.data ?? []).map((guardian) => ({
       managedPersonId: guardian.managed_person_id,
@@ -159,7 +160,7 @@ export function buildConnectedFamilySettingsModel(
   const membershipByPerson = new Map(
     data.memberships.map((membership) => [membership.personId, membership]),
   );
-  const canManageAccess = access.role === "organizer";
+  const canManageAccess = hasOrganizerPrivilege(access.role);
   const guardianMembershipIdsByPerson = new Map<string, string[]>();
   for (const guardian of data.guardians) {
     const ids =
@@ -174,7 +175,10 @@ export function buildConnectedFamilySettingsModel(
       const isManaged = person.profileKind === "managed";
       const role = isManaged
         ? null
-        : (parseCircleMembershipRole(membership?.role) ?? "member");
+        : (presentedMembershipRole({
+            role: membership?.role,
+            directoryKind: membership?.directoryKind,
+          }) ?? "member");
       return [
         {
           id: person.id,
@@ -196,7 +200,10 @@ export function buildConnectedFamilySettingsModel(
             canManageAccess &&
             membership !== undefined &&
             membership.id !== access.membershipId &&
-            !isOperationsRole(membership.role),
+            !isOperationsMembership({
+              role: membership.role,
+              directoryKind: membership.directoryKind,
+            }),
           canManageJournal: canManageAccess && isManaged,
           canReviewRemoval:
             canManageAccess &&
@@ -224,11 +231,7 @@ export function buildConnectedFamilySettingsModel(
             const person = data.people.find(
               (candidate) => candidate.id === membership.personId,
             );
-            if (
-              !person ||
-              person.profileKind !== "account" ||
-              isOperationsRole(membership.role)
-            ) {
+            if (!person || person.profileKind !== "account") {
               return [];
             }
             return [
@@ -236,7 +239,9 @@ export function buildConnectedFamilySettingsModel(
                 membershipId: membership.id,
                 personId: person.id,
                 name: person.displayName,
-                role: membership.role === "organizer" ? "organizer" : "member",
+                role: hasOrganizerPrivilege(membership.role)
+                  ? "organizer"
+                  : "member",
               } as const,
             ];
           })
