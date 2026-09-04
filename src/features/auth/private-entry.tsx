@@ -91,13 +91,13 @@ export function PrivateEntry({
                 {oauthIssueCopy[oauthIssue]}
               </p>
             ) : null}
+            {/* Full document navigation: next/link would client-route these
+                API start URLs, and GET forms are blocked by CSP form-action. */}
             <div className="private-entry-oauth">
-              <form action="/api/auth/oauth/google" method="get">
-                <button type="submit">Sign in with Google</button>
-              </form>
-              <form action="/api/auth/oauth/x" method="get">
-                <button type="submit">Sign in with X</button>
-              </form>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a href="/api/auth/oauth/google">Sign in with Google</a>
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a href="/api/auth/oauth/x">Sign in with X</a>
             </div>
             {linkRequested ? (
               <div className="private-entry-backup">
