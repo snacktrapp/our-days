@@ -273,10 +273,20 @@ button:focus-visible,
   display: grid;
   gap: 9px;
 }
-.private-entry-oauth form + form {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+.private-entry-oauth a {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  margin-top: 3px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--teal);
+  color: var(--cream);
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
 }
 .private-entry-backup {
   margin-top: 22px;
@@ -4146,21 +4156,14 @@ button:focus-visible,
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(var(--nav-pill-blur));
   -webkit-backdrop-filter: blur(var(--nav-pill-blur));
+  transform-origin: bottom center;
 }
 
 .bottom-nav.is-compact {
-  height: 48px;
-  padding: 1px 8px;
+  /* Uniform 10% shrink; layout box stays 56px so the tap target does not squash. */
+  transform: scale(0.9);
 }
 
-.bottom-nav.is-compact .nav-item {
-  height: 46px;
-}
-
-.bottom-nav.is-compact .nav-symbol {
-  font-size: 18px;
-  line-height: 17px;
-}
 .nav-item {
   height: 54px;
   border: 0;
@@ -5485,12 +5488,6 @@ button:focus-visible,
   color: #101711;
 }
 
-.private-entry-oauth button {
-  border: 1px solid var(--hairline);
-  background: color-mix(in srgb, var(--cream) 88%, transparent);
-  color: var(--ink);
-}
-
 .private-entry-backup {
   margin-top: 20px;
   padding-top: 18px;
@@ -5502,6 +5499,18 @@ button:focus-visible,
   color: var(--teal);
   font-family: var(--font-interface);
   font-size: 13px;
+}
+
+.private-entry-content .private-entry-oauth a {
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow: none;
+  text-decoration: none;
 }
 
 .private-entry-content .auth-status {
@@ -7622,20 +7631,15 @@ iframe.composer-location-map {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .topbar,
-  .bottom-nav {
+  .topbar {
     transition:
       transform 180ms ease,
       height 180ms ease,
       padding 180ms ease;
   }
 
-  .bottom-nav .nav-item,
-  .bottom-nav .nav-symbol {
-    transition:
-      height 180ms ease,
-      font-size 180ms ease,
-      line-height 180ms ease;
+  .bottom-nav {
+    transition: transform 180ms ease;
   }
 
   /* Scale the pill, not each tab, so a child tap still presses on iOS. */
@@ -7644,6 +7648,11 @@ iframe.composer-location-map {
   .bottom-nav:active,
   .bottom-nav:has(:active) {
     transform: scale(0.985);
+  }
+
+  .bottom-nav.is-compact:active,
+  .bottom-nav.is-compact:has(:active) {
+    transform: scale(calc(0.9 * 0.985));
   }
 
   .nav-symbol-pending,

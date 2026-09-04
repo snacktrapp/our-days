@@ -147,10 +147,10 @@ describe("OAuth start route", () => {
     );
   });
 
-  it("maps X to the Twitter Supabase provider", async () => {
+  it("maps X to the hosted Auth X provider", async () => {
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.signInWithOAuth.mockResolvedValueOnce({
-      data: { url: "https://twitter.com/i/oauth2/authorize" },
+      data: { url: "https://x.com/i/oauth2/authorize" },
       error: null,
     });
 
@@ -160,7 +160,7 @@ describe("OAuth start route", () => {
     );
 
     expect(mocks.signInWithOAuth).toHaveBeenCalledWith({
-      provider: "twitter",
+      provider: "x",
       options: {
         redirectTo: "https://journal.example.com/auth/callback",
         skipBrowserRedirect: true,
@@ -168,7 +168,7 @@ describe("OAuth start route", () => {
       },
     });
     expect(response.headers.get("location")).toBe(
-      "https://twitter.com/i/oauth2/authorize",
+      "https://x.com/i/oauth2/authorize",
     );
   });
 });
