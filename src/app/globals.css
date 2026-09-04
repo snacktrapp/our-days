@@ -3657,6 +3657,13 @@ button:focus-visible,
   opacity: 0;
   cursor: inherit;
 }
+.audience-choice input {
+  width: 1px;
+  height: 1px;
+  inset: auto;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
 .tag-person-dot {
   width: 25px;
   height: 25px;
@@ -4669,6 +4676,10 @@ button:focus-visible,
 }
 
 .insight-source {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 0.16em;

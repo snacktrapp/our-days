@@ -127,13 +127,17 @@ select throws_ok(
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 
+select id as insight_moment_id
+  from public.moments
+ where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
+ order by created_at desc
+ limit 1 \gset
+
 select lives_ok(
-  $$select public.set_written_moment_trashed(
-    (select id from public.moments
-      where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
-      order by created_at desc limit 1),
-    1, true
-  )$$,
+  format(
+    'select public.set_written_moment_trashed(%L, 1, true)',
+    :'insight_moment_id'
+  ),
   'an organizer can trash an Insight'
 );
 
@@ -157,12 +161,10 @@ select ok(
 );
 
 select lives_ok(
-  $$select public.set_written_moment_trashed(
-    (select id from public.moments
-      where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
-      order by created_at desc limit 1),
-    2, false
-  )$$,
+  format(
+    'select public.set_written_moment_trashed(%L, 2, false)',
+    :'insight_moment_id'
+  ),
   'an organizer can restore an Insight'
 );
 

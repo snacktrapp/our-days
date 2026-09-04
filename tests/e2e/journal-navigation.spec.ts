@@ -44,7 +44,7 @@ test("route-based journal navigation preserves the approved views", async ({
   ).toBeVisible();
   await page.locator(".title-switcher summary").click();
   await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
-  await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
+  await expect(page.locator("[data-moment-kind]")).toHaveCount(7);
   await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
   await expect(page.getByText(/earliest entry/i)).toBeVisible();
   await expect(page.locator(".elapsed-gap")).toHaveCount(0);
