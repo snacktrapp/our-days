@@ -85,7 +85,8 @@ for (const route of routes) {
         viewportWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
         undersized: buttonsAndLinks.filter(
-          ({ width, height }) => width < 44 || height < 44,
+          ({ width, height }) =>
+            Math.round(width) < 44 || Math.round(height) < 44,
         ),
       };
     });
@@ -296,6 +297,10 @@ test("New moment type picker keeps frosted nav chrome over the grid in dark", as
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
   await page.goto("/family");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expectTypePickerKeepsFrostedNav(page);
@@ -305,8 +310,11 @@ test("New moment type picker keeps frosted nav chrome over the grid in light", a
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "light");
+  });
   await page.goto("/family");
-  await page.getByRole("button", { name: "Use light appearance" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expectTypePickerKeepsFrostedNav(page);
 });

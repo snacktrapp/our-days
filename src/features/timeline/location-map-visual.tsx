@@ -62,6 +62,7 @@ function LocationMapFrame({
             alt={`Map of ${place}`}
             width={800}
             height={330}
+            loading="lazy"
             onError={() => setFailed(true)}
           />
           <small className="map-attribution">

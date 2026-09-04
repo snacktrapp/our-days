@@ -414,7 +414,9 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   } catch {
     backgroundBlocked = true;
   }
-  expect(backgroundBlocked).toBe(true);
+  // Type picker is a compact popover (`pointer-events: none` on the
+  // wrapper) so frost still samples the grid. Nav stays hittable.
+  expect(backgroundBlocked).toBe(false);
 
   const firstChoice = page.getByRole("button", { name: /^Photo/u });
   await expectCompleteFocusTraversal(page, dialog, firstChoice, "chooser");
@@ -602,6 +604,8 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
   await page.evaluate(async () => {
     const timelineImages = Array.from(
       document.querySelectorAll<HTMLImageElement>("[data-moment-kind] img"),
+    ).filter(
+      (image) => !/\/api\/maps\//u.test(image.getAttribute("src") ?? ""),
     );
     for (const image of timelineImages) image.loading = "eager";
     await Promise.all(

@@ -5947,7 +5947,7 @@ html[data-theme].overlay-open .app-shell::before,
 .new-moment-composer-dialog .moment-choices small {
   margin: 0;
   font-family: var(--font-record);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.35;
 }
 
@@ -7519,6 +7519,13 @@ iframe.composer-location-map {
 
 :root[data-theme="light"] .moment-choices small {
   color: #4f5d56;
+}
+
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .moment-choices
+  small {
+  color: #3f4a44;
 }
 
 :root[data-theme="light"] .composer-back {

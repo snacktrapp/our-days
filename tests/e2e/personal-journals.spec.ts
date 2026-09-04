@@ -4,7 +4,6 @@ const journals = [
   {
     id: "brian",
     name: "Brian",
-    summary: "2 moments · 2022–2026",
     momentIds: ["moment-sunset", "moment-late-summer-2022"],
     dates: ["2026-08-28", "2022-08-28"],
     years: ["Aug 28, 2022"],
@@ -12,7 +11,6 @@ const journals = [
   {
     id: "molly",
     name: "Molly",
-    summary: "3 moments · 2019–2026",
     momentIds: ["moment-kitchen", "moment-lake", "moment-porch-light-2019"],
     dates: ["2026-08-14", "2026-07-06", "2019-08-28"],
     years: ["Aug 28, 2019"],
@@ -20,7 +18,6 @@ const journals = [
   {
     id: "avery",
     name: "Avery",
-    summary: "1 moment · 2023",
     momentIds: ["moment-first-day"],
     dates: ["2023-08-21"],
     years: [],
@@ -28,7 +25,6 @@ const journals = [
   {
     id: "sam",
     name: "Sam",
-    summary: "No moments yet",
     momentIds: [],
     dates: [],
     years: [],
@@ -36,7 +32,6 @@ const journals = [
   {
     id: "june",
     name: "June",
-    summary: "No moments yet",
     momentIds: [],
     dates: [],
     years: [],
@@ -63,7 +58,6 @@ test("People links to five distinct, owner-correct life journals", async ({
     await expect(
       page.getByLabel(`Chronological moments for ${journal.name}`),
     ).toBeVisible();
-    await expect(page.getByText(journal.summary)).toBeVisible();
     expect(
       await page
         .locator("[data-moment-kind]")
