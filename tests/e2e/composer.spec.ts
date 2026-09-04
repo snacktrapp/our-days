@@ -6,7 +6,8 @@ import { expect, test } from "./test";
 const focusableSelector = [
   "a[href]",
   "button:not([disabled])",
-  "input:not([disabled])",
+  'input:not([disabled]):not([type="radio"])',
+  'input[type="radio"]:checked:not([disabled])',
   "select:not([disabled])",
   "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',

@@ -183,7 +183,8 @@ test("route-based journal navigation preserves the approved views", async ({
     "moment-kitchen",
     "moment-lake",
   ]);
-  await expect(page.getByText("2 weeks earlier")).toBeVisible();
+  await expect(page.getByText("one day earlier")).toBeVisible();
+  await expect(page.getByText("13 days earlier")).toBeVisible();
   await expect(page.getByText("one month earlier")).toBeVisible();
 });
 
