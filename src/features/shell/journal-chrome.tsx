@@ -81,7 +81,6 @@ export function JournalChrome({
   section,
   children,
   createMomentAction,
-  standaloneNavigation = false,
   switcher,
 }: JournalChromeProps) {
   const header =
@@ -113,15 +112,13 @@ export function JournalChrome({
               aria-atomic="true"
             />
             {children}
-            {standaloneNavigation ? (
-              <PrimaryNavigation
-                section={section}
-                memoriesHref={model.memoriesHref}
-                settingsHref={model.settingsHref}
-              />
-            ) : null}
           </section>
         </main>
+        <PrimaryNavigation
+          section={section}
+          memoriesHref={model.memoriesHref}
+          settingsHref={model.settingsHref}
+        />
       </PhotoLightboxRoot>
     </ComposerSessionProvider>
   );

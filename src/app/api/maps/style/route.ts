@@ -10,7 +10,10 @@ export async function GET(request: Request) {
 
   let upstream: Response;
   try {
-    upstream = await fetch(mapTilerStyleUrl(key), mapTilerUpstreamInit(request));
+    upstream = await fetch(
+      mapTilerStyleUrl(key),
+      mapTilerUpstreamInit(request),
+    );
   } catch {
     return mapsApiText(502, "maptiler_upstream_failed");
   }
@@ -18,7 +21,8 @@ export async function GET(request: Request) {
     return mapsApiText(502, `maptiler_upstream_failed ${upstream.status}`);
   }
 
-  const contentType = upstream.headers.get("content-type") ?? "application/json";
+  const contentType =
+    upstream.headers.get("content-type") ?? "application/json";
   return new Response(upstream.body, {
     status: 200,
     headers: {

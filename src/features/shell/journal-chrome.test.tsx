@@ -24,7 +24,9 @@ vi.mock("./theme-toggle", () => ({
   ThemeToggle: () => <button type="button">Use light appearance</button>,
 }));
 vi.mock("./primary-navigation", () => ({
-  PrimaryNavigation: () => <nav aria-label="Primary navigation" />,
+  PrimaryNavigation: () => (
+    <nav className="bottom-nav" aria-label="Primary navigation" />
+  ),
 }));
 vi.mock("@/features/composer/photo-status-shelf", () => ({
   PhotoStatusShelf: () => null,
@@ -75,6 +77,21 @@ describe("JournalChrome", () => {
     expect(stage).not.toBeNull();
     expect(stage?.contains(header)).toBe(false);
     expect(container.querySelector(".app-shell")?.contains(header)).toBe(false);
+  });
+
+  it("keeps the floating bottom pill outside the scrolling journal stage", () => {
+    const { container } = render(
+      <JournalChrome model={model} section="timeline">
+        <p>Page content</p>
+      </JournalChrome>,
+    );
+    const stage = container.querySelector(".phone-stage");
+    const header = container.querySelector(".topbar");
+    const nav = container.querySelector(".bottom-nav");
+    expect(nav).not.toBeNull();
+    expect(stage?.contains(nav)).toBe(false);
+    expect(container.querySelector(".app-shell")?.contains(nav)).toBe(false);
+    expect(header?.parentElement).toBe(nav?.parentElement);
   });
 
   it("opens the family switcher from the middle title", () => {

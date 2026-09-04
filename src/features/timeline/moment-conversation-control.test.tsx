@@ -323,9 +323,7 @@ describe("MomentConversationControl", () => {
     expect(
       screen.getByRole("list", { name: "Family responses" }),
     ).toHaveTextContent("❤️Brian");
-    expect(
-      screen.getByText("Brian").closest("li"),
-    ).toHaveClass("is-entering");
+    expect(screen.getByText("Brian").closest("li")).toHaveClass("is-entering");
   });
 
   it("reverses the name pill out when the current reaction is removed", async () => {

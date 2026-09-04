@@ -162,7 +162,13 @@ export function MomentConversationControl({
       conversation.reactions.flatMap((reaction) => {
         const option = reactionOptions.get(reaction.reactionId);
         return option
-          ? [{ ...reaction, option, presenceKey: reactionPresenceKey(reaction) }]
+          ? [
+              {
+                ...reaction,
+                option,
+                presenceKey: reactionPresenceKey(reaction),
+              },
+            ]
           : [];
       }),
     [conversation.reactions, reactionOptions],
@@ -531,7 +537,8 @@ export function MomentConversationControl({
                       if (event.target !== event.currentTarget) return;
                       if (event.animationName === "overlay-popover-in") {
                         setEnteringKeys((current) => {
-                          if (!current.has(reaction.presenceKey)) return current;
+                          if (!current.has(reaction.presenceKey))
+                            return current;
                           const next = new Set(current);
                           next.delete(reaction.presenceKey);
                           return next;
