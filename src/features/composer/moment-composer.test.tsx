@@ -284,6 +284,33 @@ async function selectComposerJournal(
 }
 
 describe("MomentComposer", () => {
+  it("defaults audience to Family and locks the journal to self for Just Me", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(<ConnectedFamilyHarness save={save} />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "A private thought.");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(screen.getByRole("radio", { name: "Family" })).toBeChecked();
+    await user.click(screen.getByRole("radio", { name: "Just Me" }));
+    expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
+    expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          journalPersonId: "brian",
+          audience: "just_me",
+          taggedPersonIds: [],
+        }),
+      ),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith("/people/brian");
+  });
+
   it("offers only the production-ready written path in a connected journal", async () => {
     const user = userEvent.setup();
     render(

@@ -96,6 +96,13 @@ describe("family activity notifications", () => {
           moment_kind: "insight",
           created_at: "2026-09-03T20:00:00.000Z",
         },
+        {
+          id: "tars-just-me",
+          author_membership_id: "tars",
+          moment_kind: "thought",
+          created_at: "2026-09-03T21:00:00.000Z",
+          audience: "just_me",
+        },
       ],
       "brian",
     );

@@ -3,6 +3,10 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
+import {
+  localAlexPersonId,
+  localJordanPersonId,
+} from "../../src/lib/local-journal/ids";
 
 async function jpegFixture() {
   const directory = mkdtempSync(join(tmpdir(), "our-days-photo-"));
@@ -120,6 +124,54 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     display: "standalone",
     start_url: "/",
   });
+});
+
+test("Just Me stays on the author's journal and off Family", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add moment" }).click();
+  await page
+    .getByRole("button", { name: "Written entry Text, date, and details" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Entry" })
+    .fill("A porch thought just for me.");
+  await page.getByRole("button", { name: /Details/u }).click();
+  await page.getByRole("radio", { name: "Just Me" }).click();
+  await expect(
+    page.getByRole("button", { name: /Alex · You/u }),
+  ).toBeDisabled();
+  await expect(page.getByText("Who else was part of this?")).toHaveCount(0);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}`));
+  await expect(
+    page
+      .getByLabel("Chronological moments for Alex")
+      .getByText("A porch thought just for me."),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".just-me-pill")).toHaveText("Just Me");
+
+  await page.goto("/family");
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    page
+      .getByLabel("Chronological family moments")
+      .getByText("A porch thought just for me."),
+  ).toHaveCount(0);
+
+  await page.goto(`/people/${localJordanPersonId}`);
+  await expect(page.getByLabel("Chronological moments for Jordan")).toBeVisible(
+    { timeout: 15_000 },
+  );
+  await expect(page.getByText("A porch thought just for me.")).toHaveCount(0);
 });
 
 test("unconfigured Google and X stay on the invitation gate", async ({

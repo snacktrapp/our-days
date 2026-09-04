@@ -111,6 +111,32 @@ describe("connected timeline mapping", () => {
     expect(moment.conversation).toEqual({ notes: [], reactions: [] });
   });
 
+  it("maps Just Me only when the viewer is looking at their own journal", () => {
+    const ownJournal = mapTimelineRow(
+      row({
+        moment_audience: "just_me",
+        moment_journal_person_id: "parent",
+        recorder_person_id: "parent",
+      }),
+      "2026-08-30",
+      {
+        viewerPersonId: "parent",
+        viewingJournalPersonId: "parent",
+      },
+    );
+    const familyFeed = mapTimelineRow(
+      row({
+        moment_audience: "just_me",
+        moment_journal_person_id: "parent",
+      }),
+      "2026-08-30",
+      { viewerPersonId: "parent" },
+    );
+    expect(ownJournal.audience).toBe("just_me");
+    expect(ownJournal.showJustMeBadge).toBe(true);
+    expect(familyFeed.showJustMeBadge).toBe(false);
+  });
+
   it("maps a connected photo to the same-origin private delivery route", () => {
     const moment = mapTimelineRow(
       row({

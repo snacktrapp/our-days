@@ -96,6 +96,7 @@ function momentToTimelineRow(
     place_name: moment.placeName || null,
     latitude: moment.latitude ?? null,
     longitude: moment.longitude ?? null,
+    moment_audience: moment.audience ?? "family",
     tagged_people: moment.taggedPersonIds.flatMap((personId) => {
       const person = document.people.find(
         (candidate) => candidate.id === personId,
@@ -209,6 +210,7 @@ export async function loadLocalJournalContext(
           (moment) =>
             moment.trashedAt === null &&
             moment.kind !== "insight" &&
+            moment.audience !== "just_me" &&
             moment.recordedByMembershipId !== access.membershipId,
         )
         .map((moment) => ({
@@ -231,14 +233,20 @@ export async function loadLocalJournalContext(
 
 function visibleMoments(
   document: Awaited<ReturnType<typeof readLocalJournal>>,
+  access: LocalAccess,
   journalPersonId?: string,
 ) {
   return document.moments
-    .filter(
-      (moment) =>
-        moment.trashedAt === null &&
-        (!journalPersonId || moment.journalPersonId === journalPersonId),
-    )
+    .filter((moment) => {
+      if (moment.trashedAt !== null) return false;
+      if (!journalPersonId) return moment.audience !== "just_me";
+      if (moment.journalPersonId !== journalPersonId) return false;
+      if (moment.audience !== "just_me") return true;
+      return (
+        moment.recordedByMembershipId === access.membershipId &&
+        moment.journalPersonId === access.personId
+      );
+    })
     .slice()
     .sort(compareTimelineMoments);
 }
@@ -259,7 +267,7 @@ export async function loadLocalTimeline(
   const personal = options.journalPersonId
     ? context.people.find((person) => person.id === options.journalPersonId)
     : undefined;
-  const all = visibleMoments(document, options.journalPersonId);
+  const all = visibleMoments(document, access, options.journalPersonId);
   const pageSize = 20;
   const limit = pageCount * pageSize;
   const page = all.slice(0, limit);
@@ -268,6 +276,10 @@ export async function loadLocalTimeline(
     mapTimelineRow(
       momentToTimelineRow(document, moment, snapshotAt),
       context.today,
+      {
+        viewerPersonId: access.personId,
+        viewingJournalPersonId: options.journalPersonId,
+      },
     ),
   );
   const personalJournalIsWritable = Boolean(
@@ -370,7 +382,7 @@ export async function loadLocalMemories(
   const document = await readLocalJournal();
   const today = parseMemoryDate(context.today);
   if (!today) throw new Error("Circle date is unavailable");
-  const visible = visibleMoments(document);
+  const visible = visibleMoments(document, access);
   const years = [
     ...new Set(visible.map((moment) => Number(moment.occurredOn.slice(0, 4)))),
   ]
@@ -468,7 +480,7 @@ export async function loadLocalMemoryJourney(
         ? parseMemoryDate(`2000-${options.anniversaryKey}`)
         : today
       : undefined;
-  const visible = visibleMoments(document).filter((moment) => {
+  const visible = visibleMoments(document, access).filter((moment) => {
     if (options.mode === "year") {
       return Number(moment.occurredOn.slice(0, 4)) === options.year;
     }
@@ -745,9 +757,13 @@ export async function loadLocalConversation(
 
 export async function findLocalVisibleMoment(momentId: string) {
   const document = await readLocalJournal();
-  return (
+  const { readLocalJournalAccess } = await import("./auth");
+  const access = await readLocalJournalAccess();
+  const moment =
     document.moments.find(
-      (moment) => moment.id === momentId && moment.trashedAt === null,
-    ) ?? null
-  );
+      (candidate) => candidate.id === momentId && candidate.trashedAt === null,
+    ) ?? null;
+  if (!moment) return null;
+  if (moment.audience !== "just_me") return moment;
+  return moment.recordedByMembershipId === access?.membershipId ? moment : null;
 }

@@ -54,6 +54,7 @@ export type VideoMomentDraft = Readonly<{
   latitude?: number | null;
   longitude?: number | null;
   taggedPersonIds: readonly string[];
+  audience?: "family" | "just_me";
 }>;
 
 export class VideoUploadError extends Error {
@@ -367,6 +368,7 @@ export async function uploadVideoMoment(
       place_name: draft.placeName,
       request_key: attempt.requestKey,
       tagged_person_ids: [...draft.taggedPersonIds],
+      audience: draft.audience ?? "family",
     },
   );
   const reservation = firstRow(reservationRows);

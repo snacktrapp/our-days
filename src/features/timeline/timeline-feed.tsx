@@ -54,6 +54,9 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
 
   return (
     <div className="connection">
+      {moment.showJustMeBadge ? (
+        <span className="just-me-pill">Just Me</span>
+      ) : null}
       <span
         className={`avatar-node dot-${moment.personAccent}`}
         aria-hidden="true"

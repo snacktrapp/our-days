@@ -12,6 +12,10 @@ import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type { ConnectedJournalContext } from "./journal-context.server";
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import { mapDatabaseAccent } from "./journal-context.server";
+import {
+  normalizeMomentAudience,
+  showJustMeAudienceBadge,
+} from "@/features/moments/moment-audience";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
@@ -30,6 +34,7 @@ export type TimelineRow = Omit<
   | "moment_journal_person_id"
   | "journal_person_name"
   | "journal_person_accent"
+  | "moment_audience"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
@@ -42,6 +47,7 @@ export type TimelineRow = Omit<
   moment_journal_person_id: string | null;
   journal_person_name: string | null;
   journal_person_accent: string | null;
+  moment_audience?: string | null;
   tagged_people?: unknown;
 };
 
@@ -70,7 +76,12 @@ function formatPreciseTime(value: string, timeZone: string | null) {
 export function mapTimelineRow(
   row: TimelineRow,
   today: string,
+  visibility?: Readonly<{
+    viewerPersonId?: string;
+    viewingJournalPersonId?: string;
+  }>,
 ): TimelineMomentViewModel {
+  const audience = normalizeMomentAudience(row.moment_audience);
   const taggedPeople = Array.isArray(row.tagged_people)
     ? row.tagged_people.flatMap((tag): { id: string; name: string }[] => {
         if (
@@ -90,6 +101,13 @@ export function mapTimelineRow(
   const base = {
     id: row.moment_id,
     journalPersonId: row.moment_journal_person_id ?? "",
+    audience,
+    showJustMeBadge: showJustMeAudienceBadge({
+      audience,
+      viewerPersonId: visibility?.viewerPersonId,
+      viewingJournalPersonId: visibility?.viewingJournalPersonId,
+      momentJournalPersonId: row.moment_journal_person_id,
+    }),
     personName: journalPersonName,
     personInitial:
       Array.from(journalPersonName.trim())[0]?.toLocaleUpperCase("en-US") ??
@@ -332,7 +350,12 @@ export async function loadConnectedTimeline(
     if (!hasMore || !cursor) break;
   }
 
-  const moments = rows.map((row) => mapTimelineRow(row, context.today));
+  const moments = rows.map((row) =>
+    mapTimelineRow(row, context.today, {
+      viewerPersonId: access.personId,
+      viewingJournalPersonId: options.journalPersonId,
+    }),
+  );
   const personalJournalIsWritable = Boolean(
     personal &&
     context.chrome.composer.journalPeople.some(

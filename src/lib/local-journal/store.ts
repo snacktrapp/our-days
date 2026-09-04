@@ -243,6 +243,18 @@ function nextRevision(current: number) {
   return current + 1;
 }
 
+function resolvedAudience(
+  access: LocalAccess,
+  journalPersonId: string | null,
+  audience?: "family" | "just_me",
+) {
+  if (audience !== "just_me") return "family" as const;
+  if (journalPersonId !== access.personId) {
+    throw new Error("Just Me moments can only live on your own journal.");
+  }
+  return "just_me" as const;
+}
+
 export async function createLocalWrittenMoment(
   access: LocalAccess,
   input: Readonly<{
@@ -257,6 +269,7 @@ export async function createLocalWrittenMoment(
     occurredOn: string;
     occurredAt: string | null;
     occurredTimezone: string | null;
+    audience?: "family" | "just_me";
   }>,
 ) {
   return withStoreLock(() => {
@@ -284,10 +297,12 @@ export async function createLocalWrittenMoment(
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds: [...input.taggedPersonIds],
+      taggedPersonIds:
+        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
+      audience: resolvedAudience(access, input.journalPersonId, input.audience),
       revision: 1,
       createdAt,
       updatedAt: createdAt,
@@ -361,6 +376,7 @@ export async function updateLocalWrittenMoment(
     occurredOn: string;
     occurredAt: string | null;
     occurredTimezone: string | null;
+    audience?: "family" | "just_me";
   }>,
 ) {
   return withStoreLock(() => {
@@ -388,10 +404,16 @@ export async function updateLocalWrittenMoment(
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds: [...input.taggedPersonIds],
+      taggedPersonIds:
+        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
+      audience: resolvedAudience(
+        access,
+        current.journalPersonId,
+        input.audience ?? current.audience,
+      ),
       revision: nextRevision(current.revision),
       updatedAt: nowIso(),
     };
@@ -454,6 +476,7 @@ export async function publishLocalMediaMoment(
     occurredOn: string;
     occurredAt: string | null;
     occurredTimezone: string | null;
+    audience?: "family" | "just_me";
     media: LocalMedia;
   }>,
 ) {
@@ -474,10 +497,12 @@ export async function publishLocalMediaMoment(
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds: [...input.taggedPersonIds],
+      taggedPersonIds:
+        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
+      audience: resolvedAudience(access, input.journalPersonId, input.audience),
       revision: 1,
       createdAt,
       updatedAt: createdAt,
@@ -505,6 +530,12 @@ export async function createLocalNote(
         candidate.id === input.momentId && candidate.trashedAt === null,
     );
     if (!moment) throw new Error("That note could not be saved.");
+    if (
+      moment.audience === "just_me" &&
+      moment.recordedByMembershipId !== access.membershipId
+    ) {
+      throw new Error("That note could not be saved.");
+    }
     const createdAt = nowIso();
     const note: LocalNote = {
       id: randomUUID(),
@@ -608,6 +639,12 @@ export async function setLocalReaction(
         candidate.id === input.momentId && candidate.trashedAt === null,
     );
     if (!moment) throw new Error("That response could not be saved.");
+    if (
+      moment.audience === "just_me" &&
+      moment.recordedByMembershipId !== access.membershipId
+    ) {
+      throw new Error("That response could not be saved.");
+    }
     const existing = document.reactions.find(
       (reaction) =>
         reaction.momentId === input.momentId &&

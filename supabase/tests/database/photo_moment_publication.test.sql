@@ -44,7 +44,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.reserve_photo_moment(uuid,uuid,text,text,uuid[],date,timestamptz,text,uuid)',
+    'public.reserve_photo_moment(uuid,uuid,text,text,uuid[],date,timestamptz,text,uuid,text)',
     'EXECUTE'
   ) and has_function_privilege(
     'authenticated', 'public.get_photo_moment_status(uuid)', 'EXECUTE'
@@ -52,7 +52,7 @@ select ok(
     'authenticated', 'public.get_photo_moment_delivery(uuid)', 'EXECUTE'
   ) and not has_function_privilege(
     'anon',
-    'public.reserve_photo_moment(uuid,uuid,text,text,uuid[],date,timestamptz,text,uuid)',
+    'public.reserve_photo_moment(uuid,uuid,text,text,uuid[],date,timestamptz,text,uuid,text)',
     'EXECUTE'
   ) and not has_function_privilege(
     'anon', 'public.get_photo_moment_delivery(uuid)', 'EXECUTE'

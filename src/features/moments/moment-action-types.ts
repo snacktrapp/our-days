@@ -1,3 +1,5 @@
+import type { MomentAudience } from "./moment-audience";
+
 export type MomentActionResult = Readonly<{
   ok: boolean;
   message: string;
@@ -19,6 +21,7 @@ export type SaveFamilyMomentAction = (input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: MomentAudience;
 }) => Promise<MomentActionResult>;
 
 export type SaveWrittenMomentAction = (input: {
@@ -27,6 +30,7 @@ export type SaveWrittenMomentAction = (input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: MomentAudience;
 }) => Promise<MomentActionResult>;
 
 export type UpdateFamilyMomentAction = (input: {
@@ -41,6 +45,7 @@ export type UpdateFamilyMomentAction = (input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: MomentAudience;
 }) => Promise<MomentActionResult>;
 
 export type ChangeTrashAction = (input: {
