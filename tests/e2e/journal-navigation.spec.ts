@@ -177,7 +177,12 @@ test("route-based journal navigation preserves the approved views", async ({
     await page
       .locator("[data-moment-kind]")
       .evaluateAll((moments) => moments.map((moment) => moment.id)),
-  ).toEqual(["moment-sunset", "moment-kitchen", "moment-lake"]);
+  ).toEqual([
+    "moment-sunset",
+    "moment-sleep-insight",
+    "moment-kitchen",
+    "moment-lake",
+  ]);
   await expect(page.getByText("2 weeks earlier")).toBeVisible();
   await expect(page.getByText("one month earlier")).toBeVisible();
 });
