@@ -13,6 +13,10 @@ import {
   peekIndependentOverlayObjectUrl,
   prefetchIndependentOverlayObjectUrl,
 } from "@/components/independent-overlay-photo";
+import {
+  lockOverlayChrome,
+  unlockOverlayChrome,
+} from "@/features/shell/overlay-chrome";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
 import {
   dispatchMomentHeart,
@@ -214,10 +218,12 @@ function PhotoLightboxLayer({
     document.body.style.overflow = "hidden";
     document.documentElement.classList.add("overlay-open");
     document.body.classList.add("overlay-open");
+    lockOverlayChrome();
     return () => {
       document.body.style.overflow = previousOverflow;
       document.documentElement.classList.remove("overlay-open");
       document.body.classList.remove("overlay-open");
+      unlockOverlayChrome();
     };
   }, []);
 

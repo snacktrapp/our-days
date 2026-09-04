@@ -1,6 +1,7 @@
 import { render, renderHook, waitFor } from "@testing-library/react";
 import { createElement, useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
@@ -35,6 +36,10 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
+    resetOverlayChromeForTests();
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.remove();
+    });
     vi.restoreAllMocks();
   });
 
@@ -133,6 +138,17 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).not.toHaveBeenCalled();
     unmount();
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
+  });
+
+  it("paints Safari theme-color black while the composer is open", () => {
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "theme-color");
+    meta.setAttribute("content", "#0b1712");
+    document.head.append(meta);
+    const { unmount } = renderHook(() => useLockBackgroundScroll(true));
+    expect(meta.getAttribute("content")).toBe("#000000");
+    unmount();
+    expect(meta.getAttribute("content")).toBe("#0b1712");
   });
 
   it("prevents wheel default on overlay chrome while locked", () => {

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import {
   PhotoLightboxRoot,
@@ -78,9 +79,20 @@ function renderPhotos() {
 }
 
 describe("photo lightbox", () => {
+  beforeEach(() => {
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "theme-color");
+    meta.setAttribute("content", "#0b1712");
+    document.head.append(meta);
+  });
+
   afterEach(() => {
     resetPhotoLightboxSession();
     resetIndependentOverlayObjectUrlCache();
+    resetOverlayChromeForTests();
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.remove();
+    });
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -130,6 +142,11 @@ describe("photo lightbox", () => {
     expect(document.documentElement).not.toHaveClass("media-viewer-open");
     expect(document.documentElement).toHaveClass("overlay-open");
     expect(document.body).toHaveClass("overlay-open");
+    expect(
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.getAttribute("content"),
+    ).toBe("#000000");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(card);
     expect(card).toHaveAttribute("src", cardPixelA);
     expect(card).toBeVisible();
@@ -148,6 +165,11 @@ describe("photo lightbox", () => {
     });
     expect(document.documentElement).not.toHaveClass("overlay-open");
     expect(document.body).not.toHaveClass("overlay-open");
+    expect(
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.getAttribute("content"),
+    ).toBe("#0b1712");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(card);
   });
 

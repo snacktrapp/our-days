@@ -286,6 +286,10 @@ async function expectTypePickerKeepsFrostedNav(page: Page) {
   }));
   expect(canvas.html).toBe("rgb(0, 0, 0)");
   expect(canvas.body).toBe("rgb(0, 0, 0)");
+  const themeColor = await page
+    .locator('meta[name="theme-color"]')
+    .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
+  expect(themeColor.every((color) => color === "#000000")).toBe(true);
 }
 
 test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
@@ -990,4 +994,7 @@ test("a timeline photo expands over the floating header", async ({ page }) => {
   expect(paint?.html).toBe("rgb(0, 0, 0)");
   expect(paint?.body).toBe("rgb(0, 0, 0)");
   expect(paint?.lightbox).toBe("rgb(0, 0, 0)");
+  await expect(
+    page.locator('meta[name="theme-color"]').first(),
+  ).toHaveAttribute("content", "#000000");
 });

@@ -141,6 +141,19 @@ body.composer-scroll-locked {
   background-image: none;
 }
 
+html.overlay-open .app-shell,
+html.overlay-open .phone-stage,
+html[data-theme].overlay-open .app-shell,
+html[data-theme].overlay-open .phone-stage {
+  background-color: #000;
+  background-image: none;
+}
+
+html.overlay-open .app-shell::before,
+html[data-theme].overlay-open .app-shell::before {
+  content: none;
+}
+
 html.composer-scroll-locked .app-shell,
 html.composer-scroll-locked .phone-stage {
   overscroll-behavior: none;
@@ -5735,6 +5748,23 @@ button:focus-visible,
 :root[data-theme="light"] .app-shell::before,
 :root[data-theme="light"] .private-entry-shell::before {
   background-image: var(--journal-grid-image);
+}
+
+html.overlay-open .app-shell,
+html.overlay-open .phone-stage,
+html[data-theme].overlay-open .app-shell,
+html[data-theme].overlay-open .phone-stage,
+:root[data-theme].overlay-open .app-shell,
+:root[data-theme].overlay-open .phone-stage {
+  background-color: #000;
+  background-image: none;
+}
+
+html.overlay-open .app-shell::before,
+html[data-theme].overlay-open .app-shell::before,
+:root[data-theme].overlay-open .app-shell::before {
+  content: none;
+  background-image: none;
 }
 
 :root[data-theme="light"] .private-entry-content .auth-error {
