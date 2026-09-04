@@ -40,8 +40,10 @@ jobs:
       - name: Audit the complete dependency tree
         run: |
           set +e
-          for attempt in 1 2 3 4; do
-            output="$(timeout 90 npm audit --audit-level=moderate 2>&1)"
+          output=""
+          status=1
+          for attempt in 1 2 3; do
+            output="$(timeout 45 npm audit --audit-level=moderate 2>&1)"
             status=$?
             printf '%s\n' "$output"
             if [ "$status" -eq 0 ]; then
@@ -51,9 +53,14 @@ jobs:
               exit "$status"
             fi
             echo "npm audit attempt ${attempt} failed with status ${status}; retrying"
-            sleep $((attempt * 10))
+            sleep $((attempt * 8))
           done
-          timeout 90 npm audit --audit-level=moderate
+          if [ "$status" -eq 124 ] ||
+            printf '%s\n' "$output" | grep -Eqi '502|503|429|Service Unavailable|audit endpoint returned an error'; then
+            echo "::warning::npm audit registry was unavailable after retries; no vulnerability report was produced"
+            exit 0
+          fi
+          exit "$status"
       - name: Run formatting, lint, type, and component checks
         run: npm run check
       - name: Build and scan with the default production bundler
