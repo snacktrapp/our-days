@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import {
-  staticMapImageSrc,
-  staticMapProxySrc,
+  MAP_TILE_SIZE,
+  mapTileViewport,
+  publicMapTilerKey,
 } from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
@@ -19,12 +20,13 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const coordinates = parsePlaceCoordinates(latitude, longitude);
-  const proxyUrl = coordinates
-    ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
-    : "";
-  const directUrl = coordinates
-    ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
-    : "";
+  const viewport = coordinates
+    ? mapTileViewport(
+        coordinates.latitude,
+        coordinates.longitude,
+        publicMapTilerKey(),
+      )
+    : null;
   const mapKey = coordinates
     ? `${coordinates.latitude},${coordinates.longitude}`
     : "illustration";
@@ -34,8 +36,7 @@ export function LocationMapVisual({
       key={mapKey}
       place={place}
       className={className}
-      directUrl={directUrl}
-      proxyUrl={proxyUrl}
+      viewport={viewport}
     />
   );
 }
@@ -43,19 +44,14 @@ export function LocationMapVisual({
 function LocationMapFrame({
   place,
   className,
-  directUrl,
-  proxyUrl,
+  viewport,
 }: Readonly<{
   place: string;
   className?: string;
-  directUrl: string;
-  proxyUrl: string;
+  viewport: ReturnType<typeof mapTileViewport>;
 }>) {
   const [failed, setFailed] = useState(false);
-  const [useProxy, setUseProxy] = useState(false);
-  const mapUrl =
-    useProxy && proxyUrl && proxyUrl !== directUrl ? proxyUrl : directUrl;
-  const showLiveMap = Boolean(mapUrl) && !failed;
+  const showLiveMap = Boolean(viewport?.tiles.length) && !failed;
 
   return (
     <div
@@ -63,27 +59,26 @@ function LocationMapFrame({
         className ? ` ${className}` : ""
       }`}
     >
-      {showLiveMap ? (
+      {showLiveMap && viewport ? (
         <>
-          {/* Prefer a direct MapTiler image with no referrer — the same
-              policy that already makes place search work on iPhone. The
-              same-origin proxy is only a fallback if that image errors. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mapUrl}
-            alt={`Map of ${place}`}
-            width={800}
-            height={330}
-            decoding="async"
-            referrerPolicy="no-referrer"
-            onError={() => {
-              if (!useProxy && proxyUrl && proxyUrl !== mapUrl) {
-                setUseProxy(true);
-                return;
-              }
-              setFailed(true);
-            }}
-          />
+          <svg
+            role="img"
+            aria-label={`Map of ${place}`}
+            viewBox={viewport.viewBox}
+            preserveAspectRatio="xMidYMid slice"
+            onErrorCapture={() => setFailed(true)}
+          >
+            {viewport.tiles.map((tile) => (
+              <image
+                key={`${tile.z}/${tile.x}/${tile.y}/${tile.originX}`}
+                href={tile.href}
+                x={tile.originX}
+                y={tile.originY}
+                width={MAP_TILE_SIZE}
+                height={MAP_TILE_SIZE}
+              />
+            ))}
+          </svg>
           <small className="map-attribution">
             © MapTiler © OpenStreetMap contributors
           </small>

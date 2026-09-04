@@ -110,9 +110,11 @@ describe("photo lightbox", () => {
     expect(overlay.style.width).toBe("");
     expect(overlay.style.height).toBe("");
     expect(overlay).toBeVisible();
-    expect(overlay).not.toHaveStyle({ opacity: "0" });
-    expect(overlay.style.opacity).toBe("1");
-    expect(overlay.style.transform).toBe("scale(1)");
+    expect(overlay.style.opacity).toBe("");
+    expect(overlay.style.transform).toBe("");
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveAttribute("data-motion", "open"),
+    );
     expect(stage).toBeTruthy();
     expect(stage.contains(overlay)).toBe(true);
     expect(screen.getByRole("dialog")).toHaveClass("photo-lightbox");
@@ -130,10 +132,10 @@ describe("photo lightbox", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Close full-screen media" }),
     );
-    expect(overlay.style.opacity).toBe("0");
-    expect(document.querySelector(".photo-lightbox-dimmer")).toHaveStyle({
-      opacity: "0",
-    });
+    expect(screen.getByRole("dialog")).toHaveAttribute(
+      "data-motion",
+      "closing",
+    );
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -233,7 +235,7 @@ describe("photo lightbox", () => {
     expect(overlay.style.left).toBe("");
     expect(overlay.style.top).toBe("");
     expect(overlay).toBeVisible();
-    expect(overlay).not.toHaveStyle({ opacity: "0" });
+    expect(overlay.style.opacity).toBe("");
     expect(overlay.style.width).toBe("");
     expect(overlay.style.height).toBe("");
     expect(stage).toHaveClass("photo-lightbox-stage");
@@ -267,7 +269,7 @@ describe("photo lightbox", () => {
       clientX: 124,
       clientY: 200,
     });
-    expect(overlay.style.transform).toBe("scale(1)");
+    expect(overlay.style.transform).toBe("");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 

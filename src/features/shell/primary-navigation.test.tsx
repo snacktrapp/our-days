@@ -123,4 +123,27 @@ describe("PrimaryNavigation", () => {
       document.head.querySelector("style#our-days-dynamic-css"),
     ).toBeNull();
   });
+
+  it("compacts the tab bar while scrolling down and restores it at the top", () => {
+    let scrollY = 0;
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => scrollY,
+    });
+    render(<PrimaryNavigation section="timeline" />);
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(nav).not.toHaveClass("is-compact");
+
+    scrollY = 80;
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(nav).toHaveClass("is-compact");
+
+    scrollY = 8;
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(nav).not.toHaveClass("is-compact");
+  });
 });

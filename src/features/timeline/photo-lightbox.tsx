@@ -143,8 +143,6 @@ function PhotoLightboxLayer({
   );
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
-  const photoRef = useRef<HTMLImageElement>(null);
-  const dimmerRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
   const openedRef = useRef(false);
   const titleId = useId();
@@ -163,21 +161,6 @@ function PhotoLightboxLayer({
     if (closeTimerRef.current == null) return;
     window.clearTimeout(closeTimerRef.current);
     closeTimerRef.current = null;
-  }
-
-  function setDimmer(opacity: string, transition: string) {
-    const dimmer = dimmerRef.current;
-    if (!dimmer) return;
-    dimmer.style.transition = transition;
-    dimmer.style.opacity = opacity;
-  }
-
-  function setPhotoFade(opacity: string, scale: string, transition: string) {
-    const photo = photoRef.current;
-    if (!photo) return;
-    photo.style.transition = transition;
-    photo.style.opacity = opacity;
-    photo.style.transform = `scale(${scale})`;
   }
 
   function teardown() {
@@ -203,12 +186,6 @@ function PhotoLightboxLayer({
       return;
     }
     setMotion("closing");
-    setDimmer("0", `opacity ${motionMs}ms ease-in`);
-    setPhotoFade(
-      "0",
-      "0.98",
-      `opacity ${motionMs}ms ease-in, transform ${motionMs}ms ease-in`,
-    );
     clearCloseTimer();
     closeTimerRef.current = window.setTimeout(teardown, motionMs);
   }
@@ -221,23 +198,9 @@ function PhotoLightboxLayer({
   useLayoutEffect(() => {
     if (!objectUrl || openedRef.current) return;
     openedRef.current = true;
-    if (overlayMotionReduced()) {
-      setDimmer("1", "none");
-      setPhotoFade("1", "1", "none");
-      window.requestAnimationFrame(() => setMotion("open"));
-      return;
-    }
-    setDimmer("0", "none");
-    setPhotoFade("0", "0.98", "none");
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        setDimmer("1", `opacity ${motionMs}ms ease-out`);
-        setPhotoFade(
-          "1",
-          "1",
-          `opacity ${motionMs}ms ease-out, transform ${motionMs}ms ease-out`,
-        );
-        window.setTimeout(() => setMotion("open"), motionMs);
+        setMotion("open");
       });
     });
   }, [objectUrl]);
@@ -287,7 +250,7 @@ function PhotoLightboxLayer({
       data-motion={motion}
       onKeyDown={onLayerKeyDown}
     >
-      <div ref={dimmerRef} className="photo-lightbox-dimmer" />
+      <div className="photo-lightbox-dimmer" />
       <h2 id={titleId} className="sr-only">
         Full-screen photo: {request.alt}
       </h2>
@@ -302,7 +265,6 @@ function PhotoLightboxLayer({
       <div className="photo-lightbox-stage">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          ref={photoRef}
           className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
           src={objectUrl}
           alt={request.alt}

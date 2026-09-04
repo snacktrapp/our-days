@@ -235,6 +235,33 @@ test("New moment type picker keeps frosted nav chrome over the grid", async ({
   );
   await expectFrostedNavPill(page.locator(".topbar"));
   await expectFrostedNavPill(page.locator(".bottom-nav"));
+  const slab = await dialog.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    return {
+      alpha: style.backgroundColor.startsWith("rgba(")
+        ? Number.parseFloat(
+            style.backgroundColor.slice(
+              style.backgroundColor.lastIndexOf(",") + 1,
+              -1,
+            ),
+          )
+        : style.backgroundColor.startsWith("rgb(")
+          ? 1
+          : style.backgroundColor === "transparent" ||
+              style.backgroundColor === "rgba(0, 0, 0, 0)"
+            ? 0
+            : Number.NaN,
+      backdrop: style.backdropFilter,
+      bottom: rect.bottom,
+      height: rect.height,
+      navTop: nav.top,
+    };
+  });
+  expect(slab.alpha).toBeLessThan(0.05);
+  expect(slab.backdrop === "none" || slab.backdrop === "").toBe(true);
+  expect(slab.bottom).toBeLessThan(slab.navTop);
 });
 
 test("moment options open as a compact popover under the trigger without inline positioning", async ({

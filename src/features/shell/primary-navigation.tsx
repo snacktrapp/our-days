@@ -4,6 +4,7 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
+import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
 type PrimarySection = Extract<
@@ -102,6 +103,7 @@ export function PrimaryNavigation({
   settingsHref?: string | null;
 }) {
   const pathname = usePathname() ?? "";
+  const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;
@@ -148,7 +150,10 @@ export function PrimaryNavigation({
     };
 
   return (
-    <nav className="bottom-nav" aria-label="Primary navigation">
+    <nav
+      className={`bottom-nav${compact ? " is-compact" : ""}`}
+      aria-label="Primary navigation"
+    >
       <Link
         className={`nav-item ${selectedSection === "timeline" ? "active" : ""}`}
         aria-current={selectedSection === "timeline" ? "page" : undefined}

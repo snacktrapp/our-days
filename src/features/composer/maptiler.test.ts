@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  mapTilerRasterTileUrl,
   mapTilerStaticMapUrl,
+  mapTileViewport,
   reverseGeocodeMapTilerPlace,
   searchMapTilerPlaces,
   searchPlacesForComposer,
@@ -62,15 +64,23 @@ describe("MapTiler geocoding", () => {
     ).resolves.toBe("Ocean overlook");
   });
 
-  it("builds a static map centered on a saved pin", () => {
-    const harbor = mapTilerStaticMapUrl("public-key", 39.2, -119.93);
-    const pismo = mapTilerStaticMapUrl("public-key", 35.1428, -120.6413);
-    expect(harbor).toContain(
-      "api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/",
+  it("builds raster tiles centered on a saved pin", () => {
+    const harbor = mapTileViewport(39.2, -119.93, "public-key");
+    const pismo = mapTileViewport(35.1428, -120.6413, "public-key");
+    expect(harbor?.tiles.length).toBeGreaterThan(0);
+    expect(pismo?.tiles.length).toBeGreaterThan(0);
+    expect(harbor?.tiles[0]?.href).toBe(
+      mapTilerRasterTileUrl(
+        "public-key",
+        harbor!.tiles[0]!.z,
+        harbor!.tiles[0]!.x,
+        harbor!.tiles[0]!.y,
+      ),
     );
-    expect(harbor).toContain("key=");
-    expect(pismo).toContain("/static/-120.6413,35.1428,14/");
-    expect(pismo).not.toBe(harbor);
+    expect(harbor?.tiles.map((tile) => tile.href)).not.toEqual(
+      pismo?.tiles.map((tile) => tile.href),
+    );
+    expect(mapTilerRasterTileUrl("", 14, 1, 1)).toBe("");
     expect(mapTilerStaticMapUrl("", 39.2, -119.93)).toBe("");
     expect(staticMapImageSrc(39.2, -119.93)).toBe(
       "/api/maps/static?lat=39.2&lng=-119.93",
@@ -103,14 +113,20 @@ describe("MapTiler geocoding", () => {
     );
   });
 
-  it("uses a direct MapTiler image when the public key is present", () => {
+  it("keeps the static image on the same-origin tile stitch", () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     expect(staticMapImageSrc(39.2, -119.93)).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/800x330.png?key=public-key",
+      "/api/maps/static?lat=39.2&lng=-119.93",
     );
     expect(staticMapImageSrc(35.1428, -120.6413)).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-120.6413,35.1428,14/800x330.png?key=public-key",
+      "/api/maps/static?lat=35.1428&lng=-120.6413",
     );
+    const viewport = mapTileViewport(39.2, -119.93, "public-key");
+    expect(
+      viewport?.tiles.every((tile) =>
+        tile.href.includes("/maps/streets-v2/256/"),
+      ),
+    ).toBe(true);
     vi.unstubAllEnvs();
   });
 });

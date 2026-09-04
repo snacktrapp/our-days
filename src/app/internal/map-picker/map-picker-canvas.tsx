@@ -12,6 +12,7 @@ import {
 import {
   mapTilerStyleProxySrc,
   mapTilerStyleUrl,
+  publicMapTilerKey,
 } from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
@@ -66,9 +67,10 @@ export function MapPickerCanvas() {
       starting = true;
       maplibre = await import("maplibre-gl");
       if (cancelled || !container) return;
+      const styleKey = key.trim() || publicMapTilerKey();
       map = new maplibre.Map({
         container,
-        style: key ? mapTilerStyleUrl(key) : mapTilerStyleProxySrc,
+        style: styleKey ? mapTilerStyleUrl(styleKey) : mapTilerStyleProxySrc,
         center: [DEFAULT_MAP_CENTER.longitude, DEFAULT_MAP_CENTER.latitude],
         zoom: DEFAULT_MAP_CENTER.zoom,
         attributionControl: { compact: true },

@@ -1,6 +1,15 @@
 // @vitest-environment node
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { GET } from "./route";
 
 function request(search: string) {
@@ -10,6 +19,21 @@ function request(search: string) {
 }
 
 describe("static map proxy", () => {
+  let tilePng: Buffer;
+
+  beforeAll(async () => {
+    tilePng = await sharp({
+      create: {
+        width: 256,
+        height: 256,
+        channels: 3,
+        background: { r: 180, g: 70, b: 60 },
+      },
+    })
+      .png()
+      .toBuffer();
+  });
+
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
   });
@@ -51,11 +75,15 @@ describe("static map proxy", () => {
     expect(await response.text()).toBe("maptiler_upstream_failed 403");
   });
 
-  it("returns a MapTiler static map centered on the pin", async () => {
+  it("returns a raster mosaic centered on the pin", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       headers: new Headers({ "content-type": "image/png" }),
-      body: new ReadableStream(),
+      arrayBuffer: async () =>
+        tilePng.buffer.slice(
+          tilePng.byteOffset,
+          tilePng.byteOffset + tilePng.byteLength,
+        ),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -63,29 +91,39 @@ describe("static map proxy", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
     expect(response.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(fetchMock).toHaveBeenCalled();
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/",
+      "api.maptiler.com/maps/streets-v2/256/",
     );
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain("/static/");
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: { Referer: "https://journal.example.test/" },
     });
+    const body = Buffer.from(await response.arrayBuffer());
+    const meta = await sharp(body).metadata();
+    expect(meta.width).toBe(800);
+    expect(meta.height).toBe(330);
   });
 
-  it("uses a different static map for a different pin", async () => {
+  it("uses different tiles for a different pin", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       headers: new Headers({ "content-type": "image/png" }),
-      body: new ReadableStream(),
+      arrayBuffer: async () =>
+        tilePng.buffer.slice(
+          tilePng.byteOffset,
+          tilePng.byteOffset + tilePng.byteLength,
+        ),
     });
     vi.stubGlobal("fetch", fetchMock);
 
     await request("?lat=39.2&lng=-119.93");
+    const harbor = fetchMock.mock.calls.map((call) => String(call[0]));
+    fetchMock.mockClear();
     await request("?lat=35.1428&lng=-120.6413");
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "/static/-119.93,39.2,14/",
-    );
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
-      "/static/-120.6413,35.1428,14/",
-    );
+    const pismo = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(harbor[0]).toContain("/maps/streets-v2/256/");
+    expect(pismo[0]).toContain("/maps/streets-v2/256/");
+    expect(pismo).not.toEqual(harbor);
   });
 });

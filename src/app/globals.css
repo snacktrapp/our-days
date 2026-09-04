@@ -446,7 +446,7 @@ button:focus-visible,
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   position: fixed;
-  z-index: 100;
+  z-index: 160;
   top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
   left: 0;
   right: 0;
@@ -1603,9 +1603,11 @@ button:focus-visible,
 .memory-map-live {
   background: #dfe3d5;
 }
-.memory-map-live img {
+.memory-map-live img,
+.memory-map-live svg {
   width: 100%;
   height: 100%;
+  display: block;
   object-fit: cover;
 }
 .memory-map-live::after {
@@ -4075,7 +4077,7 @@ button:focus-visible,
 .bottom-nav {
   height: 56px;
   position: fixed;
-  z-index: 100;
+  z-index: 160;
   bottom: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
@@ -6289,6 +6291,16 @@ button:focus-visible,
   inset: 0;
   z-index: 0;
   background: #020403;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.photo-lightbox[data-motion="open"] .photo-lightbox-dimmer {
+  opacity: 1;
+}
+
+.photo-lightbox[data-motion="closing"] .photo-lightbox-dimmer {
+  opacity: 0;
 }
 
 .photo-lightbox-stage {
@@ -6315,6 +6327,21 @@ button:focus-visible,
   object-position: center;
   transform-origin: center center;
   touch-action: pinch-zoom;
+  opacity: 0;
+  transform: scale(0.98);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.photo-lightbox[data-motion="open"] .photo-lightbox-photo {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.photo-lightbox[data-motion="closing"] .photo-lightbox-photo {
+  opacity: 0;
+  transform: scale(0.98);
 }
 
 .photo-lightbox-photo.is-zoomed {
@@ -6504,20 +6531,36 @@ button:focus-visible,
 
 /* Non-modal type picker stays in the document (not the top layer) so
    Safari keeps sampling the graph-paper through the frosted nav chrome.
-   Fullscreen capture still uses showModal() and is not restyled here. */
-.new-moment-composer-dialog.composer-type-picker {
+   Shrink-wrap the dialog itself — a full-viewport inset:0 box is what
+   painted the opaque green slab above the tab bar on iPhone. The sheet
+   stays position:fixed under the header +. Fullscreen capture still
+   uses showModal() and is not restyled here. */
+dialog.new-moment-composer-dialog.composer-type-picker {
   position: fixed;
-  inset: 0;
-  width: auto;
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: max-content;
   max-width: none;
-  height: auto;
+  height: max-content;
   max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
   z-index: 150;
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  pointer-events: none;
 }
 
-.new-moment-composer-dialog.composer-type-picker[open] {
-  align-items: flex-start;
-  justify-content: flex-start;
+dialog.new-moment-composer-dialog.composer-type-picker[open] {
+  display: block;
+  align-items: unset;
+  justify-content: unset;
 }
 
 .new-moment-composer-dialog.composer-type-picker .composer-sheet {
@@ -6529,12 +6572,19 @@ button:focus-visible,
   left: var(--type-picker-left);
   margin: 0;
   transform-origin: 30px 0;
+  pointer-events: auto;
 }
 
 .new-moment-composer-dialog,
-:root[data-theme="light"] .new-moment-composer-dialog {
-  background: transparent;
+:root[data-theme="light"] .new-moment-composer-dialog,
+dialog.new-moment-composer-dialog.composer-type-picker,
+:root[data-theme="light"]
+  dialog.new-moment-composer-dialog.composer-type-picker {
+  background: none;
+  background-color: transparent;
+  background-image: none;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .new-moment-composer-dialog::backdrop {
@@ -7165,6 +7215,10 @@ button:focus-visible,
   background: #101d17;
 }
 
+iframe.composer-location-map {
+  display: block;
+}
+
 .composer-location-map.memory-map {
   border-start-start-radius: 8px;
   border-start-end-radius: 8px;
@@ -7409,7 +7463,12 @@ button:focus-visible,
 @media (prefers-reduced-motion: no-preference) {
   .topbar,
   .bottom-nav {
-    transition: transform 90ms ease;
+    transition: transform 180ms ease;
+  }
+
+  .bottom-nav.is-compact {
+    transform: scale(0.92);
+    transform-origin: 50% 100%;
   }
 
   /* Scale the pill, not each tab, so a child tap still presses on iOS. */
@@ -7418,6 +7477,11 @@ button:focus-visible,
   .bottom-nav:active,
   .bottom-nav:has(:active) {
     transform: scale(0.985);
+  }
+
+  .bottom-nav.is-compact:active,
+  .bottom-nav.is-compact:has(:active) {
+    transform: scale(0.91);
   }
 
   .nav-symbol-pending,

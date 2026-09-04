@@ -1,14 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mapTileViewport } from "@/features/composer/maptiler";
 import { LocationMapVisual } from "./location-map-visual";
+
+function tileHrefs(container: HTMLElement) {
+  return [...container.querySelectorAll("image")].map((node) =>
+    node.getAttribute("href"),
+  );
+}
 
 describe("LocationMapVisual", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("loads the same-origin static proxy when the public key is missing", () => {
-    render(
+  it("loads same-origin raster tiles when the public key is missing", () => {
+    const { container } = render(
       <LocationMapVisual
         place="The porch"
         latitude={39.2}
@@ -16,14 +23,20 @@ describe("LocationMapVisual", () => {
       />,
     );
     const map = screen.getByRole("img", { name: "Map of The porch" });
-    expect(map.getAttribute("src")).toBe(
-      "/api/maps/static?lat=39.2&lng=-119.93",
+    const expected = mapTileViewport(39.2, -119.93, "");
+    expect(tileHrefs(container)).toEqual(
+      expected?.tiles.map((tile) => tile.href),
     );
+    expect(
+      tileHrefs(container).every((href) => href?.startsWith("/api/maps/tile?")),
+    ).toBe(true);
+    expect(map).not.toHaveAttribute("style");
     expect(document.querySelector(".map-water")).toBeNull();
     expect(document.querySelector(".memory-map-live")).toBeTruthy();
+    expect(document.querySelector(".place-pin")).not.toHaveAttribute("style");
   });
 
-  it("falls back to the illustration after the proxy image errors", () => {
+  it("falls back to the illustration after a tile image errors", () => {
     render(
       <LocationMapVisual
         place="The porch"
@@ -50,9 +63,9 @@ describe("LocationMapVisual", () => {
     unmount();
   });
 
-  it("shows a MapTiler static map centered on a saved pin", () => {
+  it("shows MapTiler raster tiles centered on a saved pin", () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
-    render(
+    const { container } = render(
       <LocationMapVisual
         place="Sand Harbor, NV"
         latitude={39.2}
@@ -60,30 +73,35 @@ describe("LocationMapVisual", () => {
       />,
     );
     const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
-    expect(map.getAttribute("src")).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/800x330.png?key=public-key",
+    const expected = mapTileViewport(39.2, -119.93, "public-key");
+    expect(tileHrefs(container)).toEqual(
+      expected?.tiles.map((tile) => tile.href),
     );
-    expect(map).toHaveAttribute("referrerPolicy", "no-referrer");
+    expect(
+      tileHrefs(container).every((href) =>
+        href?.includes("/maps/streets-v2/256/"),
+      ),
+    ).toBe(true);
+    expect(tileHrefs(container).join("")).not.toContain("/static/");
     expect(document.querySelector(".map-water")).toBeNull();
     expect(
       screen.getByText("© MapTiler © OpenStreetMap contributors"),
     ).toBeVisible();
     expect(document.querySelector(".memory-map-live .place-pin")).toBeTruthy();
     expect(document.querySelector(".place-pin")).not.toHaveAttribute("style");
+    expect(map).toHaveAttribute("viewBox", expected?.viewBox);
   });
 
-  it("uses a different static map for a different pin", () => {
+  it("uses different tiles for a different pin", () => {
     vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
-    const { rerender } = render(
+    const { container, rerender } = render(
       <LocationMapVisual
         place="Sand Harbor, NV"
         latitude={39.2}
         longitude={-119.93}
       />,
     );
-    const harbor = screen
-      .getByRole("img", { name: "Map of Sand Harbor, NV" })
-      .getAttribute("src");
+    const harbor = tileHrefs(container);
     rerender(
       <LocationMapVisual
         place="Pismo Beach"
@@ -91,15 +109,9 @@ describe("LocationMapVisual", () => {
         longitude={-120.6413}
       />,
     );
-    const pismo = screen
-      .getByRole("img", { name: "Map of Pismo Beach" })
-      .getAttribute("src");
-    expect(harbor).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/800x330.png?key=public-key",
-    );
-    expect(pismo).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-120.6413,35.1428,14/800x330.png?key=public-key",
-    );
-    expect(pismo).not.toBe(harbor);
+    const pismo = tileHrefs(container);
+    expect(harbor[0]).toContain("/maps/streets-v2/256/");
+    expect(pismo[0]).toContain("/maps/streets-v2/256/");
+    expect(pismo).not.toEqual(harbor);
   });
 });

@@ -46,6 +46,11 @@ const nextConfig: NextConfig = {
       "./node_modules/@img/sharp-linux*/**/*",
       "./node_modules/@img/sharp-libvips-linux*/**/*",
     ],
+    "/api/maps/static": [
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/sharp-linux*/**/*",
+      "./node_modules/@img/sharp-libvips-linux*/**/*",
+    ],
   },
   images: {
     qualities: [75],

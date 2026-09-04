@@ -820,6 +820,14 @@ describe("MomentComposer", () => {
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
+  it("closes the type picker from a document press outside the sheet", async () => {
+    await openComposer();
+    expect(screen.getByRole("dialog")).toHaveClass("composer-type-picker");
+    fireEvent.pointerDown(document.body);
+    const dialog = document.querySelector("dialog.new-moment-composer-dialog");
+    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+  });
+
   it("opens the type picker without a modal top layer, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
     expect(screen.getByRole("dialog")).toHaveAttribute("open");
@@ -1122,9 +1130,11 @@ describe("MomentComposer", () => {
       ).toBeVisible(),
     );
     await user.click(screen.getByRole("button", { name: "Sand Harbor, NV" }));
-    expect(
-      screen.getByRole("img", { name: "Map of Sand Harbor, NV" }),
-    ).toBeVisible();
+    expect(screen.getByTitle("Map of Sand Harbor, NV")).toBeVisible();
+    expect(screen.getByTitle("Map of Sand Harbor, NV")).toHaveAttribute(
+      "src",
+      "/internal/map-picker",
+    );
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.queryByRole("dialog")).toBeNull();
 

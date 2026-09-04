@@ -45,8 +45,138 @@ export function serverMapTilerKey() {
 
 export const mapTilerStyleProxySrc = "/api/maps/style";
 
+export const MAP_TILE_SIZE = 256;
+export const STATIC_MAP_VIEW = {
+  width: 800,
+  height: 330,
+  zoom: 14,
+} as const;
+
+export type MapTileCell = Readonly<{
+  z: number;
+  x: number;
+  y: number;
+  originX: number;
+  originY: number;
+  href: string;
+}>;
+
+export type MapTileViewport = Readonly<{
+  tiles: readonly MapTileCell[];
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  viewBox: string;
+}>;
+
 export function mapTilerStyleUrl(key: string) {
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
+}
+
+export function mapTilerRasterTileUrl(
+  key: string,
+  z: number,
+  x: number,
+  y: number,
+) {
+  if (!key) return "";
+  return `${MAPTILER_API_ORIGIN}/maps/streets-v2/256/${z}/${x}/${y}.png?key=${encodeURIComponent(key)}`;
+}
+
+export function mapTilerRasterTileProxySrc(z: number, x: number, y: number) {
+  return `/api/maps/tile?${new URLSearchParams({
+    z: String(z),
+    x: String(x),
+    y: String(y),
+  })}`;
+}
+
+export function parseMapTileIndex(
+  z: unknown,
+  x: unknown,
+  y: unknown,
+): { z: number; x: number; y: number } | null {
+  if (z == null || x == null || y == null || z === "" || x === "" || y === "") {
+    return null;
+  }
+  const zoom = Number(z);
+  const tileX = Number(x);
+  const tileY = Number(y);
+  if (!Number.isInteger(zoom) || zoom < 0 || zoom > 22) return null;
+  const max = 2 ** zoom;
+  if (!Number.isInteger(tileX) || tileX < 0 || tileX >= max) return null;
+  if (!Number.isInteger(tileY) || tileY < 0 || tileY >= max) return null;
+  return { z: zoom, x: tileX, y: tileY };
+}
+
+export function lngLatToWorldPixel(
+  longitude: number,
+  latitude: number,
+  zoom: number,
+  tileSize = MAP_TILE_SIZE,
+) {
+  const n = 2 ** zoom;
+  const x = ((longitude + 180) / 360) * n * tileSize;
+  const clamped = Math.min(85.05112878, Math.max(-85.05112878, latitude));
+  const sinLat = Math.sin((clamped * Math.PI) / 180);
+  const y =
+    (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) *
+    n *
+    tileSize;
+  return { x, y };
+}
+
+export function mapTileViewport(
+  latitude: number,
+  longitude: number,
+  key = publicMapTilerKey(),
+  view: Readonly<{
+    width: number;
+    height: number;
+    zoom: number;
+  }> = STATIC_MAP_VIEW,
+): MapTileViewport | null {
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
+  if (!coordinates) return null;
+  const { x: cx, y: cy } = lngLatToWorldPixel(
+    coordinates.longitude,
+    coordinates.latitude,
+    view.zoom,
+  );
+  const left = cx - view.width / 2;
+  const top = cy - view.height / 2;
+  const maxTile = 2 ** view.zoom;
+  const minTx = Math.floor(left / MAP_TILE_SIZE);
+  const maxTx = Math.floor((left + view.width - 1) / MAP_TILE_SIZE);
+  const minTy = Math.floor(top / MAP_TILE_SIZE);
+  const maxTy = Math.floor((top + view.height - 1) / MAP_TILE_SIZE);
+  const tiles: MapTileCell[] = [];
+  for (let ty = minTy; ty <= maxTy; ty++) {
+    if (ty < 0 || ty >= maxTile) continue;
+    for (let tx = minTx; tx <= maxTx; tx++) {
+      const x = ((tx % maxTile) + maxTile) % maxTile;
+      const href = key
+        ? mapTilerRasterTileUrl(key, view.zoom, x, ty)
+        : mapTilerRasterTileProxySrc(view.zoom, x, ty);
+      tiles.push({
+        z: view.zoom,
+        x,
+        y: ty,
+        originX: tx * MAP_TILE_SIZE,
+        originY: ty * MAP_TILE_SIZE,
+        href,
+      });
+    }
+  }
+  return {
+    tiles,
+    left,
+    top,
+    width: view.width,
+    height: view.height,
+    viewBox: `${left} ${top} ${view.width} ${view.height}`,
+  };
 }
 
 export function mapTilerStaticMapUrl(
@@ -54,12 +184,12 @@ export function mapTilerStaticMapUrl(
   latitude: number,
   longitude: number,
   size: Readonly<{ width: number; height: number }> = {
-    width: 800,
-    height: 330,
+    width: STATIC_MAP_VIEW.width,
+    height: STATIC_MAP_VIEW.height,
   },
 ) {
   if (!key) return "";
-  return `${MAPTILER_API_ORIGIN}/maps/streets-v2/static/${longitude},${latitude},14/${size.width}x${size.height}.png?key=${encodeURIComponent(key)}`;
+  return `${MAPTILER_API_ORIGIN}/maps/streets-v2/static/${longitude},${latitude},${STATIC_MAP_VIEW.zoom}/${size.width}x${size.height}.png?key=${encodeURIComponent(key)}`;
 }
 
 export function staticMapProxySrc(latitude: number, longitude: number) {
@@ -73,17 +203,7 @@ export function staticMapProxySrc(latitude: number, longitude: number) {
 }
 
 export function staticMapImageSrc(latitude: number, longitude: number) {
-  const coordinates = parsePlaceCoordinates(latitude, longitude);
-  if (!coordinates) return "";
-  const key = publicMapTilerKey();
-  if (key) {
-    return mapTilerStaticMapUrl(
-      key,
-      coordinates.latitude,
-      coordinates.longitude,
-    );
-  }
-  return staticMapProxySrc(coordinates.latitude, coordinates.longitude);
+  return staticMapProxySrc(latitude, longitude);
 }
 
 function featureLabel(feature: MapTilerFeature) {

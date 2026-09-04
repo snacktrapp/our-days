@@ -430,6 +430,22 @@ export function MomentComposer({
   });
 
   useEffect(() => {
+    if (!open || !typePicker) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const sheet = dialogRef.current?.querySelector(".composer-sheet");
+      if (sheet?.contains(target)) return;
+      if (target instanceof Element && target.closest(".header-add-moment")) {
+        return;
+      }
+      close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [close, open, typePicker]);
+
+  useEffect(() => {
     if (!open) return;
     const focusFrame = window.requestAnimationFrame(() => {
       if (reviewing) reviewHeadingRef.current?.focus();

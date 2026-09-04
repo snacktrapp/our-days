@@ -8,7 +8,7 @@ import {
   type GeocodedPlace,
 } from "./maptiler";
 import { ComposerPickerPanel } from "./composer-picker-panel";
-import { LocationMapVisual } from "@/features/timeline/location-map-visual";
+import { MapPickerFrame } from "./map-picker-frame";
 import {
   emptyPlaceSelection,
   type PlaceSelection,
@@ -230,11 +230,15 @@ export function LocationFields({
       ) : null}
 
       {value.latitude != null && value.longitude != null ? (
-        <LocationMapVisual
+        <MapPickerFrame
           className="composer-location-map"
-          place={value.label}
+          title={`Map of ${value.label}`}
+          mapKey={mapKey}
           latitude={value.latitude}
           longitude={value.longitude}
+          onMoved={(latitude, longitude) => {
+            void applyMapMove(latitude, longitude);
+          }}
         />
       ) : (
         <p className="composer-location-unavailable" role="status">

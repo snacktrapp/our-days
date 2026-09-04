@@ -109,14 +109,10 @@ describe("location fields", () => {
         onChange={onChange}
       />,
     );
-    const map = screen.getByRole("img", { name: "Map of Sand Harbor, NV" });
+    const map = screen.getByTitle("Map of Sand Harbor, NV");
     expect(map).toBeVisible();
-    expect(map.getAttribute("src")).toBe(
-      "https://api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/800x330.png?key=public-key",
-    );
-    expect(
-      screen.getByText("© MapTiler © OpenStreetMap contributors"),
-    ).toBeVisible();
+    expect(map).toHaveAttribute("src", "/internal/map-picker");
+    expect(map.tagName).toBe("IFRAME");
   });
 
   it("keeps optional Details place behind a compact trigger", async () => {
