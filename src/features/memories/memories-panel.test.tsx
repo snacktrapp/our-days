@@ -1,7 +1,12 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MemoriesPanel } from "./memories-panel";
 import { MemoryJourneyPanel } from "./memory-journey-panel";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/memories",
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn() }),
+}));
 import type {
   MemoriesViewModel,
   MemoryJourneyViewModel,
