@@ -424,7 +424,10 @@ export function MomentComposer({
     [revokeCurrentPhotoUrl],
   );
 
-  const dialogMounted = useModalDialog(open, dialogRef);
+  const typePicker = !mode || choosingMode;
+  const dialogMounted = useModalDialog(open, dialogRef, {
+    modal: !typePicker,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -887,7 +890,7 @@ export function MomentComposer({
       ref={dialogRef}
       className={`composer-dialog new-moment-composer-dialog${
         mode && !choosingMode && !reviewing ? " composer-editor-fullscreen" : ""
-      }${!mode || choosingMode ? " composer-type-picker" : ""}`}
+      }${typePicker ? " composer-type-picker" : ""}`}
       aria-labelledby="composer-title"
       aria-describedby={connectedExperience ? "composer-privacy" : undefined}
       aria-hidden={overlayClosing ? true : undefined}

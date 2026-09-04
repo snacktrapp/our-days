@@ -4,11 +4,49 @@ import { useLayoutEffect, useState, type RefObject } from "react";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 
-export function showModalPreservingScroll(dialog: HTMLDialogElement) {
+function dialogIsModal(dialog: HTMLDialogElement) {
+  try {
+    return dialog.matches(":modal");
+  } catch {
+    return false;
+  }
+}
+
+function openDialog(dialog: HTMLDialogElement, modal: boolean) {
+  if (modal) {
+    dialog.showModal();
+    return;
+  }
+  if (typeof dialog.show === "function") {
+    dialog.show();
+    return;
+  }
+  // jsdom implements showModal() but not show().
+  dialog.setAttribute("open", "");
+}
+
+export function showDialogPreservingScroll(
+  dialog: HTMLDialogElement,
+  modal = true,
+) {
   const scrollY = window.scrollY;
-  if (!dialog.open) dialog.showModal();
+  const isOpen = dialog.open;
+  const isModal = isOpen && dialogIsModal(dialog);
+  if (!isOpen) {
+    openDialog(dialog, modal);
+  } else if (modal && !isModal) {
+    dialog.close();
+    openDialog(dialog, true);
+  } else if (!modal && isModal) {
+    dialog.close();
+    openDialog(dialog, false);
+  }
   // Native showModal() makes document scrolling a no-op until close.
   if (scrollY > 0) window.scrollTo(0, scrollY);
+}
+
+export function showModalPreservingScroll(dialog: HTMLDialogElement) {
+  showDialogPreservingScroll(dialog, true);
 }
 
 const exemptOverlaySelector = "iframe, .composer-location-map";
@@ -122,7 +160,9 @@ export function useLockBackgroundScroll(active: boolean) {
 export function useModalDialog(
   open: boolean,
   dialogRef: RefObject<HTMLDialogElement | null>,
+  options?: { modal?: boolean },
 ) {
+  const modal = options?.modal ?? true;
   const [mounted, setMounted] = useState(open);
   if (open && !mounted) setMounted(true);
 
@@ -133,7 +173,7 @@ export function useModalDialog(
     if (!mounted || !dialog) return;
     if (open) {
       const scrollY = window.scrollY;
-      showModalPreservingScroll(dialog);
+      showDialogPreservingScroll(dialog, modal);
       return () => {
         if (dialog.open) dialog.close();
         restoreWindowScrollAfterModal(scrollY);
@@ -146,7 +186,7 @@ export function useModalDialog(
     return () => {
       cancelled = true;
     };
-  }, [dialogRef, mounted, open]);
+  }, [dialogRef, modal, mounted, open]);
 
   return mounted;
 }

@@ -318,7 +318,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
 
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
-    true,
+    false,
   );
   await expect(page.getByRole("heading", { name: "New moment" })).toBeFocused();
   await expect(page.getByRole("heading", { name: "New moment" })).toHaveCSS(
@@ -417,6 +417,9 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     })
     .click();
   await expect(dialog).toHaveClass(/composer-editor-fullscreen/u);
+  expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
+    true,
+  );
   await expect(overlaySheet).toHaveCSS(
     "animation-name",
     "composer-editor-ease-up",

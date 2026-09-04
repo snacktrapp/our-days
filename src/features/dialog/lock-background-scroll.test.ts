@@ -5,6 +5,7 @@ import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
   overlayScrollParent,
+  showDialogPreservingScroll,
   showModalPreservingScroll,
   useLockBackgroundScroll,
   useModalDialog,
@@ -100,6 +101,19 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
+  it("opens a type-picker overlay without promoting it to the modal top layer", () => {
+    const dialog = document.createElement("dialog");
+    const show = vi.fn(() => {
+      dialog.setAttribute("open", "");
+    });
+    const showModal = vi.fn();
+    dialog.show = show;
+    dialog.showModal = showModal;
+    showDialogPreservingScroll(dialog, false);
+    expect(show).toHaveBeenCalledOnce();
+    expect(showModal).not.toHaveBeenCalled();
+  });
+
   it("restores window scroll after the overlay closes", () => {
     let scrollY = 160;
     Object.defineProperty(window, "scrollY", {
@@ -130,6 +144,32 @@ describe("overlay background scroll lock", () => {
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     unmount();
+  });
+
+  it("opens the type picker with show() so nav frost can keep sampling the grid", async () => {
+    const show = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    });
+    const showModal = vi.fn();
+
+    function Harness({ open }: { open: boolean }) {
+      const ref = useRef<HTMLDialogElement>(null);
+      const mounted = useModalDialog(open, ref, { modal: false });
+      if (!mounted) return null;
+      return createElement("dialog", {
+        ref: (node: HTMLDialogElement | null) => {
+          if (node) {
+            node.show = show;
+            node.showModal = showModal;
+          }
+          ref.current = node;
+        },
+      });
+    }
+
+    render(createElement(Harness, { open: true }));
+    await waitFor(() => expect(show).toHaveBeenCalled());
+    expect(showModal).not.toHaveBeenCalled();
   });
 
   it("closes a connected modal before restoring window scroll", async () => {

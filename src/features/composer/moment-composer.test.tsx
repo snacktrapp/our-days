@@ -820,7 +820,7 @@ describe("MomentComposer", () => {
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
-  it("opens honestly as a modal, locks body scroll, and restores focus", async () => {
+  it("opens the type picker without a modal top layer, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
     expect(screen.getByRole("dialog")).toHaveAttribute("open");
     expect(screen.getByRole("dialog")).toHaveClass(

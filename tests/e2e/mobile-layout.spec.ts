@@ -195,6 +195,7 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
 
   const grid = await page.locator(".app-shell").evaluate((shell) => {
     const layer = getComputedStyle(shell, "::before");
+    const root = getComputedStyle(document.documentElement);
     const stage = getComputedStyle(document.querySelector(".phone-stage")!);
     return {
       backgroundImage: layer.backgroundImage,
@@ -203,12 +204,14 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
       phoneStageBackgroundImage: stage.backgroundImage,
       position: layer.position,
       right: layer.right,
+      rootBackgroundImage: root.backgroundImage,
       top: layer.top,
     };
   });
 
   expect(grid.position).toBe("fixed");
   expect(grid.backgroundImage).toContain("linear-gradient");
+  expect(grid.rootBackgroundImage).toContain("linear-gradient");
   expect(grid.phoneStageBackgroundImage).toBe("none");
   expect(grid).toMatchObject({
     bottom: "0px",
@@ -216,6 +219,22 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
     right: "0px",
     top: "0px",
   });
+});
+
+test("New moment type picker keeps frosted nav chrome over the grid", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await page.getByRole("button", { name: "Add moment" }).click();
+  const dialog = page.locator("dialog.new-moment-composer-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveClass(/composer-type-picker/u);
+  expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
+    false,
+  );
+  await expectFrostedNavPill(page.locator(".topbar"));
+  await expectFrostedNavPill(page.locator(".bottom-nav"));
 });
 
 test("moment options open as a compact popover under the trigger without inline positioning", async ({

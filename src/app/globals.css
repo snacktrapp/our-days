@@ -49,6 +49,11 @@
   );
   --nav-pill-fill: rgba(7, 17, 13, 0.64);
   --nav-pill-blur: 14px;
+  --journal-grid-line: rgba(134, 166, 151, 0.045);
+  --journal-grid-size: 22px;
+  --journal-grid-image:
+    linear-gradient(var(--journal-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--journal-grid-line) 1px, transparent 1px);
   --timeline-media-max-height: min(
     90dvh,
     calc((min(100vw, 430px) - 24px) * 16 / 9)
@@ -74,6 +79,7 @@
   --slate: #59677d;
   --moss: #58764e;
   --nav-pill-fill: rgba(243, 238, 228, 0.7);
+  --journal-grid-line: rgba(57, 123, 118, 0.07);
   --header-drawer-shadow: 0 18px 42px rgba(58, 44, 31, 0.18);
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
 }
@@ -87,7 +93,9 @@ html {
   min-height: 100dvh;
   overflow-x: clip;
   overscroll-behavior-x: none;
-  background: #07110d;
+  background-color: var(--grid-surface);
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
   scroll-padding-bottom: calc(
     78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
   );
@@ -102,7 +110,7 @@ body {
   overflow-x: clip;
   overscroll-behavior-x: none;
   margin: 0;
-  background: #07110d;
+  background-color: var(--grid-surface);
   color: var(--ink);
   font-family: var(--font-interface);
 }
@@ -4203,7 +4211,7 @@ button:focus-visible,
 /* 2026 visual system: a compact, precise record of family life. */
 .app-shell,
 .private-entry-shell {
-  background: #07110d;
+  background: var(--grid-surface);
 }
 
 .ambient {
@@ -5262,12 +5270,13 @@ button:focus-visible,
   content: "";
   position: fixed;
   z-index: 0;
-  inset: 0;
+  inset: calc(-1 * env(safe-area-inset-top, 0px))
+    calc(-1 * env(safe-area-inset-right, 0px))
+    calc(-1 * env(safe-area-inset-bottom, 0px))
+    calc(-1 * env(safe-area-inset-left, 0px));
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(134, 166, 151, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(134, 166, 151, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
 }
 
 .private-entry-card {
@@ -5444,17 +5453,19 @@ button:focus-visible,
 
 /* iOS ignores background-attachment: fixed for many scrolling elements.
    A viewport-fixed paint layer keeps the journal grid stationary in Safari
-   and installed PWAs, including beneath the safe-area chrome. */
+   and installed PWAs. Negative safe-area insets reach behind the status bar
+   so the graph paper is edge-to-edge at the top of the phone. */
 .app-shell::before {
   content: "";
   position: fixed;
   z-index: 0;
-  inset: 0;
+  inset: calc(-1 * env(safe-area-inset-top, 0px))
+    calc(-1 * env(safe-area-inset-right, 0px))
+    calc(-1 * env(safe-area-inset-bottom, 0px))
+    calc(-1 * env(safe-area-inset-left, 0px));
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(134, 166, 151, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(134, 166, 151, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
 }
 
 .phone-stage {
@@ -5679,9 +5690,7 @@ button:focus-visible,
 
 :root[data-theme="light"] .app-shell::before,
 :root[data-theme="light"] .private-entry-shell::before {
-  background-image:
-    linear-gradient(rgba(57, 123, 118, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(57, 123, 118, 0.07) 1px, transparent 1px);
+  background-image: var(--journal-grid-image);
 }
 
 :root[data-theme="light"] .private-entry-content .auth-error {
@@ -6485,6 +6494,19 @@ button:focus-visible,
   border-radius: var(--header-drawer-radius);
   transform-origin: 50% 0;
   animation: none;
+}
+
+/* Non-modal type picker stays in the document (not the top layer) so
+   Safari keeps sampling the graph-paper through the frosted nav chrome.
+   Fullscreen capture still uses showModal() and is not restyled here. */
+.new-moment-composer-dialog.composer-type-picker {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  z-index: 150;
 }
 
 .new-moment-composer-dialog.composer-type-picker[open] {
