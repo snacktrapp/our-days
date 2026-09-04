@@ -3667,13 +3667,6 @@ button:focus-visible,
   opacity: 0;
   cursor: inherit;
 }
-.audience-choice input {
-  width: 1px;
-  height: 1px;
-  inset: auto;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-}
 .tag-person-dot {
   width: 25px;
   height: 25px;
