@@ -8,6 +8,14 @@ describe("pageHealth maps unavailable console filter", () => {
     ).toEqual(["console: Hydration failed", "pageerror: boom"]);
   });
 
+  it("allows WebKit's CSP stylesheet refusal", () => {
+    expect(
+      unexpectedConsoleErrors([
+        "console: Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.",
+      ]),
+    ).toEqual([]);
+  });
+
   it("allows maps 503 text that already includes the API path", () => {
     expect(
       unexpectedConsoleErrors([

@@ -648,14 +648,13 @@ test("top chrome floats as a compact rounded pill above the feed", async ({
 test("family title is tappable and optically centered in the top pill", async ({
   page,
 }) => {
+  await page.goto("/family");
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 390, height: 844 },
     { width: 430, height: 932 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/family");
-    const header = page.locator(".topbar");
     const heading = page.getByRole("heading", { name: "All our days" });
     const summary = page.locator(".title-switcher summary");
     await expect(summary).toHaveCSS("pointer-events", "auto");
@@ -687,6 +686,7 @@ test("family title is tappable and optically centered in the top pill", async ({
       page.getByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeVisible();
     await heading.click();
+    await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
   }
 });
 
@@ -748,12 +748,8 @@ test("touch-focused composer textareas keep content spacing without a selection 
 });
 
 test("real route transitions hold the last screen and keep the nav put", async ({
-  allowedConsoleErrors,
   page,
 }) => {
-  allowedConsoleErrors.push(
-    "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive",
-  );
   await page.setViewportSize({ width: 440, height: 844 });
   await page.goto("/family");
   await expect(page.locator(".bottom-nav")).toHaveCount(1);

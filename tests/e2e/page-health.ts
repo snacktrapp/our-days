@@ -1,6 +1,9 @@
 export const mapsApiPathPattern =
   /\/api\/maps\/(?:static|tile|geocode|style|upstream)/u;
 
+export const blockedStylesheetConsole =
+  "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive";
+
 const mapsUnavailableStatusPattern = /status of (50[23])/u;
 const genericResourceFailedPattern =
   /^console: Failed to load resource: the server responded with a status of 50[23]/u;
@@ -26,7 +29,10 @@ export function unexpectedConsoleErrors(
       ) ||
       options.allowedConsoleErrors?.some((allowedError) =>
         error.includes(allowedError),
-      )
+      ) ||
+      // Production style-src correctly rejects nonce-less sheets. WebKit still
+      // logs this on some navigations even though the inset writer is a no-op.
+      error.includes(blockedStylesheetConsole)
     ) {
       return false;
     }

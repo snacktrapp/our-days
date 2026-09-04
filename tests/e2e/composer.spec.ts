@@ -244,16 +244,17 @@ async function selectBiblePassage(
 test("date, time, and journal stay separated inside every phone-width drawer", async ({
   page,
 }) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /^Photo/u }).click();
+  await dialog.getByRole("button", { name: /Details/u }).click();
+
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 390, height: 844 },
     { width: 430, height: 932 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/family");
-    const dialog = await openComposer(page);
-    await dialog.getByRole("button", { name: /^Photo/u }).click();
-    await dialog.getByRole("button", { name: /Details/u }).click();
 
     const geometry = await dialog.evaluate((element) => {
       const sheet = element.querySelector<HTMLElement>(".composer-sheet")!;
@@ -852,12 +853,8 @@ test("expanded capture states have no serious axe violations", async ({
 });
 
 test("an open entry overlay does not scroll the family feed underneath", async ({
-  allowedConsoleErrors,
   page,
 }) => {
-  allowedConsoleErrors.push(
-    "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive",
-  );
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => window.scrollTo(0, 160));
