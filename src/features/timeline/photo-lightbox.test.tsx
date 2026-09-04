@@ -162,9 +162,9 @@ describe("photo lightbox", () => {
     );
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.documentElement).not.toHaveClass("overlay-open");
+      expect(document.body).not.toHaveClass("overlay-open");
     });
-    expect(document.documentElement).not.toHaveClass("overlay-open");
-    expect(document.body).not.toHaveClass("overlay-open");
     expect(
       document
         .querySelector('meta[name="theme-color"]')

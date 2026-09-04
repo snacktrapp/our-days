@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -213,20 +214,6 @@ function PhotoLightboxLayer({
     };
   }, []);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.classList.add("overlay-open");
-    document.body.classList.add("overlay-open");
-    lockOverlayChrome();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.documentElement.classList.remove("overlay-open");
-      document.body.classList.remove("overlay-open");
-      unlockOverlayChrome();
-    };
-  }, []);
-
   function onLayerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Tab") return;
     const root = event.currentTarget;
@@ -291,6 +278,24 @@ export function PhotoLightboxHost() {
   const close = useCallback(() => {
     publish(null);
   }, []);
+
+  const overlayOpen = request != null;
+  useLayoutEffect(() => {
+    if (!overlayOpen) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("overlay-open");
+    document.body.classList.add("overlay-open");
+    lockOverlayChrome();
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.classList.remove("overlay-open");
+      document.body.classList.remove("overlay-open");
+      unlockOverlayChrome();
+    };
+  }, [overlayOpen]);
 
   if (!request || typeof document === "undefined") return null;
 
