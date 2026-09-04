@@ -67,7 +67,7 @@ describe("static map proxy", () => {
       "api.maptiler.com/maps/streets-v2/static/-119.93,39.2,14/",
     );
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-      referrerPolicy: "no-referrer",
+      headers: { Referer: "https://journal.example.test/" },
     });
   });
 

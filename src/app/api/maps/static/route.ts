@@ -3,7 +3,7 @@ import {
   mapTilerStaticMapUrl,
   serverMapTilerKey,
 } from "@/features/composer/maptiler";
-import { mapsApiHeaders, mapsApiText } from "../response";
+import { mapsApiHeaders, mapsApiText, mapTilerUpstreamInit } from "../response";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -23,10 +23,7 @@ export async function GET(request: Request) {
 
   let upstream: Response;
   try {
-    upstream = await fetch(mapUrl, {
-      method: "GET",
-      referrerPolicy: "no-referrer",
-    });
+    upstream = await fetch(mapUrl, mapTilerUpstreamInit(request));
   } catch {
     return mapsApiText(502, "maptiler_upstream_failed");
   }

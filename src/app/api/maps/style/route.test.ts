@@ -19,7 +19,9 @@ describe("map style proxy", () => {
     vi.stubEnv("MAPTILER_API_KEY", "");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const response = await GET();
+    const response = await GET(
+      new Request("https://journal.example.test/api/maps/style"),
+    );
     expect(response.status).toBe(503);
     expect(await response.text()).toBe("maptiler_key_missing");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -32,7 +34,9 @@ describe("map style proxy", () => {
       body: new ReadableStream(),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const response = await GET();
+    const response = await GET(
+      new Request("https://journal.example.test/api/maps/style"),
+    );
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
