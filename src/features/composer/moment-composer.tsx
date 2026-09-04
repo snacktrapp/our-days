@@ -407,6 +407,7 @@ export function MomentComposer({
       const dismiss = () => {
         resetDraft();
         onRequestClose();
+        returnFocusRef.current?.focus({ preventScroll: true });
       };
       if (chooserSurface) {
         requestOverlayClose(dismiss);
