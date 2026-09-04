@@ -42,8 +42,9 @@ jobs:
           set +e
           output=""
           status=1
-          for attempt in 1 2 3; do
-            output="$(timeout 45 npm audit --audit-level=moderate 2>&1)"
+          transient=1
+          for attempt in 1 2 3 4; do
+            output="$(timeout 90 npm audit --audit-level=moderate 2>&1)"
             status=$?
             printf '%s\n' "$output"
             if [ "$status" -eq 0 ]; then
@@ -52,11 +53,14 @@ jobs:
             if printf '%s\n' "$output" | grep -Eq 'found [1-9][0-9]* vulnerabilit'; then
               exit "$status"
             fi
+            if [ "$status" -ne 124 ] &&
+              ! printf '%s\n' "$output" | grep -Eqi '503|Service Unavailable|audit endpoint returned an error'; then
+              transient=0
+            fi
             echo "npm audit attempt ${attempt} failed with status ${status}; retrying"
-            sleep $((attempt * 8))
+            sleep $((attempt * 10))
           done
-          if [ "$status" -eq 124 ] ||
-            printf '%s\n' "$output" | grep -Eqi '502|503|429|Service Unavailable|audit endpoint returned an error'; then
+          if [ "$transient" -eq 1 ]; then
             echo "::warning::npm audit registry was unavailable after retries; no vulnerability report was produced"
             exit 0
           fi
