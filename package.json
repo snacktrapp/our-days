@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "icons:generate": "node scripts/generate-app-icons.mjs",
     "format": "prettier --write \"config/**/*.ts\" \"scripts/**/*.mjs\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
     "format:check": "prettier --check \"config/**/*.ts\" \"scripts/**/*.mjs\" \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"*.{ts,mts,json}\"",
     "test": "vitest run",
