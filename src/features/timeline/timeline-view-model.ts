@@ -53,6 +53,8 @@ type TimelineMomentBase = Readonly<{
   personName: string;
   personInitial: string;
   personAccent: AccentToken;
+  audience?: "family" | "just_me";
+  showJustMeBadge?: boolean;
   displayTime?: string;
   displayDate: string;
   occurredOn: string;

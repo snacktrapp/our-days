@@ -22,6 +22,8 @@ import type {
   SaveWrittenMomentAction,
   UpdateFamilyMomentAction,
 } from "@/features/moments/moment-action-types";
+import type { MomentAudience } from "@/features/moments/moment-audience";
+import { normalizeMomentAudience } from "@/features/moments/moment-audience";
 import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
   acceptedVideoMime,
@@ -72,6 +74,7 @@ export type ComposerEditDraft = Readonly<{
   verseSelection: BibleVerseSelection;
   title: string;
   body: string;
+  audience?: MomentAudience;
   existingMedia?: ComposerExistingMedia;
   save: UpdateFamilyMomentAction;
 }>;
@@ -231,10 +234,14 @@ export function MomentComposer({
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
     Boolean(
       editDraft &&
-      (editDraft.taggedPersonIds.length > 0 ||
+      (editDraft.audience === "just_me" ||
+        editDraft.taggedPersonIds.length > 0 ||
         (editDraft.mode !== "location" &&
           editDraft.place.label.trim().length > 0)),
     ),
+  );
+  const [audience, setAudience] = useState<MomentAudience>(
+    normalizeMomentAudience(editDraft?.audience),
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
   const [title, setTitle] = useState(editDraft?.title ?? "");
@@ -316,7 +323,8 @@ export function MomentComposer({
       place.longitude !== editDraft.place.longitude ||
       taggedPersonIds.join(",") !== editDraft.taggedPersonIds.join(",") ||
       occurredOn !== editDraft.occurredOn ||
-      occurredTime !== editDraft.occurredTime
+      occurredTime !== editDraft.occurredTime ||
+      audience !== normalizeMomentAudience(editDraft.audience)
     : Boolean(
         body.length ||
         title.length ||
@@ -327,7 +335,8 @@ export function MomentComposer({
         taggedPersonIds.length ||
         occurredOn !== model.previewToday ||
         occurredTime.length > 0 ||
-        journalPersonId !== model.defaultJournalPersonId,
+        journalPersonId !== model.defaultJournalPersonId ||
+        audience !== "family",
       );
 
   const revokeCurrentPhotoUrl = useCallback(() => {
@@ -370,6 +379,7 @@ export function MomentComposer({
       setOccurredTime("");
       setJournalPersonId(model.defaultJournalPersonId);
       setTaggedPersonIds([]);
+      setAudience("family");
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
       setPhotoDecodeState("empty");
@@ -611,11 +621,25 @@ export function MomentComposer({
   };
 
   const chooseJournalPerson = (personId: string) => {
+    if (audience === "just_me") return;
     if (!journalPeople.some((person) => person.id === personId)) return;
     setJournalPersonId(personId);
     setTaggedPersonIds((current) =>
       current.filter((taggedPersonId) => taggedPersonId !== personId),
     );
+  };
+
+  const justMeAllowed = editDraft
+    ? editDraft.journalPersonId === model.recorderPersonId
+    : true;
+
+  const chooseAudience = (next: MomentAudience) => {
+    if (next === "just_me" && !justMeAllowed) return;
+    setAudience(next);
+    if (next === "just_me") {
+      setJournalPersonId(model.recorderPersonId);
+      setTaggedPersonIds([]);
+    }
   };
 
   const validateDraft = () => {
@@ -720,6 +744,7 @@ export function MomentComposer({
           occurredOn: savedOccurredOn,
           occurredAt,
           occurredTimezone,
+          audience,
         });
         if (!result.ok) {
           setSaveError(result.message);
@@ -775,6 +800,7 @@ export function MomentComposer({
             latitude: savedLatitude,
             longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
+            audience,
           },
         });
       } else {
@@ -792,6 +818,7 @@ export function MomentComposer({
             latitude: savedLatitude,
             longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
+            audience,
           },
         });
       }
@@ -800,7 +827,11 @@ export function MomentComposer({
       window.requestAnimationFrame(() =>
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
-      router.replace("/family");
+      router.replace(
+        audience === "just_me"
+          ? `/people/${savedJournalPersonId}`
+          : "/family",
+      );
       return;
     }
 
@@ -848,6 +879,7 @@ export function MomentComposer({
               occurredOn: savedOccurredOn,
               occurredAt,
               occurredTimezone,
+              audience,
             })
           : saveWrittenMoment!({
               journalPersonId: savedJournalPersonId,
@@ -855,10 +887,13 @@ export function MomentComposer({
               occurredOn: savedOccurredOn,
               occurredAt,
               occurredTimezone,
+              audience,
             }),
       onPublished: () => router.refresh(),
     });
-    router.replace("/family");
+    router.replace(
+      audience === "just_me" ? `/people/${savedJournalPersonId}` : "/family",
+    );
   };
 
   const submitDraft = async () => {
@@ -1423,8 +1458,34 @@ export function MomentComposer({
                       options={journalPeople}
                       value={journalPersonId}
                       onChange={chooseJournalPerson}
+                      disabled={audience === "just_me"}
                     />
                   )}
+                  <fieldset className="people-tags audience-choice">
+                    <legend>Audience</legend>
+                    <div>
+                      <label>
+                        <input
+                          type="radio"
+                          name="moment-audience"
+                          checked={audience === "family"}
+                          onChange={() => chooseAudience("family")}
+                        />
+                        Family
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="moment-audience"
+                          checked={audience === "just_me"}
+                          disabled={!justMeAllowed}
+                          onChange={() => chooseAudience("just_me")}
+                        />
+                        Just Me
+                      </label>
+                    </div>
+                  </fieldset>
+                  {audience === "just_me" ? null : (
                   <fieldset className="people-tags">
                     <legend>Who else was part of this?</legend>
                     <div>
@@ -1458,6 +1519,7 @@ export function MomentComposer({
                         })}
                     </div>
                   </fieldset>
+                  )}
                   {mode !== "location" ? (
                     <>
                       <LocationFields

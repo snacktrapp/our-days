@@ -11,6 +11,7 @@ import type {
   EditableMomentKind,
   MomentActionResult,
 } from "./moment-action-types";
+import { normalizeMomentAudience } from "./moment-audience";
 import {
   parsePlaceCoordinates,
   validPlaceCoordinates,
@@ -162,6 +163,7 @@ export async function createFamilyMomentAction(input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: "family" | "just_me";
 }): Promise<MomentActionResult> {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -200,6 +202,7 @@ export async function createFamilyMomentAction(input: {
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
         occurredTimezone: input.occurredTimezone,
+        audience: normalizeMomentAudience(input.audience),
       });
       refreshMomentSurfaces(input.journalPersonId);
       return { ok: true, message: "Moment saved.", momentId };
@@ -227,6 +230,7 @@ export async function createFamilyMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
+    audience: normalizeMomentAudience(input.audience),
     ...coordinates,
   };
   let { data, error } = await supabase.rpc("create_family_moment", payload);
@@ -234,6 +238,7 @@ export async function createFamilyMomentAction(input: {
     const fallback = { ...payload };
     delete (fallback as { latitude?: number | null }).latitude;
     delete (fallback as { longitude?: number | null }).longitude;
+    delete (fallback as { audience?: string }).audience;
     ({ data, error } = await supabase.rpc("create_family_moment", fallback));
   }
   if (error || !data) {
@@ -258,6 +263,7 @@ export async function updateFamilyMomentAction(input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: "family" | "just_me";
 }): Promise<MomentActionResult> {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -310,6 +316,7 @@ export async function updateFamilyMomentAction(input: {
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
         occurredTimezone: input.occurredTimezone,
+        audience: normalizeMomentAudience(input.audience),
       });
       refreshMomentSurfaces();
       return { ok: true, message: "Moment updated.", revision };
@@ -337,6 +344,7 @@ export async function updateFamilyMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
+    audience: normalizeMomentAudience(input.audience),
     ...coordinates,
   };
   let { data, error } = await supabase.rpc("update_family_moment", payload);
@@ -344,6 +352,7 @@ export async function updateFamilyMomentAction(input: {
     const fallback = { ...payload };
     delete (fallback as { latitude?: number | null }).latitude;
     delete (fallback as { longitude?: number | null }).longitude;
+    delete (fallback as { audience?: string }).audience;
     ({ data, error } = await supabase.rpc("update_family_moment", fallback));
   }
   if (error) {
@@ -773,6 +782,7 @@ export async function createWrittenMomentAction(input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: "family" | "just_me";
 }) {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -801,6 +811,7 @@ export async function createWrittenMomentAction(input: {
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
         occurredTimezone: input.occurredTimezone,
+        audience: normalizeMomentAudience(input.audience),
       });
       refreshMomentSurfaces(input.journalPersonId);
       return { ok: true, message: "Moment saved.", momentId };
@@ -819,6 +830,7 @@ export async function createWrittenMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
+    audience: normalizeMomentAudience(input.audience),
   });
   if (error || !data)
     return {

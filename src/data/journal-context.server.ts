@@ -124,6 +124,7 @@ type ActivityMoment = Readonly<{
   author_membership_id: string;
   moment_kind: string;
   created_at: string;
+  audience?: string;
 }>;
 
 const momentMessages: Readonly<Record<string, string>> = {
@@ -159,7 +160,8 @@ export function buildActivityNotifications(
       .filter(
         (moment) =>
           moment.author_membership_id !== viewerMembershipId &&
-          moment.moment_kind !== "insight",
+          moment.moment_kind !== "insight" &&
+          moment.audience !== "just_me",
       )
       .map((moment) => ({
         id: `moment:${moment.id}`,
@@ -248,8 +250,9 @@ export async function loadConnectedJournalContext(
       .is("trashed_at", null),
     supabase
       .from("moments")
-      .select("id, recorded_by_membership_id, kind, created_at")
+      .select("id, recorded_by_membership_id, kind, created_at, audience")
       .eq("circle_id", access.circleId)
+      .eq("audience", "family")
       .neq("recorded_by_membership_id", access.membershipId)
       .is("trashed_at", null)
       .order("created_at", { ascending: false })
@@ -365,6 +368,7 @@ export async function loadConnectedJournalContext(
           author_membership_id: moment.recorded_by_membership_id,
           moment_kind: moment.kind,
           created_at: moment.created_at,
+          audience: moment.audience,
         })),
       access.membershipId,
     ),

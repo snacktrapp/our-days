@@ -48,6 +48,7 @@ export type PhotoMomentDraft = Readonly<{
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  audience?: "family" | "just_me";
 }>;
 
 export type PhotoUploadResult = Readonly<{
@@ -810,6 +811,7 @@ export async function uploadPhotoMoment(
         place_name: draft.placeName,
         request_key: attempt.requestKey,
         tagged_person_ids: [...draft.taggedPersonIds],
+        audience: draft.audience ?? "family",
       });
     const reservationQuotaMessage = photoQuotaMessage(reservationError);
     if (reservationQuotaMessage) {

@@ -12,12 +12,14 @@ type JournalPickerFieldProps = Readonly<{
   options: readonly JournalOption[];
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }>;
 
 export function JournalPickerField({
   options,
   value,
   onChange,
+  disabled = false,
 }: JournalPickerFieldProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -61,7 +63,12 @@ export function JournalPickerField({
         aria-label={`Journal, ${selected.name} · ${selected.contextLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        aria-disabled={disabled || undefined}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((current) => !current);
+        }}
       >
         <span>
           {selected.name} · {selected.contextLabel}

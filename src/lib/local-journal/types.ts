@@ -45,6 +45,7 @@ export type LocalMoment = Readonly<{
   id: string;
   journalPersonId: string | null;
   recordedByMembershipId: string;
+  audience?: "family" | "just_me";
   kind: LocalMomentKind;
   title: string;
   body: string;

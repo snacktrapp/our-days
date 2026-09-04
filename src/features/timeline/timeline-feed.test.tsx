@@ -227,12 +227,48 @@ describe("TimelineFeed", () => {
       container.querySelector("[data-moment-kind='insight']"),
     ).not.toBeNull();
     expect(container.querySelector(".avatar-node")).toBeNull();
+    expect(screen.queryByText("Just Me")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
     expect(screen.queryByText("Person")).toBeNull();
     expect(screen.getByText("Insight")).toBeVisible();
     expect(screen.getByText(/Morning sunlight sets the clock/u)).toBeVisible();
     expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
     expect(screen.getByRole("link", { name: "Listen" })).toBeVisible();
+  });
+
+  it("shows a Just Me pill to the left of the avatar on the author's journal", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={{
+          ...model,
+          switcher: [{ label: "Person", href: "/people/person", current: true }],
+          entries: [
+            {
+              id: "private",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "just-me-moment",
+                kind: "thought",
+                audience: "just_me",
+                showJustMeBadge: true,
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    const connection = container.querySelector(".connection");
+    const pill = screen.getByText("Just Me");
+    const avatar = container.querySelector(".avatar-node");
+    expect(pill).toBeVisible();
+    expect(pill.compareDocumentPosition(avatar!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(connection?.querySelector(".moment-meta")).toHaveTextContent(
+      "Person",
+    );
   });
 
   it("keeps the date but omits a timestamp when no time was recorded", () => {

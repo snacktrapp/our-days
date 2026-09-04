@@ -349,6 +349,7 @@ export type Database = {
       };
       moments: {
         Row: {
+          audience: string;
           body: string;
           circle_id: string;
           created_at: string;
@@ -371,6 +372,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          audience?: string;
           body: string;
           circle_id: string;
           created_at?: string;
@@ -393,6 +395,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          audience?: string;
           body?: string;
           circle_id?: string;
           created_at?: string;
@@ -713,6 +716,7 @@ export type Database = {
           latitude?: number | null;
           longitude?: number | null;
           tagged_person_ids: string[];
+          audience?: string;
         };
         Returns: string;
       };
@@ -761,6 +765,7 @@ export type Database = {
           occurred_at?: string;
           occurred_on: string;
           occurred_timezone?: string;
+          audience?: string;
         };
         Returns: string;
       };
@@ -985,6 +990,7 @@ export type Database = {
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
+          moment_audience: string;
         }[];
       };
       load_invitation_delivery_job: {
@@ -1138,6 +1144,7 @@ export type Database = {
           place_name: string;
           request_key?: string;
           tagged_person_ids: string[];
+          audience?: string;
         };
         Returns: {
           bucket_id: string;
@@ -1162,6 +1169,7 @@ export type Database = {
           place_name: string;
           request_key?: string;
           tagged_person_ids: string[];
+          audience?: string;
         };
         Returns: {
           bucket_id: string;
@@ -1225,6 +1233,7 @@ export type Database = {
           latitude?: number | null;
           longitude?: number | null;
           tagged_person_ids: string[];
+          audience?: string;
         };
         Returns: number;
       };
