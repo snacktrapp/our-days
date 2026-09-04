@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import {
   buildActivityNotifications,
+  buildJournalPersonSurface,
   plainToday,
 } from "./journal-context.server";
 
@@ -89,6 +90,12 @@ describe("family activity notifications", () => {
           moment_kind: "photo",
           created_at: "2026-09-03T19:00:00.000Z",
         },
+        {
+          id: "tars-insight",
+          author_membership_id: "tars",
+          moment_kind: "insight",
+          created_at: "2026-09-03T20:00:00.000Z",
+        },
       ],
       "brian",
     );
@@ -100,6 +107,94 @@ describe("family activity notifications", () => {
         message: "posted a note.",
         href: "/family#moment-tars-note",
       }),
+    ]);
+  });
+});
+
+describe("journal person surface", () => {
+  const people = [
+    {
+      id: "brian",
+      name: "Brian",
+      initial: "B",
+      accent: "teal" as const,
+      contextLabel: "You",
+      profileKind: "account",
+      role: "organizer",
+    },
+    {
+      id: "molly",
+      name: "Molly",
+      initial: "M",
+      accent: "clay" as const,
+      contextLabel: "Organizer",
+      profileKind: "account",
+      role: "organizer",
+    },
+    {
+      id: "tars",
+      name: "TARS",
+      initial: "T",
+      accent: "slate" as const,
+      contextLabel: "Operations",
+      profileKind: "account",
+      role: "organizer",
+      directoryKind: "operations",
+    },
+    {
+      id: "avery",
+      name: "Avery",
+      initial: "A",
+      accent: "ochre" as const,
+      contextLabel: "Managed journal",
+      profileKind: "managed",
+      role: undefined,
+    },
+  ];
+
+  it("omits Operations from Family, People, marks, and composer targets", () => {
+    const surface = buildJournalPersonSurface(
+      people,
+      { personId: "brian", role: "organizer" },
+      new Set(),
+    );
+
+    expect(surface.people.map((person) => person.name)).toEqual([
+      "Brian",
+      "Molly",
+      "Avery",
+    ]);
+    expect(surface.familyMark.map((person) => person.id)).toEqual([
+      "brian",
+      "molly",
+      "avery",
+    ]);
+    expect(surface.taggablePeople.map((person) => person.id)).toEqual([
+      "brian",
+      "molly",
+      "avery",
+    ]);
+    expect(surface.journalPeople.map((person) => person.id)).toEqual([
+      "brian",
+      "avery",
+    ]);
+    expect(
+      surface.people.find((person) => person.name === "TARS"),
+    ).toBeUndefined();
+  });
+
+  it("lets an Operations viewer compose for family journals they administer", () => {
+    const surface = buildJournalPersonSurface(
+      people,
+      { personId: "tars", role: "organizer" },
+      new Set(),
+    );
+
+    expect(surface.journalPeople.map((person) => person.id)).toEqual(["avery"]);
+    expect(surface.people.map((person) => person.id)).toEqual([
+      "brian",
+      "molly",
+      "avery",
     ]);
   });
 });

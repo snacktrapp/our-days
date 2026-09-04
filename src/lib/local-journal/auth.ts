@@ -13,7 +13,7 @@ type SessionPayload = Readonly<{
   email: string;
   membershipId: string;
   personId: string;
-  role: "organizer" | "member";
+  role: "organizer" | "member" | "operations";
   exp: number;
 }>;
 
@@ -65,7 +65,9 @@ function parseSession(value: string | undefined): SessionPayload | null {
       typeof payload.email !== "string" ||
       typeof payload.membershipId !== "string" ||
       typeof payload.personId !== "string" ||
-      (payload.role !== "organizer" && payload.role !== "member") ||
+      (payload.role !== "organizer" &&
+        payload.role !== "member" &&
+        payload.role !== "operations") ||
       typeof payload.exp !== "number" ||
       payload.exp * 1000 <= Date.now()
     ) {

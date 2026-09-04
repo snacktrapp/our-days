@@ -324,6 +324,72 @@ describe("connected family settings data", () => {
     expect(model.panel.guardianOptions).toEqual([]);
   });
 
+  it("keeps Operations visible on Account without journal-role controls", () => {
+    const operationsPersonId = "30000000-0000-4000-8000-000000000010";
+    const operationsMembershipId = "40000000-0000-4000-8000-000000000008";
+    const model = buildConnectedFamilySettingsModel(organizerAccess, context, {
+      people: [
+        ...people.map((person) => ({
+          id: person.id,
+          displayName: person.display_name,
+          profileKind: person.profile_kind,
+          accentToken: person.accent_token,
+        })),
+        {
+          id: operationsPersonId,
+          displayName: "TARS",
+          profileKind: "account",
+          accentToken: "plum",
+        },
+      ],
+      memberships: [
+        ...memberships.map((membership) => ({
+          id: membership.id,
+          personId: membership.person_id,
+          role: membership.role,
+        })),
+        {
+          id: operationsMembershipId,
+          personId: operationsPersonId,
+          role: "organizer",
+          directoryKind: "operations",
+        },
+      ],
+      guardians: [],
+      pendingInvitations: [],
+    });
+
+    if (model.panel.mode !== "connected") {
+      throw new Error("Expected connected family settings");
+    }
+    expect(model.panel.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: operationsPersonId,
+          membershipId: operationsMembershipId,
+          role: "operations",
+          name: "TARS",
+          relationshipLabel: "Operations",
+          canManageRole: false,
+          canReviewRemoval: true,
+        }),
+      ]),
+    );
+    expect(model.panel.guardianOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          membershipId: operationsMembershipId,
+          role: "organizer",
+        }),
+      ]),
+    );
+    expect(
+      model.panel.members.some(
+        (member) => member.relationshipLabel === "Operations",
+      ),
+    ).toBe(true);
+  });
+
   it("does not turn a pending-invitation RPC failure into an empty list", async () => {
     connectedClient({ pendingError: new Error("private list unavailable") });
 

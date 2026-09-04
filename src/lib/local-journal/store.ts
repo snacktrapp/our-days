@@ -20,6 +20,7 @@ import {
   localJordanPersonId,
   localRileyPersonId,
 } from "./ids";
+import { canCreateInsight, hasOrganizerPrivilege } from "@/lib/circle-roles";
 import type {
   LocalJournalDocument,
   LocalMedia,
@@ -222,14 +223,15 @@ function requireMembership(
 function canWriteJournal(
   document: LocalJournalDocument,
   access: LocalAccess,
-  journalPersonId: string,
+  journalPersonId: string | null,
 ) {
+  if (!journalPersonId) return hasOrganizerPrivilege(access.role);
   if (journalPersonId === access.personId) return true;
   const person = document.people.find(
     (candidate) => candidate.id === journalPersonId,
   );
   if (!person || person.profileKind !== "managed") return false;
-  if (access.role === "organizer") return true;
+  if (hasOrganizerPrivilege(access.role)) return true;
   return document.guardians.some(
     (guardian) =>
       guardian.managedPersonId === journalPersonId &&
@@ -283,6 +285,51 @@ export async function createLocalWrittenMoment(
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
       taggedPersonIds: [...input.taggedPersonIds],
+      occurredOn: input.occurredOn,
+      occurredAt: input.occurredAt,
+      occurredTimezone: input.occurredTimezone,
+      revision: 1,
+      createdAt,
+      updatedAt: createdAt,
+      trashedAt: null,
+      trashedByMembershipId: null,
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: [moment, ...document.moments],
+    });
+    return moment.id;
+  });
+}
+
+export async function createLocalInsightMoment(
+  access: LocalAccess,
+  input: Readonly<{
+    quote: string;
+    attribution: string;
+    sourceUrl?: string | null;
+    occurredOn: string;
+    occurredAt: string | null;
+    occurredTimezone: string | null;
+  }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    if (!canCreateInsight(access.role)) {
+      throw new Error("Only an organizer or Operations can create an Insight.");
+    }
+    const createdAt = nowIso();
+    const moment: LocalMoment = {
+      id: randomUUID(),
+      journalPersonId: null,
+      recordedByMembershipId: access.membershipId,
+      kind: "insight",
+      title: input.attribution,
+      body: input.quote,
+      sourceUrl: input.sourceUrl ?? null,
+      placeName: "",
+      taggedPersonIds: [],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,

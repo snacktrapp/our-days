@@ -49,7 +49,7 @@ import {
   type PlaceSelection,
 } from "@/lib/place-coordinates";
 
-type ComposerMode = MomentKind | "bible-verse";
+type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
 
 export type ComposerExistingMedia = Readonly<{
   kind: "photo" | "video";

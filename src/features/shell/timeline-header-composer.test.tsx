@@ -49,4 +49,13 @@ describe("TimelineHeaderComposer", () => {
       document.querySelector(".new-moment-composer-dialog .composer-sheet"),
     ).toHaveClass("is-closing");
   });
+
+  it("hides + New moment when there is no journal person to write", () => {
+    const { container } = render(
+      <TimelineHeaderComposer composer={{ ...composer, journalPeople: [] }} />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Add moment" })).toBeNull();
+    expect(container.querySelector(".topbar-leading-spacer")).not.toBeNull();
+  });
 });

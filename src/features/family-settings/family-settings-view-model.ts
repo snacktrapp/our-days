@@ -5,7 +5,7 @@ export type FamilyAccessMemberViewModel = Readonly<{
   id: string;
   membershipId: string | null;
   profileKind: "account" | "managed";
-  role: "member" | "organizer" | null;
+  role: "member" | "organizer" | "operations" | null;
   name: string;
   initial: string;
   accent: AccentToken;

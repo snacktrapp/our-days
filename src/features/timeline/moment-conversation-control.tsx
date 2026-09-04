@@ -42,6 +42,7 @@ type MomentConversationControlProps = Readonly<{
 function momentKindLabel(model: MomentDetailViewModel) {
   if (model.kind === "photo") return "photo";
   if (model.kind === "location") return "place";
+  if (model.kind === "insight") return "insight";
   return model.kind;
 }
 

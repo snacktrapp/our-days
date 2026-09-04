@@ -20,6 +20,10 @@ export function TimelineHeaderComposer({
   const addMomentRef = useRef<HTMLButtonElement>(null);
   const dismissRef = useRef<(() => void) | null>(null);
 
+  if (composer.journalPeople.length === 0) {
+    return <span className="topbar-leading-spacer" aria-hidden="true" />;
+  }
+
   if (session) {
     return (
       <button

@@ -34,7 +34,7 @@ export function buildComposerEditDraft(
   moment: TimelineMomentViewModel,
   save: UpdateFamilyMomentAction,
 ): ComposerEditDraft | null {
-  if (!moment.revision) return null;
+  if (!moment.revision || moment.kind === "insight") return null;
   const parsed =
     moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
   const place = placeFromMoment(moment);

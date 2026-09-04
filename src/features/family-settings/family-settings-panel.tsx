@@ -1028,6 +1028,18 @@ function AccountRoleReview({
   const assignedJournals = managedProfiles.filter((profile) =>
     profile.guardianMembershipIds.includes(membershipId),
   );
+  if (member.role === "operations") {
+    return (
+      <div className="settings-role-card">
+        <strong>Current role: Operations</strong>
+        <p>
+          Operations has full organizer access — invites, membership, journal
+          care, and Insights. They are not a family journal person and do not
+          appear in Family or People.
+        </p>
+      </div>
+    );
+  }
   const nextRole = member.role === "organizer" ? "member" : "organizer";
 
   return (

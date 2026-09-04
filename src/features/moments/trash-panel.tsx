@@ -25,6 +25,9 @@ function restoreMomentLabel(moment: TrashedMomentViewModel) {
     normalized.length <= 72
       ? normalized
       : `${normalized.slice(0, 48)}…${normalized.slice(-20)}`;
+  if (moment.kind === "insight") {
+    return `Insight “${excerpt}” from ${dateLabel(moment.occurredOn)}`;
+  }
   return `${moment.journalPersonName}’s “${excerpt}” moment from ${dateLabel(moment.occurredOn)}`;
 }
 

@@ -41,6 +41,17 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
     ? `${connectionDate(moment.occurredOn)} | ${moment.displayTime}`
     : connectionDate(moment.occurredOn);
 
+  if (moment.kind === "insight") {
+    return (
+      <div className="connection connection-insight">
+        <span className="insight-rail-node" aria-hidden="true" />
+        <span className="moment-meta">
+          <span>{dateAndTime}</span>
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="connection">
       <span

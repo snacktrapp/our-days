@@ -1,5 +1,5 @@
 export type LocalMomentKind =
-  "thought" | "milestone" | "location" | "photo" | "video";
+  "thought" | "milestone" | "location" | "photo" | "video" | "insight";
 
 export type LocalPerson = Readonly<{
   id: string;
@@ -12,7 +12,8 @@ export type LocalPerson = Readonly<{
 export type LocalMembership = Readonly<{
   id: string;
   personId: string;
-  role: "organizer" | "member";
+  role: "organizer" | "member" | "operations";
+  directoryKind?: "journal" | "operations";
   status: "active";
   joinedAt: string;
 }>;
@@ -42,11 +43,12 @@ export type LocalMedia = Readonly<{
 
 export type LocalMoment = Readonly<{
   id: string;
-  journalPersonId: string;
+  journalPersonId: string | null;
   recordedByMembershipId: string;
   kind: LocalMomentKind;
   title: string;
   body: string;
+  sourceUrl?: string | null;
   placeName: string;
   latitude?: number | null;
   longitude?: number | null;

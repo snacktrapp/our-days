@@ -10,6 +10,7 @@ import { MomentCard } from "./moment-card";
 import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
+  InsightMomentViewModel,
   MomentInteractionViewModel,
   ThoughtMomentViewModel,
 } from "./timeline-view-model";
@@ -352,5 +353,40 @@ describe("MomentCard timeline media", () => {
     expect(document.documentElement).not.toHaveClass("media-viewer-open");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+});
+
+const insight = {
+  id: "insight-moment",
+  journalPersonId: "",
+  kind: "insight",
+  personName: "TARS",
+  personInitial: "T",
+  personAccent: "slate",
+  displayDate: "Aug 28, 2026",
+  occurredOn: "2026-08-28",
+  kicker: "An insight",
+  text: "Morning sunlight is the most powerful stimulus for setting your circadian rhythm.",
+  attribution: "Huberman Lab — Master Your Sleep",
+  sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
+  sourceLabel: "Listen",
+  conversation: { notes: [], reactions: [] },
+} as const satisfies InsightMomentViewModel;
+
+describe("MomentCard insight treatment", () => {
+  it("renders quote, attribution, and source without a person byline", () => {
+    const { container } = render(<MomentCard moment={insight} />);
+
+    expect(screen.getByText("Insight")).toBeVisible();
+    expect(
+      screen.getByText(/Morning sunlight is the most powerful stimulus/u),
+    ).toBeVisible();
+    expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Listen" })).toHaveAttribute(
+      "href",
+      insight.sourceUrl,
+    );
+    expect(container.querySelector(".avatar-node")).toBeNull();
+    expect(screen.queryByText("TARS")).toBeNull();
   });
 });

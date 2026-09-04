@@ -19,9 +19,11 @@ import type {
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
 import {
   buildActivityNotifications,
+  buildJournalPersonSurface,
   mapDatabaseAccent,
   plainToday,
 } from "@/data/journal-context.server";
+import { journalContextLabel } from "@/lib/circle-roles";
 import {
   buildTimelineEntries,
   connectedTimelineInteraction,
@@ -77,9 +79,11 @@ function momentToTimelineRow(
   return {
     moment_id: moment.id,
     moment_journal_person_id: moment.journalPersonId,
-    journal_person_name: journalPerson?.displayName ?? "Family",
-    journal_person_accent: journalPerson?.accentToken ?? "clay",
-    recorder_person_id: recorderMembership?.personId ?? moment.journalPersonId,
+    journal_person_name: journalPerson?.displayName ?? null,
+    journal_person_accent: journalPerson?.accentToken ?? null,
+    recorder_person_id:
+      recorderMembership?.personId ?? moment.journalPersonId ?? "",
+    source_url: moment.sourceUrl ?? null,
     recorder_person_name: recorderPerson?.displayName ?? "Family",
     body: moment.body,
     can_change: true,
@@ -133,27 +137,24 @@ export async function loadLocalJournalContext(
       name: person.displayName,
       initial: initialFor(person.displayName),
       accent,
-      contextLabel:
-        person.id === access.personId
-          ? "You"
-          : person.profileKind === "managed"
-            ? "Managed journal"
-            : membership?.role === "organizer"
-              ? "Organizer"
-              : "Family member",
+      contextLabel: journalContextLabel(
+        person.id === access.personId,
+        person.profileKind,
+        membership?.role,
+      ),
       profileKind: person.profileKind,
       role: membership?.role,
+      directoryKind: membership?.directoryKind,
     };
   });
   const recorder = personOptions.find(
     (person) => person.id === access.personId,
   );
   if (!recorder) throw new Error("Member profile is unavailable");
-  const journalPeople = personOptions.filter(
-    (person) =>
-      person.id === access.personId ||
-      (person.profileKind === "managed" &&
-        (access.role === "organizer" || guardedPersonIds.has(person.id))),
+  const surface = buildJournalPersonSurface(
+    personOptions,
+    access,
+    guardedPersonIds,
   );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
@@ -163,24 +164,14 @@ export async function loadLocalJournalContext(
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,
     recordedByName: recorder.name,
-    journalPeople,
-    taggablePeople: personOptions.map((person) => ({
-      id: person.id,
-      name: person.name,
-      initial: person.initial,
-      accent: person.accent,
-      contextLabel: person.contextLabel,
-    })),
+    journalPeople: surface.journalPeople,
+    taggablePeople: surface.taggablePeople,
   };
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: document.circle.name,
     eyebrow: "Our family",
-    familyMark: personOptions.slice(0, 5).map((person) => ({
-      id: person.id,
-      initial: person.initial,
-      accent: person.accent,
-    })),
+    familyMark: surface.familyMark,
     composer,
     timelineOptionsHref: "/trash",
     settingsHref: "/settings/family",
@@ -217,6 +208,7 @@ export async function loadLocalJournalContext(
         .filter(
           (moment) =>
             moment.trashedAt === null &&
+            moment.kind !== "insight" &&
             moment.recordedByMembershipId !== access.membershipId,
         )
         .map((moment) => ({
@@ -233,19 +225,7 @@ export async function loadLocalJournalContext(
     circleTimeZone: document.circle.timeZone,
     today,
     chrome,
-    people: personOptions.map((person) => ({
-      id: person.id,
-      name: person.name,
-      initial: person.initial,
-      accent: person.accent,
-      roleLabel:
-        person.profileKind === "managed"
-          ? "Managed profile · No sign-in"
-          : person.role === "organizer"
-            ? "Organizer"
-            : "Family member",
-      journalHref: `/people/${person.id}`,
-    })),
+    people: surface.people,
   };
 }
 
@@ -355,6 +335,7 @@ function momentKindLabel(moment: TimelineMomentViewModel) {
   if (moment.kind === "location") return "Place";
   if (moment.kind === "photo") return "Photo";
   if (moment.kind === "video") return "Video";
+  if (moment.kind === "insight") return "Insight";
   return "Thought";
 }
 
@@ -645,10 +626,15 @@ export async function loadLocalTrash(
       );
       return {
         id: moment.id,
-        journalPersonName: person?.displayName ?? "Family",
+        journalPersonName:
+          moment.kind === "insight"
+            ? "Insight"
+            : (person?.displayName ?? "Family"),
         journalPersonAccent: mapDatabaseAccent(person?.accentToken ?? "clay"),
         kind:
-          moment.kind === "milestone" || moment.kind === "location"
+          moment.kind === "milestone" ||
+          moment.kind === "location" ||
+          moment.kind === "insight"
             ? moment.kind
             : "thought",
         title: moment.title || undefined,
@@ -676,6 +662,7 @@ export async function loadLocalFamilyAccess(access: LocalAccess) {
       id: membership.id,
       personId: membership.personId,
       role: membership.role,
+      directoryKind: membership.directoryKind ?? "journal",
     })),
     guardians: document.guardians.map((guardian) => ({
       managedPersonId: guardian.managedPersonId,

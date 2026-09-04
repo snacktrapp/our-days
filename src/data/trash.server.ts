@@ -11,7 +11,7 @@ export type TrashedMomentViewModel = Readonly<{
   id: string;
   journalPersonName: string;
   journalPersonAccent: ReturnType<typeof mapDatabaseAccent>;
-  kind: "thought" | "milestone" | "location";
+  kind: "thought" | "milestone" | "location" | "insight";
   title?: string;
   body: string;
   placeName?: string;
@@ -34,10 +34,17 @@ export async function loadManageableTrash(
   if (error) throw error;
   return (data ?? []).map((moment) => ({
     id: moment.moment_id,
-    journalPersonName: moment.journal_person_name,
-    journalPersonAccent: mapDatabaseAccent(moment.journal_person_accent),
+    journalPersonName:
+      moment.moment_kind === "insight"
+        ? "Insight"
+        : (moment.journal_person_name ?? "Family"),
+    journalPersonAccent: mapDatabaseAccent(
+      moment.journal_person_accent ?? "clay",
+    ),
     kind:
-      moment.moment_kind === "milestone" || moment.moment_kind === "location"
+      moment.moment_kind === "milestone" ||
+      moment.moment_kind === "location" ||
+      moment.moment_kind === "insight"
         ? moment.moment_kind
         : "thought",
     title: moment.moment_title ?? undefined,
