@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -144,7 +143,6 @@ function PhotoLightboxLayer({
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
   const closeTimerRef = useRef<number | null>(null);
-  const openedRef = useRef(false);
   const titleId = useId();
 
   useEffect(() => {
@@ -165,7 +163,6 @@ function PhotoLightboxLayer({
 
   function teardown() {
     clearCloseTimer();
-    openedRef.current = false;
     onClosed();
     document.getElementById("journal-focus-target")?.blur();
     if (document.activeElement instanceof HTMLElement) {
@@ -195,15 +192,9 @@ function PhotoLightboxLayer({
     closeRef.current = close;
   });
 
-  useLayoutEffect(() => {
-    if (!objectUrl || openedRef.current) return;
-    openedRef.current = true;
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        setMotion("open");
-      });
-    });
-  }, [objectUrl]);
+  function revealPhoto() {
+    setMotion((current) => (current === "opening" ? "open" : current));
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -268,6 +259,8 @@ function PhotoLightboxLayer({
           className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
           src={objectUrl}
           alt={request.alt}
+          onLoad={revealPhoto}
+          onError={revealPhoto}
           onDoubleClick={() => setZoomed((current) => !current)}
         />
       </div>

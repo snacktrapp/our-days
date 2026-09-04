@@ -6286,21 +6286,60 @@ button:focus-visible,
   z-index: 200;
 }
 
+@keyframes photo-lightbox-dim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes photo-lightbox-dim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes photo-lightbox-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes photo-lightbox-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
 .photo-lightbox-dimmer {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: #020403;
   opacity: 0;
-  transition: opacity 180ms ease;
 }
 
 .photo-lightbox[data-motion="open"] .photo-lightbox-dimmer {
-  opacity: 1;
+  animation: photo-lightbox-dim-in 180ms ease both;
 }
 
 .photo-lightbox[data-motion="closing"] .photo-lightbox-dimmer {
-  opacity: 0;
+  animation: photo-lightbox-dim-out 180ms ease both;
 }
 
 .photo-lightbox-stage {
@@ -6328,20 +6367,14 @@ button:focus-visible,
   transform-origin: center center;
   touch-action: pinch-zoom;
   opacity: 0;
-  transform: scale(0.98);
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
 }
 
 .photo-lightbox[data-motion="open"] .photo-lightbox-photo {
-  opacity: 1;
-  transform: scale(1);
+  animation: photo-lightbox-in 180ms ease both;
 }
 
 .photo-lightbox[data-motion="closing"] .photo-lightbox-photo {
-  opacity: 0;
-  transform: scale(0.98);
+  animation: photo-lightbox-out 180ms ease both;
 }
 
 .photo-lightbox-photo.is-zoomed {
@@ -7596,7 +7629,19 @@ iframe.composer-location-map {
   .media-viewer-dimmer,
   .photo-lightbox-photo,
   .photo-lightbox-dimmer {
+    animation: none !important;
     transition: none !important;
+  }
+
+  .photo-lightbox[data-motion="open"] .photo-lightbox-photo,
+  .photo-lightbox[data-motion="opening"] .photo-lightbox-photo {
+    opacity: 1;
+    transform: none;
+  }
+
+  .photo-lightbox[data-motion="open"] .photo-lightbox-dimmer,
+  .photo-lightbox[data-motion="opening"] .photo-lightbox-dimmer {
+    opacity: 1;
   }
 }
 

@@ -101,6 +101,11 @@ describe("photo lightbox", () => {
     fireEvent.click(trigger);
 
     const overlay = await screen.findByRole("img", { name: "First light" });
+    expect(screen.getByRole("dialog")).toHaveAttribute(
+      "data-motion",
+      "opening",
+    );
+    fireEvent.load(overlay);
     const stage = document.querySelector(
       ".photo-lightbox-stage",
     ) as HTMLElement;
@@ -228,6 +233,7 @@ describe("photo lightbox", () => {
       }),
     );
     const overlay = await screen.findByRole("img", { name: "Portrait" });
+    fireEvent.load(overlay);
     const stage = document.querySelector(
       ".photo-lightbox-stage",
     ) as HTMLElement;
@@ -255,6 +261,7 @@ describe("photo lightbox", () => {
       screen.getByRole("button", { name: "Open photo full screen: Porch" }),
     );
     const overlay = await screen.findByRole("img", { name: "Porch" });
+    fireEvent.load(overlay);
     const dialog = screen.getByRole("dialog");
     expect(dialog).not.toHaveStyle({ touchAction: "none" });
     fireEvent.pointerDown(dialog, {
