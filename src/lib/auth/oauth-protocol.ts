@@ -26,8 +26,10 @@ export function isOAuthProvider(value: string): value is OAuthProvider {
   return oauthProviders.includes(value as OAuthProvider);
 }
 
-export function supabaseOAuthProvider(provider: OAuthProvider) {
-  return provider === "x" ? "twitter" : "google";
+export function supabaseOAuthProvider(provider: OAuthProvider): "google" | "x" {
+  // Hosted Auth enables X as provider id `x` (OAuth 2.0).
+  // `twitter` is the legacy OAuth 1.0a id and is not enabled.
+  return provider === "x" ? "x" : "google";
 }
 
 function trimmed(environment: ProcessEnvironment, name: string) {

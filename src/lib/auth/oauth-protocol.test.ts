@@ -6,9 +6,15 @@ import {
   oauthCallbackUrl,
   OAuthIdentityError,
   readOAuthProviderConfig,
+  supabaseOAuthProvider,
 } from "./oauth-protocol";
 
 describe("OAuth protocol", () => {
+  it("maps app providers to hosted Auth provider ids", () => {
+    expect(supabaseOAuthProvider("google")).toBe("google");
+    expect(supabaseOAuthProvider("x")).toBe("x");
+  });
+
   it("reads complete Google and X pairs and ignores blanks", () => {
     expect(readOAuthProviderConfig("google", {})).toBeNull();
     expect(

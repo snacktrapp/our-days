@@ -37,7 +37,7 @@ describe("sign-in cleanup gate", () => {
     );
     expect(screen.queryByLabelText("Email address")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Sign in with Google" }),
+      screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
   });
 
@@ -48,12 +48,14 @@ describe("sign-in cleanup gate", () => {
     expect(
       screen.getByRole("heading", { name: "Open your family journal." }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Sign in with Google" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Sign in with X" }),
-    ).toBeVisible();
+    const google = screen.getByRole("link", { name: "Sign in with Google" });
+    const x = screen.getByRole("link", { name: "Sign in with X" });
+    expect(google).toBeVisible();
+    expect(google).toHaveAttribute("href", "/api/auth/oauth/google");
+    expect(x).toBeVisible();
+    expect(x).toHaveAttribute("href", "/api/auth/oauth/x");
+    expect(google.closest("form")).toBeNull();
+    expect(x.closest("form")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Email me a sign-in link" }),
     ).toBeVisible();
@@ -67,7 +69,7 @@ describe("sign-in cleanup gate", () => {
     render(createElement(PrivateEntry));
 
     expect(
-      screen.queryByRole("button", { name: "Sign in with Google" }),
+      screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Our Days is invitation only." }),

@@ -31,11 +31,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.getByRole("heading", { name: "Open your family journal." }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Sign in with Google" }),
-  ).toBeVisible();
+    page.getByRole("link", { name: "Sign in with Google" }),
+  ).toHaveAttribute("href", "/api/auth/oauth/google");
   await expect(
-    page.getByRole("button", { name: "Sign in with X" }),
-  ).toBeVisible();
+    page.getByRole("link", { name: "Sign in with X" }),
+  ).toHaveAttribute("href", "/api/auth/oauth/x");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
@@ -127,7 +127,7 @@ test("unconfigured Google and X stay on the invitation gate", async ({
 }) => {
   await page.goto("/sign-in");
   await expect(
-    page.getByRole("button", { name: "Sign in with Google" }),
+    page.getByRole("link", { name: "Sign in with Google" }),
   ).toBeVisible();
   await page.goto("/api/auth/oauth/google");
   await expect(page).toHaveURL(/\/sign-in\?oauth=unavailable/u);
