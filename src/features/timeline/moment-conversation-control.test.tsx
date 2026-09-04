@@ -297,6 +297,116 @@ describe("MomentConversationControl", () => {
     expect(
       screen.getByRole("list", { name: "Family responses" }),
     ).toHaveTextContent("😂Brian");
+    expect(document.querySelector(".quick-reaction-glyph")).toHaveClass(
+      "is-popping",
+    );
+    const responses = within(
+      screen.getByRole("list", { name: "Family responses" }),
+    );
+    expect(responses.getByText("Molly").closest("li")).not.toHaveClass(
+      "is-entering",
+    );
+    expect(responses.getByText("Brian").closest("li")).toHaveClass(
+      "is-entering",
+    );
+  });
+
+  it("pops the heart from a double-tap and eases the name pill in", () => {
+    renderControl(undefined, { notes: [], reactions: [] });
+    fireEvent(
+      document.getElementById("moment-conversation-moment-one")!,
+      new Event("our-days:heart"),
+    );
+    expect(document.querySelector(".quick-reaction-glyph")).toHaveClass(
+      "is-popping",
+    );
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Brian");
+    expect(screen.getByText("Brian").closest("li")).toHaveClass("is-entering");
+  });
+
+  it("reverses the name pill out when the current reaction is removed", async () => {
+    const user = userEvent.setup();
+    renderControl(undefined, {
+      notes: [],
+      reactions: [
+        {
+          id: "reaction-brian",
+          personName: "Brian",
+          personInitial: "B",
+          personAccent: "teal",
+          reactionId: "held-close",
+          isCurrentMember: true,
+        },
+      ],
+    });
+    expect(screen.getByText("Brian").closest("li")).not.toHaveClass(
+      "is-entering",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
+    );
+    await user.click(
+      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
+        "menuitemradio",
+        { name: "Heart" },
+      ),
+    );
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Brian");
+    expect(screen.getByText("Brian").closest("li")).toHaveClass("is-closing");
+  });
+
+  it("skips heart and pill motion when the user prefers reduced motion", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = userEvent.setup();
+      renderControl(undefined, { notes: [], reactions: [] });
+      fireEvent(
+        document.getElementById("moment-conversation-moment-one")!,
+        new Event("our-days:heart"),
+      );
+      expect(document.querySelector(".quick-reaction-glyph")).not.toHaveClass(
+        "is-popping",
+      );
+      expect(screen.getByText("Brian").closest("li")).not.toHaveClass(
+        "is-entering",
+      );
+      await user.click(
+        screen.getByRole("button", { name: /Choose a reaction for photo/u }),
+      );
+      await user.click(
+        within(
+          screen.getByRole("menu", { name: "Choose a reaction" }),
+        ).getByRole("menuitemradio", { name: "Heart" }),
+      );
+      expect(
+        screen.queryByRole("list", { name: "Family responses" }),
+      ).toBeNull();
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
   });
 
   it("shows standard emoji choices without relying on a long press", async () => {
@@ -317,6 +427,68 @@ describe("MomentConversationControl", () => {
     expect(
       within(choices).getByRole("menuitemradio", { name: "Meaningful" }),
     ).toHaveTextContent("✨");
+  });
+
+  it("hides the reaction menu as soon as the picker starts closing", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    const trigger = screen.getByRole("button", {
+      name: /Choose a reaction for photo/u,
+    });
+    await user.click(trigger);
+    expect(screen.getByRole("menu", { name: "Choose a reaction" })).toHaveClass(
+      "overlay-popover",
+    );
+    expect(
+      screen.getByRole("menu", { name: "Choose a reaction" }),
+    ).toBeVisible();
+
+    await user.click(trigger);
+
+    expect(
+      screen.queryByRole("menu", { name: "Choose a reaction" }),
+    ).toBeNull();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".inline-reaction-picker")).toHaveClass(
+      "is-closing",
+    );
+  });
+
+  it("closes the reaction picker immediately when motion is reduced", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = userEvent.setup();
+      renderControl();
+      const trigger = screen.getByRole("button", {
+        name: /Choose a reaction for photo/u,
+      });
+      await user.click(trigger);
+      await user.click(trigger);
+
+      expect(document.querySelector(".inline-reaction-picker")).toBeNull();
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
   });
 
   it("closes the picker and restores the prior response when saving fails", async () => {
@@ -373,6 +545,9 @@ describe("MomentConversationControl", () => {
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
+    expect(form).toHaveClass("inline-note-form");
+    expect(form).not.toHaveClass("overlay-popover");
+    expect(form).not.toHaveClass("note-drawer");
     expect(
       within(form)
         .getAllByRole("button")

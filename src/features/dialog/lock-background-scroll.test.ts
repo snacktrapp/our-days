@@ -5,9 +5,11 @@ import {
   backgroundScrollLockClass,
   overlayBackgroundScrollShouldStop,
   overlayScrollParent,
+  showDialogPreservingScroll,
   showModalPreservingScroll,
   useLockBackgroundScroll,
   useModalDialog,
+  useOverlayMount,
 } from "./lock-background-scroll";
 
 function scrollable(kind: "auto" | "scroll" = "auto") {
@@ -33,6 +35,9 @@ describe("overlay background scroll lock", () => {
   afterEach(() => {
     document.documentElement.classList.remove(backgroundScrollLockClass);
     document.body.classList.remove(backgroundScrollLockClass);
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+      meta.remove();
+    });
     vi.restoreAllMocks();
   });
 
@@ -100,6 +105,19 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
+  it("opens a type-picker overlay without promoting it to the modal top layer", () => {
+    const dialog = document.createElement("dialog");
+    const show = vi.fn(() => {
+      dialog.setAttribute("open", "");
+    });
+    const showModal = vi.fn();
+    dialog.show = show;
+    dialog.showModal = showModal;
+    showDialogPreservingScroll(dialog, false);
+    expect(show).toHaveBeenCalledOnce();
+    expect(showModal).not.toHaveBeenCalled();
+  });
+
   it("restores window scroll after the overlay closes", () => {
     let scrollY = 160;
     Object.defineProperty(window, "scrollY", {
@@ -120,6 +138,17 @@ describe("overlay background scroll lock", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
   });
 
+  it("leaves Safari theme-color on the journal so New moment frost can sample the grid", () => {
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "theme-color");
+    meta.setAttribute("content", "#0b1712");
+    document.head.append(meta);
+    const { unmount } = renderHook(() => useLockBackgroundScroll(true));
+    expect(meta.getAttribute("content")).toBe("#0b1712");
+    unmount();
+    expect(meta.getAttribute("content")).toBe("#0b1712");
+  });
+
   it("prevents wheel default on overlay chrome while locked", () => {
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
     const event = new WheelEvent("wheel", {
@@ -130,6 +159,46 @@ describe("overlay background scroll lock", () => {
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     unmount();
+  });
+
+  it("mounts a non-dialog overlay without a native dialog layer", async () => {
+    const { rerender, unmount } = renderHook(
+      ({ open }) => useOverlayMount(open),
+      { initialProps: { open: true } },
+    );
+
+    expect(document.body).toHaveClass(backgroundScrollLockClass);
+    rerender({ open: false });
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass(backgroundScrollLockClass);
+    });
+    unmount();
+  });
+
+  it("opens the type picker with show() so nav frost can keep sampling the grid", async () => {
+    const show = vi.fn(function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    });
+    const showModal = vi.fn();
+
+    function Harness({ open }: { open: boolean }) {
+      const ref = useRef<HTMLDialogElement>(null);
+      const mounted = useModalDialog(open, ref, { modal: false });
+      if (!mounted) return null;
+      return createElement("dialog", {
+        ref: (node: HTMLDialogElement | null) => {
+          if (node) {
+            node.show = show;
+            node.showModal = showModal;
+          }
+          ref.current = node;
+        },
+      });
+    }
+
+    render(createElement(Harness, { open: true }));
+    await waitFor(() => expect(show).toHaveBeenCalled());
+    expect(showModal).not.toHaveBeenCalled();
   });
 
   it("closes a connected modal before restoring window scroll", async () => {

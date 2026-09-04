@@ -81,6 +81,8 @@ export type PhotoMomentViewModel = TimelineMomentBase &
       alt: string;
       badgeLabel: string;
       delivery?: "private";
+      width?: number;
+      height?: number;
     }>;
   }>;
 
@@ -93,6 +95,8 @@ export type VideoMomentViewModel = TimelineMomentBase &
     video: Readonly<{
       src: string;
       durationMs?: number;
+      width?: number;
+      height?: number;
     }>;
   }>;
 

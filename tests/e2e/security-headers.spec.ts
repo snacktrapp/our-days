@@ -1,5 +1,27 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { Page } from "@playwright/test";
 import { expect, test } from "./test";
+
+async function applicationInlineStyles(page: Page) {
+  return page.locator("[style]").evaluateAll((elements) =>
+    elements
+      .filter((element) => {
+        if (element === document.documentElement || element === document.body) {
+          return false;
+        }
+        const root = element.getRootNode();
+        return !(
+          element.closest("next-route-announcer") ||
+          (root instanceof ShadowRoot &&
+            root.host.matches("next-route-announcer"))
+        );
+      })
+      .map((element) => ({
+        tag: element.tagName,
+        value: element.getAttribute("style"),
+      })),
+  );
+}
 
 test.skip(
   ({ browserName }) => browserName !== "chromium",
@@ -109,8 +131,23 @@ test("timeline, memories, and composer render without application style attribut
           Math.abs(imageRect.height - frameRect!.height) < 0.5,
       };
     });
-    expect(crop).toEqual({ objectFit: "cover", fillsFrame: true });
     if (path === "/family") {
+      expect(crop.objectFit).toBe("contain");
+      const timelineFrame = await image.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          aspectRatio: style.aspectRatio,
+          height: rect.height,
+          maxHeightPx: Number.parseFloat(style.maxHeight),
+          width: rect.width,
+        };
+      });
+      expect(timelineFrame.aspectRatio).toBe("auto");
+      expect(timelineFrame.height).toBeLessThan(timelineFrame.width);
+      expect(timelineFrame.height).toBeLessThanOrEqual(
+        timelineFrame.maxHeightPx + 1,
+      );
       await expect(image).toHaveAttribute("loading", "eager");
       await expect(image).toHaveAttribute("fetchpriority", "high");
       await expect(image).toHaveAttribute(
@@ -118,27 +155,11 @@ test("timeline, memories, and composer render without application style attribut
         "(max-width: 520px) 92vw, 410px",
       );
     } else {
+      expect(crop).toEqual({ objectFit: "cover", fillsFrame: true });
       await expect(image).toHaveAttribute("loading", "lazy");
       await expect(image).toHaveAttribute("sizes", "360px");
     }
-    const applicationStyles = await page
-      .locator("[style]")
-      .evaluateAll((elements) =>
-        elements
-          .filter((element) => {
-            const root = element.getRootNode();
-            return !(
-              element.closest("next-route-announcer") ||
-              (root instanceof ShadowRoot &&
-                root.host.matches("next-route-announcer"))
-            );
-          })
-          .map((element) => ({
-            tag: element.tagName,
-            value: element.getAttribute("style"),
-          })),
-      );
-    expect(applicationStyles).toEqual([]);
+    expect(await applicationInlineStyles(page)).toEqual([]);
   }
 
   await page.goto("/family");
@@ -153,24 +174,7 @@ test("timeline, memories, and composer render without application style attribut
     "src",
     /^blob:/u,
   );
-  const applicationStyles = await page
-    .locator("[style]")
-    .evaluateAll((elements) =>
-      elements
-        .filter((element) => {
-          const root = element.getRootNode();
-          return !(
-            element.closest("next-route-announcer") ||
-            (root instanceof ShadowRoot &&
-              root.host.matches("next-route-announcer"))
-          );
-        })
-        .map((element) => ({
-          tag: element.tagName,
-          value: element.getAttribute("style"),
-        })),
-    );
-  expect(applicationStyles).toEqual([]);
+  expect(await applicationInlineStyles(page)).toEqual([]);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
 });
 
@@ -217,13 +221,14 @@ test("an unhandled route error uses the CSP-compatible global boundary", async (
   expect(response?.headers()["content-security-policy"]).toContain(
     "style-src-attr 'none'",
   );
+  await expect(page.getByRole("heading", { name: "Our Days" })).toBeVisible();
+  await expect(page.getByText("Something interrupted the story")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "We couldn’t open Our Days." }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: "This page couldn’t load" }),
+  ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
-  const applicationStyles = await page.locator("[style]").count();
-  expect(applicationStyles).toBe(0);
-  await expect(page.locator("body")).toHaveCSS("display", "grid");
+  expect(await applicationInlineStyles(page)).toEqual([]);
+  await expect(page.locator(".journal-error-shell [style]")).toHaveCount(0);
 
   const viewport = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -242,7 +247,8 @@ test("an unhandled route error uses the CSP-compatible global boundary", async (
   await page.keyboard.press("Tab");
   await expect(retry).toBeFocused();
   await retry.click();
+  await expect(page.getByRole("heading", { name: "Our Days" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "We couldn’t open Our Days." }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: "This page couldn’t load" }),
+  ).toHaveCount(0);
 });

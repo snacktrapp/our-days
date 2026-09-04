@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
+import { useOverlayPopoverClose } from "./use-overlay-popover-close";
 
 type NotificationItem = NonNullable<
   JournalChromeViewModel["notifications"]
@@ -40,6 +41,8 @@ export function NotificationCenter({
   const centerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLElement>(null);
+  const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
+    useOverlayPopoverClose();
   const seenSnapshot = useSyncExternalStore(
     subscribeToSeenNotifications,
     readSeenNotifications,
@@ -58,9 +61,11 @@ export function NotificationCenter({
   }, [seenSnapshot]);
 
   const closePanel = useCallback(() => {
-    setOpen(false);
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
-  }, []);
+    requestClose(() => {
+      setOpen(false);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    });
+  }, [requestClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -95,9 +100,14 @@ export function NotificationCenter({
 
   const toggle = () => {
     if (open) {
+      if (closingRef.current) {
+        cancel();
+        return;
+      }
       closePanel();
       return;
     }
+    cancel();
     setOpen(true);
     if (unseenIds.length === 0) return;
     const nextSeen = Array.from(new Set([...seenIds, ...unseenIds])).slice(
@@ -122,7 +132,7 @@ export function NotificationCenter({
             ? `Open notifications, ${unseenIds.length} new`
             : "Open notifications"
         }
-        aria-expanded={open}
+        aria-expanded={open && !closing}
         aria-controls={panelId}
         onClick={toggle}
       >
@@ -136,8 +146,12 @@ export function NotificationCenter({
       {open ? (
         <section
           id={panelId}
-          className="notification-panel header-drawer-surface"
+          className={`notification-panel header-drawer-surface overlay-popover${
+            closing ? " is-closing" : ""
+          }`}
           aria-label="Notifications"
+          aria-hidden={closing ? true : undefined}
+          onAnimationEnd={onAnimationEnd}
         >
           <div className="notification-heading">
             <strong ref={headingRef} tabIndex={-1}>

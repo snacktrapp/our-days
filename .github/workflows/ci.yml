@@ -24,7 +24,7 @@ jobs:
   quality:
     name: Quality and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,7 +38,33 @@ jobs:
       - name: Install the exact dependency tree
         run: npm ci
       - name: Audit the complete dependency tree
-        run: npm audit --audit-level=moderate
+        run: |
+          set +e
+          output=""
+          status=1
+          transient=1
+          for attempt in 1 2 3 4; do
+            output="$(timeout 90 npm audit --audit-level=moderate 2>&1)"
+            status=$?
+            printf '%s\n' "$output"
+            if [ "$status" -eq 0 ]; then
+              exit 0
+            fi
+            if printf '%s\n' "$output" | grep -Eq 'found [1-9][0-9]* vulnerabilit'; then
+              exit "$status"
+            fi
+            if [ "$status" -ne 124 ] &&
+              ! printf '%s\n' "$output" | grep -Eqi '503|Service Unavailable|audit endpoint returned an error'; then
+              transient=0
+            fi
+            echo "npm audit attempt ${attempt} failed with status ${status}; retrying"
+            sleep $((attempt * 10))
+          done
+          if [ "$transient" -eq 1 ]; then
+            echo "::warning::npm audit registry was unavailable after retries; no vulnerability report was produced"
+            exit 0
+          fi
+          exit "$status"
       - name: Run formatting, lint, type, and component checks
         run: npm run check
       - name: Build and scan with the default production bundler

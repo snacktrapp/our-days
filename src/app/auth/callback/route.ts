@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { acceptPendingInvitationForSession } from "@/lib/auth/accept-pending-invitation.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 function appRedirect(request: Request, path: string) {
@@ -6,13 +7,24 @@ function appRedirect(request: Request, path: string) {
 }
 
 export async function GET(request: Request) {
-  const code = new URL(request.url).searchParams.get("code");
-  if (!code) return appRedirect(request, "/sign-in?link=invalid");
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code");
+  const tokenHash = url.searchParams.get("token_hash");
+  const otpType = url.searchParams.get("type");
+  if (!code && !tokenHash) {
+    // Implicit invite tokens live in the URL hash, which this route never
+    // sees. Hand the browser to the client completer; it keeps the hash.
+    return appRedirect(request, "/auth/complete");
+  }
 
   try {
     const supabase = await createOurDaysServerClient();
-    const { error: exchangeError } =
-      await supabase.auth.exchangeCodeForSession(code);
+    const { error: exchangeError } = code
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : await supabase.auth.verifyOtp({
+          token_hash: tokenHash!,
+          type: otpType === "invite" ? "invite" : "magiclink",
+        });
 
     if (exchangeError) {
       return appRedirect(request, "/sign-in?link=invalid");
@@ -29,7 +41,10 @@ export async function GET(request: Request) {
     }
 
     if (!data || data.length === 0) {
-      return appRedirect(request, "/access-unavailable");
+      const accepted = await acceptPendingInvitationForSession(supabase);
+      if (!accepted) {
+        return appRedirect(request, "/access-unavailable");
+      }
     }
 
     return appRedirect(request, "/family");

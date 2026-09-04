@@ -1,3 +1,4 @@
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 
 const routes = [
@@ -17,6 +18,38 @@ const routes = [
   "/quality/video-feasibility",
   "/quality/photo-status",
 ];
+
+async function expectFrostedNavPill(pill: Locator) {
+  const frost = await pill.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const color = style.backgroundColor;
+    const alpha = color.startsWith("rgba(")
+      ? Number.parseFloat(color.slice(color.lastIndexOf(",") + 1, -1))
+      : color.startsWith("rgb(")
+        ? 1
+        : Number.NaN;
+    const computedBlur =
+      style.backdropFilter !== "none" && style.backdropFilter
+        ? style.backdropFilter
+        : style.getPropertyValue("-webkit-backdrop-filter");
+    return {
+      alpha,
+      blur: computedBlur,
+      isolation: style.isolation,
+      tokenBlur: style.getPropertyValue("--nav-pill-blur").trim(),
+    };
+  });
+  expect(frost.alpha).toBeGreaterThanOrEqual(0.5);
+  expect(frost.alpha).toBeLessThan(1);
+  if (frost.blur && /blur\(/u.test(frost.blur)) {
+    expect(frost.blur).toMatch(/blur\(/u);
+  } else {
+    // Linux Chromium/Firefox often compute backdrop-filter as empty even
+    // when the pill still uses the shared frost token.
+    expect(frost.tokenBlur).toMatch(/^\d+(?:\.\d+)?px$/u);
+  }
+  expect(frost.isolation).not.toBe("isolate");
+}
 
 for (const route of routes) {
   test(`${route} reflows without horizontal overflow or undersized actions`, async ({
@@ -52,7 +85,8 @@ for (const route of routes) {
         viewportWidth: document.documentElement.clientWidth,
         scrollWidth: document.documentElement.scrollWidth,
         undersized: buttonsAndLinks.filter(
-          ({ width, height }) => width < 44 || height < 44,
+          ({ width, height }) =>
+            Math.round(width) < 44 || Math.round(height) < 44,
         ),
       };
     });
@@ -139,6 +173,19 @@ test("reduced-motion preference removes entrance animations", async ({
     "animation-name",
     "none",
   );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await page.getByRole("button", { name: /Open notifications/u }).click();
+  await expect(page.locator(".notification-panel")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+  await page.keyboard.press("Escape");
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
 });
 
 test("the graph-paper grid is painted by a viewport-fixed layer", async ({
@@ -149,6 +196,7 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
 
   const grid = await page.locator(".app-shell").evaluate((shell) => {
     const layer = getComputedStyle(shell, "::before");
+    const root = getComputedStyle(document.documentElement);
     const stage = getComputedStyle(document.querySelector(".phone-stage")!);
     return {
       backgroundImage: layer.backgroundImage,
@@ -157,12 +205,14 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
       phoneStageBackgroundImage: stage.backgroundImage,
       position: layer.position,
       right: layer.right,
+      rootBackgroundImage: root.backgroundImage,
       top: layer.top,
     };
   });
 
   expect(grid.position).toBe("fixed");
   expect(grid.backgroundImage).toContain("linear-gradient");
+  expect(grid.rootBackgroundImage).toContain("linear-gradient");
   expect(grid.phoneStageBackgroundImage).toBe("none");
   expect(grid).toMatchObject({
     bottom: "0px",
@@ -170,6 +220,117 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
     right: "0px",
     top: "0px",
   });
+});
+
+async function expectTypePickerKeepsFrostedNav(page: Page) {
+  await page.getByRole("button", { name: "Add moment" }).click();
+  const picker = page.locator(
+    ".new-moment-composer-dialog.composer-type-picker",
+  );
+  await expect(picker).toBeVisible();
+  await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(0);
+  expect(await picker.evaluate((element) => element.tagName)).toBe("DIV");
+  expect(await picker.evaluate((element) => element.matches(":modal"))).toBe(
+    false,
+  );
+  await expectFrostedNavPill(page.locator(".topbar"));
+  await expectFrostedNavPill(page.locator(".bottom-nav"));
+  const slab = await picker.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    const topbar = document.querySelector(".topbar")!.getBoundingClientRect();
+    return {
+      alpha: style.backgroundColor.startsWith("rgba(")
+        ? Number.parseFloat(
+            style.backgroundColor.slice(
+              style.backgroundColor.lastIndexOf(",") + 1,
+              -1,
+            ),
+          )
+        : style.backgroundColor.startsWith("rgb(")
+          ? 1
+          : style.backgroundColor === "transparent" ||
+              style.backgroundColor === "rgba(0, 0, 0, 0)"
+            ? 0
+            : Number.NaN,
+      backdrop: style.backdropFilter,
+      bottom: rect.bottom,
+      height: rect.height,
+      navTop: nav.top,
+      parentIsBody: element.parentElement === document.body,
+      themedDialog: element.classList.contains("composer-dialog"),
+      top: rect.top,
+      topbarBottom: topbar.bottom,
+    };
+  });
+  expect(slab.alpha).toBeLessThan(0.05);
+  expect(slab.backdrop === "none" || slab.backdrop === "").toBe(true);
+  expect(slab.themedDialog).toBe(false);
+  expect(slab.parentIsBody).toBe(true);
+  expect(slab.top).toBeGreaterThanOrEqual(slab.topbarBottom - 1);
+  expect(slab.bottom).toBeLessThan(slab.navTop);
+  const corners = await picker.locator(".composer-sheet").evaluate((sheet) => {
+    const style = getComputedStyle(sheet);
+    return {
+      bottomLeft: style.borderBottomLeftRadius,
+      bottomRight: style.borderBottomRightRadius,
+      topLeft: style.borderTopLeftRadius,
+      topRight: style.borderTopRightRadius,
+    };
+  });
+  expect(corners.bottomLeft).toBe(corners.topLeft);
+  expect(corners.bottomRight).toBe(corners.topRight);
+  expect(Number.parseFloat(corners.topLeft)).toBeGreaterThan(0);
+  const canvas = await page.evaluate(() => {
+    const root = document.documentElement;
+    const rootStyle = getComputedStyle(root);
+    const shell = document.querySelector(".app-shell");
+    const layer = shell ? getComputedStyle(shell, "::before") : null;
+    return {
+      html: rootStyle.backgroundColor,
+      htmlImage: rootStyle.backgroundImage,
+      body: getComputedStyle(document.body).backgroundColor,
+      grid: layer?.backgroundImage ?? "",
+      theme: root.dataset.theme,
+    };
+  });
+  const expectedCanvas =
+    canvas.theme === "light" ? "rgb(231, 223, 211)" : "rgb(11, 23, 18)";
+  expect(canvas.html).toBe(expectedCanvas);
+  expect(canvas.body).toBe(expectedCanvas);
+  expect(canvas.htmlImage).toContain("linear-gradient");
+  expect(canvas.grid).toContain("linear-gradient");
+  const themeColor = await page
+    .locator('meta[name="theme-color"]')
+    .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
+  expect(themeColor.includes("#000000")).toBe(false);
+}
+
+test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
+  await page.goto("/family");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expectTypePickerKeepsFrostedNav(page);
+});
+
+test("New moment type picker keeps frosted nav chrome over the grid in light", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "light");
+  });
+  await page.goto("/family");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectTypePickerKeepsFrostedNav(page);
 });
 
 test("moment options open as a compact popover under the trigger without inline positioning", async ({
@@ -240,10 +401,12 @@ test("moment options open as a compact popover under the trigger without inline 
         rect.top >= 0,
       navTop: nav.top,
       position: style.position,
+      animationName: style.animationName,
       width: rect.width,
     };
   });
   expect(geometry.position).toBe("absolute");
+  expect(geometry.animationName).toContain("overlay-popover-in");
   expect(geometry.compactWidth).toBe(true);
   expect(geometry.alignedToTrigger).toBe(true);
   expect(geometry.belowTrigger).toBe(true);
@@ -390,6 +553,7 @@ test("primary navigation floats as a compact rounded bar above the safe area", a
   const navigation = page.locator(".bottom-nav");
   await expect(navigation).toHaveCSS("position", "fixed");
   await expect(navigation).toHaveCSS("transform", "none");
+  await expectFrostedNavPill(navigation);
 
   const geometry = await navigation.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -430,6 +594,116 @@ test("primary navigation floats as a compact rounded bar above the safe area", a
   expect(geometry.bottom).not.toBe("0px");
 });
 
+test("top chrome floats as a compact rounded pill above the feed", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  const header = page.locator(".topbar");
+  await expect(header).toHaveCSS("position", "fixed");
+  await expect(header).toHaveCSS("transform", "none");
+  await expectFrostedNavPill(header);
+  await expect(page.locator(".phone-stage")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(header.locator(".nav-item")).toHaveCount(0);
+  await expect(
+    header.getByRole("button", { name: "Add moment" }),
+  ).toBeVisible();
+
+  const geometry = await header.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    const stage = document
+      .querySelector(".phone-stage")!
+      .getBoundingClientRect();
+    const above = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      Math.max(1, rect.top - 4),
+    );
+    const beside = document.elementFromPoint(
+      Math.max(1, rect.left - 4),
+      rect.top + rect.height / 2,
+    );
+    return {
+      aboveIsHeader: Boolean(above?.closest(".topbar")),
+      besideIsHeader: Boolean(beside?.closest(".topbar")),
+      height: rect.height,
+      leftGap: rect.left - stage.left,
+      radius: Number.parseFloat(style.borderRadius),
+      rightGap: stage.right - rect.right,
+      stageWidth: stage.width,
+      top: style.top,
+      topGap: rect.top,
+      width: rect.width,
+    };
+  });
+
+  expect(geometry.height).toBeLessThanOrEqual(58);
+  expect(geometry.radius).toBeGreaterThanOrEqual(12);
+  expect(geometry.leftGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.rightGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.topGap).toBeGreaterThanOrEqual(8);
+  expect(geometry.width).toBeLessThan(geometry.stageWidth);
+  expect(geometry.aboveIsHeader).toBe(false);
+  expect(geometry.besideIsHeader).toBe(false);
+  expect(geometry.top).not.toBe("0px");
+
+  await page.evaluate(() => window.scrollTo(0, 240));
+  const afterScroll = await header.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top, position: getComputedStyle(element).position };
+  });
+  expect(afterScroll.position).toBe("fixed");
+  expect(afterScroll.top).toBeCloseTo(geometry.topGap, 0);
+});
+
+test("family title is tappable and optically centered in the top pill", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const heading = page.getByRole("heading", { name: "All our days" });
+    const summary = page.locator(".title-switcher summary");
+    await expect(summary).toHaveCSS("pointer-events", "auto");
+    await expect(page.locator(".title-switcher")).toHaveCSS(
+      "pointer-events",
+      "none",
+    );
+
+    const alignment = await page.evaluate(() => {
+      const bar = document.querySelector(".topbar")!;
+      const title = document.querySelector(".title-switcher-heading h1")!;
+      const barRect = bar.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      return {
+        offset:
+          (titleRect.left + titleRect.right) / 2 -
+          (barRect.left + barRect.right) / 2,
+        paddingInlineStart: getComputedStyle(
+          document.querySelector(".title-switcher summary")!,
+        ).paddingInlineStart,
+      };
+    });
+    expect(Math.abs(alignment.offset)).toBeLessThanOrEqual(2);
+    expect(alignment.paddingInlineStart).toBe("0px");
+
+    await summary.click();
+    await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+    await expect(
+      page.getByRole("navigation", { name: "Choose a family timeline" }),
+    ).toBeVisible();
+    await heading.click();
+    await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
+  }
+});
+
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
   page,
 }) => {
@@ -437,8 +711,8 @@ test("touch-focused composer textareas keep content spacing without a selection 
   await page.goto("/family");
   await page.getByRole("button", { name: "Add moment" }).click();
   const composer = page.getByRole("dialog");
-  await composer.getByRole("button", { name: /Location/u }).click();
-  const details = composer.getByRole("textbox", { name: "Details" });
+  await composer.getByRole("button", { name: /Written entry/u }).click();
+  const details = composer.getByRole("textbox", { name: "Entry" });
   await details.fill("Vroom vroom");
 
   const focusedField = await details.evaluate((textarea) => {
@@ -487,14 +761,12 @@ test("touch-focused composer textareas keep content spacing without a selection 
   expect(keyboardTagFocus.boxShadow).not.toBe("none");
 });
 
-test("real route transitions preserve the nav through every loading frame", async ({
+test("real route transitions hold the last screen and keep the nav put", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 440, height: 844 });
   await page.goto("/family");
-  const navigation = page.locator(".bottom-nav");
-  const navigationNode = await navigation.elementHandle();
-  expect(navigationNode).not.toBeNull();
+  await expect(page.locator(".bottom-nav")).toHaveCount(1);
 
   await page.route(/\/people\?_rsc=/u, async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -508,7 +780,9 @@ test("real route transitions preserve the nav through every loading frame", asyn
     const samples: Array<{
       bottomGap: number;
       count: number;
-      isOriginalNode: boolean;
+      emptyJournal: boolean;
+      familyHeld: boolean;
+      loadingFrame: boolean;
       position: string;
       top: number;
     }> = [];
@@ -519,12 +793,20 @@ test("real route transitions preserve the nav through every loading frame", asyn
     state.__navTransitionSamples = samples;
     state.__stopNavTransitionSampling = false;
     const sample = () => {
-      const style = getComputedStyle(navigation);
-      const rect = navigation.getBoundingClientRect();
+      const current = document.querySelector<HTMLElement>(".bottom-nav");
+      if (!current) return;
+      const style = getComputedStyle(current);
+      const rect = current.getBoundingClientRect();
       samples.push({
         bottomGap: window.innerHeight - rect.bottom,
         count: document.querySelectorAll(".bottom-nav").length,
-        isOriginalNode: navigation === document.querySelector(".bottom-nav"),
+        emptyJournal: Boolean(document.querySelector(".timeline-empty-state")),
+        familyHeld: Boolean(
+          document
+            .getElementById("journal-focus-target")
+            ?.textContent?.includes("All our days"),
+        ),
+        loadingFrame: Boolean(document.querySelector(".journal-loading")),
         position: style.position,
         top: rect.top,
       });
@@ -536,24 +818,40 @@ test("real route transitions preserve the nav through every loading frame", asyn
   await page
     .getByRole("navigation", { name: "Primary navigation" })
     .getByRole("link", { name: "People" })
-    .click();
+    .click({ noWaitAfter: true });
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "People" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("Opening your family’s days…")).toBeVisible();
-  await expect(page.locator(".journal-loading .date-marker")).toHaveText(
-    /opening your family’s days/iu,
-  );
+  await expect(
+    page.getByRole("heading", { name: "All our days" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" })
+      .locator(".nav-symbol-pending"),
+  ).toHaveCount(1);
+  await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
+  await expect(page.locator(".journal-loading")).toHaveCount(0);
+  await expect(page.locator(".timeline-empty-state")).toHaveCount(0);
   await expect(page).toHaveURL(/\/people$/u);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" })
+      .locator(".nav-symbol-pending"),
+  ).toHaveCount(0);
   const samples = await page.evaluate(() => {
     const state = window as typeof window & {
       __navTransitionSamples?: Array<{
         bottomGap: number;
         count: number;
-        isOriginalNode: boolean;
+        emptyJournal: boolean;
+        familyHeld: boolean;
+        loadingFrame: boolean;
         position: string;
         top: number;
       }>;
@@ -565,8 +863,13 @@ test("real route transitions preserve the nav through every loading frame", asyn
 
   expect(samples.length).toBeGreaterThan(10);
   expect(samples.every(({ count }) => count === 1)).toBe(true);
-  expect(samples.every(({ isOriginalNode }) => isOriginalNode)).toBe(true);
+  const held = samples.filter(({ familyHeld }) => familyHeld);
+  expect(held.length).toBeGreaterThan(0);
+  expect(held.every(({ position }) => position === "fixed")).toBe(true);
   expect(samples.every(({ position }) => position === "fixed")).toBe(true);
+  expect(samples.every(({ loadingFrame }) => !loadingFrame)).toBe(true);
+  expect(samples.every(({ emptyJournal }) => !emptyJournal)).toBe(true);
+  expect(samples.some(({ familyHeld }) => familyHeld)).toBe(true);
   expect(
     Math.max(...samples.map(({ top }) => top)) -
       Math.min(...samples.map(({ top }) => top)),
@@ -578,13 +881,7 @@ test("real route transitions preserve the nav through every loading frame", asyn
   expect(
     Math.min(...samples.map(({ bottomGap }) => bottomGap)),
   ).toBeGreaterThanOrEqual(8);
-  expect(
-    await navigationNode!.evaluate(
-      (element) =>
-        element.isConnected &&
-        element === document.querySelector(".bottom-nav"),
-    ),
-  ).toBe(true);
+  await expect(page.locator(".bottom-nav")).toHaveCount(1);
 });
 
 test("primary navigation remains above every secondary page canvas", async ({
@@ -671,4 +968,48 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
 
   await photoChoice.scrollIntoViewIfNeeded();
   await expect(photoChoice).toBeInViewport({ ratio: 1 });
+});
+
+test("a timeline photo expands over the floating header", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await page.locator(".photo-viewer-trigger").first().click();
+  const dialog = page.locator(".photo-lightbox");
+  await expect(dialog).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const viewer = document.querySelector(".photo-lightbox");
+    if (!(viewer instanceof HTMLElement)) return null;
+    const rect = viewer.getBoundingClientRect();
+    const header = document.querySelector(".topbar");
+    const headerRect = header?.getBoundingClientRect();
+    const headerHit =
+      headerRect &&
+      document.elementFromPoint(headerRect.left + 12, headerRect.top + 12);
+    return {
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      coversHeader: !headerHit?.closest(".topbar"),
+    };
+  });
+  expect(geometry?.top).toBe(0);
+  expect(geometry?.width).toBe(390);
+  expect(geometry?.height).toBe(844);
+  expect(geometry?.coversHeader).toBe(true);
+  await expect(page.locator("html")).toHaveClass(/overlay-open/u);
+  const paint = await page.evaluate(() => {
+    const viewer = document.querySelector(".photo-lightbox");
+    if (!(viewer instanceof HTMLElement)) return null;
+    return {
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
+      lightbox: getComputedStyle(viewer).backgroundColor,
+    };
+  });
+  expect(paint?.html).toBe("rgb(0, 0, 0)");
+  expect(paint?.body).toBe("rgb(0, 0, 0)");
+  expect(paint?.lightbox).toBe("rgb(0, 0, 0)");
+  await expect(
+    page.locator('meta[name="theme-color"]').first(),
+  ).toHaveAttribute("content", "#000000");
 });

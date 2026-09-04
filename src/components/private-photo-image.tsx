@@ -5,8 +5,8 @@ import { useState } from "react";
 type PrivatePhotoImageProps = Readonly<{
   src: string;
   alt: string;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   highPriority?: boolean;
 }>;
 

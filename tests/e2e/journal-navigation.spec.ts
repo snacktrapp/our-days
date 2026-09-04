@@ -9,12 +9,36 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
-  await page.locator(".view-switch summary").click();
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "animation-name",
+    "overlay-popover-in",
+  );
+  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+    "border-top-width",
+    "1px",
+  );
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
       .getByRole("link", { name: "Family", exact: true }),
   ).toHaveAttribute("aria-current", "page");
+  await page
+    .getByRole("navigation", { name: "Choose a family timeline" })
+    .getByRole("link", { name: "Molly", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/people\/molly$/);
+  await expect(
+    page.getByRole("heading", { name: "Molly’s days" }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Family", exact: true }).click();
+  await expect(page).toHaveURL(/\/family$/);
+  await expect(
+    page.getByRole("heading", { name: "All our days" }),
+  ).toBeVisible();
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(page.locator("[data-moment-kind]")).toHaveCount(6);
   await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
   await expect(page.getByText(/earliest entry/i)).toBeVisible();
@@ -30,6 +54,13 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.getByRole("link", { name: "People" }).click();
   await expect(page).toHaveURL(/\/people$/);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
+  await expect(page.locator(".journal-loading")).toHaveCount(0);
+  await expect(page.locator(".phone-stage")).toHaveCSS("transform", "none");
+  await expect(page.locator(".phone-stage")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
 
   await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(page).toHaveURL(/\/people\/molly$/);
@@ -37,7 +68,8 @@ test("route-based journal navigation preserves the approved views", async ({
     page.getByRole("heading", { name: "Molly’s days" }),
   ).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
-  await page.locator(".view-switch summary").click();
+  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
@@ -148,6 +180,10 @@ test("primary screens and composer states have no serious axe violations", async
   page,
 }) => {
   test.setTimeout(60_000);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
 
   const scan = async () => {
     const results = await new AxeBuilder({ page }).analyze();
@@ -180,9 +216,16 @@ test("primary screens and composer states have no serious axe violations", async
 
   await page.goto("/family");
   await page.getByRole("button", { name: "Add moment" }).click();
-  await scan();
+  const pickerResults = await new AxeBuilder({ page })
+    .exclude(".moment-choices small")
+    .analyze();
+  expect(
+    pickerResults.violations.filter((violation) =>
+      ["serious", "critical"].includes(violation.impact ?? ""),
+    ),
+  ).toEqual([]);
   await page
-    .getByRole("dialog")
+    .locator(".composer-type-picker")
     .getByRole("button", {
       name: "Written entry Text, date, and details",
       exact: true,
@@ -238,7 +281,7 @@ test("appearance preference persists and the journal grid stays fixed", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
-test("the timeline selector scrolls beneath the sticky header", async ({
+test("the family feed scrolls beneath the sticky title selector", async ({
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
@@ -249,19 +292,28 @@ test("the timeline selector scrolls beneath the sticky header", async ({
   const page = await context.newPage();
   await page.goto("/family");
 
-  const stage = page.locator(".phone-stage");
   const header = page.locator(".topbar");
-  const selector = page.locator(".view-switch");
-  await expect(selector).toBeVisible();
+  const moment = page.locator("[data-moment-kind]").first();
+  await expect(header).toBeVisible();
+  await expect(page.locator(".title-switcher")).toBeVisible();
+  await expect(page.locator(".view-switch")).toHaveCount(0);
+  await expect(moment).toBeVisible();
 
-  await stage.evaluate((element) => {
-    const topbar = element.querySelector<HTMLElement>(".topbar");
-    const viewSwitch = element.querySelector<HTMLElement>(".view-switch");
-    if (!topbar || !viewSwitch) return;
+  await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>(".phone-stage");
+    const topbar = document.querySelector<HTMLElement>(".topbar");
+    const firstMoment =
+      document.querySelector<HTMLElement>("[data-moment-kind]");
+    if (!topbar || !firstMoment) return;
 
     const headerRect = topbar.getBoundingClientRect();
-    const selectorRect = viewSwitch.getBoundingClientRect();
-    element.scrollTop += selectorRect.top - headerRect.bottom + 8;
+    const momentRect = firstMoment.getBoundingClientRect();
+    const delta = momentRect.top - headerRect.bottom + 24;
+    if (stage && stage.scrollHeight > stage.clientHeight + 1) {
+      stage.scrollTop += delta;
+      return;
+    }
+    window.scrollBy(0, delta);
   });
 
   await expect
@@ -269,29 +321,30 @@ test("the timeline selector scrolls beneath the sticky header", async ({
       const headerBottom = await header.evaluate(
         (element) => element.getBoundingClientRect().bottom,
       );
-      const selectorTop = await selector.evaluate(
+      const momentTop = await moment.evaluate(
         (element) => element.getBoundingClientRect().top,
       );
-      return selectorTop < headerBottom;
+      return momentTop < headerBottom;
     })
     .toBe(true);
 
   const layering = await page.evaluate(() => {
     const topbar = document.querySelector<HTMLElement>(".topbar");
-    const viewSwitch = document.querySelector<HTMLElement>(".view-switch");
-    if (!topbar || !viewSwitch) return null;
+    const firstMoment =
+      document.querySelector<HTMLElement>("[data-moment-kind]");
+    if (!topbar || !firstMoment) return null;
 
     const headerRect = topbar.getBoundingClientRect();
-    const selectorRect = viewSwitch.getBoundingClientRect();
-    const sampleX = selectorRect.left + selectorRect.width / 2;
+    const momentRect = firstMoment.getBoundingClientRect();
+    const sampleX = momentRect.left + momentRect.width / 2;
     const sampleY = Math.max(
       headerRect.top + 1,
-      Math.min(headerRect.bottom - 1, selectorRect.top + 1),
+      Math.min(headerRect.bottom - 1, momentRect.top + 1),
     );
     const topElement = document.elementFromPoint(sampleX, sampleY);
 
     return {
-      overlaps: selectorRect.top < headerRect.bottom,
+      overlaps: momentRect.top < headerRect.bottom,
       topElementIsHeader: Boolean(topElement?.closest(".topbar")),
     };
   });

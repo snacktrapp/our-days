@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import type { JournalSection } from "./shell-view-model";
+import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
 type PrimarySection = Extract<
@@ -11,13 +12,14 @@ type PrimarySection = Extract<
   "timeline" | "people" | "memories" | "settings"
 >;
 
-function sectionFromPathname(pathname: string): PrimarySection | null {
-  if (pathname === "/family" || pathname.startsWith("/journal")) {
+function sectionFromPathname(pathname: string | null): PrimarySection | null {
+  const path = pathname ?? "";
+  if (path === "/family" || path.startsWith("/journal")) {
     return "timeline";
   }
-  if (pathname.startsWith("/people")) return "people";
-  if (pathname.startsWith("/memories")) return "memories";
-  if (pathname.startsWith("/settings")) return "settings";
+  if (path.startsWith("/people")) return "people";
+  if (path.startsWith("/memories")) return "memories";
+  if (path.startsWith("/settings")) return "settings";
   return null;
 }
 
@@ -71,6 +73,26 @@ function NavIcon({
   );
 }
 
+function NavSymbol({
+  name,
+  holding,
+}: {
+  name: "family" | "people" | "memories" | "account";
+  holding: boolean;
+}) {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      className={
+        pending || holding ? "nav-symbol nav-symbol-pending" : "nav-symbol"
+      }
+      aria-hidden="true"
+    >
+      <NavIcon name={name} />
+    </span>
+  );
+}
+
 export function PrimaryNavigation({
   section,
   memoriesHref,
@@ -80,7 +102,8 @@ export function PrimaryNavigation({
   memoriesHref?: string | null;
   settingsHref?: string | null;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
+  const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;
@@ -90,6 +113,33 @@ export function PrimaryNavigation({
     pendingSelection?.fromPathname === pathname
       ? pendingSelection.section
       : (sectionFromPathname(pathname) ?? section);
+  const currentSection = sectionFromPathname(pathname) ?? section;
+  const holdingSection =
+    pendingSelection?.fromPathname === pathname &&
+    pendingSelection.section !== currentSection
+      ? pendingSelection.section
+      : null;
+
+  useEffect(() => {
+    const onNavigateSection = (event: Event) => {
+      const href =
+        event && typeof event === "object" && "detail" in event
+          ? (event as { detail?: { href?: unknown } }).detail?.href
+          : undefined;
+      if (typeof href !== "string") {
+        return;
+      }
+      const nextSection = sectionFromPathname(href);
+      if (!nextSection) return;
+      setPendingSelection({ fromPathname: pathname, section: nextSection });
+    };
+    window.addEventListener("our-days:navigate-section", onNavigateSection);
+    return () =>
+      window.removeEventListener(
+        "our-days:navigate-section",
+        onNavigateSection,
+      );
+  }, [pathname]);
 
   const selectImmediately =
     (nextSection: PrimarySection) => (event: MouseEvent<HTMLAnchorElement>) => {
@@ -100,7 +150,10 @@ export function PrimaryNavigation({
     };
 
   return (
-    <nav className="bottom-nav" aria-label="Primary navigation">
+    <nav
+      className={`bottom-nav${compact ? " is-compact" : ""}`}
+      aria-label="Primary navigation"
+    >
       <Link
         className={`nav-item ${selectedSection === "timeline" ? "active" : ""}`}
         aria-current={selectedSection === "timeline" ? "page" : undefined}
@@ -108,9 +161,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("timeline")}
         prefetch={false}
       >
-        <span className="nav-symbol" aria-hidden="true">
-          <NavIcon name="family" />
-        </span>
+        <NavSymbol name="family" holding={holdingSection === "timeline"} />
         <span>Family</span>
       </Link>
       <Link
@@ -120,9 +171,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("people")}
         prefetch={false}
       >
-        <span className="nav-symbol" aria-hidden="true">
-          <NavIcon name="people" />
-        </span>
+        <NavSymbol name="people" holding={holdingSection === "people"} />
         <span>People</span>
       </Link>
       {memoriesHref === null ? (
@@ -135,9 +184,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("memories")}
           prefetch={false}
         >
-          <span className="nav-symbol" aria-hidden="true">
-            <NavIcon name="memories" />
-          </span>
+          <NavSymbol name="memories" holding={holdingSection === "memories"} />
           <span>Memories</span>
         </Link>
       )}
@@ -151,9 +198,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("settings")}
           prefetch={false}
         >
-          <span className="nav-symbol" aria-hidden="true">
-            <NavIcon name="account" />
-          </span>
+          <NavSymbol name="account" holding={holdingSection === "settings"} />
           <span>Account</span>
         </Link>
       )}

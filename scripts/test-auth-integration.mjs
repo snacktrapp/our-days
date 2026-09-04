@@ -1067,21 +1067,33 @@ try {
     );
   }
 
-  const users = await jsonRequest(
-    `${apiUrl}/auth/v1/admin/users?page=1&per_page=1000`,
-    serviceKey,
-    { headers: adminHeaders },
-  );
-  const userEmails = (users.body?.users ?? []).map((user) => user.email);
+  const userEmails = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const users = await jsonRequest(
+      `${apiUrl}/auth/v1/admin/users?page=${page}&per_page=50`,
+      serviceKey,
+      { headers: adminHeaders },
+    );
+    if (!users.response.ok) {
+      throw new Error(
+        `Auth admin user list failed on page ${page} with ${users.response.status}: ${JSON.stringify(users.body)}`,
+      );
+    }
+    const pageEmails = (users.body?.users ?? []).map((user) => user.email);
+    userEmails.push(...pageEmails);
+    if (pageEmails.length < 50) break;
+  }
   const deniedAuthEmails = [
     rawSignupEmail,
     ...unknownOtpAttempts.map((attempt) => attempt.body.email),
   ];
-  if (
-    !users.response.ok ||
-    deniedAuthEmails.some((email) => userEmails.includes(email))
-  ) {
-    throw new Error("A denied public Auth path still persisted an account.");
+  const persistedDeniedEmails = deniedAuthEmails.filter((email) =>
+    userEmails.includes(email),
+  );
+  if (persistedDeniedEmails.length > 0) {
+    throw new Error(
+      `A denied public Auth path still persisted an account: ${persistedDeniedEmails.join(", ")}`,
+    );
   }
 
   process.stdout.write(

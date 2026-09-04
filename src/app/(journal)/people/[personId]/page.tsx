@@ -1,8 +1,8 @@
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import { PrivateSoftNotFound } from "@/features/shell/private-soft-not-found";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getPersonalTimelineFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { notFound } from "next/navigation";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { loadConnectedTimeline } from "@/data/moments.server";
 import {
@@ -27,9 +27,13 @@ export default async function PersonJournalPage({
   const { personId } = await params;
   if (access.mode === "preview") {
     const model = getPersonalTimelineFixture(personId);
-    if (!model) notFound();
+    if (!model) return <PrivateSoftNotFound />;
     return (
-      <JournalChrome model={model.chrome} section="people">
+      <JournalChrome
+        model={model.chrome}
+        section="people"
+        switcher={model.switcher}
+      >
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -38,7 +42,9 @@ export default async function PersonJournalPage({
     searchParams,
     loadConnectedJournalContext(access),
   ]);
-  if (!context.people.some((person) => person.id === personId)) notFound();
+  if (!context.people.some((person) => person.id === personId)) {
+    return <PrivateSoftNotFound />;
+  }
   const model = await loadConnectedTimeline(access, context, {
     journalPersonId: personId,
     pages: Number(pages ?? "1"),
@@ -49,6 +55,7 @@ export default async function PersonJournalPage({
       model={model.chrome}
       section="people"
       createMomentAction={createFamilyMomentAction}
+      switcher={model.switcher}
     >
       <TimelineFeed
         model={model}

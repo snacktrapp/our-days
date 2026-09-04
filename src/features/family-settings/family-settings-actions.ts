@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
+import { createClient } from "@supabase/supabase-js";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { invitationDeliveryIsEnabled } from "../../../config/our-days-environment";
+import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
+import {
+  invitationDeliveryIsEnabled,
+  resolvedSiteOrigin,
+} from "../../../config/our-days-environment";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -52,7 +57,7 @@ async function hasExpectedOrigin() {
   const requestHeaders = await headers();
   return isExpectedMutationOrigin(
     requestHeaders.get("origin"),
-    process.env.NEXT_PUBLIC_SITE_URL,
+    resolvedSiteOrigin(),
   );
 }
 
@@ -261,14 +266,55 @@ export async function requestFamilyInvitationAction(
     email,
     request_key: requestKey,
   });
-  if (error || typeof data !== "string" || !uuidPattern.test(data)) {
+  const queuedId =
+    typeof data === "string" && uuidPattern.test(data) ? data : null;
+  // A new request key for a live email hits the one-live-email unique index
+  // and comes back as 22023. That is already-queued, not a failed send.
+  const alreadyQueued = !queuedId && error?.code === "22023";
+  if (!queuedId && !alreadyQueued) {
     return {
       ok: false,
       message: "That invitation could not be sent. Try again.",
     };
   }
+  await sendInvitedMagicLink(email);
   revalidatePath("/settings/family");
   return { ok: true, message: "Private invitation requested." };
+}
+
+function createInviteMailerClient() {
+  const { url, publishableKey } = readSupabasePublicConfig();
+  return createClient(url, publishableKey, {
+    auth: {
+      flowType: "implicit",
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+async function sendInvitedMagicLink(email: string) {
+  const siteOrigin = resolvedSiteOrigin();
+  if (!siteOrigin) return false;
+  try {
+    // Cookie-backed SSR clients default to PKCE. The verifier then lives on
+    // this server, so the recipient’s browser cannot redeem the link.
+    const mailer = createInviteMailerClient();
+    const { error } = await mailer.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        // Use /auth/callback — that path is already on the hosted redirect
+        // allowlist. Implicit tokens arrive in the hash; the callback forwards
+        // hash-only visits to /auth/complete.
+        emailRedirectTo: new URL("/auth/callback", siteOrigin).toString(),
+      },
+    });
+    return !error;
+  } catch {
+    return false;
+  }
 }
 
 export async function withdrawFamilyInvitationEmailRequestAction(

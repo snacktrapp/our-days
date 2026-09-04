@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  createAnonClient: vi.fn(),
   getHeaders: vi.fn(),
   from: vi.fn(),
   membershipMaybeSingle: vi.fn(),
   revalidatePath: vi.fn(),
   requireAccess: vi.fn(),
   rpc: vi.fn(),
+  signInWithOtp: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
@@ -19,6 +21,9 @@ vi.mock("@/lib/auth/journal-access", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
+}));
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: mocks.createAnonClient,
 }));
 
 import {
@@ -40,6 +45,14 @@ describe("family settings actions", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://journal.example.com");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     vi.stubEnv("OUR_DAYS_INVITATION_DELIVERY_MODE", "enabled");
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+    );
+    vi.stubEnv(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "sb_publishable_environment_contract_fixture",
+    );
     mocks.getHeaders.mockResolvedValue(
       new Headers({ origin: "https://journal.example.com" }),
     );
@@ -68,7 +81,15 @@ describe("family settings actions", () => {
     membershipQuery.eq.mockReturnValue(membershipQuery);
     mocks.from.mockReturnValue(membershipQuery);
     mocks.rpc.mockResolvedValue({ data: null, error: null });
-    mocks.createClient.mockResolvedValue({ from: mocks.from, rpc: mocks.rpc });
+    mocks.signInWithOtp.mockResolvedValue({ error: null });
+    mocks.createAnonClient.mockReturnValue({
+      auth: { signInWithOtp: mocks.signInWithOtp },
+    });
+    mocks.createClient.mockResolvedValue({
+      from: mocks.from,
+      rpc: mocks.rpc,
+      auth: { signInWithOtp: mocks.signInWithOtp },
+    });
   });
 
   afterEach(() => {
@@ -299,6 +320,102 @@ describe("family settings actions", () => {
         request_key: requestKey,
       },
     );
+    expect(mocks.createAnonClient).toHaveBeenCalledWith(
+      "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
+      "sb_publishable_environment_contract_fixture",
+      expect.objectContaining({
+        auth: expect.objectContaining({ flowType: "implicit" }),
+      }),
+    );
+    expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
+      email: "grandma@example.com",
+      options: {
+        emailRedirectTo: "https://journal.example.com/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/settings/family",
+    );
+  });
+
+  it("uses the Vercel Preview origin when SITE_URL is a copied staging host", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://our-days-staging.vercel.app");
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("VERCEL_URL", "our-days-git-preview.vercel.app");
+    mocks.getHeaders.mockResolvedValueOnce(
+      new Headers({ origin: "https://our-days-git-preview.vercel.app" }),
+    );
+    mocks.rpc.mockResolvedValueOnce({ data: emailRequestId, error: null });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "Grandma",
+        email: "grandma@example.com",
+        requestKey,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
+    expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
+      email: "grandma@example.com",
+      options: {
+        emailRedirectTo:
+          "https://our-days-git-preview.vercel.app/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+  });
+
+  it("resends the magic link when the same email is already queued", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: {
+        code: "22023",
+        message: "Invitation email could not be requested",
+      },
+    });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "TARS",
+        email: "tars-trapp@agentmail.to",
+        requestKey,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
+    expect(mocks.signInWithOtp).toHaveBeenCalledExactlyOnceWith({
+      email: "tars-trapp@agentmail.to",
+      options: {
+        emailRedirectTo: "https://journal.example.com/auth/callback",
+        shouldCreateUser: false,
+      },
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
+      "/settings/family",
+    );
+  });
+
+  it("keeps a queued invitation after the magic-link vendor fails to send", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: emailRequestId, error: null });
+    mocks.signInWithOtp.mockResolvedValueOnce({
+      error: { message: "rate limited" },
+    });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "Grandma",
+        email: "grandma@example.com",
+        requestKey,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
     expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
       "/settings/family",
     );

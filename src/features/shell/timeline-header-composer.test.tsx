@@ -42,5 +42,11 @@ describe("TimelineHeaderComposer", () => {
     expect(
       screen.getByRole("button", { name: /Written entry/u }),
     ).toBeVisible();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(trigger);
+    expect(
+      document.querySelector(".new-moment-composer-dialog .composer-sheet"),
+    ).toHaveClass("is-closing");
   });
 });

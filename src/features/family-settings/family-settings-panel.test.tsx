@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilySettingsPanel } from "./family-settings-panel";
 
+const refresh = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh }),
+}));
+
 const model = {
   mode: "preview",
   intro: "A small, invitation-only circle.",
@@ -89,7 +95,7 @@ const connectedOrganizerModel = {
       emailRequestId: "11111111-1111-4111-8111-111111111111",
       displayName: "Grandma",
       state: "delivered",
-      statusLabel: "Sent",
+      statusLabel: "Pending",
       createdLabel: "Invited Aug 20, 2026",
       expiresLabel: "Expires Sep 3, 2026",
     },
@@ -118,6 +124,7 @@ const connectedMemberModel = {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  refresh.mockClear();
 });
 
 describe("FamilySettingsPanel", () => {
@@ -135,6 +142,15 @@ describe("FamilySettingsPanel", () => {
         name: "Review access for Other organizer",
       }),
     ).toHaveLength(1);
+  });
+
+  it("renders journal tools inside the invitation-only account panel", () => {
+    render(
+      <FamilySettingsPanel model={model}>
+        <div data-testid="journal-tools">tools</div>
+      </FamilySettingsPanel>,
+    );
+    expect(screen.getByTestId("journal-tools")).toBeVisible();
   });
 
   it("validates, trims, previews, edits, and clears an invitation locally", async () => {
@@ -285,7 +301,8 @@ describe("FamilySettingsPanel", () => {
     );
 
     expect(screen.queryByText(/Local design preview/u)).toBeNull();
-    expect(screen.getByText(/Access changes take effect/u)).toBeVisible();
+    expect(screen.queryByText(/Access changes take effect/u)).toBeNull();
+    expect(screen.queryByText(/invitation-only circle/u)).toBeNull();
     await user.click(
       screen.getByRole("button", {
         name: "Manage role and access for Other organizer",
@@ -394,7 +411,11 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Sent")).toBeVisible();
+    expect(screen.getByText("Grandma")).toBeVisible();
+    expect(screen.getByText("Pending invite")).toBeVisible();
+    expect(screen.getByText("Pending")).toBeVisible();
+    expect(screen.queryByText("Sent")).toBeNull();
+    expect(screen.queryByText("No pending invitations.")).toBeNull();
     const name = screen.getByRole("textbox", {
       name: "Family member’s name",
     });
@@ -407,14 +428,15 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("heading", { name: "Invite Aunt June" }),
     ).toHaveFocus();
     expect(screen.getByText("june@example.com")).toBeVisible();
-    const send = screen.getByRole("button", {
-      name: "Send private invitation",
-    });
-    await user.click(send);
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That invitation could not be sent. Try again.",
     );
-    await user.click(send);
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
 
     expect(requestInvitation).toHaveBeenCalledTimes(2);
     expect(requestInvitation.mock.calls[0]?.[0]).toMatchObject({
@@ -424,15 +446,72 @@ describe("FamilySettingsPanel", () => {
     expect(requestInvitation.mock.calls[1]?.[0].requestKey).toBe(
       requestInvitation.mock.calls[0]?.[0].requestKey,
     );
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Private invitation requested for Aunt June.",
-    );
+    expect(
+      screen.queryByText("Private invitation requested for Aunt June."),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "Invite Aunt June" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Send private invitation" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("textbox", { name: "Family member’s name" }),
     ).toHaveValue("");
     expect(screen.getByRole("textbox", { name: "Email address" })).toHaveValue(
       "",
     );
+    expect(
+      screen.getByRole("button", { name: "Review invitation" }),
+    ).toBeVisible();
+    expect(screen.getByText("Aunt June")).toBeVisible();
+    expect(screen.getAllByText("Pending invite")).toHaveLength(2);
+    expect(screen.getByText("Grandma")).toBeVisible();
+  });
+
+  it("closes Review when that person is already in the queued list", async () => {
+    const user = userEvent.setup();
+    const requestInvitation = vi.fn().mockResolvedValue({
+      ok: false,
+      message: "That invitation could not be sent. Try again.",
+    });
+    render(
+      <FamilySettingsPanel
+        model={connectedInvitationModel}
+        actions={{
+          requestInvitation,
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+      "Grandma",
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Email address" }),
+      "grandma@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+    await user.click(
+      screen.getByRole("button", { name: "Send private invitation" }),
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Invite Grandma" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+    ).toHaveValue("");
+    expect(screen.getByText("Grandma")).toBeVisible();
+    expect(screen.getByText("Pending invite")).toBeVisible();
+    expect(
+      screen.queryByText("Private invitation requested for Grandma."),
+    ).toBeNull();
   });
 
   it("uses a new request key after returning to edit invitation identity", async () => {
@@ -740,5 +819,26 @@ describe("FamilySettingsPanel", () => {
       screen.getByText(/An organizer can withdraw pending invitations/u),
     ).toBeVisible();
     expect(screen.queryByText("Grandma")).toBeNull();
+  });
+
+  it("retries Account instead of crashing when connected actions are still warming up", () => {
+    expect(() =>
+      render(
+        <FamilySettingsPanel model={connectedInvitationModel}>
+          <div data-testid="journal-tools">tools</div>
+        </FamilySettingsPanel>,
+      ),
+    ).not.toThrow();
+
+    expect(
+      screen.getByText("We couldn’t open Account just now."),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "This page couldn’t load" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("journal-tools")).toBeVisible();
+
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(refresh).toHaveBeenCalledOnce();
   });
 });

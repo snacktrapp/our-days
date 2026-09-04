@@ -189,6 +189,12 @@ const expectedMigrationFiles = [
   "20260831174505_phase_4db_photo_upload_guards.sql",
   "20260831194638_centralize_live_family_sessions.sql",
   "20260831205813_record_target_bound_withdrawal_audit.sql",
+  "20260831223953_phase_4dd_photo_lifecycle_controls.sql",
+  "20260901020616_revoke_rls_auto_enable_api_execute.sql",
+  "20260901145906_phase_4e_basic_private_video.sql",
+  "20260901181748_stop_cleanup_backlog_blocking_uploads.sql",
+  "20260903040000_moment_place_coordinates.sql",
+  "20260903120000_enable_organizer_invitation_delivery.sql",
 ];
 
 class DrillError extends Error {
@@ -825,7 +831,7 @@ select (
     select count(*) = 1
       from private.invitation_delivery_capabilities
      where capability = 'email_delivery'
-       and enabled is false
+       and enabled is true
   )
   and (select count(*) = 0 from private.invitation_delivery_receipts)
   and (select count(*) = 0 from private.invitation_delivery_worker_allowlist)
@@ -1206,7 +1212,7 @@ select (
     select count(*) = 1
       from private.invitation_delivery_capabilities
      where capability = 'email_delivery'
-       and enabled is false
+       and enabled is true
   )
   and not exists (select 1 from private.invitation_delivery_receipts)
   and not exists (select 1 from private.invitation_delivery_worker_allowlist)
@@ -2813,7 +2819,8 @@ with enabled(routine) as (
     'public.read_invitation_delivery_auth(uuid)',
     'public.complete_invitation_delivery(uuid,uuid,integer,text,text,text,text,text,text,timestamp with time zone)',
     'public.read_delivered_invitation(uuid)',
-    'public.accept_invitation(text)'
+    'public.accept_invitation(text)',
+    'public.accept_pending_invitation_for_current_user()',
   ]::text[])
 ), retired(routine) as (
   select unnest(array[
@@ -3220,7 +3227,7 @@ async function runStaticSelfTest() {
   if (
     !inventoryMatches(expectedMigrationFiles, expectedMigrationFiles) ||
     expectedMigrationFiles.at(-1) !==
-      "20260831205813_record_target_bound_withdrawal_audit.sql" ||
+      "20260903120000_enable_organizer_invitation_delivery.sql" ||
     inventoryMatches(
       expectedMigrationFiles.slice(0, -1),
       expectedMigrationFiles,

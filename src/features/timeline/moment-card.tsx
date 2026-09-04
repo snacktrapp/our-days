@@ -2,6 +2,7 @@ import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
+import { PhotoLightboxTrigger } from "./photo-lightbox";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
@@ -95,6 +96,8 @@ export function MomentCard({
                   label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
                   preload={preload ? "metadata" : "none"}
                   controls={false}
+                  width={moment.video.width}
+                  height={moment.video.height}
                 />
               }
               fullscreenMedia={
@@ -102,55 +105,38 @@ export function MomentCard({
                   src={moment.video.src}
                   label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
                   preload="metadata"
+                  width={moment.video.width}
+                  height={moment.video.height}
                 />
               }
             />
           ) : (
-            <FullscreenMediaViewer
-              kind="photo"
-              label={moment.image.alt}
+            <PhotoLightboxTrigger
+              src={moment.image.src}
+              alt={moment.image.alt}
+              width={moment.image.width}
+              height={moment.image.height}
               reactionTargetId={moment.id}
-              preview={
-                moment.image.delivery === "private" ? (
-                  <PrivatePhotoImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={1200}
-                    height={801}
-                    highPriority={preload}
-                  />
-                ) : (
-                  <CspPublicImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={1200}
-                    height={801}
-                    highPriority={preload}
-                    sizes="(max-width: 520px) 92vw, 410px"
-                  />
-                )
-              }
-              fullscreenMedia={
-                moment.image.delivery === "private" ? (
-                  <PrivatePhotoImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={1600}
-                    height={1068}
-                    highPriority
-                  />
-                ) : (
-                  <CspPublicImage
-                    src={moment.image.src}
-                    alt={moment.image.alt}
-                    width={1600}
-                    height={1068}
-                    highPriority
-                    sizes="100vw"
-                  />
-                )
-              }
-            />
+            >
+              {moment.image.delivery === "private" ? (
+                <PrivatePhotoImage
+                  src={moment.image.src}
+                  alt={moment.image.alt}
+                  width={moment.image.width}
+                  height={moment.image.height}
+                  highPriority={preload}
+                />
+              ) : (
+                <CspPublicImage
+                  src={moment.image.src}
+                  alt={moment.image.alt}
+                  width={moment.image.width ?? 1200}
+                  height={moment.image.height ?? 801}
+                  highPriority={preload}
+                  sizes="(max-width: 520px) 92vw, 410px"
+                />
+              )}
+            </PhotoLightboxTrigger>
           )}
         </div>
         <div className="card-copy">
@@ -230,14 +216,6 @@ export function MomentCard({
   if (moment.kind === "location") {
     return (
       <div className="moment-card location-card">
-        <div className="memory-map" aria-hidden="true">
-          <span className="map-water" />
-          <span className="map-road road-one" />
-          <span className="map-road road-two" />
-          <span className="place-pin">
-            <i />
-          </span>
-        </div>
         <div className="card-copy">
           <div className="location-card-heading">
             <p className="moment-kicker">{typeLabel}</p>

@@ -10,11 +10,13 @@ import {
   useTransition,
 } from "react";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
+import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
   FamilySettingsPanelViewModel,
   GuardianOptionViewModel,
+  PendingFamilyInvitationViewModel,
   PreviewFamilySettingsPanelViewModel,
 } from "./family-settings-view-model";
 
@@ -54,12 +56,17 @@ export function FamilySettingsPanel({
   children?: ReactNode;
 }) {
   if (model.mode === "preview") {
-    return <PreviewFamilySettingsPanel model={model} />;
+    return (
+      <PreviewFamilySettingsPanel model={model}>
+        {children}
+      </PreviewFamilySettingsPanel>
+    );
   }
-  if (!actions)
-    throw new Error("Connected family settings actions are required");
-  if (model.invitationDelivery === "enabled" && !actions.requestInvitation) {
-    throw new Error("Connected invitation delivery action is required");
+  if (
+    !actions ||
+    (model.invitationDelivery === "enabled" && !actions.requestInvitation)
+  ) {
+    return <AccountPanelInterrupted>{children}</AccountPanelInterrupted>;
   }
   return (
     <ConnectedFamilySettingsPanel model={model} actions={actions}>
@@ -68,12 +75,20 @@ export function FamilySettingsPanel({
   );
 }
 
+function pendingInitial(name: string) {
+  return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
+}
+
 function MemberList({
   model,
   reviewId,
   setReviewId,
   triggerRef,
   disabled = false,
+  pendingInvitations = [],
+  invitationReviewId = null,
+  setInvitationReviewId,
+  invitationTriggerRef,
 }: {
   model:
     PreviewFamilySettingsPanelViewModel | ConnectedFamilySettingsPanelViewModel;
@@ -81,6 +96,10 @@ function MemberList({
   setReviewId: (id: string | null) => void;
   triggerRef: MutableRefObject<HTMLButtonElement | null>;
   disabled?: boolean;
+  pendingInvitations?: readonly PendingFamilyInvitationViewModel[];
+  invitationReviewId?: string | null;
+  setInvitationReviewId?: (id: string | null) => void;
+  invitationTriggerRef?: MutableRefObject<HTMLButtonElement | null>;
 }) {
   return (
     <ul className="access-list">
@@ -117,6 +136,7 @@ function MemberList({
               aria-controls="access-review"
               onClick={(event) => {
                 triggerRef.current = event.currentTarget;
+                setInvitationReviewId?.(null);
                 setReviewId(reviewId === member.id ? null : member.id);
               }}
             >
@@ -129,14 +149,51 @@ function MemberList({
           ) : null}
         </li>
       ))}
+      {pendingInvitations.map((item) => {
+        const canReview = !item.emailRequestId.startsWith("optimistic:");
+        return (
+          <li key={item.emailRequestId}>
+            <span className="person-avatar dot-slate" aria-hidden="true">
+              {pendingInitial(item.displayName)}
+            </span>
+            <span className="access-member-copy">
+              <strong>{item.displayName}</strong>
+              <small>Pending invite</small>
+              <span>Pending</span>
+            </span>
+            {canReview && setInvitationReviewId && invitationTriggerRef ? (
+              <button
+                type="button"
+                aria-label={`Review invite for ${item.displayName}`}
+                disabled={disabled}
+                aria-expanded={invitationReviewId === item.emailRequestId}
+                aria-controls="invitation-review"
+                onClick={(event) => {
+                  invitationTriggerRef.current = event.currentTarget;
+                  setReviewId(null);
+                  setInvitationReviewId(
+                    invitationReviewId === item.emailRequestId
+                      ? null
+                      : item.emailRequestId,
+                  );
+                }}
+              >
+                Review invite
+              </button>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
 function PreviewFamilySettingsPanel({
   model,
+  children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
+  children?: ReactNode;
 }) {
   const [email, setEmail] = useState("");
   const [reviewEmail, setReviewEmail] = useState<string | null>(null);
@@ -191,7 +248,6 @@ function PreviewFamilySettingsPanel({
 
   return (
     <section className="family-settings-panel">
-      <p className="section-intro">{model.intro}</p>
       <p className="settings-preview-banner">
         Local design preview · Access labels are illustrative; no accounts or
         permissions are active
@@ -302,6 +358,7 @@ function PreviewFamilySettingsPanel({
           </form>
         )}
       </section>
+      {children}
     </section>
   );
 }
@@ -330,6 +387,9 @@ function ConnectedFamilySettingsPanel({
     email: string;
   }> | null>(null);
   const [result, setResult] = useState<FamilySettingsActionResult | null>(null);
+  const [optimisticPending, setOptimisticPending] = useState<
+    readonly PendingFamilyInvitationViewModel[]
+  >([]);
   const [isPending, startTransition] = useTransition();
   const accessTriggerRef = useRef<HTMLButtonElement>(null);
   const invitationTriggerRef = useRef<HTMLButtonElement>(null);
@@ -344,7 +404,18 @@ function ConnectedFamilySettingsPanel({
   const accessReviewMember = model.members.find(
     (member) => member.id === accessReviewId,
   );
-  const invitation = model.pendingInvitations.find(
+  const listedNames = new Set(
+    model.pendingInvitations.map((item) =>
+      item.displayName.trim().toLowerCase(),
+    ),
+  );
+  const pendingInvitations = [
+    ...model.pendingInvitations,
+    ...optimisticPending.filter(
+      (item) => !listedNames.has(item.displayName.trim().toLowerCase()),
+    ),
+  ];
+  const invitation = pendingInvitations.find(
     (item) => item.emailRequestId === invitationReviewId,
   );
   const journalCareSuccess =
@@ -416,6 +487,15 @@ function ConnectedFamilySettingsPanel({
     setInviteDraft({ displayName, email });
   }
 
+  function resetInviteComposer() {
+    restoreInviteFormFocusRef.current = true;
+    setInviteDraft(null);
+    setInviteName("");
+    setInviteEmail("");
+    setInviteFormError("");
+    setInviteFormErrorField(null);
+  }
+
   function editInvitationRequest() {
     restoreInviteFormFocusRef.current = true;
     inviteRequestKeyRef.current = null;
@@ -426,31 +506,56 @@ function ConnectedFamilySettingsPanel({
   function sendInvitationRequest() {
     if (!inviteDraft || !actions.requestInvitation) return;
     const requestInvitation = actions.requestInvitation;
+    const draft = inviteDraft;
     const requestKey =
       inviteRequestKeyRef.current ?? window.crypto.randomUUID();
     inviteRequestKeyRef.current = requestKey;
+    const alreadyListed = model.pendingInvitations.some(
+      (item) =>
+        item.displayName.trim().toLowerCase() ===
+        draft.displayName.trim().toLowerCase(),
+    );
     setResult(null);
+    // Close Review before the server action refreshes the tree. A queued
+    // row plus a lingering review is what Brian saw on iPhone.
+    resetInviteComposer();
     startTransition(async () => {
       try {
         const nextResult = await requestInvitation({
-          ...inviteDraft,
+          ...draft,
           requestKey,
         });
-        setResult(
-          nextResult.ok
-            ? {
-                ok: true,
-                message: `Private invitation requested for ${inviteDraft.displayName}.`,
-              }
-            : nextResult,
-        );
-        if (nextResult.ok) {
+        if (nextResult.ok || alreadyListed) {
           inviteRequestKeyRef.current = null;
-          setInviteDraft(null);
-          setInviteName("");
-          setInviteEmail("");
+          if (!alreadyListed) {
+            setOptimisticPending((current) => [
+              ...current.filter(
+                (item) =>
+                  item.displayName.trim().toLowerCase() !==
+                  draft.displayName.trim().toLowerCase(),
+              ),
+              {
+                emailRequestId: `optimistic:${requestKey}`,
+                displayName: draft.displayName,
+                state: "queued",
+                statusLabel: "Pending",
+                createdLabel: "",
+                expiresLabel: "",
+              },
+            ]);
+          }
+          return;
         }
+        restoreInviteFormFocusRef.current = true;
+        setInviteDraft(draft);
+        setInviteName(draft.displayName);
+        setInviteEmail(draft.email);
+        setResult(nextResult);
       } catch {
+        restoreInviteFormFocusRef.current = true;
+        setInviteDraft(draft);
+        setInviteName(draft.displayName);
+        setInviteEmail(draft.email);
         setResult({
           ok: false,
           message: "That invitation could not be sent. Try again.",
@@ -579,15 +684,11 @@ function ConnectedFamilySettingsPanel({
 
   return (
     <section className="family-settings-panel">
-      <p className="section-intro">{model.intro}</p>
-      <p className="settings-live-banner">
-        Private circle · Access changes take effect at the next request
-      </p>
       {result?.ok && !journalCareSuccess ? (
         <p
           ref={resultRef}
-          className={`settings-action-message${result.ok ? "" : " settings-action-error"}`}
-          role={result.ok ? "status" : "alert"}
+          className="settings-action-message"
+          role="status"
           tabIndex={-1}
         >
           {result.message}
@@ -606,6 +707,14 @@ function ConnectedFamilySettingsPanel({
           }}
           triggerRef={accessTriggerRef}
           disabled={isPending}
+          pendingInvitations={pendingInvitations}
+          invitationReviewId={invitationReviewId}
+          setInvitationReviewId={(id) => {
+            setResult(null);
+            setInviteDraft(null);
+            setInvitationReviewId(id);
+          }}
+          invitationTriggerRef={invitationTriggerRef}
         />
         {accessReviewMember ? (
           <aside
@@ -686,6 +795,55 @@ function ConnectedFamilySettingsPanel({
                 onClick={closeAccessReview}
               >
                 Done
+              </button>
+            </div>
+          </aside>
+        ) : null}
+        {invitation ? (
+          <aside
+            id="invitation-review"
+            className="invite-review connected-invite-review"
+            aria-labelledby="invitation-review-heading"
+          >
+            <span>Withdraw invitation</span>
+            <h3
+              ref={invitationHeadingRef}
+              id="invitation-review-heading"
+              tabIndex={-1}
+            >
+              Review {invitation.displayName}’s invitation
+            </h3>
+            <p>
+              Withdrawing it prevents this invitation from being accepted. It
+              does not change access for anyone already in the circle.
+            </p>
+            {result && !result.ok ? (
+              <p
+                ref={resultRef}
+                className="settings-action-message settings-action-error"
+                role="alert"
+                tabIndex={-1}
+              >
+                {result.message}
+              </p>
+            ) : null}
+            <div className="settings-review-actions">
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={closeInvitationReview}
+              >
+                Keep invitation
+              </button>
+              <button
+                type="button"
+                aria-label={`Withdraw invitation for ${invitation.displayName}`}
+                aria-busy={isPending || undefined}
+                className="settings-danger-button"
+                disabled={isPending}
+                onClick={withdrawInvitation}
+              >
+                Withdraw invitation
               </button>
             </div>
           </aside>
@@ -830,94 +988,6 @@ function ConnectedFamilySettingsPanel({
                   </button>
                 </form>
               )
-            ) : null}
-            {model.pendingInvitations.length ? (
-              <ul className="pending-invitation-list">
-                {model.pendingInvitations.map((item) => (
-                  <li key={item.emailRequestId}>
-                    <span>
-                      <strong>{item.displayName}</strong>
-                      <em className={`invitation-status status-${item.state}`}>
-                        {item.statusLabel}
-                      </em>
-                      <small>
-                        {item.createdLabel} · {item.expiresLabel}
-                      </small>
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={`Review invite for ${item.displayName}`}
-                      disabled={isPending}
-                      aria-expanded={invitationReviewId === item.emailRequestId}
-                      aria-controls="invitation-review"
-                      onClick={(event) => {
-                        invitationTriggerRef.current = event.currentTarget;
-                        setResult(null);
-                        setInviteDraft(null);
-                        setAccessReviewId(null);
-                        setInvitationReviewId((current) =>
-                          current === item.emailRequestId
-                            ? null
-                            : item.emailRequestId,
-                        );
-                      }}
-                    >
-                      Review invite
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="settings-empty-copy">No pending invitations.</p>
-            )}
-            {invitation ? (
-              <aside
-                id="invitation-review"
-                className="invite-review connected-invite-review"
-                aria-labelledby="invitation-review-heading"
-              >
-                <span>Withdraw invitation</span>
-                <h3
-                  ref={invitationHeadingRef}
-                  id="invitation-review-heading"
-                  tabIndex={-1}
-                >
-                  Review {invitation.displayName}’s invitation
-                </h3>
-                <p>
-                  Withdrawing it prevents this invitation from being accepted.
-                  It does not change access for anyone already in the circle.
-                </p>
-                {result && !result.ok ? (
-                  <p
-                    ref={resultRef}
-                    className="settings-action-message settings-action-error"
-                    role="alert"
-                    tabIndex={-1}
-                  >
-                    {result.message}
-                  </p>
-                ) : null}
-                <div className="settings-review-actions">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={closeInvitationReview}
-                  >
-                    Keep invitation
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Withdraw invitation for ${invitation.displayName}`}
-                    aria-busy={isPending || undefined}
-                    className="settings-danger-button"
-                    disabled={isPending}
-                    onClick={withdrawInvitation}
-                  >
-                    Withdraw invitation
-                  </button>
-                </div>
-              </aside>
             ) : null}
             {model.invitationDelivery === "disabled" ? (
               <div className="settings-delivery-boundary">

@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   formatBibleVerseMoment,
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
+import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import { MomentCard } from "./moment-card";
+import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
   MomentInteractionViewModel,
@@ -180,5 +182,175 @@ describe("MomentCard long thought copy", () => {
       }),
     );
     vi.mocked(thoughtCopyOverflows).mockReset();
+  });
+});
+
+describe("MomentCard timeline media", () => {
+  afterEach(() => {
+    resetPhotoLightboxSession();
+    resetIndependentOverlayObjectUrlCache();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("keeps a landscape photo at its native frame instead of a cropped box", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "landscape-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Evening on the porch",
+            badgeLabel: "AUG 28",
+            width: 1200,
+            height: 801,
+          },
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", { name: "Evening on the porch" });
+    expect(image).toHaveAttribute("width", "1200");
+    expect(image).toHaveAttribute("height", "801");
+    expect(image.closest(".photo-frame")).not.toBeNull();
+  });
+
+  it("keeps a portrait photo at its native 9:16 frame", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "portrait-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Standing in the doorway",
+            badgeLabel: "AUG 28",
+            width: 1080,
+            height: 1920,
+          },
+        }}
+      />,
+    );
+
+    const image = screen.getByRole("img", {
+      name: "Standing in the doorway",
+    });
+    expect(image).toHaveAttribute("width", "1080");
+    expect(image).toHaveAttribute("height", "1920");
+  });
+
+  it("leaves both card images in place when opening A then B then A", async () => {
+    const firstSrc = "/private-photo-a.jpg";
+    const lastSrc = "/private-photo-b.jpg";
+    let created = 0;
+    vi.spyOn(URL, "createObjectURL").mockImplementation(
+      () => `blob:card-overlay-${++created}`,
+    );
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
+      })),
+    );
+
+    render(
+      <PhotoLightboxRoot>
+        <MomentCard
+          moment={{
+            ...thought,
+            id: "photo-a",
+            kind: "photo",
+            kicker: "A photo",
+            image: {
+              src: firstSrc,
+              alt: "First light",
+              badgeLabel: "AUG 28",
+              delivery: "private",
+              width: 80,
+              height: 50,
+            },
+          }}
+        />
+        <MomentCard
+          moment={{
+            ...thought,
+            id: "photo-b",
+            kind: "photo",
+            kicker: "A photo",
+            image: {
+              src: lastSrc,
+              alt: "Last light",
+              badgeLabel: "AUG 28",
+              delivery: "private",
+              width: 80,
+              height: 50,
+            },
+          }}
+        />
+      </PhotoLightboxRoot>,
+    );
+
+    const first = screen.getByRole("img", { name: "First light" });
+    const last = screen.getByRole("img", { name: "Last light" });
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    expect(first).toHaveAttribute("src", firstSrc);
+    expect(last).toHaveAttribute("src", lastSrc);
+    expect(
+      screen.getByRole("dialog").querySelector(`img[src="${firstSrc}"]`),
+    ).toBeNull();
+    expect(screen.getByRole("dialog").querySelector("img")?.src).toMatch(
+      /^blob:/u,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: Last light",
+      }),
+    );
+    expect(screen.getByRole("img", { name: "First light" })).toBe(first);
+    expect(last).toHaveAttribute("src", lastSrc);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close full-screen media" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    expect(screen.getByRole("img", { name: "Last light" })).toBe(last);
+    expect(first).toBeVisible();
+    expect(last).toBeVisible();
+    expect(first).toHaveAttribute("src", firstSrc);
+    expect(last).toHaveAttribute("src", lastSrc);
+    expect(window.getComputedStyle(first).visibility).not.toBe("hidden");
+    expect(window.getComputedStyle(last).visibility).not.toBe("hidden");
+    expect(document.documentElement).not.toHaveClass("media-viewer-open");
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });

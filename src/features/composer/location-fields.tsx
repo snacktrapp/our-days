@@ -2,15 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  MAP_PICKER_PATH,
-  MAP_PICKER_SOURCE,
-  isMapPickerToParent,
-  type ParentToMapPicker,
-} from "./map-picker-protocol";
-import {
-  publicMapTilerKey,
-  reverseGeocodeMapTilerPlace,
-  searchMapTilerPlaces,
+  reverseGeocodeForComposer,
+  searchPlacesForComposer,
   type GeocodedPlace,
 } from "./maptiler";
 import { ComposerPickerPanel } from "./composer-picker-panel";
@@ -32,13 +25,6 @@ function placeTriggerLabel(value: PlaceSelection) {
   return value.label.trim() || "Add a place";
 }
 
-function postToMap(
-  iframe: HTMLIFrameElement | null,
-  message: ParentToMapPicker,
-) {
-  iframe?.contentWindow?.postMessage(message, window.location.origin);
-}
-
 export function LocationFields({
   value,
   required = false,
@@ -48,37 +34,27 @@ export function LocationFields({
   onChange,
 }: LocationFieldsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const mapReadyRef = useRef(false);
+  const localSearchRef = useRef<HTMLInputElement>(null);
+  const inputRef = searchInputRef ?? localSearchRef;
   const searchRequestRef = useRef(0);
   const valueRef = useRef(value);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(required);
   const [search, setSearch] = useState(value.label);
   const [suggestions, setSuggestions] = useState<readonly GeocodedPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
-  const mapKey = publicMapTilerKey();
-  const mapAvailable = mapKey.length > 0;
   const canGeolocate =
-    mapAvailable &&
-    typeof navigator !== "undefined" &&
-    "geolocation" in navigator;
-  const panelOpen = open || invalid;
+    typeof navigator !== "undefined" && "geolocation" in navigator;
+  const panelOpen = required || open || invalid;
 
   const applyMapMove = useCallback(
     async (latitude: number, longitude: number) => {
       let label = valueRef.current.label.trim();
-      if (mapKey) {
-        try {
-          const reversed = await reverseGeocodeMapTilerPlace(
-            latitude,
-            longitude,
-            mapKey,
-          );
-          if (reversed) label = reversed;
-        } catch {
-          // Keep the label the family already typed.
-        }
+      try {
+        const reversed = await reverseGeocodeForComposer(latitude, longitude);
+        if (reversed) label = reversed;
+      } catch {
+        // Keep the label the family already typed.
       }
       const nextLabel =
         label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
@@ -88,9 +64,10 @@ export function LocationFields({
         longitude,
       });
       setSearch(nextLabel);
+      setSuggestions([]);
       setLocationMessage(null);
     },
-    [mapKey, onChange],
+    [onChange],
   );
 
   useEffect(() => {
@@ -98,12 +75,20 @@ export function LocationFields({
   }, [value]);
 
   useEffect(() => {
-    if (!invalid) return;
-    searchInputRef?.current?.focus();
-  }, [invalid, searchInputRef]);
+    if (!required) return;
+    const frame = window.requestAnimationFrame(() =>
+      inputRef.current?.focus({ preventScroll: true }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [inputRef, required]);
 
   useEffect(() => {
-    if (!panelOpen) return;
+    if (!invalid) return;
+    inputRef.current?.focus();
+  }, [inputRef, invalid]);
+
+  useEffect(() => {
+    if (required || !panelOpen) return;
     const close = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&
@@ -121,60 +106,27 @@ export function LocationFields({
       document.removeEventListener("pointerdown", close);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [panelOpen]);
+  }, [panelOpen, required]);
 
   useEffect(() => {
-    if (!panelOpen || !mapAvailable) return;
-    const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (!isMapPickerToParent(event.data)) return;
-      if (event.data.type === "ready") {
-        mapReadyRef.current = true;
-        postToMap(iframeRef.current, {
-          source: MAP_PICKER_SOURCE,
-          type: "init",
-          key: mapKey,
-          latitude: valueRef.current.latitude,
-          longitude: valueRef.current.longitude,
-        });
-        return;
-      }
-      if (event.data.type === "escape") {
-        setOpen(false);
-        return;
-      }
-      void applyMapMove(event.data.latitude, event.data.longitude);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [applyMapMove, mapAvailable, mapKey, panelOpen]);
-
-  useEffect(() => {
-    if (!panelOpen || !mapReadyRef.current) return;
-    if (value.latitude === null || value.longitude === null) return;
-    postToMap(iframeRef.current, {
-      source: MAP_PICKER_SOURCE,
-      type: "set-place",
-      latitude: value.latitude,
-      longitude: value.longitude,
-    });
-  }, [panelOpen, value.latitude, value.longitude]);
-
-  useEffect(() => {
-    if (!panelOpen || !mapAvailable || search.trim().length < 2) return;
+    if (!panelOpen || search.trim().length < 2) return;
     const requestId = searchRequestRef.current + 1;
     searchRequestRef.current = requestId;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void searchMapTilerPlaces(search.trim(), mapKey, controller.signal)
+      void searchPlacesForComposer(search.trim(), controller.signal)
         .then((places) => {
           if (searchRequestRef.current !== requestId) return;
           setSuggestions(places);
+          setLocationMessage(
+            places.length === 0 ? "No matching places." : null,
+          );
         })
         .catch(() => {
           if (searchRequestRef.current !== requestId) return;
           setSuggestions([]);
+          setLocationMessage("Place search isn’t available right now.");
         })
         .finally(() => {
           if (searchRequestRef.current === requestId) setSearching(false);
@@ -184,17 +136,7 @@ export function LocationFields({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [mapAvailable, mapKey, panelOpen, search]);
-
-  const sendMapInit = () => {
-    postToMap(iframeRef.current, {
-      source: MAP_PICKER_SOURCE,
-      type: "init",
-      key: mapKey,
-      latitude: valueRef.current.latitude,
-      longitude: valueRef.current.longitude,
-    });
-  };
+  }, [panelOpen, search]);
 
   const chooseSuggestion = (place: GeocodedPlace) => {
     onChange(place);
@@ -219,129 +161,132 @@ export function LocationFields({
 
   const heading = required ? "Place name" : "Place";
   const triggerName = `Place, ${placeTriggerLabel(value)}`;
+  const searchField = (
+    <div className="composer-location-search">
+      <label className="composer-field">
+        <span>Search</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          maxLength={160}
+          autoFocus={required}
+          aria-required={required || undefined}
+          aria-invalid={invalid ? true : undefined}
+          aria-label="Place name"
+          placeholder="Search for a place"
+          onChange={(event) => {
+            const nextLabel = event.target.value;
+            setSearch(nextLabel);
+            setSuggestions([]);
+            setSearching(false);
+            setLocationMessage(null);
+            onChange({
+              ...value,
+              label: nextLabel,
+              ...(nextLabel.trim() ? {} : emptyPlaceSelection()),
+            });
+          }}
+        />
+      </label>
+      {canGeolocate ? (
+        <button
+          type="button"
+          className="composer-location-locate"
+          aria-label="Use my location"
+          onClick={useMyLocation}
+        >
+          <span aria-hidden="true">⌖</span>
+        </button>
+      ) : null}
+    </div>
+  );
+  const placePanel = (
+    <>
+      {searchField}
+
+      {locationMessage ? (
+        <p className="composer-location-status" role="status">
+          {locationMessage}
+        </p>
+      ) : null}
+
+      {searching ? (
+        <p className="composer-location-status">Looking up places…</p>
+      ) : null}
+
+      {suggestions.length > 0 ? (
+        <ul className="composer-location-suggestions">
+          {suggestions.map((place) => (
+            <li key={`${place.label}-${place.latitude}-${place.longitude}`}>
+              <button type="button" onClick={() => chooseSuggestion(place)}>
+                {place.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {value.label.trim() ? (
+        <button
+          type="button"
+          className="composer-picker-secondary"
+          onClick={() => {
+            onChange(emptyPlaceSelection());
+            setSearch("");
+            setSuggestions([]);
+            if (!required) setOpen(false);
+          }}
+        >
+          Clear place
+        </button>
+      ) : null}
+    </>
+  );
 
   return (
     <div ref={rootRef} className="composer-location-fields">
-      <div className="composer-field composer-picker-field">
-        <span>
-          {heading}
-          {optional ? <small> Optional</small> : null}
-        </span>
-        <button
-          type="button"
-          className="composer-picker-trigger"
-          aria-label={triggerName}
-          aria-haspopup="dialog"
-          aria-expanded={panelOpen}
-          onClick={() => {
-            setSearch(value.label);
-            setOpen((current) => !current);
-          }}
-        >
-          <span
-            className={value.label.trim() ? undefined : "composer-picker-empty"}
-          >
-            {placeTriggerLabel(value)}
+      {required ? null : (
+        <div className="composer-field composer-picker-field">
+          <span>
+            {heading}
+            {optional ? <small> Optional</small> : null}
           </span>
-          <span aria-hidden="true">⌖</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            className="composer-picker-trigger"
+            aria-label={triggerName}
+            aria-haspopup="dialog"
+            aria-expanded={panelOpen}
+            onClick={() => {
+              setSearch(value.label);
+              setOpen((current) => !current);
+            }}
+          >
+            <span
+              className={
+                value.label.trim() ? undefined : "composer-picker-empty"
+              }
+            >
+              {placeTriggerLabel(value)}
+            </span>
+            <span aria-hidden="true">⌖</span>
+          </button>
+        </div>
+      )}
 
       {panelOpen ? (
-        <ComposerPickerPanel
-          className="composer-picker-panel composer-location-panel"
-          role="dialog"
-          aria-label="Choose a place"
-        >
-          <label className="composer-field">
-            <span>{mapAvailable ? "Search" : "Place name"}</span>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={search}
-              maxLength={160}
-              aria-required={required || undefined}
-              aria-invalid={invalid ? true : undefined}
-              aria-label="Place name"
-              placeholder={
-                mapAvailable ? "Search for a place" : "Add a place by hand"
-              }
-              onChange={(event) => {
-                const nextLabel = event.target.value;
-                setSearch(nextLabel);
-                setSuggestions([]);
-                setSearching(false);
-                onChange({
-                  ...value,
-                  label: nextLabel,
-                  ...(nextLabel.trim() ? {} : emptyPlaceSelection()),
-                });
-              }}
-            />
-          </label>
-
-          {canGeolocate ? (
-            <button
-              type="button"
-              className="composer-picker-secondary composer-location-geolocate"
-              onClick={useMyLocation}
-            >
-              Use my location
-            </button>
-          ) : null}
-
-          {locationMessage ? (
-            <p className="composer-location-status" role="status">
-              {locationMessage}
-            </p>
-          ) : null}
-
-          {searching ? (
-            <p className="composer-location-status">Looking up places…</p>
-          ) : null}
-
-          {suggestions.length > 0 ? (
-            <ul className="composer-location-suggestions">
-              {suggestions.map((place) => (
-                <li key={`${place.label}-${place.latitude}-${place.longitude}`}>
-                  <button type="button" onClick={() => chooseSuggestion(place)}>
-                    {place.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {mapAvailable ? (
-            <iframe
-              ref={iframeRef}
-              className="composer-location-map"
-              title="Place map"
-              src={MAP_PICKER_PATH}
-              referrerPolicy="no-referrer"
-              onLoad={sendMapInit}
-            />
-          ) : (
-            <p className="composer-location-unavailable" role="status">
-              Map unavailable
-            </p>
-          )}
-
-          {value.label.trim() ? (
-            <button
-              type="button"
-              className="composer-picker-secondary"
-              onClick={() => {
-                onChange(emptyPlaceSelection());
-                setSearch("");
-                setSuggestions([]);
-                setOpen(false);
-              }}
-            >
-              Clear place
-            </button>
-          ) : null}
-        </ComposerPickerPanel>
+        required ? (
+          <div className="composer-location-panel">{placePanel}</div>
+        ) : (
+          <ComposerPickerPanel
+            className="composer-picker-panel composer-location-panel"
+            role="dialog"
+            aria-label="Choose a place"
+          >
+            {placePanel}
+          </ComposerPickerPanel>
+        )
       ) : null}
     </div>
   );

@@ -1,9 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal, flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
+import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import { useModalDialog } from "@/features/dialog/lock-background-scroll";
+import {
+  useModalDialog,
+  useOverlayMount,
+} from "@/features/dialog/lock-background-scroll";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
@@ -73,6 +84,7 @@ type MomentComposerProps = Readonly<{
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
   editDraft?: ComposerEditDraft | null;
+  registerDismiss?: (dismiss: (() => void) | null) => void;
 }>;
 
 export type { SaveFamilyMomentAction, SaveWrittenMomentAction };
@@ -199,6 +211,7 @@ export function MomentComposer({
   saveFamilyMoment,
   saveWrittenMoment,
   editDraft = null,
+  registerDismiss,
 }: MomentComposerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -209,6 +222,12 @@ export function MomentComposer({
   );
   const [choosingMode, setChoosingMode] = useState(!editDraft);
   const [reviewing, setReviewing] = useState(false);
+  const {
+    closing: overlayClosing,
+    requestClose: requestOverlayClose,
+    onAnimationEnd: onOverlayAnimationEnd,
+  } = useOverlayPopoverClose();
+  const chooserSurface = !mode || choosingMode || reviewing;
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
     Boolean(
       editDraft &&
@@ -253,6 +272,7 @@ export function MomentComposer({
     PhotoUploadStage | VideoUploadStage | null
   >(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const chooserHeadingRef = useRef<HTMLHeadingElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const locationSearchRef = useRef<HTMLInputElement>(null);
@@ -267,10 +287,12 @@ export function MomentComposer({
   const photoUploadAbortRef = useRef<AbortController | null>(null);
   const uploadInFlightRef = useRef(false);
 
+  const journalPeople = model.journalPeople ?? [];
+  const taggablePeople = model.taggablePeople ?? [];
   const journalPerson =
-    model.journalPeople.find((person) => person.id === journalPersonId) ??
-    model.journalPeople[0];
-  const taggedPeople = model.taggablePeople.filter((person) =>
+    journalPeople.find((person) => person.id === journalPersonId) ??
+    journalPeople[0];
+  const taggedPeople = taggablePeople.filter((person) =>
     taggedPersonIds.includes(person.id),
   );
   const copy = mode ? modeCopy[mode] : null;
@@ -381,14 +403,36 @@ export function MomentComposer({
         return;
       }
 
-      resetDraft();
-      onRequestClose();
+      const dismiss = () => {
+        resetDraft();
+        onRequestClose();
+        returnFocusRef.current?.focus({ preventScroll: true });
+      };
+      if (chooserSurface) {
+        requestOverlayClose(dismiss);
+      } else {
+        dismiss();
+      }
       window.requestAnimationFrame(() =>
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
     },
-    [editDraft, isDirty, onRequestClose, resetDraft, returnFocusRef, saving],
+    [
+      chooserSurface,
+      editDraft,
+      isDirty,
+      onRequestClose,
+      requestOverlayClose,
+      resetDraft,
+      returnFocusRef,
+      saving,
+    ],
   );
+
+  useEffect(() => {
+    registerDismiss?.(close);
+    return () => registerDismiss?.(null);
+  }, [close, registerDismiss]);
 
   useEffect(
     () => () => {
@@ -398,21 +442,40 @@ export function MomentComposer({
     [revokeCurrentPhotoUrl],
   );
 
-  const dialogMounted = useModalDialog(open, dialogRef);
+  const typePicker = !mode || choosingMode;
+  const overlayMounted = useOverlayMount(open);
+  const dialogMounted = useModalDialog(open && !typePicker, dialogRef, {
+    modal: true,
+  });
 
   useEffect(() => {
+    if (!open || !typePicker) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const sheet = pickerRef.current?.querySelector(".composer-sheet");
+      if (sheet?.contains(target)) return;
+      if (target instanceof Element && target.closest(".header-add-moment")) {
+        return;
+      }
+      close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [close, open, typePicker]);
+
+  useLayoutEffect(() => {
     if (!open) return;
-    const focusFrame = window.requestAnimationFrame(() => {
-      if (reviewing) reviewHeadingRef.current?.focus();
-      else if (mode && !choosingMode) {
-        if (mode === "photo" || mode === "video")
-          editorHeadingRef.current?.focus({ preventScroll: true });
-        else if (mode === "thought") bodyTextareaRef.current?.focus();
-        else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
-        else titleInputRef.current?.focus();
-      } else chooserHeadingRef.current?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(focusFrame);
+    if (reviewing) reviewHeadingRef.current?.focus();
+    else if (mode && !choosingMode) {
+      if (mode === "photo" || mode === "video")
+        editorHeadingRef.current?.focus({ preventScroll: true });
+      else if (mode === "thought") bodyTextareaRef.current?.focus();
+      else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
+      else if (mode === "location")
+        locationSearchRef.current?.focus({ preventScroll: true });
+      else titleInputRef.current?.focus();
+    } else chooserHeadingRef.current?.focus({ preventScroll: true });
   }, [choosingMode, mode, open, reviewing]);
 
   const replacePhoto = (file: File | null) => {
@@ -548,7 +611,7 @@ export function MomentComposer({
   };
 
   const chooseJournalPerson = (personId: string) => {
-    if (!model.journalPeople.some((person) => person.id === personId)) return;
+    if (!journalPeople.some((person) => person.id === personId)) return;
     setJournalPersonId(personId);
     setTaggedPersonIds((current) =>
       current.filter((taggedPersonId) => taggedPersonId !== personId),
@@ -750,6 +813,13 @@ export function MomentComposer({
         : capturedBody;
     const savedResolvedPlaceName =
       savedMode === "location" ? savedTitle : savedPlaceName.trim();
+    flushSync(() => {
+      resetDraft();
+      onRequestClose();
+    });
+    window.requestAnimationFrame(() =>
+      returnFocusRef.current?.focus({ preventScroll: true }),
+    );
     startOptimisticMomentSave({
       circleId: model.circleId ?? null,
       mode: savedMode,
@@ -788,11 +858,6 @@ export function MomentComposer({
             }),
       onPublished: () => router.refresh(),
     });
-    resetDraft();
-    onRequestClose();
-    window.requestAnimationFrame(() =>
-      returnFocusRef.current?.focus({ preventScroll: true }),
-    );
     router.replace("/family");
   };
 
@@ -850,234 +915,607 @@ export function MomentComposer({
     copy?.kindLabel ?? "Moment",
   );
 
-  if (!dialogMounted) return null;
+  if (typePicker ? !open || !overlayMounted : !dialogMounted) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
-    <dialog
-      ref={dialogRef}
-      className={`composer-dialog new-moment-composer-dialog${
-        mode && !choosingMode && !reviewing ? " composer-editor-fullscreen" : ""
-      }`}
-      aria-labelledby="composer-title"
-      aria-describedby={connectedExperience ? "composer-privacy" : undefined}
-      onKeyDown={containDialogFocus}
-      onCancel={(event) => {
-        event.preventDefault();
-        close();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) close();
-      }}
+  const sheet = (
+    <section
+      className={`composer-sheet header-drawer-surface${
+        chooserSurface ? " overlay-popover" : ""
+      }${chooserSurface && overlayClosing ? " is-closing" : ""}`}
+      onAnimationEnd={chooserSurface ? onOverlayAnimationEnd : undefined}
     >
-      <section className="composer-sheet header-drawer-surface">
-        <span className="sheet-handle" aria-hidden="true" />
-        <button
-          className="sheet-close header-drawer-close"
-          aria-label="Close moment composer"
-          disabled={saving}
-          onClick={() => close()}
-        >
-          ×
-        </button>
+      <span className="sheet-handle" aria-hidden="true" />
+      <button
+        className="sheet-close header-drawer-close"
+        aria-label="Close moment composer"
+        disabled={saving}
+        onClick={() => close()}
+      >
+        ×
+      </button>
 
-        {!mode || choosingMode ? (
-          <>
-            {connectedExperience ? (
-              <span id="composer-privacy" className="private-label">
-                Family only
-              </span>
-            ) : null}
-            <h2 ref={chooserHeadingRef} id="composer-title" tabIndex={-1}>
-              {mode ? "Select entry type" : "New moment"}
-            </h2>
-            {mode && isDirty ? (
-              <p className="composer-draft-held">
-                Your current draft is still here.
-              </p>
-            ) : null}
-            <div className="moment-choices">
-              {!connectedExperience || connectedPhotoAvailable ? (
-                <button onClick={() => chooseMode("photo")}>
-                  <span className="choice-icon photo-choice" aria-hidden="true">
-                    ▣
-                  </span>
-                  <strong>Photo or video</strong>
-                  <small>Media with date and note</small>
-                </button>
-              ) : null}
-              <button onClick={() => chooseMode("thought")}>
-                <span className="choice-icon thought-choice" aria-hidden="true">
-                  “
+      {!mode || choosingMode ? (
+        <>
+          {connectedExperience ? (
+            <span id="composer-privacy" className="private-label">
+              Family only
+            </span>
+          ) : null}
+          <h2 ref={chooserHeadingRef} id="composer-title" tabIndex={-1}>
+            {mode ? "Select entry type" : "New moment"}
+          </h2>
+          {mode && isDirty ? (
+            <p className="composer-draft-held">
+              Your current draft is still here.
+            </p>
+          ) : null}
+          <div className="moment-choices">
+            {!connectedExperience || connectedPhotoAvailable ? (
+              <button onClick={() => chooseMode("photo")}>
+                <span className="choice-icon photo-choice" aria-hidden="true">
+                  ▣
                 </span>
-                <strong>Written entry</strong>
-                <small>Text, date, and details</small>
+                <strong>Photo or video</strong>
+                <small>Media with date and note</small>
               </button>
-              {!connectedExperience || connectedFamily ? (
-                <button onClick={() => chooseMode("bible-verse")}>
-                  <span className="choice-icon bible-choice" aria-hidden="true">
-                    †
-                  </span>
-                  <strong>Bible verse</strong>
-                  <small>Choose a passage</small>
+            ) : null}
+            <button onClick={() => chooseMode("thought")}>
+              <span className="choice-icon thought-choice" aria-hidden="true">
+                “
+              </span>
+              <strong>Written entry</strong>
+              <small>Text, date, and details</small>
+            </button>
+            {!connectedExperience || connectedFamily ? (
+              <button onClick={() => chooseMode("bible-verse")}>
+                <span className="choice-icon bible-choice" aria-hidden="true">
+                  †
+                </span>
+                <strong>Bible verse</strong>
+                <small>Choose a passage</small>
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : reviewing && copy ? (
+        <div className="composer-review">
+          <span id="composer-privacy" className="private-label">
+            {connectedExperience
+              ? "Family only"
+              : "Design preview · Nothing was saved"}
+          </span>
+          <h2 ref={reviewHeadingRef} id="composer-title" tabIndex={-1}>
+            Review entry
+          </h2>
+          <article className={`composer-preview-card preview-${mode}`}>
+            {photoPreviewUrl && mode === "photo" ? (
+              <div className="composer-photo-preview">
+                {/* The selected blob must bypass both Next's public optimizer
+                      and its CSP-incompatible inline image style. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  key={photoPreviewUrl}
+                  src={photoPreviewUrl}
+                  alt=""
+                  width={720}
+                  height={540}
+                  decoding="async"
+                  onError={() => {
+                    if (photoPreviewUrlRef.current !== photoPreviewUrl) return;
+                    setReviewing(false);
+                    rejectUndecodablePhoto(photoPreviewUrl);
+                  }}
+                />
+              </div>
+            ) : null}
+            {photoPreviewUrl && mode === "video" ? (
+              <div className="composer-photo-preview composer-video-preview">
+                <video
+                  key={photoPreviewUrl}
+                  src={photoPreviewUrl}
+                  aria-label="Selected video preview"
+                  controls
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  playsInline
+                  preload="metadata"
+                />
+              </div>
+            ) : null}
+            <div className="composer-preview-copy">
+              <span>{copy.kindLabel}</span>
+              <strong>{previewTitle}</strong>
+              {title.trim() && body.trim() ? <p>{body.trim()}</p> : null}
+            </div>
+          </article>
+          <dl className="composer-review-details">
+            <div>
+              <dt>Journal</dt>
+              <dd>{journalPerson.name}</dd>
+            </div>
+            <div>
+              <dt>Date</dt>
+              <dd>{plainDateLabel(occurredOn)}</dd>
+            </div>
+            {occurredTime ? (
+              <div>
+                <dt>Time</dt>
+                <dd>{occurredTime}</dd>
+              </div>
+            ) : null}
+            {taggedPeople.length ? (
+              <div>
+                <dt>With</dt>
+                <dd>{taggedPeople.map((person) => person.name).join(", ")}</dd>
+              </div>
+            ) : null}
+            {resolvedPlaceName.trim() && mode !== "location" ? (
+              <div>
+                <dt>Place</dt>
+                <dd>{resolvedPlaceName.trim()}</dd>
+              </div>
+            ) : null}
+          </dl>
+          {journalPersonId !== model.recorderPersonId ? (
+            <p className="recorded-by">Recorded by {model.recordedByName}</p>
+          ) : null}
+          <div className="composer-review-actions">
+            {(mode === "photo" || mode === "video") &&
+            saving &&
+            (photoUploadStage?.state === "preparing" ||
+              photoUploadStage?.state === "uploading") ? (
+              <button
+                className="secondary-composer-action stop-photo-upload"
+                type="button"
+                onClick={stopPhotoUpload}
+              >
+                Cancel upload
+              </button>
+            ) : photoRetryBlocked ? (
+              <button
+                className="secondary-composer-action single-composer-action"
+                type="button"
+                onClick={returnToEditing}
+              >
+                Return to {mode === "video" ? "video" : "photo"}
+              </button>
+            ) : (
+              <>
+                <button
+                  className="secondary-composer-action"
+                  type="button"
+                  disabled={saving}
+                  onClick={returnToEditing}
+                >
+                  Back to edit
                 </button>
-              ) : null}
-              {!connectedExperience || connectedFamily ? (
-                <button onClick={() => chooseMode("location")}>
-                  <span
-                    className="choice-icon location-choice"
-                    aria-hidden="true"
-                  >
-                    ⌖
-                  </span>
-                  <strong>Location</strong>
-                  <small>A place connected to a memory</small>
+                <button
+                  className="save-moment"
+                  type="button"
+                  disabled={saving}
+                  onClick={
+                    connectedExperience
+                      ? saveConnectedMoment
+                      : () => close(true)
+                  }
+                >
+                  {connectedExperience
+                    ? saving
+                      ? mode === "photo" || mode === "video"
+                        ? photoUploadStage?.state === "finishing"
+                          ? `Finishing ${mode}…`
+                          : photoUploadStage?.state === "stopping"
+                            ? `Cancelling ${mode}…`
+                            : `Adding ${mode}…`
+                        : "Saving…"
+                      : (mode === "photo" || mode === "video") && saveError
+                        ? "Try upload again"
+                        : "Save moment"
+                    : "Close preview"}
                 </button>
+              </>
+            )}
+          </div>
+          {(mode === "photo" || mode === "video") && photoUploadLabel ? (
+            <div className="composer-upload-status" role="status">
+              <p>{photoUploadLabel}</p>
+              {photoUploadStage?.state === "uploading" ? (
+                <progress
+                  aria-label={`Private ${mode} upload`}
+                  max={1}
+                  value={photoUploadStage.progress}
+                />
               ) : null}
             </div>
-          </>
-        ) : reviewing && copy ? (
-          <div className="composer-review">
+          ) : null}
+          {saveError ? (
+            <p className="composer-error" role="alert">
+              {saveError}
+            </p>
+          ) : null}
+        </div>
+      ) : copy ? (
+        <form
+          className="quick-compose composer-fullscreen-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitDraft();
+          }}
+        >
+          <header className="composer-editor-header">
+            {editDraft ? null : (
+              <button
+                className="composer-back"
+                type="button"
+                onClick={() => setChoosingMode(true)}
+              >
+                ← Choose another
+              </button>
+            )}
             <span id="composer-privacy" className="private-label">
-              {connectedExperience
-                ? "Family only"
-                : "Design preview · Nothing was saved"}
+              {copy.title}
             </span>
-            <h2 ref={reviewHeadingRef} id="composer-title" tabIndex={-1}>
-              Review entry
+            <h2
+              ref={editorHeadingRef}
+              id="composer-title"
+              className="sr-only"
+              tabIndex={-1}
+            >
+              {copy.title}
             </h2>
-            <article className={`composer-preview-card preview-${mode}`}>
-              {photoPreviewUrl && mode === "photo" ? (
-                <div className="composer-photo-preview">
-                  {/* The selected blob must bypass both Next's public optimizer
-                      and its CSP-incompatible inline image style. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    key={photoPreviewUrl}
-                    src={photoPreviewUrl}
-                    alt=""
-                    width={720}
-                    height={540}
-                    decoding="async"
-                    onError={() => {
-                      if (photoPreviewUrlRef.current !== photoPreviewUrl)
-                        return;
-                      setReviewing(false);
-                      rejectUndecodablePhoto(photoPreviewUrl);
+          </header>
+
+          <div className="composer-editor-scroll">
+            {mode === "photo" || mode === "video" ? (
+              editingExistingMedia ? null : (
+                <label className="photo-input">
+                  <span>
+                    {photoFile
+                      ? "Choose different media"
+                      : "Choose photo or video"}
+                  </span>
+                  <small>
+                    {connectedPhotoAvailable
+                      ? "The original uploads privately to this family."
+                      : "It stays on this device in the preview."}
+                  </small>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
+                    required={!photoFile}
+                    aria-invalid={photoError ? true : undefined}
+                    aria-describedby={
+                      photoError ? "photo-preview-error" : undefined
+                    }
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0] ?? null;
+                      event.currentTarget.blur();
+                      editorHeadingRef.current?.focus({
+                        preventScroll: true,
+                      });
+                      replacePhoto(file);
                     }}
                   />
-                </div>
-              ) : null}
-              {photoPreviewUrl && mode === "video" ? (
-                <div className="composer-photo-preview composer-video-preview">
-                  <video
-                    key={photoPreviewUrl}
-                    src={photoPreviewUrl}
-                    aria-label="Selected video preview"
-                    controls
-                    controlsList="nodownload noremoteplayback"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    playsInline
-                    preload="metadata"
-                  />
-                </div>
-              ) : null}
-              <div className="composer-preview-copy">
-                <span>{copy.kindLabel}</span>
-                <strong>{previewTitle}</strong>
-                {title.trim() && body.trim() ? <p>{body.trim()}</p> : null}
+                </label>
+              )
+            ) : null}
+            {photoError ? (
+              <p
+                id="photo-preview-error"
+                className="composer-error"
+                role="alert"
+              >
+                {photoError}
+              </p>
+            ) : null}
+            {editingExistingMedia ? null : (
+              <p
+                className="composer-selection-status"
+                role="status"
+                aria-live="polite"
+              >
+                {photoFile
+                  ? photoDecodeState === "ready"
+                    ? connectedPhotoAvailable
+                      ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
+                      : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
+                    : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
+                  : ""}
+              </p>
+            )}
+            {photoPreviewUrl && mode === "photo" ? (
+              <div className="composer-photo-preview">
+                {/* The selected blob is local-only and must never enter the
+                    generic Next image optimizer or receive inline styles. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  key={photoPreviewUrl}
+                  src={photoPreviewUrl}
+                  alt={
+                    editDraft?.existingMedia?.alt ?? "Selected photo preview"
+                  }
+                  width={720}
+                  height={540}
+                  decoding="async"
+                  onLoad={() => {
+                    if (editingExistingMedia) return;
+                    acceptDecodedPhoto(photoPreviewUrl);
+                  }}
+                  onError={() => {
+                    if (editingExistingMedia) return;
+                    rejectUndecodablePhoto(photoPreviewUrl);
+                  }}
+                />
+                {editingExistingMedia ? null : (
+                  <button type="button" onClick={() => replacePhoto(null)}>
+                    Remove photo
+                  </button>
+                )}
               </div>
-            </article>
-            <dl className="composer-review-details">
-              <div>
-                <dt>Journal</dt>
-                <dd>{journalPerson.name}</dd>
+            ) : null}
+            {photoPreviewUrl && mode === "video" ? (
+              <div className="composer-photo-preview composer-video-preview">
+                <video
+                  key={photoPreviewUrl}
+                  src={photoPreviewUrl}
+                  aria-label="Selected video preview"
+                  controls
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  disableRemotePlayback
+                  playsInline
+                  preload="metadata"
+                  onLoadedMetadata={
+                    editingExistingMedia
+                      ? undefined
+                      : (event) =>
+                          inspectSelectedVideo(
+                            photoPreviewUrl,
+                            event.currentTarget,
+                            false,
+                          )
+                  }
+                  onLoadedData={
+                    editingExistingMedia
+                      ? undefined
+                      : (event) =>
+                          inspectSelectedVideo(
+                            photoPreviewUrl,
+                            event.currentTarget,
+                            true,
+                          )
+                  }
+                  onError={
+                    editingExistingMedia
+                      ? undefined
+                      : () => {
+                          rejectUndecodablePhoto(photoPreviewUrl);
+                          setPhotoError(
+                            "This video could not be played. Choose another one.",
+                          );
+                        }
+                  }
+                />
+                {editingExistingMedia ? null : (
+                  <button type="button" onClick={() => replacePhoto(null)}>
+                    Remove video
+                  </button>
+                )}
               </div>
-              <div>
-                <dt>Date</dt>
-                <dd>{plainDateLabel(occurredOn)}</dd>
-              </div>
-              {occurredTime ? (
-                <div>
-                  <dt>Time</dt>
-                  <dd>{occurredTime}</dd>
+            ) : null}
+
+            {mode === "bible-verse" ? (
+              <BibleVerseFields
+                value={verseSelection}
+                bookTriggerRef={verseBookTriggerRef}
+                onChange={(next, passage) => {
+                  setVerseSelection(next);
+                  setTitle(passage?.reference ?? "");
+                  setBody(passage?.text ?? "");
+                  if (passage) setContentError(null);
+                }}
+              />
+            ) : null}
+
+            {mode === "location" ? (
+              <LocationFields
+                required
+                invalid={Boolean(contentError)}
+                searchInputRef={locationSearchRef}
+                value={{
+                  label: title,
+                  latitude: place.latitude,
+                  longitude: place.longitude,
+                }}
+                onChange={(next) => {
+                  setTitle(next.label);
+                  setPlace(next);
+                  if (next.label.trim()) setContentError(null);
+                }}
+              />
+            ) : null}
+
+            {mode === "milestone" ? (
+              <label className="composer-field">
+                <span>Milestone</span>
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={title}
+                  required
+                  aria-invalid={contentError ? true : undefined}
+                  aria-describedby={
+                    contentError ? "composer-content-error" : undefined
+                  }
+                  maxLength={120}
+                  placeholder="A meaningful first"
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    if (event.target.value.trim()) setContentError(null);
+                  }}
+                />
+              </label>
+            ) : null}
+
+            {mode === "bible-verse" ? null : (
+              <label className="composer-field">
+                <span>{copy.bodyLabel}</span>
+                <textarea
+                  ref={bodyTextareaRef}
+                  placeholder={copy.bodyPlaceholder}
+                  value={body}
+                  required={copy.bodyRequired}
+                  aria-invalid={
+                    mode === "thought" && contentError ? true : undefined
+                  }
+                  aria-describedby={
+                    mode === "thought" && contentError
+                      ? "composer-content-error"
+                      : undefined
+                  }
+                  maxLength={4000}
+                  onChange={(event) => {
+                    setBody(event.target.value);
+                    if (mode === "thought" && event.target.value.trim()) {
+                      setContentError(null);
+                    }
+                  }}
+                />
+              </label>
+            )}
+            {contentError ? (
+              <p
+                id="composer-content-error"
+                className="composer-error"
+                role="alert"
+              >
+                {contentError}
+              </p>
+            ) : null}
+
+            <div className="composer-core-fields">
+              <DateTimeFields
+                date={occurredOn}
+                maxDate={editDraft?.maxOccurredOn ?? model.previewToday}
+                time={occurredTime}
+                onDateChange={setOccurredOn}
+                onTimeChange={setOccurredTime}
+              />
+            </div>
+
+            <div className="composer-optional">
+              <button
+                className="composer-optional-toggle"
+                type="button"
+                aria-expanded={optionalDetailsOpen}
+                aria-controls="composer-optional-fields"
+                onClick={() => setOptionalDetailsOpen((current) => !current)}
+              >
+                Details <span>Optional</span>
+              </button>
+              {optionalDetailsOpen ? (
+                <div id="composer-optional-fields">
+                  {editDraft ? null : (
+                    <JournalPickerField
+                      options={journalPeople}
+                      value={journalPersonId}
+                      onChange={chooseJournalPerson}
+                    />
+                  )}
+                  <fieldset className="people-tags">
+                    <legend>Who else was part of this?</legend>
+                    <div>
+                      {taggablePeople
+                        .filter(
+                          (person) =>
+                            !connectedExperience ||
+                            person.id !== journalPersonId,
+                        )
+                        .map((person) => {
+                          const isPreviewJournalPerson =
+                            !connectedExperience &&
+                            person.id === journalPersonId;
+                          return (
+                            <label key={person.id}>
+                              <input
+                                type="checkbox"
+                                checked={taggedPersonIds.includes(person.id)}
+                                disabled={isPreviewJournalPerson}
+                                onChange={() => toggleTaggedPerson(person.id)}
+                              />
+                              <span
+                                className={`tag-person-dot dot-${person.accent}`}
+                                aria-hidden="true"
+                              >
+                                {person.initial}
+                              </span>
+                              {person.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </fieldset>
+                  {mode !== "location" ? (
+                    <>
+                      <LocationFields
+                        optional
+                        value={place}
+                        onChange={setPlace}
+                      />
+                      <small className="composer-location-note">
+                        No location is read from your media.
+                      </small>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
-              {taggedPeople.length ? (
-                <div>
-                  <dt>With</dt>
-                  <dd>
-                    {taggedPeople.map((person) => person.name).join(", ")}
-                  </dd>
-                </div>
-              ) : null}
-              {resolvedPlaceName.trim() && mode !== "location" ? (
-                <div>
-                  <dt>Place</dt>
-                  <dd>{resolvedPlaceName.trim()}</dd>
-                </div>
-              ) : null}
-            </dl>
+            </div>
+
             {journalPersonId !== model.recorderPersonId ? (
               <p className="recorded-by">Recorded by {model.recordedByName}</p>
             ) : null}
-            <div className="composer-review-actions">
-              {(mode === "photo" || mode === "video") &&
-              saving &&
-              (photoUploadStage?.state === "preparing" ||
-                photoUploadStage?.state === "uploading") ? (
-                <button
-                  className="secondary-composer-action stop-photo-upload"
-                  type="button"
-                  onClick={stopPhotoUpload}
-                >
-                  Cancel upload
-                </button>
-              ) : photoRetryBlocked ? (
-                <button
-                  className="secondary-composer-action single-composer-action"
-                  type="button"
-                  onClick={returnToEditing}
-                >
-                  Return to {mode === "video" ? "video" : "photo"}
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="secondary-composer-action"
-                    type="button"
-                    disabled={saving}
-                    onClick={returnToEditing}
-                  >
-                    Back to edit
-                  </button>
-                  <button
-                    className="save-moment"
-                    type="button"
-                    disabled={saving}
-                    onClick={
-                      connectedExperience
-                        ? saveConnectedMoment
-                        : () => close(true)
-                    }
-                  >
-                    {connectedExperience
-                      ? saving
-                        ? mode === "photo" || mode === "video"
-                          ? photoUploadStage?.state === "finishing"
-                            ? `Finishing ${mode}…`
-                            : photoUploadStage?.state === "stopping"
-                              ? `Cancelling ${mode}…`
-                              : `Adding ${mode}…`
-                          : "Saving…"
-                        : (mode === "photo" || mode === "video") && saveError
-                          ? "Try upload again"
-                          : "Save moment"
-                      : "Close preview"}
-                  </button>
-                </>
-              )}
-            </div>
+            {connectedExperience ? (
+              <p className="composer-preview-note">
+                This will appear in its true chronological place.
+              </p>
+            ) : null}
+          </div>
+
+          <footer className="composer-editor-footer">
+            <button
+              className="save-moment"
+              type="submit"
+              disabled={saving || photoRetryBlocked}
+            >
+              {saving
+                ? editDraft || (mode !== "photo" && mode !== "video")
+                  ? "Saving…"
+                  : photoUploadStage?.state === "finishing"
+                    ? `Finishing ${mode}…`
+                    : `Adding ${mode}…`
+                : !editDraft && photoRetryBlocked
+                  ? "Upload unavailable"
+                  : !editDraft &&
+                      (mode === "photo" || mode === "video") &&
+                      saveError
+                    ? "Try upload again"
+                    : "Save"}
+            </button>
+            {(mode === "photo" || mode === "video") &&
+            saving &&
+            (photoUploadStage?.state === "preparing" ||
+              photoUploadStage?.state === "uploading") ? (
+              <button
+                className="secondary-composer-action stop-photo-upload"
+                type="button"
+                onClick={stopPhotoUpload}
+              >
+                Cancel upload
+              </button>
+            ) : null}
             {(mode === "photo" || mode === "video") && photoUploadLabel ? (
               <div className="composer-upload-status" role="status">
                 <p>{photoUploadLabel}</p>
@@ -1095,410 +1533,57 @@ export function MomentComposer({
                 {saveError}
               </p>
             ) : null}
-          </div>
-        ) : copy ? (
-          <form
-            className="quick-compose composer-fullscreen-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitDraft();
-            }}
-          >
-            <header className="composer-editor-header">
-              {editDraft ? null : (
-                <button
-                  className="composer-back"
-                  type="button"
-                  onClick={() => setChoosingMode(true)}
-                >
-                  ← Choose another
-                </button>
-              )}
-              <span id="composer-privacy" className="private-label">
-                {copy.title}
-              </span>
-              <h2
-                ref={editorHeadingRef}
-                id="composer-title"
-                className="sr-only"
-                tabIndex={-1}
-              >
-                {copy.title}
-              </h2>
-            </header>
+          </footer>
+        </form>
+      ) : null}
+    </section>
+  );
 
-            <div className="composer-editor-scroll">
-              {mode === "photo" || mode === "video" ? (
-                editingExistingMedia ? null : (
-                  <label className="photo-input">
-                    <span>
-                      {photoFile
-                        ? "Choose different media"
-                        : "Choose photo or video"}
-                    </span>
-                    <small>
-                      {connectedPhotoAvailable
-                        ? "The original uploads privately to this family."
-                        : "It stays on this device in the preview."}
-                    </small>
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
-                      required={!photoFile}
-                      aria-invalid={photoError ? true : undefined}
-                      aria-describedby={
-                        photoError ? "photo-preview-error" : undefined
-                      }
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0] ?? null;
-                        event.currentTarget.blur();
-                        editorHeadingRef.current?.focus({
-                          preventScroll: true,
-                        });
-                        replacePhoto(file);
-                      }}
-                    />
-                  </label>
-                )
-              ) : null}
-              {photoError ? (
-                <p
-                  id="photo-preview-error"
-                  className="composer-error"
-                  role="alert"
-                >
-                  {photoError}
-                </p>
-              ) : null}
-              {editingExistingMedia ? null : (
-                <p
-                  className="composer-selection-status"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {photoFile
-                    ? photoDecodeState === "ready"
-                      ? connectedPhotoAvailable
-                        ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
-                        : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
-                      : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
-                    : ""}
-                </p>
-              )}
-              {photoPreviewUrl && mode === "photo" ? (
-                <div className="composer-photo-preview">
-                  {/* The selected blob is local-only and must never enter the
-                    generic Next image optimizer or receive inline styles. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    key={photoPreviewUrl}
-                    src={photoPreviewUrl}
-                    alt={
-                      editDraft?.existingMedia?.alt ?? "Selected photo preview"
-                    }
-                    width={720}
-                    height={540}
-                    decoding="async"
-                    onLoad={() => {
-                      if (editingExistingMedia) return;
-                      acceptDecodedPhoto(photoPreviewUrl);
-                    }}
-                    onError={() => {
-                      if (editingExistingMedia) return;
-                      rejectUndecodablePhoto(photoPreviewUrl);
-                    }}
-                  />
-                  {editingExistingMedia ? null : (
-                    <button type="button" onClick={() => replacePhoto(null)}>
-                      Remove photo
-                    </button>
-                  )}
-                </div>
-              ) : null}
-              {photoPreviewUrl && mode === "video" ? (
-                <div className="composer-photo-preview composer-video-preview">
-                  <video
-                    key={photoPreviewUrl}
-                    src={photoPreviewUrl}
-                    aria-label="Selected video preview"
-                    controls
-                    controlsList="nodownload noremoteplayback"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    playsInline
-                    preload="metadata"
-                    onLoadedMetadata={
-                      editingExistingMedia
-                        ? undefined
-                        : (event) =>
-                            inspectSelectedVideo(
-                              photoPreviewUrl,
-                              event.currentTarget,
-                              false,
-                            )
-                    }
-                    onLoadedData={
-                      editingExistingMedia
-                        ? undefined
-                        : (event) =>
-                            inspectSelectedVideo(
-                              photoPreviewUrl,
-                              event.currentTarget,
-                              true,
-                            )
-                    }
-                    onError={
-                      editingExistingMedia
-                        ? undefined
-                        : () => {
-                            rejectUndecodablePhoto(photoPreviewUrl);
-                            setPhotoError(
-                              "This video could not be played. Choose another one.",
-                            );
-                          }
-                    }
-                  />
-                  {editingExistingMedia ? null : (
-                    <button type="button" onClick={() => replacePhoto(null)}>
-                      Remove video
-                    </button>
-                  )}
-                </div>
-              ) : null}
+  if (typePicker) {
+    return createPortal(
+      <div
+        ref={pickerRef}
+        className="new-moment-composer-dialog composer-type-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="composer-title"
+        aria-describedby={connectedExperience ? "composer-privacy" : undefined}
+        aria-hidden={overlayClosing ? true : undefined}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            close();
+            return;
+          }
+          containDialogFocus(event);
+        }}
+      >
+        {sheet}
+      </div>,
+      document.body,
+    );
+  }
 
-              {mode === "bible-verse" ? (
-                <BibleVerseFields
-                  value={verseSelection}
-                  bookTriggerRef={verseBookTriggerRef}
-                  onChange={(next, passage) => {
-                    setVerseSelection(next);
-                    setTitle(passage?.reference ?? "");
-                    setBody(passage?.text ?? "");
-                    if (passage) setContentError(null);
-                  }}
-                />
-              ) : null}
-
-              {mode === "location" ? (
-                <LocationFields
-                  required
-                  invalid={Boolean(contentError)}
-                  searchInputRef={locationSearchRef}
-                  value={{
-                    label: title,
-                    latitude: place.latitude,
-                    longitude: place.longitude,
-                  }}
-                  onChange={(next) => {
-                    setTitle(next.label);
-                    setPlace(next);
-                    if (next.label.trim()) setContentError(null);
-                  }}
-                />
-              ) : null}
-
-              {mode === "milestone" ? (
-                <label className="composer-field">
-                  <span>Milestone</span>
-                  <input
-                    ref={titleInputRef}
-                    type="text"
-                    value={title}
-                    required
-                    aria-invalid={contentError ? true : undefined}
-                    aria-describedby={
-                      contentError ? "composer-content-error" : undefined
-                    }
-                    maxLength={120}
-                    placeholder="A meaningful first"
-                    onChange={(event) => {
-                      setTitle(event.target.value);
-                      if (event.target.value.trim()) setContentError(null);
-                    }}
-                  />
-                </label>
-              ) : null}
-
-              {mode === "bible-verse" ? null : (
-                <label className="composer-field">
-                  <span>{copy.bodyLabel}</span>
-                  <textarea
-                    ref={bodyTextareaRef}
-                    placeholder={copy.bodyPlaceholder}
-                    value={body}
-                    required={copy.bodyRequired}
-                    aria-invalid={
-                      mode === "thought" && contentError ? true : undefined
-                    }
-                    aria-describedby={
-                      mode === "thought" && contentError
-                        ? "composer-content-error"
-                        : undefined
-                    }
-                    maxLength={4000}
-                    onChange={(event) => {
-                      setBody(event.target.value);
-                      if (mode === "thought" && event.target.value.trim()) {
-                        setContentError(null);
-                      }
-                    }}
-                  />
-                </label>
-              )}
-              {contentError ? (
-                <p
-                  id="composer-content-error"
-                  className="composer-error"
-                  role="alert"
-                >
-                  {contentError}
-                </p>
-              ) : null}
-
-              <div className="composer-core-fields">
-                <DateTimeFields
-                  date={occurredOn}
-                  maxDate={editDraft?.maxOccurredOn ?? model.previewToday}
-                  time={occurredTime}
-                  onDateChange={setOccurredOn}
-                  onTimeChange={setOccurredTime}
-                />
-              </div>
-
-              <div className="composer-optional">
-                <button
-                  className="composer-optional-toggle"
-                  type="button"
-                  aria-expanded={optionalDetailsOpen}
-                  aria-controls="composer-optional-fields"
-                  onClick={() => setOptionalDetailsOpen((current) => !current)}
-                >
-                  Details <span>Optional</span>
-                </button>
-                {optionalDetailsOpen ? (
-                  <div id="composer-optional-fields">
-                    {editDraft ? null : (
-                      <JournalPickerField
-                        options={model.journalPeople}
-                        value={journalPersonId}
-                        onChange={chooseJournalPerson}
-                      />
-                    )}
-                    <fieldset className="people-tags">
-                      <legend>Who else was part of this?</legend>
-                      <div>
-                        {model.taggablePeople
-                          .filter(
-                            (person) =>
-                              !connectedExperience ||
-                              person.id !== journalPersonId,
-                          )
-                          .map((person) => {
-                            const isPreviewJournalPerson =
-                              !connectedExperience &&
-                              person.id === journalPersonId;
-                            return (
-                              <label key={person.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={taggedPersonIds.includes(person.id)}
-                                  disabled={isPreviewJournalPerson}
-                                  onChange={() => toggleTaggedPerson(person.id)}
-                                />
-                                <span
-                                  className={`tag-person-dot dot-${person.accent}`}
-                                  aria-hidden="true"
-                                >
-                                  {person.initial}
-                                </span>
-                                {person.name}
-                              </label>
-                            );
-                          })}
-                      </div>
-                    </fieldset>
-                    {mode !== "location" ? (
-                      <>
-                        <LocationFields
-                          optional
-                          value={place}
-                          onChange={setPlace}
-                        />
-                        <small className="composer-location-note">
-                          No location is read from your media.
-                        </small>
-                      </>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              {journalPersonId !== model.recorderPersonId ? (
-                <p className="recorded-by">
-                  Recorded by {model.recordedByName}
-                </p>
-              ) : null}
-              {connectedExperience ? (
-                <p className="composer-preview-note">
-                  This will appear in its true chronological place.
-                </p>
-              ) : null}
-            </div>
-
-            <footer className="composer-editor-footer">
-              <button
-                className="save-moment"
-                type="submit"
-                disabled={saving || photoRetryBlocked}
-              >
-                {saving
-                  ? editDraft || (mode !== "photo" && mode !== "video")
-                    ? "Saving…"
-                    : photoUploadStage?.state === "finishing"
-                      ? `Finishing ${mode}…`
-                      : `Adding ${mode}…`
-                  : !editDraft && photoRetryBlocked
-                    ? "Upload unavailable"
-                    : !editDraft &&
-                        (mode === "photo" || mode === "video") &&
-                        saveError
-                      ? "Try upload again"
-                      : "Save"}
-              </button>
-              {(mode === "photo" || mode === "video") &&
-              saving &&
-              (photoUploadStage?.state === "preparing" ||
-                photoUploadStage?.state === "uploading") ? (
-                <button
-                  className="secondary-composer-action stop-photo-upload"
-                  type="button"
-                  onClick={stopPhotoUpload}
-                >
-                  Cancel upload
-                </button>
-              ) : null}
-              {(mode === "photo" || mode === "video") && photoUploadLabel ? (
-                <div className="composer-upload-status" role="status">
-                  <p>{photoUploadLabel}</p>
-                  {photoUploadStage?.state === "uploading" ? (
-                    <progress
-                      aria-label={`Private ${mode} upload`}
-                      max={1}
-                      value={photoUploadStage.progress}
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-              {saveError ? (
-                <p className="composer-error" role="alert">
-                  {saveError}
-                </p>
-              ) : null}
-            </footer>
-          </form>
-        ) : null}
-      </section>
-    </dialog>
+  return createPortal(
+    <dialog
+      ref={dialogRef}
+      className={`composer-dialog new-moment-composer-dialog${
+        mode && !choosingMode && !reviewing ? " composer-editor-fullscreen" : ""
+      }`}
+      aria-labelledby="composer-title"
+      aria-describedby={connectedExperience ? "composer-privacy" : undefined}
+      aria-hidden={overlayClosing ? true : undefined}
+      onKeyDown={containDialogFocus}
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) close();
+      }}
+    >
+      {sheet}
+    </dialog>,
+    document.body,
   );
 }

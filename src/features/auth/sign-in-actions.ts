@@ -6,6 +6,7 @@ import {
   localJournalIsEnabled,
   resolvedSiteOrigin,
 } from "../../../config/our-days-environment";
+import { acceptPendingInvitationForSession } from "@/lib/auth/accept-pending-invitation.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 
@@ -124,11 +125,14 @@ export async function verifySignInCode(
     }
 
     if (!data || data.length === 0) {
-      return {
-        status: "no-access",
-        email,
-        message: "This account does not have access to a family circle.",
-      };
+      const accepted = await acceptPendingInvitationForSession(supabase);
+      if (!accepted) {
+        return {
+          status: "no-access",
+          email,
+          message: "This account does not have access to a family circle.",
+        };
+      }
     }
   } catch {
     return {

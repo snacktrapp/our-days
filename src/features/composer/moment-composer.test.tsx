@@ -177,6 +177,8 @@ afterEach(() => {
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 async function openComposer() {
@@ -203,7 +205,10 @@ async function setComposerPlace(
   user: ReturnType<typeof userEvent.setup>,
   name: string,
 ) {
-  await user.click(screen.getByRole("button", { name: /^Place,/u }));
+  const field = screen.queryByLabelText("Place name");
+  if (!field) {
+    await user.click(screen.getByRole("button", { name: /^Place,/u }));
+  }
   await user.type(screen.getByLabelText("Place name"), name);
 }
 
@@ -815,9 +820,30 @@ describe("MomentComposer", () => {
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
-  it("opens honestly as a modal, locks body scroll, and restores focus", async () => {
+  it("closes the type picker from a document press outside the sheet", async () => {
+    await openComposer();
+    expect(screen.getByRole("dialog")).toHaveClass("composer-type-picker");
+    fireEvent.pointerDown(document.body);
+    const dialog = document.querySelector(".new-moment-composer-dialog");
+    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+  });
+
+  it("portals the type picker onto document.body as a popover, not a themed dialog", async () => {
+    await openComposer();
+    const picker = screen.getByRole("dialog");
+    expect(picker.tagName).toBe("DIV");
+    expect(picker).toHaveClass("composer-type-picker");
+    expect(picker).toHaveClass("new-moment-composer-dialog");
+    expect(picker).not.toHaveClass("composer-dialog");
+    expect(picker.parentElement).toBe(document.body);
+    expect(picker.closest(".topbar")).toBeNull();
+    expect(picker.closest(".app-shell")).toBeNull();
+    expect(picker.closest(".bottom-nav")).toBeNull();
+  });
+
+  it("opens the type picker without a modal top layer, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
-    expect(screen.getByRole("dialog")).toHaveAttribute("open");
+    expect(screen.getByRole("dialog")).toBeVisible();
     expect(screen.getByRole("dialog")).toHaveClass(
       "new-moment-composer-dialog",
     );
@@ -833,8 +859,75 @@ describe("MomentComposer", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open composer" })).toHaveFocus();
-    expect(document.body).not.toHaveClass("composer-scroll-locked");
-    expect(document.documentElement).not.toHaveClass("composer-scroll-locked");
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass("composer-scroll-locked");
+      expect(document.documentElement).not.toHaveClass(
+        "composer-scroll-locked",
+      );
+    });
+  });
+
+  it("pops the type-selection window and rises the composer after a type is chosen", async () => {
+    const user = await openComposer();
+    const picker = screen.getByRole("dialog");
+    const chooser = picker.querySelector(".composer-sheet");
+    expect(picker.tagName).toBe("DIV");
+    expect(picker).not.toHaveClass("composer-editor-fullscreen");
+    expect(picker).toHaveClass("composer-type-picker");
+    expect(chooser).toHaveClass("overlay-popover");
+    expect(chooser).not.toHaveClass("is-closing");
+
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    const editor = screen.getByRole("dialog");
+    expect(editor.tagName).toBe("DIALOG");
+    expect(editor).toHaveClass("composer-editor-fullscreen");
+    expect(editor).toHaveClass("composer-dialog");
+    expect(editor).not.toHaveClass("composer-type-picker");
+    expect(editor.querySelector(".composer-sheet")).not.toHaveClass(
+      "overlay-popover",
+    );
+  });
+
+  it("dismisses the type-selection window with a reverse pop", async () => {
+    const user = await openComposer();
+    await user.click(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    );
+    const dialog = document.querySelector(".new-moment-composer-dialog");
+    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+    expect(dialog).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("dismisses the type-selection window instantly when motion is reduced", async () => {
+    const media = vi.mocked(window.matchMedia);
+    media.mockImplementation((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    try {
+      const user = await openComposer();
+      await user.click(
+        screen.getByRole("button", { name: "Close moment composer" }),
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    } finally {
+      media.mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+    }
   });
 
   it("saves a backdated local design entry without a review step", async () => {
@@ -861,20 +954,14 @@ describe("MomentComposer", () => {
     expect(screen.queryByDisplayValue("A brave blue door.")).toBeNull();
   }, 10_000);
 
-  it.each([["Location", "Place name", "Sand Harbor"]])(
-    "gives %s a distinct required title",
-    async (choice, label, value) => {
-      const user = await openComposer();
-      await user.click(
-        screen.getByRole("button", { name: new RegExp(choice) }),
-      );
-      await user.click(screen.getByRole("button", { name: /^Place,/u }));
-      const requiredTitle = screen.getByLabelText(label);
-      expect(requiredTitle).toHaveAttribute("aria-required", "true");
-      await user.type(requiredTitle, value);
-      expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
-    },
-  );
+  it("does not offer Location in New moment", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    expect(screen.queryByRole("button", { name: /Location/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Bible verse/ })).toBeVisible();
+  });
 
   it("previews WEB text as soon as a starting verse is chosen and updates when the ending verse changes", async () => {
     const user = await openComposer();
@@ -978,7 +1065,6 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
     await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "Oak Street School");
-    expect(screen.getByText("Map unavailable")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -988,31 +1074,6 @@ describe("MomentComposer", () => {
           title: "",
           body: "The kitchen was loud.",
           placeName: "Oak Street School",
-          latitude: null,
-          longitude: null,
-        }),
-      ),
-    );
-  });
-
-  it("saves a typed Location place label without coordinates", async () => {
-    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
-    const user = userEvent.setup();
-    render(<ConnectedFamilyHarness save={save} />);
-    await user.click(
-      screen.getByRole("button", { name: "Open connected family composer" }),
-    );
-    await user.click(screen.getByRole("button", { name: /Location/ }));
-    await setComposerPlace(user, "Sand Harbor");
-    expect(screen.getByText("Map unavailable")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() =>
-      expect(save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: "location",
-          title: "",
-          placeName: "Sand Harbor",
           latitude: null,
           longitude: null,
         }),
@@ -1299,17 +1360,15 @@ describe("MomentComposer", () => {
       "Keep this",
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Location/ }));
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
     confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: /Location/ }));
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1473,43 +1532,32 @@ describe("MomentComposer", () => {
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
     await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Location/ }));
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
 
     expect(confirm).toHaveBeenCalledWith(
       "Discard this draft and choose another type?",
     );
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
-  it.each([
-    ["Written entry", "Entry", "Write a thought"],
-    ["Location", "Place name", "Name the place"],
-  ])(
+  it.each([["Written entry", "Entry", "Write a thought"]])(
     "rejects whitespace-only required content for %s",
     async (choice, label, error) => {
       const user = await openComposer();
       await user.click(
         screen.getByRole("button", { name: new RegExp(choice) }),
       );
-      if (choice === "Location") {
-        await user.click(screen.getByRole("button", { name: /^Place,/u }));
-      }
       const field = screen.getByLabelText(label);
       fireEvent.change(field, { target: { value: " \n " } });
       await user.click(screen.getByRole("button", { name: "Save" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent(error);
-      if (choice === "Location") {
-        expect(
-          screen.getByRole("dialog", { name: "Choose a place" }),
-        ).toBeVisible();
-      } else {
-        expect(field).toHaveFocus();
-      }
+      expect(field).toHaveFocus();
+      expect(
+        screen.queryByRole("dialog", { name: "Choose a place" }),
+      ).toBeNull();
       expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     },
   );

@@ -19,13 +19,45 @@
   --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
   --header-drawer-radius: 10px;
-  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
+  --overlay-popover-blur: 18px;
   --header-drawer-padding: 16px;
-  --header-drawer-top: calc(63px + env(safe-area-inset-top));
+  --header-drawer-gap: 10px;
+  /* 55px is the topbar padding-box (56px border-box minus 1px borders),
+     matching `top: 100%` on drawers positioned against the header. */
+  --header-drawer-top: calc(
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) + 55px +
+      var(--header-drawer-gap)
+  );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
+  --type-picker-width: min(
+    260px,
+    calc(100dvw - 2 * var(--bottom-nav-inline-gap))
+  );
+  --type-picker-top: var(--header-drawer-top);
+  --type-picker-left: max(
+    var(--bottom-nav-inline-gap),
+    calc((100dvw - 430px) / 2 + var(--bottom-nav-inline-gap))
+  );
+  --nav-pill-fill: rgba(7, 17, 13, 0.64);
+  --nav-pill-blur: 14px;
+  --journal-grid-line: rgba(134, 166, 151, 0.045);
+  --journal-grid-size: 22px;
+  --journal-grid-image:
+    linear-gradient(var(--journal-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--journal-grid-line) 1px, transparent 1px);
+  --timeline-media-max-height: min(
+    90dvh,
+    calc((min(100vw, 430px) - 24px) * 16 / 9)
+  );
 }
 
 :root[data-theme="dark"] {
@@ -46,6 +78,10 @@
   --ochre: #9b6d24;
   --slate: #59677d;
   --moss: #58764e;
+  --nav-pill-fill: rgba(243, 238, 228, 0.7);
+  --journal-grid-line: rgba(57, 123, 118, 0.07);
+  --header-drawer-shadow: 0 18px 42px rgba(58, 44, 31, 0.18);
+  --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
 }
 
 * {
@@ -57,9 +93,14 @@ html {
   min-height: 100dvh;
   overflow-x: clip;
   overscroll-behavior-x: none;
-  background: #07110d;
+  background-color: var(--grid-surface);
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
   scroll-padding-bottom: calc(
     78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+  );
+  scroll-padding-top: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
   );
 }
 body {
@@ -69,13 +110,41 @@ body {
   overflow-x: clip;
   overscroll-behavior-x: none;
   margin: 0;
-  background: #07110d;
+  background-color: var(--grid-surface);
   color: var(--ink);
   font-family: var(--font-interface);
 }
 html.composer-scroll-locked,
 body.composer-scroll-locked {
   overscroll-behavior: none;
+}
+
+/* Safari paints html/body and theme-color in the toolbar / home-indicator
+   gap. Photo fullscreen covers the journal, so that canvas goes black.
+   New moment is a popover: frost must keep sampling the grid, so
+   composer-scroll-locked does not paint over --grid-surface. */
+html.overlay-open,
+html.overlay-open body,
+html[data-theme].overlay-open,
+html[data-theme].overlay-open body,
+:root[data-theme="light"].overlay-open,
+:root[data-theme="light"].overlay-open body,
+body.overlay-open {
+  background-color: #000;
+  background-image: none;
+}
+
+html.overlay-open .app-shell,
+html.overlay-open .phone-stage,
+html[data-theme].overlay-open .app-shell,
+html[data-theme].overlay-open .phone-stage {
+  background-color: #000;
+  background-image: none;
+}
+
+html.overlay-open .app-shell::before,
+html[data-theme].overlay-open .app-shell::before {
+  content: none;
 }
 
 html.composer-scroll-locked .app-shell,
@@ -90,6 +159,44 @@ button:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
   outline-offset: 2px;
+}
+
+/* Journal header / lightbox chrome: no focus ring at all, including
+   :focus-visible. Phone Safari was leaving a box around the family title
+   and a hairline under the floating header after photo dismiss. */
+.topbar,
+.topbar *:focus,
+.topbar *:focus-visible,
+.topbar > .title-switcher > summary,
+.topbar > .title-switcher > summary:focus,
+.topbar > .title-switcher > summary:focus-visible,
+.title-lockup h1,
+.title-lockup h1:focus,
+.title-lockup h1:focus-visible,
+.title-switcher-heading h1,
+.title-switcher-heading h1:focus,
+.title-switcher-heading h1:focus-visible,
+#journal-focus-target,
+#journal-focus-target:focus,
+#journal-focus-target:focus-visible,
+.header-add-moment,
+.header-add-moment:focus,
+.header-add-moment:focus-visible,
+.theme-toggle,
+.theme-toggle:focus,
+.theme-toggle:focus-visible,
+.notification-trigger,
+.notification-trigger:focus,
+.notification-trigger:focus-visible,
+.media-viewer-close,
+.media-viewer-close:focus,
+.media-viewer-close:focus-visible,
+.media-viewer-trigger,
+.media-viewer-trigger:focus,
+.media-viewer-trigger:focus-visible {
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) and (pointer: fine) {
   input:focus-visible,
@@ -348,6 +455,9 @@ button:focus-visible,
   position: relative;
   overflow: hidden;
   overflow-x: clip;
+  padding-top: calc(
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
+  );
   padding-bottom: calc(
     78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
   );
@@ -357,14 +467,29 @@ button:focus-visible,
   box-shadow: 0 24px 80px rgba(58, 45, 33, 0.18);
 }
 .topbar {
-  min-height: calc(88px + env(safe-area-inset-top));
-  padding: calc(18px + env(safe-area-inset-top)) 18px 12px;
+  height: 56px;
+  min-height: 56px;
+  padding: 3px 8px;
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr) 88px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  position: relative;
-  z-index: 5;
-  background: linear-gradient(var(--paper) 74%, rgba(243, 238, 228, 0));
+  position: fixed;
+  z-index: 160;
+  top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
+  margin-inline: auto;
+  overflow: visible;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background-color: var(--nav-pill-fill);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 .family-mark,
 .quiet-button {
@@ -433,20 +558,118 @@ button:focus-visible,
 }
 .title-lockup h1 {
   margin: 0;
+  overflow: hidden;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 22px;
   font-weight: 500;
   letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title-switcher {
+  overflow: visible;
+  text-align: center;
+}
+.topbar > .title-switcher,
+.topbar > .title-lockup {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+  align-self: center;
+  z-index: 1;
+  width: max-content;
+  max-width: calc(100% - 88px);
+  pointer-events: none;
+}
+.title-switcher > summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.title-switcher > summary::-webkit-details-marker,
+.title-switcher > summary::marker {
+  display: none;
+  content: none;
+}
+.title-switcher-heading {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.title-switcher-heading h1 {
+  min-width: 0;
+}
+.title-switcher-heading svg {
+  width: 14px;
+  height: 14px;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 4px);
+  margin-top: -7px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+.title-switcher[open] .title-switcher-heading svg {
+  transform: rotate(180deg);
+}
+.title-switcher nav {
+  position: absolute;
+  z-index: 110;
+  top: calc(100% + var(--header-drawer-gap));
+  left: 50%;
+  width: min(280px, calc(100dvw - 48px));
+  padding: 4px;
+  display: grid;
+  translate: -50% 0;
+  transform-origin: top center;
+  pointer-events: auto;
+  border-radius: var(--header-drawer-radius);
+}
+.title-switcher nav a {
+  min-height: 44px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.title-switcher nav a.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink);
+}
+.title-switcher nav a.is-pending,
+.title-switcher nav a:active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--ink);
+  transform: scale(0.985);
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease;
 }
 .quiet-button {
-  justify-self: end;
   color: var(--muted);
   letter-spacing: 2px;
 }
 .topbar-actions {
-  justify-self: end;
   display: flex;
   align-items: center;
+  grid-column: 3;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: end;
 }
 .topbar-actions > :is(button, a) {
   width: 44px;
@@ -463,13 +686,24 @@ button:focus-visible,
   cursor: pointer;
 }
 .topbar > .header-add-moment,
-.topbar-leading-spacer {
-  justify-self: start;
+.topbar-leading-spacer,
+.topbar > .family-mark {
   width: 44px;
   min-width: 44px;
   min-height: 44px;
   display: grid;
   place-items: center;
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: start;
+}
+.topbar > .quiet-button,
+.topbar > .settings-close-link {
+  grid-column: 3;
+  grid-row: 1;
+  z-index: 2;
+  justify-self: end;
 }
 .header-add-moment svg {
   width: 20px;
@@ -664,18 +898,26 @@ button:focus-visible,
   overflow: hidden;
 }
 .photo-frame {
-  height: 270px;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   position: relative;
+  display: grid;
+  justify-items: center;
+  align-items: center;
   overflow: hidden;
   border-start-start-radius: inherit;
   border-start-end-radius: inherit;
   background: #cab8a3;
 }
-.photo-frame img {
+.photo-frame img,
+.photo-frame video {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   filter: saturate(0.84) contrast(0.97);
 }
 .private-photo-unavailable {
@@ -763,7 +1005,7 @@ button:focus-visible,
   font-size: 10px;
   cursor: pointer;
 }
-.soft-actions button:first-child {
+.soft-actions .quick-reaction-trigger {
   color: var(--accent);
 }
 .soft-actions button.held {
@@ -780,6 +1022,11 @@ button:focus-visible,
 }
 .inline-conversation {
   min-width: 0;
+  overflow: visible;
+}
+
+.soft-actions {
+  overflow: visible;
 }
 .conversation-summary {
   margin-top: 11px;
@@ -807,6 +1054,7 @@ button:focus-visible,
   background: rgba(147, 80, 70, 0.07);
   color: #6f504b;
   font-size: 10px;
+  transform-origin: 16px 50%;
 }
 .inline-note-summary {
   display: grid;
@@ -1158,6 +1406,15 @@ button:focus-visible,
   cursor: pointer;
 }
 
+.journal-error-back {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
 .timeline-pagination {
   padding: 0;
   border: 0;
@@ -1204,7 +1461,8 @@ button:focus-visible,
   z-index: 6;
 }
 
-.moment-card:has(.connected-moment-menu) {
+.moment-card:has(.connected-moment-menu),
+.moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
 
@@ -1236,11 +1494,13 @@ button:focus-visible,
   border-radius: 15px;
   background: var(--cream);
   box-shadow: 0 12px 30px rgb(49 39 31 / 16%);
+  transform-origin: top right;
 }
 
 .connected-moment-menu[data-placement="above"] {
   top: auto;
   bottom: calc(100% + 4px);
+  transform-origin: bottom right;
 }
 
 .connected-moment-menu button {
@@ -1367,6 +1627,37 @@ button:focus-visible,
       rgba(79, 100, 87, 0.1) 22px 23px
     ),
     #dfe3d5;
+}
+.memory-map-live {
+  background: #dfe3d5;
+}
+.memory-map-live img,
+.memory-map-live svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.memory-map-live::after {
+  content: none;
+}
+.memory-map-live .place-pin {
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  transform: translate(-50%, calc(-100% + 4px)) rotate(-45deg);
+}
+.memory-map-live .map-attribution {
+  position: absolute;
+  z-index: 3;
+  right: 8px;
+  bottom: 6px;
+  margin: 0;
+  color: rgba(255, 249, 239, 0.86);
+  font-family: var(--font-record);
+  font-size: 9px;
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 4px rgba(16, 29, 23, 0.7);
 }
 .memory-map::after {
   content: "";
@@ -3814,7 +4105,7 @@ button:focus-visible,
 .bottom-nav {
   height: 56px;
   position: fixed;
-  z-index: 100;
+  z-index: 160;
   bottom: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
@@ -3827,12 +4118,26 @@ button:focus-visible,
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
   padding: 3px 8px;
-  isolation: isolate;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background: rgba(7, 17, 13, 0.92);
+  background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
+}
+
+.bottom-nav.is-compact {
+  height: 48px;
+  padding: 1px 8px;
+}
+
+.bottom-nav.is-compact .nav-item {
+  height: 46px;
+}
+
+.bottom-nav.is-compact .nav-symbol {
+  font-size: 18px;
+  line-height: 17px;
 }
 .nav-item {
   height: 54px;
@@ -3907,8 +4212,7 @@ button:focus-visible,
     border-radius: 38px;
   }
   .topbar {
-    position: sticky;
-    top: 0;
+    position: fixed;
   }
 }
 @media (max-width: 360px) {
@@ -3952,7 +4256,7 @@ button:focus-visible,
 /* 2026 visual system: a compact, precise record of family life. */
 .app-shell,
 .private-entry-shell {
-  background: #07110d;
+  background: var(--grid-surface);
 }
 
 .ambient {
@@ -3985,11 +4289,15 @@ button:focus-visible,
 }
 
 .topbar {
-  min-height: calc(72px + env(safe-area-inset-top));
-  padding: calc(13px + env(safe-area-inset-top)) 18px 8px;
-  background: color-mix(in srgb, var(--paper) 96%, transparent);
-  border-bottom: 1px solid var(--hairline);
-  backdrop-filter: blur(16px);
+  height: 56px;
+  min-height: 56px;
+  padding: 3px 8px;
+  background-color: var(--nav-pill-fill);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 
 .family-mark,
@@ -4206,16 +4514,19 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.moment-card:has(.connected-moment-menu) {
+.moment-card:has(.connected-moment-menu),
+.moment-card:has(.inline-reaction-picker) {
   overflow: visible;
 }
 
 .photo-frame {
-  height: 248px;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   background: #17231e;
 }
 
-.photo-frame img {
+.photo-frame img,
+.photo-frame video {
   filter: saturate(0.9) contrast(1.02);
 }
 
@@ -4455,6 +4766,11 @@ button:focus-visible,
   line-height: 1;
 }
 
+.quick-reaction-glyph {
+  display: inline-block;
+  transform-origin: 50% 60%;
+}
+
 .quick-reaction-control .inline-reaction-picker {
   position: absolute;
   z-index: 12;
@@ -4468,6 +4784,32 @@ button:focus-visible,
   border-radius: 999px;
   background: #17261f;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  /* Heart is 44px, picker is shifted 7px left and 7px above it. */
+  transform-origin: 29px calc(100% + 29px);
+}
+
+@keyframes overlay-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.93);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes overlay-popover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.93);
+  }
 }
 
 .quick-reaction-control .inline-reaction-picker button {
@@ -4964,16 +5306,164 @@ button:focus-visible,
   color: var(--ink);
 }
 
+.private-entry-shell {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px
+    max(24px, env(safe-area-inset-bottom));
+  background-color: var(--grid-surface);
+  background-image: none;
+}
+
+.private-entry-shell::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  inset: calc(-1 * env(safe-area-inset-top, 0px))
+    calc(-1 * env(safe-area-inset-right, 0px))
+    calc(-1 * env(safe-area-inset-bottom, 0px))
+    calc(-1 * env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
+}
+
 .private-entry-card {
-  padding: 36px 28px;
-  border-radius: 12px;
-  background: var(--cream);
-  box-shadow: none;
+  position: relative;
+  z-index: 1;
+  width: min(100%, 390px);
+  padding: 28px 22px 24px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--header-drawer-radius);
+  background: var(--overlay-popover-fill);
+  box-shadow: var(--header-drawer-shadow);
+  backdrop-filter: blur(var(--overlay-popover-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
+  text-align: center;
+}
+
+.private-entry-card > p,
+.private-entry-card > .eyebrow {
+  display: block;
+  margin: 18px 0 4px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
 }
 
 .private-entry-card h1 {
-  font-size: 24px;
-  font-weight: 680;
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.private-entry-card > span:last-child {
+  display: block;
+  margin-top: 14px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.private-entry-content {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.private-entry-content > p,
+.private-entry-backup > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.private-entry-content label {
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.private-entry-content input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 13px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: #13211b;
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 16px;
+  box-shadow: none;
+}
+
+.private-entry-content input[aria-invalid="true"] {
+  border-color: var(--clay);
+}
+
+.private-entry-oauth {
+  display: grid;
+  gap: 8px;
+}
+
+.private-entry-content button {
+  min-height: 48px;
+  margin-top: 3px;
+  padding: 10px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.private-entry-backup button[type="submit"] {
+  border-color: color-mix(in srgb, var(--ochre) 72%, transparent);
+  background: var(--ochre);
+  color: #101711;
+}
+
+.private-entry-oauth button {
+  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--cream) 88%, transparent);
+  color: var(--ink);
+}
+
+.private-entry-backup {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+.private-entry-backup a,
+.private-entry-content a {
+  color: var(--teal);
+  font-family: var(--font-interface);
+  font-size: 13px;
+}
+
+.private-entry-content .auth-status {
+  color: var(--muted);
+}
+
+.private-entry-content .auth-error {
+  color: #e09292;
 }
 
 .private-entry-mark i {
@@ -5013,17 +5503,19 @@ button:focus-visible,
 
 /* iOS ignores background-attachment: fixed for many scrolling elements.
    A viewport-fixed paint layer keeps the journal grid stationary in Safari
-   and installed PWAs, including beneath the safe-area chrome. */
+   and installed PWAs. Negative safe-area insets reach behind the status bar
+   so the graph paper is edge-to-edge at the top of the phone. */
 .app-shell::before {
   content: "";
   position: fixed;
   z-index: 0;
-  inset: 0;
+  inset: calc(-1 * env(safe-area-inset-top, 0px))
+    calc(-1 * env(safe-area-inset-right, 0px))
+    calc(-1 * env(safe-area-inset-bottom, 0px))
+    calc(-1 * env(safe-area-inset-left, 0px));
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(134, 166, 151, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(134, 166, 151, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+  background-image: var(--journal-grid-image);
+  background-size: var(--journal-grid-size) var(--journal-grid-size);
 }
 
 .phone-stage {
@@ -5062,11 +5554,15 @@ button:focus-visible,
 }
 
 .notification-center {
-  position: relative;
+  display: grid;
+  place-items: center;
 }
 
 .notification-trigger {
   position: relative;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -5104,12 +5600,13 @@ button:focus-visible,
 .notification-panel {
   position: absolute;
   z-index: 35;
-  top: 47px;
-  right: -44px;
+  top: calc(100% + var(--header-drawer-gap));
+  right: 0;
   width: min(310px, calc(100dvw - 32px));
   padding: var(--header-drawer-padding);
   border-radius: var(--header-drawer-radius);
   color: var(--ink);
+  transform-origin: calc(100% - 8px) 0;
 }
 
 .notification-heading {
@@ -5174,46 +5671,64 @@ button:focus-visible,
   margin: 0;
 }
 
+.account-tool-link,
+.account-sign-out button {
+  min-height: 72px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 13px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
 .account-tool-link {
-  min-height: 58px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 11px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 7px;
-  color: var(--ink);
-  text-decoration: none;
 }
 
 .account-tool-link > span:first-child {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
-.account-tool-link strong {
-  font-size: 13px;
+.account-tool-link strong,
+.account-sign-out button {
+  overflow-wrap: anywhere;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .account-tool-link small {
   color: var(--muted);
-  font: 500 9px/1.3 var(--font-record);
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.04em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
-.account-sign-out {
-  margin-top: 10px;
+.account-tool-link > span:last-child {
+  color: var(--teal);
+  font-size: 16px;
+  line-height: 1;
 }
 
-.account-sign-out button {
-  min-height: 42px;
-  width: 100%;
-  border: 1px solid var(--hairline);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
+.account-sign-out {
+  margin: 0;
+}
+
+.account-sign-out button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 :root[data-theme="light"],
@@ -5223,14 +5738,35 @@ button:focus-visible,
   background-color: var(--grid-surface);
 }
 
-:root[data-theme="light"] .app-shell::before {
-  background-image:
-    linear-gradient(rgba(57, 123, 118, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(57, 123, 118, 0.07) 1px, transparent 1px);
+:root[data-theme="light"] .app-shell::before,
+:root[data-theme="light"] .private-entry-shell::before {
+  background-image: var(--journal-grid-image);
 }
 
-:root[data-theme="light"] .bottom-nav {
-  background: rgba(243, 238, 228, 0.94);
+html.overlay-open .app-shell,
+html.overlay-open .phone-stage,
+html[data-theme].overlay-open .app-shell,
+html[data-theme].overlay-open .phone-stage,
+:root[data-theme].overlay-open .app-shell,
+:root[data-theme].overlay-open .phone-stage {
+  background-color: #000;
+  background-image: none;
+}
+
+html.overlay-open .app-shell::before,
+html[data-theme].overlay-open .app-shell::before,
+:root[data-theme].overlay-open .app-shell::before {
+  content: none;
+  background-image: none;
+}
+
+:root[data-theme="light"] .private-entry-content .auth-error {
+  color: #8b3e36;
+}
+
+:root[data-theme="light"] .bottom-nav,
+:root[data-theme="light"] .topbar {
+  background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
@@ -5337,10 +5873,10 @@ button:focus-visible,
   }
 }
 
-/* Entry choices use the same compact header-drawer pattern as Activity. */
-.new-moment-composer-dialog .composer-sheet {
-  padding: var(--header-drawer-padding) var(--header-drawer-padding)
-    max(var(--header-drawer-padding), env(safe-area-inset-bottom));
+/* Entry choices stay the existing compact list. The window sits above the
+   bottom bar and pops in place; it is not a header drawer or a sheet. */
+.new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+  padding: var(--header-drawer-padding);
 }
 
 .new-moment-composer-dialog .composer-sheet > .sheet-close {
@@ -5536,6 +6072,40 @@ button:focus-visible,
   color: #101711;
 }
 
+/* Light Account actions: keep ink on cream. The danger fill is cream in
+   light theme, so white label text must not survive from the dark rule. */
+:root[data-theme="light"] .access-review > button,
+:root[data-theme="light"] .invite-review button,
+:root[data-theme="light"] .settings-review-actions button,
+:root[data-theme="light"] .settings-role-card button,
+:root[data-theme="light"] .guardian-options button,
+:root[data-theme="light"] .settings-removal-zone > button {
+  border-color: var(--hairline);
+  background: var(--cream);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .invite-section form > button {
+  border-color: #b8893f;
+  background: #b8893f;
+  color: #101711;
+}
+
+:root[data-theme="light"] .access-list button {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+}
+
+:root[data-theme="light"] .settings-review-actions .settings-danger-button,
+:root[data-theme="light"]
+  .settings-removal-zone
+  > button.settings-danger-button {
+  border-color: color-mix(in srgb, #844740 48%, var(--hairline));
+  background: var(--cream);
+  color: #6e2f28;
+}
+
 .video-feasibility-card .card-copy > p:not(.moment-kicker),
 .video-feasibility-explainer,
 .video-feasibility-input small {
@@ -5698,22 +6268,28 @@ button:focus-visible,
   text-transform: uppercase;
 }
 
-/* Video deliberately shares the photo card geometry. */
+/* Video shares the photo card, but keeps its native frame. */
 .video-frame video,
 .composer-video-preview video {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
   border: 0;
   background: #050b08;
   object-fit: contain;
+  object-position: center;
 }
 
 .media-viewer-trigger {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
   position: relative;
-  display: block;
+  display: grid;
+  justify-items: center;
+  align-items: center;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -5723,9 +6299,9 @@ button:focus-visible,
   overflow: hidden;
 }
 
+.media-viewer-trigger:focus,
 .media-viewer-trigger:focus-visible {
-  outline: 2px solid var(--accent-gold);
-  outline-offset: -4px;
+  outline: none;
 }
 
 .media-viewer-trigger > img,
@@ -5733,7 +6309,11 @@ button:focus-visible,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
 }
 
 .video-viewer-trigger {
@@ -5759,8 +6339,119 @@ button:focus-visible,
   backdrop-filter: blur(8px);
 }
 
-.media-viewer-scroll-locked {
-  overflow: hidden;
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  isolation: isolate;
+  background: #000;
+  min-height: 100dvh;
+  min-height: 100lvh;
+  min-height: -webkit-fill-available;
+}
+
+@keyframes photo-lightbox-dim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes photo-lightbox-dim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes photo-lightbox-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes photo-lightbox-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.photo-lightbox-dimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #000;
+  opacity: 0;
+}
+
+.photo-lightbox[data-motion="open"] .photo-lightbox-dimmer {
+  animation: photo-lightbox-dim-in 180ms ease both;
+}
+
+.photo-lightbox[data-motion="closing"] .photo-lightbox-dimmer {
+  animation: photo-lightbox-dim-out 180ms ease both;
+}
+
+.photo-lightbox-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    max(56px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px);
+  overflow: auto;
+}
+
+.photo-lightbox-photo {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  transform-origin: center center;
+  touch-action: pinch-zoom;
+  opacity: 0;
+}
+
+.photo-lightbox[data-motion="open"] .photo-lightbox-photo {
+  animation: photo-lightbox-in 180ms ease both;
+}
+
+.photo-lightbox[data-motion="closing"] .photo-lightbox-photo {
+  animation: photo-lightbox-out 180ms ease both;
+}
+
+.photo-lightbox-photo.is-zoomed {
+  max-width: none;
+  max-height: none;
+  width: 200%;
+  height: auto;
+  touch-action: pan-x pan-y pinch-zoom;
+}
+
+.photo-lightbox-close {
+  position: fixed;
+  z-index: 2;
 }
 
 .fullscreen-media-dialog {
@@ -5771,9 +6462,13 @@ button:focus-visible,
   margin: 0;
   padding: 0;
   border: 0;
-  background: #020403;
+  position: fixed;
+  inset: 0;
+  background: transparent;
   color: white;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .fullscreen-media-dialog[open] {
@@ -5782,7 +6477,14 @@ button:focus-visible,
 }
 
 .fullscreen-media-dialog::backdrop {
+  background: transparent;
+}
+
+.media-viewer-dimmer {
+  position: absolute;
+  inset: 0;
   background: #020403;
+  pointer-events: none;
 }
 
 .media-viewer-photo,
@@ -5799,27 +6501,25 @@ button:focus-visible,
 }
 
 .media-viewer-photo {
+  z-index: 1;
   touch-action: pinch-zoom;
-  transition:
-    transform 180ms ease,
-    opacity 180ms ease;
 }
 
 .media-viewer-photo.is-pulling {
-  opacity: 0.86;
   transition: none;
 }
 
 .media-viewer-photo img,
 .media-viewer-video video {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   display: block;
-  position: absolute;
-  inset: 0;
+  position: relative;
+  inset: auto;
   object-fit: contain;
+  object-position: center;
 }
 
 .media-viewer-photo.is-zoomed {
@@ -5854,9 +6554,11 @@ button:focus-visible,
   line-height: 1;
 }
 
+.media-viewer-close:focus,
 .media-viewer-close:focus-visible {
-  outline: 0;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  outline: none;
+  box-shadow: none;
+  text-shadow: none;
 }
 
 .video-frame::after {
@@ -5898,28 +6600,96 @@ button:focus-visible,
   max-height: 360px;
 }
 
-/* The new-entry composer is visually attached to the header Add control. */
-.new-moment-composer-dialog[open] {
-  align-items: flex-start;
-  justify-content: flex-start;
+/* Review stays a compact panel above the tab bar. Type selection is a
+   separate popover under the header + and is positioned below. */
+.new-moment-composer-dialog[open]:not(.composer-editor-fullscreen):not(
+    .composer-type-picker
+  ) {
+  align-items: flex-end;
+  justify-content: center;
 }
 
-.new-moment-composer-dialog .composer-sheet {
-  width: min(310px, calc(100dvw - 32px));
+.new-moment-composer-dialog:not(.composer-editor-fullscreen):not(
+    .composer-type-picker
+  )
+  .composer-sheet {
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
   max-height: calc(100dvh - 72px - env(safe-area-inset-top));
   position: fixed;
-  top: var(--header-drawer-top);
-  left: var(--header-drawer-gutter);
-  margin-top: 0;
-  padding-inline: var(--header-drawer-padding);
+  top: auto;
+  right: 0;
+  bottom: calc(
+    56px + (2 * var(--bottom-nav-float-gap)) + env(safe-area-inset-bottom)
+  );
+  left: 0;
+  margin: 0 auto;
   border-radius: var(--header-drawer-radius);
+  transform-origin: 50% 0;
   animation: none;
+}
+
+/* Type picker is a body-portaled popover, not a <dialog>. Native dialog
+   chrome (and the themed .composer-dialog dim + blur) is what flattened
+   frost: dark left a green slab on the bottom pill, light killed the top
+   pill — leftover rgba fills plus backdrop-filter on a viewport layer.
+   The wrapper is only as big as the sheet, under the header +, so both
+   pills keep sampling the grid in both themes. Fullscreen capture still
+   uses showModal() and is not restyled here. */
+.new-moment-composer-dialog.composer-type-picker,
+:root[data-theme="dark"] .new-moment-composer-dialog.composer-type-picker,
+:root[data-theme="light"] .new-moment-composer-dialog.composer-type-picker {
+  position: fixed;
+  inset: auto;
+  top: var(--type-picker-top);
+  left: var(--type-picker-left);
+  width: var(--type-picker-width);
+  max-width: var(--type-picker-width);
+  height: auto;
+  max-height: calc(100dvh - var(--type-picker-top) - 24px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  z-index: 150;
+  display: block;
+  align-items: unset;
+  justify-content: unset;
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.new-moment-composer-dialog.composer-type-picker .composer-sheet {
+  width: 100%;
+  max-height: inherit;
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  margin: 0;
+  overflow: hidden;
+  /* Sheet default is 14px 14px 0 0 (bottom-sheet). This popover needs
+     the same radius on all four corners. */
+  border-radius: 14px;
+  transform-origin: 30px 0;
+  pointer-events: auto;
 }
 
 .new-moment-composer-dialog,
 :root[data-theme="light"] .new-moment-composer-dialog {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .new-moment-composer-dialog::backdrop {
@@ -5957,6 +6727,45 @@ button:focus-visible,
   color: var(--ink);
 }
 
+/* Compact overlay windows share the family-switcher / ⋯ chrome. Type picker
+   and notifications previously dropped the hairline, which is why they
+   vanished into the grid. Do not restyle the fullscreen composer. */
+.title-switcher nav,
+.notification-panel,
+.connected-moment-menu,
+.quick-reaction-control .inline-reaction-picker,
+.new-moment-composer-dialog.composer-type-picker .composer-sheet,
+:root[data-theme="light"] .title-switcher nav,
+:root[data-theme="light"] .notification-panel,
+:root[data-theme="light"] .connected-moment-menu,
+:root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .composer-sheet,
+.header-drawer-surface.notification-panel,
+:root[data-theme="light"] .header-drawer-surface.notification-panel,
+.new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet {
+  border: 1px solid var(--hairline);
+  background: var(--overlay-popover-fill);
+  box-shadow: var(--header-drawer-shadow);
+  backdrop-filter: blur(var(--overlay-popover-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
+}
+
+.new-moment-composer-dialog.composer-type-picker .composer-sheet,
+.new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
 .header-drawer-close {
   width: 44px;
   height: 44px;
@@ -5980,23 +6789,30 @@ button:focus-visible,
   color: var(--ink);
 }
 
-@keyframes composer-sheet-down {
+@keyframes composer-ease-up {
   from {
-    transform: translateY(-24px);
-    opacity: 0.72;
+    opacity: 0;
+    transform: translateY(10px);
   }
   to {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes composer-editor-ease-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 }
 
 @media (min-width: 431px) and (hover: hover) and (pointer: fine) {
-  :root {
-    --header-drawer-top: 92px;
-  }
-
-  .new-moment-composer-dialog .composer-sheet {
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
     max-height: calc(100dvh - 92px);
   }
 }
@@ -6020,6 +6836,7 @@ button:focus-visible,
   overflow: hidden;
   border: 0;
   border-radius: 0;
+  animation: composer-editor-ease-up 180ms ease backwards;
 }
 
 .composer-editor-fullscreen .composer-sheet > .sheet-close {
@@ -6273,6 +7090,7 @@ button:focus-visible,
   background: #101d17;
   color: var(--ink);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
+  animation: none;
 }
 
 .composer-calendar-heading {
@@ -6434,10 +7252,28 @@ button:focus-visible,
   gap: 10px;
 }
 
-.composer-location-geolocate {
-  width: 100%;
+.composer-location-search {
+  position: relative;
+}
+
+.composer-location-locate {
+  width: 44px;
+  height: 44px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--teal);
+  cursor: pointer;
+}
+
+.composer-location-search input {
+  padding-right: 44px;
 }
 
 .composer-location-status,
@@ -6494,6 +7330,15 @@ button:focus-visible,
   background: #101d17;
 }
 
+iframe.composer-location-map {
+  display: block;
+}
+
+.composer-location-map.memory-map {
+  border-start-start-radius: 8px;
+  border-start-end-radius: 8px;
+}
+
 .pending-media-shelf {
   padding: 12px 17px 4px;
 }
@@ -6538,14 +7383,17 @@ button:focus-visible,
 }
 
 .optimistic-media-card .photo-frame {
-  min-height: 210px;
+  min-height: 0;
 }
 
 .optimistic-media-card .photo-frame video {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: auto;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .optimistic-media-overlay {
@@ -6727,9 +7575,162 @@ button:focus-visible,
   color: #7d520f;
 }
 
-/* This must follow the drawer animation declaration above. */
+@media (prefers-reduced-motion: no-preference) {
+  .topbar,
+  .bottom-nav {
+    transition:
+      transform 180ms ease,
+      height 180ms ease,
+      padding 180ms ease;
+  }
+
+  .bottom-nav .nav-item,
+  .bottom-nav .nav-symbol {
+    transition:
+      height 180ms ease,
+      font-size 180ms ease,
+      line-height 180ms ease;
+  }
+
+  /* Scale the pill, not each tab, so a child tap still presses on iOS. */
+  .topbar:active,
+  .topbar:has(:active),
+  .bottom-nav:active,
+  .bottom-nav:has(:active) {
+    transform: scale(0.985);
+  }
+
+  .nav-symbol-pending,
+  .title-switcher-link-pending {
+    animation: nav-pending-pulse 900ms ease-in-out infinite;
+  }
+
+  .overlay-popover,
+  .quick-reaction-control .inline-reaction-picker,
+  .connected-moment-menu,
+  .notification-panel,
+  .title-switcher[open] nav,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+    animation: overlay-popover-in 180ms ease-out backwards;
+  }
+
+  .overlay-popover.is-closing,
+  .inline-reaction-picker.is-closing,
+  .connected-moment-menu.is-closing,
+  .notification-panel.is-closing,
+  .title-switcher[open] nav.is-closing,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
+    .composer-sheet.is-closing {
+    animation: overlay-popover-out 120ms ease-in forwards;
+  }
+
+  .quick-reaction-trigger:active {
+    transform: translateY(1px);
+  }
+
+  .quick-reaction-glyph.is-popping {
+    display: inline-block;
+    transform-origin: 50% 60%;
+    animation: reaction-heart-pop 180ms ease-out;
+  }
+
+  .inline-reaction-summary li.is-entering {
+    animation: overlay-popover-in 180ms ease-out backwards;
+  }
+
+  .inline-reaction-summary li.is-closing {
+    animation: overlay-popover-out 120ms ease-in forwards;
+  }
+}
+
+@keyframes reaction-heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes nav-pending-pulse {
+  50% {
+    opacity: 0.42;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .new-moment-composer-dialog .composer-sheet {
     animation: none;
   }
+
+  .topbar,
+  .bottom-nav {
+    transition: none;
+    transform: none;
+  }
+
+  .title-switcher-heading svg {
+    transition: none;
+  }
+
+  .nav-symbol-pending,
+  .title-switcher-link-pending {
+    animation: none;
+  }
+
+  .overlay-popover,
+  .overlay-popover.is-closing,
+  .quick-reaction-control .inline-reaction-picker,
+  .quick-reaction-control .inline-reaction-picker.is-closing,
+  .connected-moment-menu,
+  .connected-moment-menu.is-closing,
+  .notification-panel,
+  .notification-panel.is-closing,
+  .title-switcher[open] nav,
+  .title-switcher[open] nav.is-closing,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet,
+  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
+    .composer-sheet.is-closing {
+    animation: none;
+  }
+
+  .quick-reaction-trigger,
+  .quick-reaction-glyph.is-popping {
+    transform: none;
+    animation: none;
+  }
+
+  .inline-reaction-summary li.is-entering,
+  .inline-reaction-summary li.is-closing {
+    animation: none;
+  }
+
+  .media-viewer-photo,
+  .media-viewer-dimmer,
+  .photo-lightbox-photo,
+  .photo-lightbox-dimmer {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .photo-lightbox[data-motion="open"] .photo-lightbox-photo,
+  .photo-lightbox[data-motion="opening"] .photo-lightbox-photo {
+    opacity: 1;
+    transform: none;
+  }
+
+  .photo-lightbox[data-motion="open"] .photo-lightbox-dimmer,
+  .photo-lightbox[data-motion="opening"] .photo-lightbox-dimmer {
+    opacity: 1;
+  }
+}
+
+/* Date / time / verse / place panels stay in the composer sheet. They scroll
+   into view and never use the compact overlay pop. */
+.composer-picker-panel,
+.composer-picker-panel.is-closing {
+  animation: none;
 }

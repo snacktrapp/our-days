@@ -2,14 +2,22 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
+import { PhotoLightboxRoot } from "@/features/timeline/photo-lightbox";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationCenter } from "./notification-center";
+import {
+  FamilyTitleSwitcher,
+  StaticJournalTitle,
+  type FamilyTimelineSwitcherItem,
+} from "./family-title-switcher";
 import type {
   JournalSection,
   JournalChromeViewModel,
 } from "./shell-view-model";
+
+export type { FamilyTimelineSwitcherItem };
 
 type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
@@ -17,27 +25,32 @@ type JournalChromeProps = Readonly<{
   children: ReactNode;
   createMomentAction?: SaveFamilyMomentAction;
   standaloneNavigation?: boolean;
+  switcher?: readonly FamilyTimelineSwitcherItem[];
 }>;
 
 function PrimaryJournalHeader({
   model,
   createMomentAction,
+  switcher,
 }: Readonly<{
   model: JournalChromeViewModel;
   createMomentAction?: SaveFamilyMomentAction;
+  switcher?: readonly FamilyTimelineSwitcherItem[];
 }>) {
+  const title =
+    switcher && switcher.length > 0 ? (
+      <FamilyTitleSwitcher model={model} switcher={switcher} />
+    ) : (
+      <StaticJournalTitle model={model} />
+    );
+
   return (
     <header className="topbar">
       <TimelineHeaderComposer
         composer={model.composer}
         createMomentAction={createMomentAction}
       />
-      <div className="title-lockup">
-        <span className="eyebrow">{model.eyebrow}</span>
-        <h1 id="journal-focus-target" tabIndex={-1}>
-          {model.title}
-        </h1>
-      </div>
+      {title}
       <div className="topbar-actions">
         <NotificationCenter items={model.notifications} />
         <ThemeToggle />
@@ -50,12 +63,7 @@ function TrashHeader({ model }: Readonly<{ model: JournalChromeViewModel }>) {
   return (
     <header className="topbar">
       <span className="topbar-leading-spacer" aria-hidden="true" />
-      <div className="title-lockup">
-        <span className="eyebrow">{model.eyebrow}</span>
-        <h1 id="journal-focus-target" tabIndex={-1}>
-          {model.title}
-        </h1>
-      </div>
+      <StaticJournalTitle model={model} />
       <Link
         className="quiet-button settings-close-link"
         aria-label="Back to Family"
@@ -73,41 +81,45 @@ export function JournalChrome({
   section,
   children,
   createMomentAction,
-  standaloneNavigation = false,
+  switcher,
 }: JournalChromeProps) {
-  return (
-    <main className={`app-shell theme-${model.accent}`}>
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-      <ComposerSessionProvider
-        model={model.composer}
+  const header =
+    section === "trash" ? (
+      <TrashHeader model={model} />
+    ) : (
+      <PrimaryJournalHeader
+        model={model}
         createMomentAction={createMomentAction}
-      >
-        <section className="phone-stage" aria-label="Family journal">
-          <p
-            id="journal-live-region"
-            className="sr-only"
-            aria-live="assertive"
-            aria-atomic="true"
-          />
-          {section === "trash" ? (
-            <TrashHeader model={model} />
-          ) : (
-            <PrimaryJournalHeader
-              model={model}
-              createMomentAction={createMomentAction}
+        switcher={switcher}
+      />
+    );
+
+  return (
+    <ComposerSessionProvider
+      model={model.composer}
+      createMomentAction={createMomentAction}
+    >
+      <PhotoLightboxRoot>
+        {header}
+        <main className={`app-shell theme-${model.accent}`}>
+          <div className="ambient ambient-one" />
+          <div className="ambient ambient-two" />
+          <section className="phone-stage" aria-label="Family journal">
+            <p
+              id="journal-live-region"
+              className="sr-only"
+              aria-live="assertive"
+              aria-atomic="true"
             />
-          )}
-          {children}
-          {standaloneNavigation ? (
-            <PrimaryNavigation
-              section={section}
-              memoriesHref={model.memoriesHref}
-              settingsHref={model.settingsHref}
-            />
-          ) : null}
-        </section>
-      </ComposerSessionProvider>
-    </main>
+            {children}
+          </section>
+        </main>
+        <PrimaryNavigation
+          section={section}
+          memoriesHref={model.memoriesHref}
+          settingsHref={model.settingsHref}
+        />
+      </PhotoLightboxRoot>
+    </ComposerSessionProvider>
   );
 }

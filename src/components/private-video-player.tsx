@@ -7,11 +7,15 @@ export function PrivateVideoPlayer({
   label,
   preload = "metadata",
   controls = true,
+  width,
+  height,
 }: Readonly<{
   src: string;
   label: string;
   preload?: "none" | "metadata";
   controls?: boolean;
+  width?: number;
+  height?: number;
 }>) {
   const [unavailable, setUnavailable] = useState(false);
 
@@ -34,6 +38,8 @@ export function PrivateVideoPlayer({
     <video
       src={src}
       aria-label={label}
+      width={width}
+      height={height}
       controls={controls}
       controlsList="nodownload noremoteplayback"
       disablePictureInPicture

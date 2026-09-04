@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   select: vi.fn(),
   limit: vi.fn(),
+  acceptPending: vi.fn(),
   redirect: vi.fn(() => {
     throw new Error("NEXT_REDIRECT");
   }),
@@ -18,6 +19,9 @@ vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
+}));
+vi.mock("@/lib/auth/accept-pending-invitation.server", () => ({
+  acceptPendingInvitationForSession: mocks.acceptPending,
 }));
 
 import { requestSignInLink, verifySignInCode } from "./sign-in-actions";
@@ -40,6 +44,7 @@ describe("passwordless email sign-in actions", () => {
     mocks.select.mockReturnValue({ limit: mocks.limit });
     mocks.signInWithOtp.mockResolvedValue({ error: null });
     mocks.verifyOtp.mockResolvedValue({ error: null });
+    mocks.acceptPending.mockResolvedValue(false);
     mocks.createClient.mockResolvedValue({
       auth: {
         signInWithOtp: mocks.signInWithOtp,
@@ -158,6 +163,21 @@ describe("passwordless email sign-in actions", () => {
       type: "email",
     });
     expect(mocks.select).toHaveBeenCalledWith("circle_id");
+    expect(mocks.redirect).toHaveBeenCalledWith("/family");
+  });
+
+  it("opens the journal after an invited account accepts a pending invitation", async () => {
+    mocks.limit.mockResolvedValueOnce({ data: [] });
+    mocks.acceptPending.mockResolvedValueOnce(true);
+
+    await expect(
+      verifySignInCode(
+        initialSignInActionState,
+        form({ email: "invited@example.com", code: "123456" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.acceptPending).toHaveBeenCalledOnce();
     expect(mocks.redirect).toHaveBeenCalledWith("/family");
   });
 

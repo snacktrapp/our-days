@@ -77,6 +77,7 @@ select is(
   ),
   array[
     'accept_invitation(token text)',
+    'accept_pending_invitation_for_current_user()',
     'acknowledge_photo_intake(intake_id uuid)',
     'cancel_photo_intake(intake_id uuid)',
     'claim_photo_display_derivative(original_id uuid, lease_key uuid)',
@@ -149,6 +150,7 @@ select is(
   ),
   array[
     'accept_invitation:authenticated:EXECUTE',
+    'accept_pending_invitation_for_current_user:authenticated:EXECUTE',
     'acknowledge_photo_intake:authenticated:EXECUTE',
     'cancel_photo_intake:authenticated:EXECUTE',
     'claim_photo_display_derivative:authenticated:EXECUTE',
@@ -237,6 +239,7 @@ select is(
   array[
     'accept_invitation(invitation_token text)',
     'accept_invitation_dispatch(invitation_token text)',
+    'accept_pending_invitation_for_current_user()',
     'accept_phase_2d_invitation(invitation_token text)',
     'account_closure_is_blocking(target_auth_user_id uuid)',
     'acknowledge_photo_intake(requested_intake_id uuid)',
@@ -268,6 +271,7 @@ select is(
     'enqueue_photo_display_derivative()',
     'enqueue_photo_object_cleanup()',
     'enqueue_photo_validation_job()',
+    'ensure_login_capable_auth_user(normalized_email text)',
     'finalize_video_moment(requested_request_id uuid)',
     'flag_photo_display_derivative_for_review(requested_derivative_job_id uuid, requested_lease_key uuid, requested_review_reason text)',
     'flag_photo_validation_for_review(requested_validation_job_id uuid, requested_lease_key uuid, requested_review_reason text)',

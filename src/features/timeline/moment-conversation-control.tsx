@@ -8,6 +8,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  overlayMotionReduced,
+  overlayPopoverCloseMs,
+  useOverlayPopoverClose,
+} from "@/features/shell/use-overlay-popover-close";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
 import type {
   MomentConversationViewModel,
@@ -84,6 +89,16 @@ function withCurrentMemberReaction(
   };
 }
 
+function reactionPresenceKey(reaction: {
+  id: string;
+  reactionId: MomentReactionId;
+  isCurrentMember?: boolean;
+}) {
+  return reaction.isCurrentMember
+    ? `current:${reaction.reactionId}`
+    : reaction.id;
+}
+
 function overlayCurrentMemberReaction(
   server: MomentConversationViewModel,
   local: MomentConversationViewModel,
@@ -128,18 +143,139 @@ export function MomentConversationControl({
       currentReaction(model.conversation),
     );
   const reactionWriteGen = useRef(0);
+  const {
+    closing: reactionsClosing,
+    closingRef: reactionsClosingRef,
+    requestClose: requestOverlayClose,
+    cancel: cancelReactionPickerClose,
+    onAnimationEnd: onReactionPickerAnimationEnd,
+  } = useOverlayPopoverClose();
 
   const reactionOptions = useMemo(
     () =>
       new Map(interaction.reactionOptions.map((option) => [option.id, option])),
     [interaction.reactionOptions],
   );
-  const visibleReactions = conversation.reactions.flatMap((reaction) => {
-    const option = reactionOptions.get(reaction.reactionId);
-    return option ? [{ ...reaction, option }] : [];
-  });
+  const visibleReactions = useMemo(
+    () =>
+      conversation.reactions.flatMap((reaction) => {
+        const option = reactionOptions.get(reaction.reactionId);
+        return option
+          ? [
+              {
+                ...reaction,
+                option,
+                presenceKey: reactionPresenceKey(reaction),
+              },
+            ]
+          : [];
+      }),
+    [conversation.reactions, reactionOptions],
+  );
+  const [heartPopGeneration, setHeartPopGeneration] = useState(0);
+  const [enteringKeys, setEnteringKeys] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [leavingReactions, setLeavingReactions] = useState<
+    typeof visibleReactions
+  >([]);
+  const [previousReactions, setPreviousReactions] = useState(visibleReactions);
   const kindLabel = momentKindLabel(model);
   const controlLabel = conciseLabel(model.text);
+
+  if (previousReactions !== visibleReactions) {
+    setPreviousReactions(visibleReactions);
+    const nextKeys = new Set(
+      visibleReactions.map((reaction) => reaction.presenceKey),
+    );
+    const previousKeys = new Set(
+      previousReactions.map((reaction) => reaction.presenceKey),
+    );
+    const added = visibleReactions.filter(
+      (reaction) => !previousKeys.has(reaction.presenceKey),
+    );
+    const removed = previousReactions.filter(
+      (reaction) => !nextKeys.has(reaction.presenceKey),
+    );
+    if (overlayMotionReduced()) {
+      if (enteringKeys.size > 0) setEnteringKeys(new Set());
+      if (leavingReactions.length > 0) setLeavingReactions([]);
+    } else {
+      let nextEntering: Set<string> | null = null;
+      if (added.length > 0) {
+        nextEntering = new Set(enteringKeys);
+        for (const reaction of added) nextEntering.add(reaction.presenceKey);
+      }
+      if (removed.length > 0) {
+        const fadeOut = removed.filter(
+          (reaction) => !enteringKeys.has(reaction.presenceKey),
+        );
+        const cancelEnter = removed.filter((reaction) =>
+          enteringKeys.has(reaction.presenceKey),
+        );
+        if (cancelEnter.length > 0) {
+          nextEntering ??= new Set(enteringKeys);
+          for (const reaction of cancelEnter) {
+            nextEntering.delete(reaction.presenceKey);
+          }
+        }
+        if (fadeOut.length > 0) {
+          setLeavingReactions((current) => [
+            ...current.filter(
+              (reaction) => !nextKeys.has(reaction.presenceKey),
+            ),
+            ...fadeOut,
+          ]);
+        }
+      }
+      if (nextEntering) setEnteringKeys(nextEntering);
+    }
+  }
+
+  useEffect(() => {
+    if (leavingReactions.length === 0) return;
+    const timer = window.setTimeout(() => {
+      setLeavingReactions([]);
+    }, overlayPopoverCloseMs);
+    return () => window.clearTimeout(timer);
+  }, [leavingReactions]);
+
+  const displayedReactions = useMemo(() => {
+    const visibleKeys = new Set(
+      visibleReactions.map((reaction) => reaction.presenceKey),
+    );
+    return [
+      ...visibleReactions,
+      ...leavingReactions.filter(
+        (reaction) => !visibleKeys.has(reaction.presenceKey),
+      ),
+    ];
+  }, [leavingReactions, visibleReactions]);
+
+  const popHeart = useCallback(() => {
+    if (overlayMotionReduced()) return;
+    setHeartPopGeneration((current) => current + 1);
+  }, []);
+
+  const requestReactionPickerClose = useCallback(
+    (restoreFocus = false) => {
+      const restoreTriggerFocus = () => {
+        if (!restoreFocus) return;
+        window.requestAnimationFrame(() =>
+          reactionTriggerRef.current?.focus({ preventScroll: true }),
+        );
+      };
+      if (panel !== "reactions") {
+        restoreTriggerFocus();
+        return;
+      }
+      requestOverlayClose(() => {
+        setPanel((current) => (current === "reactions" ? null : current));
+      });
+      restoreTriggerFocus();
+    },
+    [panel, requestOverlayClose, setPanel],
+  );
 
   useEffect(() => {
     if (panel !== "note") return;
@@ -156,15 +292,12 @@ export function MomentConversationControl({
         event.target instanceof Node &&
         !reactionControlRef.current?.contains(event.target)
       ) {
-        setPanel(null);
+        requestReactionPickerClose();
       }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setPanel(null);
-      window.requestAnimationFrame(() =>
-        reactionTriggerRef.current?.focus({ preventScroll: true }),
-      );
+      requestReactionPickerClose(true);
     };
     document.addEventListener("pointerdown", closeOnOutsidePress);
     window.addEventListener("keydown", closeOnEscape);
@@ -172,7 +305,7 @@ export function MomentConversationControl({
       document.removeEventListener("pointerdown", closeOnOutsidePress);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [panel]);
+  }, [panel, requestReactionPickerClose]);
 
   const applyLoadedConversation = useCallback(
     (next: MomentConversationViewModel, startedWriteGen: number) => {
@@ -226,16 +359,26 @@ export function MomentConversationControl({
 
   const togglePanel = async (nextPanel: Exclude<InlinePanel, null>) => {
     setError(null);
+    if (nextPanel === "reactions" && panel === "reactions") {
+      if (reactionsClosingRef.current) {
+        cancelReactionPickerClose();
+        return;
+      }
+      requestReactionPickerClose();
+      return;
+    }
     if (panel === nextPanel) {
       setPanel(null);
       return;
     }
+    cancelReactionPickerClose();
     setPanel(nextPanel);
     await loadConversation();
   };
 
   const openReactionPicker = () => {
     setError(null);
+    cancelReactionPickerClose();
     setPanel("reactions");
     void loadConversation();
   };
@@ -250,11 +393,9 @@ export function MomentConversationControl({
     setConversation((current) =>
       withCurrentMemberReaction(current, interaction.currentPerson, next),
     );
-    setPanel(null);
+    if (next) popHeart();
     setError(null);
-    window.requestAnimationFrame(() =>
-      reactionTriggerRef.current?.focus({ preventScroll: true }),
-    );
+    requestReactionPickerClose(true);
     if (!actions) {
       return;
     }
@@ -360,21 +501,55 @@ export function MomentConversationControl({
 
   return (
     <div id={conversationId} className="inline-conversation">
-      {visibleReactions.length > 0 || conversation.notes.length > 0 ? (
+      {displayedReactions.length > 0 || conversation.notes.length > 0 ? (
         <div className="conversation-summary" aria-label="Family activity">
-          {visibleReactions.length > 0 ? (
+          {displayedReactions.length > 0 ? (
             <ul
               className="inline-reaction-summary"
               aria-label="Family responses"
             >
-              {visibleReactions.map((reaction) => (
-                <li key={reaction.id}>
-                  <span aria-hidden="true">
-                    {reactionPresentation[reaction.reactionId].emoji}
-                  </span>
-                  <span>{reaction.personName}</span>
-                </li>
-              ))}
+              {displayedReactions.map((reaction) => {
+                const leaving = leavingReactions.some(
+                  (item) => item.presenceKey === reaction.presenceKey,
+                );
+                const entering = enteringKeys.has(reaction.presenceKey);
+                return (
+                  <li
+                    key={reaction.presenceKey}
+                    className={
+                      leaving
+                        ? "is-closing"
+                        : entering
+                          ? "is-entering"
+                          : undefined
+                    }
+                    onAnimationEnd={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.animationName === "overlay-popover-in") {
+                        setEnteringKeys((current) => {
+                          if (!current.has(reaction.presenceKey))
+                            return current;
+                          const next = new Set(current);
+                          next.delete(reaction.presenceKey);
+                          return next;
+                        });
+                        return;
+                      }
+                      if (event.animationName !== "overlay-popover-out") return;
+                      setLeavingReactions((current) =>
+                        current.filter(
+                          (item) => item.presenceKey !== reaction.presenceKey,
+                        ),
+                      );
+                    }}
+                  >
+                    <span aria-hidden="true">
+                      {reactionPresentation[reaction.reactionId].emoji}
+                    </span>
+                    <span>{reaction.personName}</span>
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
           {conversation.notes.length > 0 ? (
@@ -469,9 +644,11 @@ export function MomentConversationControl({
         <div ref={reactionControlRef} className="quick-reaction-control">
           <button
             ref={reactionTriggerRef}
-            className="quick-reaction-trigger"
+            className={`quick-reaction-trigger${
+              heartPopGeneration > 0 ? " is-popping" : ""
+            }`}
             type="button"
-            aria-expanded={panel === "reactions"}
+            aria-expanded={panel === "reactions" && !reactionsClosing}
             aria-haspopup="menu"
             aria-controls={`${panelId}-reactions`}
             aria-label={`Choose a reaction for ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
@@ -487,7 +664,13 @@ export function MomentConversationControl({
             }}
             onClick={() => void togglePanel("reactions")}
           >
-            <span aria-hidden="true">
+            <span
+              key={heartPopGeneration}
+              className={`quick-reaction-glyph${
+                heartPopGeneration > 0 ? " is-popping" : ""
+              }`}
+              aria-hidden="true"
+            >
               {selectedReactionId
                 ? reactionPresentation[selectedReactionId].emoji
                 : "♡"}
@@ -496,9 +679,13 @@ export function MomentConversationControl({
           {panel === "reactions" ? (
             <div
               id={`${panelId}-reactions`}
-              className="inline-reaction-picker"
+              className={`inline-reaction-picker overlay-popover${
+                reactionsClosing ? " is-closing" : ""
+              }`}
               role="menu"
               aria-label="Choose a reaction"
+              aria-hidden={reactionsClosing ? true : undefined}
+              onAnimationEnd={onReactionPickerAnimationEnd}
             >
               {interaction.reactionOptions.map((option) => {
                 const presentation = reactionPresentation[option.id];

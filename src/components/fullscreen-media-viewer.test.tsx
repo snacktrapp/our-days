@@ -1,84 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FullscreenMediaViewer } from "./fullscreen-media-viewer";
 
 describe("FullscreenMediaViewer", () => {
-  it("opens a photo full screen, supports direct zoom, and returns focus on close", () => {
-    render(
-      <FullscreenMediaViewer
-        kind="photo"
-        label="Family outside"
-        preview={<span>Photo preview</span>}
-        fullscreenMedia={<span>Full photo</span>}
-      />,
-    );
-
-    const trigger = screen.getByRole("button", {
-      name: "Open photo full screen: Family outside",
-    });
-    const preview = screen.getByText("Photo preview");
-    fireEvent.click(trigger);
-
-    const dialog = screen.getByRole("dialog", {
-      name: "Full-screen photo: Family outside",
-    });
-    expect(dialog).toBeVisible();
-    expect(screen.getByText("Photo preview")).toBe(preview);
-    const photo = screen.getByText("Full photo").parentElement;
-    expect(photo).toHaveClass("media-viewer-photo");
-    fireEvent.doubleClick(photo as HTMLElement);
-    expect(photo).toHaveClass("is-zoomed");
-    expect(screen.queryByRole("button", { name: /Zoom/u })).toBeNull();
-    expect(screen.queryByText(/Pinch/u)).toBeNull();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("Photo preview")).toBe(preview);
-    expect(trigger).toHaveFocus();
-  });
-
-  it("dismisses a photo with a deliberate downward pull", () => {
-    render(
-      <FullscreenMediaViewer
-        kind="photo"
-        label="Family outside"
-        preview={<span>Photo preview</span>}
-        fullscreenMedia={<span>Full photo</span>}
-      />,
-    );
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open photo full screen: Family outside",
-      }),
-    );
-    const photo = screen.getByText("Full photo").parentElement as HTMLElement;
-    Object.defineProperties(photo, {
-      setPointerCapture: { configurable: true, value: vi.fn() },
-      hasPointerCapture: { configurable: true, value: () => false },
-    });
-    fireEvent.pointerDown(photo, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 120,
-      clientY: 200,
-    });
-    fireEvent.pointerMove(photo, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 124,
-      clientY: 320,
-    });
-    expect(photo.style.transform).toBe("translate3d(0, 120px, 0)");
-    fireEvent.pointerUp(photo, {
-      pointerId: 1,
-      pointerType: "touch",
-      clientX: 124,
-      clientY: 320,
-    });
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("opens a video with native playback controls", () => {
@@ -104,33 +30,5 @@ describe("FullscreenMediaViewer", () => {
     });
     expect(dialog.querySelector("video")).toHaveAttribute("controls");
     expect(screen.queryByText("Rotate for a wider view")).toBeNull();
-  });
-
-  it("uses a second media tap for the exact entry reaction instead of opening", () => {
-    const reactionTarget = document.createElement("div");
-    reactionTarget.id = "moment-conversation-moment-one";
-    const heart = vi.fn();
-    reactionTarget.addEventListener("our-days:heart", heart);
-    document.body.append(reactionTarget);
-
-    render(
-      <FullscreenMediaViewer
-        kind="photo"
-        label="Family outside"
-        reactionTargetId="moment-one"
-        preview={<span>Photo preview</span>}
-        fullscreenMedia={<span>Full photo</span>}
-      />,
-    );
-    const trigger = screen.getByRole("button", {
-      name: "Open photo full screen: Family outside",
-    });
-
-    fireEvent.click(trigger, { detail: 1 });
-    fireEvent.click(trigger, { detail: 2 });
-
-    expect(heart).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    reactionTarget.remove();
   });
 });

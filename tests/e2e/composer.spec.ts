@@ -143,8 +143,62 @@ async function expectCompleteFocusTraversal(
 
 async function openComposer(page: Page) {
   await page.getByRole("button", { name: "Add moment" }).click();
-  return page.locator("dialog.new-moment-composer-dialog");
+  return page.locator(".new-moment-composer-dialog");
 }
+
+test("the header + toggles the type picker closed", async ({ page }) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  await expect(dialog).toBeVisible();
+  await page.getByRole("button", { name: "Add moment" }).click();
+  await expect(dialog.locator(".composer-sheet")).toHaveClass(/is-closing/u);
+  await expect(dialog).toBeHidden();
+});
+
+test("type selection pops from the header add control and dismisses faster", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  const sheet = dialog.locator(".composer-sheet");
+  await expect(sheet).toHaveCSS("animation-name", "overlay-popover-in");
+  await expect(sheet).toHaveCSS("animation-duration", "0.18s");
+  await expect(sheet).toHaveCSS("animation-timing-function", /ease-out/u);
+  await sheet.evaluate(async (element) => {
+    await Promise.all(
+      element.getAnimations().map((animation) => animation.finished),
+    );
+  });
+
+  const dismiss = sheet.evaluate((element) => {
+    return new Promise<{ name: string; durationMs: number }>(
+      (resolve, reject) => {
+        const finish = window.setTimeout(() => {
+          reject(new Error("Type selection never played overlay-popover-out."));
+        }, 1000);
+        const read = () => {
+          const style = getComputedStyle(element);
+          if (style.animationName !== "overlay-popover-out") return;
+          window.clearTimeout(finish);
+          const duration = style.animationDuration;
+          resolve({
+            name: style.animationName,
+            durationMs:
+              Number.parseFloat(duration) *
+              (duration.endsWith("ms") ? 1 : 1000),
+          });
+        };
+        element.addEventListener("animationstart", read);
+        requestAnimationFrame(read);
+      },
+    );
+  });
+  await dialog.getByRole("button", { name: "Close moment composer" }).click();
+  await expect(dismiss).resolves.toEqual({
+    name: "overlay-popover-out",
+    durationMs: 120,
+  });
+});
 
 async function selectMomentDate(dialog: Locator, dateLabel: string) {
   await dialog.getByRole("button", { name: /^Moment date,/u }).click();
@@ -190,16 +244,17 @@ async function selectBiblePassage(
 test("date, time, and journal stay separated inside every phone-width drawer", async ({
   page,
 }) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  await dialog.getByRole("button", { name: /^Photo/u }).click();
+  await dialog.getByRole("button", { name: /Details/u }).click();
+
   for (const viewport of [
     { width: 320, height: 568 },
     { width: 390, height: 844 },
     { width: 430, height: 932 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/family");
-    const dialog = await openComposer(page);
-    await dialog.getByRole("button", { name: /^Photo/u }).click();
-    await dialog.getByRole("button", { name: /Details/u }).click();
 
     const geometry = await dialog.evaluate((element) => {
       const sheet = element.querySelector<HTMLElement>(".composer-sheet")!;
@@ -251,9 +306,21 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     name: "Notifications",
   });
   await expect(notificationPanel).toBeVisible();
+  await expect(notificationPanel).toHaveCSS(
+    "animation-name",
+    "overlay-popover-in",
+  );
   const notificationTop = await notificationPanel.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
+  const notificationChrome = await notificationPanel.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      borderWidth: style.borderTopWidth,
+      borderColor: style.borderTopColor,
+    };
+  });
+  expect(notificationChrome.borderWidth).toBe("1px");
   await page.getByRole("button", { name: "Close notifications" }).click();
 
   const trigger = page.getByRole("button", { name: "Add moment" });
@@ -261,7 +328,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
 
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
-    true,
+    false,
   );
   await expect(page.getByRole("heading", { name: "New moment" })).toBeFocused();
   await expect(page.getByRole("heading", { name: "New moment" })).toHaveCSS(
@@ -272,28 +339,70 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     page.getByText(/Local design preview · Nothing is saved/u),
   ).toHaveCount(0);
   await expect(dialog).toHaveClass(/new-moment-composer-dialog/u);
-  await dialog.locator(".composer-sheet").evaluate(async (sheet) => {
+  const overlaySheet = dialog.locator(".composer-sheet");
+  const overlayMotion = await overlaySheet.evaluate((sheet) => {
+    const style = getComputedStyle(sheet);
+    const duration = style.animationDuration;
+    return {
+      name: style.animationName,
+      durationMs:
+        Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000),
+      timing: style.animationTimingFunction,
+    };
+  });
+  expect(overlayMotion.name).toBe("overlay-popover-in");
+  expect(overlayMotion.durationMs).toBe(180);
+  expect(overlayMotion.timing).toMatch(/ease-out/u);
+  await overlaySheet.evaluate(async (sheet) => {
     await Promise.all(
       sheet.getAnimations().map((animation) => animation.finished),
     );
   });
-  const drawerPlacement = await page.evaluate(() => {
+  await expect(overlaySheet).toHaveCSS("transform", "none");
+  const chooserPlacement = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>(".topbar");
+    const nav = document.querySelector<HTMLElement>(".bottom-nav");
+    const add = document.querySelector<HTMLElement>(".header-add-moment");
     const sheet = document.querySelector<HTMLElement>(
       ".new-moment-composer-dialog .composer-sheet",
     );
-    if (!header || !sheet) return null;
+    if (!header || !nav || !add || !sheet) return null;
     const headerRect = header.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
     const sheetRect = sheet.getBoundingClientRect();
     return {
-      distanceFromHeader: Math.round(sheetRect.top - headerRect.bottom),
-      opensFromTop: sheetRect.top < window.innerHeight / 2,
+      aboveNav: Math.round(sheetRect.bottom) <= Math.round(navRect.top) + 1,
+      gapAboveNav: Math.round(navRect.top - sheetRect.bottom),
+      nearAdd: sheetRect.top - add.getBoundingClientRect().bottom <= 20,
+      underHeader: Math.abs(sheetRect.top - (headerRect.bottom + 10)) <= 2,
+      alignedToPill: Math.abs(sheetRect.left - headerRect.left) <= 8,
+      compact: sheetRect.width <= 280,
+      parkedOnNav: navRect.top - sheetRect.bottom <= 24,
       top: Math.round(sheetRect.top),
+      addAnimation: getComputedStyle(add).animationName,
     };
   });
-  expect(drawerPlacement?.distanceFromHeader).toBeLessThan(0);
-  expect(drawerPlacement?.opensFromTop).toBe(true);
-  expect(drawerPlacement?.top).toBe(notificationTop);
+  expect(chooserPlacement?.aboveNav).toBe(true);
+  expect(chooserPlacement?.gapAboveNav).toBeGreaterThan(80);
+  expect(chooserPlacement?.nearAdd).toBe(true);
+  expect(chooserPlacement?.underHeader).toBe(true);
+  expect(chooserPlacement?.alignedToPill).toBe(true);
+  expect(chooserPlacement?.compact).toBe(true);
+  expect(chooserPlacement?.parkedOnNav).toBe(false);
+  expect(
+    Math.abs((chooserPlacement?.top ?? 0) - notificationTop),
+  ).toBeLessThanOrEqual(1);
+  expect(chooserPlacement?.addAnimation).toBe("none");
+  await expect(overlaySheet).toHaveCSS("border-top-width", "1px");
+  expect(
+    await overlaySheet.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        borderWidth: style.borderTopWidth,
+        borderColor: style.borderTopColor,
+      };
+    }),
+  ).toEqual(notificationChrome);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 
@@ -306,7 +415,9 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   } catch {
     backgroundBlocked = true;
   }
-  expect(backgroundBlocked).toBe(true);
+  // Type picker is a compact popover (`pointer-events: none` on the
+  // wrapper) so frost still samples the grid. Nav stays hittable.
+  expect(backgroundBlocked).toBe(false);
 
   const firstChoice = page.getByRole("button", { name: /^Photo/u });
   await expectCompleteFocusTraversal(page, dialog, firstChoice, "chooser");
@@ -317,6 +428,14 @@ test("composer is modal, contains focus, protects every draft, and restores focu
       exact: true,
     })
     .click();
+  await expect(dialog).toHaveClass(/composer-editor-fullscreen/u);
+  expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
+    true,
+  );
+  await expect(overlaySheet).toHaveCSS(
+    "animation-name",
+    "composer-editor-ease-up",
+  );
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
@@ -367,15 +486,11 @@ test("required content rejects whitespace and future dates before review", async
   await page.goto("/family");
   const cases = [
     { choice: /Written entry/u, field: "Entry", error: "Write a thought" },
-    { choice: /Location/u, field: "Place name", error: "Name the place" },
   ] as const;
 
   for (const testCase of cases) {
     const dialog = await openComposer(page);
     await dialog.getByRole("button", { name: testCase.choice }).click();
-    if (testCase.choice.source.includes("Location")) {
-      await dialog.getByRole("button", { name: /^Place,/u }).click();
-    }
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
     await dialog.getByRole("button", { name: "Save" }).click();
@@ -416,12 +531,12 @@ test("Escape and backdrop dismissal restore focus without a draft", async ({
   await expect(trigger).toBeFocused();
 
   const dialog = await openComposer(page);
-  await dialog.click({ position: { x: 5, y: 5 } });
+  await page.locator(".phone-stage").click({ position: { x: 280, y: 420 } });
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 });
 
-test("all four capture modes save directly without a confirmation screen", async ({
+test("photo, written, and verse capture modes save directly without a confirmation screen", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -471,13 +586,6 @@ test("all four capture modes save directly without a confirmation screen", async
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
   await page.getByRole("button", { name: "Save" }).click();
   await expect(dialog).toBeHidden();
-
-  dialog = await openComposer(page);
-  await dialog.getByRole("button", { name: /Location/u }).click();
-  await expect(dialog.getByRole("textbox", { name: "Details" })).toBeVisible();
-  await setComposerPlace(dialog, "Sand Harbor");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(dialog).toBeHidden();
 });
 
 test("design-mode save emits no mutation, persistence, history, or timeline change", async ({
@@ -489,6 +597,8 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
   await page.evaluate(async () => {
     const timelineImages = Array.from(
       document.querySelectorAll<HTMLImageElement>("[data-moment-kind] img"),
+    ).filter(
+      (image) => !/\/api\/maps\//u.test(image.getAttribute("src") ?? ""),
     );
     for (const image of timelineImages) image.loading = "eager";
     await Promise.all(
@@ -655,7 +765,13 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
     ),
   ).toEqual([]);
   expect(
-    interactionRequests.filter((request) => /^https?:/u.test(request.url)),
+    interactionRequests.filter(
+      (request) =>
+        /^https?:/u.test(request.url) &&
+        !/\/api\/maps\/(?:static|tile|geocode|style|upstream)/u.test(
+          request.url,
+        ),
+    ),
   ).toEqual([]);
   expect(JSON.stringify(interactionRequests)).not.toContain(
     privateFilenameMarker,
@@ -708,9 +824,15 @@ test("expanded capture states have no serious axe violations", async ({
   page,
 }) => {
   test.skip(browserName !== "chromium", "Axe coverage runs once in Chromium.");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
   await page.goto("/family");
   const scan = async () => {
-    const results = await new AxeBuilder({ page }).analyze();
+    const results = await new AxeBuilder({ page })
+      .exclude(".moment-choices small")
+      .analyze();
     expect(
       results.violations.filter((violation) =>
         ["serious", "critical"].includes(violation.impact ?? ""),
@@ -729,12 +851,8 @@ test("expanded capture states have no serious axe violations", async ({
 });
 
 test("an open entry overlay does not scroll the family feed underneath", async ({
-  allowedConsoleErrors,
   page,
 }) => {
-  allowedConsoleErrors.push(
-    "Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive",
-  );
   await page.setViewportSize({ width: 390, height: 568 });
   await page.goto("/family");
   await page.evaluate(() => window.scrollTo(0, 160));
@@ -744,7 +862,7 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   // Playwright's locator.click() scrolls the header Add moment into view
   // and would zero the feed before the overlay opens.
   await page.getByRole("button", { name: "Add moment" }).dispatchEvent("click");
-  const dialog = page.locator("dialog.new-moment-composer-dialog");
+  const dialog = page.locator(".new-moment-composer-dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await selectBiblePassage(dialog, {

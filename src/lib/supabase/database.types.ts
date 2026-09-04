@@ -555,6 +555,10 @@ export type Database = {
     };
     Functions: {
       accept_invitation: { Args: { token: string }; Returns: string };
+      accept_pending_invitation_for_current_user: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
       acknowledge_photo_intake: {
         Args: { intake_id: string };
         Returns: {

@@ -9,7 +9,7 @@ import {
   isParentToMapPicker,
   type MapPickerToParent,
 } from "@/features/composer/map-picker-protocol";
-import { mapTilerStyleUrl } from "@/features/composer/maptiler";
+import { mapTilerStyleProxySrc } from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
 export function MapPickerCanvas() {
@@ -25,6 +25,7 @@ export function MapPickerCanvas() {
     let map: import("maplibre-gl").Map | undefined;
     let marker: import("maplibre-gl").Marker | undefined;
     let maplibre: typeof import("maplibre-gl") | undefined;
+    let observer: ResizeObserver | null = null;
 
     const post = (message: MapPickerToParent) => {
       window.parent.postMessage(message, parentOrigin);
@@ -54,7 +55,6 @@ export function MapPickerCanvas() {
     };
 
     const startMap = async (
-      key: string,
       latitude: number | null,
       longitude: number | null,
     ) => {
@@ -64,7 +64,7 @@ export function MapPickerCanvas() {
       if (cancelled || !container) return;
       map = new maplibre.Map({
         container,
-        style: mapTilerStyleUrl(key),
+        style: mapTilerStyleProxySrc,
         center: [DEFAULT_MAP_CENTER.longitude, DEFAULT_MAP_CENTER.latitude],
         zoom: DEFAULT_MAP_CENTER.zoom,
         attributionControl: { compact: true },
@@ -79,21 +79,24 @@ export function MapPickerCanvas() {
         });
       });
       const coordinates = parsePlaceCoordinates(latitude, longitude);
+      const resize = () => map?.resize();
       map.on("load", () => {
+        resize();
         if (coordinates)
           placeMarker(coordinates.latitude, coordinates.longitude);
       });
+      observer =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(resize);
+      observer?.observe(container);
     };
 
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== parentOrigin) return;
       if (!isParentToMapPicker(event.data)) return;
       if (event.data.type === "init") {
-        void startMap(
-          event.data.key,
-          event.data.latitude,
-          event.data.longitude,
-        );
+        void startMap(event.data.latitude, event.data.longitude);
         return;
       }
       placeMarker(event.data.latitude, event.data.longitude);
@@ -115,6 +118,7 @@ export function MapPickerCanvas() {
       window.removeEventListener("keydown", onKeyDown);
       marker?.remove();
       map?.remove();
+      observer?.disconnect();
     };
   }, []);
 

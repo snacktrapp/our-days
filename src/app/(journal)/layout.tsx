@@ -1,5 +1,5 @@
 import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { PrimaryNavigation } from "@/features/shell/primary-navigation";
+import { JournalRouteBoundary } from "@/features/shell/journal-route-boundary";
 
 export const dynamic = "force-dynamic";
 
@@ -8,10 +8,5 @@ export default async function JournalLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   await requireJournalAccess();
 
-  return (
-    <>
-      {children}
-      <PrimaryNavigation section="trash" />
-    </>
-  );
+  return <JournalRouteBoundary>{children}</JournalRouteBoundary>;
 }

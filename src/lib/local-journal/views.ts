@@ -213,6 +213,19 @@ export async function loadLocalJournalContext(
           .map((moment) => moment.id),
       ),
       memberNames,
+      document.moments
+        .filter(
+          (moment) =>
+            moment.trashedAt === null &&
+            moment.recordedByMembershipId !== access.membershipId,
+        )
+        .map((moment) => ({
+          id: moment.id,
+          author_membership_id: moment.recordedByMembershipId,
+          moment_kind: moment.kind,
+          created_at: moment.createdAt,
+        })),
+      access.membershipId,
     ),
   };
   return {
