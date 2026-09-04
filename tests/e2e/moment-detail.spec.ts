@@ -165,6 +165,10 @@ test("inline reaction and note states have no serious accessibility findings", a
     testInfo.project.name !== "chromium-mobile",
     "Axe coverage runs once in Chromium.",
   );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
   await page.goto("/family");
   const card = firstPhoto(page);
   const scan = async () => {

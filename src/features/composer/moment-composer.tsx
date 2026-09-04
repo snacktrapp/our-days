@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal, flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
@@ -480,21 +486,18 @@ export function MomentComposer({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [close, open, typePicker]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
-    const focusFrame = window.requestAnimationFrame(() => {
-      if (reviewing) reviewHeadingRef.current?.focus();
-      else if (mode && !choosingMode) {
-        if (mode === "photo" || mode === "video")
-          editorHeadingRef.current?.focus({ preventScroll: true });
-        else if (mode === "thought") bodyTextareaRef.current?.focus();
-        else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
-        else if (mode === "location")
-          locationSearchRef.current?.focus({ preventScroll: true });
-        else titleInputRef.current?.focus();
-      } else chooserHeadingRef.current?.focus({ preventScroll: true });
-    });
-    return () => window.cancelAnimationFrame(focusFrame);
+    if (reviewing) reviewHeadingRef.current?.focus();
+    else if (mode && !choosingMode) {
+      if (mode === "photo" || mode === "video")
+        editorHeadingRef.current?.focus({ preventScroll: true });
+      else if (mode === "thought") bodyTextareaRef.current?.focus();
+      else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
+      else if (mode === "location")
+        locationSearchRef.current?.focus({ preventScroll: true });
+      else titleInputRef.current?.focus();
+    } else chooserHeadingRef.current?.focus({ preventScroll: true });
   }, [choosingMode, mode, open, reviewing]);
 
   const replacePhoto = (file: File | null) => {

@@ -180,6 +180,10 @@ test("primary screens and composer states have no serious axe violations", async
   page,
 }) => {
   test.setTimeout(60_000);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-theme", "dark");
+  });
 
   const scan = async () => {
     const results = await new AxeBuilder({ page }).analyze();

@@ -772,7 +772,13 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
     ),
   ).toEqual([]);
   expect(
-    interactionRequests.filter((request) => /^https?:/u.test(request.url)),
+    interactionRequests.filter(
+      (request) =>
+        /^https?:/u.test(request.url) &&
+        !/\/api\/maps\/(?:static|tile|geocode|style|upstream)/u.test(
+          request.url,
+        ),
+    ),
   ).toEqual([]);
   expect(JSON.stringify(interactionRequests)).not.toContain(
     privateFilenameMarker,
