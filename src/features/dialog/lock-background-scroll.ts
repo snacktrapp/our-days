@@ -191,8 +191,9 @@ export function useModalDialog(
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current;
-    if (!mounted || !dialog) return;
+    if (!mounted) return;
     if (open) {
+      if (!dialog) return;
       const scrollY = window.scrollY;
       showDialogPreservingScroll(dialog, modal);
       return () => {
@@ -200,6 +201,7 @@ export function useModalDialog(
         restoreWindowScrollAfterModal(scrollY);
       };
     }
+    // Release even when the consumer already unmounted the <dialog>.
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) setMounted(false);

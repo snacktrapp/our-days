@@ -484,6 +484,19 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass("composer-scroll-locked");
+      expect(document.documentElement).not.toHaveClass(
+        "composer-scroll-locked",
+      );
+    });
+    const wheel = new WheelEvent("wheel", {
+      deltaY: 480,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
         body: "Still in the post.",

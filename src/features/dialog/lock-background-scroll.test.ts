@@ -201,6 +201,44 @@ describe("overlay background scroll lock", () => {
     expect(showModal).not.toHaveBeenCalled();
   });
 
+  it("releases the document lock when the dialog node is gone before close finishes", async () => {
+    function Harness({
+      open,
+      typePicker,
+    }: {
+      open: boolean;
+      typePicker: boolean;
+    }) {
+      const ref = useRef<HTMLDialogElement>(null);
+      const overlayMounted = useOverlayMount(open);
+      const dialogMounted = useModalDialog(open && !typePicker, ref);
+      if (typePicker ? !open || !overlayMounted : !dialogMounted) return null;
+      if (typePicker) return createElement("div", { role: "dialog" });
+      return createElement("dialog", { ref });
+    }
+
+    const { rerender } = render(
+      createElement(Harness, { open: true, typePicker: false }),
+    );
+    expect(document.querySelector("dialog")).toBeTruthy();
+    expect(document.body).toHaveClass(backgroundScrollLockClass);
+
+    rerender(createElement(Harness, { open: false, typePicker: true }));
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass(backgroundScrollLockClass);
+      expect(document.documentElement).not.toHaveClass(
+        backgroundScrollLockClass,
+      );
+    });
+    const event = new WheelEvent("wheel", {
+      deltaY: 480,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("closes a connected modal before restoring window scroll", async () => {
     let scrollY = 160;
     Object.defineProperty(window, "scrollY", {
