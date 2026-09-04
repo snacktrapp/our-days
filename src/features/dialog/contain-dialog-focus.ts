@@ -7,9 +7,7 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-export function containDialogFocus(
-  event: React.KeyboardEvent<HTMLDialogElement>,
-) {
+export function containDialogFocus(event: React.KeyboardEvent<HTMLElement>) {
   if (event.key !== "Tab") return;
 
   const dialog = event.currentTarget;

@@ -157,6 +157,27 @@ export function useLockBackgroundScroll(active: boolean) {
   }, [active]);
 }
 
+export function useOverlayMount(open: boolean) {
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
+
+  useLockBackgroundScroll(mounted);
+
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    if (open) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setMounted(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, open]);
+
+  return mounted;
+}
+
 export function useModalDialog(
   open: boolean,
   dialogRef: RefObject<HTMLDialogElement | null>,

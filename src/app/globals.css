@@ -6552,12 +6552,17 @@ button:focus-visible,
 
 /* Review stays a compact panel above the tab bar. Type selection is a
    separate popover under the header + and is positioned below. */
-.new-moment-composer-dialog[open]:not(.composer-editor-fullscreen) {
+.new-moment-composer-dialog[open]:not(.composer-editor-fullscreen):not(
+    .composer-type-picker
+  ) {
   align-items: flex-end;
   justify-content: center;
 }
 
-.new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+.new-moment-composer-dialog:not(.composer-editor-fullscreen):not(
+    .composer-type-picker
+  )
+  .composer-sheet {
   width: min(
     calc(100% - 2 * var(--bottom-nav-inline-gap)),
     calc(430px - 2 * var(--bottom-nav-inline-gap))
@@ -6576,25 +6581,32 @@ button:focus-visible,
   animation: none;
 }
 
-/* Non-modal type picker stays in the document (not the top layer) so
-   Safari keeps sampling the graph-paper through the frosted nav chrome.
-   Shrink-wrap the dialog itself — a full-viewport inset:0 box is what
-   painted the opaque green slab above the tab bar on iPhone. The sheet
-   stays position:fixed under the header +. Fullscreen capture still
+/* Type picker is a body-portaled popover, not a <dialog>. Native dialog
+   chrome (and the themed .composer-dialog dim + blur) is what flattened
+   frost: dark left a green slab on the bottom pill, light killed the top
+   pill — leftover rgba fills plus backdrop-filter on a viewport layer.
+   The wrapper is only as big as the sheet, under the header +, so both
+   pills keep sampling the grid in both themes. Fullscreen capture still
    uses showModal() and is not restyled here. */
-dialog.new-moment-composer-dialog.composer-type-picker {
+.new-moment-composer-dialog.composer-type-picker,
+:root[data-theme="dark"] .new-moment-composer-dialog.composer-type-picker,
+:root[data-theme="light"] .new-moment-composer-dialog.composer-type-picker {
   position: fixed;
   inset: auto;
-  top: 0;
-  left: 0;
-  width: max-content;
-  max-width: none;
-  height: max-content;
-  max-height: none;
+  top: var(--type-picker-top);
+  left: var(--type-picker-left);
+  width: var(--type-picker-width);
+  max-width: var(--type-picker-width);
+  height: auto;
+  max-height: calc(100dvh - var(--type-picker-top) - 24px);
   margin: 0;
   padding: 0;
+  border: 0;
   overflow: visible;
   z-index: 150;
+  display: block;
+  align-items: unset;
+  justify-content: unset;
   background: none;
   background-color: transparent;
   background-image: none;
@@ -6604,29 +6616,21 @@ dialog.new-moment-composer-dialog.composer-type-picker {
   pointer-events: none;
 }
 
-dialog.new-moment-composer-dialog.composer-type-picker[open] {
-  display: block;
-  align-items: unset;
-  justify-content: unset;
-}
-
 .new-moment-composer-dialog.composer-type-picker .composer-sheet {
-  width: var(--type-picker-width);
-  max-height: calc(100dvh - var(--type-picker-top) - 24px);
-  top: var(--type-picker-top);
+  width: 100%;
+  max-height: inherit;
+  position: relative;
+  top: auto;
   right: auto;
   bottom: auto;
-  left: var(--type-picker-left);
+  left: auto;
   margin: 0;
   transform-origin: 30px 0;
   pointer-events: auto;
 }
 
 .new-moment-composer-dialog,
-:root[data-theme="light"] .new-moment-composer-dialog,
-dialog.new-moment-composer-dialog.composer-type-picker,
-:root[data-theme="light"]
-  dialog.new-moment-composer-dialog.composer-type-picker {
+:root[data-theme="light"] .new-moment-composer-dialog {
   background: none;
   background-color: transparent;
   background-image: none;

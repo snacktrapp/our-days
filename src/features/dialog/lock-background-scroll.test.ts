@@ -9,6 +9,7 @@ import {
   showModalPreservingScroll,
   useLockBackgroundScroll,
   useModalDialog,
+  useOverlayMount,
 } from "./lock-background-scroll";
 
 function scrollable(kind: "auto" | "scroll" = "auto") {
@@ -143,6 +144,20 @@ describe("overlay background scroll lock", () => {
     });
     document.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
+    unmount();
+  });
+
+  it("mounts a non-dialog overlay without a native dialog layer", async () => {
+    const { rerender, unmount } = renderHook(
+      ({ open }) => useOverlayMount(open),
+      { initialProps: { open: true } },
+    );
+
+    expect(document.body).toHaveClass(backgroundScrollLockClass);
+    rerender({ open: false });
+    await waitFor(() => {
+      expect(document.body).not.toHaveClass(backgroundScrollLockClass);
+    });
     unmount();
   });
 

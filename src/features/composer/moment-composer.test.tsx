@@ -824,13 +824,26 @@ describe("MomentComposer", () => {
     await openComposer();
     expect(screen.getByRole("dialog")).toHaveClass("composer-type-picker");
     fireEvent.pointerDown(document.body);
-    const dialog = document.querySelector("dialog.new-moment-composer-dialog");
+    const dialog = document.querySelector(".new-moment-composer-dialog");
     expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+  });
+
+  it("portals the type picker onto document.body as a popover, not a themed dialog", async () => {
+    await openComposer();
+    const picker = screen.getByRole("dialog");
+    expect(picker.tagName).toBe("DIV");
+    expect(picker).toHaveClass("composer-type-picker");
+    expect(picker).toHaveClass("new-moment-composer-dialog");
+    expect(picker).not.toHaveClass("composer-dialog");
+    expect(picker.parentElement).toBe(document.body);
+    expect(picker.closest(".topbar")).toBeNull();
+    expect(picker.closest(".app-shell")).toBeNull();
+    expect(picker.closest(".bottom-nav")).toBeNull();
   });
 
   it("opens the type picker without a modal top layer, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
-    expect(screen.getByRole("dialog")).toHaveAttribute("open");
+    expect(screen.getByRole("dialog")).toBeVisible();
     expect(screen.getByRole("dialog")).toHaveClass(
       "new-moment-composer-dialog",
     );
@@ -856,17 +869,21 @@ describe("MomentComposer", () => {
 
   it("pops the type-selection window and rises the composer after a type is chosen", async () => {
     const user = await openComposer();
-    const dialog = screen.getByRole("dialog");
-    const chooser = dialog.querySelector(".composer-sheet");
-    expect(dialog).not.toHaveClass("composer-editor-fullscreen");
-    expect(dialog).toHaveClass("composer-type-picker");
+    const picker = screen.getByRole("dialog");
+    const chooser = picker.querySelector(".composer-sheet");
+    expect(picker.tagName).toBe("DIV");
+    expect(picker).not.toHaveClass("composer-editor-fullscreen");
+    expect(picker).toHaveClass("composer-type-picker");
     expect(chooser).toHaveClass("overlay-popover");
     expect(chooser).not.toHaveClass("is-closing");
 
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
-    expect(dialog).toHaveClass("composer-editor-fullscreen");
-    expect(dialog).not.toHaveClass("composer-type-picker");
-    expect(dialog.querySelector(".composer-sheet")).not.toHaveClass(
+    const editor = screen.getByRole("dialog");
+    expect(editor.tagName).toBe("DIALOG");
+    expect(editor).toHaveClass("composer-editor-fullscreen");
+    expect(editor).toHaveClass("composer-dialog");
+    expect(editor).not.toHaveClass("composer-type-picker");
+    expect(editor.querySelector(".composer-sheet")).not.toHaveClass(
       "overlay-popover",
     );
   });
@@ -876,7 +893,7 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Close moment composer" }),
     );
-    const dialog = document.querySelector("dialog.new-moment-composer-dialog");
+    const dialog = document.querySelector(".new-moment-composer-dialog");
     expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
     expect(dialog).toHaveAttribute("aria-hidden", "true");
   });

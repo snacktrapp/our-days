@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./test";
 
 const routes = [
@@ -221,24 +221,23 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
   });
 });
 
-test("New moment type picker keeps frosted nav chrome over the grid", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/family");
+async function expectTypePickerKeepsFrostedNav(page: Page) {
   await page.getByRole("button", { name: "Add moment" }).click();
-  const dialog = page.locator("dialog.new-moment-composer-dialog");
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveClass(/composer-type-picker/u);
-  expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
+  const picker = page.locator(
+    ".new-moment-composer-dialog.composer-type-picker",
+  );
+  await expect(picker).toBeVisible();
+  expect(await picker.evaluate((element) => element.tagName)).toBe("DIV");
+  expect(await picker.evaluate((element) => element.matches(":modal"))).toBe(
     false,
   );
   await expectFrostedNavPill(page.locator(".topbar"));
   await expectFrostedNavPill(page.locator(".bottom-nav"));
-  const slab = await dialog.evaluate((element) => {
+  const slab = await picker.evaluate((element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
+    const topbar = document.querySelector(".topbar")!.getBoundingClientRect();
     return {
       alpha: style.backgroundColor.startsWith("rgba(")
         ? Number.parseFloat(
@@ -257,11 +256,37 @@ test("New moment type picker keeps frosted nav chrome over the grid", async ({
       bottom: rect.bottom,
       height: rect.height,
       navTop: nav.top,
+      parentIsBody: element.parentElement === document.body,
+      themedDialog: element.classList.contains("composer-dialog"),
+      top: rect.top,
+      topbarBottom: topbar.bottom,
     };
   });
   expect(slab.alpha).toBeLessThan(0.05);
   expect(slab.backdrop === "none" || slab.backdrop === "").toBe(true);
+  expect(slab.themedDialog).toBe(false);
+  expect(slab.parentIsBody).toBe(true);
+  expect(slab.top).toBeGreaterThanOrEqual(slab.topbarBottom - 1);
   expect(slab.bottom).toBeLessThan(slab.navTop);
+}
+
+test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expectTypePickerKeepsFrostedNav(page);
+});
+
+test("New moment type picker keeps frosted nav chrome over the grid in light", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  await page.getByRole("button", { name: "Use light appearance" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectTypePickerKeepsFrostedNav(page);
 });
 
 test("moment options open as a compact popover under the trigger without inline positioning", async ({
