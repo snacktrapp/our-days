@@ -268,6 +268,18 @@ async function expectTypePickerKeepsFrostedNav(page: Page) {
   expect(slab.parentIsBody).toBe(true);
   expect(slab.top).toBeGreaterThanOrEqual(slab.topbarBottom - 1);
   expect(slab.bottom).toBeLessThan(slab.navTop);
+  const corners = await picker.locator(".composer-sheet").evaluate((sheet) => {
+    const style = getComputedStyle(sheet);
+    return {
+      bottomLeft: style.borderBottomLeftRadius,
+      bottomRight: style.borderBottomRightRadius,
+      topLeft: style.borderTopLeftRadius,
+      topRight: style.borderTopRightRadius,
+    };
+  });
+  expect(corners.bottomLeft).toBe(corners.topLeft);
+  expect(corners.bottomRight).toBe(corners.topRight);
+  expect(Number.parseFloat(corners.topLeft)).toBeGreaterThan(0);
   const canvas = await page.evaluate(() => ({
     html: getComputedStyle(document.documentElement).backgroundColor,
     body: getComputedStyle(document.body).backgroundColor,

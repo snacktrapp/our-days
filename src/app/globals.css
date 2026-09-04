@@ -6652,6 +6652,10 @@ button:focus-visible,
   bottom: auto;
   left: auto;
   margin: 0;
+  overflow: hidden;
+  /* Sheet default is 14px 14px 0 0 (bottom-sheet). This popover needs
+     the same radius on all four corners. */
+  border-radius: 14px;
   transform-origin: 30px 0;
   pointer-events: auto;
 }
