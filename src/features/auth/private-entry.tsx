@@ -92,12 +92,8 @@ export function PrivateEntry({
               </p>
             ) : null}
             <div className="private-entry-oauth">
-              <form action="/api/auth/oauth/google" method="get">
-                <button type="submit">Sign in with Google</button>
-              </form>
-              <form action="/api/auth/oauth/x" method="get">
-                <button type="submit">Sign in with X</button>
-              </form>
+              <a href="/api/auth/oauth/google">Sign in with Google</a>
+              <a href="/api/auth/oauth/x">Sign in with X</a>
             </div>
             {linkRequested ? (
               <div className="private-entry-backup">
