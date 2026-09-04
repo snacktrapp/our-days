@@ -78,6 +78,7 @@ type MomentComposerProps = Readonly<{
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
   editDraft?: ComposerEditDraft | null;
+  registerDismiss?: (dismiss: (() => void) | null) => void;
 }>;
 
 export type { SaveFamilyMomentAction, SaveWrittenMomentAction };
@@ -204,6 +205,7 @@ export function MomentComposer({
   saveFamilyMoment,
   saveWrittenMoment,
   editDraft = null,
+  registerDismiss,
 }: MomentComposerProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -260,6 +262,7 @@ export function MomentComposer({
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [photoRetryable, setPhotoRetryable] = useState(true);
+  const [hideLocationChoice, setHideLocationChoice] = useState(false);
   const [photoUploadStage, setPhotoUploadStage] = useState<
     PhotoUploadStage | VideoUploadStage | null
   >(null);
@@ -420,6 +423,11 @@ export function MomentComposer({
     ],
   );
 
+  useEffect(() => {
+    registerDismiss?.(close);
+    return () => registerDismiss?.(null);
+  }, [close, registerDismiss]);
+
   useEffect(
     () => () => {
       photoUploadAbortRef.current?.abort();
@@ -429,10 +437,32 @@ export function MomentComposer({
   );
 
   const typePicker = !mode || choosingMode;
+  if (!open && hideLocationChoice) {
+    setHideLocationChoice(false);
+  }
   const overlayMounted = useOverlayMount(open);
   const dialogMounted = useModalDialog(open && !typePicker, dialogRef, {
     modal: true,
   });
+
+  useEffect(() => {
+    if (!open || !typePicker) return;
+    const controller = new AbortController();
+    void fetch("/api/maps/geocode?q=San%20Luis%20Obispo", {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload: unknown = await response.json();
+        if (Array.isArray(payload) && payload.length === 0) {
+          setHideLocationChoice(true);
+        }
+      })
+      .catch(() => {
+        // Abort or network: keep Location. The sheet still fail-closes.
+      });
+    return () => controller.abort();
+  }, [open, typePicker]);
 
   useEffect(() => {
     if (!open || !typePicker) return;
@@ -965,7 +995,8 @@ export function MomentComposer({
                 <small>Choose a passage</small>
               </button>
             ) : null}
-            {!connectedExperience || connectedFamily ? (
+            {(!connectedExperience || connectedFamily) &&
+            !hideLocationChoice ? (
               <button onClick={() => chooseMode("location")}>
                 <span
                   className="choice-icon location-choice"

@@ -45,5 +45,28 @@ describe("map geocode proxy", () => {
     await expect(response.json()).resolves.toEqual([
       { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
     ]);
+    expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain(
+      "api.maptiler.com/geocoding",
+    );
+    expect(vi.mocked(fetch).mock.calls[0]?.[1]).toMatchObject({
+      headers: {
+        Origin: "https://journal.example.test",
+        Referer: "https://journal.example.test/",
+      },
+    });
+  });
+
+  it("surfaces an upstream geocoding failure instead of an empty list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: async () => ({}),
+      }),
+    );
+    const response = await request("?q=San%20Luis%20Obispo");
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe("maptiler_upstream_failed");
   });
 });

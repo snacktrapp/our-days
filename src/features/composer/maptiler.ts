@@ -3,7 +3,10 @@ import {
   trimmedPlaceLabel,
   type PlaceSelection,
 } from "@/lib/place-coordinates";
-import { MAPTILER_API_ORIGIN } from "@/lib/maptiler-origins";
+import {
+  MAPTILER_API_ORIGIN,
+  MAPTILER_CDN_ORIGIN,
+} from "@/lib/maptiler-origins";
 
 const geocodeLimit = 5;
 
@@ -17,7 +20,19 @@ type MapTilerFeature = Readonly<{
   place_name?: unknown;
   text?: unknown;
   center?: unknown;
+  geometry?: unknown;
+  properties?: unknown;
 }>;
+
+export class MapTilerGeocodeError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super("maptiler_geocode_failed");
+    this.name = "MapTilerGeocodeError";
+    this.status = status;
+  }
+}
 
 type MapTilerGeocodeResponse = Readonly<{
   features?: readonly MapTilerFeature[];
@@ -72,6 +87,60 @@ export type MapTileViewport = Readonly<{
 
 export function mapTilerStyleUrl(key: string) {
   return `${MAPTILER_API_ORIGIN}/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
+}
+
+export function allowedMapTilerUrl(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === MAPTILER_API_ORIGIN ||
+      url.origin === MAPTILER_CDN_ORIGIN
+    ) {
+      return url;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function mapTilerUpstreamProxySrc(url: URL) {
+  const clean = new URL(url.toString());
+  clean.searchParams.delete("key");
+  return `/api/maps/upstream?${new URLSearchParams({ u: clean.toString() })}`;
+}
+
+export function rewriteMapTilerStyleDocument(value: unknown): unknown {
+  if (typeof value === "string") {
+    const url = allowedMapTilerUrl(value);
+    return url ? mapTilerUpstreamProxySrc(url) : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => rewriteMapTilerStyleDocument(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        rewriteMapTilerStyleDocument(entry),
+      ]),
+    );
+  }
+  return value;
+}
+
+function mapTilerFetchInit(
+  request?: Request,
+  signal?: AbortSignal,
+): RequestInit {
+  const origin = request ? new URL(request.url).origin : "";
+  return {
+    method: "GET",
+    referrer: origin ? `${origin}/` : undefined,
+    referrerPolicy: origin ? "origin" : "no-referrer",
+    headers: origin ? { Referer: `${origin}/`, Origin: origin } : undefined,
+    signal,
+  };
 }
 
 export function mapTilerRasterTileUrl(
@@ -206,6 +275,12 @@ export function staticMapImageSrc(latitude: number, longitude: number) {
   return staticMapProxySrc(latitude, longitude);
 }
 
+function propertyString(properties: unknown, name: string) {
+  if (!properties || typeof properties !== "object") return "";
+  const value = (properties as Record<string, unknown>)[name];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function featureLabel(feature: MapTilerFeature) {
   if (typeof feature.place_name === "string" && feature.place_name.trim()) {
     return trimmedPlaceLabel(feature.place_name);
@@ -213,15 +288,33 @@ function featureLabel(feature: MapTilerFeature) {
   if (typeof feature.text === "string" && feature.text.trim()) {
     return trimmedPlaceLabel(feature.text);
   }
-  return "";
+  const named = propertyString(feature.properties, "name");
+  if (named) return trimmedPlaceLabel(named);
+  const labeled = propertyString(feature.properties, "label");
+  return labeled ? trimmedPlaceLabel(labeled) : "";
+}
+
+function featureCoordinates(feature: MapTilerFeature) {
+  if (Array.isArray(feature.center) && feature.center.length >= 2) {
+    return parsePlaceCoordinates(feature.center[1], feature.center[0]);
+  }
+  if (
+    feature.geometry &&
+    typeof feature.geometry === "object" &&
+    "coordinates" in feature.geometry &&
+    Array.isArray(feature.geometry.coordinates) &&
+    feature.geometry.coordinates.length >= 2
+  ) {
+    return parsePlaceCoordinates(
+      feature.geometry.coordinates[1],
+      feature.geometry.coordinates[0],
+    );
+  }
+  return null;
 }
 
 function featurePlace(feature: MapTilerFeature): GeocodedPlace | null {
-  if (!Array.isArray(feature.center) || feature.center.length < 2) return null;
-  const coordinates = parsePlaceCoordinates(
-    feature.center[1],
-    feature.center[0],
-  );
+  const coordinates = featureCoordinates(feature);
   const label = featureLabel(feature);
   if (!coordinates || !label) return null;
   return { label, ...coordinates };
@@ -231,16 +324,13 @@ async function geocode(
   path: string,
   key: string,
   signal?: AbortSignal,
+  request?: Request,
 ): Promise<readonly GeocodedPlace[]> {
   const url = new URL(`${MAPTILER_API_ORIGIN}/geocoding/${path}.json`);
   url.searchParams.set("key", key);
   url.searchParams.set("limit", String(geocodeLimit));
-  const response = await fetch(url, {
-    method: "GET",
-    referrerPolicy: "no-referrer",
-    signal,
-  });
-  if (!response.ok) return [];
+  const response = await fetch(url, mapTilerFetchInit(request, signal));
+  if (!response.ok) throw new MapTilerGeocodeError(response.status);
   const payload = (await response.json()) as MapTilerGeocodeResponse;
   if (!Array.isArray(payload.features)) return [];
   return payload.features.flatMap((feature) => {
@@ -253,10 +343,11 @@ export async function searchMapTilerPlaces(
   query: string,
   key: string,
   signal?: AbortSignal,
+  request?: Request,
 ) {
   const trimmed = query.trim();
   if (!trimmed || !key) return [];
-  return geocode(encodeURIComponent(trimmed), key, signal);
+  return geocode(encodeURIComponent(trimmed), key, signal, request);
 }
 
 export async function reverseGeocodeMapTilerPlace(
@@ -264,25 +355,29 @@ export async function reverseGeocodeMapTilerPlace(
   longitude: number,
   key: string,
   signal?: AbortSignal,
+  request?: Request,
 ) {
   if (!key) return "";
-  const [place] = await geocode(`${longitude},${latitude}`, key, signal);
+  const [place] = await geocode(
+    `${longitude},${latitude}`,
+    key,
+    signal,
+    request,
+  );
   return place?.label ?? "";
 }
 
 export async function searchPlacesForComposer(
   query: string,
-  key: string,
   signal?: AbortSignal,
 ): Promise<readonly GeocodedPlace[]> {
-  if (key) return searchMapTilerPlaces(query, key, signal);
   const trimmed = query.trim();
   if (!trimmed) return [];
   const response = await fetch(
     `/api/maps/geocode?${new URLSearchParams({ q: trimmed })}`,
     { signal },
   );
-  if (!response.ok) return [];
+  if (!response.ok) throw new MapTilerGeocodeError(response.status);
   const payload: unknown = await response.json();
   return Array.isArray(payload) ? (payload as readonly GeocodedPlace[]) : [];
 }
@@ -290,10 +385,8 @@ export async function searchPlacesForComposer(
 export async function reverseGeocodeForComposer(
   latitude: number,
   longitude: number,
-  key: string,
   signal?: AbortSignal,
 ) {
-  if (key) return reverseGeocodeMapTilerPlace(latitude, longitude, key, signal);
   const params = new URLSearchParams({
     lat: String(latitude),
     lng: String(longitude),

@@ -128,6 +128,8 @@ describe("photo lightbox", () => {
     expect(document.body.contains(screen.getByRole("dialog"))).toBe(true);
     expect(document.body).not.toHaveClass("media-viewer-scroll-locked");
     expect(document.documentElement).not.toHaveClass("media-viewer-open");
+    expect(document.documentElement).toHaveClass("overlay-open");
+    expect(document.body).toHaveClass("overlay-open");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(card);
     expect(card).toHaveAttribute("src", cardPixelA);
     expect(card).toBeVisible();
@@ -144,6 +146,8 @@ describe("photo lightbox", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    expect(document.documentElement).not.toHaveClass("overlay-open");
+    expect(document.body).not.toHaveClass("overlay-open");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(card);
   });
 

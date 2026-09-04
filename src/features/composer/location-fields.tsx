@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  publicMapTilerKey,
   reverseGeocodeForComposer,
   searchPlacesForComposer,
   type GeocodedPlace,
@@ -45,7 +44,6 @@ export function LocationFields({
   const [suggestions, setSuggestions] = useState<readonly GeocodedPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
-  const mapKey = publicMapTilerKey();
   const canGeolocate =
     typeof navigator !== "undefined" && "geolocation" in navigator;
   const panelOpen = required || open || invalid;
@@ -54,11 +52,7 @@ export function LocationFields({
     async (latitude: number, longitude: number) => {
       let label = valueRef.current.label.trim();
       try {
-        const reversed = await reverseGeocodeForComposer(
-          latitude,
-          longitude,
-          mapKey,
-        );
+        const reversed = await reverseGeocodeForComposer(latitude, longitude);
         if (reversed) label = reversed;
       } catch {
         // Keep the label the family already typed.
@@ -74,7 +68,7 @@ export function LocationFields({
       setSuggestions([]);
       setLocationMessage(null);
     },
-    [mapKey, onChange],
+    [onChange],
   );
 
   useEffect(() => {
@@ -122,14 +116,18 @@ export function LocationFields({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching(true);
-      void searchPlacesForComposer(search.trim(), mapKey, controller.signal)
+      void searchPlacesForComposer(search.trim(), controller.signal)
         .then((places) => {
           if (searchRequestRef.current !== requestId) return;
           setSuggestions(places);
+          setLocationMessage(
+            places.length === 0 ? "No matching places." : null,
+          );
         })
         .catch(() => {
           if (searchRequestRef.current !== requestId) return;
           setSuggestions([]);
+          setLocationMessage("Place search isn’t available right now.");
         })
         .finally(() => {
           if (searchRequestRef.current === requestId) setSearching(false);
@@ -139,7 +137,7 @@ export function LocationFields({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [mapKey, panelOpen, search]);
+  }, [panelOpen, search]);
 
   const chooseSuggestion = (place: GeocodedPlace) => {
     onChange(place);
@@ -183,6 +181,7 @@ export function LocationFields({
             setSearch(nextLabel);
             setSuggestions([]);
             setSearching(false);
+            setLocationMessage(null);
             onChange({
               ...value,
               label: nextLabel,
@@ -233,7 +232,6 @@ export function LocationFields({
         <MapPickerFrame
           className="composer-location-map"
           title={`Map of ${value.label}`}
-          mapKey={mapKey}
           latitude={value.latitude}
           longitude={value.longitude}
           onMoved={(latitude, longitude) => {

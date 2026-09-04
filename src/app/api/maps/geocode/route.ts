@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   try {
     if (query) {
-      const places = await searchMapTilerPlaces(query, key);
+      const places = await searchMapTilerPlaces(query, key, undefined, request);
       return Response.json(places, {
         headers: { ...mapsApiHeaders, "Cache-Control": "no-store" },
       });
@@ -29,6 +29,8 @@ export async function GET(request: Request) {
         coordinates.latitude,
         coordinates.longitude,
         key,
+        undefined,
+        request,
       );
       return Response.json(
         { label },

@@ -21,7 +21,6 @@ export type ParentToMapPicker =
   | Readonly<{
       source: typeof MAP_PICKER_SOURCE;
       type: "init";
-      key: string;
       latitude: number | null;
       longitude: number | null;
     }>
@@ -55,7 +54,6 @@ export function isParentToMapPicker(
   if (message.source !== MAP_PICKER_SOURCE) return false;
   if (message.type === "init") {
     return (
-      typeof message.key === "string" &&
       (message.latitude === null || typeof message.latitude === "number") &&
       (message.longitude === null || typeof message.longitude === "number")
     );

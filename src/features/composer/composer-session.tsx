@@ -18,6 +18,8 @@ import {
 
 type ComposerSessionValue = Readonly<{
   openCreate: (trigger?: HTMLButtonElement | null) => void;
+  toggleCreate: (trigger?: HTMLButtonElement | null) => void;
+  isOpen: boolean;
   openEdit: (
     draft: ComposerEditDraft,
     trigger?: HTMLButtonElement | null,
@@ -42,12 +44,24 @@ export function ComposerSessionProvider({
   const [open, setOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<ComposerEditDraft | null>(null);
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const dismissRef = useRef<(() => void) | null>(null);
 
   const openCreate = useCallback((trigger?: HTMLButtonElement | null) => {
     setEditDraft(null);
     returnFocusRef.current = trigger ?? null;
     setOpen(true);
   }, []);
+
+  const toggleCreate = useCallback(
+    (trigger?: HTMLButtonElement | null) => {
+      if (open) {
+        dismissRef.current?.();
+        return;
+      }
+      openCreate(trigger);
+    },
+    [open, openCreate],
+  );
 
   const openEdit = useCallback(
     (draft: ComposerEditDraft, trigger?: HTMLButtonElement | null) => {
@@ -58,9 +72,13 @@ export function ComposerSessionProvider({
     [],
   );
 
+  const registerDismiss = useCallback((dismiss: (() => void) | null) => {
+    dismissRef.current = dismiss;
+  }, []);
+
   const value = useMemo(
-    () => ({ openCreate, openEdit }),
-    [openCreate, openEdit],
+    () => ({ openCreate, toggleCreate, isOpen: open, openEdit }),
+    [open, openCreate, openEdit, toggleCreate],
   );
 
   return (
@@ -72,6 +90,7 @@ export function ComposerSessionProvider({
         open={open}
         editDraft={editDraft}
         returnFocusRef={returnFocusRef}
+        registerDismiss={registerDismiss}
         onRequestClose={() => {
           setOpen(false);
           setEditDraft(null);

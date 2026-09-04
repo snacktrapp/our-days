@@ -9,7 +9,9 @@ export function mapTilerUpstreamInit(request?: Request): RequestInit {
   const origin = request ? new URL(request.url).origin : "";
   return {
     method: "GET",
-    headers: origin ? { Referer: `${origin}/` } : undefined,
+    referrer: origin ? `${origin}/` : undefined,
+    referrerPolicy: origin ? "origin" : "no-referrer",
+    headers: origin ? { Referer: `${origin}/`, Origin: origin } : undefined,
   };
 }
 

@@ -954,6 +954,24 @@ describe("MomentComposer", () => {
     expect(screen.queryByDisplayValue("A brave blue door.")).toBeNull();
   }, 10_000);
 
+  it("hides Location when place search returns no places", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Location/ })).toBeNull(),
+    );
+    expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
+    vi.unstubAllGlobals();
+  });
+
   it.each([["Location", "Place name", "Sand Harbor"]])(
     "gives %s a distinct required title",
     async (choice, label, value) => {
@@ -1113,19 +1131,17 @@ describe("MomentComposer", () => {
   });
 
   it("saves a chosen MapTiler place with coordinates from the location sheet", async () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
-          features: [
-            {
-              place_name: "Sand Harbor, NV",
-              center: [-119.93, 39.2],
-            },
-          ],
-        }),
+        json: async () => [
+          {
+            label: "Sand Harbor, NV",
+            latitude: 39.2,
+            longitude: -119.93,
+          },
+        ],
       }),
     );
     const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });

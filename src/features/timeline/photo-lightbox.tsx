@@ -209,6 +209,18 @@ function PhotoLightboxLayer({
     };
   }, []);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("overlay-open");
+    document.body.classList.add("overlay-open");
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.documentElement.classList.remove("overlay-open");
+      document.body.classList.remove("overlay-open");
+    };
+  }, []);
+
   function onLayerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Tab") return;
     const root = event.currentTarget;

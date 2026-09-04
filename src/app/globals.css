@@ -119,6 +119,28 @@ body.composer-scroll-locked {
   overscroll-behavior: none;
 }
 
+/* Safari paints html/body in the home-indicator gap. Journal green
+   (--grid-surface) shows as a slab under New moment and photo fullscreen.
+   Paint that canvas black only while those overlays are open so closed
+   frost still samples the grid. */
+html.overlay-open,
+html.overlay-open body,
+html.composer-scroll-locked,
+html.composer-scroll-locked body,
+html[data-theme].overlay-open,
+html[data-theme].overlay-open body,
+html[data-theme].composer-scroll-locked,
+html[data-theme].composer-scroll-locked body,
+:root[data-theme="light"].overlay-open,
+:root[data-theme="light"].overlay-open body,
+:root[data-theme="light"].composer-scroll-locked,
+:root[data-theme="light"].composer-scroll-locked body,
+body.overlay-open,
+body.composer-scroll-locked {
+  background-color: #000;
+  background-image: none;
+}
+
 html.composer-scroll-locked .app-shell,
 html.composer-scroll-locked .phone-stage {
   overscroll-behavior: none;
@@ -6298,6 +6320,11 @@ button:focus-visible,
   position: fixed;
   inset: 0;
   z-index: 200;
+  isolation: isolate;
+  background: #000;
+  min-height: 100dvh;
+  min-height: 100lvh;
+  min-height: -webkit-fill-available;
 }
 
 @keyframes photo-lightbox-dim-in {
@@ -6344,7 +6371,7 @@ button:focus-visible,
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: #020403;
+  background: #000;
   opacity: 0;
 }
 

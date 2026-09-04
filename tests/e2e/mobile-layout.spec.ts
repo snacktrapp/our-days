@@ -268,6 +268,12 @@ async function expectTypePickerKeepsFrostedNav(page: Page) {
   expect(slab.parentIsBody).toBe(true);
   expect(slab.top).toBeGreaterThanOrEqual(slab.topbarBottom - 1);
   expect(slab.bottom).toBeLessThan(slab.navTop);
+  const canvas = await page.evaluate(() => ({
+    html: getComputedStyle(document.documentElement).backgroundColor,
+    body: getComputedStyle(document.body).backgroundColor,
+  }));
+  expect(canvas.html).toBe("rgb(0, 0, 0)");
+  expect(canvas.body).toBe("rgb(0, 0, 0)");
 }
 
 test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
@@ -959,4 +965,17 @@ test("a timeline photo expands over the floating header", async ({ page }) => {
   expect(geometry?.width).toBe(390);
   expect(geometry?.height).toBe(844);
   expect(geometry?.coversHeader).toBe(true);
+  await expect(page.locator("html")).toHaveClass(/overlay-open/u);
+  const paint = await page.evaluate(() => {
+    const viewer = document.querySelector(".photo-lightbox");
+    if (!(viewer instanceof HTMLElement)) return null;
+    return {
+      html: getComputedStyle(document.documentElement).backgroundColor,
+      body: getComputedStyle(document.body).backgroundColor,
+      lightbox: getComputedStyle(viewer).backgroundColor,
+    };
+  });
+  expect(paint?.html).toBe("rgb(0, 0, 0)");
+  expect(paint?.body).toBe("rgb(0, 0, 0)");
+  expect(paint?.lightbox).toBe("rgb(0, 0, 0)");
 });

@@ -8,14 +8,12 @@ import {
 } from "./map-picker-protocol";
 
 export function MapPickerFrame({
-  mapKey,
   latitude,
   longitude,
   title,
   className,
   onMoved,
 }: Readonly<{
-  mapKey: string;
   latitude: number;
   longitude: number;
   title: string;
@@ -35,13 +33,12 @@ export function MapPickerFrame({
       {
         source: MAP_PICKER_SOURCE,
         type: "init",
-        key: mapKey,
         latitude,
         longitude,
       },
       window.location.origin,
     );
-  }, [latitude, longitude, mapKey]);
+  }, [latitude, longitude]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {

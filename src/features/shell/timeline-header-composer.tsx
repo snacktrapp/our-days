@@ -18,6 +18,7 @@ export function TimelineHeaderComposer({
   const session = useComposerSession();
   const [composerOpen, setComposerOpen] = useState(false);
   const addMomentRef = useRef<HTMLButtonElement>(null);
+  const dismissRef = useRef<(() => void) | null>(null);
 
   if (session) {
     return (
@@ -26,7 +27,8 @@ export function TimelineHeaderComposer({
         className="header-add-moment"
         type="button"
         aria-label="Add moment"
-        onClick={() => session.openCreate(addMomentRef.current)}
+        aria-expanded={session.isOpen}
+        onClick={() => session.toggleCreate(addMomentRef.current)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
@@ -42,7 +44,14 @@ export function TimelineHeaderComposer({
         className="header-add-moment"
         type="button"
         aria-label="Add moment"
-        onClick={() => setComposerOpen(true)}
+        aria-expanded={composerOpen}
+        onClick={() => {
+          if (composerOpen) {
+            dismissRef.current?.();
+            return;
+          }
+          setComposerOpen(true);
+        }}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
@@ -53,6 +62,9 @@ export function TimelineHeaderComposer({
         model={composer}
         open={composerOpen}
         returnFocusRef={addMomentRef}
+        registerDismiss={(dismiss) => {
+          dismissRef.current = dismiss;
+        }}
         onRequestClose={() => setComposerOpen(false)}
         saveFamilyMoment={createMomentAction}
       />

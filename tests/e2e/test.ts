@@ -48,8 +48,9 @@ export const test = base.extend<{
             error.includes(allowedError),
           ) &&
           !(
-            /\/api\/maps\/(?:static|tile)\?/u.test(error) &&
-            /status of 50[23]/u.test(error)
+            /\/api\/maps\/(?:static|tile|geocode|style|upstream)/u.test(
+              error,
+            ) && /status of 50[23]/u.test(error)
           ),
       );
       expect(
@@ -72,7 +73,7 @@ export const test = base.extend<{
               /\/apple-touch-icon\.png(?:\?|$)/u.test(failure)) &&
             /(ERR_ABORTED|NS_BINDING_ABORTED|cancel)/i.test(failure)
           ) &&
-          !/\/api\/maps\/(?:static|tile)\?/u.test(failure),
+          !/\/api\/maps\/(?:static|tile|geocode|style|upstream)/u.test(failure),
       );
       expect(
         unexpectedRequestFailures,

@@ -48,19 +48,13 @@ describe("location fields", () => {
   });
 
   it("keeps a typed label and shows a map of the chosen MapTiler place", async () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
-          features: [
-            {
-              place_name: "Sand Harbor, NV",
-              center: [-119.93, 39.2],
-            },
-          ],
-        }),
+        json: async () => [
+          { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+        ],
       }),
     );
     const onChange = vi.fn();
@@ -139,8 +133,32 @@ describe("location fields", () => {
     expect(screen.getByLabelText("Place name")).toBeVisible();
   });
 
-  it("puts current location on the search field when MapTiler can geolocate", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPTILER_KEY", "public-key");
+  it("shows a visible error when place search is unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: async () => ({}),
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <LocationFields
+        required
+        value={emptyPlaceSelection()}
+        onChange={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByLabelText("Place name"), "San Luis");
+    await waitFor(() =>
+      expect(
+        screen.getByText("Place search isn’t available right now."),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("puts current location on the search field when the browser can geolocate", () => {
     vi.stubGlobal("navigator", {
       ...navigator,
       geolocation: { getCurrentPosition: vi.fn() },

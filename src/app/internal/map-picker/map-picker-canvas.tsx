@@ -9,11 +9,7 @@ import {
   isParentToMapPicker,
   type MapPickerToParent,
 } from "@/features/composer/map-picker-protocol";
-import {
-  mapTilerStyleProxySrc,
-  mapTilerStyleUrl,
-  publicMapTilerKey,
-} from "@/features/composer/maptiler";
+import { mapTilerStyleProxySrc } from "@/features/composer/maptiler";
 import { parsePlaceCoordinates } from "@/lib/place-coordinates";
 
 export function MapPickerCanvas() {
@@ -59,7 +55,6 @@ export function MapPickerCanvas() {
     };
 
     const startMap = async (
-      key: string,
       latitude: number | null,
       longitude: number | null,
     ) => {
@@ -67,10 +62,9 @@ export function MapPickerCanvas() {
       starting = true;
       maplibre = await import("maplibre-gl");
       if (cancelled || !container) return;
-      const styleKey = key.trim() || publicMapTilerKey();
       map = new maplibre.Map({
         container,
-        style: styleKey ? mapTilerStyleUrl(styleKey) : mapTilerStyleProxySrc,
+        style: mapTilerStyleProxySrc,
         center: [DEFAULT_MAP_CENTER.longitude, DEFAULT_MAP_CENTER.latitude],
         zoom: DEFAULT_MAP_CENTER.zoom,
         attributionControl: { compact: true },
@@ -102,11 +96,7 @@ export function MapPickerCanvas() {
       if (event.origin !== parentOrigin) return;
       if (!isParentToMapPicker(event.data)) return;
       if (event.data.type === "init") {
-        void startMap(
-          event.data.key,
-          event.data.latitude,
-          event.data.longitude,
-        );
+        void startMap(event.data.latitude, event.data.longitude);
         return;
       }
       placeMarker(event.data.latitude, event.data.longitude);

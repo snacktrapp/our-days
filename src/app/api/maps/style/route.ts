@@ -1,5 +1,6 @@
 import {
   mapTilerStyleUrl,
+  rewriteMapTilerStyleDocument,
   serverMapTilerKey,
 } from "@/features/composer/maptiler";
 import { mapsApiHeaders, mapsApiText, mapTilerUpstreamInit } from "../response";
@@ -21,13 +22,16 @@ export async function GET(request: Request) {
     return mapsApiText(502, `maptiler_upstream_failed ${upstream.status}`);
   }
 
-  const contentType =
-    upstream.headers.get("content-type") ?? "application/json";
-  return new Response(upstream.body, {
-    status: 200,
+  let payload: unknown;
+  try {
+    payload = await upstream.json();
+  } catch {
+    return mapsApiText(502, "maptiler_upstream_failed");
+  }
+
+  return Response.json(rewriteMapTilerStyleDocument(payload), {
     headers: {
       ...mapsApiHeaders,
-      "Content-Type": contentType,
       "Cache-Control": "public, max-age=3600",
     },
   });

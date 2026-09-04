@@ -146,6 +146,15 @@ async function openComposer(page: Page) {
   return page.locator(".new-moment-composer-dialog");
 }
 
+test("the header + toggles the type picker closed", async ({ page }) => {
+  await page.goto("/family");
+  const dialog = await openComposer(page);
+  await expect(dialog).toBeVisible();
+  await page.getByRole("button", { name: "Add moment" }).click();
+  await expect(dialog.locator(".composer-sheet")).toHaveClass(/is-closing/u);
+  await expect(dialog).toBeHidden();
+});
+
 test("type selection pops from the header add control and dismisses faster", async ({
   page,
 }) => {
