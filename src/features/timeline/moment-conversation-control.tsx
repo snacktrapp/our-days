@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -180,67 +179,58 @@ export function MomentConversationControl({
   const [leavingReactions, setLeavingReactions] = useState<
     typeof visibleReactions
   >([]);
-  const seededReactionPresence = useRef(false);
-  const previousReactionsRef = useRef(visibleReactions);
-  const enteringKeysRef = useRef(enteringKeys);
-  enteringKeysRef.current = enteringKeys;
+  const [previousReactions, setPreviousReactions] = useState(visibleReactions);
   const kindLabel = momentKindLabel(model);
   const controlLabel = conciseLabel(model.text);
 
-  useLayoutEffect(() => {
-    const previous = previousReactionsRef.current;
-    previousReactionsRef.current = visibleReactions;
-    if (!seededReactionPresence.current) {
-      seededReactionPresence.current = true;
-      return;
-    }
+  if (previousReactions !== visibleReactions) {
+    setPreviousReactions(visibleReactions);
     const nextKeys = new Set(
       visibleReactions.map((reaction) => reaction.presenceKey),
     );
     const previousKeys = new Set(
-      previous.map((reaction) => reaction.presenceKey),
+      previousReactions.map((reaction) => reaction.presenceKey),
     );
     const added = visibleReactions.filter(
       (reaction) => !previousKeys.has(reaction.presenceKey),
     );
-    const removed = previous.filter(
+    const removed = previousReactions.filter(
       (reaction) => !nextKeys.has(reaction.presenceKey),
     );
     if (overlayMotionReduced()) {
-      setEnteringKeys(new Set());
-      setLeavingReactions([]);
-      return;
-    }
-    if (added.length > 0) {
-      setEnteringKeys((current) => {
-        const next = new Set(current);
-        for (const reaction of added) next.add(reaction.presenceKey);
-        return next;
-      });
-    }
-    if (removed.length > 0) {
-      const entering = enteringKeysRef.current;
-      const fadeOut = removed.filter(
-        (reaction) => !entering.has(reaction.presenceKey),
-      );
-      const cancelEnter = removed.filter((reaction) =>
-        entering.has(reaction.presenceKey),
-      );
-      if (cancelEnter.length > 0) {
-        setEnteringKeys((current) => {
-          const next = new Set(current);
-          for (const reaction of cancelEnter) next.delete(reaction.presenceKey);
-          return next;
-        });
+      if (enteringKeys.size > 0) setEnteringKeys(new Set());
+      if (leavingReactions.length > 0) setLeavingReactions([]);
+    } else {
+      let nextEntering: Set<string> | null = null;
+      if (added.length > 0) {
+        nextEntering = new Set(enteringKeys);
+        for (const reaction of added) nextEntering.add(reaction.presenceKey);
       }
-      if (fadeOut.length > 0) {
-        setLeavingReactions((current) => [
-          ...current.filter((reaction) => !nextKeys.has(reaction.presenceKey)),
-          ...fadeOut,
-        ]);
+      if (removed.length > 0) {
+        const fadeOut = removed.filter(
+          (reaction) => !enteringKeys.has(reaction.presenceKey),
+        );
+        const cancelEnter = removed.filter((reaction) =>
+          enteringKeys.has(reaction.presenceKey),
+        );
+        if (cancelEnter.length > 0) {
+          nextEntering ??= new Set(enteringKeys);
+          for (const reaction of cancelEnter) {
+            nextEntering.delete(reaction.presenceKey);
+          }
+        }
+        if (fadeOut.length > 0) {
+          setLeavingReactions((current) => [
+            ...current.filter(
+              (reaction) => !nextKeys.has(reaction.presenceKey),
+            ),
+            ...fadeOut,
+          ]);
+        }
       }
+      if (nextEntering) setEnteringKeys(nextEntering);
     }
-  }, [visibleReactions]);
+  }
 
   useEffect(() => {
     if (leavingReactions.length === 0) return;
