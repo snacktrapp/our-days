@@ -828,9 +828,7 @@ export function MomentComposer({
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
       router.replace(
-        audience === "just_me"
-          ? `/people/${savedJournalPersonId}`
-          : "/family",
+        audience === "just_me" ? `/people/${savedJournalPersonId}` : "/family",
       );
       return;
     }
@@ -1486,39 +1484,39 @@ export function MomentComposer({
                     </div>
                   </fieldset>
                   {audience === "just_me" ? null : (
-                  <fieldset className="people-tags">
-                    <legend>Who else was part of this?</legend>
-                    <div>
-                      {taggablePeople
-                        .filter(
-                          (person) =>
-                            !connectedExperience ||
-                            person.id !== journalPersonId,
-                        )
-                        .map((person) => {
-                          const isPreviewJournalPerson =
-                            !connectedExperience &&
-                            person.id === journalPersonId;
-                          return (
-                            <label key={person.id}>
-                              <input
-                                type="checkbox"
-                                checked={taggedPersonIds.includes(person.id)}
-                                disabled={isPreviewJournalPerson}
-                                onChange={() => toggleTaggedPerson(person.id)}
-                              />
-                              <span
-                                className={`tag-person-dot dot-${person.accent}`}
-                                aria-hidden="true"
-                              >
-                                {person.initial}
-                              </span>
-                              {person.name}
-                            </label>
-                          );
-                        })}
-                    </div>
-                  </fieldset>
+                    <fieldset className="people-tags">
+                      <legend>Who else was part of this?</legend>
+                      <div>
+                        {taggablePeople
+                          .filter(
+                            (person) =>
+                              !connectedExperience ||
+                              person.id !== journalPersonId,
+                          )
+                          .map((person) => {
+                            const isPreviewJournalPerson =
+                              !connectedExperience &&
+                              person.id === journalPersonId;
+                            return (
+                              <label key={person.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={taggedPersonIds.includes(person.id)}
+                                  disabled={isPreviewJournalPerson}
+                                  onChange={() => toggleTaggedPerson(person.id)}
+                                />
+                                <span
+                                  className={`tag-person-dot dot-${person.accent}`}
+                                  aria-hidden="true"
+                                >
+                                  {person.initial}
+                                </span>
+                                {person.name}
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </fieldset>
                   )}
                   {mode !== "location" ? (
                     <>

@@ -241,7 +241,9 @@ describe("TimelineFeed", () => {
       <TimelineFeed
         model={{
           ...model,
-          switcher: [{ label: "Person", href: "/people/person", current: true }],
+          switcher: [
+            { label: "Person", href: "/people/person", current: true },
+          ],
           entries: [
             {
               id: "private",

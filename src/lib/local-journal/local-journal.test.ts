@@ -13,15 +13,19 @@ import {
   localAlexPersonId,
   localCircleId,
   localFamilyEmail,
+  localJordanMembershipId,
+  localJordanPersonId,
 } from "./ids";
 import {
   createLocalInsightMoment,
   createLocalWrittenMoment,
   findLocalAccount,
   resetLocalJournalForTests,
+  setLocalReaction,
   type LocalAccess,
 } from "./store";
 import { publishVerifiedPhotoMoment } from "./media-coordinator";
+import { loadLocalJournalContext, loadLocalTimeline } from "./views";
 
 const access: LocalAccess = {
   membershipId: localAlexMembershipId,
@@ -143,5 +147,65 @@ describe("local journal happy path", () => {
     expect(momentId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
     );
+  });
+
+  it("keeps Just Me on the author's journal only", async () => {
+    const jordanAccess: LocalAccess = {
+      membershipId: localJordanMembershipId,
+      circleId: localCircleId,
+      personId: localJordanPersonId,
+      role: "member",
+    };
+    await createLocalWrittenMoment(access, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "A porch thought just for me.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      audience: "just_me",
+    });
+    const context = await loadLocalJournalContext(access);
+    const family = await loadLocalTimeline(access, context, { pages: 1 });
+    const ownJournal = await loadLocalTimeline(access, context, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const otherJournal = await loadLocalTimeline(access, context, {
+      journalPersonId: localJordanPersonId,
+      pages: 1,
+    });
+    const jordanView = await loadLocalTimeline(
+      jordanAccess,
+      await loadLocalJournalContext(jordanAccess),
+      { journalPersonId: localAlexPersonId, pages: 1 },
+    );
+    const texts = (timeline: Awaited<ReturnType<typeof loadLocalTimeline>>) =>
+      timeline.entries.flatMap((entry) =>
+        entry.entryType === "moment" ? [entry.moment.text] : [],
+      );
+    const ownMoment = ownJournal.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "A porch thought just for me.",
+    );
+    expect(texts(family)).not.toContain("A porch thought just for me.");
+    expect(texts(ownJournal)).toContain("A porch thought just for me.");
+    expect(texts(otherJournal)).not.toContain("A porch thought just for me.");
+    expect(texts(jordanView)).not.toContain("A porch thought just for me.");
+    expect(ownMoment?.entryType).toBe("moment");
+    if (ownMoment?.entryType !== "moment") {
+      throw new Error("Just Me moment missing from the author's journal");
+    }
+    expect(ownMoment.moment.showJustMeBadge).toBe(true);
+    await expect(
+      setLocalReaction(jordanAccess, {
+        momentId: ownMoment.moment.id,
+        reactionId: "held-close",
+      }),
+    ).rejects.toThrow("That response could not be saved.");
   });
 });

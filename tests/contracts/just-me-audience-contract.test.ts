@@ -12,7 +12,9 @@ const migration = readFileSync(
 
 describe("Just Me audience database contract", () => {
   it("stores audience on moments with a locked family default", () => {
-    expect(migration).toContain("add column audience text not null default 'family'");
+    expect(migration).toContain(
+      "add column audience text not null default 'family'",
+    );
     expect(migration).toContain("audience in ('family', 'just_me')");
     expect(migration).toContain("kind <> 'insight' or audience = 'family'");
   });

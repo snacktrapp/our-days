@@ -297,9 +297,7 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("radio", { name: "Family" })).toBeChecked();
     await user.click(screen.getByRole("radio", { name: "Just Me" }));
     expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
-    expect(
-      screen.queryByRole("checkbox", { name: /Molly/ }),
-    ).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
