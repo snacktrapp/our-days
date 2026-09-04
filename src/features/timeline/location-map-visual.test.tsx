@@ -7,7 +7,7 @@ describe("LocationMapVisual", () => {
     vi.unstubAllEnvs();
   });
 
-  it("uses the same-origin proxy when the public key is missing", () => {
+  it("keeps the illustration when the public key is missing", () => {
     render(
       <LocationMapVisual
         place="The porch"
@@ -15,9 +15,9 @@ describe("LocationMapVisual", () => {
         longitude={-119.93}
       />,
     );
-    expect(
-      screen.getByRole("img", { name: "Map of The porch" }),
-    ).toHaveAttribute("src", "/api/maps/static?lat=39.2&lng=-119.93");
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(document.querySelector(".map-water")).toBeInTheDocument();
+    expect(document.querySelector(".memory-map-live")).toBeNull();
   });
 
   it("keeps the illustration when coordinates are missing", () => {
@@ -51,10 +51,8 @@ describe("LocationMapVisual", () => {
     expect(
       screen.getByText("© MapTiler © OpenStreetMap contributors"),
     ).toBeVisible();
-    expect(document.querySelector(".place-pin")).toHaveStyle({
-      top: "50%",
-      left: "50%",
-    });
+    expect(document.querySelector(".memory-map-live .place-pin")).toBeTruthy();
+    expect(document.querySelector(".place-pin")).not.toHaveAttribute("style");
   });
 
   it("uses a different static map for a different pin", () => {

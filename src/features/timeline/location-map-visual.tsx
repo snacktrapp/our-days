@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  publicMapTilerKey,
   staticMapImageSrc,
   staticMapProxySrc,
 } from "@/features/composer/maptiler";
@@ -19,12 +20,15 @@ export function LocationMapVisual({
   className?: string;
 }>) {
   const coordinates = parsePlaceCoordinates(latitude, longitude);
-  const directUrl = coordinates
-    ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
-    : "";
-  const proxyUrl = coordinates
-    ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
-    : "";
+  const canRequestLiveMap = Boolean(publicMapTilerKey());
+  const directUrl =
+    canRequestLiveMap && coordinates
+      ? staticMapImageSrc(coordinates.latitude, coordinates.longitude)
+      : "";
+  const proxyUrl =
+    canRequestLiveMap && coordinates
+      ? staticMapProxySrc(coordinates.latitude, coordinates.longitude)
+      : "";
   const mapKey = coordinates
     ? `${coordinates.latitude},${coordinates.longitude}`
     : "illustration";
@@ -95,18 +99,7 @@ function LocationMapFrame({
           <span className="map-road road-two" />
         </>
       )}
-      <span
-        className="place-pin"
-        aria-hidden="true"
-        style={
-          showLiveMap
-            ? {
-                top: "50%",
-                left: "50%",
-              }
-            : undefined
-        }
-      >
+      <span className="place-pin" aria-hidden="true">
         <i />
       </span>
     </div>
