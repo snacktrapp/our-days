@@ -6733,6 +6733,16 @@ button:focus-visible,
   -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
 }
 
+.new-moment-composer-dialog.composer-type-picker .composer-sheet,
+.new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet,
+:root[data-theme="light"]
+  .new-moment-composer-dialog.composer-type-picker
+  .header-drawer-surface.composer-sheet {
+  overflow: hidden;
+  border-radius: 14px;
+}
+
 .header-drawer-close {
   width: 44px;
   height: 44px;
