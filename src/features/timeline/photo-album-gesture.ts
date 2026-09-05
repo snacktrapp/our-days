@@ -124,6 +124,41 @@ export function pairTransform(pair: AlbumPair): string {
   return pair.direction === 1 ? "translateX(0%)" : "translateX(-50%)";
 }
 
+/** Pixel track math for a stage whose slides are exactly `slideWidth` wide. */
+export function pairSlideTransform(
+  pair: AlbumPair,
+  slideWidth: number,
+): string {
+  const usePx = slideWidth > 0;
+  const start = pair.direction === 1 ? 0 : usePx ? -slideWidth : -100;
+  const end = pair.direction === 1 ? (usePx ? -slideWidth : -100) : 0;
+  const unit = usePx ? "px" : "%";
+  if (pair.mode === "drag" || pair.mode === "pending") {
+    return usePx
+      ? `translateX(${start + pair.dx}px)`
+      : `translateX(calc(${start}% + ${pair.dx}px))`;
+  }
+  if (pair.mode === "snap") {
+    return `translateX(${end}${unit})`;
+  }
+  return `translateX(${start}${unit})`;
+}
+
+export function albumSlideWidth(
+  stage: HTMLElement | null,
+  track: HTMLElement | null = null,
+) {
+  if (track && track.clientWidth > 0) return track.clientWidth;
+  if (!stage) return 0;
+  if (typeof window === "undefined") return stage.clientWidth;
+  const styles = window.getComputedStyle(stage);
+  const padded =
+    stage.clientWidth -
+    (Number.parseFloat(styles.paddingLeft) || 0) -
+    (Number.parseFloat(styles.paddingRight) || 0);
+  return padded > 0 ? padded : stage.clientWidth;
+}
+
 export function clampDragDx(
   dx: number,
   direction: 1 | -1,

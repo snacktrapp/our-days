@@ -27,10 +27,11 @@ import {
   usePairedTap,
 } from "@/features/timeline/double-tap-heart";
 import {
+  albumSlideWidth,
   axisLockPx,
   clampDragDx,
   mountedAlbumIndexes,
-  pairTransform,
+  pairSlideTransform,
   slideMs,
   swipeThreshold,
   waitForFrameReady,
@@ -241,6 +242,8 @@ function PhotoLightboxLayer({
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const slideWidthRef = useRef(0);
   const pairRef = useRef<AlbumPair | null>(null);
   const pendingToRef = useRef<number | null>(null);
   const finishTimerRef = useRef<number | null>(null);
@@ -264,6 +267,12 @@ function PhotoLightboxLayer({
   function writePair(next: AlbumPair | null) {
     pairRef.current = next;
     setPair(next);
+  }
+
+  function readSlideWidth() {
+    const next = albumSlideWidth(stageRef.current, trackRef.current);
+    if (next > 0) slideWidthRef.current = next;
+    return slideWidthRef.current;
   }
 
   function frameEl(photoIndex: number): HTMLElement | null {
@@ -343,11 +352,7 @@ function PhotoLightboxLayer({
   function beginHorizontalDrag(rawDx: number) {
     const direction: 1 | -1 = rawDx < 0 ? 1 : -1;
     const to = wrapIndex(index + direction, album.length);
-    const dx = clampDragDx(
-      rawDx,
-      direction,
-      stageRef.current?.clientWidth ?? 0,
-    );
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
     pendingToRef.current = to;
     pendingDragRef.current = { to, direction, dx, commit: false };
     if (overlayMotionReduced()) return;
@@ -362,11 +367,7 @@ function PhotoLightboxLayer({
     const direction: 1 | -1 =
       rawDx === 0 ? (pairRef.current?.direction ?? 1) : rawDx < 0 ? 1 : -1;
     const to = wrapIndex(index + direction, album.length);
-    const dx = clampDragDx(
-      rawDx,
-      direction,
-      stageRef.current?.clientWidth ?? 0,
-    );
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
     if (pointerRef.current) pointerRef.current.dx = dx;
     const pending = pendingDragRef.current;
     if (pending) {
@@ -454,6 +455,27 @@ function PhotoLightboxLayer({
       cancelled = true;
     };
   }, [request]);
+
+  useLayoutEffect(() => {
+    if (album.length < 2) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const update = () => {
+      const width = albumSlideWidth(stage, trackRef.current);
+      if (width > 0) {
+        slideWidthRef.current = width;
+        stage.style.setProperty("--photo-lightbox-slide-width", `${width}px`);
+      }
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [album.length, objectUrl]);
 
   useEffect(
     () => () => {
@@ -661,8 +683,9 @@ function PhotoLightboxLayer({
   const parkedIndexes = mounted.filter(
     (photoIndex) => !reserved.has(photoIndex),
   );
+  const slideWidth = pair ? readSlideWidth() : slideWidthRef.current;
   const trackStyle: CSSProperties | undefined = pair
-    ? { transform: pairTransform(pair) }
+    ? { transform: pairSlideTransform(pair, slideWidth) }
     : undefined;
 
   function renderFrame(
@@ -743,6 +766,7 @@ function PhotoLightboxLayer({
           />
         ) : (
           <div
+            ref={trackRef}
             className={`photo-lightbox-track${pair ? " is-paired" : ""}${
               pair?.mode === "drag" ? " is-dragging" : ""
             }${pair?.mode === "snap" ? " is-sliding" : ""}${

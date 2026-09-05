@@ -390,34 +390,73 @@ describe("photo lightbox", () => {
     ).toBeVisible();
   });
 
+  function mockLightboxSlideWidth(width: number) {
+    const previous = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        if (
+          this.classList?.contains("photo-lightbox-stage") ||
+          this.classList?.contains("photo-lightbox-track")
+        ) {
+          return width;
+        }
+        return 0;
+      },
+    });
+    return () => {
+      if (previous) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", previous);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+    };
+  }
+
   it("follows a horizontal drag live, then snaps past the threshold", async () => {
-    await openAlbumLightbox();
-    const stage = lightboxStage();
-    fireEvent.pointerDown(stage, {
-      pointerId: 4,
-      pointerType: "touch",
-      clientX: 180,
-      clientY: 80,
-    });
-    fireEvent.pointerMove(stage, {
-      pointerId: 4,
-      pointerType: "touch",
-      clientX: 120,
-      clientY: 84,
-    });
-    expect(screen.getByRole("img", { name: "First light" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Last light" })).toBeVisible();
-    expect(lightboxTrack()).toHaveAttribute("data-phase", "drag");
-    expect(lightboxTrack()).toHaveAttribute("data-dx", "-60");
-    expect((lightboxTrack() as HTMLElement).style.transform).toContain("-60px");
-    fireEvent.pointerUp(stage, {
-      pointerId: 4,
-      pointerType: "touch",
-      clientX: 120,
-      clientY: 84,
-    });
-    expect(lightboxTrack()).toHaveAttribute("data-direction", "next");
-    expect(lightboxTrack()).toHaveClass("is-sliding");
+    const restoreWidth = mockLightboxSlideWidth(390);
+    try {
+      await openAlbumLightbox();
+      const stage = lightboxStage();
+      expect(stage.style.getPropertyValue("--photo-lightbox-slide-width")).toBe(
+        "390px",
+      );
+      fireEvent.pointerDown(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 80,
+      });
+      fireEvent.pointerMove(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
+      expect(screen.getByRole("img", { name: "First light" })).toBeVisible();
+      expect(screen.getByRole("img", { name: "Last light" })).toBeVisible();
+      expect(lightboxTrack()).toHaveAttribute("data-phase", "drag");
+      expect(lightboxTrack()).toHaveAttribute("data-dx", "-60");
+      expect((lightboxTrack() as HTMLElement).style.transform).toBe(
+        "translateX(-60px)",
+      );
+      fireEvent.pointerUp(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
+      expect(lightboxTrack()).toHaveAttribute("data-direction", "next");
+      expect(lightboxTrack()).toHaveClass("is-sliding");
+      expect((lightboxTrack() as HTMLElement).style.transform).toBe(
+        "translateX(-390px)",
+      );
+    } finally {
+      restoreWidth();
+    }
   });
 
   it("springs back when a horizontal drag is released before the threshold", async () => {
