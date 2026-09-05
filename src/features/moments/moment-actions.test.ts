@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
 vi.mock("@/lib/auth/journal-access", () => ({

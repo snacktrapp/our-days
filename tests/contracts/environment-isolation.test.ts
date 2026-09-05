@@ -832,6 +832,18 @@ describe("Our Days environment isolation", () => {
     },
   );
 
+  it("allows URL-safe VAPID keys without treating them as privileged credentials", () => {
+    expect(() =>
+      validateOurDaysEnvironment({
+        ...productionEnvironment,
+        NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY:
+          "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY:
+          "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects legacy Supabase aliases even in detached mode", () => {
     expectUnsafe(
       {

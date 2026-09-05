@@ -5897,6 +5897,33 @@ button:focus-visible,
   margin: 0;
 }
 
+.notification-preference {
+  margin: 0;
+}
+
+.notification-preference .account-tool-link {
+  border-top: 1px solid var(--hairline);
+}
+
+.notification-preference-note,
+.notification-preference-message {
+  margin: 0;
+  padding: 10px 13px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.notification-preference-message {
+  padding-top: 0;
+  color: var(--ink);
+}
+
+.notification-preference .account-tool-link:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .account-tool-link,
 .account-sign-out button {
   min-height: 72px;
@@ -6264,7 +6291,8 @@ html[data-theme].overlay-open .app-shell::before,
 .invitation-status,
 .pending-invitation-list small,
 .settings-empty-copy,
-.settings-delivery-boundary p {
+.settings-delivery-boundary p,
+.notification-preference-note {
   color: var(--muted) !important;
 }
 

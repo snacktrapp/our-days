@@ -37,6 +37,8 @@ Local no-Docker development does not need GitHub, Vercel, or Supabase credential
 | `OUR_DAYS_OAUTH_STATE_SECRET`                                    | Optional local HMAC                        | Set on the existing Vercel project if first-party OAuth is enabled there                                                                                   | —                                                                  |
 | `OUR_DAYS_PHOTO_WORKER_EMAIL` / `OUR_DAYS_PHOTO_WORKER_PASSWORD` | empty unless running photo workers locally | Only if Production already uses them                                                                                                                       | Allowlisted Auth identity with **no** family membership            |
 | `NEXT_PUBLIC_MAPTILER_KEY`                                       | Optional MapTiler **public** web key. Leave empty for “Map unavailable”. | Optional on Production **and** Preview. Public key only — never an admin/secret MapTiler token.                                                             | —                                                                  |
+| `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`                          | empty unless testing hosted push locally   | Production **and** Preview. Browser VAPID public key only.                                                                                                 | —                                                                  |
+| `OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY`                            | empty                                      | Production **and** Preview. Server-only VAPID private key — never `NEXT_PUBLIC_`, never a PEM, never a Supabase service-role value.                        | —                                                                  |
 
 Google and X app setup (redirect URIs, email permission, no public signup) is in `docs/operations/OAUTH_SIGN_IN.md`.
 
@@ -57,6 +59,8 @@ Required public / non-secret names:
 Optional:
 
 - `NEXT_PUBLIC_MAPTILER_KEY` — MapTiler public web key for the shared Place picker (Location entry and Details on every other type). Leave unset until it exists in the Vercel dashboard; typed labels still save, the closed row still matches date/time chrome, and the map shows “Map unavailable.”
+- `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` — Web Push VAPID public key so Account can opt in to phone banners. Leave unset until Brian generates the pair; the Enable control stays visible and the in-app activity center still works.
+- `OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY` — matching server-only VAPID private key. Enable Preview for this secret too. Never a service-role key and never paste the value into chat.
 
 Also enable Preview for the current Production values of `OUR_DAYS_PHOTO_POSTING_MODE`, `OUR_DAYS_MEDIA_DELIVERY_MODE`, and `OUR_DAYS_PHOTO_WORKER_EMAIL` / `OUR_DAYS_PHOTO_WORKER_PASSWORD` when Production already uses the verified photo worker.
 

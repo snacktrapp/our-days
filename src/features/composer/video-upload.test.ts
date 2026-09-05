@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/features/family-settings/web-push-actions", () => ({
+  deliverPublishedMomentPushAction: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 import type { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
   acceptedVideoMime,
