@@ -150,23 +150,41 @@ function dateLabel(date: string) {
   }).format(new Date(year, month - 1, day));
 }
 
+function optimisticUploadFractionLabel(upload: OptimisticMediaUpload) {
+  if (upload.totalFiles > 1) {
+    return `Uploading ${Math.min(upload.totalFiles, Math.max(1, upload.completedFiles + 1))} of ${upload.totalFiles}…`;
+  }
+  return "Uploading…";
+}
+
 function optimisticUploadChipLabel(upload: OptimisticMediaUpload) {
-  if (upload.stage.state === "uploading") {
-    if (upload.totalFiles > 1) {
-      return `Uploading ${Math.min(upload.totalFiles, upload.completedFiles + 1)} of ${upload.totalFiles}…`;
-    }
-    return "Uploading…";
-  }
-  if (upload.stage.state === "processing") {
-    return upload.kind === "video"
-      ? "Adding your video…"
-      : "Adding your photo…";
-  }
   if (upload.stage.state === "published") return "Added to timeline";
   if (upload.stage.state === "failed") return "Upload failed";
   if (upload.stage.state === "stopping") return "Stopping upload";
-  if (upload.stage.state === "finishing") return "Finishing";
-  return "Preparing upload";
+  return optimisticUploadFractionLabel(upload);
+}
+
+function optimisticUploadChipProgress(
+  upload: OptimisticMediaUpload,
+): number | null {
+  if (
+    upload.stage.state === "failed" ||
+    upload.stage.state === "published" ||
+    upload.stage.state === "stopping"
+  ) {
+    return null;
+  }
+  if (upload.stage.state === "uploading") return upload.stage.progress;
+  if (upload.totalFiles > 1) {
+    return Math.min(1, upload.completedFiles / upload.totalFiles);
+  }
+  if (
+    upload.stage.state === "processing" ||
+    upload.stage.state === "finishing"
+  ) {
+    return 1;
+  }
+  return 0;
 }
 
 function optimisticMomentChipLabel(save: OptimisticMomentSave) {
@@ -296,10 +314,7 @@ function serverShelfChip({
     return {
       alert: cancellationResult?.message ?? null,
       busy: true,
-      label:
-        processingCount === 1
-          ? "Adding your photo…"
-          : `Adding ${processingCount} photos…`,
+      label: "Uploading…",
     };
   }
 
@@ -321,11 +336,10 @@ export function PhotoStatusShelfView(props: PhotoStatusShelfViewProps) {
 
 function uploadChip(upload: OptimisticMediaUpload): PhotoStatusChipViewProps {
   const failed = upload.stage.state === "failed";
-  const uploading = upload.stage.state === "uploading";
   return {
     busy: !failed && upload.stage.state !== "published",
     label: optimisticUploadChipLabel(upload),
-    progress: uploading ? upload.stage.progress : null,
+    progress: optimisticUploadChipProgress(upload),
     primaryAction: failed
       ? upload.retryable
         ? {

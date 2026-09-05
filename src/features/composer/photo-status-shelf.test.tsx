@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -34,6 +40,7 @@ import { PhotoStatusShelf } from "./photo-status-shelf";
 import {
   addOptimisticMediaUpload,
   clearOptimisticMediaUploads,
+  updateOptimisticMediaUpload,
 } from "./optimistic-media-upload";
 import {
   clearOptimisticMomentSaves,
@@ -180,7 +187,7 @@ describe("PhotoStatusShelf", () => {
 
     render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
 
-    expect(screen.getByText("Preparing upload")).toBeVisible();
+    expect(screen.getByText("Uploading…")).toBeVisible();
     expect(screen.queryByText(/Will appear on Apr 3, 2021/u)).toBeNull();
     expect(
       screen.queryByRole("region", { name: "Media being added" }),
@@ -280,6 +287,108 @@ describe("PhotoStatusShelf", () => {
     expect(
       screen.getAllByRole("region", { name: "Private photo status" }),
     ).toHaveLength(1);
+  });
+
+  it("keeps Uploading X of Y through every in-batch stage", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    addOptimisticMediaUpload({
+      id: "batch-upload",
+      circleId,
+      kind: "photo",
+      body: "Batch",
+      occurredOn: "2026-09-01",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:batch",
+      totalFiles: 4,
+      completedFiles: 1,
+      stage: { state: "uploading", progress: 0.4 },
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+
+    expect(screen.getByText("Uploading 2 of 4…")).toBeVisible();
+    expect(
+      document.querySelector(".photo-status-chip")?.childElementCount,
+    ).toBe(2);
+    expect(screen.getByRole("progressbar")).toHaveValue(0.4);
+
+    act(() => {
+      updateOptimisticMediaUpload("batch-upload", {
+        completedFiles: 1,
+        stage: { state: "finishing" },
+      });
+    });
+    expect(screen.getByText("Uploading 2 of 4…")).toBeVisible();
+    expect(screen.queryByText(/Adding (your )?photo/u)).toBeNull();
+    expect(
+      document.querySelector(".photo-status-chip")?.childElementCount,
+    ).toBe(2);
+
+    act(() => {
+      updateOptimisticMediaUpload("batch-upload", {
+        completedFiles: 2,
+        stage: { state: "processing" },
+      });
+    });
+    expect(screen.getByText("Uploading 3 of 4…")).toBeVisible();
+    expect(screen.queryByText("Adding your photo…")).toBeNull();
+    expect(screen.queryByText("Adding photo…")).toBeNull();
+    expect(
+      document.querySelector(".photo-status-chip")?.childElementCount,
+    ).toBe(2);
+    expect(screen.getByRole("progressbar")).toHaveValue(0.5);
+
+    act(() => {
+      updateOptimisticMediaUpload("batch-upload", {
+        completedFiles: 2,
+        stage: { state: "preparing" },
+      });
+    });
+    expect(screen.getByText("Uploading 3 of 4…")).toBeVisible();
+    expect(
+      document.querySelector(".photo-status-chip")?.childElementCount,
+    ).toBe(2);
+
+    act(() => {
+      updateOptimisticMediaUpload("batch-upload", {
+        completedFiles: 2,
+        stage: { state: "uploading", progress: 0.62 },
+      });
+    });
+    expect(screen.getByText("Uploading 3 of 4…")).toBeVisible();
+    expect(screen.getByRole("progressbar")).toHaveValue(0.62);
+    expect(
+      document.querySelector(".photo-status-chip")?.childElementCount,
+    ).toBe(2);
+  });
+
+  it("keeps Uploading… for a single photo instead of Adding photo copy", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    addOptimisticMediaUpload({
+      id: "single-upload",
+      circleId,
+      kind: "photo",
+      body: "One photo",
+      occurredOn: "2026-09-01",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:single",
+      stage: { state: "processing" },
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+
+    expect(screen.getByText("Uploading…")).toBeVisible();
+    expect(screen.queryByText("Adding your photo…")).toBeNull();
+    expect(screen.queryByText("Adding photo…")).toBeNull();
+    expect(screen.getByRole("progressbar")).toHaveValue(1);
   });
 
   it.each([
@@ -438,7 +547,8 @@ describe("PhotoStatusShelf", () => {
     });
     render(<PhotoStatusShelf circleId={circleId} />);
 
-    expect(await screen.findByText("Adding your photo…")).toBeVisible();
+    expect(await screen.findByText("Uploading…")).toBeVisible();
+    expect(screen.queryByText("Adding your photo…")).toBeNull();
     expect(screen.queryByRole("button", { name: /Cancel upload/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Try finishing" })).toBeNull();
     await waitFor(() =>
