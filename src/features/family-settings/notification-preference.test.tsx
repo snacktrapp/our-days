@@ -56,14 +56,16 @@ function stubPushEnvironment(options?: {
     configurable: true,
     value: {},
   });
+  const registration = {
+    pushManager: { subscribe, getSubscription },
+  };
   Object.defineProperty(navigator, "serviceWorker", {
     configurable: true,
     value: {
-      register: vi.fn().mockResolvedValue({
-        pushManager: { subscribe, getSubscription },
-      }),
-      ready: Promise.resolve({
-        pushManager: { subscribe, getSubscription },
+      register: vi.fn().mockResolvedValue(registration),
+      getRegistration: vi.fn().mockResolvedValue(registration),
+      ready: new Promise(() => {
+        // Never settle — the switch must not wait on serviceWorker.ready.
       }),
     },
   });
@@ -122,6 +124,16 @@ describe("NotificationPreference", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
     expect(screen.getByText("Not available yet.")).toBeVisible();
     expect(screen.queryByText(/Home Screen/u)).toBeNull();
+  });
+
+  it("lets the switch turn on before a service worker is ready", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+    stubPushEnvironment();
+
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
   it("keeps the Home Screen note under the row on iPhone", async () => {

@@ -43,7 +43,8 @@ async function currentPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
   }
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return null;
   return registration.pushManager.getSubscription();
 }
 
@@ -156,7 +157,8 @@ export function NotificationPreference() {
   };
 
   const on = state === "on";
-  const canToggle = configured && !busy && (state === "off" || state === "on");
+  const canToggle =
+    configured && !busy && state !== "blocked" && state !== "unsupported";
   const helper = !configured
     ? "Not available yet."
     : isIosDevice() && !isStandaloneDisplay()
