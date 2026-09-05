@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   deleteWebPushSubscriptionAction,
   saveWebPushSubscriptionAction,
@@ -39,6 +39,18 @@ function isStandaloneDisplay() {
   );
 }
 
+function isIosBrowserTab() {
+  return isIosDevice() && !isStandaloneDisplay();
+}
+
+function pushApisAvailable() {
+  return (
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window
+  );
+}
+
 async function currentPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
@@ -52,18 +64,23 @@ export function NotificationPreference() {
   const [state, setState] = useState<PreferenceState>("loading");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const helperRef = useRef<HTMLParagraphElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
   const configured = vapidPublicKey().length > 0;
 
   useEffect(() => {
     let cancelled = false;
     const readState = async () => {
-      if (
-        !configured ||
-        !("Notification" in window) ||
-        !("serviceWorker" in navigator) ||
-        !("PushManager" in window)
-      ) {
-        if (!cancelled) setState(configured ? "unsupported" : "off");
+      if (!configured) {
+        if (!cancelled) setState("off");
+        return;
+      }
+      if (!pushApisAvailable()) {
+        // iOS Safari tabs lack PushManager. Keep the switch off — not
+        // unsupported — so tap can focus the Home Screen helper.
+        if (!cancelled) {
+          setState(isIosBrowserTab() ? "off" : "unsupported");
+        }
         return;
       }
       if (Notification.permission === "denied") {
@@ -79,16 +96,31 @@ export function NotificationPreference() {
     };
   }, [configured]);
 
+  useEffect(() => {
+    if (window.location.hash !== "#notifications") return;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById("notifications")
+        ?.scrollIntoView({ block: "nearest" });
+      if (isIosBrowserTab()) {
+        helperRef.current?.focus();
+        return;
+      }
+      rowRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const enable = async () => {
     setMessage(null);
     if (!configured) {
       return;
     }
-    if (
-      !("Notification" in window) ||
-      !("serviceWorker" in navigator) ||
-      !("PushManager" in window)
-    ) {
+    if (isIosBrowserTab()) {
+      helperRef.current?.focus();
+      return;
+    }
+    if (!pushApisAvailable()) {
       setState("unsupported");
       return;
     }
@@ -157,31 +189,50 @@ export function NotificationPreference() {
   };
 
   const on = state === "on";
+  const homeScreenHelp = configured && isIosBrowserTab();
   const canToggle =
-    configured && !busy && state !== "blocked" && state !== "unsupported";
+    configured &&
+    !busy &&
+    state !== "blocked" &&
+    (state !== "unsupported" || homeScreenHelp);
   const helper = !configured
     ? "Not available yet."
-    : isIosDevice() && !isStandaloneDisplay()
+    : homeScreenHelp
       ? "On iPhone and iPad, add Our Days to your Home Screen first."
       : null;
 
   return (
-    <div className="notification-preference">
+    <div className="notification-preference" id="notifications">
       <button
+        ref={rowRef}
         className="notification-preference-row"
         type="button"
         role="switch"
         aria-checked={on}
         aria-label="Notifications"
+        aria-describedby={helper ? "notification-preference-note" : undefined}
         disabled={!canToggle}
         onClick={() => {
+          if (homeScreenHelp) {
+            helperRef.current?.focus();
+            return;
+          }
           void (on ? disable() : enable());
         }}
       >
         <strong>Notifications</strong>
         <span className="notification-switch" aria-hidden="true" />
       </button>
-      {helper ? <p className="notification-preference-note">{helper}</p> : null}
+      {helper ? (
+        <p
+          ref={helperRef}
+          id="notification-preference-note"
+          className="notification-preference-note"
+          tabIndex={homeScreenHelp ? -1 : undefined}
+        >
+          {helper}
+        </p>
+      ) : null}
       {message ? (
         <p className="notification-preference-message" role="status">
           {message}

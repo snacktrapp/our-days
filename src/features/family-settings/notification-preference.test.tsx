@@ -17,14 +17,24 @@ const originalUserAgent = navigator.userAgent;
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+  window.location.hash = "";
   Reflect.deleteProperty(window, "Notification");
   Reflect.deleteProperty(navigator, "serviceWorker");
   Reflect.deleteProperty(window, "PushManager");
+  Reflect.deleteProperty(navigator, "standalone");
   Object.defineProperty(navigator, "userAgent", {
     configurable: true,
     value: originalUserAgent,
   });
 });
+
+function stubIphoneUserAgent() {
+  Object.defineProperty(navigator, "userAgent", {
+    configurable: true,
+    value:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+  });
+}
 
 function stubPushEnvironment(options?: {
   permission?: NotificationPermission;
@@ -126,6 +136,16 @@ describe("NotificationPreference", () => {
     expect(screen.queryByText(/Home Screen/u)).toBeNull();
   });
 
+  it("focuses the Notifications switch from the Account hash", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+    stubPushEnvironment();
+    window.location.hash = "#notifications";
+
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toHaveFocus());
+  });
+
   it("lets the switch turn on before a service worker is ready", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     stubPushEnvironment();
@@ -136,20 +156,86 @@ describe("NotificationPreference", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
-  it("keeps the Home Screen note under the row on iPhone", async () => {
+  it("keeps the switch pressable on an iPhone Safari tab and focuses Home Screen help", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+    stubIphoneUserAgent();
+
+    const user = userEvent.setup();
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    const note = await screen.findByText(
+      "On iPhone and iPad, add Our Days to your Home Screen first.",
+    );
+    expect(note).toBeVisible();
+    expect(screen.queryByText(/not available yet/iu)).toBeNull();
+
+    await user.click(toggle);
+    expect(save).not.toHaveBeenCalled();
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(toggle).toBeEnabled();
+    expect(note).toHaveFocus();
+  });
+
+  it("does not subscribe from an iPhone Safari tab even when push APIs exist", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     stubPushEnvironment();
-    Object.defineProperty(navigator, "userAgent", {
-      configurable: true,
-      value:
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-    });
+    stubIphoneUserAgent();
 
+    const user = userEvent.setup();
     render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await user.click(toggle);
+    expect(save).not.toHaveBeenCalled();
+    expect(toggle).toHaveAttribute("aria-checked", "false");
     expect(
-      await screen.findByText(
+      screen.getByText(
         "On iPhone and iPad, add Our Days to your Home Screen first.",
       ),
-    ).toBeVisible();
+    ).toHaveFocus();
+  });
+
+  it("subscribes from an iPhone Home Screen app", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+    stubPushEnvironment();
+    stubIphoneUserAgent();
+    Object.defineProperty(navigator, "standalone", {
+      configurable: true,
+      value: true,
+    });
+    save.mockResolvedValue({ ok: true, message: "Notifications are on." });
+
+    const user = userEvent.setup();
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    expect(screen.queryByText(/Home Screen/u)).toBeNull();
+
+    await user.click(toggle);
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("keeps the switch disabled on iPhone when VAPID is missing", async () => {
+    stubIphoneUserAgent();
+
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeDisabled());
+    expect(screen.getByText("Not available yet.")).toBeVisible();
+    expect(screen.queryByText(/Home Screen/u)).toBeNull();
+  });
+
+  it("disables the switch when this browser cannot receive push", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+
+    render(<NotificationPreference />);
+    const toggle = await screen.findByRole("switch", { name: "Notifications" });
+    await waitFor(() => expect(toggle).toBeDisabled());
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByText(/Home Screen/u)).toBeNull();
+    expect(screen.queryByText(/not available yet/iu)).toBeNull();
   });
 });

@@ -1488,6 +1488,53 @@ button:focus-visible,
   font-size: 0.82rem;
 }
 
+.phone-notifications-announcement {
+  position: relative;
+  z-index: 2;
+  width: min(calc(100% - 32px), 398px);
+  margin: 8px auto 2px;
+  padding: 12px 14px 10px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--cream);
+}
+
+.phone-notifications-announcement p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.phone-notifications-announcement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.phone-notifications-announcement a,
+.phone-notifications-announcement button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.phone-notifications-announcement a {
+  color: var(--teal);
+}
+
+.phone-notifications-announcement button {
+  color: var(--muted);
+}
+
 .journal-error-shell .phone-stage {
   min-height: 100dvh;
 }
@@ -4603,6 +4650,7 @@ button:focus-visible,
 .memory-collections > article,
 .memory-empty,
 .timeline-empty-state,
+.phone-notifications-announcement,
 .trash-empty,
 .trash-list li,
 .family-settings-panel {
@@ -5992,6 +6040,11 @@ button:focus-visible,
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.notification-preference-note:focus {
+  outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
+  outline-offset: 2px;
 }
 
 .notification-preference-message {
