@@ -257,7 +257,14 @@ describe("MomentCard timeline media", () => {
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    const track = document.querySelector(".photo-card-pager-track");
+    expect(track).toHaveAttribute("data-direction", "next");
+    expect(track).toHaveClass("is-paired");
+    fireEvent.transitionEnd(track!, { propertyName: "transform" });
+    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
