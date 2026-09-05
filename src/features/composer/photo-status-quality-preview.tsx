@@ -1,12 +1,16 @@
 "use client";
 
-import { PhotoStatusShelfView } from "./photo-status-shelf";
+import {
+  PhotoStatusChipView,
+  PhotoStatusShelfView,
+} from "./photo-status-shelf";
 
 export function PhotoStatusQualityPreview() {
   return (
     <main className="photo-status-quality-preview">
       <h1>Private photo status</h1>
       <p>Mobile layout and accessibility fixture</p>
+      <PhotoStatusChipView busy label="Uploading 1 of 2…" progress={0.45} />
       <PhotoStatusShelfView
         cancellationResult={null}
         cancellingIds={new Set()}

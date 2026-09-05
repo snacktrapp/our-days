@@ -3893,14 +3893,11 @@ button:focus-visible,
   display: grid;
   gap: 8px;
   pointer-events: none;
-  overflow: visible;
+  overflow: hidden;
   border: 1px solid var(--hairline);
   border-radius: 18px;
-  background-color: var(--nav-pill-fill);
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--paper) 82%, transparent),
-    color-mix(in srgb, var(--paper) 82%, transparent)
-  );
+  background-color: color-mix(in srgb, var(--paper) 88%, var(--nav-pill-fill));
+  background-image: none;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(var(--nav-pill-blur));
   -webkit-backdrop-filter: blur(var(--nav-pill-blur));
@@ -3929,8 +3926,11 @@ button:focus-visible,
   top: auto;
   left: auto;
   right: auto;
-  width: auto;
-  margin: 0 18px;
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
+  );
+  margin: 0 auto 8px;
   pointer-events: auto;
 }
 .photo-status-result {
@@ -5997,11 +5997,8 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 :root[data-theme="light"] .photo-status-shelf {
-  background-color: var(--nav-pill-fill);
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--paper) 82%, transparent),
-    color-mix(in srgb, var(--paper) 82%, transparent)
-  );
+  background-color: color-mix(in srgb, var(--paper) 88%, var(--nav-pill-fill));
+  background-image: none;
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
