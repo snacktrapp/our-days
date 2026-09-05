@@ -3893,9 +3893,17 @@ button:focus-visible,
   display: grid;
   gap: 8px;
   pointer-events: none;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  overflow: visible;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background-color: var(--nav-pill-fill);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--paper) 82%, transparent),
+    color-mix(in srgb, var(--paper) 82%, transparent)
+  );
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(var(--nav-pill-blur));
+  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
 .photo-status-quality-preview {
   min-height: 100svh;
@@ -3935,19 +3943,21 @@ button:focus-visible,
 }
 .photo-status-chip {
   pointer-events: auto;
-  isolation: isolate;
-  overflow: hidden;
   display: grid;
   align-content: start;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 18px;
-  background-color: var(--nav-pill-fill);
-  background-image: none;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(var(--nav-pill-blur));
-  -webkit-backdrop-filter: blur(var(--nav-pill-blur));
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.photo-status-chip-copy,
+.photo-status-chip-detail,
+.photo-status-confirmation {
+  background: none;
+  border: 0;
+  box-shadow: none;
 }
 .photo-status-chip-copy {
   margin: 0;
@@ -3965,7 +3975,7 @@ button:focus-visible,
   font-size: 11px;
   line-height: 1.35;
 }
-.photo-status-chip progress {
+.photo-status-chip-bar {
   display: block;
   width: 100%;
   height: 6px;
@@ -3975,34 +3985,19 @@ button:focus-visible,
   border: 0;
   border-radius: 999px;
   overflow: hidden;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background: color-mix(in srgb, var(--ink) 28%, transparent);
-  box-shadow: none;
-  outline: none;
-  accent-color: var(--ochre);
-  color: var(--ochre);
-}
-.photo-status-chip progress::-webkit-progress-inner-element {
-  border: 0;
-  background: transparent;
-}
-.photo-status-chip progress::-webkit-progress-bar {
-  background: color-mix(in srgb, var(--ink) 28%, transparent);
-  border: 0;
-  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
   box-shadow: none;
 }
-.photo-status-chip progress::-webkit-progress-value {
-  background: var(--ochre);
+.photo-status-chip-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
 }
-.photo-status-chip progress::-moz-progress-bar {
-  background: var(--ochre);
-  border: 0;
-  border-radius: 999px;
+.photo-status-chip-indeterminate > span {
+  width: 36%;
 }
 .photo-status-confirmation {
   margin: 0;
@@ -5516,12 +5511,6 @@ button:focus-visible,
   opacity: 1;
 }
 
-.photo-status-shelf {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
 .photo-status-item,
 .photo-status-result,
 .photo-status-quality-preview {
@@ -5531,8 +5520,9 @@ button:focus-visible,
 }
 
 .photo-status-chip {
-  border-color: var(--hairline);
-  background-color: var(--nav-pill-fill);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--ink);
 }
 
@@ -6001,9 +5991,17 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 :root[data-theme="light"] .bottom-nav,
-:root[data-theme="light"] .topbar,
-:root[data-theme="light"] .photo-status-chip {
+:root[data-theme="light"] .topbar {
   background-color: var(--nav-pill-fill);
+  box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
+}
+
+:root[data-theme="light"] .photo-status-shelf {
+  background-color: var(--nav-pill-fill);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--paper) 82%, transparent),
+    color-mix(in srgb, var(--paper) 82%, transparent)
+  );
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
 
@@ -6068,7 +6066,7 @@ html[data-theme].overlay-open .app-shell::before,
   background: var(--cream);
 }
 
-:root[data-theme="light"] .photo-status-shelf {
+:root[data-theme="light"] .photo-status-chip {
   border: 0;
   background: transparent;
   box-shadow: none;

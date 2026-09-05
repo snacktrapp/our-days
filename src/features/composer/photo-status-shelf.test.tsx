@@ -158,7 +158,10 @@ describe("PhotoStatusShelf", () => {
     render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
 
     expect(screen.getByText("Uploading 2 of 4…")).toBeVisible();
-    expect(screen.getByRole("progressbar")).toHaveValue(0.4);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0.4",
+    );
     expect(screen.queryByRole("img")).toBeNull();
     expect(
       screen.queryByText("The exact note entered before Save."),
@@ -314,7 +317,10 @@ describe("PhotoStatusShelf", () => {
     expect(
       document.querySelector(".photo-status-chip")?.childElementCount,
     ).toBe(2);
-    expect(screen.getByRole("progressbar")).toHaveValue(0.4);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0.4",
+    );
 
     act(() => {
       updateOptimisticMediaUpload("batch-upload", {
@@ -340,7 +346,10 @@ describe("PhotoStatusShelf", () => {
     expect(
       document.querySelector(".photo-status-chip")?.childElementCount,
     ).toBe(2);
-    expect(screen.getByRole("progressbar")).toHaveValue(0.5);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0.5",
+    );
 
     act(() => {
       updateOptimisticMediaUpload("batch-upload", {
@@ -360,7 +369,10 @@ describe("PhotoStatusShelf", () => {
       });
     });
     expect(screen.getByText("Uploading 3 of 4…")).toBeVisible();
-    expect(screen.getByRole("progressbar")).toHaveValue(0.62);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "0.62",
+    );
     expect(
       document.querySelector(".photo-status-chip")?.childElementCount,
     ).toBe(2);
@@ -388,7 +400,10 @@ describe("PhotoStatusShelf", () => {
     expect(screen.getByText("Uploading…")).toBeVisible();
     expect(screen.queryByText("Adding your photo…")).toBeNull();
     expect(screen.queryByText("Adding photo…")).toBeNull();
-    expect(screen.getByRole("progressbar")).toHaveValue(1);
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "1",
+    );
   });
 
   it.each([

@@ -195,6 +195,31 @@ function optimisticMomentChipLabel(save: OptimisticMomentSave) {
   return "Adding milestone…";
 }
 
+function ChipProgressBar({ value }: Readonly<{ value?: number }>) {
+  const determinate = typeof value === "number";
+  return (
+    <div
+      className={
+        determinate
+          ? "photo-status-chip-bar"
+          : "photo-status-chip-bar photo-status-chip-indeterminate"
+      }
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={1}
+      aria-valuenow={determinate ? value : undefined}
+    >
+      <span
+        style={
+          determinate
+            ? { width: `${Math.min(100, Math.max(0, value * 100))}%` }
+            : undefined
+        }
+      />
+    </div>
+  );
+}
+
 function ChipActionButton({ action }: Readonly<{ action: ChipAction }>) {
   return (
     <button
@@ -231,13 +256,9 @@ export function PhotoStatusChipView({
         </p>
         {detail ? <p className="photo-status-chip-detail">{detail}</p> : null}
         {typeof progress === "number" ? (
-          <progress max={1} value={progress}>
-            {Math.round(progress * 100)}%
-          </progress>
+          <ChipProgressBar value={progress} />
         ) : busy ? (
-          <progress max={1} className="photo-status-chip-indeterminate">
-            Working
-          </progress>
+          <ChipProgressBar />
         ) : null}
         {confirmation ? (
           <p className="photo-status-confirmation">{confirmation}</p>
