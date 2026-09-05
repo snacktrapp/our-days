@@ -13,10 +13,12 @@ import { photoUploadResumeStore } from "./photo-upload-resume-store";
 import {
   clearOptimisticMediaUploads,
   emptyOptimisticMediaUploadSnapshot,
+  firstAcceptedMomentRefresh,
   firstPublishedMediaRefresh,
   optimisticMediaUploadSnapshot,
   removeOptimisticMediaUpload,
   removeOptimisticMediaUploadByIntake,
+  retryOptimisticMediaUpload,
   subscribeToOptimisticMediaUploads,
   updateOptimisticMediaUpload,
   type OptimisticMediaUpload,
@@ -52,6 +54,24 @@ export type PhotoStatusItem = Readonly<{
 type CancellationResult = Readonly<{
   id: string;
   message: string;
+}>;
+
+type ChipAction = Readonly<{
+  ariaLabel?: string;
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}>;
+
+export type PhotoStatusChipViewProps = Readonly<{
+  alert?: string | null;
+  busy?: boolean;
+  confirmation?: string | null;
+  detail?: string | null;
+  label: string;
+  primaryAction?: ChipAction | null;
+  progress?: number | null;
+  secondaryAction?: ChipAction | null;
 }>;
 
 type PhotoStatusShelfViewProps = Readonly<{
@@ -94,6 +114,13 @@ const terminalUploadMessage =
 type PhotoMomentStatus =
   "cancelled" | "needs_attention" | "processing" | "published" | "uploading";
 
+const activeUploadStates = new Set([
+  "finishing",
+  "preparing",
+  "stopping",
+  "uploading",
+]);
+
 function momentStatusFromShelfItem(
   item: PhotoStatusItem,
 ): PhotoMomentStatus | null {
@@ -123,260 +150,285 @@ function dateLabel(date: string) {
   }).format(new Date(year, month - 1, day));
 }
 
-function optimisticStageLabel(upload: OptimisticMediaUpload) {
-  if (upload.stage.state === "uploading") {
-    return `Uploading ${Math.round(upload.stage.progress * 100)}%`;
+function optimisticUploadFractionLabel(upload: OptimisticMediaUpload) {
+  if (upload.totalFiles > 1) {
+    return `Uploading ${Math.min(upload.totalFiles, Math.max(1, upload.completedFiles + 1))} of ${upload.totalFiles}…`;
   }
-  if (upload.stage.state === "processing") return "Preparing media";
+  return "Uploading…";
+}
+
+function optimisticUploadChipLabel(upload: OptimisticMediaUpload) {
   if (upload.stage.state === "published") return "Added to timeline";
-  if (upload.stage.state === "failed") return upload.stage.message;
+  if (upload.stage.state === "failed") return "Upload failed";
   if (upload.stage.state === "stopping") return "Stopping upload";
-  if (upload.stage.state === "finishing") return "Finishing";
-  return "Preparing upload";
+  return optimisticUploadFractionLabel(upload);
 }
 
-function OptimisticMediaCard({
-  upload,
-  pendingPlacement = false,
-}: Readonly<{
-  upload: OptimisticMediaUpload;
-  pendingPlacement?: boolean;
-}>) {
+function optimisticUploadChipProgress(
+  upload: OptimisticMediaUpload,
+): number | null {
+  if (
+    upload.stage.state === "failed" ||
+    upload.stage.state === "published" ||
+    upload.stage.state === "stopping"
+  ) {
+    return null;
+  }
+  if (upload.stage.state === "uploading") return upload.stage.progress;
+  if (upload.totalFiles > 1) {
+    return Math.min(1, upload.completedFiles / upload.totalFiles);
+  }
+  if (
+    upload.stage.state === "processing" ||
+    upload.stage.state === "finishing"
+  ) {
+    return 1;
+  }
+  return 0;
+}
+
+function optimisticMomentChipLabel(save: OptimisticMomentSave) {
+  if (save.stage.state === "failed") return "Couldn’t add";
+  if (save.mode === "bible-verse") return "Adding verse…";
+  if (save.mode === "thought") return "Adding note…";
+  if (save.mode === "location") return "Adding place…";
+  return "Adding milestone…";
+}
+
+function ChipActionButton({ action }: Readonly<{ action: ChipAction }>) {
   return (
-    <article
-      className={
-        pendingPlacement
-          ? "pending-media-item"
-          : "moment moment-media optimistic-media-moment"
-      }
+    <button
+      type="button"
+      aria-label={action.ariaLabel}
+      disabled={action.disabled}
+      onClick={action.onClick}
     >
-      <div className="connection">
-        <span
-          className={`avatar-node dot-${upload.journalPersonAccent}`}
-          aria-hidden="true"
-        >
-          {upload.journalPersonInitial}
-        </span>
-        <span className="moment-meta">
-          <strong>{upload.journalPersonName}</strong>
-          <span>
-            {dateLabel(upload.occurredOn)}
-            {upload.occurredTime ? ` | ${upload.occurredTime}` : ""}
-          </span>
-        </span>
-      </div>
-      <div
-        className="moment-card photo-card optimistic-media-card"
-        aria-busy={
-          upload.stage.state !== "failed" && upload.stage.state !== "published"
-        }
-      >
-        <div className="photo-frame">
-          {upload.kind === "video" ? (
-            <video
-              src={upload.previewUrl}
-              muted
-              playsInline
-              preload="metadata"
-            />
-          ) : (
-            // The preview is a private, device-local blob URL.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={upload.previewUrl} alt="" />
-          )}
-          <span className="optimistic-media-overlay">
-            {optimisticStageLabel(upload)}
-          </span>
-        </div>
-        <div className="card-copy">
-          <div className="photo-card-heading">
-            <p className="moment-kicker">{upload.kind}</p>
-          </div>
-          {upload.body ? <p>{upload.body}</p> : null}
-          {pendingPlacement ? (
-            <p className="pending-media-placement">
-              Uploading privately · Will appear on{" "}
-              {dateLabel(upload.occurredOn)}
-            </p>
-          ) : null}
-          {upload.stage.state === "uploading" ? (
-            <progress max={1} value={upload.stage.progress}>
-              {Math.round(upload.stage.progress * 100)}%
-            </progress>
-          ) : null}
-          {upload.stage.state === "failed" ? (
-            <button
-              className="pending-media-dismiss"
-              type="button"
-              onClick={() => removeOptimisticMediaUpload(upload.id)}
-            >
-              Dismiss
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </article>
+      {action.label}
+    </button>
   );
 }
 
-function OptimisticMediaTimeline({
-  uploads,
-}: Readonly<{ uploads: readonly OptimisticMediaUpload[] }>) {
-  if (uploads.length === 0) return null;
-
+export function PhotoStatusChipView({
+  alert,
+  busy = false,
+  confirmation,
+  detail,
+  label,
+  primaryAction,
+  progress,
+  secondaryAction,
+}: PhotoStatusChipViewProps) {
   return (
-    <section
-      className="timeline optimistic-media-timeline"
-      aria-label="Media being added"
-    >
-      <div className="time-rail" aria-hidden="true" />
-      {uploads.map((upload) => (
-        <OptimisticMediaCard key={upload.id} upload={upload} />
-      ))}
-    </section>
-  );
-}
-
-function optimisticMomentLabel(save: OptimisticMomentSave) {
-  if (save.mode === "bible-verse") return "Bible verse";
-  if (save.mode === "thought") return "Note";
-  if (save.mode === "location") return "Location";
-  return "Milestone";
-}
-
-function OptimisticMomentCard({
-  save,
-  pendingPlacement = false,
-}: Readonly<{
-  save: OptimisticMomentSave;
-  pendingPlacement?: boolean;
-}>) {
-  return (
-    <article
-      className={
-        pendingPlacement
-          ? "pending-media-item"
-          : "moment optimistic-written-moment"
-      }
-    >
-      <div className="connection">
-        <span
-          className={`avatar-node dot-${save.journalPersonAccent}`}
-          aria-hidden="true"
-        >
-          {save.journalPersonInitial}
-        </span>
-        <span className="moment-meta">
-          <strong>{save.journalPersonName}</strong>
-          <span>
-            {dateLabel(save.occurredOn)}
-            {save.occurredTime ? ` | ${save.occurredTime}` : ""}
-          </span>
-        </span>
-      </div>
-      <div
-        className="moment-card optimistic-written-card"
-        aria-busy={save.stage.state === "saving"}
-      >
-        <p className="moment-kicker">{optimisticMomentLabel(save)}</p>
-        {save.mode === "thought" ? (
-          <blockquote>“{save.body}”</blockquote>
-        ) : null}
-        {save.mode === "bible-verse" ? (
-          <>
-            <blockquote>“{save.body}”</blockquote>
-            <cite>{save.title}</cite>
-          </>
-        ) : null}
-        {save.mode === "milestone" || save.mode === "location" ? (
-          <>
-            <h3>{save.title}</h3>
-            {save.body ? <p>{save.body}</p> : null}
-          </>
-        ) : null}
-        {save.placeName && save.mode !== "location" ? (
-          <p className="optimistic-written-metadata">{save.placeName}</p>
-        ) : null}
-        {save.taggedPeopleLabel ? (
-          <p className="optimistic-written-metadata">
-            with {save.taggedPeopleLabel}
-          </p>
-        ) : null}
-        {pendingPlacement ? (
-          <p className="pending-media-placement">
-            Adding privately · Will appear on {dateLabel(save.occurredOn)}
-          </p>
-        ) : null}
-        <p className="optimistic-written-status" role="status">
-          {save.stage.state === "saving" ? "Adding…" : save.stage.message}
+    <section className="photo-status-shelf" aria-label="Private photo status">
+      {alert ? (
+        <p className="photo-status-result" role="alert">
+          {alert}
         </p>
-        {save.stage.state === "failed" ? (
-          <div className="optimistic-written-actions">
-            <button
-              type="button"
-              onClick={() => retryOptimisticMomentSave(save.id)}
-            >
-              Try again
-            </button>
-            <button
-              type="button"
-              onClick={() => removeOptimisticMomentSave(save.id)}
-            >
-              Dismiss
-            </button>
+      ) : null}
+      <div className="photo-status-chip" aria-busy={busy}>
+        <p className="photo-status-chip-copy" role="status">
+          {label}
+        </p>
+        {detail ? <p className="photo-status-chip-detail">{detail}</p> : null}
+        {typeof progress === "number" ? (
+          <progress max={1} value={progress}>
+            {Math.round(progress * 100)}%
+          </progress>
+        ) : busy ? (
+          <progress max={1} className="photo-status-chip-indeterminate">
+            Working
+          </progress>
+        ) : null}
+        {confirmation ? (
+          <p className="photo-status-confirmation">{confirmation}</p>
+        ) : null}
+        {primaryAction || secondaryAction ? (
+          <div className="photo-status-actions">
+            {secondaryAction ? (
+              <ChipActionButton action={secondaryAction} />
+            ) : null}
+            {primaryAction ? <ChipActionButton action={primaryAction} /> : null}
           </div>
         ) : null}
       </div>
-    </article>
-  );
-}
-
-function OptimisticMomentTimeline({
-  saves,
-}: Readonly<{ saves: readonly OptimisticMomentSave[] }>) {
-  if (saves.length === 0) return null;
-  return (
-    <section
-      className="timeline optimistic-written-timeline"
-      aria-label="Moments being added"
-    >
-      <div className="time-rail" aria-hidden="true" />
-      {saves.map((save) => (
-        <OptimisticMomentCard key={save.id} save={save} />
-      ))}
     </section>
   );
 }
 
-function BackdatedMediaShelf({
+function serverShelfChip({
+  cancellationResult,
+  cancellingIds,
+  confirmingCancelId,
+  items,
+  onConfirmCancel,
+  onKeep,
+  onRequestCancel,
+}: PhotoStatusShelfViewProps): PhotoStatusChipViewProps | null {
+  const processingCount = items.filter(
+    (item) => item.state === "processing",
+  ).length;
+  const unfinishedItems = items.filter((item) => item.state === "pending");
+  const pending = unfinishedItems[0];
+  const confirming =
+    pending && confirmingCancelId === pending.id ? pending : null;
+  const cancelling = pending ? cancellingIds.has(pending.id) : false;
+
+  if (!pending && processingCount === 0 && !cancellationResult) return null;
+
+  if (confirming) {
+    return {
+      alert: cancellationResult?.message ?? null,
+      busy: cancelling,
+      confirmation: "Cancel this unfinished photo? It won’t be added.",
+      detail: `${confirming.journalPersonName} · ${dateLabel(confirming.occurredOn)}`,
+      label: "Photo upload paused",
+      primaryAction: {
+        ariaLabel: `Confirm cancellation for ${confirming.journalPersonName}, ${dateLabel(confirming.occurredOn)}`,
+        disabled: cancelling,
+        label: cancelling ? "Cancelling…" : "Confirm cancel",
+        onClick: () => onConfirmCancel(confirming.id),
+      },
+      secondaryAction: {
+        label: "Keep upload",
+        onClick: onKeep,
+      },
+    };
+  }
+
+  if (pending?.canCancel) {
+    return {
+      alert: cancellationResult?.message ?? null,
+      busy: cancelling,
+      detail: `${pending.journalPersonName} · ${dateLabel(pending.occurredOn)}`,
+      label: "Photo upload paused",
+      primaryAction: {
+        ariaLabel: `Cancel upload for ${pending.journalPersonName}, ${dateLabel(pending.occurredOn)}`,
+        disabled: cancelling,
+        label: "Cancel upload",
+        onClick: () => onRequestCancel(pending.id),
+      },
+    };
+  }
+
+  if (processingCount > 0) {
+    return {
+      alert: cancellationResult?.message ?? null,
+      busy: true,
+      label: "Uploading…",
+    };
+  }
+
+  if (cancellationResult) {
+    return {
+      alert: cancellationResult.message,
+      label: "Photo upload paused",
+    };
+  }
+
+  return null;
+}
+
+export function PhotoStatusShelfView(props: PhotoStatusShelfViewProps) {
+  const chip = serverShelfChip(props);
+  if (!chip) return null;
+  return <PhotoStatusChipView {...chip} />;
+}
+
+function uploadChip(upload: OptimisticMediaUpload): PhotoStatusChipViewProps {
+  const failed = upload.stage.state === "failed";
+  return {
+    busy: !failed && upload.stage.state !== "published",
+    label: optimisticUploadChipLabel(upload),
+    progress: optimisticUploadChipProgress(upload),
+    primaryAction: failed
+      ? upload.retryable
+        ? {
+            label: "Retry",
+            onClick: () => {
+              retryOptimisticMediaUpload(upload.id);
+            },
+          }
+        : {
+            label: "Dismiss",
+            onClick: () => removeOptimisticMediaUpload(upload.id),
+          }
+      : null,
+  };
+}
+
+function momentChip(save: OptimisticMomentSave): PhotoStatusChipViewProps {
+  const failed = save.stage.state === "failed";
+  return {
+    busy: !failed,
+    label: optimisticMomentChipLabel(save),
+    primaryAction: failed
+      ? {
+          label: "Retry",
+          onClick: () => retryOptimisticMomentSave(save.id),
+        }
+      : null,
+    secondaryAction: failed
+      ? {
+          label: "Dismiss",
+          onClick: () => removeOptimisticMomentSave(save.id),
+        }
+      : null,
+  };
+}
+
+function selectVisibleChip({
+  cancellationResult,
+  cancellingIds,
+  confirmingCancelId,
+  items,
+  onConfirmCancel,
+  onKeep,
+  onRequestCancel,
+  saves,
   uploads,
-}: Readonly<{ uploads: readonly OptimisticMediaUpload[] }>) {
-  if (uploads.length === 0) return null;
-  return (
-    <section className="pending-media-shelf" aria-label="Media being uploaded">
-      {uploads.map((upload) => (
-        <OptimisticMediaCard key={upload.id} upload={upload} pendingPlacement />
-      ))}
-    </section>
+}: PhotoStatusShelfViewProps & {
+  saves: readonly OptimisticMomentSave[];
+  uploads: readonly OptimisticMediaUpload[];
+}): PhotoStatusChipViewProps | null {
+  const failedUpload = uploads.find(
+    (upload) => upload.stage.state === "failed",
   );
-}
+  if (failedUpload) return uploadChip(failedUpload);
 
-function BackdatedMomentShelf({
-  saves,
-}: Readonly<{ saves: readonly OptimisticMomentSave[] }>) {
-  if (saves.length === 0) return null;
-  return (
-    <section className="pending-media-shelf" aria-label="Moments being added">
-      {saves.map((save) => (
-        <OptimisticMomentCard key={save.id} save={save} pendingPlacement />
-      ))}
-    </section>
+  const failedSave = saves.find((save) => save.stage.state === "failed");
+  if (failedSave) return momentChip(failedSave);
+
+  const activeUpload = uploads.find((upload) =>
+    activeUploadStates.has(upload.stage.state),
   );
+  if (activeUpload) return uploadChip(activeUpload);
+
+  const processingUpload = uploads.find(
+    (upload) => upload.stage.state === "processing",
+  );
+  if (processingUpload) return uploadChip(processingUpload);
+
+  const saving = saves.find((save) => save.stage.state === "saving");
+  if (saving) return momentChip(saving);
+
+  const published = uploads.find(
+    (upload) => upload.stage.state === "published",
+  );
+  if (published) return uploadChip(published);
+
+  return serverShelfChip({
+    cancellationResult,
+    cancellingIds,
+    confirmingCancelId,
+    items,
+    onConfirmCancel,
+    onKeep,
+    onRequestCancel,
+  });
 }
 
 export function PhotoStatusShelf({
   circleId,
-  today = "",
 }: Readonly<{ circleId: string; today?: string }>) {
   const router = useRouter();
   const [items, setItems] = useState<readonly PhotoStatusItem[]>([]);
@@ -647,6 +699,13 @@ export function PhotoStatusShelf({
   }, [checkStatuses]);
 
   useEffect(() => {
+    for (const upload of optimisticUploads) {
+      if (!upload.momentId) continue;
+      if (firstAcceptedMomentRefresh(upload.momentId)) router.refresh();
+    }
+  }, [optimisticUploads, router]);
+
+  useEffect(() => {
     const timers: number[] = [];
     for (const upload of optimisticUploads) {
       if (upload.stage.state !== "published") continue;
@@ -720,142 +779,30 @@ export function PhotoStatusShelf({
   };
 
   return (
-    <>
-      <OptimisticMediaTimeline
-        uploads={optimisticUploads.filter(
-          (upload) => upload.occurredOn === today,
-        )}
-      />
-      <OptimisticMomentTimeline
-        saves={optimisticMomentSaves.filter(
-          (save) => save.occurredOn === today,
-        )}
-      />
-      <BackdatedMediaShelf
-        uploads={optimisticUploads.filter(
-          (upload) => upload.occurredOn !== today,
-        )}
-      />
-      <BackdatedMomentShelf
-        saves={optimisticMomentSaves.filter(
-          (save) => save.occurredOn !== today,
-        )}
-      />
-      <PhotoStatusShelfView
-        cancellationResult={cancellationResult}
-        cancellingIds={cancellingIds}
-        confirmingCancelId={confirmingCancelId}
-        items={items.filter(
-          (item) =>
-            !optimisticUploads.some((upload) => upload.intakeId === item.id),
-        )}
-        onConfirmCancel={(id) => void cancel(id)}
-        onKeep={() => setConfirmingCancelId(null)}
-        onRequestCancel={setConfirmingCancelId}
-      />
-    </>
+    <VisiblePhotoStatusChip
+      cancellationResult={cancellationResult}
+      cancellingIds={cancellingIds}
+      confirmingCancelId={confirmingCancelId}
+      items={items.filter(
+        (item) =>
+          !optimisticUploads.some((upload) => upload.intakeId === item.id),
+      )}
+      onConfirmCancel={(id) => void cancel(id)}
+      onKeep={() => setConfirmingCancelId(null)}
+      onRequestCancel={setConfirmingCancelId}
+      saves={optimisticMomentSaves}
+      uploads={optimisticUploads}
+    />
   );
 }
 
-export function PhotoStatusShelfView({
-  cancellationResult,
-  cancellingIds,
-  confirmingCancelId,
-  items,
-  onConfirmCancel,
-  onKeep,
-  onRequestCancel,
-}: PhotoStatusShelfViewProps) {
-  const resultRef = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
-    if (cancellationResult) resultRef.current?.focus();
-  }, [cancellationResult]);
-
-  if (items.length === 0 && !cancellationResult) return null;
-
-  const processingCount = items.filter(
-    (item) => item.state === "processing",
-  ).length;
-  const unfinishedItems = items.filter((item) => item.state === "pending");
-
-  return (
-    <section className="photo-status-shelf" aria-label="Private photo status">
-      {cancellationResult ? (
-        <p
-          className="photo-status-result"
-          ref={resultRef}
-          role="alert"
-          tabIndex={-1}
-        >
-          {cancellationResult.message}
-        </p>
-      ) : null}
-      {processingCount > 0 ? (
-        <p className="photo-processing-status" role="status">
-          {processingCount === 1
-            ? "Adding your photo…"
-            : `Adding ${processingCount} photos…`}
-        </p>
-      ) : null}
-      {unfinishedItems.map((item) => {
-        const cancelling = cancellingIds.has(item.id);
-        const confirming = confirmingCancelId === item.id;
-        return (
-          <div
-            key={item.id}
-            className="photo-status-item"
-            aria-busy={cancelling}
-          >
-            <span className="photo-status-mark" aria-hidden="true">
-              {item.state === "pending" || item.state === "processing"
-                ? "◌"
-                : item.state === "published-cleanup"
-                  ? "✓"
-                  : "!"}
-            </span>
-            <div className="photo-status-copy">
-              <strong>Photo upload paused</strong>
-              <span>
-                {item.journalPersonName} · {dateLabel(item.occurredOn)}
-              </span>
-              <span>It hasn’t been added to the timeline.</span>
-              {confirming ? (
-                <span className="photo-status-confirmation">
-                  Cancel this unfinished photo? It won’t be added.
-                </span>
-              ) : null}
-            </div>
-            {item.canCancel ? (
-              <div className="photo-status-actions">
-                {confirming ? (
-                  <>
-                    <button type="button" onClick={onKeep}>
-                      Keep upload
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Confirm cancellation for ${item.journalPersonName}, ${dateLabel(item.occurredOn)}`}
-                      disabled={cancelling}
-                      onClick={() => onConfirmCancel(item.id)}
-                    >
-                      {cancelling ? "Cancelling…" : "Confirm cancel"}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label={`Cancel upload for ${item.journalPersonName}, ${dateLabel(item.occurredOn)}`}
-                    disabled={cancelling}
-                    onClick={() => onRequestCancel(item.id)}
-                  >
-                    Cancel upload
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </section>
-  );
+function VisiblePhotoStatusChip(
+  props: PhotoStatusShelfViewProps & {
+    saves: readonly OptimisticMomentSave[];
+    uploads: readonly OptimisticMediaUpload[];
+  },
+) {
+  const chip = selectVisibleChip(props);
+  if (!chip) return null;
+  return <PhotoStatusChipView {...chip} />;
 }
