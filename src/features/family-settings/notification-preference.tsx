@@ -101,7 +101,7 @@ export function NotificationPreference() {
     const frame = window.requestAnimationFrame(() => {
       document
         .getElementById("notifications")
-        ?.scrollIntoView({ block: "nearest" });
+        ?.scrollIntoView?.({ block: "nearest" });
       if (isIosBrowserTab()) {
         helperRef.current?.focus();
         return;
