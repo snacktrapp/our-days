@@ -123,6 +123,40 @@ function markPagerImagesReady() {
     .forEach((img) => markImgReady(img));
 }
 
+function swipeAlbum(
+  target: Element,
+  {
+    fromX = 180,
+    toX = 120,
+    y = 80,
+    pointerId = 2,
+  }: {
+    fromX?: number;
+    toX?: number;
+    y?: number;
+    pointerId?: number;
+  } = {},
+) {
+  fireEvent.pointerDown(target, {
+    pointerId,
+    pointerType: "touch",
+    clientX: fromX,
+    clientY: y,
+  });
+  fireEvent.pointerMove(target, {
+    pointerId,
+    pointerType: "touch",
+    clientX: toX,
+    clientY: y + 4,
+  });
+  fireEvent.pointerUp(target, {
+    pointerId,
+    pointerType: "touch",
+    clientX: toX,
+    clientY: y + 4,
+  });
+}
+
 function incomingImg() {
   return document.querySelector(
     '[data-photo-index="1"] img',
@@ -144,6 +178,9 @@ describe("PhotoCardPager", () => {
     expect(
       screen.queryByRole("button", { name: "Next photo" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Previous photo" }),
+    ).not.toBeInTheDocument();
     expect(track()).toBeNull();
   });
 
@@ -160,11 +197,18 @@ describe("PhotoCardPager", () => {
     expect(
       document.querySelectorAll(".photo-card-pager-frame.is-parked"),
     ).toHaveLength(3);
+    expect(
+      screen.queryByRole("button", { name: "Next photo" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Previous photo" }),
+    ).not.toBeInTheDocument();
 
     markPagerImagesReady();
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    const pager = document.querySelector(".photo-card-pager")!;
+    swipeAlbum(pager);
     settleSlide();
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    swipeAlbum(pager, { pointerId: 3 });
     settleSlide();
 
     expect(screen.getByRole("img", { name: "Porch 3" })).toBeVisible();
@@ -181,7 +225,8 @@ describe("PhotoCardPager", () => {
     markImgReady(document.querySelector('[data-photo-index="0"] img')!);
     markImgNotReady(neighbor);
 
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    const pager = document.querySelector(".photo-card-pager")!;
+    swipeAlbum(pager);
 
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
@@ -238,7 +283,7 @@ describe("PhotoCardPager", () => {
     try {
       renderPager();
       markPagerImagesReady();
-      fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+      swipeAlbum(document.querySelector(".photo-card-pager")!);
 
       expect(track()).toHaveClass("is-sliding");
       expect(stage()?.style.height).not.toBe("");
@@ -273,7 +318,10 @@ describe("PhotoCardPager", () => {
     renderPager();
     markPagerImagesReady();
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous photo" }));
+    swipeAlbum(document.querySelector(".photo-card-pager")!, {
+      fromX: 180,
+      toX: 240,
+    });
     expect(track()).toHaveAttribute("data-direction", "prev");
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
@@ -412,7 +460,7 @@ describe("PhotoCardPager", () => {
 
     renderPager();
     markPagerImagesReady();
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    swipeAlbum(document.querySelector(".photo-card-pager")!);
 
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();

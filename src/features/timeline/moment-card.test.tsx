@@ -268,7 +268,25 @@ describe("MomentCard timeline media", () => {
           get: () => 800,
         });
       });
-    await fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    const pager = document.querySelector(".photo-card-pager")!;
+    fireEvent.pointerDown(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
+    fireEvent.pointerUp(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
     const track = document.querySelector(".photo-card-pager-track");

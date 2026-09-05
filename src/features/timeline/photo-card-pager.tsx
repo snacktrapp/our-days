@@ -12,101 +12,20 @@ import {
 } from "react";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import {
+  albumIndexes,
+  axisLockPx,
+  clampDragDx,
+  frameImage,
+  pairTransform,
+  slideMs,
+  swipeThreshold,
+  waitForImageReady,
+  wrapIndex,
+  type AlbumPair,
+} from "./photo-album-gesture";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
 import { PhotoLightboxTrigger } from "./photo-lightbox";
-
-const swipeThreshold = 36;
-const axisLockPx = 8;
-const slideMs = 200;
-
-type Pair = Readonly<{
-  from: number;
-  to: number;
-  direction: 1 | -1;
-  mode: "pending" | "drag" | "snap" | "spring";
-  dx: number;
-}>;
-
-function wrapIndex(next: number, length: number) {
-  return (next + length) % length;
-}
-
-function albumIndexes(length: number) {
-  return Array.from({ length }, (_, index) => index);
-}
-
-function frameImage(frame: Element | null): HTMLImageElement | null {
-  if (!frame) return null;
-  return frame.querySelector("img");
-}
-
-function isImageReady(img: HTMLImageElement | null): boolean {
-  if (!img) return true;
-  return img.complete && img.naturalWidth > 0;
-}
-
-function waitForImageReady(
-  img: HTMLImageElement | null,
-  onReady: () => void,
-): () => void {
-  if (!img || isImageReady(img)) {
-    onReady();
-    return () => {};
-  }
-
-  let settled = false;
-  const settle = () => {
-    if (settled) return;
-    settled = true;
-    img.removeEventListener("load", onLoad);
-    img.removeEventListener("error", onError);
-    onReady();
-  };
-  const onLoad = () => {
-    if (img.naturalWidth > 0) settle();
-  };
-  const onError = () => settle();
-
-  img.addEventListener("load", onLoad);
-  img.addEventListener("error", onError);
-
-  if (typeof img.decode === "function") {
-    void img
-      .decode()
-      .then(() => {
-        if (img.naturalWidth > 0) settle();
-      })
-      .catch(() => {
-        if (isImageReady(img)) settle();
-      });
-  }
-
-  if (isImageReady(img)) settle();
-
-  return () => {
-    settled = true;
-    img.removeEventListener("load", onLoad);
-    img.removeEventListener("error", onError);
-  };
-}
-
-function pairTransform(pair: Pair): string {
-  const base = pair.direction === 1 ? 0 : -50;
-  if (pair.mode === "drag" || pair.mode === "pending") {
-    return `translateX(calc(${base}% + ${pair.dx}px))`;
-  }
-  if (pair.mode === "snap") {
-    return pair.direction === 1 ? "translateX(-50%)" : "translateX(0%)";
-  }
-  return pair.direction === 1 ? "translateX(0%)" : "translateX(-50%)";
-}
-
-function clampDragDx(dx: number, direction: 1 | -1, width: number): number {
-  if (width <= 0) return dx;
-  return direction === 1
-    ? Math.min(0, Math.max(-width, dx))
-    : Math.max(0, Math.min(width, dx));
-}
 
 export function PhotoCardPager({
   moment,
@@ -117,13 +36,12 @@ export function PhotoCardPager({
 }>) {
   const photos = photoAlbum(moment);
   const [index, setIndex] = useState(0);
-  const [pair, setPair] = useState<Pair | null>(null);
+  const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const [stageHeight, setStageHeight] = useState<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const pairRef = useRef<Pair | null>(null);
+  const pairRef = useRef<AlbumPair | null>(null);
   const pendingToRef = useRef<number | null>(null);
-  const navigatingRef = useRef(false);
   const finishTimerRef = useRef<number | null>(null);
   const cancelReadyRef = useRef<(() => void) | null>(null);
   const pointerRef = useRef<{
@@ -141,7 +59,7 @@ export function PhotoCardPager({
   } | null>(null);
   const suppressClickRef = useRef(false);
 
-  function writePair(next: Pair | null) {
+  function writePair(next: AlbumPair | null) {
     pairRef.current = next;
     setPair(next);
   }
@@ -211,7 +129,6 @@ export function PhotoCardPager({
     if (nextIndex == null) return;
     const incomingHeight = paintedFrameHeight(nextIndex);
     pendingToRef.current = null;
-    navigatingRef.current = false;
     pendingDragRef.current = null;
     clearFinishTimer();
     setIndex(nextIndex);
@@ -233,7 +150,7 @@ export function PhotoCardPager({
     [],
   );
 
-  function startSettle(next: Pair) {
+  function startSettle(next: AlbumPair) {
     pendingToRef.current = next.mode === "snap" ? next.to : next.from;
     writePair(next);
     clearFinishTimer();
@@ -244,7 +161,6 @@ export function PhotoCardPager({
     lockStageHeight(to, paintedFrameHeight(to));
     if (overlayMotionReduced()) {
       pendingToRef.current = null;
-      navigatingRef.current = false;
       pendingDragRef.current = null;
       setIndex(to);
       writePair(null);
@@ -256,27 +172,6 @@ export function PhotoCardPager({
     requestAnimationFrame(() => {
       lockStageHeight(to, paintedFrameHeight(to));
       startSettle({ from, to, direction, mode: "snap", dx: 0 });
-    });
-  }
-
-  function goTo(next: number) {
-    if (
-      photos.length < 2 ||
-      pair ||
-      navigatingRef.current ||
-      pointerRef.current
-    ) {
-      return;
-    }
-    const to = wrapIndex(next, photos.length);
-    if (to === index) return;
-    const direction: 1 | -1 = next < index || next < 0 ? -1 : 1;
-    navigatingRef.current = true;
-    pendingToRef.current = to;
-    clearReadyWait();
-    cancelReadyRef.current = waitForImageReady(frameImage(frameEl(to)), () => {
-      navigatingRef.current = false;
-      startSnap(index, to, direction);
     });
   }
 
@@ -367,7 +262,6 @@ export function PhotoCardPager({
     if (
       photos.length < 2 ||
       pair ||
-      navigatingRef.current ||
       (event.pointerType === "mouse" && event.button !== 0)
     ) {
       return;
@@ -576,28 +470,6 @@ export function PhotoCardPager({
       </PhotoLightboxTrigger>
       {photos.length > 1 ? (
         <>
-          <button
-            type="button"
-            className="photo-card-pager-arrow is-prev"
-            aria-label="Previous photo"
-            onClick={(event) => {
-              event.stopPropagation();
-              goTo(index - 1);
-            }}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            className="photo-card-pager-arrow is-next"
-            aria-label="Next photo"
-            onClick={(event) => {
-              event.stopPropagation();
-              goTo(index + 1);
-            }}
-          >
-            ›
-          </button>
           <div className="photo-card-pager-dots" aria-hidden="true">
             {photos.map((photo, photoIndex) => (
               <span
