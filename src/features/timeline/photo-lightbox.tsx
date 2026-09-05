@@ -176,9 +176,8 @@ function PhotoLightboxLayer({
     return start >= 0 && start < album.length ? start : 0;
   });
   const current = album[index] ?? album[0]!;
-  const [objectUrl, setObjectUrl] = useState(() =>
-    peekIndependentOverlayObjectUrl(current.src),
-  );
+  const [, setObjectUrlVersion] = useState(0);
+  const objectUrl = peekIndependentOverlayObjectUrl(current.src);
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
   const closeTimerRef = useRef<number | null>(null);
@@ -187,9 +186,8 @@ function PhotoLightboxLayer({
 
   useEffect(() => {
     let cancelled = false;
-    setObjectUrl(peekIndependentOverlayObjectUrl(current.src));
     void prefetchIndependentOverlayObjectUrl(current.src).then((next) => {
-      if (!cancelled && next) setObjectUrl(next);
+      if (!cancelled && next) setObjectUrlVersion((version) => version + 1);
     });
     return () => {
       cancelled = true;

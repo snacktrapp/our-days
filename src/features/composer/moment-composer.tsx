@@ -321,7 +321,9 @@ export function MomentComposer({
     editDraft?.existingMedia ? "ready" : "empty",
   );
   const photoItemsRef = useRef(photoItems);
-  photoItemsRef.current = photoItems;
+  useEffect(() => {
+    photoItemsRef.current = photoItems;
+  }, [photoItems]);
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
