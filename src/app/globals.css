@@ -1556,7 +1556,7 @@ button:focus-visible,
   margin-top: 8px;
   padding: 0 14px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 7px;
   background: var(--ochre);
   color: var(--cream);
   font-size: 12px;
