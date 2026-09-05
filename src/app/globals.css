@@ -1027,16 +1027,16 @@ button:focus-visible,
 }
 .photo-card-pager-frame.is-parked {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
   overflow: hidden;
-  clip-path: inset(50%);
+  visibility: hidden;
   pointer-events: none;
   flex: 0 0 0;
 }
 .photo-card-pager-track.is-paired .photo-card-pager-frame.is-parked {
   flex-basis: 0;
-  width: 1px;
+  width: 100%;
 }
 @media (prefers-reduced-motion: no-preference) {
   .photo-card-pager-track.is-settling,

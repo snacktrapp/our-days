@@ -31,11 +31,8 @@ function wrapIndex(next: number, length: number) {
   return (next + length) % length;
 }
 
-function neighborIndexes(index: number, length: number) {
-  if (length < 2) return [];
-  const prev = wrapIndex(index - 1, length);
-  const next = wrapIndex(index + 1, length);
-  return prev === next ? [next] : [prev, next];
+function albumIndexes(length: number) {
+  return Array.from({ length }, (_, index) => index);
 }
 
 function frameImage(frame: Element | null): HTMLImageElement | null {
@@ -473,7 +470,7 @@ export function PhotoCardPager({
   }
 
   const reserved = new Set(pair ? [pair.from, pair.to] : [index]);
-  const parkedIndexes = neighborIndexes(displayIndex, photos.length).filter(
+  const parkedIndexes = albumIndexes(photos.length).filter(
     (photoIndex) => !reserved.has(photoIndex),
   );
   const stageStyle: CSSProperties | undefined =

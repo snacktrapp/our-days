@@ -40,11 +40,11 @@ const album = {
   ],
 } as const satisfies PhotoMomentViewModel;
 
-function albumImages() {
-  return album.photos.map((photo) => (
+function albumImages(moment: PhotoMomentViewModel = album) {
+  return (moment.photos ?? [moment.image]).map((photo) => (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      key={photo.id}
+      key={"id" in photo ? photo.id : photo.alt}
       src={photo.src}
       alt={photo.alt}
       width={photo.width}
@@ -54,7 +54,22 @@ function albumImages() {
 }
 
 function renderPager(moment: PhotoMomentViewModel = album) {
-  return render(<PhotoCardPager moment={moment} images={albumImages()} />);
+  return render(
+    <PhotoCardPager moment={moment} images={albumImages(moment)} />,
+  );
+}
+
+function porchAlbum(count: number): PhotoMomentViewModel {
+  return {
+    ...album,
+    photos: Array.from({ length: count }, (_, index) => ({
+      id: `p${index + 1}`,
+      src: "/sample-family.jpg",
+      alt: `Porch ${index + 1}`,
+      width: 1200,
+      height: 801,
+    })),
+  };
 }
 
 function track() {
@@ -130,6 +145,34 @@ describe("PhotoCardPager", () => {
       screen.queryByRole("button", { name: "Next photo" }),
     ).not.toBeInTheDocument();
     expect(track()).toBeNull();
+  });
+
+  it("mounts every album frame when a multi-photo card is first painted", () => {
+    renderPager(porchAlbum(4));
+
+    expect(screen.getByRole("img", { name: "Porch 1" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Porch 2" })).toBeNull();
+    expect(
+      [...document.querySelectorAll("[data-photo-index]")].map((node) =>
+        node.getAttribute("data-photo-index"),
+      ),
+    ).toEqual(["0", "1", "2", "3"]);
+    expect(
+      document.querySelectorAll(".photo-card-pager-frame.is-parked"),
+    ).toHaveLength(3);
+
+    markPagerImagesReady();
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    settleSlide();
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    settleSlide();
+
+    expect(screen.getByRole("img", { name: "Porch 3" })).toBeVisible();
+    expect(
+      [...document.querySelectorAll("[data-photo-index]")].map((node) =>
+        node.getAttribute("data-photo-index"),
+      ),
+    ).toEqual(["2", "0", "1", "3"]);
   });
 
   it("keeps the outgoing photo painted until the neighbor is ready, then slides", () => {
