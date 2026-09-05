@@ -256,6 +256,18 @@ describe("MomentCard timeline media", () => {
 
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    document
+      .querySelectorAll<HTMLImageElement>(".photo-card-pager img")
+      .forEach((img) => {
+        Object.defineProperty(img, "complete", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(img, "naturalWidth", {
+          configurable: true,
+          get: () => 800,
+        });
+      });
     await fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();

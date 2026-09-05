@@ -984,6 +984,9 @@ button:focus-visible,
   width: 100%;
   touch-action: pan-y;
 }
+.photo-card-pager.is-axis-x {
+  touch-action: none;
+}
 .photo-card-pager-stage {
   position: relative;
   overflow: hidden;
@@ -1022,16 +1025,23 @@ button:focus-visible,
   object-fit: contain;
   object-position: center;
 }
-.photo-card-pager-prefetch {
+.photo-card-pager-frame.is-parked {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
   pointer-events: none;
+  flex: 0 0 0;
+}
+.photo-card-pager-track.is-paired .photo-card-pager-frame.is-parked {
+  flex-basis: 0;
+  width: 1px;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .photo-card-pager-track.is-sliding {
+  .photo-card-pager-track.is-settling,
+  .photo-card-pager-track.is-sliding,
+  .photo-card-pager-track.is-springing {
     transition: transform 200ms ease;
   }
 }

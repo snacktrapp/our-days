@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PhotoCardPager } from "./photo-card-pager";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
 
@@ -61,10 +61,62 @@ function track() {
   return document.querySelector(".photo-card-pager-track");
 }
 
+function stage() {
+  return document.querySelector(
+    ".photo-card-pager-stage",
+  ) as HTMLElement | null;
+}
+
 function settleSlide() {
   const node = track();
   if (node) fireEvent.transitionEnd(node, { propertyName: "transform" });
 }
+
+function markImgReady(
+  img: HTMLImageElement,
+  naturalWidth = 1200,
+  naturalHeight = 801,
+) {
+  Object.defineProperty(img, "complete", {
+    configurable: true,
+    get: () => true,
+  });
+  Object.defineProperty(img, "naturalWidth", {
+    configurable: true,
+    get: () => naturalWidth,
+  });
+  Object.defineProperty(img, "naturalHeight", {
+    configurable: true,
+    get: () => naturalHeight,
+  });
+}
+
+function markImgNotReady(img: HTMLImageElement) {
+  Object.defineProperty(img, "complete", {
+    configurable: true,
+    get: () => false,
+  });
+  Object.defineProperty(img, "naturalWidth", {
+    configurable: true,
+    get: () => 0,
+  });
+}
+
+function markPagerImagesReady() {
+  document
+    .querySelectorAll<HTMLImageElement>(".photo-card-pager img")
+    .forEach((img) => markImgReady(img));
+}
+
+function incomingImg() {
+  return document.querySelector(
+    '[data-photo-index="1"] img',
+  ) as HTMLImageElement | null;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("PhotoCardPager", () => {
   it("leaves a single photo without arrows or a slide track", () => {
@@ -80,13 +132,21 @@ describe("PhotoCardPager", () => {
     expect(track()).toBeNull();
   });
 
-  it("slides the current photo out only after the neighbor is on the track", () => {
+  it("keeps the outgoing photo painted until the neighbor is ready, then slides", () => {
     renderPager();
+    const neighbor = incomingImg()!;
+    markImgReady(document.querySelector('[data-photo-index="0"] img')!);
+    markImgNotReady(neighbor);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
 
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    expect(track()).toHaveAttribute("data-phase", "idle");
+    expect(track()).not.toHaveClass("is-sliding");
 
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    markImgReady(neighbor, 900, 1200);
+    fireEvent.load(neighbor);
 
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
@@ -105,8 +165,70 @@ describe("PhotoCardPager", () => {
     ).toBeInTheDocument();
   });
 
+  it("slides a ready neighbor immediately and settles height to the incoming photo", () => {
+    const clientWidth = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    const offsetHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "offsetHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return this.classList?.contains("photo-card-pager-stage") ? 400 : 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get() {
+        if (this.classList?.contains("is-incoming")) return 480;
+        if (this.classList?.contains("photo-card-pager-stage")) {
+          return this.style.height ? parseFloat(this.style.height) : 267;
+        }
+        if (this.classList?.contains("photo-card-pager-frame")) return 267;
+        return 0;
+      },
+    });
+
+    try {
+      renderPager();
+      markPagerImagesReady();
+      fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+
+      expect(track()).toHaveClass("is-sliding");
+      expect(stage()?.style.height).not.toBe("");
+      expect(Number.parseFloat(stage()?.style.height ?? "0")).toBeGreaterThan(
+        0,
+      );
+
+      settleSlide();
+
+      expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+      expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
+      expect(stage()?.style.height).toBe("480px");
+    } finally {
+      if (clientWidth) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "clientWidth",
+          clientWidth,
+        );
+      }
+      if (offsetHeight) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          "offsetHeight",
+          offsetHeight,
+        );
+      }
+    }
+  });
+
   it("slides the previous photo in from the left and wraps the album", () => {
     renderPager();
+    markPagerImagesReady();
 
     fireEvent.click(screen.getByRole("button", { name: "Previous photo" }));
     expect(track()).toHaveAttribute("data-direction", "prev");
@@ -118,8 +240,76 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
+  it("follows a horizontal drag live, then snaps past the threshold", () => {
+    const { container } = renderPager();
+    markPagerImagesReady();
+    const pager = container.querySelector(".photo-card-pager")!;
+
+    fireEvent.pointerDown(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
+
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    expect(track()).toHaveAttribute("data-phase", "drag");
+    expect(track()).toHaveAttribute("data-dx", "-60");
+    expect((track() as HTMLElement).style.transform).toContain("-60px");
+
+    fireEvent.pointerUp(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
+    expect(track()).toHaveAttribute("data-direction", "next");
+    expect(track()).toHaveClass("is-sliding");
+  });
+
+  it("springs back when a horizontal drag is released before the threshold", () => {
+    const { container } = renderPager();
+    markPagerImagesReady();
+    const pager = container.querySelector(".photo-card-pager")!;
+
+    fireEvent.pointerDown(pager, {
+      pointerId: 3,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(pager, {
+      pointerId: 3,
+      pointerType: "touch",
+      clientX: 155,
+      clientY: 82,
+    });
+    expect(track()).toHaveAttribute("data-phase", "drag");
+    expect(track()).toHaveAttribute("data-dx", "-25");
+
+    fireEvent.pointerUp(pager, {
+      pointerId: 3,
+      pointerType: "touch",
+      clientX: 155,
+      clientY: 82,
+    });
+    expect(track()).toHaveClass("is-springing");
+    settleSlide();
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    expect(track()).toHaveAttribute("data-phase", "idle");
+  });
+
   it("pages on a horizontal swipe without treating a vertical drag as a swipe", () => {
     const { container } = renderPager();
+    markPagerImagesReady();
     const pager = container.querySelector(".photo-card-pager")!;
 
     fireEvent.pointerDown(pager, {
@@ -141,6 +331,7 @@ describe("PhotoCardPager", () => {
       clientY: 160,
     });
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    expect(track()).toHaveAttribute("data-phase", "idle");
 
     fireEvent.pointerDown(pager, {
       pointerId: 2,
@@ -177,6 +368,7 @@ describe("PhotoCardPager", () => {
     }));
 
     renderPager();
+    markPagerImagesReady();
     fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
 
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
