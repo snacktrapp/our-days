@@ -306,7 +306,9 @@ describe("photo lightbox", () => {
     expect(card).toHaveAttribute("src", cardPixelA);
     expect(card).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Previous photo" }));
-    expect(await screen.findByRole("img", { name: "First light" })).toBeVisible();
+    expect(
+      await screen.findByRole("img", { name: "First light" }),
+    ).toBeVisible();
   });
 
   it("does not capture pointermove, so native pinch is not blocked", async () => {

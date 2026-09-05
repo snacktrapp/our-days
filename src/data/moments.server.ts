@@ -283,9 +283,7 @@ export function requestedSnapshot(value: string | undefined) {
   return value;
 }
 
-type MomentPhotoClient = Awaited<
-  ReturnType<typeof createOurDaysServerClient>
->;
+type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
 
 export async function loadMomentPhotosByMomentId(
   supabase: MomentPhotoClient,

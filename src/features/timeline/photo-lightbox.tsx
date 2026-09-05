@@ -136,7 +136,8 @@ export function PhotoLightboxTrigger({
   useEffect(() => {
     void prefetchIndependentOverlayObjectUrl(src);
     for (const photo of photos ?? []) {
-      if (photo.src !== src) void prefetchIndependentOverlayObjectUrl(photo.src);
+      if (photo.src !== src)
+        void prefetchIndependentOverlayObjectUrl(photo.src);
     }
   }, [photos, src]);
 

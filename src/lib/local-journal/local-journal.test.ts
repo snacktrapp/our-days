@@ -135,9 +135,13 @@ describe("local journal happy path", () => {
       momentId: moment.id,
       photoIds: [second.photos![1]!.id, second.photos![0]!.id],
     });
-    const timeline = await loadLocalTimeline(access, await loadLocalJournalContext(access), {
-      pages: 1,
-    });
+    const timeline = await loadLocalTimeline(
+      access,
+      await loadLocalJournalContext(access),
+      {
+        pages: 1,
+      },
+    );
     const photoMoment = timeline.entries.find(
       (entry) => entry.entryType === "moment" && entry.moment.id === moment.id,
     );

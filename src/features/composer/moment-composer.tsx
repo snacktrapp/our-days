@@ -916,10 +916,13 @@ export function MomentComposer({
           setSaveError(result.message);
           return;
         }
-        if (savedMode === "photo" && editDraft.existingMedia?.kind === "photo") {
-          const originalIds = (
-            editDraft.existingMedia.photos ?? []
-          ).flatMap((photo) => (photo.id ? [photo.id] : []));
+        if (
+          savedMode === "photo" &&
+          editDraft.existingMedia?.kind === "photo"
+        ) {
+          const originalIds = (editDraft.existingMedia.photos ?? []).flatMap(
+            (photo) => (photo.id ? [photo.id] : []),
+          );
           const remainingExistingIds = photoItems.flatMap((item) =>
             item.existingPhotoId ? [item.existingPhotoId] : [],
           );
@@ -963,10 +966,7 @@ export function MomentComposer({
               return;
             }
           }
-          if (
-            remainingExistingIds.length > 1 &&
-            editDraft.reorderPhotos
-          ) {
+          if (remainingExistingIds.length > 1 && editDraft.reorderPhotos) {
             const reordered = await editDraft.reorderPhotos({
               momentId: editDraft.momentId,
               photoIds: remainingExistingIds,
@@ -996,7 +996,9 @@ export function MomentComposer({
       if (
         !connectedPhotoAvailable ||
         !model.circleId ||
-        !(mode === "photo" ? photoItems.some((item) => item.file) : photoFile) ||
+        !(mode === "photo"
+          ? photoItems.some((item) => item.file)
+          : photoFile) ||
         !photoReady ||
         (mode === "video" && !videoDurationMs)
       ) {

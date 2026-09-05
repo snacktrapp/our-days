@@ -488,9 +488,7 @@ export async function publishLocalMediaMoment(
     }
     const createdAt = nowIso();
     const photo =
-      input.kind === "photo"
-        ? { id: randomUUID(), ...input.media }
-        : undefined;
+      input.kind === "photo" ? { id: randomUUID(), ...input.media } : undefined;
     const moment: LocalMoment = {
       id: randomUUID(),
       journalPersonId: input.journalPersonId,

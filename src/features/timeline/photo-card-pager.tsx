@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-  type MouseEvent,
-  type PointerEvent,
-} from "react";
+import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { photoAlbum } from "@/features/moments/moment-photos";
@@ -30,13 +25,14 @@ export function PhotoCardPager({
     swiped: boolean;
   } | null>(null);
   const suppressClickRef = useRef(false);
-  const current = photos[index] ?? photos[0] ?? {
-    id: moment.id,
-    src: moment.image.src,
-    alt: moment.image.alt,
-    width: moment.image.width,
-    height: moment.image.height,
-  };
+  const current = photos[index] ??
+    photos[0] ?? {
+      id: moment.id,
+      src: moment.image.src,
+      alt: moment.image.alt,
+      width: moment.image.width,
+      height: moment.image.height,
+    };
 
   function goTo(next: number) {
     if (photos.length < 2) return;
@@ -44,7 +40,10 @@ export function PhotoCardPager({
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (photos.length < 2 || event.pointerType === "mouse" && event.button !== 0) {
+    if (
+      photos.length < 2 ||
+      (event.pointerType === "mouse" && event.button !== 0)
+    ) {
       return;
     }
     pointerRef.current = {
