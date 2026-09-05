@@ -1,6 +1,4 @@
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
-import { CspPublicImage } from "@/components/csp-image";
-import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
@@ -123,28 +121,7 @@ export function MomentCard({
               }
             />
           ) : (
-            <PhotoCardPager moment={moment}>
-              {(photo) =>
-                moment.image.delivery === "private" ? (
-                  <PrivatePhotoImage
-                    src={photo.src}
-                    alt={photo.alt}
-                    width={photo.width}
-                    height={photo.height}
-                    highPriority={preload}
-                  />
-                ) : (
-                  <CspPublicImage
-                    src={photo.src}
-                    alt={photo.alt}
-                    width={photo.width ?? 1200}
-                    height={photo.height ?? 801}
-                    highPriority={preload}
-                    sizes="(max-width: 520px) 92vw, 410px"
-                  />
-                )
-              }
-            </PhotoCardPager>
+            <PhotoCardPager moment={moment} preload={preload} />
           )}
         </div>
         <div className="card-copy">
