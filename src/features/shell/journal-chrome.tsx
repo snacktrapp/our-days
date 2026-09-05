@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
+import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PhotoLightboxRoot } from "@/features/timeline/photo-lightbox";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
@@ -101,6 +102,9 @@ export function JournalChrome({
     >
       <PhotoLightboxRoot>
         {header}
+        {model.composer.circleId ? (
+          <PhotoStatusShelf circleId={model.composer.circleId} />
+        ) : null}
         <main className={`app-shell theme-${model.accent}`}>
           <div className="ambient ambient-one" />
           <div className="ambient ambient-two" />

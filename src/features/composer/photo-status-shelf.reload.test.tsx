@@ -72,11 +72,12 @@ beforeEach(() => {
 describe("PhotoStatusShelf reload recovery", () => {
   it("survives remount from server state when this browser has no resume record", async () => {
     const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Adding your photo…")).toBeVisible();
+    expect(await screen.findByText("Uploading…")).toBeVisible();
     firstPage.unmount();
 
     render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Adding your photo…")).toBeVisible();
+    expect(await screen.findByText("Uploading…")).toBeVisible();
+    expect(screen.queryByText("Adding your photo…")).toBeNull();
     await expect(
       photoUploadResumeStore.listForScope(accountId, circleId),
     ).resolves.toEqual([]);

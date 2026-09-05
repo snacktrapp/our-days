@@ -1,5 +1,4 @@
 import { JournalChrome } from "@/features/shell/journal-chrome";
-import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
@@ -51,14 +50,6 @@ export default async function FamilyPage({
     >
       <TimelineFeed
         model={model}
-        pendingEntries={
-          model.chrome.composer.circleId ? (
-            <PhotoStatusShelf
-              circleId={model.chrome.composer.circleId}
-              today={model.chrome.composer.previewToday}
-            />
-          ) : null
-        }
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
