@@ -168,29 +168,6 @@ export function PhotoLightboxTrigger({
   );
 }
 
-function usePeekedOverlayUrl(src: string) {
-  const [objectUrl, setObjectUrl] = useState(() =>
-    peekIndependentOverlayObjectUrl(src),
-  );
-
-  useEffect(() => {
-    const existing = peekIndependentOverlayObjectUrl(src);
-    if (existing) {
-      setObjectUrl(existing);
-      return;
-    }
-    let cancelled = false;
-    void prefetchIndependentOverlayObjectUrl(src).then((next) => {
-      if (!cancelled && next) setObjectUrl(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [src]);
-
-  return objectUrl;
-}
-
 function PhotoLightboxFrame({
   photo,
   photoIndex,
@@ -206,7 +183,7 @@ function PhotoLightboxFrame({
   onReady?: () => void;
   onToggleZoom?: () => void;
 }>) {
-  const objectUrl = usePeekedOverlayUrl(photo.src);
+  const objectUrl = peekIndependentOverlayObjectUrl(photo.src);
   return (
     <div
       data-photo-index={photoIndex}
