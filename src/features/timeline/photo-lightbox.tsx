@@ -265,6 +265,10 @@ function PhotoLightboxLayer({
   const displayIndex = pair?.mode === "snap" ? pair.to : index;
 
   function writePair(next: AlbumPair | null) {
+    if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
+      const width = readSlideWidth();
+      next = width > 0 ? { ...next, slideWidth: width } : next;
+    }
     pairRef.current = next;
     setPair(next);
   }
@@ -683,9 +687,8 @@ function PhotoLightboxLayer({
   const parkedIndexes = mounted.filter(
     (photoIndex) => !reserved.has(photoIndex),
   );
-  const slideWidth = pair ? readSlideWidth() : slideWidthRef.current;
   const trackStyle: CSSProperties | undefined = pair
-    ? { transform: pairSlideTransform(pair, slideWidth) }
+    ? { transform: pairSlideTransform(pair, pair.slideWidth ?? 0) }
     : undefined;
 
   function renderFrame(

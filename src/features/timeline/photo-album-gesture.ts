@@ -9,6 +9,7 @@ export type AlbumPair = Readonly<{
   direction: 1 | -1;
   mode: "pending" | "drag" | "snap" | "spring";
   dx: number;
+  slideWidth?: number;
 }>;
 
 export function wrapIndex(next: number, length: number) {
