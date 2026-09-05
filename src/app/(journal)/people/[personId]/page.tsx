@@ -10,6 +10,8 @@ import {
   createMomentNoteAction,
   loadMomentConversationAction,
   setMomentReactionAction,
+  removeMomentPhotoAction,
+  reorderMomentPhotosAction,
   trashWrittenMomentAction,
   trashMomentNoteAction,
   updateFamilyMomentAction,
@@ -62,6 +64,8 @@ export default async function PersonJournalPage({
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
+          removePhoto: removeMomentPhotoAction,
+          reorderPhotos: reorderMomentPhotosAction,
         }}
         conversationActions={{
           load: loadMomentConversationAction,

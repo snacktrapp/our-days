@@ -9,6 +9,8 @@ import {
   createFamilyMomentAction,
   createMomentNoteAction,
   loadMomentConversationAction,
+  removeMomentPhotoAction,
+  reorderMomentPhotosAction,
   setMomentReactionAction,
   trashMomentNoteAction,
   trashWrittenMomentAction,
@@ -59,6 +61,8 @@ export default async function OnThisDayPage({
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
+          removePhoto: removeMomentPhotoAction,
+          reorderPhotos: reorderMomentPhotosAction,
         }}
         conversationActions={{
           load: loadMomentConversationAction,

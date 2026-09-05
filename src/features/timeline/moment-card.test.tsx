@@ -219,6 +219,48 @@ describe("MomentCard timeline media", () => {
     expect(image.closest(".photo-frame")).not.toBeNull();
   });
 
+  it("pages a multi-photo card without opening the lightbox", async () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "album-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "First porch",
+            badgeLabel: "AUG 28",
+            width: 1200,
+            height: 801,
+          },
+          photos: [
+            {
+              id: "p1",
+              src: "/sample-family.jpg",
+              alt: "First porch",
+              width: 1200,
+              height: 801,
+            },
+            {
+              id: "p2",
+              src: "/sample-family.jpg",
+              alt: "Second porch",
+              width: 900,
+              height: 1200,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("keeps a portrait photo at its native 9:16 frame", () => {
     render(
       <MomentCard

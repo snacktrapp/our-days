@@ -63,6 +63,8 @@ export async function POST(request: Request) {
       readString(form, "latitude"),
       readString(form, "longitude"),
     );
+    const audienceValue = readString(form, "audience");
+    const existingMomentId = readString(form, "existingMomentId");
     const moment = await publishVerifiedPhotoMoment(access, {
       file,
       journalPersonId: readString(form, "journalPersonId"),
@@ -75,6 +77,11 @@ export async function POST(request: Request) {
       occurredAt: readString(form, "occurredAt") || null,
       occurredTimezone: readString(form, "occurredTimezone") || null,
       claimedSha256: readString(form, "sha256") || undefined,
+      audience:
+        audienceValue === "just_me" || audienceValue === "family"
+          ? audienceValue
+          : undefined,
+      existingMomentId: existingMomentId || undefined,
     });
     return json(200, {
       state: "published",

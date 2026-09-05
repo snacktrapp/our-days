@@ -53,9 +53,21 @@ export type ChangeTrashAction = (input: {
   revision: number;
 }) => Promise<MomentActionResult>;
 
+export type RemoveMomentPhotoAction = (input: {
+  momentId: string;
+  photoId: string;
+}) => Promise<MomentActionResult>;
+
+export type ReorderMomentPhotosAction = (input: {
+  momentId: string;
+  photoIds: readonly string[];
+}) => Promise<MomentActionResult>;
+
 export type ConnectedMomentActions = Readonly<{
   update: UpdateFamilyMomentAction;
   trash: ChangeTrashAction;
+  removePhoto?: RemoveMomentPhotoAction;
+  reorderPhotos?: ReorderMomentPhotosAction;
 }>;
 
 export type MomentConversationActions = Readonly<{

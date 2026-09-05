@@ -274,6 +274,41 @@ describe("photo lightbox", () => {
     expect(stage.contains(overlay)).toBe(true);
   });
 
+  it("swipes across an album without remounting the card image", async () => {
+    mockIndependentOverlayDecode();
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src={cardPixelA}
+          alt="First light"
+          photos={[
+            { src: cardPixelA, alt: "First light" },
+            { src: cardPixelB, alt: "Last light" },
+          ]}
+          index={0}
+        >
+          {cardPhoto(cardPixelA, "First light card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    const card = screen.getByRole("img", { name: "First light card" });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    const first = await screen.findByRole("img", { name: "First light" });
+    fireEvent.load(first);
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    const second = await screen.findByRole("img", { name: "Last light" });
+    expect(second).toBeVisible();
+    expect(screen.queryByRole("img", { name: "First light" })).toBeNull();
+    expect(card).toHaveAttribute("src", cardPixelA);
+    expect(card).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Previous photo" }));
+    expect(await screen.findByRole("img", { name: "First light" })).toBeVisible();
+  });
+
   it("does not capture pointermove, so native pinch is not blocked", async () => {
     mockIndependentOverlayDecode();
     render(

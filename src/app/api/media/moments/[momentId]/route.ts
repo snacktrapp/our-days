@@ -26,11 +26,15 @@ function hex(bytes: ArrayBuffer) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: Readonly<{ params: Promise<{ momentId: string }> }>,
 ) {
   const { momentId } = await context.params;
   if (!uuidPattern.test(momentId)) return unavailable();
+  const requestedPhotoId = new URL(request.url).searchParams.get("photo");
+  if (requestedPhotoId && !uuidPattern.test(requestedPhotoId)) {
+    return unavailable();
+  }
   if (localJournalIsEnabled()) {
     const { readLocalJournalAccess } = await import("@/lib/local-journal/auth");
     const { digestBuffer, readLocalMediaFile } =
@@ -40,18 +44,28 @@ export async function GET(
     const access = await readLocalJournalAccess();
     if (!access) return unavailable();
     const moment = await findLocalVisibleMoment(momentId);
-    if (!moment?.media || moment.kind !== "photo") return unavailable();
+    if (moment?.kind !== "photo") return unavailable();
+    const photos = moment.photos?.length
+      ? moment.photos
+      : moment.media
+        ? [{ id: moment.id, ...moment.media }]
+        : [];
+    const selected =
+      (requestedPhotoId
+        ? photos.find((photo) => photo.id === requestedPhotoId)
+        : photos[0]) ?? null;
+    if (!selected) return unavailable();
     const relativePath =
-      moment.media.displayRelativePath ?? moment.media.originalRelativePath;
+      selected.displayRelativePath ?? selected.originalRelativePath;
     const bytes = readLocalMediaFile(relativePath);
-    const expectedSha = moment.media.displaySha256 ?? moment.media.sha256;
+    const expectedSha = selected.displaySha256 ?? selected.sha256;
     if (digestBuffer(bytes) !== expectedSha) return unavailable();
     return new Response(bytes, {
       status: 200,
       headers: {
         ...privateHeaders,
         "Content-Length": String(bytes.byteLength),
-        "Content-Type": moment.media.displayMimeType ?? moment.media.mimeType,
+        "Content-Type": selected.displayMimeType ?? selected.mimeType,
       },
     });
   }
@@ -64,7 +78,9 @@ export async function GET(
     "get_photo_moment_delivery",
     { moment_id: momentId },
   );
-  const descriptor = rows?.[0];
+  const descriptor = requestedPhotoId
+    ? rows?.find((row) => row.photo_id === requestedPhotoId)
+    : rows?.[0];
   if (descriptorError || !descriptor) return unavailable();
 
   const { data: photo, error: downloadError } = await supabase.storage

@@ -979,6 +979,52 @@ button:focus-visible,
   box-shadow: inset 0 -70px 90px rgba(40, 32, 25, 0.15);
   pointer-events: none;
 }
+.photo-card-pager {
+  position: relative;
+  width: 100%;
+}
+.photo-card-pager-arrow {
+  min-width: 36px;
+  min-height: 36px;
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(36, 31, 27, 0.62);
+  color: #fffaf0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.photo-card-pager-arrow.is-prev {
+  left: 8px;
+}
+.photo-card-pager-arrow.is-next {
+  right: 8px;
+}
+.photo-card-pager-dots {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.photo-card-pager-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.45);
+}
+.photo-card-pager-dots span.is-current {
+  background: #fffaf0;
+}
 .photo-date {
   position: absolute;
   z-index: 1;
@@ -3711,6 +3757,61 @@ button:focus-visible,
   background: rgba(36, 31, 27, 0.88);
   color: #fffaf0;
   font-size: 11px;
+  cursor: pointer;
+}
+.composer-photo-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.composer-photo-thumb,
+.composer-photo-add {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #e9e2d7;
+}
+.composer-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.composer-photo-thumb-remove {
+  min-width: 28px;
+  min-height: 28px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(36, 31, 27, 0.82);
+  color: #fffaf0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.composer-photo-add {
+  display: grid;
+  place-content: center;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  background: color-mix(in srgb, var(--accent) 5%, var(--cream));
+  color: #60574e;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+.composer-photo-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
   cursor: pointer;
 }
 .composer-error {
@@ -6504,6 +6605,28 @@ html[data-theme].overlay-open .app-shell::before,
   touch-action: pan-x pan-y pinch-zoom;
 }
 
+.photo-lightbox-nav {
+  min-width: 44px;
+  min-height: 44px;
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 12, 0.55);
+  color: #fffaf0;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+.photo-lightbox-nav.is-prev {
+  left: 12px;
+}
+.photo-lightbox-nav.is-next {
+  right: 12px;
+}
 .photo-lightbox-close {
   position: fixed;
   z-index: 2;

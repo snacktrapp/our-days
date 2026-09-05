@@ -114,6 +114,40 @@ describe("local journal happy path", () => {
       moment.media?.originalRelativePath,
     );
     expect(moment.media?.sha256).toHaveLength(64);
+    expect(moment.photos).toHaveLength(1);
+
+    const second = await publishVerifiedPhotoMoment(access, {
+      file: new File([bytes], "porch-2.jpg", { type: "image/jpeg" }),
+      journalPersonId: localAlexPersonId,
+      body: "The last warm hour.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      existingMomentId: moment.id,
+    });
+    expect(second.id).toBe(moment.id);
+    expect(second.photos).toHaveLength(2);
+
+    const { reorderLocalMomentPhotos } = await import("./store");
+    await reorderLocalMomentPhotos(access, {
+      momentId: moment.id,
+      photoIds: [second.photos![1]!.id, second.photos![0]!.id],
+    });
+    const timeline = await loadLocalTimeline(access, await loadLocalJournalContext(access), {
+      pages: 1,
+    });
+    const photoMoment = timeline.entries.find(
+      (entry) => entry.entryType === "moment" && entry.moment.id === moment.id,
+    );
+    expect(
+      photoMoment && photoMoment.entryType === "moment"
+        ? photoMoment.moment.kind === "photo"
+          ? photoMoment.moment.photos?.map((photo) => photo.id)
+          : []
+        : [],
+    ).toEqual([second.photos![1]!.id, second.photos![0]!.id]);
   });
 
   it("lets Operations post Insights and write with organizer privileges", async () => {

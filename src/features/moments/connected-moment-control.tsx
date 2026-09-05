@@ -190,7 +190,10 @@ function ChangeableMomentControl({
   const editMoment = () => {
     closeMenu(true);
     if (!composerSession) return;
-    const draft = buildComposerEditDraft(moment, actions.update);
+    const draft = buildComposerEditDraft(moment, actions.update, {
+      removePhoto: actions.removePhoto,
+      reorderPhotos: actions.reorderPhotos,
+    });
     if (!draft) return;
     composerSession.openEdit(draft, menuTriggerRef.current);
   };

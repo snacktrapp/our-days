@@ -487,6 +487,10 @@ export async function publishLocalMediaMoment(
       throw new Error("That journal cannot be written from this account.");
     }
     const createdAt = nowIso();
+    const photo =
+      input.kind === "photo"
+        ? { id: randomUUID(), ...input.media }
+        : undefined;
     const moment: LocalMoment = {
       id: randomUUID(),
       journalPersonId: input.journalPersonId,
@@ -509,6 +513,7 @@ export async function publishLocalMediaMoment(
       trashedAt: null,
       trashedByMembershipId: null,
       media: input.media,
+      photos: photo ? [photo] : undefined,
     };
     writeDocumentUnlocked({
       ...document,
@@ -691,6 +696,151 @@ export function compareTimelineMoments(left: LocalMoment, right: LocalMoment) {
     return right.occurredAt.localeCompare(left.occurredAt);
   }
   return right.id.localeCompare(left.id);
+}
+
+function localPhotosFor(moment: LocalMoment) {
+  if (moment.photos && moment.photos.length > 0) return [...moment.photos];
+  if (moment.kind === "photo" && moment.media) {
+    return [{ id: moment.id, ...moment.media }];
+  }
+  return [];
+}
+
+function removeLocalPhotoFiles(photo: LocalMedia) {
+  const mediaRoot = localJournalMediaDirectory();
+  for (const relative of [
+    photo.originalRelativePath,
+    photo.displayRelativePath,
+  ]) {
+    if (!relative) continue;
+    const directory = dirname(join(mediaRoot, relative));
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+export async function attachLocalPhotoToMoment(
+  access: LocalAccess,
+  input: Readonly<{
+    momentId: string;
+    media: LocalMedia & { id: string };
+  }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = document.moments.find(
+      (moment) => moment.id === input.momentId && moment.trashedAt === null,
+    );
+    if (!current || current.kind !== "photo") {
+      throw new Error("That photo could not be added.");
+    }
+    if (!canWriteJournal(document, access, current.journalPersonId)) {
+      throw new Error("That journal cannot be written from this account.");
+    }
+    const photos = localPhotosFor(current);
+    if (photos.length >= 6) {
+      throw new Error("A photo entry can hold up to 6 photos.");
+    }
+    const nextPhotos = [...photos, input.media];
+    const updated: LocalMoment = {
+      ...current,
+      photos: nextPhotos,
+      media: nextPhotos[0],
+      revision: nextRevision(current.revision),
+      updatedAt: nowIso(),
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: document.moments.map((moment) =>
+        moment.id === current.id ? updated : moment,
+      ),
+    });
+    return updated;
+  });
+}
+
+export async function reorderLocalMomentPhotos(
+  access: LocalAccess,
+  input: Readonly<{ momentId: string; photoIds: readonly string[] }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = document.moments.find(
+      (moment) => moment.id === input.momentId && moment.trashedAt === null,
+    );
+    if (!current || current.kind !== "photo") {
+      throw new Error("Those photos could not be reordered.");
+    }
+    if (!canWriteJournal(document, access, current.journalPersonId)) {
+      throw new Error("That journal cannot be written from this account.");
+    }
+    const photos = localPhotosFor(current);
+    if (
+      input.photoIds.length !== photos.length ||
+      new Set(input.photoIds).size !== photos.length ||
+      input.photoIds.some((id) => !photos.some((photo) => photo.id === id))
+    ) {
+      throw new Error("Those photos could not be reordered.");
+    }
+    const byId = new Map(photos.map((photo) => [photo.id, photo]));
+    const nextPhotos = input.photoIds.map((id) => byId.get(id)!);
+    const updated: LocalMoment = {
+      ...current,
+      photos: nextPhotos,
+      media: nextPhotos[0],
+      revision: nextRevision(current.revision),
+      updatedAt: nowIso(),
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: document.moments.map((moment) =>
+        moment.id === current.id ? updated : moment,
+      ),
+    });
+    return updated.revision;
+  });
+}
+
+export async function removeLocalMomentPhoto(
+  access: LocalAccess,
+  input: Readonly<{ momentId: string; photoId: string }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = document.moments.find(
+      (moment) => moment.id === input.momentId && moment.trashedAt === null,
+    );
+    if (!current || current.kind !== "photo") {
+      throw new Error("That photo could not be removed.");
+    }
+    if (!canWriteJournal(document, access, current.journalPersonId)) {
+      throw new Error("That journal cannot be written from this account.");
+    }
+    const photos = localPhotosFor(current);
+    if (photos.length <= 1) {
+      throw new Error("Keep at least one photo, or move the moment to trash.");
+    }
+    const removed = photos.find((photo) => photo.id === input.photoId);
+    if (!removed) throw new Error("That photo could not be removed.");
+    const nextPhotos = photos.filter((photo) => photo.id !== input.photoId);
+    removeLocalPhotoFiles(removed);
+    const updated: LocalMoment = {
+      ...current,
+      photos: nextPhotos,
+      media: nextPhotos[0],
+      revision: nextRevision(current.revision),
+      updatedAt: nowIso(),
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: document.moments.map((moment) =>
+        moment.id === current.id ? updated : moment,
+      ),
+    });
+    return updated.revision;
+  });
 }
 
 export function resetLocalJournalForTests() {

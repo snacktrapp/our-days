@@ -33,6 +33,13 @@ type Box = Readonly<{
   height: number;
 }>;
 
+export type PhotoLightboxPhoto = Readonly<{
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}>;
+
 export type PhotoLightboxRequest = Readonly<{
   src: string;
   alt: string;
@@ -40,6 +47,8 @@ export type PhotoLightboxRequest = Readonly<{
   trigger: HTMLElement;
   width?: number;
   height?: number;
+  photos?: readonly PhotoLightboxPhoto[];
+  index?: number;
 }>;
 
 type PhotoMotion = "opening" | "open" | "closing";
@@ -82,6 +91,8 @@ export function PhotoLightboxTrigger({
   alt,
   width,
   height,
+  photos,
+  index = 0,
   reactionTargetId,
   children,
 }: Readonly<{
@@ -89,6 +100,8 @@ export function PhotoLightboxTrigger({
   alt: string;
   width?: number;
   height?: number;
+  photos?: readonly PhotoLightboxPhoto[];
+  index?: number;
   reactionTargetId?: string;
   children: ReactNode;
 }>) {
@@ -114,13 +127,18 @@ export function PhotoLightboxTrigger({
         trigger,
         width,
         height,
+        photos,
+        index,
       });
     },
   });
 
   useEffect(() => {
     void prefetchIndependentOverlayObjectUrl(src);
-  }, [src]);
+    for (const photo of photos ?? []) {
+      if (photo.src !== src) void prefetchIndependentOverlayObjectUrl(photo.src);
+    }
+  }, [photos, src]);
 
   return (
     <button
@@ -142,23 +160,49 @@ function PhotoLightboxLayer({
   request: PhotoLightboxRequest;
   onClosed: () => void;
 }>) {
+  const album = request.photos?.length
+    ? request.photos
+    : [
+        {
+          src: request.src,
+          alt: request.alt,
+          width: request.width,
+          height: request.height,
+        },
+      ];
+  const [index, setIndex] = useState(() => {
+    const start = request.index ?? 0;
+    return start >= 0 && start < album.length ? start : 0;
+  });
+  const current = album[index] ?? album[0]!;
   const [objectUrl, setObjectUrl] = useState(() =>
-    peekIndependentOverlayObjectUrl(request.src),
+    peekIndependentOverlayObjectUrl(current.src),
   );
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
   const closeTimerRef = useRef<number | null>(null);
+  const swipeRef = useRef<{ id: number; x: number; y: number } | null>(null);
   const titleId = useId();
 
   useEffect(() => {
     let cancelled = false;
-    void prefetchIndependentOverlayObjectUrl(request.src).then((next) => {
+    setObjectUrl(peekIndependentOverlayObjectUrl(current.src));
+    void prefetchIndependentOverlayObjectUrl(current.src).then((next) => {
       if (!cancelled && next) setObjectUrl(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [request.src]);
+  }, [current.src]);
+
+  const goTo = useCallback(
+    (next: number) => {
+      if (album.length < 2) return;
+      setZoomed(false);
+      setIndex((next + album.length) % album.length);
+    },
+    [album.length],
+  );
 
   function clearCloseTimer() {
     if (closeTimerRef.current == null) return;
@@ -203,16 +247,27 @@ function PhotoLightboxLayer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closeRef.current();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (zoomed) return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goTo(index + 1);
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goTo(index - 1);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
       clearCloseTimer();
     };
-  }, []);
+  }, [goTo, index, zoomed]);
 
   function onLayerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Tab") return;
@@ -248,7 +303,7 @@ function PhotoLightboxLayer({
     >
       <div className="photo-lightbox-dimmer" />
       <h2 id={titleId} className="sr-only">
-        Full-screen photo: {request.alt}
+        Full-screen photo: {current.alt}
       </h2>
       <button
         type="button"
@@ -258,15 +313,57 @@ function PhotoLightboxLayer({
       >
         ×
       </button>
-      <div className="photo-lightbox-stage">
+      {album.length > 1 ? (
+        <>
+          <button
+            type="button"
+            className="photo-lightbox-nav is-prev"
+            aria-label="Previous photo"
+            onClick={() => goTo(index - 1)}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="photo-lightbox-nav is-next"
+            aria-label="Next photo"
+            onClick={() => goTo(index + 1)}
+          >
+            ›
+          </button>
+        </>
+      ) : null}
+      <div
+        className="photo-lightbox-stage"
+        onPointerDown={(event) => {
+          if (zoomed || album.length < 2) return;
+          swipeRef.current = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+          };
+        }}
+        onPointerUp={(event) => {
+          const start = swipeRef.current;
+          swipeRef.current = null;
+          if (!start || start.id !== event.pointerId || zoomed) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+          goTo(index + (dx < 0 ? 1 : -1));
+        }}
+        onPointerCancel={() => {
+          swipeRef.current = null;
+        }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
           src={objectUrl}
-          alt={request.alt}
+          alt={current.alt}
           onLoad={revealPhoto}
           onError={revealPhoto}
-          onDoubleClick={() => setZoomed((current) => !current)}
+          onDoubleClick={() => setZoomed((currentZoom) => !currentZoom)}
         />
       </div>
     </div>

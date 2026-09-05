@@ -1443,6 +1443,24 @@ describe("MomentComposer", () => {
     );
   });
 
+  it("adds a second photo from the thumb strip without replacing the first", async () => {
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File(["first"], "first.jpg", { type: "image/jpeg" }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.upload(
+      screen.getByLabelText("Add photo"),
+      new File(["second"], "second.jpg", { type: "image/jpeg" }),
+    );
+    expect(screen.getByAltText("Photo 1 of 2")).toBeVisible();
+    expect(screen.getByAltText("Photo 2 of 2")).toBeVisible();
+    expect(screen.queryByText("Choose photo or video")).toBeNull();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it("rejects an image that the browser cannot decode", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /^Photo/u }));
@@ -1475,24 +1493,23 @@ describe("MomentComposer", () => {
     );
     const firstPreview = screen.getByAltText("Selected photo preview");
 
-    fireEvent.submit(picker.closest("form")!);
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Wait for this photo to finish loading.",
     );
 
     await user.upload(
-      picker,
+      screen.getByLabelText("Add photo"),
       new File(["second"], "second.jpg", { type: "image/jpeg" }),
     );
-    const secondPreview = screen.getByAltText("Selected photo preview");
-    expect(secondPreview).not.toBe(firstPreview);
+    expect(screen.getByAltText("Photo 2 of 2")).toBeVisible();
     fireEvent.error(firstPreview);
-    expect(secondPreview).toBeVisible();
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(screen.getByAltText("Selected photo preview")).toBeVisible();
 
-    fireEvent.load(secondPreview);
-    fireEvent.submit(picker.closest("form")!);
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -1509,15 +1526,18 @@ describe("MomentComposer", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("first.jpg")).toBeNull();
 
-    await user.upload(input, second);
+    await user.upload(screen.getByLabelText("Add photo"), second);
+    expect(createObjectURL).toHaveBeenCalledTimes(2);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Remove photo 2" }));
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       1,
-      "blob:composer-preview-1",
+      "blob:composer-preview-2",
     );
     await user.click(screen.getByRole("button", { name: "Remove photo" }));
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       2,
-      "blob:composer-preview-2",
+      "blob:composer-preview-1",
     );
 
     input = screen.getByLabelText(/Choose photo/u);
@@ -1542,7 +1562,7 @@ describe("MomentComposer", () => {
     input = await picker();
     await user.upload(input, second);
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    fireEvent.submit(input.closest("form")!);
+    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       4,

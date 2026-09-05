@@ -215,8 +215,10 @@ export type Database = {
           display_derivative_id: string;
           display_height: number;
           display_width: number;
+          id: string;
           moment_id: string;
           original_id: string;
+          sort_order: number;
         };
         Insert: {
           circle_id: string;
@@ -224,8 +226,10 @@ export type Database = {
           display_derivative_id: string;
           display_height: number;
           display_width: number;
+          id?: string;
           moment_id: string;
           original_id: string;
+          sort_order?: number;
         };
         Update: {
           circle_id?: string;
@@ -233,14 +237,16 @@ export type Database = {
           display_derivative_id?: string;
           display_height?: number;
           display_width?: number;
+          id?: string;
           moment_id?: string;
           original_id?: string;
+          sort_order?: number;
         };
         Relationships: [
           {
             foreignKeyName: "moment_photos_moment_fkey";
             columns: ["circle_id", "moment_id"];
-            isOneToOne: true;
+            isOneToOne: false;
             referencedRelation: "moments";
             referencedColumns: ["circle_id", "id"];
           },
@@ -580,6 +586,17 @@ export type Database = {
           state: string;
         }[];
       };
+      attach_photo_to_moment: {
+        Args: { existing_moment_id: string; request_key: string };
+        Returns: {
+          bucket_id: string;
+          expires_at: string;
+          intake_id: string;
+          moment_id: string;
+          object_path: string;
+          state: string;
+        }[];
+      };
       cancel_photo_intake: {
         Args: { intake_id: string };
         Returns: {
@@ -806,6 +823,8 @@ export type Database = {
           output_sha256_hex: string;
           output_size_bytes: number;
           output_width: number;
+          photo_id: string;
+          sort_order: number;
         }[];
       };
       get_photo_moment_status: {
@@ -1084,6 +1103,14 @@ export type Database = {
           rejection_reason: string;
         };
         Returns: string;
+      };
+      remove_moment_photo: {
+        Args: { moment_id: string; photo_id: string };
+        Returns: undefined;
+      };
+      reorder_moment_photos: {
+        Args: { moment_id: string; photo_ids: string[] };
+        Returns: undefined;
       };
       reject_photo_validation: {
         Args: {

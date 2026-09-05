@@ -63,6 +63,7 @@ export type LocalMoment = Readonly<{
   trashedAt: string | null;
   trashedByMembershipId: string | null;
   media?: LocalMedia;
+  photos?: readonly (LocalMedia & { id: string })[];
 }>;
 
 export type LocalNote = Readonly<{

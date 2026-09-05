@@ -2,7 +2,7 @@ import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
-import { PhotoLightboxTrigger } from "./photo-lightbox";
+import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
@@ -123,32 +123,28 @@ export function MomentCard({
               }
             />
           ) : (
-            <PhotoLightboxTrigger
-              src={moment.image.src}
-              alt={moment.image.alt}
-              width={moment.image.width}
-              height={moment.image.height}
-              reactionTargetId={moment.id}
-            >
-              {moment.image.delivery === "private" ? (
-                <PrivatePhotoImage
-                  src={moment.image.src}
-                  alt={moment.image.alt}
-                  width={moment.image.width}
-                  height={moment.image.height}
-                  highPriority={preload}
-                />
-              ) : (
-                <CspPublicImage
-                  src={moment.image.src}
-                  alt={moment.image.alt}
-                  width={moment.image.width ?? 1200}
-                  height={moment.image.height ?? 801}
-                  highPriority={preload}
-                  sizes="(max-width: 520px) 92vw, 410px"
-                />
-              )}
-            </PhotoLightboxTrigger>
+            <PhotoCardPager moment={moment}>
+              {(photo) =>
+                moment.image.delivery === "private" ? (
+                  <PrivatePhotoImage
+                    src={photo.src}
+                    alt={photo.alt}
+                    width={photo.width}
+                    height={photo.height}
+                    highPriority={preload}
+                  />
+                ) : (
+                  <CspPublicImage
+                    src={photo.src}
+                    alt={photo.alt}
+                    width={photo.width ?? 1200}
+                    height={photo.height ?? 801}
+                    highPriority={preload}
+                    sizes="(max-width: 520px) 92vw, 410px"
+                  />
+                )
+              }
+            </PhotoCardPager>
           )}
         </div>
         <div className="card-copy">
