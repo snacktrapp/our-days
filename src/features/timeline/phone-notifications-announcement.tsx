@@ -61,19 +61,33 @@ export function PhoneNotificationsAnnouncement() {
 
   return (
     <aside className="phone-notifications-announcement" role="status">
-      <p>Phone notifications are live — turn them on in Account.</p>
-      <div className="phone-notifications-announcement-actions">
-        <Link
-          href="/settings/family#notifications"
-          prefetch={false}
-          onClick={dismiss}
-        >
-          Open Account
-        </Link>
-        <button type="button" onClick={dismiss}>
-          Dismiss
-        </button>
-      </div>
+      <button
+        type="button"
+        className="phone-notifications-announcement-dismiss"
+        aria-label="Dismiss"
+        onClick={dismiss}
+      >
+        ×
+      </button>
+      <span
+        className="phone-notifications-announcement-mark"
+        aria-hidden="true"
+      >
+        <svg viewBox="0 0 24 24">
+          <path d="M6.2 16.4h11.6s-1.3-1.5-1.3-5.1a4.5 4.5 0 1 0-9 0c0 3.6-1.3 5.1-1.3 5.1Z" />
+          <path d="M10.2 18.1a1.8 1.8 0 0 0 3.6 0" />
+        </svg>
+      </span>
+      <strong>Phone notifications are live</strong>
+      <p>Get a quiet ping on this phone.</p>
+      <Link
+        className="phone-notifications-announcement-cta"
+        href="/settings/family#notifications"
+        prefetch={false}
+        onClick={dismiss}
+      >
+        Turn on notifications
+      </Link>
     </aside>
   );
 }

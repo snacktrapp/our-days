@@ -44,30 +44,21 @@ describe("PhoneNotificationsAnnouncement", () => {
     const { rerender } = render(<PhoneNotificationsAnnouncement />);
 
     expect(
-      await screen.findByText(
-        "Phone notifications are live — turn them on in Account.",
-      ),
+      await screen.findByText("Phone notifications are live"),
     ).toBeVisible();
-    const account = screen.getByRole("link", { name: "Open Account" });
+    expect(screen.getByText("Get a quiet ping on this phone.")).toBeVisible();
+    const account = screen.getByRole("link", { name: "Turn on notifications" });
     expect(account).toHaveAttribute("href", "/settings/family#notifications");
 
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(
-      screen.queryByText(
-        "Phone notifications are live — turn them on in Account.",
-      ),
-    ).toBeNull();
+    expect(screen.queryByText("Phone notifications are live")).toBeNull();
     expect(
       window.localStorage.getItem("our-days:phone-notifications-announcement"),
     ).toBe("dismissed");
 
     rerender(<PhoneNotificationsAnnouncement />);
     await waitFor(() => {
-      expect(
-        screen.queryByText(
-          "Phone notifications are live — turn them on in Account.",
-        ),
-      ).toBeNull();
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
   });
 
@@ -76,12 +67,10 @@ describe("PhoneNotificationsAnnouncement", () => {
     const user = userEvent.setup();
     render(<PhoneNotificationsAnnouncement />);
 
-    await user.click(await screen.findByRole("link", { name: "Open Account" }));
-    expect(
-      screen.queryByText(
-        "Phone notifications are live — turn them on in Account.",
-      ),
-    ).toBeNull();
+    await user.click(
+      await screen.findByRole("link", { name: "Turn on notifications" }),
+    );
+    expect(screen.queryByText("Phone notifications are live")).toBeNull();
     expect(
       window.localStorage.getItem("our-days:phone-notifications-announcement"),
     ).toBe("dismissed");
@@ -93,11 +82,7 @@ describe("PhoneNotificationsAnnouncement", () => {
 
     render(<PhoneNotificationsAnnouncement />);
     await waitFor(() => {
-      expect(
-        screen.queryByText(
-          "Phone notifications are live — turn them on in Account.",
-        ),
-      ).toBeNull();
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
   });
 
@@ -107,22 +92,14 @@ describe("PhoneNotificationsAnnouncement", () => {
 
     render(<PhoneNotificationsAnnouncement />);
     await waitFor(() => {
-      expect(
-        screen.queryByText(
-          "Phone notifications are live — turn them on in Account.",
-        ),
-      ).toBeNull();
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
   });
 
   it("stays hidden when VAPID is missing", async () => {
     render(<PhoneNotificationsAnnouncement />);
     await waitFor(() => {
-      expect(
-        screen.queryByText(
-          "Phone notifications are live — turn them on in Account.",
-        ),
-      ).toBeNull();
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
   });
 });

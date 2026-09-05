@@ -1493,46 +1493,117 @@ button:focus-visible,
   z-index: 2;
   width: min(calc(100% - 32px), 398px);
   margin: 8px auto 2px;
-  padding: 12px 14px 10px;
+  padding: 13px 40px 13px 13px;
   display: grid;
-  gap: 4px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: var(--cream);
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--ochre) 34%, var(--hairline));
+  border-radius: 14px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--ochre) 20%, var(--cream)) 0%,
+    color-mix(in srgb, var(--ochre) 8%, var(--cream)) 52%,
+    color-mix(in srgb, var(--ochre) 4%, var(--cream)) 100%
+  );
+  box-shadow: none;
+}
+
+.phone-notifications-announcement-mark {
+  grid-row: 1 / span 2;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ochre) 18%, transparent);
+  color: var(--ochre);
+}
+
+.phone-notifications-announcement-mark svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.phone-notifications-announcement strong {
+  grid-column: 2;
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .phone-notifications-announcement p {
+  grid-column: 2;
   margin: 0;
-  color: var(--ink);
-  font-size: 13px;
+  color: var(--muted);
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
-.phone-notifications-announcement-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
+.phone-notifications-announcement-cta {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ochre);
+  color: var(--cream);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  display: inline-grid;
+  place-items: center;
 }
 
-.phone-notifications-announcement a,
-.phone-notifications-announcement button {
-  min-height: 44px;
-  padding: 0 10px;
+.phone-notifications-announcement-dismiss {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-radius: 8px;
   background: transparent;
-  font-size: 12px;
-  font-weight: 650;
+  color: var(--muted);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
 }
 
-.phone-notifications-announcement a {
-  color: var(--teal);
+.phone-notifications-announcement-dismiss:hover,
+.phone-notifications-announcement-dismiss:focus-visible {
+  color: var(--ink);
 }
 
-.phone-notifications-announcement button {
-  color: var(--muted);
+.phone-notifications-announcement-cta:hover,
+.phone-notifications-announcement-cta:focus-visible {
+  color: var(--cream);
+  background: color-mix(in srgb, var(--ochre) 86%, var(--ink));
+}
+
+:root[data-theme="dark"] .phone-notifications-announcement {
+  border-color: color-mix(in srgb, var(--ochre) 44%, var(--hairline));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--ochre) 28%, var(--cream)) 0%,
+    color-mix(in srgb, var(--ochre) 12%, var(--cream)) 54%,
+    color-mix(in srgb, var(--ochre) 6%, var(--cream)) 100%
+  );
 }
 
 .journal-error-shell .phone-stage {
@@ -4650,7 +4721,6 @@ button:focus-visible,
 .memory-collections > article,
 .memory-empty,
 .timeline-empty-state,
-.phone-notifications-announcement,
 .trash-empty,
 .trash-list li,
 .family-settings-panel {
