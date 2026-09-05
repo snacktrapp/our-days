@@ -1,8 +1,12 @@
 "use client";
 
-import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { CspPublicImage } from "@/components/csp-image";
-import { PrivatePhotoImage } from "@/components/private-photo-image";
+import {
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+} from "react";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
 import { PhotoLightboxTrigger } from "./photo-lightbox";
@@ -11,10 +15,10 @@ const swipeThreshold = 36;
 
 export function PhotoCardPager({
   moment,
-  preload = false,
+  images,
 }: Readonly<{
   moment: PhotoMomentViewModel;
-  preload?: boolean;
+  images: readonly ReactNode[];
 }>) {
   const photos = photoAlbum(moment);
   const [index, setIndex] = useState(0);
@@ -102,24 +106,7 @@ export function PhotoCardPager({
         index={index}
         reactionTargetId={moment.id}
       >
-        {moment.image.delivery === "private" ? (
-          <PrivatePhotoImage
-            src={current.src}
-            alt={current.alt}
-            width={current.width}
-            height={current.height}
-            highPriority={preload}
-          />
-        ) : (
-          <CspPublicImage
-            src={current.src}
-            alt={current.alt}
-            width={current.width ?? 1200}
-            height={current.height ?? 801}
-            highPriority={preload}
-            sizes="(max-width: 520px) 92vw, 410px"
-          />
-        )}
+        {images[index] ?? images[0]}
       </PhotoLightboxTrigger>
       {photos.length > 1 ? (
         <>
