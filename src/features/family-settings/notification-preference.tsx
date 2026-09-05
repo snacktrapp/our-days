@@ -24,6 +24,21 @@ function isIosDevice() {
   return /iPad|iPhone|iPod/u.test(navigator.userAgent);
 }
 
+function isStandaloneDisplay() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      return true;
+    }
+  } catch {
+    // jsdom and similar test hosts may not implement matchMedia.
+  }
+  return (
+    "standalone" in navigator &&
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  );
+}
+
 async function currentPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
@@ -66,7 +81,6 @@ export function NotificationPreference() {
   const enable = async () => {
     setMessage(null);
     if (!configured) {
-      setMessage("Phone notifications aren’t set up on this journal yet.");
       return;
     }
     if (
@@ -141,55 +155,31 @@ export function NotificationPreference() {
     }
   };
 
-  const heading =
-    state === "on"
-      ? "Notifications on"
-      : state === "blocked"
-        ? "Notifications blocked"
-        : "Enable notifications";
-  const detail =
-    state === "on"
-      ? "Family posts, reactions, and comments can reach this phone"
-      : state === "blocked"
-        ? "This device blocked Our Days. Change that in system settings."
-        : state === "unsupported"
-          ? "This browser cannot receive phone notifications"
-          : "Banners when family posts, reacts, or comments";
+  const on = state === "on";
+  const canToggle = configured && !busy && (state === "off" || state === "on");
+  const helper = !configured
+    ? "Not available yet."
+    : isIosDevice() && !isStandaloneDisplay()
+      ? "On iPhone and iPad, add Our Days to your Home Screen first."
+      : null;
 
   return (
     <div className="notification-preference">
-      {state === "on" ? (
-        <button
-          className="account-tool-link"
-          type="button"
-          onClick={() => void disable()}
-          disabled={busy}
-        >
-          <span>
-            <strong>Turn off notifications</strong>
-            <small>{detail}</small>
-          </span>
-          <span aria-hidden="true">×</span>
-        </button>
-      ) : (
-        <button
-          className="account-tool-link"
-          type="button"
-          onClick={() => void enable()}
-          disabled={busy || state === "blocked"}
-        >
-          <span>
-            <strong>{heading}</strong>
-            <small>{detail}</small>
-          </span>
-          <span aria-hidden="true">{state === "blocked" ? "!" : "→"}</span>
-        </button>
-      )}
-      <p className="notification-preference-note">
-        {isIosDevice()
-          ? "On iPhone and iPad, add Our Days to your Home Screen first."
-          : "On iPhone and iPad, Our Days must be on the Home Screen for push."}
-      </p>
+      <button
+        className="notification-preference-row"
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="Notifications"
+        disabled={!canToggle}
+        onClick={() => {
+          void (on ? disable() : enable());
+        }}
+      >
+        <strong>Notifications</strong>
+        <span className="notification-switch" aria-hidden="true" />
+      </button>
+      {helper ? <p className="notification-preference-note">{helper}</p> : null}
       {message ? (
         <p className="notification-preference-message" role="status">
           {message}

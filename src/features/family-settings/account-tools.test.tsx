@@ -36,10 +36,11 @@ describe("Account tools", () => {
     expect(
       screen.getByRole("heading", { name: "Journal tools" }),
     ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: /Enable notifications/u }),
-    ).toBeVisible();
-    expect(screen.getByText(/Home Screen/u)).toBeVisible();
+    const notifications = screen.getByRole("switch", { name: "Notifications" });
+    expect(notifications).toBeVisible();
+    expect(notifications).toBeDisabled();
+    expect(screen.getByText("Not available yet.")).toBeVisible();
+    expect(screen.queryByText(/Home Screen/u)).toBeNull();
     const trash = screen.getByRole("link", { name: /Recently removed/u });
     expect(trash).toHaveAttribute("href", "/trash");
     expect(trash).toHaveClass("account-tool-link");
