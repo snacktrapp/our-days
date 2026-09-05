@@ -25,6 +25,14 @@ const descriptor = {
     "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0",
   output_width: 1200,
   output_height: 800,
+  photo_id: "10000000-0000-4000-8000-000000000011",
+  sort_order: 0,
+};
+const secondDescriptor = {
+  ...descriptor,
+  object_path: "display/private/photo-2.webp",
+  photo_id: "10000000-0000-4000-8000-000000000012",
+  sort_order: 1,
 };
 
 function request(id = momentId) {
@@ -37,7 +45,10 @@ describe("private photo delivery route", () => {
   beforeEach(() => {
     vi.stubEnv("OUR_DAYS_MEDIA_DELIVERY_MODE", "enabled");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
-    mocks.rpc.mockResolvedValue({ data: [descriptor], error: null });
+    mocks.rpc.mockResolvedValue({
+      data: [descriptor, secondDescriptor],
+      error: null,
+    });
     mocks.download.mockResolvedValue({
       data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], {
         type: "image/webp",
@@ -97,6 +108,31 @@ describe("private photo delivery route", () => {
     const response = await request(id);
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("");
+  });
+
+  it("streams a specific album photo when photo is requested", async () => {
+    const response = await GET(
+      new Request(
+        `https://journal.example.test/api/media/${momentId}?photo=${secondDescriptor.photo_id}`,
+      ),
+      { params: Promise.resolve({ momentId }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.download).toHaveBeenCalledWith(
+      "display/private/photo-2.webp",
+      {},
+      { cache: "no-store" },
+    );
+  });
+
+  it("returns the same neutral response for an unknown photo id", async () => {
+    const response = await GET(
+      new Request(
+        `https://journal.example.test/api/media/${momentId}?photo=10000000-0000-4000-8000-000000000099`,
+      ),
+      { params: Promise.resolve({ momentId }) },
+    );
+    expect(response.status).toBe(404);
   });
 
   it("rejects bytes whose verified size, type, or digest no longer matches", async () => {

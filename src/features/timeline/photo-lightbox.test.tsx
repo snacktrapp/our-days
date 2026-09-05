@@ -274,6 +274,245 @@ describe("photo lightbox", () => {
     expect(stage.contains(overlay)).toBe(true);
   });
 
+  function lightboxTrack() {
+    return document.querySelector(".photo-lightbox-track");
+  }
+
+  function lightboxStage() {
+    return document.querySelector(".photo-lightbox-stage") as HTMLElement;
+  }
+
+  function markLightboxImagesReady() {
+    document
+      .querySelectorAll<HTMLImageElement>(".photo-lightbox img")
+      .forEach((img) => {
+        Object.defineProperty(img, "complete", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(img, "naturalWidth", {
+          configurable: true,
+          get: () => 80,
+        });
+      });
+  }
+
+  function swipeLightbox(
+    target: Element,
+    {
+      fromX = 180,
+      toX = 120,
+      y = 80,
+      pointerId = 2,
+    }: {
+      fromX?: number;
+      toX?: number;
+      y?: number;
+      pointerId?: number;
+    } = {},
+  ) {
+    fireEvent.pointerDown(target, {
+      pointerId,
+      pointerType: "touch",
+      clientX: fromX,
+      clientY: y,
+    });
+    fireEvent.pointerMove(target, {
+      pointerId,
+      pointerType: "touch",
+      clientX: toX,
+      clientY: y + 4,
+    });
+    fireEvent.pointerUp(target, {
+      pointerId,
+      pointerType: "touch",
+      clientX: toX,
+      clientY: y + 4,
+    });
+  }
+
+  async function openAlbumLightbox() {
+    mockIndependentOverlayDecode();
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src={cardPixelA}
+          alt="First light"
+          photos={[
+            { src: cardPixelA, alt: "First light" },
+            { src: cardPixelB, alt: "Last light" },
+          ]}
+          index={0}
+        >
+          {cardPhoto(cardPixelA, "First light card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    const card = screen.getByRole("img", { name: "First light card" });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    const first = await screen.findByRole("img", { name: "First light" });
+    fireEvent.load(first);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog")).toHaveAttribute("data-motion", "open"),
+    );
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(".photo-lightbox-frame img"),
+      ).toHaveLength(2);
+    });
+    markLightboxImagesReady();
+    return card;
+  }
+
+  it("swipes across an album without remounting the card image", async () => {
+    const card = await openAlbumLightbox();
+    expect(
+      screen.queryByRole("button", { name: "Next photo" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Previous photo" }),
+    ).not.toBeInTheDocument();
+    swipeLightbox(lightboxStage());
+    fireEvent.transitionEnd(lightboxTrack()!, { propertyName: "transform" });
+    const second = await screen.findByRole("img", { name: "Last light" });
+    expect(second).toBeVisible();
+    expect(screen.queryByRole("img", { name: "First light" })).toBeNull();
+    expect(card).toHaveAttribute("src", cardPixelA);
+    expect(card).toBeVisible();
+    swipeLightbox(lightboxStage(), { fromX: 180, toX: 240, pointerId: 3 });
+    fireEvent.transitionEnd(lightboxTrack()!, { propertyName: "transform" });
+    expect(
+      await screen.findByRole("img", { name: "First light" }),
+    ).toBeVisible();
+  });
+
+  function mockLightboxSlideWidth(width: number) {
+    const previous = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        if (
+          this.classList?.contains("photo-lightbox-stage") ||
+          this.classList?.contains("photo-lightbox-track")
+        ) {
+          return width;
+        }
+        return 0;
+      },
+    });
+    return () => {
+      if (previous) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", previous);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+    };
+  }
+
+  it("follows a horizontal drag live, then snaps past the threshold", async () => {
+    const restoreWidth = mockLightboxSlideWidth(390);
+    try {
+      await openAlbumLightbox();
+      const stage = lightboxStage();
+      expect(stage.style.getPropertyValue("--photo-lightbox-slide-width")).toBe(
+        "390px",
+      );
+      fireEvent.pointerDown(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 80,
+      });
+      fireEvent.pointerMove(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
+      expect(screen.getByRole("img", { name: "First light" })).toBeVisible();
+      expect(screen.getByRole("img", { name: "Last light" })).toBeVisible();
+      expect(lightboxTrack()).toHaveAttribute("data-phase", "drag");
+      expect(lightboxTrack()).toHaveAttribute("data-dx", "-60");
+      expect((lightboxTrack() as HTMLElement).style.transform).toBe(
+        "translateX(-60px)",
+      );
+      fireEvent.pointerUp(stage, {
+        pointerId: 4,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
+      expect(lightboxTrack()).toHaveAttribute("data-direction", "next");
+      expect(lightboxTrack()).toHaveClass("is-sliding");
+      expect((lightboxTrack() as HTMLElement).style.transform).toBe(
+        "translateX(-390px)",
+      );
+    } finally {
+      restoreWidth();
+    }
+  });
+
+  it("springs back when a horizontal drag is released before the threshold", async () => {
+    await openAlbumLightbox();
+    const stage = lightboxStage();
+    fireEvent.pointerDown(stage, {
+      pointerId: 5,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(stage, {
+      pointerId: 5,
+      pointerType: "touch",
+      clientX: 155,
+      clientY: 82,
+    });
+    expect(lightboxTrack()).toHaveAttribute("data-phase", "drag");
+    expect(lightboxTrack()).toHaveAttribute("data-dx", "-25");
+    fireEvent.pointerUp(stage, {
+      pointerId: 5,
+      pointerType: "touch",
+      clientX: 155,
+      clientY: 82,
+    });
+    expect(lightboxTrack()).toHaveClass("is-springing");
+    fireEvent.transitionEnd(lightboxTrack()!, { propertyName: "transform" });
+    expect(screen.getByRole("img", { name: "First light" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Last light" })).toBeNull();
+    expect(lightboxTrack()).toHaveAttribute("data-phase", "idle");
+  });
+
+  it("does not page while the photo is zoomed", async () => {
+    await openAlbumLightbox();
+    fireEvent.doubleClick(screen.getByRole("img", { name: "First light" }));
+    expect(screen.getByRole("img", { name: "First light" })).toHaveClass(
+      "is-zoomed",
+    );
+    swipeLightbox(lightboxStage());
+    expect(screen.getByRole("img", { name: "First light" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Last light" })).toBeNull();
+    expect(lightboxTrack()).toHaveAttribute("data-phase", "idle");
+  });
+
+  it("mounts album neighbors when the overlay first opens", async () => {
+    await openAlbumLightbox();
+    expect(
+      [...document.querySelectorAll("[data-photo-index]")].map((node) =>
+        node.getAttribute("data-photo-index"),
+      ),
+    ).toEqual(["0", "1"]);
+    expect(
+      document.querySelectorAll(".photo-lightbox-frame.is-parked"),
+    ).toHaveLength(1);
+  });
+
   it("does not capture pointermove, so native pinch is not blocked", async () => {
     mockIndependentOverlayDecode();
     render(

@@ -54,7 +54,10 @@ type CommonUploadInput = Readonly<{
 }>;
 
 export type StartPhotoUploadInput = CommonUploadInput &
-  Readonly<{ draft: PhotoMomentDraft }>;
+  Readonly<{
+    draft: PhotoMomentDraft;
+    files?: readonly File[];
+  }>;
 
 export type StartVideoUploadInput = CommonUploadInput &
   Readonly<{ draft: VideoMomentDraft }>;
@@ -112,40 +115,60 @@ function createOptimisticUpload(
 /** Starts a photo upload independently of the composer component lifecycle. */
 export function startOptimisticPhotoUpload(input: StartPhotoUploadInput) {
   const id = createOptimisticUpload("photo", input);
-  const attempt = createPhotoUploadAttempt();
+  const files = input.files?.length ? input.files : [input.file];
   const controller = new AbortController();
   controllers.set(id, controller);
 
   void (async () => {
+    let lastIntakeId: string | undefined;
+    let lastMomentId: string | undefined;
     try {
-      const result = await uploadPhotoMoment(
-        input.file,
-        input.draft,
-        attempt,
-        controller.signal,
-        (stage) => {
-          if (controller.signal.aborted || !uploadStillExists(id)) return;
-          updateOptimisticMediaUpload(id, {
-            intakeId: attempt.intakeId,
-            momentId: attempt.momentId,
-            stage,
-          });
-        },
-      );
-      if (!uploadStillExists(id)) return;
-      updateOptimisticMediaUpload(id, {
-        intakeId: result.intakeId,
-        momentId: result.momentId,
-        stage:
-          result.state === "published"
-            ? { state: "published" }
-            : { state: "processing" },
-      });
+      for (const [index, file] of files.entries()) {
+        const attempt = createPhotoUploadAttempt();
+        const result = await uploadPhotoMoment(
+          file,
+          {
+            ...input.draft,
+            existingMomentId:
+              index === 0 ? input.draft.existingMomentId : lastMomentId,
+          },
+          attempt,
+          controller.signal,
+          (stage) => {
+            if (controller.signal.aborted || !uploadStillExists(id)) return;
+            const progress =
+              stage.state === "uploading"
+                ? {
+                    ...stage,
+                    progress: (index + stage.progress) / files.length,
+                  }
+                : stage;
+            updateOptimisticMediaUpload(id, {
+              intakeId: attempt.intakeId,
+              momentId: attempt.momentId ?? lastMomentId,
+              stage: progress,
+            });
+          },
+        );
+        lastIntakeId = result.intakeId;
+        lastMomentId = result.momentId;
+        if (!uploadStillExists(id)) return;
+        updateOptimisticMediaUpload(id, {
+          intakeId: result.intakeId,
+          momentId: result.momentId,
+          stage:
+            index + 1 < files.length
+              ? { state: "uploading", progress: (index + 1) / files.length }
+              : result.state === "published"
+                ? { state: "published" }
+                : { state: "processing" },
+        });
+      }
     } catch (error) {
       if (!uploadStillExists(id)) return;
       updateOptimisticMediaUpload(id, {
-        intakeId: attempt.intakeId,
-        momentId: attempt.momentId,
+        intakeId: lastIntakeId,
+        momentId: lastMomentId,
         stage: {
           state: "failed",
           message: uploadErrorMessage(error, "photo"),

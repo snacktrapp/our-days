@@ -39,6 +39,22 @@ import {
   type LocalAccess,
 } from "./store";
 import type { LocalMoment, LocalPerson } from "./types";
+import type { MomentPhotoDescriptor } from "@/features/moments/moment-photos";
+
+function localMomentPhotoDescriptors(
+  moment: LocalMoment,
+): MomentPhotoDescriptor[] | undefined {
+  if (moment.kind !== "photo") return undefined;
+  const photos = moment.photos?.length
+    ? moment.photos
+    : moment.media
+      ? [{ id: moment.id, ...moment.media }]
+      : [];
+  return photos.map((photo, index) => ({
+    id: photo.id,
+    sortOrder: index,
+  }));
+}
 
 function initialFor(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
@@ -280,6 +296,7 @@ export async function loadLocalTimeline(
         viewerPersonId: access.personId,
         viewingJournalPersonId: options.journalPersonId,
       },
+      localMomentPhotoDescriptors(moment),
     ),
   );
   const personalJournalIsWritable = Boolean(
@@ -400,6 +417,8 @@ export async function loadLocalMemories(
     ? mapTimelineRow(
         momentToTimelineRow(document, feature, snapshotAt),
         context.today,
+        undefined,
+        localMomentPhotoDescriptors(feature),
       )
     : undefined;
   return {
@@ -497,6 +516,8 @@ export async function loadLocalMemoryJourney(
     mapTimelineRow(
       momentToTimelineRow(document, moment, snapshotAt),
       context.today,
+      undefined,
+      localMomentPhotoDescriptors(moment),
     ),
   );
   const anniversaryKey = anniversary

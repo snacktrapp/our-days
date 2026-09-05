@@ -219,6 +219,85 @@ describe("MomentCard timeline media", () => {
     expect(image.closest(".photo-frame")).not.toBeNull();
   });
 
+  it("pages a multi-photo card without opening the lightbox", async () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "album-photo",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "First porch",
+            badgeLabel: "AUG 28",
+            width: 1200,
+            height: 801,
+          },
+          photos: [
+            {
+              id: "p1",
+              src: "/sample-family.jpg",
+              alt: "First porch",
+              width: 1200,
+              height: 801,
+            },
+            {
+              id: "p2",
+              src: "/sample-family.jpg",
+              alt: "Second porch",
+              width: 900,
+              height: 1200,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
+    document
+      .querySelectorAll<HTMLImageElement>(".photo-card-pager img")
+      .forEach((img) => {
+        Object.defineProperty(img, "complete", {
+          configurable: true,
+          get: () => true,
+        });
+        Object.defineProperty(img, "naturalWidth", {
+          configurable: true,
+          get: () => 800,
+        });
+      });
+    const pager = document.querySelector(".photo-card-pager")!;
+    fireEvent.pointerDown(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 180,
+      clientY: 80,
+    });
+    fireEvent.pointerMove(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
+    fireEvent.pointerUp(pager, {
+      pointerId: 2,
+      pointerType: "touch",
+      clientX: 120,
+      clientY: 84,
+    });
+    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    const track = document.querySelector(".photo-card-pager-track");
+    expect(track).toHaveAttribute("data-direction", "next");
+    expect(track).toHaveClass("is-paired");
+    fireEvent.transitionEnd(track!, { propertyName: "transform" });
+    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+    expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("keeps a portrait photo at its native 9:16 frame", () => {
     render(
       <MomentCard

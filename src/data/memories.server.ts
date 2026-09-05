@@ -20,6 +20,7 @@ import {
 import {
   buildTimelineEntries,
   connectedTimelineInteraction,
+  loadMomentPhotosByMomentId,
   mapTimelineRow,
   requestedPageCount,
   requestedSnapshot,
@@ -160,8 +161,17 @@ export async function loadConnectedMemories(
 
   const featureRow = (featureResult.data?.[0] ?? undefined) as
     MemoryRow | undefined;
+  const featurePhotos =
+    featureRow?.moment_kind === "photo"
+      ? await loadMomentPhotosByMomentId(supabase, [featureRow.moment_id])
+      : new Map();
   const featureMoment = featureRow
-    ? mapTimelineRow(featureRow, context.today)
+    ? mapTimelineRow(
+        featureRow,
+        context.today,
+        undefined,
+        featurePhotos.get(featureRow.moment_id),
+      )
     : undefined;
 
   return {
@@ -302,7 +312,21 @@ export async function loadConnectedMemoryJourney(
     if (!hasMore || !cursor) break;
   }
 
-  const moments = rows.map((row) => mapTimelineRow(row, context.today));
+  const photoMomentIds = rows
+    .filter((row) => row.moment_kind === "photo")
+    .map((row) => row.moment_id);
+  const photosByMoment = await loadMomentPhotosByMomentId(
+    supabase,
+    photoMomentIds,
+  );
+  const moments = rows.map((row) =>
+    mapTimelineRow(
+      row,
+      context.today,
+      undefined,
+      photosByMoment.get(row.moment_id),
+    ),
+  );
   const chrome = memoryChrome(context);
   const title =
     options.mode === "year"

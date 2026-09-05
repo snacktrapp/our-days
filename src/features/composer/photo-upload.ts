@@ -49,6 +49,7 @@ export type PhotoMomentDraft = Readonly<{
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
+  existingMomentId?: string;
 }>;
 
 export type PhotoUploadResult = Readonly<{
@@ -507,6 +508,7 @@ async function draftFingerprint(draft: PhotoMomentDraft) {
   const normalized = JSON.stringify({
     body: draft.body.trim(),
     circleId: draft.circleId,
+    existingMomentId: draft.existingMomentId ?? null,
     journalPersonId: draft.journalPersonId,
     occurredAt: draft.occurredAt,
     occurredOn: draft.occurredOn,
@@ -617,6 +619,10 @@ async function uploadLocalPhotoMoment(
   body.set("occurredTimezone", draft.occurredTimezone ?? "");
   body.set("sha256", sha256);
   body.set("requestKey", attempt.requestKey);
+  body.set("audience", draft.audience ?? "family");
+  if (draft.existingMomentId) {
+    body.set("existingMomentId", draft.existingMomentId);
+  }
   const response = await fetchFn("/api/media/local/photo", {
     body,
     credentials: "same-origin",
@@ -801,18 +807,23 @@ export async function uploadPhotoMoment(
     };
 
     const { data: reservationRows, error: reservationError } =
-      await supabase.rpc("reserve_photo_moment", {
-        body: draft.body,
-        circle_id: draft.circleId,
-        journal_person_id: draft.journalPersonId,
-        occurred_at: draft.occurredAt ?? undefined,
-        occurred_on: draft.occurredOn,
-        occurred_timezone: draft.occurredTimezone ?? undefined,
-        place_name: draft.placeName,
-        request_key: attempt.requestKey,
-        tagged_person_ids: [...draft.taggedPersonIds],
-        audience: draft.audience ?? "family",
-      });
+      draft.existingMomentId
+        ? await supabase.rpc("attach_photo_to_moment", {
+            existing_moment_id: draft.existingMomentId,
+            request_key: attempt.requestKey,
+          })
+        : await supabase.rpc("reserve_photo_moment", {
+            body: draft.body,
+            circle_id: draft.circleId,
+            journal_person_id: draft.journalPersonId,
+            occurred_at: draft.occurredAt ?? undefined,
+            occurred_on: draft.occurredOn,
+            occurred_timezone: draft.occurredTimezone ?? undefined,
+            place_name: draft.placeName,
+            request_key: attempt.requestKey,
+            tagged_person_ids: [...draft.taggedPersonIds],
+            audience: draft.audience ?? "family",
+          });
     const reservationQuotaMessage = photoQuotaMessage(reservationError);
     if (reservationQuotaMessage) {
       throw new PhotoUploadError(reservationQuotaMessage);

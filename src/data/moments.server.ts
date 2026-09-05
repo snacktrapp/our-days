@@ -16,6 +16,11 @@ import {
   normalizeMomentAudience,
   showJustMeAudienceBadge,
 } from "@/features/moments/moment-audience";
+import {
+  parseMomentPhotoRows,
+  timelinePhotosFor,
+  type MomentPhotoDescriptor,
+} from "@/features/moments/moment-photos";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
@@ -80,6 +85,7 @@ export function mapTimelineRow(
     viewerPersonId?: string;
     viewingJournalPersonId?: string;
   }>,
+  photos?: readonly MomentPhotoDescriptor[],
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
   const taggedPeople = Array.isArray(row.tagged_people)
@@ -165,15 +171,21 @@ export function mapTimelineRow(
     };
   }
   if (row.moment_kind === "photo") {
+    const alt = `Photo in ${row.journal_person_name}’s journal from ${formatPlainDate(row.occurred_on, today)}`;
+    const album = timelinePhotosFor(row.moment_id, alt, photos);
+    const first = album[0];
     return {
       ...base,
       kind: "photo",
       image: {
-        src: `/api/media/moments/${row.moment_id}`,
-        alt: `Photo in ${row.journal_person_name}’s journal from ${formatPlainDate(row.occurred_on, today)}`,
+        src: first?.src ?? `/api/media/moments/${row.moment_id}`,
+        alt,
         badgeLabel: formatPlainDate(row.occurred_on, today),
         delivery: "private",
+        width: first?.width,
+        height: first?.height,
       },
+      photos: album,
     };
   }
   if (row.moment_kind === "video") {
@@ -271,6 +283,35 @@ export function requestedSnapshot(value: string | undefined) {
   return value;
 }
 
+type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
+
+export async function loadMomentPhotosByMomentId(
+  supabase: MomentPhotoClient,
+  momentIds: readonly string[],
+): Promise<Map<string, MomentPhotoDescriptor[]>> {
+  const uniqueIds = [...new Set(momentIds.filter(Boolean))];
+  const photosByMoment = new Map<string, MomentPhotoDescriptor[]>();
+  if (uniqueIds.length === 0) return photosByMoment;
+  if (typeof supabase.from !== "function") return photosByMoment;
+  const { data, error } = await supabase
+    .from("moment_photos")
+    .select("id, moment_id, sort_order, display_width, display_height")
+    .in("moment_id", uniqueIds)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return photosByMoment;
+  for (const row of data) {
+    const parsed = parseMomentPhotoRows([row]);
+    const photo = parsed[0];
+    if (!photo || !("moment_id" in row) || typeof row.moment_id !== "string") {
+      continue;
+    }
+    const current = photosByMoment.get(row.moment_id) ?? [];
+    current.push(photo);
+    photosByMoment.set(row.moment_id, current);
+  }
+  return photosByMoment;
+}
+
 export function connectedTimelineInteraction(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -350,11 +391,23 @@ export async function loadConnectedTimeline(
     if (!hasMore || !cursor) break;
   }
 
+  const photoMomentIds = rows
+    .filter((row) => row.moment_kind === "photo")
+    .map((row) => row.moment_id);
+  const photosByMoment = await loadMomentPhotosByMomentId(
+    supabase,
+    photoMomentIds,
+  );
   const moments = rows.map((row) =>
-    mapTimelineRow(row, context.today, {
-      viewerPersonId: access.personId,
-      viewingJournalPersonId: options.journalPersonId,
-    }),
+    mapTimelineRow(
+      row,
+      context.today,
+      {
+        viewerPersonId: access.personId,
+        viewingJournalPersonId: options.journalPersonId,
+      },
+      photosByMoment.get(row.moment_id),
+    ),
   );
   const personalJournalIsWritable = Boolean(
     personal &&

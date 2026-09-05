@@ -1,4 +1,9 @@
-import type { UpdateFamilyMomentAction } from "@/features/moments/moment-action-types";
+import type {
+  RemoveMomentPhotoAction,
+  ReorderMomentPhotosAction,
+  UpdateFamilyMomentAction,
+} from "@/features/moments/moment-action-types";
+import { photoAlbum } from "@/features/moments/moment-photos";
 import type { TimelineMomentViewModel } from "@/features/timeline/timeline-view-model";
 import {
   emptyBibleVerseSelection,
@@ -33,6 +38,10 @@ function placeFromMoment(moment: TimelineMomentViewModel): PlaceSelection {
 export function buildComposerEditDraft(
   moment: TimelineMomentViewModel,
   save: UpdateFamilyMomentAction,
+  photoActions?: Readonly<{
+    removePhoto?: RemoveMomentPhotoAction;
+    reorderPhotos?: ReorderMomentPhotosAction;
+  }>,
 ): ComposerEditDraft | null {
   if (!moment.revision || moment.kind === "insight") return null;
   const parsed =
@@ -66,10 +75,17 @@ export function buildComposerEditDraft(
             kind: "photo",
             src: moment.image.src,
             alt: moment.image.alt,
+            photos: photoAlbum(moment).map((photo) => ({
+              ...(photo.id !== moment.id ? { id: photo.id } : {}),
+              src: photo.src,
+              alt: photo.alt,
+            })),
           }
         : moment.kind === "video"
           ? { kind: "video", src: moment.video.src }
           : undefined,
     save,
+    removePhoto: photoActions?.removePhoto,
+    reorderPhotos: photoActions?.reorderPhotos,
   };
 }

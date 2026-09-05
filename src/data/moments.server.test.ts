@@ -157,6 +157,50 @@ describe("connected timeline mapping", () => {
         alt: "Photo in Molly’s journal from Aug 28, 2026",
         delivery: "private",
       },
+      photos: [
+        {
+          id: "10000000-0000-4000-8000-000000000099",
+          src: "/api/media/moments/10000000-0000-4000-8000-000000000099",
+          alt: "Photo in Molly’s journal from Aug 28, 2026",
+        },
+      ],
+    });
+  });
+
+  it("maps several photo rows onto an ordered album and keeps the first as image", () => {
+    const moment = mapTimelineRow(
+      row({
+        moment_id: "10000000-0000-4000-8000-000000000099",
+        moment_kind: "photo",
+        journal_person_name: "Molly",
+        recorder_person_id: "child",
+        recorder_person_name: "Molly",
+        body: "A windy afternoon.",
+      }),
+      "2026-08-30",
+      undefined,
+      [
+        { id: "photo-b", sortOrder: 1, width: 800, height: 600 },
+        { id: "photo-a", sortOrder: 0, width: 1200, height: 800 },
+      ],
+    );
+    expect(moment).toMatchObject({
+      kind: "photo",
+      image: {
+        src: "/api/media/moments/10000000-0000-4000-8000-000000000099?photo=photo-a",
+        width: 1200,
+        height: 800,
+      },
+      photos: [
+        {
+          id: "photo-a",
+          src: "/api/media/moments/10000000-0000-4000-8000-000000000099?photo=photo-a",
+        },
+        {
+          id: "photo-b",
+          src: "/api/media/moments/10000000-0000-4000-8000-000000000099?photo=photo-b",
+        },
+      ],
     });
   });
 

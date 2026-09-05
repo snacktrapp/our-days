@@ -912,3 +912,84 @@ export async function updateWrittenMomentAction(input: {
   refreshMomentSurfaces();
   return { ok: true, message: "Moment updated.", revision: data };
 }
+
+export async function removeMomentPhotoAction(input: {
+  momentId: string;
+  photoId: string;
+}): Promise<MomentActionResult> {
+  if (!(await hasExpectedOrigin())) {
+    return { ok: false, message: "That request could not be verified." };
+  }
+  const access = await requireJournalAccess();
+  if (access.mode !== "authenticated") {
+    return { ok: false, message: "Preview moments are not changed." };
+  }
+  if (!uuidPattern.test(input.momentId) || !uuidPattern.test(input.photoId)) {
+    return { ok: false, message: "That photo could not be removed." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { removeLocalMomentPhoto } = await localStore();
+      await removeLocalMomentPhoto(access, input);
+      refreshMomentSurfaces();
+      return { ok: true, message: "Photo removed." };
+    } catch {
+      return {
+        ok: false,
+        message: "That photo could not be removed. Keep at least one photo.",
+      };
+    }
+  }
+  const supabase = await createOurDaysServerClient();
+  const { error } = await supabase.rpc("remove_moment_photo", {
+    moment_id: input.momentId,
+    photo_id: input.photoId,
+  });
+  if (error) {
+    return { ok: false, message: "That photo could not be removed." };
+  }
+  refreshMomentSurfaces();
+  return { ok: true, message: "Photo removed." };
+}
+
+export async function reorderMomentPhotosAction(input: {
+  momentId: string;
+  photoIds: readonly string[];
+}): Promise<MomentActionResult> {
+  if (!(await hasExpectedOrigin())) {
+    return { ok: false, message: "That request could not be verified." };
+  }
+  const access = await requireJournalAccess();
+  if (access.mode !== "authenticated") {
+    return { ok: false, message: "Preview moments are not changed." };
+  }
+  if (
+    !uuidPattern.test(input.momentId) ||
+    input.photoIds.length === 0 ||
+    input.photoIds.length > 6 ||
+    input.photoIds.some((photoId) => !uuidPattern.test(photoId)) ||
+    new Set(input.photoIds).size !== input.photoIds.length
+  ) {
+    return { ok: false, message: "Those photos could not be reordered." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { reorderLocalMomentPhotos } = await localStore();
+      await reorderLocalMomentPhotos(access, input);
+      refreshMomentSurfaces();
+      return { ok: true, message: "Photos reordered." };
+    } catch {
+      return { ok: false, message: "Those photos could not be reordered." };
+    }
+  }
+  const supabase = await createOurDaysServerClient();
+  const { error } = await supabase.rpc("reorder_moment_photos", {
+    moment_id: input.momentId,
+    photo_ids: [...input.photoIds],
+  });
+  if (error) {
+    return { ok: false, message: "Those photos could not be reordered." };
+  }
+  refreshMomentSurfaces();
+  return { ok: true, message: "Photos reordered." };
+}

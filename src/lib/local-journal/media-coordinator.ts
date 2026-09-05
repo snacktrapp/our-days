@@ -3,9 +3,12 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { maximumMomentPhotos } from "@/features/moments/moment-photos";
 import {
+  attachLocalPhotoToMoment,
   localJournalMediaDirectory,
   publishLocalMediaMoment,
+  readLocalJournal,
   sha256Hex,
   type LocalAccess,
 } from "./store";
@@ -118,6 +121,7 @@ async function writeMediaFiles(
 
   if (kind === "photo") {
     return {
+      id: mediaId,
       mimeType: originalMime,
       byteLength: original.byteLength,
       sha256,
@@ -126,15 +130,16 @@ async function writeMediaFiles(
       displayMimeType: originalMime,
       displayByteLength: original.byteLength,
       displaySha256: sha256,
-    } satisfies LocalMedia;
+    } satisfies LocalMedia & { id: string };
   }
 
   return {
+    id: mediaId,
     mimeType: originalMime,
     byteLength: original.byteLength,
     sha256,
     originalRelativePath,
-  } satisfies LocalMedia;
+  } satisfies LocalMedia & { id: string };
 }
 
 export async function publishVerifiedPhotoMoment(
@@ -151,6 +156,8 @@ export async function publishVerifiedPhotoMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     claimedSha256?: string;
+    audience?: "family" | "just_me";
+    existingMomentId?: string;
   }>,
 ) {
   requireUuid(input.journalPersonId, "journal");
@@ -172,6 +179,31 @@ export async function publishVerifiedPhotoMoment(
     );
   }
   const media = await writeMediaFiles("photo", bytes, mimeType, digest);
+  if (input.existingMomentId) {
+    requireUuid(input.existingMomentId, "moment");
+    const document = await readLocalJournal();
+    const current = document.moments.find(
+      (moment) =>
+        moment.id === input.existingMomentId && moment.trashedAt === null,
+    );
+    const existingCount = current?.photos?.length
+      ? current.photos.length
+      : current?.media
+        ? 1
+        : 0;
+    if (!current || current.kind !== "photo") {
+      throw new LocalMediaCoordinatorError("That photo could not be added.");
+    }
+    if (existingCount >= maximumMomentPhotos) {
+      throw new LocalMediaCoordinatorError(
+        "A photo entry can hold up to 6 photos.",
+      );
+    }
+    return attachLocalPhotoToMoment(access, {
+      momentId: input.existingMomentId,
+      media,
+    });
+  }
   return publishLocalMediaMoment(access, {
     kind: "photo",
     journalPersonId: input.journalPersonId,
@@ -183,6 +215,7 @@ export async function publishVerifiedPhotoMoment(
     occurredOn: input.occurredOn,
     occurredAt: input.occurredAt,
     occurredTimezone: input.occurredTimezone,
+    audience: input.audience,
     media,
   });
 }

@@ -38,6 +38,21 @@ function clientWithStatus(status = "published") {
   const rpc = vi.fn(
     async (name: string): Promise<{ data: unknown; error: unknown }> => {
       calls.push(name);
+      if (name === "attach_photo_to_moment") {
+        return {
+          data: [
+            {
+              bucket_id: "our-days-intake",
+              expires_at: "2026-08-31T20:00:00Z",
+              intake_id: intakeId,
+              moment_id: momentId,
+              object_path: `intake/${intakeId}`,
+              state: "reserved",
+            },
+          ],
+          error: null,
+        };
+      }
       if (name === "reserve_photo_moment") {
         return {
           data: [
@@ -264,6 +279,52 @@ describe("connected private photo upload", () => {
         )
         .map((stage) => stage.progress),
     ).toEqual([0, sixMiB / file.size, 1]);
+  });
+
+  it("attaches a later photo to an existing moment instead of reserving a new one", async () => {
+    const file = jpegFile();
+    const { calls, client, rpc } = clientWithStatus();
+    const result = await uploadPhotoMoment(
+      file,
+      { ...draft, existingMomentId: momentId },
+      createPhotoUploadAttempt(),
+      new AbortController().signal,
+      () => undefined,
+      {
+        createClient: () => client,
+        fetch: vi.fn(async (_input, init) => {
+          if (init?.method === "POST") {
+            return new Response(null, {
+              status: 201,
+              headers: { location: uploadUrl },
+            });
+          }
+          if (init?.method === "HEAD") {
+            return new Response(null, {
+              status: 200,
+              headers: { "upload-offset": "0" },
+            });
+          }
+          return new Response(null, {
+            status: 204,
+            headers: { "upload-offset": String(file.size) },
+          });
+        }),
+        hash: vi.fn(async () => "a".repeat(64)),
+        resumeStore: memoryResumeStore(),
+        statusAttempts: 1,
+      },
+    );
+    expect(result.momentId).toBe(momentId);
+    expect(calls[0]).toBe("attach_photo_to_moment");
+    expect(rpc).toHaveBeenNthCalledWith(
+      1,
+      "attach_photo_to_moment",
+      expect.objectContaining({
+        existing_moment_id: momentId,
+      }),
+    );
+    expect(calls).not.toContain("reserve_photo_moment");
   });
 
   it("uses the Safari-safe TUS transport in the production path", async () => {

@@ -75,6 +75,14 @@ type TimelineMomentBase = Readonly<{
   longitude?: number;
 }>;
 
+export type TimelinePhotoView = Readonly<{
+  id: string;
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}>;
+
 export type PhotoMomentViewModel = TimelineMomentBase &
   Readonly<{
     kind: "photo";
@@ -86,6 +94,7 @@ export type PhotoMomentViewModel = TimelineMomentBase &
       width?: number;
       height?: number;
     }>;
+    photos?: readonly TimelinePhotoView[];
   }>;
 
 export type ThoughtMomentViewModel = TimelineMomentBase &

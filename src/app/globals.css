@@ -979,6 +979,92 @@ button:focus-visible,
   box-shadow: inset 0 -70px 90px rgba(40, 32, 25, 0.15);
   pointer-events: none;
 }
+.photo-card-pager {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+}
+.photo-card-pager.is-axis-x {
+  touch-action: none;
+}
+.photo-card-pager-stage {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+.photo-card-pager-track {
+  display: flex;
+  width: 100%;
+  transform: translateX(0);
+}
+.photo-card-pager-track.is-paired {
+  width: 200%;
+}
+.photo-card-pager-track.is-paired[data-direction="prev"] {
+  transform: translateX(-50%);
+}
+.photo-card-pager-track.is-sliding[data-direction="next"] {
+  transform: translateX(-50%);
+}
+.photo-card-pager-track.is-sliding[data-direction="prev"] {
+  transform: translateX(0);
+}
+.photo-card-pager-frame {
+  width: 100%;
+  flex: 0 0 100%;
+}
+.photo-card-pager-track.is-paired .photo-card-pager-frame {
+  flex-basis: 50%;
+  width: 50%;
+}
+.photo-card-pager-frame img {
+  width: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  display: block;
+  object-fit: contain;
+  object-position: center;
+}
+.photo-card-pager-frame.is-parked {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  flex: 0 0 0;
+}
+.photo-card-pager-track.is-paired .photo-card-pager-frame.is-parked {
+  flex-basis: 0;
+  width: 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .photo-card-pager-track.is-settling,
+  .photo-card-pager-track.is-sliding,
+  .photo-card-pager-track.is-springing {
+    transition: transform 200ms ease;
+  }
+}
+.photo-card-pager-dots {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.photo-card-pager-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 250, 240, 0.45);
+}
+.photo-card-pager-dots span.is-current {
+  background: #fffaf0;
+}
 .photo-date {
   position: absolute;
   z-index: 1;
@@ -3713,6 +3799,61 @@ button:focus-visible,
   font-size: 11px;
   cursor: pointer;
 }
+.composer-photo-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.composer-photo-thumb,
+.composer-photo-add {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #e9e2d7;
+}
+.composer-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.composer-photo-thumb-remove {
+  min-width: 28px;
+  min-height: 28px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(36, 31, 27, 0.82);
+  color: #fffaf0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.composer-photo-add {
+  display: grid;
+  place-content: center;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--hairline));
+  background: color-mix(in srgb, var(--accent) 5%, var(--cream));
+  color: #60574e;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+.composer-photo-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
 .composer-error {
   margin: 8px 0 0;
   color: #8b3e36;
@@ -3849,10 +3990,10 @@ button:focus-visible,
   min-width: 44px;
   min-height: 44px;
   padding: 0 10px;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--hairline));
   border-radius: 14px;
-  background: color-mix(in srgb, var(--accent) 12%, white);
-  color: var(--accent-dark);
+  background: color-mix(in srgb, var(--accent) 16%, var(--cream));
+  color: var(--ink);
   font-weight: 750;
   cursor: pointer;
 }
@@ -6474,6 +6615,66 @@ html[data-theme].overlay-open .app-shell::before,
     max(56px, env(safe-area-inset-bottom, 0px)) env(safe-area-inset-left, 0px);
   overflow: auto;
 }
+.photo-lightbox-stage.has-album {
+  display: block;
+  overflow: hidden;
+  touch-action: pan-y pinch-zoom;
+}
+.photo-lightbox-stage.has-album.is-axis-x {
+  touch-action: none;
+}
+.photo-lightbox-stage.has-album.is-zoomed {
+  overflow: auto;
+  touch-action: auto;
+}
+.photo-lightbox-track {
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 100%;
+  height: 100%;
+  min-height: 100%;
+  transform: translateX(0);
+}
+.photo-lightbox-track.is-paired[data-direction="prev"] {
+  transform: translateX(-100%);
+}
+.photo-lightbox-track.is-sliding[data-direction="next"] {
+  transform: translateX(-100%);
+}
+.photo-lightbox-track.is-sliding[data-direction="prev"] {
+  transform: translateX(0);
+}
+.photo-lightbox-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 var(--photo-lightbox-slide-width, 100%);
+  width: var(--photo-lightbox-slide-width, 100%);
+  min-width: var(--photo-lightbox-slide-width, 100%);
+  max-width: var(--photo-lightbox-slide-width, 100%);
+  height: 100%;
+}
+.photo-lightbox-frame.is-parked {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  flex: 0 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .photo-lightbox-track.is-settling,
+  .photo-lightbox-track.is-sliding,
+  .photo-lightbox-track.is-springing {
+    transition: transform 200ms ease;
+  }
+}
 
 .photo-lightbox-photo {
   max-width: 100%;
@@ -6502,6 +6703,12 @@ html[data-theme].overlay-open .app-shell::before,
   width: 200%;
   height: auto;
   touch-action: pan-x pan-y pinch-zoom;
+}
+
+.photo-lightbox-frame.is-parked .photo-lightbox-photo,
+.photo-lightbox-frame.is-incoming .photo-lightbox-photo {
+  opacity: 1;
+  animation: none;
 }
 
 .photo-lightbox-close {

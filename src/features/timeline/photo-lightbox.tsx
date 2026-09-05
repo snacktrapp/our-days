@@ -7,7 +7,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
+  type PointerEvent,
   type ReactNode,
+  type TransitionEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -23,6 +26,18 @@ import {
   dispatchMomentHeart,
   usePairedTap,
 } from "@/features/timeline/double-tap-heart";
+import {
+  albumSlideWidth,
+  axisLockPx,
+  clampDragDx,
+  mountedAlbumIndexes,
+  pairSlideTransform,
+  slideMs,
+  swipeThreshold,
+  waitForFrameReady,
+  wrapIndex,
+  type AlbumPair,
+} from "./photo-album-gesture";
 
 const motionMs = 180;
 
@@ -33,6 +48,13 @@ type Box = Readonly<{
   height: number;
 }>;
 
+export type PhotoLightboxPhoto = Readonly<{
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}>;
+
 export type PhotoLightboxRequest = Readonly<{
   src: string;
   alt: string;
@@ -40,6 +62,8 @@ export type PhotoLightboxRequest = Readonly<{
   trigger: HTMLElement;
   width?: number;
   height?: number;
+  photos?: readonly PhotoLightboxPhoto[];
+  index?: number;
 }>;
 
 type PhotoMotion = "opening" | "open" | "closing";
@@ -82,6 +106,8 @@ export function PhotoLightboxTrigger({
   alt,
   width,
   height,
+  photos,
+  index = 0,
   reactionTargetId,
   children,
 }: Readonly<{
@@ -89,6 +115,8 @@ export function PhotoLightboxTrigger({
   alt: string;
   width?: number;
   height?: number;
+  photos?: readonly PhotoLightboxPhoto[];
+  index?: number;
   reactionTargetId?: string;
   children: ReactNode;
 }>) {
@@ -114,13 +142,19 @@ export function PhotoLightboxTrigger({
         trigger,
         width,
         height,
+        photos,
+        index,
       });
     },
   });
 
   useEffect(() => {
     void prefetchIndependentOverlayObjectUrl(src);
-  }, [src]);
+    for (const photo of photos ?? []) {
+      if (photo.src !== src)
+        void prefetchIndependentOverlayObjectUrl(photo.src);
+    }
+  }, [photos, src]);
 
   return (
     <button
@@ -135,6 +169,49 @@ export function PhotoLightboxTrigger({
   );
 }
 
+function PhotoLightboxFrame({
+  photo,
+  photoIndex,
+  role,
+  zoomed,
+  onReady,
+  onToggleZoom,
+}: Readonly<{
+  photo: PhotoLightboxPhoto;
+  photoIndex: number;
+  role: "outgoing" | "incoming" | "parked";
+  zoomed: boolean;
+  onReady?: () => void;
+  onToggleZoom?: () => void;
+}>) {
+  const objectUrl = peekIndependentOverlayObjectUrl(photo.src);
+  return (
+    <div
+      data-photo-index={photoIndex}
+      className={
+        role === "parked"
+          ? "photo-lightbox-frame is-parked"
+          : role === "incoming"
+            ? "photo-lightbox-frame is-incoming"
+            : "photo-lightbox-frame is-outgoing"
+      }
+      aria-hidden={role === "parked" ? true : undefined}
+    >
+      {objectUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className={`photo-lightbox-photo${zoomed ? " is-zoomed" : ""}`}
+          src={objectUrl}
+          alt={photo.alt}
+          onLoad={onReady}
+          onError={onReady}
+          onDoubleClick={role === "parked" ? undefined : onToggleZoom}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function PhotoLightboxLayer({
   request,
   onClosed,
@@ -142,23 +219,275 @@ function PhotoLightboxLayer({
   request: PhotoLightboxRequest;
   onClosed: () => void;
 }>) {
-  const [objectUrl, setObjectUrl] = useState(() =>
-    peekIndependentOverlayObjectUrl(request.src),
-  );
+  const album = request.photos?.length
+    ? request.photos
+    : [
+        {
+          src: request.src,
+          alt: request.alt,
+          width: request.width,
+          height: request.height,
+        },
+      ];
+  const [index, setIndex] = useState(() => {
+    const start = request.index ?? 0;
+    return start >= 0 && start < album.length ? start : 0;
+  });
+  const current = album[index] ?? album[0]!;
+  const [, setObjectUrlVersion] = useState(0);
+  const objectUrl = peekIndependentOverlayObjectUrl(current.src);
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
+  const [pair, setPair] = useState<AlbumPair | null>(null);
+  const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const closeTimerRef = useRef<number | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const slideWidthRef = useRef(0);
+  const pairRef = useRef<AlbumPair | null>(null);
+  const pendingToRef = useRef<number | null>(null);
+  const finishTimerRef = useRef<number | null>(null);
+  const cancelReadyRef = useRef<(() => void) | null>(null);
+  const pointerRef = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    axis: "x" | "y" | null;
+    dx: number;
+  } | null>(null);
+  const pendingDragRef = useRef<{
+    to: number;
+    direction: 1 | -1;
+    dx: number;
+    commit: boolean;
+  } | null>(null);
   const titleId = useId();
+  const displayIndex = pair?.mode === "snap" ? pair.to : index;
+
+  function writePair(next: AlbumPair | null) {
+    if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
+      const width = readSlideWidth();
+      next = width > 0 ? { ...next, slideWidth: width } : next;
+    }
+    pairRef.current = next;
+    setPair(next);
+  }
+
+  function readSlideWidth() {
+    const next = albumSlideWidth(stageRef.current, trackRef.current);
+    if (next > 0) slideWidthRef.current = next;
+    return slideWidthRef.current;
+  }
+
+  function frameEl(photoIndex: number): HTMLElement | null {
+    return (
+      stageRef.current?.querySelector(`[data-photo-index="${photoIndex}"]`) ??
+      null
+    );
+  }
+
+  function clearFinishTimer() {
+    if (finishTimerRef.current == null) return;
+    window.clearTimeout(finishTimerRef.current);
+    finishTimerRef.current = null;
+  }
+
+  function clearReadyWait() {
+    cancelReadyRef.current?.();
+    cancelReadyRef.current = null;
+  }
+
+  function finishPair() {
+    const nextIndex = pendingToRef.current;
+    if (nextIndex == null) return;
+    pendingToRef.current = null;
+    pendingDragRef.current = null;
+    clearFinishTimer();
+    setIndex(nextIndex);
+    writePair(null);
+    setAxis(null);
+  }
+
+  function startSettle(next: AlbumPair) {
+    pendingToRef.current = next.mode === "snap" ? next.to : next.from;
+    writePair(next);
+    clearFinishTimer();
+    finishTimerRef.current = window.setTimeout(finishPair, slideMs + 40);
+  }
+
+  function startSnap(from: number, to: number, direction: 1 | -1) {
+    setZoomed(false);
+    if (overlayMotionReduced()) {
+      pendingToRef.current = null;
+      pendingDragRef.current = null;
+      setIndex(to);
+      writePair(null);
+      return;
+    }
+    pendingToRef.current = to;
+    writePair({ from, to, direction, mode: "pending", dx: 0 });
+    requestAnimationFrame(() => {
+      startSettle({ from, to, direction, mode: "snap", dx: 0 });
+    });
+  }
+
+  function applyDrag(to: number, direction: 1 | -1, dx: number) {
+    writePair({ from: index, to, direction, mode: "drag", dx });
+  }
+
+  function onIncomingReadyForDrag() {
+    const pending = pendingDragRef.current;
+    if (!pending) return;
+    const pointer = pointerRef.current;
+    const shouldCommit =
+      pending.commit || (!pointer && Math.abs(pending.dx) >= swipeThreshold);
+    if (!pointer || shouldCommit) {
+      pendingDragRef.current = null;
+      if (shouldCommit) {
+        startSnap(index, pending.to, pending.direction);
+        return;
+      }
+      pendingToRef.current = null;
+      return;
+    }
+    applyDrag(pending.to, pending.direction, pending.dx);
+  }
+
+  function beginHorizontalDrag(rawDx: number) {
+    const direction: 1 | -1 = rawDx < 0 ? 1 : -1;
+    const to = wrapIndex(index + direction, album.length);
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
+    pendingToRef.current = to;
+    pendingDragRef.current = { to, direction, dx, commit: false };
+    if (overlayMotionReduced()) return;
+    clearReadyWait();
+    cancelReadyRef.current = waitForFrameReady(
+      frameEl(to),
+      onIncomingReadyForDrag,
+    );
+  }
+
+  function moveHorizontalDrag(rawDx: number) {
+    const direction: 1 | -1 =
+      rawDx === 0 ? (pairRef.current?.direction ?? 1) : rawDx < 0 ? 1 : -1;
+    const to = wrapIndex(index + direction, album.length);
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
+    if (pointerRef.current) pointerRef.current.dx = dx;
+    const pending = pendingDragRef.current;
+    if (pending) {
+      pending.to = to;
+      pending.direction = direction;
+      pending.dx = dx;
+    }
+    const currentPair = pairRef.current;
+    if (currentPair?.mode === "drag") {
+      if (currentPair.to === to) {
+        writePair({ ...currentPair, dx });
+        return;
+      }
+      pendingToRef.current = to;
+      pendingDragRef.current = { to, direction, dx, commit: false };
+      clearReadyWait();
+      cancelReadyRef.current = waitForFrameReady(
+        frameEl(to),
+        onIncomingReadyForDrag,
+      );
+      return;
+    }
+    if (!pending) {
+      beginHorizontalDrag(rawDx);
+    }
+  }
+
+  function cancelHorizontalDrag() {
+    const currentPair = pairRef.current;
+    pointerRef.current = null;
+    setAxis(null);
+    pendingDragRef.current = null;
+    if (currentPair?.mode === "drag") {
+      pendingToRef.current = currentPair.from;
+      startSettle({ ...currentPair, mode: "spring", dx: 0 });
+      return;
+    }
+    if (!currentPair) pendingToRef.current = null;
+    clearReadyWait();
+  }
+
+  function onTrackTransitionEnd(event: TransitionEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) return;
+    if (event.propertyName && event.propertyName !== "transform") return;
+    finishPair();
+  }
+
+  function pagingAllowed() {
+    return (
+      album.length >= 2 &&
+      motion === "open" &&
+      !zoomed &&
+      !pair &&
+      !pointerRef.current
+    );
+  }
+
+  function goTo(next: number) {
+    if (!pagingAllowed()) return;
+    const to = wrapIndex(next, album.length);
+    if (to === index) return;
+    const direction: 1 | -1 = next < index || next < 0 ? -1 : 1;
+    clearReadyWait();
+    cancelReadyRef.current = waitForFrameReady(frameEl(to), () => {
+      startSnap(index, to, direction);
+    });
+  }
+
+  const goToRef = useRef(goTo);
+  useEffect(() => {
+    goToRef.current = goTo;
+  });
 
   useEffect(() => {
     let cancelled = false;
-    void prefetchIndependentOverlayObjectUrl(request.src).then((next) => {
-      if (!cancelled && next) setObjectUrl(next);
-    });
+    const photos = request.photos?.length
+      ? request.photos
+      : [{ src: request.src }];
+    for (const photo of photos) {
+      void prefetchIndependentOverlayObjectUrl(photo.src).then((next) => {
+        if (!cancelled && next) setObjectUrlVersion((version) => version + 1);
+      });
+    }
     return () => {
       cancelled = true;
     };
-  }, [request.src]);
+  }, [request]);
+
+  useLayoutEffect(() => {
+    if (album.length < 2) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const update = () => {
+      const width = albumSlideWidth(stage, trackRef.current);
+      if (width > 0) {
+        slideWidthRef.current = width;
+        stage.style.setProperty("--photo-lightbox-slide-width", `${width}px`);
+      }
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [album.length, objectUrl]);
+
+  useEffect(
+    () => () => {
+      clearFinishTimer();
+      clearReadyWait();
+    },
+    [],
+  );
 
   function clearCloseTimer() {
     if (closeTimerRef.current == null) return;
@@ -198,21 +527,34 @@ function PhotoLightboxLayer({
   });
 
   function revealPhoto() {
-    setMotion((current) => (current === "opening" ? "open" : current));
+    setMotion((currentMotion) =>
+      currentMotion === "opening" ? "open" : currentMotion,
+    );
   }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closeRef.current();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (zoomed) return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToRef.current(index + 1);
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToRef.current(index - 1);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
       clearCloseTimer();
     };
-  }, []);
+  }, [index, zoomed]);
 
   function onLayerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Tab") return;
@@ -235,6 +577,153 @@ function PhotoLightboxLayer({
     }
   }
 
+  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (pointerRef.current && pointerRef.current.id !== event.pointerId) {
+      cancelHorizontalDrag();
+      return;
+    }
+    if (
+      album.length < 2 ||
+      zoomed ||
+      motion !== "open" ||
+      pair ||
+      (event.pointerType === "mouse" && event.button !== 0)
+    ) {
+      return;
+    }
+    pointerRef.current = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      axis: null,
+      dx: 0,
+    };
+    setAxis(null);
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const start = pointerRef.current;
+    if (!start || start.id !== event.pointerId || zoomed) return;
+    const rawDx = event.clientX - start.x;
+    const rawDy = event.clientY - start.y;
+    if (start.axis == null) {
+      if (Math.abs(rawDx) < axisLockPx && Math.abs(rawDy) < axisLockPx) {
+        return;
+      }
+      if (Math.abs(rawDy) >= Math.abs(rawDx)) {
+        start.axis = "y";
+        setAxis("y");
+        return;
+      }
+      start.axis = "x";
+      setAxis("x");
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        /* jsdom */
+      }
+      beginHorizontalDrag(rawDx);
+      return;
+    }
+    if (start.axis !== "x") return;
+    moveHorizontalDrag(rawDx);
+  }
+
+  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const start = pointerRef.current;
+    pointerRef.current = null;
+    setAxis(null);
+    if (
+      !start ||
+      start.id !== event.pointerId ||
+      start.axis !== "x" ||
+      zoomed
+    ) {
+      pendingDragRef.current = null;
+      if (!pair) pendingToRef.current = null;
+      return;
+    }
+    const rawDx = event.clientX - start.x;
+    const currentPair = pairRef.current;
+    const pending = pendingDragRef.current;
+    const dx = currentPair?.dx ?? pending?.dx ?? rawDx;
+    const commit = Math.abs(dx) >= swipeThreshold;
+    if (overlayMotionReduced()) {
+      pendingDragRef.current = null;
+      if (!commit) {
+        pendingToRef.current = null;
+        return;
+      }
+      const direction: 1 | -1 = dx < 0 ? 1 : -1;
+      const to = wrapIndex(index + direction, album.length);
+      clearReadyWait();
+      cancelReadyRef.current = waitForFrameReady(frameEl(to), () =>
+        startSnap(index, to, direction),
+      );
+      return;
+    }
+    if (!currentPair && pending) {
+      pending.commit = commit;
+      if (!commit) {
+        clearReadyWait();
+        pendingDragRef.current = null;
+        pendingToRef.current = null;
+      }
+      return;
+    }
+    if (!currentPair || currentPair.mode !== "drag") return;
+    if (commit) {
+      pendingDragRef.current = null;
+      startSettle({ ...currentPair, mode: "snap", dx: 0 });
+      return;
+    }
+    pendingToRef.current = currentPair.from;
+    pendingDragRef.current = null;
+    startSettle({ ...currentPair, mode: "spring", dx: 0 });
+  }
+
+  const reserved = new Set(pair ? [pair.from, pair.to] : [index]);
+  const mounted = mountedAlbumIndexes(index, album.length);
+  const parkedIndexes = mounted.filter(
+    (photoIndex) => !reserved.has(photoIndex),
+  );
+  const trackStyle: CSSProperties | undefined = pair
+    ? { transform: pairSlideTransform(pair, pair.slideWidth ?? 0) }
+    : undefined;
+
+  function renderFrame(
+    photoIndex: number,
+    role: "outgoing" | "incoming" | "parked",
+  ) {
+    const photo = album[photoIndex];
+    if (!photo) return null;
+    return (
+      <PhotoLightboxFrame
+        key={`photo-${photoIndex}`}
+        photo={photo}
+        photoIndex={photoIndex}
+        role={role}
+        zoomed={role === "outgoing" && zoomed && !pair}
+        onReady={role === "outgoing" && !pair ? revealPhoto : undefined}
+        onToggleZoom={
+          role === "parked"
+            ? undefined
+            : () => setZoomed((currentZoom) => !currentZoom)
+        }
+      />
+    );
+  }
+
+  const pairFrames = pair
+    ? pair.direction === 1
+      ? [renderFrame(pair.from, "outgoing"), renderFrame(pair.to, "incoming")]
+      : [renderFrame(pair.to, "incoming"), renderFrame(pair.from, "outgoing")]
+    : [renderFrame(index, "outgoing")];
+  const trackFrames = [
+    ...pairFrames,
+    ...parkedIndexes.map((photoIndex) => renderFrame(photoIndex, "parked")),
+  ];
+
   if (!objectUrl) return null;
 
   return (
@@ -248,7 +737,7 @@ function PhotoLightboxLayer({
     >
       <div className="photo-lightbox-dimmer" />
       <h2 id={titleId} className="sr-only">
-        Full-screen photo: {request.alt}
+        Full-screen photo: {current.alt}
       </h2>
       <button
         type="button"
@@ -258,17 +747,55 @@ function PhotoLightboxLayer({
       >
         ×
       </button>
-      <div className="photo-lightbox-stage">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
-          src={objectUrl}
-          alt={request.alt}
-          onLoad={revealPhoto}
-          onError={revealPhoto}
-          onDoubleClick={() => setZoomed((current) => !current)}
-        />
+      <div
+        ref={stageRef}
+        className={`photo-lightbox-stage${album.length > 1 ? " has-album" : ""}${
+          axis === "x" ? " is-axis-x" : ""
+        }${zoomed ? " is-zoomed" : ""}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={cancelHorizontalDrag}
+      >
+        {album.length < 2 ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
+            src={objectUrl}
+            alt={current.alt}
+            onLoad={revealPhoto}
+            onError={revealPhoto}
+            onDoubleClick={() => setZoomed((currentZoom) => !currentZoom)}
+          />
+        ) : (
+          <div
+            ref={trackRef}
+            className={`photo-lightbox-track${pair ? " is-paired" : ""}${
+              pair?.mode === "drag" ? " is-dragging" : ""
+            }${pair?.mode === "snap" ? " is-sliding" : ""}${
+              pair?.mode === "spring" ? " is-springing" : ""
+            }${
+              pair?.mode === "snap" || pair?.mode === "spring"
+                ? " is-settling"
+                : ""
+            }`}
+            data-direction={
+              pair ? (pair.direction === 1 ? "next" : "prev") : undefined
+            }
+            data-phase={pair?.mode ?? "idle"}
+            data-dx={pair?.mode === "drag" ? String(pair.dx) : undefined}
+            style={trackStyle}
+            onTransitionEnd={onTrackTransitionEnd}
+          >
+            {trackFrames}
+          </div>
+        )}
       </div>
+      {album.length > 1 ? (
+        <p className="sr-only" aria-live="polite">
+          Photo {displayIndex + 1} of {album.length}
+        </p>
+      ) : null}
     </div>
   );
 }

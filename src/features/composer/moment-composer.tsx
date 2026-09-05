@@ -18,13 +18,21 @@ import {
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import type { MomentComposerViewModel } from "./composer-view-model";
 import type {
+  RemoveMomentPhotoAction,
+  ReorderMomentPhotosAction,
   SaveFamilyMomentAction,
   SaveWrittenMomentAction,
   UpdateFamilyMomentAction,
 } from "@/features/moments/moment-action-types";
+import { maximumMomentPhotos } from "@/features/moments/moment-photos";
 import type { MomentAudience } from "@/features/moments/moment-audience";
 import { normalizeMomentAudience } from "@/features/moments/moment-audience";
-import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
+import {
+  createPhotoUploadAttempt,
+  uploadPhotoMoment,
+  type PhotoUploadAttempt,
+  type PhotoUploadStage,
+} from "./photo-upload";
 import {
   acceptedVideoMime,
   maximumVideoBytes,
@@ -53,10 +61,17 @@ import {
 
 type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
 
+export type ComposerExistingPhoto = Readonly<{
+  id?: string;
+  src: string;
+  alt?: string;
+}>;
+
 export type ComposerExistingMedia = Readonly<{
   kind: "photo" | "video";
   src: string;
   alt?: string;
+  photos?: readonly ComposerExistingPhoto[];
 }>;
 
 export type ComposerEditDraft = Readonly<{
@@ -77,6 +92,8 @@ export type ComposerEditDraft = Readonly<{
   audience?: MomentAudience;
   existingMedia?: ComposerExistingMedia;
   save: UpdateFamilyMomentAction;
+  removePhoto?: RemoveMomentPhotoAction;
+  reorderPhotos?: ReorderMomentPhotosAction;
 }>;
 
 type MomentComposerProps = Readonly<{
@@ -101,6 +118,34 @@ type ModeCopy = Readonly<{
 }>;
 
 type PhotoDecodeState = "empty" | "decoding" | "ready" | "error";
+
+type ComposerPhotoItem = {
+  key: string;
+  file: File | null;
+  previewUrl: string;
+  existingPhotoId?: string;
+  decodeState: PhotoDecodeState;
+};
+
+function existingPhotoItems(
+  media: ComposerExistingMedia | undefined,
+): ComposerPhotoItem[] {
+  if (media?.kind !== "photo") return [];
+  const photos = media.photos?.length
+    ? media.photos
+    : [{ src: media.src, alt: media.alt }];
+  return photos.map((photo, index) => ({
+    key: photo.id ?? `existing-${index}`,
+    file: null,
+    previewUrl: photo.src,
+    existingPhotoId: photo.id,
+    decodeState: "ready",
+  }));
+}
+
+function revokeBlobUrl(url: string | null | undefined) {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
 
 const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
   photo: {
@@ -265,11 +310,20 @@ export function MomentComposer({
   );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(
-    editDraft?.existingMedia?.src ?? null,
+    editDraft?.existingMedia?.kind === "video"
+      ? editDraft.existingMedia.src
+      : null,
+  );
+  const [photoItems, setPhotoItems] = useState<ComposerPhotoItem[]>(() =>
+    existingPhotoItems(editDraft?.existingMedia),
   );
   const [photoDecodeState, setPhotoDecodeState] = useState<PhotoDecodeState>(
     editDraft?.existingMedia ? "ready" : "empty",
   );
+  const photoItemsRef = useRef(photoItems);
+  useEffect(() => {
+    photoItemsRef.current = photoItems;
+  }, [photoItems]);
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -311,6 +365,17 @@ export function MomentComposer({
   );
   const resolvedPlaceName = mode === "location" ? title : place.label;
   const editingExistingMedia = Boolean(editDraft?.existingMedia);
+  const existingPhotoSignature = (
+    editDraft?.existingMedia?.photos ??
+    (editDraft?.existingMedia?.kind === "photo"
+      ? [{ id: undefined, src: editDraft.existingMedia.src }]
+      : [])
+  )
+    .map((photo) => photo.id ?? photo.src)
+    .join(",");
+  const currentPhotoSignature = photoItems
+    .map((item) => item.existingPhotoId ?? item.file?.name ?? item.key)
+    .join(",");
   const isDirty = editDraft
     ? body !== editDraft.body ||
       title !== editDraft.title ||
@@ -324,7 +389,8 @@ export function MomentComposer({
       taggedPersonIds.join(",") !== editDraft.taggedPersonIds.join(",") ||
       occurredOn !== editDraft.occurredOn ||
       occurredTime !== editDraft.occurredTime ||
-      audience !== normalizeMomentAudience(editDraft.audience)
+      audience !== normalizeMomentAudience(editDraft.audience) ||
+      currentPhotoSignature !== existingPhotoSignature
     : Boolean(
         body.length ||
         title.length ||
@@ -332,28 +398,52 @@ export function MomentComposer({
         place.label.length ||
         place.latitude !== null ||
         photoFile ||
+        photoItems.length > 0 ||
         taggedPersonIds.length ||
         occurredOn !== model.previewToday ||
         occurredTime.length > 0 ||
         journalPersonId !== model.defaultJournalPersonId ||
         audience !== "family",
       );
+  const selectedPhoto = photoItems[0] ?? null;
+  const photoReady =
+    mode === "video"
+      ? photoDecodeState === "ready"
+      : photoItems.length > 0 &&
+        photoItems.every((item) => item.decodeState === "ready");
 
   const revokeCurrentPhotoUrl = useCallback(() => {
     if (photoPreviewUrlRef.current) {
       const url = photoPreviewUrlRef.current;
       photoPreviewUrlRef.current = null;
-      URL.revokeObjectURL(url);
+      revokeBlobUrl(url);
     }
+    for (const item of photoItemsRef.current) {
+      revokeBlobUrl(item.previewUrl);
+    }
+    photoItemsRef.current = [];
   }, []);
 
   const clearPhotoPreview = useCallback(() => {
     revokeCurrentPhotoUrl();
     setPhotoPreviewUrl(null);
+    setPhotoItems([]);
   }, [revokeCurrentPhotoUrl]);
 
   const rejectUndecodablePhoto = useCallback(
     (expectedUrl: string) => {
+      const matchingItem = photoItemsRef.current.find(
+        (item) => item.previewUrl === expectedUrl,
+      );
+      if (matchingItem) {
+        revokeBlobUrl(matchingItem.previewUrl);
+        setPhotoItems((current) =>
+          current.filter((item) => item.key !== matchingItem.key),
+        );
+        if (photoInputRef.current) photoInputRef.current.value = "";
+        setPhotoError("This image could not be shown. Choose another one.");
+        return;
+      }
       if (photoPreviewUrlRef.current !== expectedUrl) return;
       clearPhotoPreview();
       setPhotoFile(null);
@@ -382,6 +472,7 @@ export function MomentComposer({
       setAudience("family");
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
+      setPhotoItems([]);
       setPhotoDecodeState("empty");
       setVideoDurationMs(null);
       setPhotoError(null);
@@ -488,23 +579,81 @@ export function MomentComposer({
     } else chooserHeadingRef.current?.focus({ preventScroll: true });
   }, [choosingMode, mode, open, reviewing]);
 
+  const inspectPhotoFile = (file: File) => {
+    const normalizedType = file.type.toLowerCase();
+    const supportedType = connectedPhotoAvailable
+      ? normalizedType === "" || connectedPhotoTypes.has(normalizedType)
+      : previewImageTypes.has(normalizedType);
+    if (!supportedType) {
+      return connectedPhotoAvailable
+        ? "For now, choose a JPEG, PNG, or WebP photo."
+        : "Choose an image file for this preview.";
+    }
+    if (file.size === 0) return "That image is empty. Choose another one.";
+    if (file.size > 25 * 1024 * 1024) {
+      return "Choose an image smaller than 25 MB for this preview.";
+    }
+    return null;
+  };
+
+  const addPhotoFiles = (files: readonly File[]) => {
+    if (uploadInFlightRef.current || files.length === 0) return;
+    photoUploadAttemptRef.current = null;
+    setPhotoUploadStage(null);
+    setPhotoError(null);
+    setPhotoRetryable(true);
+    const remaining = maximumMomentPhotos - photoItems.length;
+    if (remaining <= 0) {
+      setPhotoError("A photo entry can hold up to 6 photos.");
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      return;
+    }
+    const nextItems: ComposerPhotoItem[] = [];
+    for (const file of files.slice(0, remaining)) {
+      const error = inspectPhotoFile(file);
+      if (error) {
+        setPhotoDecodeState("error");
+        setPhotoError(error);
+        if (photoInputRef.current) photoInputRef.current.value = "";
+        return;
+      }
+      nextItems.push({
+        key: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        decodeState: "decoding",
+      });
+    }
+    setMode("photo");
+    setPhotoFile(nextItems[0]?.file ?? photoFile);
+    setPhotoItems((current) => [...current, ...nextItems]);
+    setPhotoDecodeState("decoding");
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
   const replacePhoto = (file: File | null) => {
     if (uploadInFlightRef.current) return;
     photoUploadAttemptRef.current = null;
     setPhotoUploadStage(null);
-    clearPhotoPreview();
-    setPhotoFile(null);
-    setPhotoDecodeState("empty");
-    setVideoDurationMs(null);
     setPhotoError(null);
     setPhotoRetryable(true);
     if (!file) {
+      if (mode === "video" || photoItems.length === 0) {
+        clearPhotoPreview();
+        setPhotoFile(null);
+        setPhotoDecodeState("empty");
+        setVideoDurationMs(null);
+      }
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
     }
-    const normalizedType = file.type.toLowerCase();
     const videoMime = acceptedVideoMime(file);
     if (videoMime) {
+      if (photoItems.length > 0) {
+        setPhotoError("Choose photos or a video, not both.");
+        if (photoInputRef.current) photoInputRef.current.value = "";
+        return;
+      }
       if (file.size === 0) {
         setPhotoDecodeState("error");
         setPhotoError("That video is empty. Choose another one.");
@@ -517,6 +666,7 @@ export function MomentComposer({
         if (photoInputRef.current) photoInputRef.current.value = "";
         return;
       }
+      clearPhotoPreview();
       const nextUrl = URL.createObjectURL(file);
       photoPreviewUrlRef.current = nextUrl;
       setMode("video");
@@ -525,43 +675,60 @@ export function MomentComposer({
       setPhotoDecodeState("decoding");
       return;
     }
-    const supportedType = connectedPhotoAvailable
-      ? normalizedType === "" || connectedPhotoTypes.has(normalizedType)
-      : previewImageTypes.has(normalizedType);
-    if (!supportedType) {
-      setPhotoDecodeState("error");
-      setPhotoError(
-        connectedPhotoAvailable
-          ? "For now, choose a JPEG, PNG, or WebP photo."
-          : "Choose an image file for this preview.",
-      );
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-    if (file.size === 0) {
-      setPhotoDecodeState("error");
-      setPhotoError("That image is empty. Choose another one.");
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      setPhotoDecodeState("error");
-      setPhotoError("Choose an image smaller than 25 MB for this preview.");
-      if (photoInputRef.current) photoInputRef.current.value = "";
-      return;
-    }
-    const nextUrl = URL.createObjectURL(file);
-    setMode("photo");
-    photoPreviewUrlRef.current = nextUrl;
-    setPhotoFile(file);
-    setPhotoPreviewUrl(nextUrl);
-    setPhotoDecodeState("decoding");
+    addPhotoFiles([file]);
   };
 
   const acceptDecodedPhoto = (expectedUrl: string) => {
+    const matchingItem = photoItemsRef.current.find(
+      (item) => item.previewUrl === expectedUrl,
+    );
+    if (matchingItem) {
+      setPhotoItems((current) =>
+        current.map((item) =>
+          item.key === matchingItem.key
+            ? { ...item, decodeState: "ready" }
+            : item,
+        ),
+      );
+      setPhotoDecodeState("ready");
+      setPhotoError(null);
+      return;
+    }
     if (photoPreviewUrlRef.current !== expectedUrl) return;
     setPhotoDecodeState("ready");
     setPhotoError(null);
+  };
+
+  const removePhotoItem = (key: string) => {
+    if (uploadInFlightRef.current) return;
+    const remaining = photoItems.filter((item) => item.key !== key);
+    if (editingExistingMedia && remaining.length === 0) return;
+    const removed = photoItems.find((item) => item.key === key);
+    revokeBlobUrl(removed?.previewUrl);
+    setPhotoItems(remaining);
+    setPhotoFile(remaining[0]?.file ?? null);
+    if (remaining.length === 0) {
+      setPhotoDecodeState("empty");
+      setPhotoError(null);
+    }
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  };
+
+  const movePhotoItem = (fromIndex: number, toIndex: number) => {
+    if (
+      fromIndex === toIndex ||
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= photoItems.length ||
+      toIndex >= photoItems.length
+    ) {
+      return;
+    }
+    const next = [...photoItems];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setPhotoItems(next);
+    setPhotoFile(next[0]?.file ?? photoFile);
   };
 
   const inspectSelectedVideo = (
@@ -646,10 +813,11 @@ export function MomentComposer({
     if (
       (mode === "photo" || mode === "video") &&
       !editingExistingMedia &&
-      photoDecodeState !== "ready"
+      !photoReady
     ) {
       setPhotoError(
-        photoDecodeState === "decoding"
+        photoDecodeState === "decoding" ||
+          photoItems.some((item) => item.decodeState === "decoding")
           ? `Wait for this ${mode} to finish loading.`
           : `Choose a ${mode} for this preview.`,
       );
@@ -750,6 +918,67 @@ export function MomentComposer({
           setSaveError(result.message);
           return;
         }
+        if (
+          savedMode === "photo" &&
+          editDraft.existingMedia?.kind === "photo"
+        ) {
+          const originalIds = (editDraft.existingMedia.photos ?? []).flatMap(
+            (photo) => (photo.id ? [photo.id] : []),
+          );
+          const remainingExistingIds = photoItems.flatMap((item) =>
+            item.existingPhotoId ? [item.existingPhotoId] : [],
+          );
+          const newFiles = photoItems.flatMap((item) =>
+            item.file ? [item.file] : [],
+          );
+          if (newFiles.length > 0 && model.circleId) {
+            for (const file of newFiles) {
+              await uploadPhotoMoment(
+                file,
+                {
+                  body: savedBody,
+                  circleId: model.circleId,
+                  journalPersonId: savedJournalPersonId,
+                  occurredAt,
+                  occurredOn: savedOccurredOn,
+                  occurredTimezone,
+                  placeName: savedPlaceName,
+                  latitude: savedLatitude,
+                  longitude: savedLongitude,
+                  taggedPersonIds: savedTaggedPersonIds,
+                  audience,
+                  existingMomentId: editDraft.momentId,
+                },
+                createPhotoUploadAttempt(),
+                new AbortController().signal,
+                () => undefined,
+              );
+            }
+          }
+          const removedIds = originalIds.filter(
+            (photoId) => !remainingExistingIds.includes(photoId),
+          );
+          for (const photoId of removedIds) {
+            const removed = await editDraft.removePhoto?.({
+              momentId: editDraft.momentId,
+              photoId,
+            });
+            if (removed && !removed.ok) {
+              setSaveError(removed.message);
+              return;
+            }
+          }
+          if (remainingExistingIds.length > 1 && editDraft.reorderPhotos) {
+            const reordered = await editDraft.reorderPhotos({
+              momentId: editDraft.momentId,
+              photoIds: remainingExistingIds,
+            });
+            if (!reordered.ok) {
+              setSaveError(reordered.message);
+              return;
+            }
+          }
+        }
         const region = document.getElementById("journal-live-region");
         if (region) region.textContent = "Changes to this moment were saved.";
         resetDraft();
@@ -769,15 +998,17 @@ export function MomentComposer({
       if (
         !connectedPhotoAvailable ||
         !model.circleId ||
-        !photoFile ||
-        photoDecodeState !== "ready" ||
+        !(mode === "photo"
+          ? photoItems.some((item) => item.file)
+          : photoFile) ||
+        !photoReady ||
         (mode === "video" && !videoDurationMs)
       ) {
         setSaveError(`Choose the ${mode} again and try once more.`);
         return;
       }
       const common = {
-        file: photoFile,
+        file: photoFile!,
         occurredTime: savedOccurredTime,
         person: {
           id: savedJournalPersonId,
@@ -787,8 +1018,13 @@ export function MomentComposer({
         },
       };
       if (mode === "photo") {
+        const files = photoItems.flatMap((item) =>
+          item.file ? [item.file] : [],
+        );
         startOptimisticPhotoUpload({
           ...common,
+          file: files[0] ?? photoFile,
+          files,
           draft: {
             body: capturedBody,
             circleId: model.circleId,
@@ -944,7 +1180,7 @@ export function MomentComposer({
   const previewTitle = resolvePreviewTitle(
     title,
     body,
-    Boolean(photoFile),
+    Boolean(photoFile || photoItems.length),
     copy?.kindLabel ?? "Moment",
   );
 
@@ -1202,38 +1438,50 @@ export function MomentComposer({
 
           <div className="composer-editor-scroll">
             {mode === "photo" || mode === "video" ? (
-              editingExistingMedia ? null : (
-                <label className="photo-input">
-                  <span>
-                    {photoFile
-                      ? "Choose different media"
-                      : "Choose photo or video"}
-                  </span>
-                  <small>
-                    {connectedPhotoAvailable
-                      ? "The original uploads privately to this family."
-                      : "It stays on this device in the preview."}
-                  </small>
-                  <input
-                    ref={photoInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
-                    required={!photoFile}
-                    aria-invalid={photoError ? true : undefined}
-                    aria-describedby={
-                      photoError ? "photo-preview-error" : undefined
-                    }
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0] ?? null;
-                      event.currentTarget.blur();
-                      editorHeadingRef.current?.focus({
-                        preventScroll: true,
-                      });
-                      replacePhoto(file);
-                    }}
-                  />
-                </label>
-              )
+              mode === "video" || photoItems.length === 0 ? (
+                editingExistingMedia && mode === "video" ? null : (
+                  <label className="photo-input">
+                    <span>Choose photo or video</span>
+                    <small>
+                      {connectedPhotoAvailable
+                        ? "The original uploads privately to this family."
+                        : "It stays on this device in the preview."}
+                    </small>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm"
+                      multiple={mode === "photo" || !photoFile}
+                      required={!photoFile && photoItems.length === 0}
+                      aria-invalid={photoError ? true : undefined}
+                      aria-describedby={
+                        photoError ? "photo-preview-error" : undefined
+                      }
+                      onChange={(event) => {
+                        const files = [...(event.currentTarget.files ?? [])];
+                        event.currentTarget.blur();
+                        editorHeadingRef.current?.focus({
+                          preventScroll: true,
+                        });
+                        const video = files.find((file) =>
+                          acceptedVideoMime(file),
+                        );
+                        if (video && files.length === 1) {
+                          replacePhoto(video);
+                          return;
+                        }
+                        if (video && files.length > 1) {
+                          setPhotoError("Choose photos or a video, not both.");
+                          event.currentTarget.value = "";
+                          return;
+                        }
+                        if (files.length > 1) addPhotoFiles(files);
+                        else replacePhoto(files[0] ?? null);
+                      }}
+                    />
+                  </label>
+                )
+              ) : null
             ) : null}
             {photoError ? (
               <p
@@ -1244,29 +1492,39 @@ export function MomentComposer({
                 {photoError}
               </p>
             ) : null}
-            {editingExistingMedia ? null : (
+            {editingExistingMedia && photoItems.length === 0 ? null : (
               <p
                 className="composer-selection-status"
                 role="status"
                 aria-live="polite"
               >
-                {photoFile
+                {mode === "video" && photoFile
                   ? photoDecodeState === "ready"
                     ? connectedPhotoAvailable
-                      ? `${mode === "video" ? "Video" : "Photo"} ready to upload privately.`
-                      : `${mode === "video" ? "Video" : "Photo"} ready for this local preview.`
-                    : `Preparing this ${mode === "video" ? "video" : "photo"} on your device.`
-                  : ""}
+                      ? "Video ready to upload privately."
+                      : "Video ready for this local preview."
+                    : "Preparing this video on your device."
+                  : selectedPhoto
+                    ? photoReady
+                      ? connectedPhotoAvailable
+                        ? photoItems.length > 1
+                          ? `${photoItems.length} photos ready to upload privately.`
+                          : "Photo ready to upload privately."
+                        : photoItems.length > 1
+                          ? `${photoItems.length} photos ready for this local preview.`
+                          : "Photo ready for this local preview."
+                      : "Preparing these photos on your device."
+                    : ""}
               </p>
             )}
-            {photoPreviewUrl && mode === "photo" ? (
+            {mode === "photo" && selectedPhoto ? (
               <div className="composer-photo-preview">
                 {/* The selected blob is local-only and must never enter the
                     generic Next image optimizer or receive inline styles. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  key={photoPreviewUrl}
-                  src={photoPreviewUrl}
+                  key={selectedPhoto.previewUrl}
+                  src={selectedPhoto.previewUrl}
                   alt={
                     editDraft?.existingMedia?.alt ?? "Selected photo preview"
                   }
@@ -1274,19 +1532,96 @@ export function MomentComposer({
                   height={540}
                   decoding="async"
                   onLoad={() => {
-                    if (editingExistingMedia) return;
-                    acceptDecodedPhoto(photoPreviewUrl);
+                    if (selectedPhoto.existingPhotoId) return;
+                    acceptDecodedPhoto(selectedPhoto.previewUrl);
                   }}
                   onError={() => {
-                    if (editingExistingMedia) return;
-                    rejectUndecodablePhoto(photoPreviewUrl);
+                    if (selectedPhoto.existingPhotoId) return;
+                    rejectUndecodablePhoto(selectedPhoto.previewUrl);
                   }}
                 />
-                {editingExistingMedia ? null : (
-                  <button type="button" onClick={() => replacePhoto(null)}>
+                {!editingExistingMedia || photoItems.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => removePhotoItem(selectedPhoto.key)}
+                  >
                     Remove photo
                   </button>
-                )}
+                ) : null}
+              </div>
+            ) : null}
+            {mode === "photo" && photoItems.length > 0
+              ? photoItems.slice(1).map((item) =>
+                  item.existingPhotoId ? null : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={item.key}
+                      className="sr-only"
+                      src={item.previewUrl}
+                      alt=""
+                      onLoad={() => acceptDecodedPhoto(item.previewUrl)}
+                      onError={() => rejectUndecodablePhoto(item.previewUrl)}
+                    />
+                  ),
+                )
+              : null}
+            {mode === "photo" && photoItems.length > 0 ? (
+              <div className="composer-photo-strip" role="list">
+                {photoItems.map((item, index) => (
+                  <div
+                    key={item.key}
+                    className="composer-photo-thumb"
+                    role="listitem"
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", String(index));
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const from = Number(
+                        event.dataTransfer.getData("text/plain"),
+                      );
+                      if (Number.isInteger(from)) movePhotoItem(from, index);
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.previewUrl}
+                      alt={`Photo ${index + 1} of ${photoItems.length}`}
+                      draggable={false}
+                    />
+                    {photoItems.length > 1 ? (
+                      <button
+                        type="button"
+                        className="composer-photo-thumb-remove"
+                        aria-label={`Remove photo ${index + 1}`}
+                        onClick={() => removePhotoItem(item.key)}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {photoItems.length < maximumMomentPhotos ? (
+                  <label className="composer-photo-add">
+                    <span>Add photo</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      aria-label="Add photo"
+                      onChange={(event) => {
+                        addPhotoFiles([...(event.currentTarget.files ?? [])]);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                ) : null}
               </div>
             ) : null}
             {photoPreviewUrl && mode === "video" ? (
