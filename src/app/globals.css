@@ -3893,6 +3893,9 @@ button:focus-visible,
   display: grid;
   gap: 8px;
   pointer-events: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .photo-status-quality-preview {
   min-height: 100svh;
@@ -3932,6 +3935,8 @@ button:focus-visible,
 }
 .photo-status-chip {
   pointer-events: auto;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   align-content: start;
   gap: 8px;
@@ -3939,6 +3944,7 @@ button:focus-visible,
   border: 1px solid var(--hairline);
   border-radius: 18px;
   background-color: var(--nav-pill-fill);
+  background-image: none;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(var(--nav-pill-blur));
   -webkit-backdrop-filter: blur(var(--nav-pill-blur));
@@ -3960,28 +3966,42 @@ button:focus-visible,
   line-height: 1.35;
 }
 .photo-status-chip progress {
+  display: block;
   width: 100%;
   height: 6px;
   min-height: 6px;
   margin: 0;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   overflow: hidden;
   appearance: none;
   -webkit-appearance: none;
-  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  -moz-appearance: none;
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  box-shadow: none;
+  outline: none;
   accent-color: var(--ochre);
+  color: var(--ochre);
+}
+.photo-status-chip progress::-webkit-progress-inner-element {
+  border: 0;
+  background: transparent;
 }
 .photo-status-chip progress::-webkit-progress-bar {
-  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  border: 0;
   border-radius: 999px;
+  box-shadow: none;
 }
 .photo-status-chip progress::-webkit-progress-value {
   background: var(--ochre);
+  border: 0;
   border-radius: 999px;
 }
 .photo-status-chip progress::-moz-progress-bar {
   background: var(--ochre);
+  border: 0;
   border-radius: 999px;
 }
 .photo-status-confirmation {
@@ -5981,7 +6001,8 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 :root[data-theme="light"] .bottom-nav,
-:root[data-theme="light"] .topbar {
+:root[data-theme="light"] .topbar,
+:root[data-theme="light"] .photo-status-chip {
   background-color: var(--nav-pill-fill);
   box-shadow: 0 10px 24px rgba(58, 44, 31, 0.12);
 }
@@ -6029,7 +6050,6 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .secondary-composer-action,
 :root[data-theme="light"] .inline-note-form button,
 :root[data-theme="light"] .inline-note-edit button,
-:root[data-theme="light"] .photo-status-shelf,
 :root[data-theme="light"] .photo-status-item,
 :root[data-theme="light"] .photo-status-result,
 :root[data-theme="light"] .photo-status-quality-preview,
@@ -6048,8 +6068,10 @@ html[data-theme].overlay-open .app-shell::before,
   background: var(--cream);
 }
 
-:root[data-theme="light"] .photo-status-chip {
-  background-color: var(--nav-pill-fill);
+:root[data-theme="light"] .photo-status-shelf {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 :root[data-theme="light"] .composer-sheet,
