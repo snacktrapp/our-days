@@ -29,7 +29,9 @@ vi.mock("./primary-navigation", () => ({
   ),
 }));
 vi.mock("@/features/composer/photo-status-shelf", () => ({
-  PhotoStatusShelf: () => null,
+  PhotoStatusShelf: () => (
+    <section className="photo-status-shelf" aria-label="Private photo status" />
+  ),
 }));
 
 afterEach(cleanup);
@@ -64,6 +66,26 @@ describe("JournalChrome", () => {
       ).not.toBeInTheDocument();
     },
   );
+
+  it("keeps the upload chip outside the scrolling journal stage", () => {
+    const { container } = render(
+      <JournalChrome
+        model={
+          {
+            ...model,
+            composer: { ...model.composer, circleId: "circle-1" },
+          } as JournalChromeViewModel
+        }
+        section="timeline"
+      >
+        <p>Page content</p>
+      </JournalChrome>,
+    );
+    const stage = container.querySelector(".phone-stage");
+    const chip = container.querySelector(".photo-status-shelf");
+    expect(chip).not.toBeNull();
+    expect(stage?.contains(chip)).toBe(false);
+  });
 
   it("keeps the floating top pill outside the scrolling journal stage", () => {
     const { container } = render(
