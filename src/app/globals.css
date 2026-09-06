@@ -4577,13 +4577,14 @@ button:focus-visible,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-color: color-mix(in srgb, var(--ink) 5%, transparent);
+  background-color: color-mix(in srgb, var(--ink) 8%, transparent);
   background-image: var(--journal-grid-image);
   background-size: var(--journal-grid-size) var(--journal-grid-size);
-  opacity: 0;
+  opacity: 0.28;
 }
 :root[data-theme="light"] .route-pending-field::after {
-  background-color: color-mix(in srgb, var(--ink) 9%, transparent);
+  background-color: color-mix(in srgb, var(--ink) 14%, transparent);
+  opacity: 0.48;
 }
 .journal-loading {
   min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
@@ -8325,20 +8326,20 @@ iframe.composer-location-map {
 @keyframes route-pending-breath {
   0%,
   100% {
-    opacity: 0.22;
+    opacity: 0.2;
   }
   50% {
-    opacity: 0.55;
+    opacity: 0.48;
   }
 }
 
 @keyframes route-pending-breath-light {
   0%,
   100% {
-    opacity: 0.38;
+    opacity: 0.4;
   }
   50% {
-    opacity: 0.82;
+    opacity: 0.88;
   }
 }
 
