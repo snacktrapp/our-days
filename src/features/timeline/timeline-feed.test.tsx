@@ -188,7 +188,7 @@ describe("TimelineFeed", () => {
       "2026-08-01",
     );
     expect(screen.getByAltText("Family outside")).toBeInTheDocument();
-    expect(screen.getAllByText("Aug. 1, 2026 | 8:00 pm")).toHaveLength(4);
+    expect(screen.getAllByText("Aug. 1, 2026 · 8:00 pm")).toHaveLength(4);
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
     expect(
       container.querySelector(

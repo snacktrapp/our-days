@@ -7,6 +7,7 @@ type DateTimeFieldsProps = Readonly<{
   date: string;
   maxDate?: string;
   time: string;
+  timeOptional?: boolean;
   onDateChange: (value: string) => void;
   onTimeChange: (value: string) => void;
 }>;
@@ -48,6 +49,15 @@ function dateLabel(value: string) {
   return dateFormatter.format(parseDate(value));
 }
 
+function timePartsFromDate(now: Date): TimeParts {
+  const roundedMinute = Math.floor(now.getMinutes() / 15) * 15;
+  return {
+    hour: now.getHours() % 12 || 12,
+    minute: roundedMinute,
+    period: now.getHours() >= 12 ? "PM" : "AM",
+  };
+}
+
 function timeParts(value: string): TimeParts {
   if (value) {
     const [rawHour, rawMinute] = value.split(":").map(Number);
@@ -58,13 +68,7 @@ function timeParts(value: string): TimeParts {
     };
   }
 
-  const now = new Date();
-  const roundedMinute = Math.floor(now.getMinutes() / 15) * 15;
-  return {
-    hour: now.getHours() % 12 || 12,
-    minute: roundedMinute,
-    period: now.getHours() >= 12 ? "PM" : "AM",
-  };
+  return timePartsFromDate(new Date());
 }
 
 function toTimeValue(parts: TimeParts) {
@@ -79,7 +83,11 @@ function toTimeValue(parts: TimeParts) {
   return `${String(hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
 }
 
-function timeLabel(value: string) {
+export function currentPickerTimeValue(now = new Date()) {
+  return toTimeValue(timePartsFromDate(now));
+}
+
+export function formatPickerTimeLabel(value: string) {
   if (!value) return "No time";
   const parts = timeParts(value);
   return `${parts.hour}:${String(parts.minute).padStart(2, "0")} ${parts.period}`;
@@ -89,6 +97,7 @@ export function DateTimeFields({
   date,
   maxDate,
   time,
+  timeOptional = true,
   onDateChange,
   onTimeChange,
 }: DateTimeFieldsProps) {
@@ -170,19 +179,17 @@ export function DateTimeFields({
           </button>
         </div>
         <div className="composer-field composer-picker-field">
-          <span>
-            Time <small>Optional</small>
-          </span>
+          <span>Time{timeOptional ? <small> Optional</small> : null}</span>
           <button
             type="button"
             className="composer-picker-trigger"
-            aria-label={`Time, ${timeLabel(time)}`}
+            aria-label={`Time, ${formatPickerTimeLabel(time)}`}
             aria-haspopup="dialog"
             aria-expanded={openPicker === "time"}
             onClick={openTimePicker}
           >
             <span className={time ? undefined : "composer-picker-empty"}>
-              {timeLabel(time)}
+              {formatPickerTimeLabel(time)}
             </span>
             <span aria-hidden="true">◷</span>
           </button>
@@ -267,7 +274,7 @@ export function DateTimeFields({
         <ComposerPickerPanel
           className="composer-picker-panel composer-time-panel"
           role="dialog"
-          aria-label="Choose optional time"
+          aria-label={timeOptional ? "Choose optional time" : "Choose time"}
         >
           <div className="composer-time-controls">
             <label>

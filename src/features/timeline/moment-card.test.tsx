@@ -7,6 +7,7 @@ import {
 } from "@/features/composer/bible-verse-catalog";
 import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import { MomentCard } from "./moment-card";
+import { timelineCardOccurredLabel } from "./timeline-view-model";
 import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
@@ -451,6 +452,18 @@ const insight = {
   sourceLabel: "Listen",
   conversation: { notes: [], reactions: [] },
 } as const satisfies InsightMomentViewModel;
+
+describe("MomentCard date line", () => {
+  it("leaves the card body date-only; the rail formats date · time", () => {
+    render(<MomentCard moment={thought} />);
+
+    expect(screen.queryByText(/·/u)).not.toBeInTheDocument();
+    expect(timelineCardOccurredLabel(thought.occurredOn, "7:25 PM")).toBe(
+      "Aug. 28, 2026 · 7:25 PM",
+    );
+    expect(timelineCardOccurredLabel(thought.occurredOn)).toBe("Aug. 28, 2026");
+  });
+});
 
 describe("MomentCard insight treatment", () => {
   it("renders quote, attribution, and source without a person byline", () => {

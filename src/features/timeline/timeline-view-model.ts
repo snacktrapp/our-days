@@ -4,6 +4,32 @@ import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 export type MomentKind =
   "photo" | "video" | "thought" | "milestone" | "location" | "insight";
 
+const connectionMonths = [
+  "Jan.",
+  "Feb.",
+  "Mar.",
+  "Apr.",
+  "May",
+  "June",
+  "July",
+  "Aug.",
+  "Sept.",
+  "Oct.",
+  "Nov.",
+  "Dec.",
+] as const;
+
+export function timelineCardOccurredLabel(
+  occurredOn: string,
+  displayTime?: string,
+) {
+  const [year, month, day] = occurredOn.split("-").map(Number);
+  const monthLabel = connectionMonths[month - 1];
+  const date =
+    monthLabel && year && day ? `${monthLabel} ${day}, ${year}` : occurredOn;
+  return displayTime ? `${date} · ${displayTime}` : date;
+}
+
 export type MomentReactionId = "held-close" | "made-me-smile" | "remember-this";
 
 export type MomentInteractionViewModel = Readonly<{

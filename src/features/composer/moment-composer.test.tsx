@@ -2,6 +2,10 @@ import { type ComponentProps, useRef, useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  currentPickerTimeValue,
+  formatPickerTimeLabel,
+} from "./date-time-fields";
 import { MomentComposer } from "./moment-composer";
 import {
   selectBiblePassage,
@@ -176,6 +180,7 @@ beforeEach(() => {
 afterEach(() => {
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -194,7 +199,7 @@ async function setComposerTime(
   minute: string,
   period: "AM" | "PM",
 ) {
-  await user.click(screen.getByRole("button", { name: /No time/u }));
+  await user.click(screen.getByRole("button", { name: /^Time,/u }));
   await user.selectOptions(screen.getByLabelText("Hour"), hour);
   await user.selectOptions(screen.getByLabelText("Minute"), minute);
   await user.selectOptions(screen.getByLabelText("AM or PM"), period);
@@ -284,6 +289,174 @@ async function selectComposerJournal(
 }
 
 describe("MomentComposer", () => {
+  it("defaults Photo and written Moment time to now without marking the draft dirty", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    const expectedLabel = formatPickerTimeLabel(currentPickerTimeValue());
+    expect(
+      screen.getByRole("button", { name: `Time, ${expectedLabel}` }),
+    ).toBeVisible();
+    expect(screen.getByText("Time")).not.toHaveTextContent("Optional");
+    await user.click(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    );
+    expect(confirm).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(
+      screen.getByRole("button", {
+        name: `Time, ${formatPickerTimeLabel(currentPickerTimeValue())}`,
+      }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Close moment composer" }),
+    );
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("saves a Photo with the default local time and timezone", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    const expectedTime = currentPickerTimeValue();
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "family.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(optimisticMediaUploadSnapshot()).toEqual([
+      expect.objectContaining({
+        occurredTime: expectedTime,
+        occurredOn: "2026-08-28",
+      }),
+    ]);
+    expect(photoUpload.upload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        occurredAt: new Date(`2026-08-28T${expectedTime}:00`).toISOString(),
+        occurredOn: "2026-08-28",
+        occurredTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+      expect.anything(),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+  });
+
+  it("keeps a stored time when editing a Photo", () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "20000000-0000-4000-8000-000000000001",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+        }}
+        open
+        editDraft={{
+          momentId: "moment-photo-timed",
+          revision: 4,
+          mode: "photo",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "14:45",
+          occurredAt: "2026-08-28T19:45:00.000Z",
+          occurredTimezone: "America/Chicago",
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "At the lake",
+          existingMedia: {
+            kind: "photo",
+            src: "/api/media/moments/moment-photo-timed",
+            alt: "Lake photo",
+          },
+          save: update,
+        }}
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Time, 2:45 PM" })).toBeVisible();
+  });
+
+  it("does not invent now when editing a date-only Photo", () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "20000000-0000-4000-8000-000000000001",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+        }}
+        open
+        editDraft={{
+          momentId: "moment-photo-dated",
+          revision: 4,
+          mode: "photo",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "",
+          occurredAt: null,
+          occurredTimezone: null,
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "At the lake",
+          existingMedia: {
+            kind: "photo",
+            src: "/api/media/moments/moment-photo-dated",
+            alt: "Lake photo",
+          },
+          save: update,
+        }}
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Time, No time" })).toBeVisible();
+  });
+
+  it("lets a Photo create clear back to No time", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.click(
+      screen.getByRole("button", {
+        name: `Time, ${formatPickerTimeLabel(currentPickerTimeValue())}`,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "No time" }));
+    expect(screen.getByRole("button", { name: "Time, No time" })).toBeVisible();
+  });
+
   it("defaults audience to Family and locks the journal to self for Just Me", async () => {
     const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
     const user = userEvent.setup();
@@ -1117,6 +1290,8 @@ describe("MomentComposer", () => {
           placeName: "Oak Street School",
           latitude: null,
           longitude: null,
+          occurredAt: expect.any(String),
+          occurredTimezone: expect.any(String),
         }),
       ),
     );
@@ -1130,6 +1305,7 @@ describe("MomentComposer", () => {
       screen.getByRole("button", { name: "Open connected family composer" }),
     );
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    expect(screen.getByRole("button", { name: "Time, No time" })).toBeVisible();
     await selectComposerBiblePassage(user, {
       book: "John",
       chapter: 3,
@@ -1148,6 +1324,8 @@ describe("MomentComposer", () => {
           kind: "thought",
           title: "",
           body: expect.stringContaining("— John 3:16 · World English Bible"),
+          occurredAt: null,
+          occurredTimezone: null,
         }),
       ),
     );

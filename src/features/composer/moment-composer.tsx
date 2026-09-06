@@ -51,7 +51,7 @@ import {
   startOptimisticVideoUpload,
 } from "./optimistic-media-upload";
 import { startOptimisticMomentSave } from "./optimistic-moment-save";
-import { DateTimeFields } from "./date-time-fields";
+import { currentPickerTimeValue, DateTimeFields } from "./date-time-fields";
 import { JournalPickerField } from "./journal-picker-field";
 import { LocationFields } from "./location-fields";
 import {
@@ -60,6 +60,14 @@ import {
 } from "@/lib/place-coordinates";
 
 type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
+
+function defaultsCreateOccurredTime(mode: ComposerMode | null) {
+  return mode === "photo" || mode === "video" || mode === "thought";
+}
+
+function defaultOccurredTimeForCreate(mode: ComposerMode | null) {
+  return defaultsCreateOccurredTime(mode) ? currentPickerTimeValue() : "";
+}
 
 export type ComposerExistingPhoto = Readonly<{
   id?: string;
@@ -296,9 +304,12 @@ export function MomentComposer({
   const [occurredOn, setOccurredOn] = useState(
     editDraft?.occurredOn ?? model.previewToday,
   );
-  const [occurredTime, setOccurredTime] = useState(
-    editDraft?.occurredTime ?? "",
+  const [cleanOccurredTime, setCleanOccurredTime] = useState(
+    () =>
+      editDraft?.occurredTime ??
+      defaultOccurredTimeForCreate(editDraft?.mode ?? null),
   );
+  const [occurredTime, setOccurredTime] = useState(cleanOccurredTime);
   const [journalPersonId, setJournalPersonId] = useState(
     editDraft?.journalPersonId ?? model.defaultJournalPersonId,
   );
@@ -401,7 +412,7 @@ export function MomentComposer({
         photoItems.length > 0 ||
         taggedPersonIds.length ||
         occurredOn !== model.previewToday ||
-        occurredTime.length > 0 ||
+        occurredTime !== cleanOccurredTime ||
         journalPersonId !== model.defaultJournalPersonId ||
         audience !== "family",
       );
@@ -466,7 +477,9 @@ export function MomentComposer({
       setTitle("");
       setVerseSelection(emptyBibleVerseSelection);
       setOccurredOn(model.previewToday);
-      setOccurredTime("");
+      const nextDefault = defaultOccurredTimeForCreate(nextMode);
+      setCleanOccurredTime(nextDefault);
+      setOccurredTime(nextDefault);
       setJournalPersonId(model.defaultJournalPersonId);
       setTaggedPersonIds([]);
       setAudience("family");
@@ -1769,6 +1782,7 @@ export function MomentComposer({
                 date={occurredOn}
                 maxDate={editDraft?.maxOccurredOn ?? model.previewToday}
                 time={occurredTime}
+                timeOptional={!defaultsCreateOccurredTime(mode)}
                 onDateChange={setOccurredOn}
                 onTimeChange={setOccurredTime}
               />
