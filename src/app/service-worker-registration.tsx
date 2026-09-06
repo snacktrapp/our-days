@@ -4,7 +4,11 @@ import { useEffect } from "react";
 
 const OUR_DAYS_CACHE_PREFIX = "our-days-public-shell-";
 
-export function ServiceWorkerCleanup() {
+function vapidPublicKey() {
+  return process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ?? "";
+}
+
+export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (
       process.env.NODE_ENV !== "production" ||
@@ -12,8 +16,25 @@ export function ServiceWorkerCleanup() {
     )
       return;
 
-    const removeLegacyWorker = async () => {
+    const syncWorker = async () => {
       try {
+        if ("caches" in window) {
+          const cacheNames = await window.caches.keys();
+          await Promise.all(
+            cacheNames
+              .filter((name) => name.startsWith(OUR_DAYS_CACHE_PREFIX))
+              .map((name) => window.caches.delete(name)),
+          );
+        }
+
+        if (vapidPublicKey()) {
+          await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+            updateViaCache: "none",
+          });
+          return;
+        }
+
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(
           registrations
@@ -23,22 +44,13 @@ export function ServiceWorkerCleanup() {
             )
             .map((registration) => registration.unregister()),
         );
-
-        if ("caches" in window) {
-          const cacheNames = await window.caches.keys();
-          await Promise.all(
-            cacheNames
-              .filter((name) => name.startsWith(OUR_DAYS_CACHE_PREFIX))
-              .map((name) => window.caches.delete(name)),
-          );
-        }
       } catch (error) {
         if (process.env.NODE_ENV === "development")
-          console.error("Legacy service worker cleanup failed.", error);
+          console.error("Service worker registration failed.", error);
       }
     };
 
-    void removeLegacyWorker();
+    void syncWorker();
   }, []);
 
   return null;

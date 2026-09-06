@@ -786,6 +786,10 @@ export type Database = {
         };
         Returns: string;
       };
+      delete_web_push_subscription: {
+        Args: { endpoint: string };
+        Returns: boolean;
+      };
       flag_photo_display_derivative_for_review: {
         Args: {
           derivative_job_id: string;
@@ -1012,6 +1016,18 @@ export type Database = {
           moment_audience: string;
         }[];
       };
+      list_web_push_deliveries: {
+        Args: { activity_id: string; activity_kind: string };
+        Returns: {
+          actor_name: string;
+          auth: string;
+          endpoint: string;
+          moment_id: string;
+          moment_kind: string;
+          p256dh: string;
+          reaction_type: string | null;
+        }[];
+      };
       load_invitation_delivery_job: {
         Args: { invitation_job_id: string };
         Returns: {
@@ -1214,6 +1230,10 @@ export type Database = {
       revoke_membership: {
         Args: { membership_id: string };
         Returns: undefined;
+      };
+      save_web_push_subscription: {
+        Args: { auth: string; endpoint: string; p256dh: string };
+        Returns: string;
       };
       set_membership_role: {
         Args: { membership_id: string; role: string };

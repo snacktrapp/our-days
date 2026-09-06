@@ -5,12 +5,12 @@ select plan(6);
 select ok(
   exists (
     select 1
-      from pg_catalog.pg_constraint as constraint
+      from pg_catalog.pg_constraint as constraint_row
       join pg_catalog.pg_class as class
-        on class.oid = constraint.conrelid
+        on class.oid = constraint_row.conrelid
      where class.relname = 'moment_photos'
-       and constraint.conname = 'moment_photos_moment_sort_unique'
-       and constraint.contype = 'u'
+       and constraint_row.conname = 'moment_photos_moment_sort_unique'
+       and constraint_row.contype = 'u'
   ),
   'moment_photos enforces unique sort_order per moment'
 );
@@ -18,11 +18,11 @@ select ok(
 select ok(
   not exists (
     select 1
-      from pg_catalog.pg_constraint as constraint
+      from pg_catalog.pg_constraint as constraint_row
       join pg_catalog.pg_class as class
-        on class.oid = constraint.conrelid
+        on class.oid = constraint_row.conrelid
      where class.relname = 'moment_photos'
-       and constraint.conname = 'moment_photos_moment_unique'
+       and constraint_row.conname = 'moment_photos_moment_unique'
   ),
   'moment_photos no longer has a 1:1 uniqueness on moment_id'
 );

@@ -383,6 +383,12 @@ export async function uploadVideoMoment(
   attempt.requestId = reservation.request_id;
   attempt.momentId = reservation.moment_id;
   if (reservation.state === "published") {
+    void import("@/features/family-settings/web-push-actions").then(
+      ({ deliverPublishedMomentPushAction }) =>
+        deliverPublishedMomentPushAction({
+          momentId: reservation.moment_id,
+        }),
+    );
     return { momentId: reservation.moment_id };
   }
 
@@ -430,5 +436,9 @@ export async function uploadVideoMoment(
       "The upload finished, but the video could not yet be added. Try again.",
     );
   }
+  void import("@/features/family-settings/web-push-actions").then(
+    ({ deliverPublishedMomentPushAction }) =>
+      deliverPublishedMomentPushAction({ momentId }),
+  );
   return { momentId };
 }

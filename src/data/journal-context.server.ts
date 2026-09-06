@@ -16,6 +16,13 @@ import {
   journalDirectoryRoleLabel,
 } from "@/lib/circle-roles";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import {
+  activityMomentHref,
+  entryCommentMessage,
+  entryReactionMessage,
+  familyMomentPostedMessage,
+  isNotifiableFamilyMoment,
+} from "@/lib/activity-notifications";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 
@@ -127,14 +134,6 @@ type ActivityMoment = Readonly<{
   audience?: string;
 }>;
 
-const momentMessages: Readonly<Record<string, string>> = {
-  thought: "posted a note.",
-  photo: "posted a photo.",
-  video: "posted a video.",
-  location: "posted a place.",
-  milestone: "posted a milestone.",
-};
-
 export function buildActivityNotifications(
   notes: readonly ActivityNote[],
   reactions: readonly ActivityReaction[],
@@ -149,26 +148,22 @@ export function buildActivityNotifications(
       day: "numeric",
       year: "numeric",
     }).format(new Date(createdAt));
-  const reactionMessages: Readonly<Record<string, string>> = {
-    "held-close": "loved your entry.",
-    "made-me-smile": "smiled at your entry.",
-    "remember-this": "remembered your entry.",
-  };
-
   return [
     ...familyMoments
-      .filter(
-        (moment) =>
-          moment.author_membership_id !== viewerMembershipId &&
-          moment.moment_kind !== "insight" &&
-          moment.audience !== "just_me",
+      .filter((moment) =>
+        isNotifiableFamilyMoment({
+          authorMembershipId: moment.author_membership_id,
+          viewerMembershipId,
+          momentKind: moment.moment_kind,
+          audience: moment.audience,
+        }),
       )
       .map((moment) => ({
         id: `moment:${moment.id}`,
         actorName: memberNames.get(moment.author_membership_id) ?? "Family",
-        message: momentMessages[moment.moment_kind] ?? "posted an entry.",
+        message: familyMomentPostedMessage(moment.moment_kind),
         displayDate: displayDate(moment.created_at),
-        href: `/family#moment-${moment.id}`,
+        href: activityMomentHref(moment.id),
         createdAt: moment.created_at,
       })),
     ...notes
@@ -176,9 +171,9 @@ export function buildActivityNotifications(
       .map((note) => ({
         id: `note:${note.id}`,
         actorName: memberNames.get(note.author_membership_id) ?? "Family",
-        message: "commented on your entry.",
+        message: entryCommentMessage,
         displayDate: displayDate(note.created_at),
-        href: `/family#moment-${note.moment_id}`,
+        href: activityMomentHref(note.moment_id),
         createdAt: note.created_at,
       })),
     ...reactions
@@ -186,10 +181,9 @@ export function buildActivityNotifications(
       .map((reaction) => ({
         id: `reaction:${reaction.id}:${reaction.reaction_type}`,
         actorName: memberNames.get(reaction.author_membership_id) ?? "Family",
-        message:
-          reactionMessages[reaction.reaction_type] ?? "reacted to your entry.",
+        message: entryReactionMessage(reaction.reaction_type),
         displayDate: displayDate(reaction.created_at),
-        href: `/family#moment-${reaction.moment_id}`,
+        href: activityMomentHref(reaction.moment_id),
         createdAt: reaction.created_at,
       })),
   ]

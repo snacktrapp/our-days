@@ -1,0 +1,243 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  deleteWebPushSubscriptionAction,
+  saveWebPushSubscriptionAction,
+} from "./web-push-actions";
+
+type PreferenceState = "loading" | "unsupported" | "blocked" | "off" | "on";
+
+function vapidPublicKey() {
+  return process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ?? "";
+}
+
+function urlBase64ToUint8Array(value: string) {
+  const padded = value.replace(/-/gu, "+").replace(/_/gu, "/");
+  const padLength = (4 - (padded.length % 4)) % 4;
+  const raw = atob(`${padded}${"=".repeat(padLength)}`);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
+function isIosDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/u.test(navigator.userAgent);
+}
+
+function isStandaloneDisplay() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      return true;
+    }
+  } catch {
+    // jsdom and similar test hosts may not implement matchMedia.
+  }
+  return (
+    "standalone" in navigator &&
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  );
+}
+
+function isIosBrowserTab() {
+  return isIosDevice() && !isStandaloneDisplay();
+}
+
+function pushApisAvailable() {
+  return (
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window
+  );
+}
+
+async function currentPushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return null;
+  }
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return null;
+  return registration.pushManager.getSubscription();
+}
+
+export function NotificationPreference() {
+  const [state, setState] = useState<PreferenceState>("loading");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const helperRef = useRef<HTMLParagraphElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  const configured = vapidPublicKey().length > 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    const readState = async () => {
+      if (!configured) {
+        if (!cancelled) setState("off");
+        return;
+      }
+      if (!pushApisAvailable()) {
+        // iOS Safari tabs lack PushManager. Keep the switch off — not
+        // unsupported — so tap can focus the Home Screen helper.
+        if (!cancelled) {
+          setState(isIosBrowserTab() ? "off" : "unsupported");
+        }
+        return;
+      }
+      if (Notification.permission === "denied") {
+        if (!cancelled) setState("blocked");
+        return;
+      }
+      const subscription = await currentPushSubscription();
+      if (!cancelled) setState(subscription ? "on" : "off");
+    };
+    void readState();
+    return () => {
+      cancelled = true;
+    };
+  }, [configured]);
+
+  useEffect(() => {
+    if (window.location.hash !== "#notifications") return;
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById("notifications")
+        ?.scrollIntoView?.({ block: "nearest" });
+      if (isIosBrowserTab()) {
+        helperRef.current?.focus();
+        return;
+      }
+      rowRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const enable = async () => {
+    setMessage(null);
+    if (!configured) {
+      return;
+    }
+    if (isIosBrowserTab()) {
+      helperRef.current?.focus();
+      return;
+    }
+    if (!pushApisAvailable()) {
+      setState("unsupported");
+      return;
+    }
+    setBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none",
+      });
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setState(permission === "denied" ? "blocked" : "off");
+        return;
+      }
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey()),
+      });
+      const json = subscription.toJSON();
+      const endpoint = json.endpoint;
+      const p256dh = json.keys?.p256dh;
+      const auth = json.keys?.auth;
+      if (!endpoint || !p256dh || !auth) {
+        setState("off");
+        setMessage("Notifications could not be turned on.");
+        return;
+      }
+      const result = await saveWebPushSubscriptionAction({
+        endpoint,
+        p256dh,
+        auth,
+      });
+      if (!result.ok) {
+        await subscription.unsubscribe().catch(() => undefined);
+        setState("off");
+        setMessage(result.message);
+        return;
+      }
+      setState("on");
+    } catch {
+      setState("off");
+      setMessage("Notifications could not be turned on.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    setMessage(null);
+    setBusy(true);
+    try {
+      const subscription = await currentPushSubscription();
+      if (subscription) {
+        await deleteWebPushSubscriptionAction({
+          endpoint: subscription.endpoint,
+        });
+        await subscription.unsubscribe();
+      }
+      setState("off");
+    } catch {
+      setState("on");
+      setMessage("Notifications could not be turned off.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const on = state === "on";
+  const homeScreenHelp = configured && isIosBrowserTab();
+  const canToggle =
+    configured &&
+    !busy &&
+    state !== "blocked" &&
+    (state !== "unsupported" || homeScreenHelp);
+  const helper = !configured
+    ? "Not available yet."
+    : homeScreenHelp
+      ? "On iPhone and iPad, add Our Days to your Home Screen first."
+      : null;
+
+  return (
+    <div className="notification-preference" id="notifications">
+      <button
+        ref={rowRef}
+        className="notification-preference-row"
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="Notifications"
+        aria-describedby={helper ? "notification-preference-note" : undefined}
+        disabled={!canToggle}
+        onClick={() => {
+          if (homeScreenHelp) {
+            helperRef.current?.focus();
+            return;
+          }
+          void (on ? disable() : enable());
+        }}
+      >
+        <strong>Notifications</strong>
+        <span className="notification-switch" aria-hidden="true" />
+      </button>
+      {helper ? (
+        <p
+          ref={helperRef}
+          id="notification-preference-note"
+          className="notification-preference-note"
+          tabIndex={homeScreenHelp ? -1 : undefined}
+        >
+          {helper}
+        </p>
+      ) : null}
+      {message ? (
+        <p className="notification-preference-message" role="status">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
+}

@@ -1,4 +1,5 @@
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import { PhoneNotificationsAnnouncement } from "@/features/timeline/phone-notifications-announcement";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
@@ -31,6 +32,7 @@ export default async function FamilyPage({
         section="timeline"
         switcher={model.switcher}
       >
+        <PhoneNotificationsAnnouncement />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -48,6 +50,7 @@ export default async function FamilyPage({
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
     >
+      <PhoneNotificationsAnnouncement />
       <TimelineFeed
         model={model}
         connectedActions={{

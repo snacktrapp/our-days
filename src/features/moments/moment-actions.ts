@@ -6,6 +6,7 @@ import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
 import type { AccentToken } from "@/features/accent-token";
 import type {
   EditableMomentKind,
@@ -246,6 +247,9 @@ export async function createFamilyMomentAction(input: {
       ok: false,
       message: "That moment could not be saved. Your draft is still here.",
     };
+  }
+  if (normalizeMomentAudience(input.audience) === "family") {
+    void deliverActivityWebPush(supabase, "moment", data);
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
@@ -623,6 +627,7 @@ export async function createMomentNoteAction(input: {
       ok: false,
       message: "That note could not be saved. Your words are still here.",
     };
+  void deliverActivityWebPush(supabase, "note", data);
   return { ok: true, message: "Note saved.", momentId: data };
 }
 
@@ -769,6 +774,9 @@ export async function setMomentReactionAction(input: {
     reaction_type: input.reactionId as string,
   });
   if (error) return { ok: false, message: "That response could not be saved." };
+  if (input.reactionId) {
+    void deliverActivityWebPush(supabase, "reaction", input.momentId);
+  }
   return {
     ok: true,
     message: input.reactionId ? "Response saved." : "Response removed.",
@@ -837,6 +845,9 @@ export async function createWrittenMomentAction(input: {
       ok: false,
       message: "That moment could not be saved. Your draft is still here.",
     };
+  if (normalizeMomentAudience(input.audience) === "family") {
+    void deliverActivityWebPush(supabase, "moment", data);
+  }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
 }

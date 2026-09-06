@@ -23,6 +23,12 @@ vi.mock("@/features/auth/sign-out-button", () => ({
   ),
 }));
 
+vi.mock("./web-push-actions", () => ({
+  saveWebPushSubscriptionAction: vi.fn(),
+  deleteWebPushSubscriptionAction: vi.fn(),
+  deliverPublishedMomentPushAction: vi.fn(),
+}));
+
 describe("Account tools", () => {
   it("keeps recently removed and sign out as Account card rows", () => {
     render(<AccountTools />);
@@ -30,6 +36,11 @@ describe("Account tools", () => {
     expect(
       screen.getByRole("heading", { name: "Journal tools" }),
     ).toBeVisible();
+    const notifications = screen.getByRole("switch", { name: "Notifications" });
+    expect(notifications).toBeVisible();
+    expect(notifications).toBeDisabled();
+    expect(screen.getByText("Not available yet.")).toBeVisible();
+    expect(screen.queryByText(/Home Screen/u)).toBeNull();
     const trash = screen.getByRole("link", { name: /Recently removed/u });
     expect(trash).toHaveAttribute("href", "/trash");
     expect(trash).toHaveClass("account-tool-link");

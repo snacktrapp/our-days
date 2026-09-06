@@ -1488,6 +1488,124 @@ button:focus-visible,
   font-size: 0.82rem;
 }
 
+.phone-notifications-announcement {
+  position: relative;
+  z-index: 2;
+  width: min(calc(100% - 32px), 398px);
+  margin: 8px auto 2px;
+  padding: 13px 40px 13px 13px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--ochre) 34%, var(--hairline));
+  border-radius: 14px;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--ochre) 20%, var(--cream)) 0%,
+    color-mix(in srgb, var(--ochre) 8%, var(--cream)) 52%,
+    color-mix(in srgb, var(--ochre) 4%, var(--cream)) 100%
+  );
+  box-shadow: none;
+}
+
+.phone-notifications-announcement-mark {
+  grid-row: 1 / span 2;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ochre) 18%, transparent);
+  color: var(--ochre);
+}
+
+.phone-notifications-announcement-mark svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.phone-notifications-announcement strong {
+  grid-column: 2;
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.phone-notifications-announcement p {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.phone-notifications-announcement-cta {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--ochre);
+  color: var(--cream);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  display: inline-grid;
+  place-items: center;
+}
+
+.phone-notifications-announcement-dismiss {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.phone-notifications-announcement-dismiss:hover,
+.phone-notifications-announcement-dismiss:focus-visible {
+  color: var(--ink);
+}
+
+.phone-notifications-announcement-cta:hover,
+.phone-notifications-announcement-cta:focus-visible {
+  color: var(--cream);
+  background: color-mix(in srgb, var(--ochre) 86%, var(--ink));
+}
+
+:root[data-theme="dark"] .phone-notifications-announcement {
+  border-color: color-mix(in srgb, var(--ochre) 44%, var(--hairline));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--ochre) 28%, var(--cream)) 0%,
+    color-mix(in srgb, var(--ochre) 12%, var(--cream)) 54%,
+    color-mix(in srgb, var(--ochre) 6%, var(--cream)) 100%
+  );
+}
+
 .journal-error-shell .phone-stage {
   min-height: 100dvh;
 }
@@ -5897,6 +6015,113 @@ button:focus-visible,
   margin: 0;
 }
 
+.notification-preference {
+  margin: 0;
+}
+
+.notification-preference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 13px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-preference-row strong {
+  overflow-wrap: anywhere;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.notification-preference-row:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.notification-switch {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background-color 160ms ease;
+}
+
+.notification-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f4f6f2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  transition: transform 160ms ease;
+}
+
+.notification-preference-row[aria-checked="true"] .notification-switch {
+  background: var(--teal);
+}
+
+.notification-preference-row[aria-checked="true"] .notification-switch::after {
+  transform: translateX(18px);
+}
+
+:root[data-theme="light"] .notification-switch {
+  background: color-mix(in srgb, var(--ink) 22%, var(--paper));
+}
+
+:root[data-theme="light"] .notification-switch::after {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(32, 39, 33, 0.2);
+}
+
+:root[data-theme="light"]
+  .notification-preference-row[aria-checked="true"]
+  .notification-switch {
+  background: var(--teal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-switch,
+  .notification-switch::after {
+    transition: none;
+  }
+}
+
+.notification-preference-note,
+.notification-preference-message {
+  margin: 0;
+  padding: 4px 13px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.notification-preference-note:focus {
+  outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
+  outline-offset: 2px;
+}
+
+.notification-preference-message {
+  padding-top: 0;
+  color: var(--ink);
+}
+
 .account-tool-link,
 .account-sign-out button {
   min-height: 72px;
@@ -6264,7 +6489,8 @@ html[data-theme].overlay-open .app-shell::before,
 .invitation-status,
 .pending-invitation-list small,
 .settings-empty-copy,
-.settings-delivery-boundary p {
+.settings-delivery-boundary p,
+.notification-preference-note {
   color: var(--muted) !important;
 }
 
