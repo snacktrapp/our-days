@@ -4516,49 +4516,42 @@ button:focus-visible,
 .route-pending-skeleton .time-rail {
   z-index: 0;
 }
-.route-pending-card,
-.route-pending-row,
-.route-pending-block {
+.route-pending-card {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  background: color-mix(in srgb, var(--cream) 72%, var(--paper));
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-.route-pending-card {
   width: min(100%, 410px);
   height: 168px;
   margin: 18px auto 0;
   border-radius: 22px;
+  background: color-mix(in srgb, var(--cream) 72%, var(--paper));
+  box-shadow: inset 0 0 0 1px var(--hairline);
 }
 .route-pending-card.is-short {
   height: 92px;
 }
-.route-pending-row {
-  width: 100%;
-  height: 70px;
-  margin-top: 0;
-  border-radius: 0;
-  border-bottom: 1px solid var(--hairline);
+.route-pending-field {
+  min-height: calc(100svh - 190px);
+  background: transparent;
 }
-.route-pending-row:first-child {
-  border-start-start-radius: 22px;
-  border-start-end-radius: 22px;
+.route-pending-glow {
+  position: absolute;
+  inset: 8% 6% 18%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.42;
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--ink) 16%, transparent),
+    transparent 68%
+  );
 }
-.route-pending-row:last-child {
-  border-bottom: 0;
-  border-end-start-radius: 22px;
-  border-end-end-radius: 22px;
-}
-.route-pending-block {
-  width: 100%;
-  height: 148px;
-  margin-bottom: 18px;
-  border-radius: 22px;
-}
-.route-pending-skeleton.section-panel {
-  min-height: 0;
-  padding-top: 28px;
+:root[data-theme="light"] .route-pending-glow {
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--cream) 58%, transparent),
+    transparent 70%
+  );
 }
 .journal-loading {
   min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
@@ -8200,10 +8193,12 @@ iframe.composer-location-map {
     transform: scale(calc(0.9 * 0.985));
   }
 
-  .route-pending-card,
-  .route-pending-row,
-  .route-pending-block {
+  .route-pending-card {
     animation: route-pending-pulse 1.4s ease-in-out infinite;
+  }
+
+  .route-pending-glow {
+    animation: route-pending-glow 1.6s ease-in-out 2 both;
   }
 
   .photo-frame img.is-ready {
@@ -8287,6 +8282,21 @@ iframe.composer-location-map {
   }
 }
 
+@keyframes route-pending-glow {
+  0% {
+    opacity: 0.22;
+    transform: scale(0.86);
+  }
+  45% {
+    opacity: 0.7;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 0.34;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .new-moment-composer-dialog .composer-sheet {
     animation: none;
@@ -8303,11 +8313,14 @@ iframe.composer-location-map {
   }
 
   .route-pending-card,
-  .route-pending-row,
-  .route-pending-block,
+  .route-pending-glow,
   .photo-frame img.is-ready {
     animation: none;
     transition: none;
+  }
+
+  .route-pending-glow {
+    opacity: 0.36;
   }
 
   .photo-frame img.is-pending {

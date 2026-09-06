@@ -23,18 +23,20 @@ describe("route pending skeleton", () => {
     expect(container.querySelector(".timeline-empty-state")).toBeNull();
   });
 
-  it("uses row placeholders for People and Account", () => {
+  it("keeps People and Account on the graph-paper field without empty boxes", () => {
     const { rerender, container } = render(
       <RoutePendingSkeleton kind="people" />,
     );
-    expect(screen.getByRole("region", { name: "Opening people" })).toHaveClass(
-      "route-pending-skeleton",
-    );
-    expect(container.querySelectorAll(".route-pending-row")).toHaveLength(3);
+    const people = screen.getByRole("region", { name: "Opening people" });
+    expect(people).toHaveClass("route-pending-field", "route-pending-skeleton");
+    expect(container.querySelector(".route-pending-glow")).not.toBeNull();
+    expect(container.querySelector(".route-pending-row")).toBeNull();
+    expect(container.querySelector(".route-pending-card")).toBeNull();
     rerender(<RoutePendingSkeleton kind="settings" />);
-    expect(
-      screen.getByRole("region", { name: "Opening account" }),
-    ).toBeVisible();
+    expect(screen.getByRole("region", { name: "Opening account" })).toHaveClass(
+      "route-pending-field",
+    );
+    expect(container.querySelector(".route-pending-row")).toBeNull();
   });
 
   it("updates destination titles without inventing an empty journal", () => {

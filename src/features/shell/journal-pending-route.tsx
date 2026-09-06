@@ -90,14 +90,11 @@ export function RoutePendingSkeleton({
 
   return (
     <section
-      className={`section-panel route-pending-skeleton route-pending-${kind}`}
+      className={`route-pending-field route-pending-skeleton route-pending-${kind}`}
       aria-busy="true"
       aria-label={label}
     >
-      {kind === "memories" ? <div className="route-pending-block" /> : null}
-      <div className="route-pending-row" />
-      <div className="route-pending-row" />
-      <div className="route-pending-row" />
+      <span className="route-pending-glow" aria-hidden="true" />
     </section>
   );
 }
