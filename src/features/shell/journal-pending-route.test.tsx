@@ -30,6 +30,7 @@ describe("route pending skeleton", () => {
     const people = screen.getByRole("region", { name: "Opening people" });
     expect(people).toHaveClass("route-pending-field", "route-pending-skeleton");
     expect(people.childElementCount).toBe(0);
+    expect(people).not.toHaveClass("route-pending-glow");
     expect(container.querySelector(".route-pending-glow")).toBeNull();
     expect(container.querySelector(".route-pending-row")).toBeNull();
     expect(container.querySelector(".route-pending-card")).toBeNull();

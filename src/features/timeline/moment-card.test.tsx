@@ -279,6 +279,12 @@ describe("MomentCard timeline media", () => {
     expect(frame?.compareDocumentPosition(copy!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("Molly");
+    expect(
+      screen.getByRole("list", { name: "Notes from family" }),
+    ).toHaveTextContent("The quiet ride home.");
   });
 
   it("pages a multi-photo card without opening the lightbox", async () => {

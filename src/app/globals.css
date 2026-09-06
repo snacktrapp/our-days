@@ -4569,22 +4569,10 @@ button:focus-visible,
   height: 92px;
 }
 .route-pending-field {
-  min-height: calc(100svh - 190px);
+  min-height: calc(
+    100dvh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
   background: transparent;
-}
-.route-pending-field::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-color: color-mix(in srgb, var(--ink) 8%, transparent);
-  background-image: var(--journal-grid-image);
-  background-size: var(--journal-grid-size) var(--journal-grid-size);
-  opacity: 0.28;
-}
-:root[data-theme="light"] .route-pending-field::after {
-  background-color: color-mix(in srgb, var(--ink) 14%, transparent);
-  opacity: 0.48;
 }
 .journal-loading {
   min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
@@ -5963,6 +5951,11 @@ button:focus-visible,
   z-index: 1;
   background-color: transparent;
   background-image: none;
+}
+
+.phone-stage:has(.route-pending-field),
+.phone-stage:has(.route-pending-field) .route-pending-skeleton {
+  background: transparent;
 }
 
 .theme-toggle {
@@ -8234,14 +8227,6 @@ iframe.composer-location-map {
     animation: route-pending-pulse 1.4s ease-in-out infinite;
   }
 
-  .route-pending-field::after {
-    animation: route-pending-breath 2.2s ease-in-out infinite;
-  }
-
-  :root[data-theme="light"] .route-pending-field::after {
-    animation-name: route-pending-breath-light;
-  }
-
   .photo-frame img.is-ready {
     transition: opacity 180ms ease;
   }
@@ -8323,26 +8308,6 @@ iframe.composer-location-map {
   }
 }
 
-@keyframes route-pending-breath {
-  0%,
-  100% {
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 0.48;
-  }
-}
-
-@keyframes route-pending-breath-light {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.88;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .new-moment-composer-dialog .composer-sheet {
     animation: none;
@@ -8359,15 +8324,9 @@ iframe.composer-location-map {
   }
 
   .route-pending-card,
-  .route-pending-field::after,
   .photo-frame img.is-ready {
     animation: none;
     transition: none;
-  }
-
-  .route-pending-field::after {
-    opacity: 0;
-    background: none;
   }
 
   .photo-frame img.is-pending {

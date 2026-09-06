@@ -364,6 +364,7 @@ export async function loadLocalTimeline(
         viewingJournalPersonId: options.journalPersonId,
       },
       localMomentPhotoDescriptors(moment),
+      conversationFromLocalDocument(document, access, moment.id),
     ),
   );
   const personalJournalIsWritable = Boolean(
@@ -585,6 +586,7 @@ export async function loadLocalMemoryJourney(
       context.today,
       undefined,
       localMomentPhotoDescriptors(moment),
+      conversationFromLocalDocument(document, access, moment.id),
     ),
   );
   const anniversaryKey = anniversary

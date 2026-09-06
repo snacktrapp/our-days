@@ -82,6 +82,8 @@ function formatPreciseTime(value: string, timeZone: string | null) {
   }).format(new Date(value));
 }
 
+// Closed timeline rows use conversation: { notes: [], reactions: [] }
+// until an authorized batch read attaches note and reaction bodies.
 const emptyConversation: MomentConversationViewModel = {
   notes: [],
   reactions: [],
@@ -238,6 +240,7 @@ export function mapTimelineRow(
     viewingJournalPersonId?: string;
   }>,
   photos?: readonly MomentPhotoDescriptor[],
+  conversation: MomentConversationViewModel = emptyConversation,
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
   const taggedPeople = Array.isArray(row.tagged_people)
@@ -292,7 +295,7 @@ export function mapTimelineRow(
                   : "A thought"
           : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
-    conversation: { notes: [], reactions: [] },
+    conversation,
     canChange: row.can_change,
     revision: row.revision,
     editOccurrence: {
@@ -548,6 +551,11 @@ export async function loadConnectedTimeline(
     supabase,
     photoMomentIds,
   );
+  const conversationsByMoment = await loadMomentConversationsByMomentId(
+    supabase,
+    access,
+    rows.map((row) => row.moment_id),
+  );
   const moments = rows.map((row) =>
     mapTimelineRow(
       row,
@@ -557,6 +565,7 @@ export async function loadConnectedTimeline(
         viewingJournalPersonId: options.journalPersonId,
       },
       photosByMoment.get(row.moment_id),
+      conversationsByMoment.get(row.moment_id) ?? emptyConversation,
     ),
   );
   const personalJournalIsWritable = Boolean(

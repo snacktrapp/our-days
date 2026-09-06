@@ -98,7 +98,28 @@ describe("connected timeline mapping", () => {
     });
   });
 
-  it("maps tag identity and keeps conversation bodies off the feed row", () => {
+  it("maps tag identity and includes conversation already in the feed payload", () => {
+    const conversation = {
+      notes: [
+        {
+          id: "note-1",
+          authorName: "Molly",
+          authorInitial: "M",
+          authorAccent: "clay" as const,
+          body: "The quiet ride home.",
+          displayDate: "Aug 29, 2026",
+        },
+      ],
+      reactions: [
+        {
+          id: "reaction-1",
+          personName: "Molly",
+          personInitial: "M",
+          personAccent: "clay" as const,
+          reactionId: "held-close" as const,
+        },
+      ],
+    };
     const moment = mapTimelineRow(
       row({
         tagged_people: [
@@ -107,9 +128,12 @@ describe("connected timeline mapping", () => {
         ],
       }),
       "2026-08-30",
+      undefined,
+      undefined,
+      conversation,
     );
     expect(moment.taggedPeopleLabel).toBe("Molly, Avery");
-    expect(moment.conversation).toEqual({ notes: [], reactions: [] });
+    expect(moment.conversation).toEqual(conversation);
   });
 
   it("leaves a quiet feed row short when no conversation was loaded", () => {
