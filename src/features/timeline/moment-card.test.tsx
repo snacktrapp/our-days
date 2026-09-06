@@ -275,7 +275,7 @@ describe("MomentCard timeline media", () => {
       "viewBox",
       "0 0 1200 801",
     );
-    expect(copy?.contains(conversation)).toBe(true);
+    expect(copy?.contains(conversation ?? null)).toBe(true);
     expect(frame?.compareDocumentPosition(copy!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
