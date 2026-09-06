@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { MomentCard } from "./moment-card";
-import type {
-  TimelineEntryViewModel,
-  TimelineMomentViewModel,
-  TimelineViewModel,
+import {
+  timelineCardOccurredLabel,
+  type TimelineEntryViewModel,
+  type TimelineMomentViewModel,
+  type TimelineViewModel,
 } from "./timeline-view-model";
 import type {
   ConnectedMomentActions,
@@ -13,33 +14,11 @@ import type {
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
-const connectionMonths = [
-  "Jan.",
-  "Feb.",
-  "Mar.",
-  "Apr.",
-  "May",
-  "June",
-  "July",
-  "Aug.",
-  "Sept.",
-  "Oct.",
-  "Nov.",
-  "Dec.",
-] as const;
-
-function connectionDate(occurredOn: string) {
-  const [year, month, day] = occurredOn.split("-").map(Number);
-  const monthLabel = connectionMonths[month - 1];
-  return monthLabel && year && day
-    ? `${monthLabel} ${day}, ${year}`
-    : occurredOn;
-}
-
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
-  const dateAndTime = moment.displayTime
-    ? `${connectionDate(moment.occurredOn)} | ${moment.displayTime}`
-    : connectionDate(moment.occurredOn);
+  const dateAndTime = timelineCardOccurredLabel(
+    moment.occurredOn,
+    moment.displayTime,
+  );
 
   if (moment.kind === "insight") {
     return (

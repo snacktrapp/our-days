@@ -3,6 +3,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
+  currentPickerTimeValue,
+  formatPickerTimeLabel,
+} from "./date-time-fields";
+import {
   ComposerSessionProvider,
   useComposerSession,
 } from "./composer-session";
@@ -65,5 +69,29 @@ describe("ComposerSessionProvider", () => {
     expect(
       document.querySelector(".new-moment-composer-dialog .composer-sheet"),
     ).toHaveClass("is-closing");
+  });
+
+  it("opens a create Photo draft with the current local time", async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerSessionProvider
+        model={{
+          ...model,
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          circleId: "20000000-0000-4000-8000-000000000001",
+        }}
+      >
+        <AddMoment />
+      </ComposerSessionProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add moment" }));
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    expect(
+      screen.getByRole("button", {
+        name: `Time, ${formatPickerTimeLabel(currentPickerTimeValue())}`,
+      }),
+    ).toBeVisible();
   });
 });

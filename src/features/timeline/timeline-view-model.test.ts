@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { TimelineViewModel } from "./timeline-view-model";
+import {
+  timelineCardOccurredLabel,
+  type TimelineViewModel,
+} from "./timeline-view-model";
 
 const composer = {
   previewToday: "2026-08-28",
@@ -67,6 +70,13 @@ const model = {
 } as const satisfies TimelineViewModel;
 
 describe("timeline presentation contract", () => {
+  it("joins a recorded time to the card date with a middle dot", () => {
+    expect(timelineCardOccurredLabel("2026-09-05", "7:25 PM")).toBe(
+      "Sept. 5, 2026 · 7:25 PM",
+    );
+    expect(timelineCardOccurredLabel("2026-09-05")).toBe("Sept. 5, 2026");
+  });
+
   it("round-trips through JSON and structuredClone without losing data", () => {
     expect(JSON.parse(JSON.stringify(model))).toEqual(model);
     expect(structuredClone(model)).toEqual(model);

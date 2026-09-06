@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
-import { DateTimeFields } from "./date-time-fields";
+import {
+  currentPickerTimeValue,
+  DateTimeFields,
+  formatPickerTimeLabel,
+} from "./date-time-fields";
 import { composerEditorScrollClass } from "./composer-picker-panel";
 
 function rect(top: number, bottom: number): DOMRect {
@@ -21,6 +25,14 @@ function rect(top: number, bottom: number): DOMRect {
 }
 
 describe("DateTimeFields", () => {
+  it("defaults the picker value to the current minute rounded down to 15", () => {
+    expect(currentPickerTimeValue(new Date(2026, 8, 6, 19, 25, 40))).toBe(
+      "19:15",
+    );
+    expect(formatPickerTimeLabel("19:15")).toBe("7:15 PM");
+    expect(formatPickerTimeLabel("")).toBe("No time");
+  });
+
   const originalRect = HTMLElement.prototype.getBoundingClientRect;
 
   afterEach(() => {
@@ -64,6 +76,22 @@ describe("DateTimeFields", () => {
       screen.getByRole("dialog", { name: "Choose moment date" }),
     ).not.toHaveClass("overlay-popover");
     expect(scroller.scrollTop).toBe(172);
+  });
+
+  it("drops the Optional label when time already defaults on", () => {
+    render(
+      <DateTimeFields
+        date="2026-09-02"
+        time="19:15"
+        timeOptional={false}
+        onDateChange={() => undefined}
+        onTimeChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Time")).toBeVisible();
+    expect(screen.queryByText("Optional")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Time, 7:15 PM" })).toBeVisible();
   });
 
   it("scrolls the entry sheet so the open time panel sits above Save", async () => {
