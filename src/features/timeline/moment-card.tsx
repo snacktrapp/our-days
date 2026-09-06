@@ -19,6 +19,22 @@ import type {
   TimelineMomentViewModel,
 } from "./timeline-view-model";
 
+function PhotoFrameSizer({
+  width,
+  height,
+}: Readonly<{ width?: number; height?: number }>) {
+  const sizerWidth = width && width > 0 ? width : 4;
+  const sizerHeight = height && height > 0 ? height : 3;
+  return (
+    <svg
+      className="photo-frame-sizer"
+      viewBox={`0 0 ${sizerWidth} ${sizerHeight}`}
+      aria-hidden="true"
+      focusable="false"
+    />
+  );
+}
+
 function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   const base = {
     id: moment.id,
@@ -101,10 +117,11 @@ export function MomentCard({
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
       >
         <div
-          className={`photo-frame ${moment.kind === "video" ? "video-frame" : ""}${
+          className={`photo-frame has-reserved-frame ${moment.kind === "video" ? "video-frame" : ""}${
             knownRatio ? " has-known-ratio" : ""
           }`}
         >
+          <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
           {moment.kind === "video" ? (
             <FullscreenMediaViewer
               kind="video"

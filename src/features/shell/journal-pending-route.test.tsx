@@ -29,7 +29,8 @@ describe("route pending skeleton", () => {
     );
     const people = screen.getByRole("region", { name: "Opening people" });
     expect(people).toHaveClass("route-pending-field", "route-pending-skeleton");
-    expect(container.querySelector(".route-pending-glow")).not.toBeNull();
+    expect(people.childElementCount).toBe(0);
+    expect(container.querySelector(".route-pending-glow")).toBeNull();
     expect(container.querySelector(".route-pending-row")).toBeNull();
     expect(container.querySelector(".route-pending-card")).toBeNull();
     rerender(<RoutePendingSkeleton kind="settings" />);

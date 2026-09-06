@@ -93,9 +93,7 @@ export function RoutePendingSkeleton({
       className={`route-pending-field route-pending-skeleton route-pending-${kind}`}
       aria-busy="true"
       aria-label={label}
-    >
-      <span className="route-pending-glow" aria-hidden="true" />
-    </section>
+    />
   );
 }
 
