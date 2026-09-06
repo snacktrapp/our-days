@@ -132,7 +132,7 @@ export function MomentConversationControl({
   const [conversation, setConversation] = useState<MomentConversationViewModel>(
     model.conversation,
   );
-  const [conversationLoaded, setConversationLoaded] = useState(!actions);
+  const [conversationLoaded, setConversationLoaded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -324,19 +324,6 @@ export function MomentConversationControl({
     [],
   );
 
-  useEffect(() => {
-    if (!actions) return;
-    let active = true;
-    const startedWriteGen = reactionWriteGen.current;
-    void actions.load({ momentId: model.id }).then((result) => {
-      if (!active || !result.ok) return;
-      applyLoadedConversation(result.conversation, startedWriteGen);
-    });
-    return () => {
-      active = false;
-    };
-  }, [actions, applyLoadedConversation, model.id]);
-
   const loadConversation = async (force = false) => {
     if (!actions || (conversationLoaded && !force)) return true;
     const startedWriteGen = reactionWriteGen.current;
@@ -502,7 +489,16 @@ export function MomentConversationControl({
 
   return (
     <div id={conversationId} className="inline-conversation">
-      {displayedReactions.length > 0 || conversation.notes.length > 0 ? (
+      {loading &&
+      displayedReactions.length === 0 &&
+      conversation.notes.length === 0 ? (
+        <div
+          className="conversation-summary conversation-summary-pending"
+          aria-hidden="true"
+        >
+          <span className="inline-conversation-wait" />
+        </div>
+      ) : displayedReactions.length > 0 || conversation.notes.length > 0 ? (
         <div className="conversation-summary" aria-label="Family activity">
           {displayedReactions.length > 0 ? (
             <ul

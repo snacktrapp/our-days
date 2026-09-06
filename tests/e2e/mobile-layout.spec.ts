@@ -783,6 +783,7 @@ test("real route transitions hold the last screen and keep the nav put", async (
       emptyJournal: boolean;
       familyHeld: boolean;
       loadingFrame: boolean;
+      pendingSkeleton: boolean;
       position: string;
       top: number;
     }> = [];
@@ -807,6 +808,9 @@ test("real route transitions hold the last screen and keep the nav put", async (
             ?.textContent?.includes("All our days"),
         ),
         loadingFrame: Boolean(document.querySelector(".journal-loading")),
+        pendingSkeleton: Boolean(
+          document.querySelector(".route-pending-skeleton"),
+        ),
         position: style.position,
         top: rect.top,
       });
@@ -824,17 +828,16 @@ test("real route transitions hold the last screen and keep the nav put", async (
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "People" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(
-    page.getByRole("heading", { name: "All our days" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "People" })
       .locator(".nav-symbol-pending"),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
   await expect(page.locator(".journal-loading")).toHaveCount(0);
+  await expect(page.locator(".route-pending-skeleton")).toHaveCount(1);
   await expect(page.locator(".timeline-empty-state")).toHaveCount(0);
   await expect(page).toHaveURL(/\/people$/u);
   await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
@@ -852,6 +855,7 @@ test("real route transitions hold the last screen and keep the nav put", async (
         emptyJournal: boolean;
         familyHeld: boolean;
         loadingFrame: boolean;
+        pendingSkeleton: boolean;
         position: string;
         top: number;
       }>;
@@ -863,13 +867,10 @@ test("real route transitions hold the last screen and keep the nav put", async (
 
   expect(samples.length).toBeGreaterThan(10);
   expect(samples.every(({ count }) => count === 1)).toBe(true);
-  const held = samples.filter(({ familyHeld }) => familyHeld);
-  expect(held.length).toBeGreaterThan(0);
-  expect(held.every(({ position }) => position === "fixed")).toBe(true);
   expect(samples.every(({ position }) => position === "fixed")).toBe(true);
   expect(samples.every(({ loadingFrame }) => !loadingFrame)).toBe(true);
   expect(samples.every(({ emptyJournal }) => !emptyJournal)).toBe(true);
-  expect(samples.some(({ familyHeld }) => familyHeld)).toBe(true);
+  expect(samples.some(({ pendingSkeleton }) => pendingSkeleton)).toBe(true);
   expect(
     Math.max(...samples.map(({ top }) => top)) -
       Math.min(...samples.map(({ top }) => top)),

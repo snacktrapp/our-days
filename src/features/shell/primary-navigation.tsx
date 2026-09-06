@@ -1,8 +1,9 @@
 "use client";
 
-import Link, { useLinkStatus } from "next/link";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
+import { sectionFromPathname } from "./journal-routes";
 import type { JournalSection } from "./shell-view-model";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
@@ -11,17 +12,6 @@ type PrimarySection = Extract<
   JournalSection,
   "timeline" | "people" | "memories" | "settings"
 >;
-
-function sectionFromPathname(pathname: string | null): PrimarySection | null {
-  const path = pathname ?? "";
-  if (path === "/family" || path.startsWith("/journal")) {
-    return "timeline";
-  }
-  if (path.startsWith("/people")) return "people";
-  if (path.startsWith("/memories")) return "memories";
-  if (path.startsWith("/settings")) return "settings";
-  return null;
-}
 
 function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   return (
@@ -75,19 +65,11 @@ function NavIcon({
 
 function NavSymbol({
   name,
-  holding,
 }: {
   name: "family" | "people" | "memories" | "account";
-  holding: boolean;
 }) {
-  const { pending } = useLinkStatus();
   return (
-    <span
-      className={
-        pending || holding ? "nav-symbol nav-symbol-pending" : "nav-symbol"
-      }
-      aria-hidden="true"
-    >
+    <span className="nav-symbol" aria-hidden="true">
       <NavIcon name={name} />
     </span>
   );
@@ -113,13 +95,6 @@ export function PrimaryNavigation({
     pendingSelection?.fromPathname === pathname
       ? pendingSelection.section
       : (sectionFromPathname(pathname) ?? section);
-  const currentSection = sectionFromPathname(pathname) ?? section;
-  const holdingSection =
-    pendingSelection?.fromPathname === pathname &&
-    pendingSelection.section !== currentSection
-      ? pendingSelection.section
-      : null;
-
   useEffect(() => {
     const onNavigateSection = (event: Event) => {
       const href =
@@ -146,6 +121,11 @@ export function PrimaryNavigation({
       if (!event.defaultPrevented && isUnmodifiedPrimaryClick(event)) {
         pinToVisualViewport();
         setPendingSelection({ fromPathname: pathname, section: nextSection });
+        window.dispatchEvent(
+          new CustomEvent("our-days:navigate-section", {
+            detail: { href: event.currentTarget.getAttribute("href") },
+          }),
+        );
       }
     };
 
@@ -161,7 +141,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("timeline")}
         prefetch={false}
       >
-        <NavSymbol name="family" holding={holdingSection === "timeline"} />
+        <NavSymbol name="family" />
         <span>Family</span>
       </Link>
       <Link
@@ -171,7 +151,7 @@ export function PrimaryNavigation({
         onClick={selectImmediately("people")}
         prefetch={false}
       >
-        <NavSymbol name="people" holding={holdingSection === "people"} />
+        <NavSymbol name="people" />
         <span>People</span>
       </Link>
       {memoriesHref === null ? (
@@ -184,7 +164,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("memories")}
           prefetch={false}
         >
-          <NavSymbol name="memories" holding={holdingSection === "memories"} />
+          <NavSymbol name="memories" />
           <span>Memories</span>
         </Link>
       )}
@@ -198,7 +178,7 @@ export function PrimaryNavigation({
           onClick={selectImmediately("settings")}
           prefetch={false}
         >
-          <NavSymbol name="account" holding={holdingSection === "settings"} />
+          <NavSymbol name="account" />
           <span>Account</span>
         </Link>
       )}

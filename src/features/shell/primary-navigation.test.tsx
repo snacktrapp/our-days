@@ -62,7 +62,7 @@ describe("PrimaryNavigation", () => {
     expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
       "active",
     );
-    expect(people.querySelector(".nav-symbol-pending")).not.toBeNull();
+    expect(people.querySelector(".nav-symbol-pending")).toBeNull();
     expect(
       screen
         .getByRole("link", { name: "Family" })

@@ -18,6 +18,8 @@ describe("PrivatePhotoImage", () => {
     const image = screen.getByRole("img");
     expect(image).toHaveAttribute("src", "/api/media/moments/one");
     expect(image).toHaveAttribute("loading", "eager");
+    expect(image).toHaveAttribute("width", "1200");
+    expect(image).toHaveAttribute("height", "800");
     expect(image).toHaveAttribute(
       "alt",
       "Photo in Molly’s journal from Aug 1, 2026",

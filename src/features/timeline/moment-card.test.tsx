@@ -217,7 +217,7 @@ describe("MomentCard timeline media", () => {
     const image = screen.getByRole("img", { name: "Evening on the porch" });
     expect(image).toHaveAttribute("width", "1200");
     expect(image).toHaveAttribute("height", "801");
-    expect(image.closest(".photo-frame")).not.toBeNull();
+    expect(image.closest(".photo-frame")).toHaveClass("has-known-ratio");
   });
 
   it("pages a multi-photo card without opening the lightbox", async () => {

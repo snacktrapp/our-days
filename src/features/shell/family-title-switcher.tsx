@@ -1,6 +1,6 @@
 "use client";
 
-import Link, { useLinkStatus } from "next/link";
+import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
@@ -59,27 +59,6 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 
-function SwitcherLinkLabel({
-  holding,
-  children,
-}: Readonly<{
-  holding: boolean;
-  children: string;
-}>) {
-  const { pending } = useLinkStatus();
-  return (
-    <span
-      className={
-        pending || holding
-          ? "title-switcher-link-label title-switcher-link-pending"
-          : "title-switcher-link-label"
-      }
-    >
-      {children}
-    </span>
-  );
-}
-
 function SwitcherLink({
   item,
   current,
@@ -89,13 +68,9 @@ function SwitcherLink({
   current: boolean;
   onChoose: (item: FamilyTimelineSwitcherItem) => void;
 }>) {
-  const [holding, setHolding] = useState(false);
-
   function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
     if (!isUnmodifiedPrimaryClick(event)) return;
     onChoose(item);
-    if (current) return;
-    setHolding(true);
   }
 
   return (
@@ -103,11 +78,11 @@ function SwitcherLink({
       href={item.href}
       prefetch={false}
       aria-current={current ? "page" : undefined}
-      className={`${current ? "active" : ""}${holding ? " is-pending" : ""}`}
+      className={current ? "active" : undefined}
       onPointerDown={acknowledge}
       onClick={acknowledge}
     >
-      <SwitcherLinkLabel holding={holding}>{item.label}</SwitcherLinkLabel>
+      <span className="title-switcher-link-label">{item.label}</span>
     </Link>
   );
 }

@@ -6,6 +6,10 @@ import type {
 } from "./shell-view-model";
 import { JournalChrome } from "./journal-chrome";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/family",
+}));
+
 vi.mock("./timeline-header-composer", () => ({
   TimelineHeaderComposer: () => <button type="button">Add moment</button>,
 }));
@@ -171,5 +175,34 @@ describe("JournalChrome", () => {
       screen.queryByRole("navigation", { name: "Choose a family timeline" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
+  });
+
+  it("replaces page content with a destination skeleton as soon as a journal is chosen", () => {
+    render(
+      <JournalChrome
+        model={{ ...model, title: "All our days" }}
+        section="timeline"
+        switcher={[
+          { label: "Family", href: "/family", current: true },
+          { label: "Molly", href: "/people/molly", current: false },
+        ]}
+      >
+        <p>Moments</p>
+      </JournalChrome>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    fireEvent.pointerDown(screen.getByRole("link", { name: "Molly" }), {
+      button: 0,
+    });
+
+    expect(screen.queryByText("Moments")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Opening this journal" }),
+    ).toHaveClass("route-pending-skeleton");
+    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(document.querySelector(".timeline-empty-state")).toBeNull();
   });
 });

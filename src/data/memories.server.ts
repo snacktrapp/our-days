@@ -20,6 +20,7 @@ import {
 import {
   buildTimelineEntries,
   connectedTimelineInteraction,
+  loadMomentConversationsByMomentId,
   loadMomentPhotosByMomentId,
   mapTimelineRow,
   requestedPageCount,
@@ -319,12 +320,18 @@ export async function loadConnectedMemoryJourney(
     supabase,
     photoMomentIds,
   );
+  const conversationsByMoment = await loadMomentConversationsByMomentId(
+    supabase,
+    access,
+    rows.map((row) => row.moment_id),
+  );
   const moments = rows.map((row) =>
     mapTimelineRow(
       row,
       context.today,
       undefined,
       photosByMoment.get(row.moment_id),
+      conversationsByMoment.get(row.moment_id),
     ),
   );
   const chrome = memoryChrome(context);

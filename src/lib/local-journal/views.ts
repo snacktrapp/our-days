@@ -38,7 +38,7 @@ import {
   readLocalJournal,
   type LocalAccess,
 } from "./store";
-import type { LocalMoment, LocalPerson } from "./types";
+import type { LocalJournalDocument, LocalMoment, LocalPerson } from "./types";
 import type { MomentPhotoDescriptor } from "@/features/moments/moment-photos";
 
 function localMomentPhotoDescriptors(
@@ -67,7 +67,7 @@ function personName(people: readonly LocalPerson[], personId: string) {
 }
 
 function membershipPersonName(
-  document: Awaited<ReturnType<typeof readLocalJournal>>,
+  document: LocalJournalDocument,
   membershipId: string,
 ) {
   const membership = document.memberships.find(
@@ -76,6 +76,73 @@ function membershipPersonName(
   return membership
     ? personName(document.people, membership.personId)
     : "Family";
+}
+
+function conversationFromLocalDocument(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  momentId: string,
+): MomentConversationViewModel {
+  const displayDate = (value: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(value));
+  return {
+    notes: document.notes
+      .filter((note) => note.momentId === momentId && note.trashedAt === null)
+      .map((note) => {
+        const authorName = membershipPersonName(
+          document,
+          note.authorMembershipId,
+        );
+        const author = document.people.find(
+          (person) =>
+            person.id ===
+            document.memberships.find(
+              (membership) => membership.id === note.authorMembershipId,
+            )?.personId,
+        );
+        return {
+          id: note.id,
+          authorName,
+          authorInitial: initialFor(authorName),
+          authorAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
+          body: note.body,
+          displayDate: displayDate(note.createdAt),
+          revision: note.revision,
+          canChange: note.authorMembershipId === access.membershipId,
+        };
+      }),
+    reactions: document.reactions
+      .filter(
+        (reaction) =>
+          reaction.momentId === momentId && reaction.removedAt === null,
+      )
+      .map((reaction) => {
+        const personNameValue = membershipPersonName(
+          document,
+          reaction.authorMembershipId,
+        );
+        const author = document.people.find(
+          (person) =>
+            person.id ===
+            document.memberships.find(
+              (membership) => membership.id === reaction.authorMembershipId,
+            )?.personId,
+        );
+        return {
+          id: reaction.id,
+          personName: personNameValue,
+          personInitial: initialFor(personNameValue),
+          personAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
+          reactionId: reaction.reactionType,
+          isCurrentMember: reaction.authorMembershipId === access.membershipId,
+        };
+      }),
+  };
 }
 
 function momentToTimelineRow(
@@ -297,6 +364,7 @@ export async function loadLocalTimeline(
         viewingJournalPersonId: options.journalPersonId,
       },
       localMomentPhotoDescriptors(moment),
+      conversationFromLocalDocument(document, access, moment.id),
     ),
   );
   const personalJournalIsWritable = Boolean(
@@ -518,6 +586,7 @@ export async function loadLocalMemoryJourney(
       context.today,
       undefined,
       localMomentPhotoDescriptors(moment),
+      conversationFromLocalDocument(document, access, moment.id),
     ),
   );
   const anniversaryKey = anniversary
@@ -714,66 +783,7 @@ export async function loadLocalConversation(
     (candidate) => candidate.id === momentId && candidate.trashedAt === null,
   );
   if (!moment) throw new Error("That conversation could not be opened.");
-  const displayDate = (value: string) =>
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(new Date(value));
-  return {
-    notes: document.notes
-      .filter((note) => note.momentId === momentId && note.trashedAt === null)
-      .map((note) => {
-        const authorName = membershipPersonName(
-          document,
-          note.authorMembershipId,
-        );
-        const author = document.people.find(
-          (person) =>
-            person.id ===
-            document.memberships.find(
-              (membership) => membership.id === note.authorMembershipId,
-            )?.personId,
-        );
-        return {
-          id: note.id,
-          authorName,
-          authorInitial: initialFor(authorName),
-          authorAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
-          body: note.body,
-          displayDate: displayDate(note.createdAt),
-          revision: note.revision,
-          canChange: note.authorMembershipId === access.membershipId,
-        };
-      }),
-    reactions: document.reactions
-      .filter(
-        (reaction) =>
-          reaction.momentId === momentId && reaction.removedAt === null,
-      )
-      .map((reaction) => {
-        const personNameValue = membershipPersonName(
-          document,
-          reaction.authorMembershipId,
-        );
-        const author = document.people.find(
-          (person) =>
-            person.id ===
-            document.memberships.find(
-              (membership) => membership.id === reaction.authorMembershipId,
-            )?.personId,
-        );
-        return {
-          id: reaction.id,
-          personName: personNameValue,
-          personInitial: initialFor(personNameValue),
-          personAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
-          reactionId: reaction.reactionType,
-          isCurrentMember: reaction.authorMembershipId === access.membershipId,
-        };
-      }),
-  };
+  return conversationFromLocalDocument(document, access, momentId);
 }
 
 export async function findLocalVisibleMoment(momentId: string) {

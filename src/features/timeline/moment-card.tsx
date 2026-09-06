@@ -91,12 +91,19 @@ export function MomentCard({
               : "Photo";
 
   if (moment.kind === "photo" || moment.kind === "video") {
+    const mediaWidth =
+      moment.kind === "video" ? moment.video.width : moment.image.width;
+    const mediaHeight =
+      moment.kind === "video" ? moment.video.height : moment.image.height;
+    const knownRatio = Boolean(mediaWidth && mediaHeight);
     return (
       <div
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
       >
         <div
-          className={`photo-frame ${moment.kind === "video" ? "video-frame" : ""}`}
+          className={`photo-frame ${moment.kind === "video" ? "video-frame" : ""}${
+            knownRatio ? " has-known-ratio" : ""
+          }`}
         >
           {moment.kind === "video" ? (
             <FullscreenMediaViewer
