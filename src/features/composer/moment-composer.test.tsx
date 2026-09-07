@@ -1124,6 +1124,33 @@ describe("MomentComposer", () => {
     ).toBeNull();
   });
 
+  it.each([
+    ["Written entry", "New written entry"],
+    ["Photo or video", "New photo entry"],
+    ["Bible verse", "Add a Bible verse"],
+  ] as const)(
+    "drops Choose another and the type kicker in the %s editor",
+    async (choice, title) => {
+      const user = await openComposer();
+      await user.click(
+        screen.getByRole("button", { name: new RegExp(choice) }),
+      );
+      const editor = screen.getByRole("dialog", { name: title });
+      expect(screen.getByRole("heading", { name: title })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+      expect(editor.querySelector(".sheet-handle")).not.toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Choose another/u }),
+      ).toBeNull();
+      expect(editor.querySelector(".composer-editor-header")).toBeNull();
+      expect(editor.querySelector(".composer-back")).toBeNull();
+      expect(
+        editor.querySelector(".composer-fullscreen-form .private-label"),
+      ).toBeNull();
+      expect(editor.textContent).not.toMatch(/←\s*Choose another/u);
+    },
+  );
+
   it("dismisses the composer sheet with Done and a reverse sheet motion", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: "Done" }));

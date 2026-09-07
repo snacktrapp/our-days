@@ -3696,17 +3696,6 @@ button:focus-visible,
   font-size: 9px;
   line-height: 1.35;
 }
-.composer-back {
-  min-height: 44px;
-  margin: -16px 0 3px -8px;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
 .composer-field,
 .photo-input {
   margin-top: 12px;
@@ -5560,15 +5549,6 @@ button:focus-visible,
   color: var(--ink);
 }
 
-.composer-back {
-  color: var(--teal);
-  font-family: var(--font-interface);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .photo-input,
 .composer-preview-card {
   border-color: color-mix(in srgb, var(--clay) 58%, transparent);
@@ -7296,8 +7276,10 @@ html[data-theme].overlay-open .app-shell::before,
   justify-content: center;
 }
 
-.quick-compose > .private-label {
-  margin-top: 0;
+.new-moment-composer-dialog .composer-editor-header,
+.new-moment-composer-dialog .composer-back,
+.new-moment-composer-dialog .composer-fullscreen-form > .private-label {
+  display: none;
 }
 
 /* Header drawers share one surface and one close control. Their height and
@@ -7993,10 +7975,6 @@ iframe.composer-location-map {
 
 :root[data-theme="light"] .moment-choices small {
   color: #4f5d56;
-}
-
-:root[data-theme="light"] .composer-back {
-  color: #285f5b;
 }
 
 :root[data-theme="light"] .composer-sheet .private-label {
