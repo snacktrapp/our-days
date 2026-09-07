@@ -155,9 +155,7 @@ const connectedMemberModel = {
   ],
 };
 
-async function openFamilyCircle(
-  user: ReturnType<typeof userEvent.setup>,
-) {
+async function openFamilyCircle(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /All our days/u }));
 }
 

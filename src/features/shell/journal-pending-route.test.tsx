@@ -26,7 +26,10 @@ describe("route pending skeleton", () => {
   it("keeps Account on the graph-paper field without empty boxes", () => {
     const { container } = render(<RoutePendingSkeleton kind="settings" />);
     const account = screen.getByRole("region", { name: "Opening account" });
-    expect(account).toHaveClass("route-pending-field", "route-pending-skeleton");
+    expect(account).toHaveClass(
+      "route-pending-field",
+      "route-pending-skeleton",
+    );
     expect(account.childElementCount).toBe(0);
     expect(account).not.toHaveClass("route-pending-glow");
     expect(container.querySelector(".route-pending-glow")).toBeNull();

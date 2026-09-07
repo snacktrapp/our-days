@@ -23,11 +23,7 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 
-function NavIcon({
-  name,
-}: {
-  name: "family" | "memories" | "account";
-}) {
+function NavIcon({ name }: { name: "family" | "memories" | "account" }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -54,11 +50,7 @@ function NavIcon({
   );
 }
 
-function NavSymbol({
-  name,
-}: {
-  name: "family" | "memories" | "account";
-}) {
+function NavSymbol({ name }: { name: "family" | "memories" | "account" }) {
   return (
     <span className="nav-symbol" aria-hidden="true">
       <NavIcon name={name} />

@@ -65,8 +65,8 @@ export function RoutePendingSkeleton({
     kind === "timeline"
       ? "Opening this journal"
       : kind === "memories"
-          ? "Opening memories"
-          : "Opening account";
+        ? "Opening memories"
+        : "Opening account";
 
   if (kind === "timeline") {
     return (

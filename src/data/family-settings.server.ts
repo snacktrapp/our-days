@@ -447,7 +447,8 @@ export function buildConnectedFamilySettingsModel(
       : [{ id: access.circleId, name: context.circleName }]
   ).map((group) => {
     const circleData = directory.get(group.id) ?? emptyAccess;
-    const viewer = viewerByCircle.get(group.id) ??
+    const viewer =
+      viewerByCircle.get(group.id) ??
       (group.id === access.circleId
         ? {
             membershipId: access.membershipId,

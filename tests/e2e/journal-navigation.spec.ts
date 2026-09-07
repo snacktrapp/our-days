@@ -79,9 +79,13 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page).toHaveURL(/\/settings\/family$/);
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(
-    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "People" }),
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "People" }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /All our days/u })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /All our days/u }),
+  ).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
   await page.getByRole("button", { name: /All our days/u }).click();
   await expect(page.getByText("TARS")).toBeVisible();
@@ -429,7 +433,9 @@ test("members can create a second group from Account and filter Home without cos
     page.getByRole("link", { name: "Molly", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("link", { name: "Account" }).click();
-  await expect(page.getByRole("button", { name: /All our days/u })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /All our days/u }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: /Cousins/u })).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
   await page.getByRole("button", { name: /Cousins/u }).click();
