@@ -68,7 +68,7 @@ describe("ComposerSessionProvider", () => {
     expect(dialog.querySelector(".activity-sheet")).toHaveClass(
       "composer-sheet",
     );
-    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     await user.click(trigger);

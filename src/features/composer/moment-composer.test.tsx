@@ -200,6 +200,28 @@ async function finishSheetClose() {
   });
 }
 
+function swipeComposerClosed() {
+  const handle = document.querySelector(
+    ".new-moment-composer-dialog .sheet-handle",
+  );
+  const sheet = document.querySelector(
+    ".new-moment-composer-dialog .activity-sheet",
+  ) as HTMLElement | null;
+  expect(handle).not.toBeNull();
+  expect(sheet).not.toBeNull();
+  fireEvent.pointerDown(handle!, { pointerId: 1, clientX: 40, clientY: 20 });
+  fireEvent.pointerMove(sheet!, {
+    pointerId: 1,
+    clientX: 40,
+    clientY: 20 + sheetDismissThresholdPx,
+  });
+  fireEvent.pointerUp(sheet!, {
+    pointerId: 1,
+    clientX: 40,
+    clientY: 20 + sheetDismissThresholdPx,
+  });
+}
+
 async function setComposerTime(
   user: ReturnType<typeof userEvent.setup>,
   hour: string,
@@ -309,7 +331,7 @@ describe("MomentComposer", () => {
       screen.getByRole("button", { name: `Time, ${expectedLabel}` }),
     ).toBeVisible();
     expect(screen.getByText("Time")).not.toHaveTextContent("Optional");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(confirm).not.toHaveBeenCalled();
     await finishSheetClose();
 
@@ -322,7 +344,7 @@ describe("MomentComposer", () => {
         name: `Time, ${formatPickerTimeLabel(currentPickerTimeValue())}`,
       }),
     ).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(confirm).not.toHaveBeenCalled();
   });
 
@@ -1056,7 +1078,7 @@ describe("MomentComposer", () => {
       "composer-sheet",
     );
     expect(picker.querySelector(".sheet-handle")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(picker.parentElement).toBe(document.body);
     expect(picker.closest(".topbar")).toBeNull();
     expect(picker.closest(".app-shell")).toBeNull();
@@ -1075,7 +1097,7 @@ describe("MomentComposer", () => {
     expect(document.body).toHaveClass("composer-scroll-locked");
     expect(document.documentElement).toHaveClass("composer-scroll-locked");
 
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(document.querySelector(".activity-sheet")).toHaveClass("is-closing");
     expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
       "aria-hidden",
@@ -1113,7 +1135,7 @@ describe("MomentComposer", () => {
     );
     expect(editor.querySelector(".sheet-handle")).not.toBeNull();
     expect(editor.querySelector(".activity-sheet-chrome")).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: /Choose another/u }),
     ).toBeNull();
@@ -1137,7 +1159,7 @@ describe("MomentComposer", () => {
       );
       const editor = screen.getByRole("dialog", { name: title });
       expect(screen.getByRole("heading", { name: title })).toBeVisible();
-      expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
       expect(editor.querySelector(".sheet-handle")).not.toBeNull();
       expect(
         screen.queryByRole("button", { name: /Choose another/u }),
@@ -1151,9 +1173,9 @@ describe("MomentComposer", () => {
     },
   );
 
-  it("dismisses the composer sheet with Done and a reverse sheet motion", async () => {
-    const user = await openComposer();
-    await user.click(screen.getByRole("button", { name: "Done" }));
+  it("dismisses the composer sheet with a handle swipe and reverse sheet motion", async () => {
+    await openComposer();
+    swipeComposerClosed();
     const dialog = document.querySelector(".new-moment-composer-dialog");
     expect(dialog?.querySelector(".activity-sheet")).toHaveClass("is-closing");
     expect(dialog).toHaveAttribute("aria-hidden", "true");
@@ -1209,8 +1231,8 @@ describe("MomentComposer", () => {
       dispatchEvent: vi.fn(),
     }));
     try {
-      const user = await openComposer();
-      await user.click(screen.getByRole("button", { name: "Done" }));
+      await openComposer();
+      swipeComposerClosed();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     } finally {
       media.mockImplementation((query: string) => ({
@@ -1646,7 +1668,7 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
-  it("has no in-sheet type switcher; wrong type is Done then + again", async () => {
+  it("has no in-sheet type switcher; wrong type is swipe dismiss then + again", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
@@ -1659,14 +1681,14 @@ describe("MomentComposer", () => {
     ).toBeNull();
     expect(document.querySelector(".composer-editor-header")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("textbox", { name: "Entry" })).toHaveValue(
       "Keep this",
     );
 
     confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     await finishSheetClose();
 
     await user.click(screen.getByRole("button", { name: "Open composer" }));
@@ -1806,12 +1828,12 @@ describe("MomentComposer", () => {
     input = screen.getByLabelText(/Choose photo/u);
     await user.upload(input, first);
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(revokeObjectURL).toHaveBeenCalledTimes(2);
     expect(screen.getByAltText("Selected photo preview")).toBeVisible();
 
     confirm.mockReturnValue(true);
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     await finishSheetClose();
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       3,
@@ -1844,7 +1866,7 @@ describe("MomentComposer", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
   });
 
-  it("revokes a photo exactly once when Done discards the draft", async () => {
+  it("revokes a photo exactly once when swipe dismiss discards the draft", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /^Photo/u }));
@@ -1852,7 +1874,7 @@ describe("MomentComposer", () => {
       screen.getByLabelText(/Choose photo/u),
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
 
     expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     await finishSheetClose();
@@ -1931,7 +1953,7 @@ describe("MomentComposer", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await mutate(user);
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    swipeComposerClosed();
     expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("dialog")).toBeVisible();
   });

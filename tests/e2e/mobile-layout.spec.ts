@@ -235,7 +235,7 @@ async function expectComposerMatchesActivitySheet(page: Page) {
   const sheet = picker.locator(".composer-sheet");
   await expect(sheet).toHaveClass(/activity-sheet/u);
   await expect(sheet.locator(".sheet-handle")).toBeVisible();
-  await expect(picker.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Done" })).toHaveCount(0);
   const geometry = await sheet.evaluate((element) => {
     const handle = element.querySelector(".sheet-handle");
     if (!(handle instanceof HTMLElement)) {

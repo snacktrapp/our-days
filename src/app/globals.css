@@ -7276,6 +7276,11 @@ html[data-theme].overlay-open .app-shell::before,
   justify-content: center;
 }
 
+.new-moment-composer-dialog .activity-sheet-bar {
+  justify-content: flex-start;
+  padding-right: 20px;
+}
+
 .new-moment-composer-dialog .composer-editor-header,
 .new-moment-composer-dialog .composer-back,
 .new-moment-composer-dialog .composer-fullscreen-form > .private-label {

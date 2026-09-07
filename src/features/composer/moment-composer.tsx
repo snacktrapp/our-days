@@ -1247,14 +1247,6 @@ export function MomentComposer({
           >
             {sheetTitle}
           </h2>
-          <button
-            className="sheet-close activity-sheet-done"
-            type="button"
-            disabled={saving}
-            onClick={() => close()}
-          >
-            Done
-          </button>
         </header>
       </div>
       <div

@@ -146,11 +146,24 @@ async function openComposer(page: Page) {
   return page.locator(".new-moment-composer-dialog");
 }
 
-test("Done dismisses the type picker sheet", async ({ page }) => {
+async function swipeComposerClosed(dialog: Locator) {
+  const handle = dialog.locator(".sheet-handle");
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("Composer sheet is missing a grab handle.");
+  const page = dialog.page();
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 140, { steps: 8 });
+  await page.mouse.up();
+}
+
+test("a handle swipe dismisses the type picker sheet", async ({ page }) => {
   await page.goto("/family");
   const dialog = await openComposer(page);
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Done" }).click();
+  await swipeComposerClosed(dialog);
   await expect(dialog.locator(".composer-sheet")).toHaveClass(/is-closing/u);
   await expect(dialog).toBeHidden();
 });
@@ -163,7 +176,7 @@ test("type selection opens as a tall sheet and dismisses with sheet-down", async
   const sheet = dialog.locator(".composer-sheet");
   await expect(sheet).toHaveClass(/activity-sheet/u);
   await expect(sheet.locator(".sheet-handle")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Done" })).toHaveCount(0);
   await expect(sheet).toHaveCSS("animation-name", "sheet-up");
   await sheet.evaluate(async (element) => {
     await Promise.all(
@@ -194,7 +207,7 @@ test("type selection opens as a tall sheet and dismisses with sheet-down", async
       },
     );
   });
-  await dialog.getByRole("button", { name: "Done" }).click();
+  await swipeComposerClosed(dialog);
   await expect(dismiss).resolves.toEqual({
     name: "sheet-down",
     durationMs: 200,
@@ -347,7 +360,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   const overlaySheet = dialog.locator(".composer-sheet");
   await expect(overlaySheet).toHaveClass(/activity-sheet/u);
   await expect(overlaySheet.locator(".sheet-handle")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Done" })).toHaveCount(0);
   const overlayMotion = await overlaySheet.evaluate((sheet) => {
     const style = getComputedStyle(sheet);
     const duration = style.animationDuration;
@@ -416,7 +429,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     true,
   );
   await expect(overlaySheet).toHaveClass(/activity-sheet/u);
-  await expect(dialog.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Done" })).toHaveCount(0);
   await expect(
     dialog.getByRole("button", { name: /Choose another/u }),
   ).toHaveCount(0);
@@ -450,7 +463,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   );
 
   page.once("dialog", async (confirmation) => confirmation.dismiss());
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Escape");
   await expect(text).toHaveValue("A draft worth keeping");
   await expect(
     dialog.getByRole("button", { name: "Moment date, Aug 21, 2026" }),
@@ -459,7 +472,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(page.getByRole("checkbox", { name: /Molly/u })).toBeChecked();
 
   page.once("dialog", async (confirmation) => confirmation.accept());
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
@@ -485,7 +498,7 @@ test("required content rejects whitespace and future dates before review", async
       dialog.getByRole("heading", { name: "Review entry" }),
     ).toHaveCount(0);
     page.once("dialog", (confirmation) => confirmation.accept());
-    await dialog.getByRole("button", { name: "Done" }).click();
+    await page.keyboard.press("Escape");
   }
 
   const dialog = await openComposer(page);
@@ -783,7 +796,7 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
     .click();
   await expect(page.getByRole("textbox", { name: "Entry" })).toHaveValue("");
 
-  await page.getByRole("button", { name: "Done" }).click();
+  await swipeComposerClosed(draftDialog);
   draftDialog = await openComposer(page);
   await draftDialog.getByRole("button", { name: /^Photo/u }).click();
   await draftDialog.getByLabel(/Choose photo/u).setInputFiles({
@@ -886,7 +899,7 @@ test("an open entry overlay does not scroll the family feed underneath", async (
   ).toBeGreaterThan(0);
 
   page.once("dialog", (confirmation) => confirmation.accept());
-  await dialog.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(page.locator("html")).not.toHaveClass(/composer-scroll-locked/u);
   await expect(page.locator("body")).not.toHaveClass(/composer-scroll-locked/u);
@@ -918,7 +931,6 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     .locator(".people-tags label")
     .filter({ hasText: "Molly" });
   for (const control of [
-    page.getByRole("button", { name: "Done" }),
     text,
     page.getByRole("button", { name: /^Moment date,/u }),
     dialog.getByRole("button", { name: /^Journal,/u }),

@@ -267,14 +267,14 @@ describe("ConnectedMomentControl", () => {
 
     await user.clear(screen.getByLabelText("Entry"));
     await user.type(screen.getByLabelText("Entry"), "A changed draft.");
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.keyboard("{Escape}");
     expect(confirm).toHaveBeenCalledWith(
       "Discard your unsaved changes to this moment?",
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     confirm.mockReturnValueOnce(true);
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.keyboard("{Escape}");
     await waitFor(() => {
       expect(document.querySelector(".new-moment-composer-dialog")).toBeNull();
     });
