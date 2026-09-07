@@ -224,6 +224,10 @@ export function buildConnectedFamilySettingsModel(
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: access.personId,
+      groups:
+        context.groups && context.groups.length > 0
+          ? context.groups
+          : [{ id: access.circleId, name: context.circleName }],
       canManageAccess,
       members,
       guardianOptions: canManageAccess

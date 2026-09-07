@@ -5,10 +5,7 @@ import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.se
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { loadConnectedTimeline } from "@/data/moments.server";
-import {
-  createGroupAction,
-  selectActiveGroupAction,
-} from "@/features/groups/create-group-action";
+import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
   createFamilyMomentAction,
@@ -42,7 +39,6 @@ export default async function FamilyPage({
         model={model.chrome}
         section="timeline"
         switcher={model.switcher}
-        createGroupAction={createGroupAction}
         onSelectGroup={selectActiveGroupAction}
       >
         <PhoneNotificationsAnnouncement />
@@ -62,7 +58,6 @@ export default async function FamilyPage({
       section="timeline"
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
-      createGroupAction={createGroupAction}
       onSelectGroup={selectActiveGroupAction}
     >
       <PhoneNotificationsAnnouncement />

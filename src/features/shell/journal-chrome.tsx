@@ -28,12 +28,6 @@ import type {
 
 export type { FamilyTimelineSwitcherItem };
 
-type CreateGroupAction = (
-  input: FormData,
-) => Promise<
-  Readonly<{ ok: true; href: string } | { ok: false; message: string }>
->;
-
 type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
   section: JournalSection;
@@ -41,7 +35,6 @@ type JournalChromeProps = Readonly<{
   createMomentAction?: SaveFamilyMomentAction;
   standaloneNavigation?: boolean;
   switcher?: readonly FamilyTimelineSwitcherItem[];
-  createGroupAction?: CreateGroupAction;
   onSelectGroup?: (circleId: string) => void;
 }>;
 
@@ -49,13 +42,11 @@ function PrimaryJournalHeader({
   model,
   createMomentAction,
   switcher,
-  createGroupAction,
   onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
   createMomentAction?: SaveFamilyMomentAction;
   switcher?: readonly FamilyTimelineSwitcherItem[];
-  createGroupAction?: JournalChromeProps["createGroupAction"];
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const title =
@@ -63,7 +54,6 @@ function PrimaryJournalHeader({
       <FamilyTitleSwitcher
         model={model}
         switcher={switcher}
-        createGroupAction={createGroupAction}
         onSelectGroup={onSelectGroup}
       />
     ) : (
@@ -108,7 +98,6 @@ function JournalStage({
   children,
   createMomentAction,
   switcher,
-  createGroupAction,
   onSelectGroup,
 }: JournalChromeProps) {
   const pendingRoute = usePendingJournalRoute();
@@ -122,7 +111,6 @@ function JournalStage({
         model={chromeModel}
         createMomentAction={createMomentAction}
         switcher={switcher}
-        createGroupAction={createGroupAction}
         onSelectGroup={onSelectGroup}
       />
     );
@@ -161,7 +149,6 @@ export function JournalChrome({
   children,
   createMomentAction,
   switcher,
-  createGroupAction,
   onSelectGroup,
 }: JournalChromeProps) {
   return (
@@ -176,7 +163,6 @@ export function JournalChrome({
             section={section}
             createMomentAction={createMomentAction}
             switcher={switcher}
-            createGroupAction={createGroupAction}
             onSelectGroup={onSelectGroup}
           >
             {children}

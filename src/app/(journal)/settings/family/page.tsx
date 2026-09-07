@@ -21,14 +21,19 @@ import {
 import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-environment";
 import { AccountTools } from "@/features/family-settings/account-tools";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
+import { createGroupAction } from "@/features/groups/create-group-action";
+import { previewGroupOptions } from "@/data/preview-groups.server";
 
 export default async function FamilySettingsPage() {
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
-    const model = getFamilySettingsFixture();
+    const model = getFamilySettingsFixture(await previewGroupOptions());
     return (
       <JournalChrome model={model.chrome} section="settings">
-        <FamilySettingsPanel model={model.panel}>
+        <FamilySettingsPanel
+          model={model.panel}
+          createGroupAction={createGroupAction}
+        >
           <AccountTools />
         </FamilySettingsPanel>
       </JournalChrome>
@@ -78,6 +83,7 @@ export default async function FamilySettingsPage() {
     >
       <FamilySettingsPanel
         model={model.panel}
+        createGroupAction={createGroupAction}
         actions={{
           requestInvitation: requestFamilyInvitationAction,
           revokeMembership: revokeFamilyMembershipAction,

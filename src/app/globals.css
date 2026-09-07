@@ -691,65 +691,6 @@ button:focus-visible,
   white-space: nowrap;
 }
 
-.title-switcher-create,
-.title-switcher-create-form {
-  margin: 4px 8px 8px;
-  width: calc(100% - 16px);
-}
-
-.title-switcher-create {
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 1px dashed var(--hairline);
-  border-radius: 12px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.title-switcher-create-form {
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-}
-
-.title-switcher-create-form label {
-  display: grid;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 650;
-  text-align: left;
-}
-
-.title-switcher-create-form input {
-  min-height: 40px;
-  padding: 8px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: var(--paper, transparent);
-  color: var(--ink);
-  font: inherit;
-}
-
-.title-switcher-create-form button {
-  min-height: 40px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 650;
-}
-
-.title-switcher-create-form [role="alert"] {
-  margin: 0;
-  color: var(--danger, #8a2b2b);
-  font-size: 12px;
-}
 .title-switcher nav a.is-pending,
 .title-switcher nav a:active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -2416,7 +2357,8 @@ button:focus-visible,
 }
 .access-review > button,
 .invite-review button,
-.invite-section form > button {
+.invite-section form > button,
+.groups-section form > button {
   min-height: 46px;
   border-radius: 14px;
   cursor: pointer;
@@ -2576,20 +2518,24 @@ button:focus-visible,
   font-size: 11px !important;
   font-weight: 700;
 }
-.invite-section {
+.invite-section,
+.groups-section {
   scroll-margin-top: 16px;
 }
-.invite-section form {
+.invite-section form,
+.groups-section form {
   padding: 0 16px 17px;
   display: grid;
 }
-.invite-section form label {
+.invite-section form label,
+.groups-section form label {
   margin-bottom: 6px;
   color: #60574e;
   font-size: 11px;
   font-weight: 700;
 }
-.invite-section form input {
+.invite-section form input,
+.groups-section form input {
   width: 100%;
   min-height: 48px;
   padding: 12px 13px;
@@ -2600,22 +2546,26 @@ button:focus-visible,
   color: var(--ink);
   font-size: 16px;
 }
-.invite-section form input:focus {
+.invite-section form input:focus,
+.groups-section form input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(46, 111, 105, 0.12);
 }
-.invite-section form > p {
+.invite-section form > p,
+.groups-section form > p {
   min-height: 32px;
   margin: 6px 1px 7px;
   color: var(--muted);
   font-size: 10px;
   line-height: 1.35;
 }
-.invite-section form > .field-error {
+.invite-section form > .field-error,
+.groups-section form > .field-error {
   color: #844740;
   font-weight: 700;
 }
-.invite-section form > button {
+.invite-section form > button,
+.groups-section form > button {
   border: 0;
   background: var(--ink);
   color: #fffaf0;
@@ -6479,7 +6429,8 @@ html[data-theme].overlay-open .app-shell::before,
   color: #7d520f;
 }
 
-:root[data-theme="light"] .invite-section form > button {
+:root[data-theme="light"] .invite-section form > button,
+:root[data-theme="light"] .groups-section form > button {
   border-color: #b8893f;
   background: #b8893f;
 }
@@ -6523,6 +6474,7 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .guardian-options li,
 :root[data-theme="light"] .settings-delivery-boundary,
 :root[data-theme="light"] .invite-section form input,
+:root[data-theme="light"] .groups-section form input,
 :root[data-theme="light"] .access-review > button,
 :root[data-theme="light"] .invite-review button,
 :root[data-theme="light"] .settings-review-actions button,
@@ -6729,6 +6681,8 @@ html[data-theme].overlay-open .app-shell::before,
 .invite-section form label,
 .invite-section form > p,
 .invite-section form > small,
+.groups-section form label,
+.groups-section form > p,
 .invite-review-email,
 .invitation-status,
 .pending-invitation-list small,
@@ -6753,7 +6707,8 @@ html[data-theme].overlay-open .app-shell::before,
   background: #14231c;
 }
 
-.invite-section form input {
+.invite-section form input,
+.groups-section form input {
   border-color: var(--hairline);
   border-radius: 7px;
   background: #13211b;
@@ -6772,7 +6727,8 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--ink);
 }
 
-.invite-section form > button {
+.invite-section form > button,
+.groups-section form > button {
   border: 1px solid color-mix(in srgb, var(--ochre) 72%, transparent);
   border-radius: 7px;
   background: var(--ochre);
@@ -6792,7 +6748,8 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--ink);
 }
 
-:root[data-theme="light"] .invite-section form > button {
+:root[data-theme="light"] .invite-section form > button,
+:root[data-theme="light"] .groups-section form > button {
   border-color: #b8893f;
   background: #b8893f;
   color: #101711;

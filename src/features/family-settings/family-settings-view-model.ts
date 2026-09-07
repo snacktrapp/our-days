@@ -33,10 +33,16 @@ export type PendingFamilyInvitationViewModel = Readonly<{
   expiresLabel: string;
 }>;
 
+export type FamilyGroupViewModel = Readonly<{
+  id: string;
+  name: string;
+}>;
+
 export type PreviewFamilySettingsPanelViewModel = Readonly<{
   mode: "preview";
   intro: string;
   currentMemberId: string;
+  groups: readonly FamilyGroupViewModel[];
   members: readonly FamilyAccessMemberViewModel[];
 }>;
 
@@ -45,6 +51,7 @@ export type ConnectedFamilySettingsPanelViewModel = Readonly<{
   intro: string;
   currentMemberId: string;
   canManageAccess: boolean;
+  groups: readonly FamilyGroupViewModel[];
   members: readonly FamilyAccessMemberViewModel[];
   guardianOptions: readonly GuardianOptionViewModel[];
   pendingInvitations: readonly PendingFamilyInvitationViewModel[];

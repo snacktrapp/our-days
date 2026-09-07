@@ -380,21 +380,26 @@ test("the family feed scrolls beneath the sticky title selector", async ({
   await context.close();
 });
 
-test("members can create a second group and switch without costume family rows", async ({
+test("members can create a second group from Account and filter Home without costume family rows", async ({
   page,
 }) => {
-  await page.goto("/family");
-  await page.locator(".title-switcher summary").click();
+  await page.goto("/settings/family");
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create group" }),
+    page.locator(".groups-section").getByText("All our days"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Create group" }).click();
   await page.getByLabel("Group name").fill("Cousins");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
   await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Group");
   await expect(page).toHaveURL(/circle=created/);
   await page.locator(".title-switcher summary").click();
+  await expect(page.getByRole("button", { name: "Create group" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByLabel("Group name")).toHaveCount(0);
   await expect(
     page.locator(".title-switcher nav a .title-switcher-type-pill"),
   ).toHaveText(["You", "Group", "Group"]);

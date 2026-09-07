@@ -578,70 +578,58 @@ export function getPersonalTimelineFixture(
   };
 }
 
-export function getPeopleFixture(
-  options: PreviewTimelineOptions = {},
-): PeopleViewModel {
-  const extraSelected =
-    options.selectedGroupId &&
-    options.selectedGroupId !== previewFamilyId &&
-    options.extraGroup
-      ? options.extraGroup
-      : null;
+export function getPeopleFixture(): PeopleViewModel {
   return {
     chrome: chrome("teal", "Our people"),
-    intro: extraSelected
-      ? "People in this group."
-      : "Individual journals within this family archive.",
+    intro: "Individual journals within this family archive.",
     people: [
       {
         id: "brian",
         name: "Brian",
         initial: "B",
         accent: "teal",
-        roleLabel: extraSelected ? "Organizer" : "Co-organizer",
+        roleLabel: "Co-organizer",
         journalHref: "/people/brian",
       },
-      ...(extraSelected
-        ? []
-        : [
-            {
-              id: "molly",
-              name: "Molly",
-              initial: "M",
-              accent: "clay" as const,
-              roleLabel: "Co-organizer",
-              journalHref: "/people/molly",
-            },
-            {
-              id: "avery",
-              name: "Avery",
-              initial: "A",
-              accent: "ochre" as const,
-              roleLabel: "Managed profile · No sign-in",
-              journalHref: "/people/avery",
-            },
-            {
-              id: "sam",
-              name: "Sam",
-              initial: "S",
-              accent: "slate" as const,
-              roleLabel: "Managed profile · No sign-in",
-              journalHref: "/people/sam",
-            },
-            {
-              id: "june",
-              name: "June",
-              initial: "J",
-              accent: "moss" as const,
-              roleLabel: "Managed profile · No sign-in",
-              journalHref: "/people/june",
-            },
-          ]),
+      {
+        id: "molly",
+        name: "Molly",
+        initial: "M",
+        accent: "clay",
+        roleLabel: "Co-organizer",
+        journalHref: "/people/molly",
+      },
+      {
+        id: "avery",
+        name: "Avery",
+        initial: "A",
+        accent: "ochre",
+        roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/avery",
+      },
+      {
+        id: "sam",
+        name: "Sam",
+        initial: "S",
+        accent: "slate",
+        roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/sam",
+      },
+      {
+        id: "june",
+        name: "June",
+        initial: "J",
+        accent: "moss",
+        roleLabel: "Managed profile · No sign-in",
+        journalHref: "/people/june",
+      },
     ],
   };
 }
 
-export function getFamilySettingsFixture(): FamilySettingsViewModel {
+export function getFamilySettingsFixture(
+  options: PreviewTimelineOptions = {},
+): FamilySettingsViewModel {
   return {
     chrome: chrome("teal", "Account"),
     panel: {
@@ -649,6 +637,7 @@ export function getFamilySettingsFixture(): FamilySettingsViewModel {
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: "brian",
+      groups: previewGroups(options.extraGroup),
       members: [
         {
           id: "brian",

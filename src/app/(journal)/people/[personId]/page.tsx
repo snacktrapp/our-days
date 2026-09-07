@@ -2,10 +2,7 @@ import { JournalChrome } from "@/features/shell/journal-chrome";
 import { PrivateSoftNotFound } from "@/features/shell/private-soft-not-found";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getPersonalTimelineFixture } from "@/fixtures/design-preview/timelines.server";
-import {
-  createGroupAction,
-  selectActiveGroupAction,
-} from "@/features/groups/create-group-action";
+import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
@@ -43,7 +40,6 @@ export default async function PersonJournalPage({
         model={model.chrome}
         section="people"
         switcher={model.switcher}
-        createGroupAction={createGroupAction}
         onSelectGroup={selectActiveGroupAction}
       >
         <TimelineFeed model={model} />
@@ -68,7 +64,6 @@ export default async function PersonJournalPage({
       section="people"
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
-      createGroupAction={createGroupAction}
       onSelectGroup={selectActiveGroupAction}
     >
       <TimelineFeed

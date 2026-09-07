@@ -137,23 +137,21 @@ describe("FamilyTitleSwitcher", () => {
     );
   });
 
-  it("opens a required-name create form without leaving the switcher open state", () => {
-    const action = vi.fn();
+  it("is a feed filter only and does not offer create or admin actions", () => {
     const { container } = render(
-      <FamilyTitleSwitcher
-        model={model}
-        switcher={switcher}
-        createGroupAction={action}
-      />,
+      <FamilyTitleSwitcher model={model} switcher={switcher} />,
     );
     fireEvent.click(
       screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Create group" }));
     expect(container.querySelector(".title-switcher")).toHaveAttribute("open");
-    expect(screen.getByLabelText("Group name")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Create" })).toBeVisible();
-    expect(action).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Create group" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Group name")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes the switcher on the same frame as a row press", () => {

@@ -1,13 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-  type MouseEvent,
-} from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
 import {
@@ -19,10 +13,6 @@ export type {
   FamilyTimelineSwitcherItem,
   JournalSwitcherKind,
 } from "./journal-switcher";
-
-type CreateGroupActionResult = Readonly<
-  { ok: true; href: string } | { ok: false; message: string }
->;
 
 function TitleCopy({
   model,
@@ -118,64 +108,13 @@ function SwitcherLink({
   );
 }
 
-function CreateGroupControl({
-  action,
-}: Readonly<{
-  action: (input: FormData) => Promise<CreateGroupActionResult>;
-}>) {
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="title-switcher-create"
-        onClick={() => setOpen(true)}
-      >
-        Create group
-      </button>
-    );
-  }
-
-  return (
-    <form
-      className="title-switcher-create-form"
-      action={(formData) => {
-        startTransition(async () => {
-          const result = await action(formData);
-          if (result && !result.ok) setError(result.message);
-        });
-      }}
-    >
-      <label>
-        Group name
-        <input
-          name="name"
-          required
-          maxLength={80}
-          autoComplete="off"
-          autoFocus
-        />
-      </label>
-      {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" disabled={pending}>
-        {pending ? "Creating…" : "Create"}
-      </button>
-    </form>
-  );
-}
-
 export function FamilyTitleSwitcher({
   model,
   switcher,
-  createGroupAction,
   onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
   switcher: readonly FamilyTimelineSwitcherItem[];
-  createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -279,9 +218,6 @@ export function FamilyTitleSwitcher({
             onChoose={chooseItem}
           />
         ))}
-        {createGroupAction ? (
-          <CreateGroupControl action={createGroupAction} />
-        ) : null}
       </nav>
     </details>
   );
