@@ -814,6 +814,7 @@ function isMomentEntry(entry: TimelineEntryViewModel): entry is MomentEntry {
 
 const archiveMoments = (familyEntries as readonly TimelineEntryViewModel[])
   .filter(isMomentEntry)
+  .filter((entry) => entry.moment.kind !== "insight")
   .sort((left, right) =>
     compareMemoryDatesDescending(left.moment, right.moment),
   );

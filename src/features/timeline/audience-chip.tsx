@@ -107,13 +107,21 @@ export function AudienceChip({
       <button
         ref={triggerRef}
         type="button"
-        className="just-me-pill audience-chip"
+        className="audience-chip"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Audience, ${label}`}
         onClick={openSheet}
       >
-        {label}
+        <span
+          className={
+            audience === "just_me"
+              ? "audience-chip-face just-me-pill"
+              : "audience-chip-face"
+          }
+        >
+          {label}
+        </span>
       </button>
       {dialogMounted ? (
         <dialog

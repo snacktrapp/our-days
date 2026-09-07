@@ -293,8 +293,12 @@ using (
   )
 );
 
-create or replace function private.get_photo_moment_delivery(requested_moment_id uuid)
+drop function public.get_photo_moment_delivery(uuid);
+drop function private.get_photo_moment_delivery(uuid);
+
+create function private.get_photo_moment_delivery(requested_moment_id uuid)
 returns table (
+  photo_id uuid, sort_order integer,
   bucket_id text, object_path text, output_mime_type text,
   output_size_bytes bigint, output_sha256_hex text,
   output_width integer, output_height integer
@@ -304,7 +308,8 @@ stable
 security definer
 set search_path = ''
 as $$
-  select derivative.bucket_id, derivative.object_path,
+  select photo.id, photo.sort_order,
+    derivative.bucket_id, derivative.object_path,
     derivative.output_mime_type, derivative.output_size_bytes,
     encode(derivative.output_sha256, 'hex'), derivative.output_width,
     derivative.output_height
@@ -321,7 +326,23 @@ as $$
       'family_derivative_delivery'
     ))
     and (select private.current_family_session_is_live())
-    and (select private.can_read_live_moment(moment.id));
+    and (select private.can_read_live_moment(moment.id))
+  order by photo.sort_order, photo.id;
+$$;
+
+create function public.get_photo_moment_delivery(moment_id uuid)
+returns table (
+  photo_id uuid, sort_order integer,
+  bucket_id text, object_path text, output_mime_type text,
+  output_size_bytes bigint, output_sha256_hex text,
+  output_width integer, output_height integer
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select * from private.get_photo_moment_delivery(moment_id);
 $$;
 
 create or replace function private.photo_display_path_is_readable(
@@ -726,6 +747,15 @@ begin
     reserved.object_path, reserved.state, reserved.upload_expires_at;
 end;
 $$;
+
+revoke all on function private.get_photo_moment_delivery(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_photo_moment_delivery(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function private.get_photo_moment_delivery(uuid)
+  to authenticated;
+grant execute on function public.get_photo_moment_delivery(uuid)
+  to authenticated;
 
 revoke all on function private.can_read_live_moment(uuid)
   from public, anon;
