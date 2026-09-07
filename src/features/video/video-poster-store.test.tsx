@@ -2,7 +2,9 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearVideoPosters,
+  peekVideoFrame,
   peekVideoPoster,
+  rememberVideoFrame,
   rememberVideoPoster,
   useVideoPoster,
 } from "./video-poster-store";
@@ -38,6 +40,14 @@ describe("video poster store", () => {
     rememberVideoPoster("moment-1", poster);
     window.dispatchEvent(new Event("our-days:clear-private-state"));
     expect(peekVideoPoster("moment-1")).toBeNull();
+  });
+
+  it("remembers the clip's native frame for the timeline card", () => {
+    rememberVideoFrame("moment-1", 1920, 1080);
+    expect(peekVideoFrame("moment-1")).toEqual({ width: 1920, height: 1080 });
+    expect(window.sessionStorage.getItem("our-days:video-frame:moment-1")).toBe(
+      "1920x1080",
+    );
   });
 
   it("notifies cards when a poster arrives", async () => {

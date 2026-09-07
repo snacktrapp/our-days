@@ -14,7 +14,10 @@ import {
   type VideoMomentDraft,
 } from "./video-upload";
 import { inspectVideoFile } from "@/features/video/inspect-video-file";
-import { rememberVideoPoster } from "@/features/video/video-poster-store";
+import {
+  rememberVideoFrame,
+  rememberVideoPoster,
+} from "@/features/video/video-poster-store";
 
 export type OptimisticMediaUploadStage =
   | Readonly<{ state: "preparing" }>
@@ -68,6 +71,8 @@ export type StartVideoUploadInput = CommonUploadInput &
   Readonly<{
     draft: Omit<VideoMomentDraft, "durationMs"> & { durationMs?: number };
     posterDataUrl?: string;
+    width?: number;
+    height?: number;
   }>;
 
 type QueuedUpload =
@@ -277,8 +282,14 @@ function beginPhotoUpload(input: StartPhotoUploadInput) {
   });
 }
 
-function rememberPoster(momentId: string | undefined, posterDataUrl?: string) {
+function rememberPoster(
+  momentId: string | undefined,
+  posterDataUrl?: string,
+  width?: number,
+  height?: number,
+) {
   if (momentId && posterDataUrl) rememberVideoPoster(momentId, posterDataUrl);
+  if (momentId && width && height) rememberVideoFrame(momentId, width, height);
 }
 
 async function preparedVideoDraft(
@@ -287,14 +298,20 @@ async function preparedVideoDraft(
 ) {
   let durationMs = input.draft.durationMs;
   let posterDataUrl = input.posterDataUrl;
-  if (!durationMs || !posterDataUrl) {
+  let width = input.width;
+  let height = input.height;
+  if (!durationMs || !posterDataUrl || !width || !height) {
     const inspected = await inspectVideoFile(input.file, signal);
     durationMs = durationMs ?? inspected.durationMs;
     posterDataUrl = posterDataUrl ?? inspected.posterDataUrl ?? undefined;
+    width = width ?? inspected.width;
+    height = height ?? inspected.height;
   }
   return {
     draft: { ...input.draft, durationMs },
     posterDataUrl,
+    width,
+    height,
   };
 }
 
@@ -315,7 +332,12 @@ function beginVideoUpload(input: StartVideoUploadInput) {
         controller.signal,
         (stage) => {
           if (controller.signal.aborted || !uploadStillExists(id)) return;
-          rememberPoster(attempt.momentId, prepared.posterDataUrl);
+          rememberPoster(
+            attempt.momentId,
+            prepared.posterDataUrl,
+            prepared.width,
+            prepared.height,
+          );
           updateOptimisticMediaUpload(id, {
             momentId: attempt.momentId,
             stage,
@@ -323,7 +345,12 @@ function beginVideoUpload(input: StartVideoUploadInput) {
         },
       );
       if (!uploadStillExists(id)) return;
-      rememberPoster(result.momentId, prepared.posterDataUrl);
+      rememberPoster(
+        result.momentId,
+        prepared.posterDataUrl,
+        prepared.width,
+        prepared.height,
+      );
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,
@@ -478,6 +505,8 @@ export function retryOptimisticMediaUpload(id: string) {
           rememberPoster(
             attempt.momentId ?? upload.momentId,
             prepared.posterDataUrl,
+            prepared.width,
+            prepared.height,
           );
           updateOptimisticMediaUpload(id, {
             momentId: attempt.momentId ?? upload.momentId,
@@ -486,7 +515,12 @@ export function retryOptimisticMediaUpload(id: string) {
         },
       );
       if (!uploadStillExists(id)) return;
-      rememberPoster(result.momentId, prepared.posterDataUrl);
+      rememberPoster(
+        result.momentId,
+        prepared.posterDataUrl,
+        prepared.width,
+        prepared.height,
+      );
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,

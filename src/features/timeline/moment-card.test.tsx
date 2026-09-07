@@ -403,6 +403,11 @@ describe("MomentCard timeline media", () => {
     expect(container.querySelector(".video-card")).not.toBeNull();
     expect(container.querySelector(".video-frame")).toHaveClass(
       "has-known-ratio",
+      "has-reserved-frame",
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 160 90",
     );
     expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
       "▶",
@@ -455,6 +460,57 @@ describe("MomentCard timeline media", () => {
     expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
     expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
       "▶",
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 160 90",
+    );
+  });
+
+  it("sizes a portrait video to a tall native frame instead of a 4:3 mat", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "portrait-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/portrait-video",
+            width: 1080,
+            height: 1920,
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 1080 1920",
+    );
+    expect(container.querySelector(".video-frame")).toHaveClass(
+      "has-known-ratio",
+    );
+  });
+
+  it("does not reserve a 4:3 video frame when the clip size is unknown", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "unknown-ratio-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/unknown-ratio-video",
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".photo-frame-sizer")).toBeNull();
+    expect(container.querySelector(".video-frame")).not.toHaveClass(
+      "has-reserved-frame",
     );
   });
 

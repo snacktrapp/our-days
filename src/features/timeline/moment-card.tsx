@@ -106,27 +106,26 @@ export function MomentCard({
               : "Photo";
 
   if (moment.kind === "photo" || moment.kind === "video") {
-    const mediaWidth =
-      moment.kind === "video" ? moment.video.width : moment.image.width;
+    const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
-      moment.kind === "video" ? moment.video.height : moment.image.height;
+      moment.kind === "photo" ? moment.image.height : undefined;
     const knownRatio = Boolean(mediaWidth && mediaHeight);
     return (
       <div
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
       >
-        <div
-          className={`photo-frame has-reserved-frame ${moment.kind === "video" ? "video-frame" : ""}${
-            knownRatio ? " has-known-ratio" : ""
-          }`}
-        >
-          <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
-          {moment.kind === "video" ? (
-            <VideoMomentMedia
-              moment={moment}
-              label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-            />
-          ) : (
+        {moment.kind === "video" ? (
+          <VideoMomentMedia
+            moment={moment}
+            label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
+          />
+        ) : (
+          <div
+            className={`photo-frame has-reserved-frame${
+              knownRatio ? " has-known-ratio" : ""
+            }`}
+          >
+            <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
             <PhotoCardPager
               moment={moment}
               images={photoAlbum(moment).map((photo) =>
@@ -152,8 +151,8 @@ export function MomentCard({
                 ),
               )}
             />
-          )}
-        </div>
+          </div>
+        )}
         <div className="card-copy">
           <div className="photo-card-heading">
             <p className="moment-kicker">{typeLabel}</p>

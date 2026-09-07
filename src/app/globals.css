@@ -6993,7 +6993,11 @@ html[data-theme].overlay-open .app-shell::before,
 
 .video-viewer-trigger {
   cursor: pointer;
-  background: #050b08;
+  background: transparent;
+}
+
+.video-frame {
+  background: transparent;
 }
 
 .video-card-poster,
@@ -7002,24 +7006,30 @@ html[data-theme].overlay-open .app-shell::before,
   height: auto;
   max-height: var(--timeline-media-max-height);
   display: block;
-  background: #1a221c;
+  background: transparent;
   object-fit: contain;
   object-position: center;
 }
 
 .video-card-mat {
-  min-height: 180px;
+  min-height: 0;
   aspect-ratio: 16 / 9;
+  background: color-mix(in srgb, var(--cream) 28%, transparent);
 }
 
-.photo-frame.has-reserved-frame .video-card-poster,
-.photo-frame.has-reserved-frame .video-card-mat,
-.photo-frame.has-reserved-frame .media-viewer-trigger > .video-card-poster,
-.photo-frame.has-reserved-frame .media-viewer-trigger > .video-card-mat {
+.photo-frame.has-known-ratio.has-reserved-frame .video-card-poster,
+.photo-frame.has-known-ratio.has-reserved-frame .video-card-mat,
+.photo-frame.has-known-ratio.has-reserved-frame
+  .media-viewer-trigger
+  > .video-card-poster,
+.photo-frame.has-known-ratio.has-reserved-frame
+  .media-viewer-trigger
+  > .video-card-mat {
   height: 100%;
   max-height: none;
   min-height: 0;
   aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .video-viewer-play {
