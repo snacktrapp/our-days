@@ -31,11 +31,14 @@ import { previewGroupOptions } from "@/data/preview-groups.server";
 export default async function FamilySettingsPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ inviteCircle?: string }>;
+  searchParams: Promise<{ inviteCircle?: string; previewLoading?: string }>;
 }>) {
-  const { inviteCircle } = await searchParams;
+  const { inviteCircle, previewLoading } = await searchParams;
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
+    if (previewLoading === "navigation") {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
     const model = getFamilySettingsFixture(await previewGroupOptions());
     const inviteGroup = model.panel.groups.find(
       (group) => group.id === inviteCircle,

@@ -8,6 +8,7 @@ import { JournalChrome } from "./journal-chrome";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock("./timeline-header-composer", () => ({

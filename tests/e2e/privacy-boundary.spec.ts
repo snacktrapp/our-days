@@ -112,6 +112,10 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
         isRscNavigationRequest(browserRequest.url(), browserRequest.headers())
       );
     });
+    if (to.startsWith("/people/")) {
+      await page.locator(".title-switcher summary").click();
+      await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+    }
     await page.locator(`a[href="${to}"]`).first().click();
     const navigationRequest = await navigationRequestPromise;
     await expect(page).toHaveURL(new RegExp(`${to.replace("/", "\\/")}$`));
@@ -134,13 +138,12 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   };
 
   const capturedRequests = new Map([
-    ["/family", await captureNavigation("/people", "/family")],
-    ["/people", await captureNavigation("/family", "/people")],
-    ["/people/brian", await captureNavigation("/people", "/people/brian")],
-    ["/people/molly", await captureNavigation("/people", "/people/molly")],
-    ["/people/avery", await captureNavigation("/people", "/people/avery")],
-    ["/people/sam", await captureNavigation("/people", "/people/sam")],
-    ["/people/june", await captureNavigation("/people", "/people/june")],
+    ["/family", await captureNavigation("/settings/family", "/family")],
+    ["/people/brian", await captureNavigation("/family", "/people/brian")],
+    ["/people/molly", await captureNavigation("/family", "/people/molly")],
+    ["/people/avery", await captureNavigation("/family", "/people/avery")],
+    ["/people/sam", await captureNavigation("/family", "/people/sam")],
+    ["/people/june", await captureNavigation("/family", "/people/june")],
     [
       "/settings/family",
       await captureNavigation("/family", "/settings/family"),
@@ -174,6 +177,7 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   // `/journal` is a guarded compatibility redirect and intentionally has no
   // visible link. Reuse the genuine browser-generated envelope captured from
   // a sibling private route while targeting `/journal` on the locked server.
+  capturedRequests.set("/people", capturedRequests.get("/settings/family")!);
   capturedRequests.set("/journal", capturedRequests.get("/family")!);
   capturedRequests.set("/trash", capturedRequests.get("/family")!);
   capturedRequests.set(

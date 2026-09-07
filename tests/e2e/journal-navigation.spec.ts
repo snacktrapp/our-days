@@ -444,7 +444,14 @@ test("members can create a second group from Account and filter Home without cos
   ).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
   await page.getByRole("link", { name: "Home" }).click();
+  await expect(page.locator(".title-switcher")).toBeVisible();
   await page.locator(".title-switcher summary").click();
+  const cousins = page.getByRole("link", { name: "Cousins", exact: true });
+  if (await cousins.isVisible()) {
+    await cousins.click();
+    await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
+    await page.locator(".title-switcher summary").click();
+  }
   await page.getByRole("link", { name: "All our days", exact: true }).click();
   await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
   await expect(page).toHaveURL(/circle=family/);
