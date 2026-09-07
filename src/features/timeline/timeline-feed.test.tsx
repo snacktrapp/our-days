@@ -287,7 +287,7 @@ describe("TimelineFeed", () => {
     );
   });
 
-  it("opens an edit sheet from the group-count chip", () => {
+  it("opens an edit sheet from the group-count chip", async () => {
     const setAudience = vi.fn().mockResolvedValue({
       ok: true,
       message: "Audience updated.",

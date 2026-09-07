@@ -442,11 +442,15 @@ export async function setMomentAudienceAction(input: {
   }
   const memberships = await readJournalCircleMemberships();
   const allowed = new Set(memberships.map((membership) => membership.circleId));
-  const circleIds =
+  const validated =
     audience === "just_me" ? [] : validatedCircleIds(input.circleIds, allowed);
-  if (audience === "family" && (!circleIds || circleIds.length === 0)) {
+  if (validated === null) {
+    return { ok: false, message: "That moment could not be changed." };
+  }
+  if (audience === "family" && (!validated || validated.length === 0)) {
     return { ok: false, message: "Choose at least one circle or Just me." };
   }
+  const circleIds = validated ?? [];
   if (localJournalIsEnabled()) {
     try {
       const { updateLocalMomentAudience } = await localStore();
