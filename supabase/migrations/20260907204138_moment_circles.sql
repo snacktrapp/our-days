@@ -293,8 +293,13 @@ using (
   )
 );
 
-drop function public.get_photo_moment_delivery(uuid);
-drop function private.get_photo_moment_delivery(uuid);
+-- CREATE OR REPLACE cannot change RETURNS TABLE. Drop both argument-name
+-- spellings; they share one (uuid) identity. Recreate with the live
+-- multi-photo OUT columns and only swap the readability check.
+drop function if exists public.get_photo_moment_delivery(moment_id uuid);
+drop function if exists public.get_photo_moment_delivery(requested_moment_id uuid);
+drop function if exists private.get_photo_moment_delivery(requested_moment_id uuid);
+drop function if exists private.get_photo_moment_delivery(moment_id uuid);
 
 create function private.get_photo_moment_delivery(requested_moment_id uuid)
 returns table (
@@ -383,7 +388,12 @@ as $$
   );
 $$;
 
-create or replace function private.get_video_moment_delivery(requested_moment_id uuid)
+drop function if exists public.get_video_moment_delivery(moment_id uuid);
+drop function if exists public.get_video_moment_delivery(requested_moment_id uuid);
+drop function if exists private.get_video_moment_delivery(requested_moment_id uuid);
+drop function if exists private.get_video_moment_delivery(moment_id uuid);
+
+create function private.get_video_moment_delivery(requested_moment_id uuid)
 returns table (
   bucket_id text, object_path text, mime_type text, size_bytes bigint,
   duration_ms integer
@@ -409,6 +419,19 @@ as $$
     and (select private.can_read_live_moment(moment.id))
     and object.metadata ->> 'mimetype' = video.mime_type
     and object.metadata ->> 'size' = video.size_bytes::text;
+$$;
+
+create function public.get_video_moment_delivery(moment_id uuid)
+returns table (
+  bucket_id text, object_path text, mime_type text, size_bytes bigint,
+  duration_ms integer
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select * from private.get_video_moment_delivery(moment_id);
 $$;
 
 create or replace function private.video_object_path_is_readable(
@@ -752,9 +775,17 @@ revoke all on function private.get_photo_moment_delivery(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function public.get_photo_moment_delivery(uuid)
   from public, anon, authenticated, service_role;
+revoke all on function private.get_video_moment_delivery(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.get_video_moment_delivery(uuid)
+  from public, anon, authenticated, service_role;
 grant execute on function private.get_photo_moment_delivery(uuid)
   to authenticated;
 grant execute on function public.get_photo_moment_delivery(uuid)
+  to authenticated;
+grant execute on function private.get_video_moment_delivery(uuid)
+  to authenticated;
+grant execute on function public.get_video_moment_delivery(uuid)
   to authenticated;
 
 revoke all on function private.can_read_live_moment(uuid)
