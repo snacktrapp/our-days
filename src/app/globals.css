@@ -2522,6 +2522,9 @@ button:focus-visible,
 .groups-section {
   scroll-margin-top: 16px;
 }
+.groups-create-section .settings-heading h2 {
+  font-size: 26px;
+}
 .invite-section form,
 .groups-section form {
   padding: 0 16px 17px;

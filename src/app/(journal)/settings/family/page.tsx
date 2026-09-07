@@ -9,6 +9,7 @@ import { requireJournalAccess } from "@/lib/auth/journal-access";
 import {
   buildConnectedFamilySettingsModel,
   loadConnectedFamilyAccess,
+  loadGroupMemberCounts,
 } from "@/data/family-settings.server";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import {
@@ -68,11 +69,15 @@ export default async function FamilySettingsPage() {
     );
   }
 
+  const memberCounts = await loadGroupMemberCounts(
+    (context.groups ?? [{ id: access.circleId }]).map((group) => group.id),
+  );
   const model = buildConnectedFamilySettingsModel(
     access,
     context,
     familyAccess,
     invitationDeliveryIsEnabled(),
+    memberCounts,
   );
 
   return (

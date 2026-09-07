@@ -14,6 +14,7 @@ import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
+  FamilyGroupViewModel,
   FamilySettingsPanelViewModel,
   GuardianOptionViewModel,
   PendingFamilyInvitationViewModel,
@@ -201,65 +202,80 @@ function MemberList({
   );
 }
 
+function peopleCountLabel(count: number) {
+  return count === 1 ? "1 person" : `${count} people`;
+}
+
 function GroupsSection({
   groups,
   createGroupAction,
 }: {
-  groups: readonly Readonly<{ id: string; name: string }>[];
+  groups: readonly FamilyGroupViewModel[];
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   return (
-    <section
-      className="settings-section groups-section"
-      aria-labelledby="groups-heading"
-    >
-      <div className="settings-heading">
-        <span>Your circles</span>
-        <h2 id="groups-heading">Groups</h2>
-        <p>Every group you belong to. Anyone here can start another.</p>
-      </div>
-      <ul className="access-list">
-        {groups.map((group) => (
-          <li key={group.id}>
-            <div className="access-member-copy">
-              <strong>{group.name}</strong>
-            </div>
-          </li>
-        ))}
-      </ul>
+    <>
+      <section
+        className="settings-section groups-section"
+        aria-labelledby="your-groups-heading"
+      >
+        <div className="settings-heading">
+          <span>Your circles</span>
+          <h2 id="your-groups-heading">Your groups</h2>
+        </div>
+        <ul className="access-list">
+          {groups.map((group) => (
+            <li key={group.id}>
+              <div className="access-member-copy">
+                <strong>{group.name}</strong>
+                <small>{peopleCountLabel(group.memberCount)}</small>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
       {createGroupAction ? (
-        <form
-          action={(formData) => {
-            startTransition(async () => {
-              const result = await createGroupAction(formData);
-              if (result && !result.ok) setError(result.message);
-            });
-          }}
+        <section
+          className="settings-section groups-section groups-create-section"
+          aria-labelledby="create-group-heading"
         >
-          <label htmlFor="create-group-name">Group name</label>
-          <input
-            id="create-group-name"
-            name="name"
-            required
-            maxLength={80}
-            autoComplete="off"
-          />
-          {error ? (
-            <p className="field-error" role="alert">
-              {error}
-            </p>
-          ) : (
-            <p>A name is required. You become a member and organizer.</p>
-          )}
-          <button type="submit" disabled={pending}>
-            {pending ? "Creating…" : "Create"}
-          </button>
-        </form>
+          <div className="settings-heading">
+            <h2 id="create-group-heading">Create a new group</h2>
+            <p>Starts a separate circle. You’re the organizer.</p>
+          </div>
+          <form
+            action={(formData) => {
+              startTransition(async () => {
+                const result = await createGroupAction(formData);
+                if (result && !result.ok) setError(result.message);
+              });
+            }}
+          >
+            <label htmlFor="create-group-name">Group name</label>
+            <input
+              id="create-group-name"
+              name="name"
+              required
+              maxLength={80}
+              autoComplete="off"
+            />
+            {error ? (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            ) : (
+              <p>A name is required.</p>
+            )}
+            <button type="submit" disabled={pending}>
+              {pending ? "Creating…" : "Create"}
+            </button>
+          </form>
+        </section>
       ) : null}
-    </section>
+    </>
   );
 }
 

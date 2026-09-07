@@ -36,6 +36,7 @@ export type PendingFamilyInvitationViewModel = Readonly<{
 export type FamilyGroupViewModel = Readonly<{
   id: string;
   name: string;
+  memberCount: number;
 }>;
 
 export type PreviewFamilySettingsPanelViewModel = Readonly<{

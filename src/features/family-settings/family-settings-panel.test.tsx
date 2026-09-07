@@ -13,7 +13,7 @@ const model = {
   mode: "preview",
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
-  groups: [{ id: "family", name: "All our days" }],
+  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
   members: [
     {
       id: "current",
@@ -68,7 +68,7 @@ const connectedOrganizerModel = {
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
   canManageAccess: true,
-  groups: [{ id: "family", name: "All our days" }],
+  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
   members: model.members.map((member) => ({
     ...member,
     guardianMembershipIds:
@@ -162,13 +162,15 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Groups" })).toBeVisible();
-    expect(
-      screen.getByText(
-        "Every group you belong to. Anyone here can start another.",
-      ),
-    ).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Your groups" })).toBeVisible();
     expect(screen.getByText("All our days")).toBeVisible();
+    expect(screen.getByText("4 people")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Create a new group" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Starts a separate circle. You’re the organizer."),
+    ).toBeVisible();
     expect(screen.getByLabelText("Group name")).toBeRequired();
     expect(screen.getByRole("button", { name: "Create" })).toBeVisible();
 

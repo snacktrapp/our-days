@@ -151,11 +151,41 @@ export async function loadConnectedFamilyAccess(
   };
 }
 
+export async function loadGroupMemberCounts(
+  circleIds: readonly string[],
+): Promise<ReadonlyMap<string, number>> {
+  const ids = [...new Set(circleIds.filter(Boolean))];
+  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
+  if (ids.length === 0) return counts;
+
+  if (localJournalIsEnabled()) {
+    const { readLocalJournal } = await import("@/lib/local-journal/store");
+    const document = await readLocalJournal();
+    counts.set(document.circle.id, document.people.length);
+    for (const extra of document.extraCircles ?? []) {
+      counts.set(extra.id, 1);
+    }
+    return counts;
+  }
+
+  const supabase = await createOurDaysServerClient();
+  const { data, error } = await supabase
+    .from("people")
+    .select("circle_id")
+    .in("circle_id", ids);
+  if (error) throw error;
+  for (const person of data ?? []) {
+    counts.set(person.circle_id, (counts.get(person.circle_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function buildConnectedFamilySettingsModel(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
   data: FamilyAccessData,
   invitationDeliveryEnabled = false,
+  memberCounts: ReadonlyMap<string, number> = new Map(),
 ): FamilySettingsViewModel {
   const membershipByPerson = new Map(
     data.memberships.map((membership) => [membership.personId, membership]),
@@ -224,10 +254,16 @@ export function buildConnectedFamilySettingsModel(
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: access.personId,
-      groups:
-        context.groups && context.groups.length > 0
-          ? context.groups
-          : [{ id: access.circleId, name: context.circleName }],
+      groups: (context.groups && context.groups.length > 0
+        ? context.groups
+        : [{ id: access.circleId, name: context.circleName }]
+      ).map((group) => ({
+        id: group.id,
+        name: group.name,
+        memberCount:
+          memberCounts.get(group.id) ??
+          (group.id === access.circleId ? data.people.length : 0),
+      })),
       canManageAccess,
       members,
       guardianOptions: canManageAccess

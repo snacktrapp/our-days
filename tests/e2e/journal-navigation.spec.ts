@@ -386,9 +386,14 @@ test("members can create a second group from Account and filter Home without cos
   await page.goto("/settings/family");
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Groups" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Your groups" }),
+  ).toBeVisible();
   await expect(
     page.locator(".groups-section").getByText("All our days"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Create a new group" }),
   ).toBeVisible();
   await page.getByLabel("Group name").fill("Cousins");
   await page.getByRole("button", { name: "Create" }).click();

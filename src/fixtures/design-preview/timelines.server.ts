@@ -637,7 +637,10 @@ export function getFamilySettingsFixture(
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: "brian",
-      groups: previewGroups(options.extraGroup),
+      groups: previewGroups(options.extraGroup).map((group) => ({
+        ...group,
+        memberCount: group.id === previewFamilyId ? 5 : 1,
+      })),
       members: [
         {
           id: "brian",

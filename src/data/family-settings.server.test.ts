@@ -242,7 +242,10 @@ describe("connected family settings data", () => {
       mode: "connected",
       canManageAccess: true,
       invitationDelivery: "disabled",
-      groups: context.groups,
+      groups: (context.groups ?? []).map((group) => ({
+        ...group,
+        memberCount: group.id === organizerAccess.circleId ? 3 : 0,
+      })),
     });
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");
