@@ -638,7 +638,9 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
@@ -719,7 +721,9 @@ describe("MomentComposer", () => {
       expect.any(AbortSignal),
       expect.any(Function),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -770,7 +774,9 @@ describe("MomentComposer", () => {
       ),
     );
     expect(videoInspect.inspect).toHaveBeenCalled();
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
   });
 
   it("rejects HEIC truthfully before a connected upload starts", async () => {
@@ -1051,7 +1057,9 @@ describe("MomentComposer", () => {
         state: "processing",
       }),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 

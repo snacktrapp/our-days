@@ -508,7 +508,7 @@ export function MomentComposer({
       setTaggedPersonIds([]);
       setAudience("family");
       setSelectedCircleIds(
-        defaultPostToCircleIds(postableCircles, model.circleId),
+        defaultPostToCircleIds(model.postableCircles ?? [], model.circleId),
       );
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
