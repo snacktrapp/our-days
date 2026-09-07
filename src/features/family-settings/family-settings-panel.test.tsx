@@ -245,11 +245,19 @@ describe("FamilySettingsPanel", () => {
     };
     render(<FamilySettingsPanel model={twoCircles} />);
 
+    const familyTrigger = screen.getByRole("button", {
+      name: /All our days/u,
+    });
+    expect(familyTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(
+      familyTrigger.querySelector(".circle-accordion-chevron"),
+    ).not.toBeNull();
     expect(screen.queryByText(/Current person/u)).toBeNull();
     expect(
       screen.queryByRole("heading", { name: "Invite into All our days" }),
     ).toBeNull();
     await openFamilyCircle(user);
+    expect(familyTrigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/Current person/u)).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Invite into All our days" }),

@@ -29,6 +29,8 @@ describe("bottom-nav compact CSS contract", () => {
     const compact = ruleBody(".bottom-nav.is-compact");
 
     expect(nav).toMatch(/height:\s*56px;/);
+    expect(nav).toMatch(/display:\s*flex;/);
+    expect(nav).not.toMatch(/repeat\(4/);
     expect(nav).toMatch(/transform-origin:\s*bottom center;/);
     expect(compact).toMatch(/transform:\s*scale\(0\.9\);/);
     expect(compact).not.toMatch(/height\s*:/);

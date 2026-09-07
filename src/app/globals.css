@@ -2349,6 +2349,27 @@ button:focus-visible,
 .circle-accordion-trigger .access-member-copy {
   flex: 1;
 }
+.circle-accordion-chevron {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.circle-accordion-chevron svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+.circle-accordion-trigger[aria-expanded="true"] .circle-accordion-chevron svg {
+  transform: rotate(180deg);
+}
 .circle-accordion-panel {
   border-top: 1px solid var(--hairline);
 }
@@ -4598,8 +4619,8 @@ button:focus-visible,
     calc(430px - 2 * var(--bottom-nav-inline-gap))
   );
   margin-inline: auto;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  justify-content: center;
   align-items: center;
   padding: 3px 8px;
   border: 1px solid var(--hairline);
@@ -4617,6 +4638,8 @@ button:focus-visible,
 }
 
 .nav-item {
+  flex: 1 1 0;
+  min-width: 0;
   height: 54px;
   border: 0;
   background: none;
@@ -8380,7 +8403,8 @@ iframe.composer-location-map {
     transform: none;
   }
 
-  .title-switcher-heading svg {
+  .title-switcher-heading svg,
+  .circle-accordion-chevron svg {
     transition: none;
   }
 
