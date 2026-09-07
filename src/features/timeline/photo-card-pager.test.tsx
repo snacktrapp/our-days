@@ -395,7 +395,9 @@ describe("PhotoCardPager", () => {
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(track()).toHaveAttribute("data-phase", "drag");
       expect(track()).toHaveAttribute("data-dx", "-60");
-      expect((track() as HTMLElement).style.transform).toBe("translateX(-60px)");
+      expect((track() as HTMLElement).style.transform).toBe(
+        "translateX(-60px)",
+      );
 
       fireEvent.pointerUp(pager, {
         pointerId: 2,
