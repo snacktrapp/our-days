@@ -939,11 +939,58 @@ button:focus-visible,
   width: 100%;
   height: auto;
   max-height: var(--timeline-media-max-height);
-  aspect-ratio: auto;
   display: block;
   object-fit: contain;
   object-position: center;
   filter: saturate(0.84) contrast(0.97);
+}
+.photo-frame-sizer {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.photo-frame.has-reserved-frame {
+  max-height: var(--timeline-media-max-height);
+}
+.photo-frame.has-reserved-frame > :not(.photo-frame-sizer) {
+  grid-area: 1 / 1;
+  align-self: stretch;
+  justify-self: stretch;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+.photo-frame.has-reserved-frame .media-viewer-trigger,
+.photo-frame.has-reserved-frame .photo-card-pager,
+.photo-frame.has-reserved-frame .photo-card-pager-stage,
+.photo-frame.has-reserved-frame .photo-card-pager-track,
+.photo-frame.has-reserved-frame .photo-card-pager-frame {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+}
+.photo-frame.has-reserved-frame img,
+.photo-frame.has-reserved-frame video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+.photo-frame:has(.photo-frame-sizer):not(:has(img.is-ready))::before {
+  content: "";
+  grid-area: 1 / 1;
+  z-index: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--cream) 28%, transparent);
+}
+.photo-frame img.is-pending {
+  opacity: 0;
+}
+.photo-frame img.is-ready {
+  opacity: 1;
 }
 .private-photo-unavailable {
   position: relative;
@@ -1098,6 +1145,7 @@ button:focus-visible,
   text-transform: uppercase;
 }
 .soft-actions {
+  min-height: 51px;
   margin-top: 10px;
   padding-top: 6px;
   display: flex;
@@ -1143,6 +1191,16 @@ button:focus-visible,
   margin-top: 11px;
   display: grid;
   gap: 8px;
+}
+.conversation-summary-pending {
+  min-height: 18px;
+}
+.conversation-summary-pending .inline-conversation-wait {
+  display: block;
+  width: 72px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
 }
 .inline-reaction-summary,
 .inline-note-summary {
@@ -4489,6 +4547,33 @@ button:focus-visible,
   font-weight: 300;
   cursor: pointer;
 }
+.route-pending-skeleton {
+  position: relative;
+  min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
+}
+.route-pending-skeleton .time-rail {
+  z-index: 0;
+}
+.route-pending-card {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  width: min(100%, 410px);
+  height: 168px;
+  margin: 18px auto 0;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--cream) 72%, var(--paper));
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.route-pending-card.is-short {
+  height: 92px;
+}
+.route-pending-field {
+  min-height: calc(
+    100dvh - 156px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+  background: transparent;
+}
 .journal-loading {
   min-height: calc(100dvh - 56px - env(safe-area-inset-bottom));
   display: grid;
@@ -5866,6 +5951,11 @@ button:focus-visible,
   z-index: 1;
   background-color: transparent;
   background-image: none;
+}
+
+.phone-stage:has(.route-pending-field),
+.phone-stage:has(.route-pending-field) .route-pending-skeleton {
+  background: transparent;
 }
 
 .theme-toggle {
@@ -8129,9 +8219,16 @@ iframe.composer-location-map {
     transform: scale(calc(0.9 * 0.985));
   }
 
-  .nav-symbol-pending,
-  .title-switcher-link-pending {
-    animation: nav-pending-pulse 900ms ease-in-out infinite;
+  .route-pending-card {
+    animation: route-pending-pulse 1.4s ease-in-out infinite;
+  }
+
+  .photo-frame:has(.photo-frame-sizer):not(:has(img.is-ready))::before {
+    animation: route-pending-pulse 1.4s ease-in-out infinite;
+  }
+
+  .photo-frame img.is-ready {
+    transition: opacity 180ms ease;
   }
 
   .overlay-popover,
@@ -8205,9 +8302,9 @@ iframe.composer-location-map {
   }
 }
 
-@keyframes nav-pending-pulse {
+@keyframes route-pending-pulse {
   50% {
-    opacity: 0.42;
+    opacity: 0.55;
   }
 }
 
@@ -8226,9 +8323,14 @@ iframe.composer-location-map {
     transition: none;
   }
 
-  .nav-symbol-pending,
-  .title-switcher-link-pending {
+  .route-pending-card,
+  .photo-frame img.is-ready {
     animation: none;
+    transition: none;
+  }
+
+  .photo-frame img.is-pending {
+    opacity: 1;
   }
 
   .overlay-popover,

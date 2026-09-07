@@ -217,7 +217,74 @@ describe("MomentCard timeline media", () => {
     const image = screen.getByRole("img", { name: "Evening on the porch" });
     expect(image).toHaveAttribute("width", "1200");
     expect(image).toHaveAttribute("height", "801");
-    expect(image.closest(".photo-frame")).not.toBeNull();
+    const frame = image.closest(".photo-frame");
+    expect(frame).toHaveClass("has-known-ratio", "has-reserved-frame");
+    const sizer = frame?.querySelector(".photo-frame-sizer");
+    expect(sizer).toHaveAttribute("viewBox", "0 0 1200 801");
+    expect(frame?.firstElementChild).toBe(sizer);
+  });
+
+  it("reserves the photo frame above conversation chrome before pixels arrive", () => {
+    const { container } = render(
+      <MomentCard
+        interaction={interaction}
+        conversationActions={conversationActions()}
+        moment={{
+          ...thought,
+          id: "pending-photo",
+          kind: "photo",
+          kicker: "A photo",
+          conversation: {
+            notes: [
+              {
+                id: "note-1",
+                authorName: "Molly",
+                authorInitial: "M",
+                authorAccent: "clay",
+                body: "The quiet ride home.",
+                displayDate: "Aug 29, 2026",
+              },
+            ],
+            reactions: [
+              {
+                id: "reaction-1",
+                personName: "Molly",
+                personInitial: "M",
+                personAccent: "clay",
+                reactionId: "held-close",
+              },
+            ],
+          },
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Evening on the porch",
+            badgeLabel: "AUG 28",
+            width: 1200,
+            height: 801,
+          },
+        }}
+      />,
+    );
+
+    const card = container.querySelector(".photo-card");
+    const frame = card?.querySelector(".photo-frame");
+    const copy = card?.querySelector(".card-copy");
+    const conversation = card?.querySelector(".inline-conversation");
+    expect(frame).toHaveClass("has-reserved-frame");
+    expect(frame?.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 1200 801",
+    );
+    expect(copy?.contains(conversation ?? null)).toBe(true);
+    expect(frame?.compareDocumentPosition(copy!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("Molly");
+    expect(
+      screen.getByRole("list", { name: "Notes from family" }),
+    ).toHaveTextContent("The quiet ride home.");
   });
 
   it("pages a multi-photo card without opening the lightbox", async () => {

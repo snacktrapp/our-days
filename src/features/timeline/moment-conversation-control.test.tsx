@@ -525,14 +525,29 @@ describe("MomentConversationControl", () => {
     ).not.toHaveTextContent("Brian");
   });
 
-  it("loads connected comments without waiting for a reaction tap", async () => {
+  it("renders feed-payload comments on first paint without a follow-up load", () => {
     const actions = connectedActions(initialConversation);
+    renderControl(actions, initialConversation);
+
+    expect(
+      screen.getByRole("list", { name: "Notes from family" }),
+    ).toHaveTextContent("The quiet ride home was my favorite part.");
+    expect(
+      screen.getByRole("list", { name: "Family responses" }),
+    ).toHaveTextContent("❤️Molly");
+    expect(actions.load).not.toHaveBeenCalled();
+  });
+
+  it("keeps a quiet post short when the payload has no conversation", () => {
+    const actions = connectedActions({ notes: [], reactions: [] });
     renderControl(actions, { notes: [], reactions: [] });
 
     expect(
-      await screen.findByRole("list", { name: "Notes from family" }),
-    ).toHaveTextContent("The quiet ride home was my favorite part.");
-    expect(actions.load).toHaveBeenCalledWith({ momentId: "moment-one" });
+      screen.queryByRole("list", { name: "Notes from family" }),
+    ).toBeNull();
+    expect(screen.queryByRole("list", { name: "Family responses" })).toBeNull();
+    expect(document.querySelector(".conversation-summary-pending")).toBeNull();
+    expect(actions.load).not.toHaveBeenCalled();
   });
 
   it("opens a compact note field inline with only Cancel and Save", async () => {
@@ -580,9 +595,7 @@ describe("MomentConversationControl", () => {
       reactions: [],
     } as const satisfies MomentConversationViewModel;
     const actions = connectedActions(empty);
-    actions.load
-      .mockResolvedValueOnce({ ok: true, conversation: empty })
-      .mockResolvedValueOnce({ ok: true, conversation: saved });
+    actions.load.mockResolvedValue({ ok: true, conversation: saved });
     const user = userEvent.setup();
     renderControl(actions, empty);
 
@@ -655,9 +668,7 @@ describe("MomentConversationControl", () => {
       notes: [{ ...owned.notes[0], body: "Updated note.", revision: 4 }],
     } as const satisfies MomentConversationViewModel;
     const actions = connectedActions(owned);
-    actions.load
-      .mockResolvedValueOnce({ ok: true, conversation: owned })
-      .mockResolvedValue({ ok: true, conversation: updated });
+    actions.load.mockResolvedValue({ ok: true, conversation: updated });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const user = userEvent.setup();
     renderControl(actions, owned);

@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
@@ -13,6 +15,12 @@ import {
   StaticJournalTitle,
   type FamilyTimelineSwitcherItem,
 } from "./family-title-switcher";
+import {
+  JournalPendingRouteProvider,
+  RoutePendingSkeleton,
+  pendingChromeModel,
+  usePendingJournalRoute,
+} from "./journal-pending-route";
 import type {
   JournalSection,
   JournalChromeViewModel,
@@ -77,6 +85,55 @@ function TrashHeader({ model }: Readonly<{ model: JournalChromeViewModel }>) {
   );
 }
 
+function JournalStage({
+  model,
+  section,
+  children,
+  createMomentAction,
+  switcher,
+}: JournalChromeProps) {
+  const pendingRoute = usePendingJournalRoute();
+  const pending = pendingRoute?.pending ?? null;
+  const chromeModel = pendingChromeModel(model, pending);
+  const header =
+    section === "trash" ? (
+      <TrashHeader model={chromeModel} />
+    ) : (
+      <PrimaryJournalHeader
+        model={chromeModel}
+        createMomentAction={createMomentAction}
+        switcher={switcher}
+      />
+    );
+
+  return (
+    <>
+      {header}
+      {model.composer.circleId ? (
+        <PhotoStatusShelf circleId={model.composer.circleId} />
+      ) : null}
+      <main className={`app-shell theme-${model.accent}`}>
+        <div className="ambient ambient-one" />
+        <div className="ambient ambient-two" />
+        <section className="phone-stage" aria-label="Family journal">
+          <p
+            id="journal-live-region"
+            className="sr-only"
+            aria-live="assertive"
+            aria-atomic="true"
+          />
+          {pending ? <RoutePendingSkeleton kind={pending.kind} /> : children}
+        </section>
+      </main>
+      <PrimaryNavigation
+        section={section}
+        memoriesHref={model.memoriesHref}
+        settingsHref={model.settingsHref}
+      />
+    </>
+  );
+}
+
 export function JournalChrome({
   model,
   section,
@@ -84,45 +141,22 @@ export function JournalChrome({
   createMomentAction,
   switcher,
 }: JournalChromeProps) {
-  const header =
-    section === "trash" ? (
-      <TrashHeader model={model} />
-    ) : (
-      <PrimaryJournalHeader
-        model={model}
-        createMomentAction={createMomentAction}
-        switcher={switcher}
-      />
-    );
-
   return (
     <ComposerSessionProvider
       model={model.composer}
       createMomentAction={createMomentAction}
     >
       <PhotoLightboxRoot>
-        {header}
-        {model.composer.circleId ? (
-          <PhotoStatusShelf circleId={model.composer.circleId} />
-        ) : null}
-        <main className={`app-shell theme-${model.accent}`}>
-          <div className="ambient ambient-one" />
-          <div className="ambient ambient-two" />
-          <section className="phone-stage" aria-label="Family journal">
-            <p
-              id="journal-live-region"
-              className="sr-only"
-              aria-live="assertive"
-              aria-atomic="true"
-            />
+        <JournalPendingRouteProvider>
+          <JournalStage
+            model={model}
+            section={section}
+            createMomentAction={createMomentAction}
+            switcher={switcher}
+          >
             {children}
-          </section>
-        </main>
-        <PrimaryNavigation
-          section={section}
-          memoriesHref={model.memoriesHref}
-          settingsHref={model.settingsHref}
-        />
+          </JournalStage>
+        </JournalPendingRouteProvider>
       </PhotoLightboxRoot>
     </ComposerSessionProvider>
   );

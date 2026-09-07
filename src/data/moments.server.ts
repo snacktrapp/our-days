@@ -1,6 +1,8 @@
 import "server-only";
 
 import type {
+  MomentConversationViewModel,
+  MomentReactionId,
   TimelineEntryViewModel,
   TimelineMomentViewModel,
   TimelineViewModel,
@@ -56,6 +58,8 @@ export type TimelineRow = Omit<
   tagged_people?: unknown;
 };
 
+type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
+
 const pageSize = 20;
 const maximumCumulativePages = 25;
 
@@ -78,6 +82,156 @@ function formatPreciseTime(value: string, timeZone: string | null) {
   }).format(new Date(value));
 }
 
+// Closed timeline rows use conversation: { notes: [], reactions: [] }
+// until an authorized batch read attaches note and reaction bodies.
+const emptyConversation: MomentConversationViewModel = {
+  notes: [],
+  reactions: [],
+};
+
+const knownReactionIds = new Set<MomentReactionId>([
+  "held-close",
+  "made-me-smile",
+  "remember-this",
+]);
+
+function displayConversationDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function conversationAuthorInitial(name: string) {
+  return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
+}
+
+export async function loadMomentConversationsByMomentId(
+  supabase: MomentPhotoClient,
+  access: Readonly<{ circleId: string; membershipId: string }>,
+  momentIds: readonly string[],
+): Promise<Map<string, MomentConversationViewModel>> {
+  const conversations = new Map<string, MomentConversationViewModel>();
+  const uniqueIds = [...new Set(momentIds.filter(Boolean))];
+  for (const id of uniqueIds) {
+    conversations.set(id, emptyConversation);
+  }
+  if (uniqueIds.length === 0 || typeof supabase.from !== "function") {
+    return conversations;
+  }
+
+  const [notesResult, reactionsResult] = await Promise.all([
+    supabase
+      .from("moment_notes")
+      .select("id, moment_id, author_membership_id, body, revision, created_at")
+      .in("moment_id", uniqueIds)
+      .is("trashed_at", null)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("moment_reactions")
+      .select("id, moment_id, author_membership_id, reaction_type, created_at")
+      .in("moment_id", uniqueIds)
+      .is("removed_at", null)
+      .order("created_at", { ascending: true }),
+  ]);
+  const notes = notesResult.data ?? [];
+  const reactions = reactionsResult.data ?? [];
+  const membershipIds = [
+    ...new Set([...notes, ...reactions].map((row) => row.author_membership_id)),
+  ];
+  if (membershipIds.length === 0) return conversations;
+
+  const membershipsResult = await supabase
+    .from("circle_memberships")
+    .select("id, person_id")
+    .eq("circle_id", access.circleId)
+    .in("id", membershipIds);
+  const memberships = membershipsResult.data ?? [];
+  const personIds = [...new Set(memberships.map((row) => row.person_id))];
+  const peopleResult =
+    personIds.length === 0
+      ? {
+          data: [] as {
+            id: string;
+            display_name: string;
+            accent_token: string;
+          }[],
+        }
+      : await supabase
+          .from("people")
+          .select("id, display_name, accent_token")
+          .eq("circle_id", access.circleId)
+          .in("id", personIds);
+  const personById = new Map(
+    (peopleResult.data ?? []).map((person) => [person.id, person]),
+  );
+  const authorByMembership = new Map(
+    memberships.map((membership) => {
+      const person = personById.get(membership.person_id);
+      return [
+        membership.id,
+        {
+          name: person?.display_name ?? "Family",
+          accent: mapDatabaseAccent(person?.accent_token ?? "slate"),
+        },
+      ] as const;
+    }),
+  );
+
+  const notesByMoment = new Map<
+    string,
+    MomentConversationViewModel["notes"][number][]
+  >();
+  for (const note of notes) {
+    const author = authorByMembership.get(note.author_membership_id);
+    const authorName = author?.name ?? "Family";
+    const list = notesByMoment.get(note.moment_id) ?? [];
+    list.push({
+      id: note.id,
+      authorName,
+      authorInitial: conversationAuthorInitial(authorName),
+      authorAccent: author?.accent ?? "slate",
+      body: note.body,
+      displayDate: displayConversationDate(note.created_at),
+      revision: note.revision,
+      canChange: note.author_membership_id === access.membershipId,
+    });
+    notesByMoment.set(note.moment_id, list);
+  }
+
+  const reactionsByMoment = new Map<
+    string,
+    MomentConversationViewModel["reactions"][number][]
+  >();
+  for (const reaction of reactions) {
+    if (!knownReactionIds.has(reaction.reaction_type as MomentReactionId)) {
+      continue;
+    }
+    const author = authorByMembership.get(reaction.author_membership_id);
+    const personName = author?.name ?? "Family";
+    const list = reactionsByMoment.get(reaction.moment_id) ?? [];
+    list.push({
+      id: reaction.id,
+      personName,
+      personInitial: conversationAuthorInitial(personName),
+      personAccent: author?.accent ?? "slate",
+      reactionId: reaction.reaction_type as MomentReactionId,
+      isCurrentMember: reaction.author_membership_id === access.membershipId,
+    });
+    reactionsByMoment.set(reaction.moment_id, list);
+  }
+
+  for (const id of uniqueIds) {
+    conversations.set(id, {
+      notes: notesByMoment.get(id) ?? [],
+      reactions: reactionsByMoment.get(id) ?? [],
+    });
+  }
+  return conversations;
+}
+
 export function mapTimelineRow(
   row: TimelineRow,
   today: string,
@@ -86,6 +240,7 @@ export function mapTimelineRow(
     viewingJournalPersonId?: string;
   }>,
   photos?: readonly MomentPhotoDescriptor[],
+  conversation: MomentConversationViewModel = emptyConversation,
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
   const taggedPeople = Array.isArray(row.tagged_people)
@@ -140,7 +295,7 @@ export function mapTimelineRow(
                   : "A thought"
           : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
-    conversation: { notes: [], reactions: [] },
+    conversation,
     canChange: row.can_change,
     revision: row.revision,
     editOccurrence: {
@@ -283,8 +438,6 @@ export function requestedSnapshot(value: string | undefined) {
   return value;
 }
 
-type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
-
 export async function loadMomentPhotosByMomentId(
   supabase: MomentPhotoClient,
   momentIds: readonly string[],
@@ -398,6 +551,11 @@ export async function loadConnectedTimeline(
     supabase,
     photoMomentIds,
   );
+  const conversationsByMoment = await loadMomentConversationsByMomentId(
+    supabase,
+    access,
+    rows.map((row) => row.moment_id),
+  );
   const moments = rows.map((row) =>
     mapTimelineRow(
       row,
@@ -407,6 +565,7 @@ export async function loadConnectedTimeline(
         viewingJournalPersonId: options.journalPersonId,
       },
       photosByMoment.get(row.moment_id),
+      conversationsByMoment.get(row.moment_id) ?? emptyConversation,
     ),
   );
   const personalJournalIsWritable = Boolean(
