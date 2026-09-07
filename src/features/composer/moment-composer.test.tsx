@@ -1112,7 +1112,16 @@ describe("MomentComposer", () => {
       "activity-sheet",
     );
     expect(editor.querySelector(".sheet-handle")).not.toBeNull();
+    expect(editor.querySelector(".activity-sheet-chrome")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Choose another/u }),
+    ).toBeNull();
+    expect(editor.querySelector(".composer-editor-header")).toBeNull();
+    expect(editor.querySelector(".composer-back")).toBeNull();
+    expect(
+      editor.querySelector(".composer-fullscreen-form > .private-label"),
+    ).toBeNull();
   });
 
   it("dismisses the composer sheet with Done and a reverse sheet motion", async () => {
@@ -1610,7 +1619,7 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
-  it("preserves a draft while choosing and confirms an incompatible type change", async () => {
+  it("has no in-sheet type switcher; wrong type is Done then + again", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
@@ -1618,23 +1627,25 @@ describe("MomentComposer", () => {
       screen.getByRole("textbox", { name: "Entry" }),
       "Keep this",
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    expect(screen.getByText("Your current draft is still here.")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Choose another/u }),
+    ).toBeNull();
+    expect(document.querySelector(".composer-editor-header")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("textbox", { name: "Entry" })).toHaveValue(
       "Keep this",
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this draft and choose another type?",
-    );
-    expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
     confirm.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await finishSheetClose();
+
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
     expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Entry" })).toBeNull();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1806,7 +1817,7 @@ describe("MomentComposer", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
   });
 
-  it("revokes a photo exactly once when an accepted type change discards it", async () => {
+  it("revokes a photo exactly once when Done discards the draft", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /^Photo/u }));
@@ -1814,15 +1825,12 @@ describe("MomentComposer", () => {
       screen.getByLabelText(/Choose photo/u),
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    await user.click(screen.getByRole("button", { name: "Done" }));
 
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this draft and choose another type?",
-    );
+    expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
+    await finishSheetClose();
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
   it.each([["Written entry", "Entry", "Write a thought"]])(

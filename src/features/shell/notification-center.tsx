@@ -205,19 +205,21 @@ export function NotificationCenter({
         onPointerUp={dismissGesture.onPointerUp}
         onPointerCancel={dismissGesture.onPointerCancel}
       >
-        <span className="sheet-handle" aria-hidden="true" />
-        <header className="activity-sheet-bar">
-          <h2 ref={headingRef} id={titleId} tabIndex={-1}>
-            Activity
-          </h2>
-          <button
-            className="sheet-close activity-sheet-done"
-            type="button"
-            onClick={closePanel}
-          >
-            Done
-          </button>
-        </header>
+        <div className="activity-sheet-chrome">
+          <span className="sheet-handle" aria-hidden="true" />
+          <header className="activity-sheet-bar">
+            <h2 ref={headingRef} id={titleId} tabIndex={-1}>
+              Activity
+            </h2>
+            <button
+              className="sheet-close activity-sheet-done"
+              type="button"
+              onClick={closePanel}
+            >
+              Done
+            </button>
+          </header>
+        </div>
         <div
           ref={scrollerRef}
           className="activity-sheet-list"

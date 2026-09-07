@@ -237,16 +237,25 @@ async function expectComposerMatchesActivitySheet(page: Page) {
   await expect(sheet.locator(".sheet-handle")).toBeVisible();
   await expect(picker.getByRole("button", { name: "Done" })).toBeVisible();
   const geometry = await sheet.evaluate((element) => {
+    const handle = element.querySelector(".sheet-handle");
+    if (!(handle instanceof HTMLElement)) {
+      throw new Error("Composer sheet is missing a grab handle.");
+    }
     const rect = element.getBoundingClientRect();
+    const handleRect = handle.getBoundingClientRect();
     const style = getComputedStyle(element);
     return {
       height: rect.height,
       radius: style.borderTopLeftRadius,
       bottomRadius: style.borderBottomLeftRadius,
+      sheetTop: rect.top,
+      handleTop: handleRect.top,
       viewport: window.innerHeight,
     };
   });
   expect(geometry.height).toBeGreaterThan(geometry.viewport * 0.6);
+  expect(geometry.sheetTop).toBeGreaterThanOrEqual(20);
+  expect(geometry.handleTop).toBeGreaterThanOrEqual(geometry.sheetTop);
   expect(Number.parseFloat(geometry.radius)).toBeGreaterThanOrEqual(14);
   expect(Number.parseFloat(geometry.bottomRadius)).toBe(0);
   const themeColor = await page

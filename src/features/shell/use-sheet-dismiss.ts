@@ -60,7 +60,9 @@ export function useSheetDismiss({
       if (!(target instanceof Element)) return;
       if (target.closest("button, input, textarea, select")) return;
       const fromHandle = Boolean(
-        target.closest(".sheet-handle, .activity-sheet-bar"),
+        target.closest(
+          ".sheet-handle, .activity-sheet-bar, .activity-sheet-chrome",
+        ),
       );
       const scrollTop = scrollerRef.current?.scrollTop ?? 0;
       if (!canStartSheetDismiss(scrollTop, fromHandle)) return;

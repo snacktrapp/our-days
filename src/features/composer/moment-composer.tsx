@@ -1231,30 +1231,32 @@ export function MomentComposer({
       onPointerUp={dismissGesture.onPointerUp}
       onPointerCancel={dismissGesture.onPointerCancel}
     >
-      <span className="sheet-handle" aria-hidden="true" />
-      <header className="activity-sheet-bar">
-        <h2
-          ref={
-            reviewing
-              ? reviewHeadingRef
-              : !mode || choosingMode
-                ? chooserHeadingRef
-                : editorHeadingRef
-          }
-          id="composer-title"
-          tabIndex={-1}
-        >
-          {sheetTitle}
-        </h2>
-        <button
-          className="sheet-close activity-sheet-done"
-          type="button"
-          disabled={saving}
-          onClick={() => close()}
-        >
-          Done
-        </button>
-      </header>
+      <div className="activity-sheet-chrome">
+        <span className="sheet-handle" aria-hidden="true" />
+        <header className="activity-sheet-bar">
+          <h2
+            ref={
+              reviewing
+                ? reviewHeadingRef
+                : !mode || choosingMode
+                  ? chooserHeadingRef
+                  : editorHeadingRef
+            }
+            id="composer-title"
+            tabIndex={-1}
+          >
+            {sheetTitle}
+          </h2>
+          <button
+            className="sheet-close activity-sheet-done"
+            type="button"
+            disabled={saving}
+            onClick={() => close()}
+          >
+            Done
+          </button>
+        </header>
+      </div>
       <div
         ref={chooserSurface ? scrollerRef : undefined}
         className="composer-sheet-body"
@@ -1465,21 +1467,6 @@ export function MomentComposer({
               void submitDraft();
             }}
           >
-            <header className="composer-editor-header">
-              {editDraft ? null : (
-                <button
-                  className="composer-back"
-                  type="button"
-                  onClick={() => setChoosingMode(true)}
-                >
-                  ← Choose another
-                </button>
-              )}
-              <span id="composer-privacy" className="private-label">
-                {copy.title}
-              </span>
-            </header>
-
             <div
               ref={chooserSurface ? undefined : scrollerRef}
               className="composer-editor-scroll"
@@ -1998,7 +1985,11 @@ export function MomentComposer({
         typePicker ? " composer-type-picker" : ""
       }${mode && !choosingMode && !reviewing ? " composer-editor-open" : ""}`}
       aria-labelledby="composer-title"
-      aria-describedby={connectedExperience ? "composer-privacy" : undefined}
+      aria-describedby={
+        connectedExperience && (typePicker || reviewing)
+          ? "composer-privacy"
+          : undefined
+      }
       aria-hidden={overlayClosing ? true : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") {

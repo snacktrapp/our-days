@@ -366,15 +366,26 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   });
   await expect(overlaySheet).toHaveCSS("transform", "none");
   const chooserGeometry = await overlaySheet.evaluate((element) => {
+    const handle = element.querySelector(".sheet-handle");
+    if (!(handle instanceof HTMLElement)) {
+      throw new Error("Composer sheet is missing a grab handle.");
+    }
     const rect = element.getBoundingClientRect();
+    const handleRect = handle.getBoundingClientRect();
     return {
       height: rect.height,
       radius: getComputedStyle(element).borderTopLeftRadius,
+      sheetTop: rect.top,
+      handleTop: handleRect.top,
       viewport: window.innerHeight,
     };
   });
   expect(chooserGeometry.height).toBeGreaterThan(
     chooserGeometry.viewport * 0.6,
+  );
+  expect(chooserGeometry.sheetTop).toBeGreaterThanOrEqual(20);
+  expect(chooserGeometry.handleTop).toBeGreaterThanOrEqual(
+    chooserGeometry.sheetTop,
   );
   expect(Number.parseFloat(chooserGeometry.radius)).toBeGreaterThanOrEqual(14);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
@@ -406,6 +417,10 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   );
   await expect(overlaySheet).toHaveClass(/activity-sheet/u);
   await expect(dialog.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: /Choose another/u }),
+  ).toHaveCount(0);
+  await expect(dialog.locator(".composer-editor-header")).toHaveCount(0);
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
