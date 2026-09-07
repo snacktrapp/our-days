@@ -1,5 +1,6 @@
 import { type ComponentProps, useRef, useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { sheetDismissThresholdPx } from "@/features/shell/use-sheet-dismiss";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -193,6 +194,34 @@ async function openComposer() {
   return user;
 }
 
+async function finishSheetClose() {
+  await waitFor(() => {
+    expect(document.querySelector(".new-moment-composer-dialog")).toBeNull();
+  });
+}
+
+function swipeComposerClosed() {
+  const handle = document.querySelector(
+    ".new-moment-composer-dialog .sheet-handle",
+  );
+  const sheet = document.querySelector(
+    ".new-moment-composer-dialog .activity-sheet",
+  ) as HTMLElement | null;
+  expect(handle).not.toBeNull();
+  expect(sheet).not.toBeNull();
+  fireEvent.pointerDown(handle!, { pointerId: 1, clientX: 40, clientY: 20 });
+  fireEvent.pointerMove(sheet!, {
+    pointerId: 1,
+    clientX: 40,
+    clientY: 20 + sheetDismissThresholdPx,
+  });
+  fireEvent.pointerUp(sheet!, {
+    pointerId: 1,
+    clientX: 40,
+    clientY: 20 + sheetDismissThresholdPx,
+  });
+}
+
 async function setComposerTime(
   user: ReturnType<typeof userEvent.setup>,
   hour: string,
@@ -302,10 +331,9 @@ describe("MomentComposer", () => {
       screen.getByRole("button", { name: `Time, ${expectedLabel}` }),
     ).toBeVisible();
     expect(screen.getByText("Time")).not.toHaveTextContent("Optional");
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    swipeComposerClosed();
     expect(confirm).not.toHaveBeenCalled();
+    await finishSheetClose();
 
     await user.click(
       screen.getByRole("button", { name: "Open connected family composer" }),
@@ -316,9 +344,7 @@ describe("MomentComposer", () => {
         name: `Time, ${formatPickerTimeLabel(currentPickerTimeValue())}`,
       }),
     ).toBeVisible();
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    swipeComposerClosed();
     expect(confirm).not.toHaveBeenCalled();
   });
 
@@ -1033,33 +1059,37 @@ describe("MomentComposer", () => {
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 
-  it("closes the type picker from a document press outside the sheet", async () => {
+  it("closes the type picker from a press on the dialog scrim", async () => {
     await openComposer();
-    expect(screen.getByRole("dialog")).toHaveClass("composer-type-picker");
-    fireEvent.pointerDown(document.body);
-    const dialog = document.querySelector(".new-moment-composer-dialog");
-    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
+    const dialog = screen.getByRole("dialog", { name: "New moment" });
+    expect(dialog).toHaveClass("composer-type-picker");
+    fireEvent.click(dialog);
+    expect(dialog.querySelector(".composer-sheet")).toHaveClass("is-closing");
   });
 
-  it("portals the type picker onto document.body as a popover, not a themed dialog", async () => {
+  it("portals the type picker onto document.body as a tall Activity sheet", async () => {
     await openComposer();
-    const picker = screen.getByRole("dialog");
-    expect(picker.tagName).toBe("DIV");
+    const picker = screen.getByRole("dialog", { name: "New moment" });
+    expect(picker.tagName).toBe("DIALOG");
     expect(picker).toHaveClass("composer-type-picker");
     expect(picker).toHaveClass("new-moment-composer-dialog");
-    expect(picker).not.toHaveClass("composer-dialog");
+    expect(picker).toHaveClass("composer-dialog");
+    expect(picker.querySelector(".activity-sheet")).toHaveClass(
+      "composer-sheet",
+    );
+    expect(picker.querySelector(".sheet-handle")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(picker.parentElement).toBe(document.body);
     expect(picker.closest(".topbar")).toBeNull();
     expect(picker.closest(".app-shell")).toBeNull();
     expect(picker.closest(".bottom-nav")).toBeNull();
   });
 
-  it("opens the type picker without a modal top layer, locks body scroll, and restores focus", async () => {
+  it("opens the type picker as a modal sheet, locks body scroll, and restores focus", async () => {
     const user = await openComposer();
-    expect(screen.getByRole("dialog")).toBeVisible();
-    expect(screen.getByRole("dialog")).toHaveClass(
-      "new-moment-composer-dialog",
-    );
+    const dialog = screen.getByRole("dialog", { name: "New moment" });
+    expect(dialog).toBeVisible();
+    expect(dialog).toHaveClass("composer-dialog");
     expect(
       screen.queryByText(/Local design preview · Nothing is saved/u),
     ).toBeNull();
@@ -1067,10 +1097,13 @@ describe("MomentComposer", () => {
     expect(document.body).toHaveClass("composer-scroll-locked");
     expect(document.documentElement).toHaveClass("composer-scroll-locked");
 
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
+    swipeComposerClosed();
+    expect(document.querySelector(".activity-sheet")).toHaveClass("is-closing");
+    expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
+      "aria-hidden",
+      "true",
     );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await finishSheetClose();
     expect(screen.getByRole("button", { name: "Open composer" })).toHaveFocus();
     await waitFor(() => {
       expect(document.body).not.toHaveClass("composer-scroll-locked");
@@ -1080,35 +1113,109 @@ describe("MomentComposer", () => {
     });
   });
 
-  it("pops the type-selection window and rises the composer after a type is chosen", async () => {
+  it("keeps type selection and the editor on the same tall sheet", async () => {
     const user = await openComposer();
-    const picker = screen.getByRole("dialog");
+    const picker = screen.getByRole("dialog", { name: "New moment" });
     const chooser = picker.querySelector(".composer-sheet");
-    expect(picker.tagName).toBe("DIV");
-    expect(picker).not.toHaveClass("composer-editor-fullscreen");
+    expect(picker.tagName).toBe("DIALOG");
+    expect(picker).not.toHaveClass("composer-editor-open");
     expect(picker).toHaveClass("composer-type-picker");
-    expect(chooser).toHaveClass("overlay-popover");
+    expect(chooser).toHaveClass("activity-sheet");
+    expect(chooser).not.toHaveClass("overlay-popover");
     expect(chooser).not.toHaveClass("is-closing");
 
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
-    const editor = screen.getByRole("dialog");
+    const editor = screen.getByRole("dialog", { name: "New written entry" });
     expect(editor.tagName).toBe("DIALOG");
-    expect(editor).toHaveClass("composer-editor-fullscreen");
+    expect(editor).toHaveClass("composer-editor-open");
     expect(editor).toHaveClass("composer-dialog");
     expect(editor).not.toHaveClass("composer-type-picker");
-    expect(editor.querySelector(".composer-sheet")).not.toHaveClass(
-      "overlay-popover",
+    expect(editor.querySelector(".composer-sheet")).toHaveClass(
+      "activity-sheet",
+    );
+    expect(editor.querySelector(".sheet-handle")).not.toBeNull();
+    expect(editor.querySelector(".activity-sheet-chrome")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Choose another/u }),
+    ).toBeNull();
+    expect(editor.querySelector(".composer-editor-header")).toBeNull();
+    expect(editor.querySelector(".composer-back")).toBeNull();
+    expect(
+      editor.querySelector(".composer-fullscreen-form > .private-label"),
+    ).toBeNull();
+  });
+
+  it.each([
+    ["Written entry", "New written entry"],
+    ["Photo or video", "New photo entry"],
+    ["Bible verse", "Add a Bible verse"],
+  ] as const)(
+    "drops Choose another and the type kicker in the %s editor",
+    async (choice, title) => {
+      const user = await openComposer();
+      await user.click(
+        screen.getByRole("button", { name: new RegExp(choice) }),
+      );
+      const editor = screen.getByRole("dialog", { name: title });
+      expect(screen.getByRole("heading", { name: title })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+      expect(editor.querySelector(".sheet-handle")).not.toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Choose another/u }),
+      ).toBeNull();
+      expect(editor.querySelector(".composer-editor-header")).toBeNull();
+      expect(editor.querySelector(".composer-back")).toBeNull();
+      expect(
+        editor.querySelector(".composer-fullscreen-form .private-label"),
+      ).toBeNull();
+      expect(editor.textContent).not.toMatch(/←\s*Choose another/u);
+    },
+  );
+
+  it("dismisses the composer sheet with a handle swipe and reverse sheet motion", async () => {
+    await openComposer();
+    swipeComposerClosed();
+    const dialog = document.querySelector(".new-moment-composer-dialog");
+    expect(dialog?.querySelector(".activity-sheet")).toHaveClass("is-closing");
+    expect(dialog).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("dismisses the composer sheet when dragged down from the handle", async () => {
+    await openComposer();
+    const handle = document.querySelector(".sheet-handle");
+    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
+    expect(handle).not.toBeNull();
+    fireEvent.pointerDown(handle!, { pointerId: 1, clientX: 40, clientY: 20 });
+    fireEvent.pointerMove(sheet, {
+      pointerId: 1,
+      clientX: 40,
+      clientY: 20 + sheetDismissThresholdPx,
+    });
+    fireEvent.pointerUp(sheet, {
+      pointerId: 1,
+      clientX: 40,
+      clientY: 20 + sheetDismissThresholdPx,
+    });
+    expect(sheet).toHaveClass("is-closing");
+    expect(sheet.style.getPropertyValue("--activity-sheet-drag")).toBe(
+      `${sheetDismissThresholdPx}px`,
     );
   });
 
-  it("dismisses the type-selection window with a reverse pop", async () => {
-    const user = await openComposer();
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
-    const dialog = document.querySelector(".new-moment-composer-dialog");
-    expect(dialog?.querySelector(".composer-sheet")).toHaveClass("is-closing");
-    expect(dialog).toHaveAttribute("aria-hidden", "true");
+  it("keeps a cancelled drag from restarting open motion", async () => {
+    await openComposer();
+    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
+    fireEvent.pointerDown(sheet, { pointerId: 2, clientX: 40, clientY: 20 });
+    fireEvent.pointerMove(sheet, {
+      pointerId: 2,
+      clientX: 40,
+      clientY: 40,
+    });
+    fireEvent.pointerUp(sheet, { pointerId: 2, clientX: 40, clientY: 40 });
+    expect(sheet).not.toHaveClass("is-closing");
+    expect(sheet).not.toHaveClass("is-dragging");
+    expect(sheet.style.getPropertyValue("--activity-sheet-drag")).toBe("");
   });
 
   it("dismisses the type-selection window instantly when motion is reduced", async () => {
@@ -1124,10 +1231,8 @@ describe("MomentComposer", () => {
       dispatchEvent: vi.fn(),
     }));
     try {
-      const user = await openComposer();
-      await user.click(
-        screen.getByRole("button", { name: "Close moment composer" }),
-      );
+      await openComposer();
+      swipeComposerClosed();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     } finally {
       media.mockImplementation((query: string) => ({
@@ -1563,7 +1668,7 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
-  it("preserves a draft while choosing and confirms an incompatible type change", async () => {
+  it("has no in-sheet type switcher; wrong type is swipe dismiss then + again", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
@@ -1571,23 +1676,25 @@ describe("MomentComposer", () => {
       screen.getByRole("textbox", { name: "Entry" }),
       "Keep this",
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    expect(screen.getByText("Your current draft is still here.")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Choose another/u }),
+    ).toBeNull();
+    expect(document.querySelector(".composer-editor-header")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    swipeComposerClosed();
+    expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("textbox", { name: "Entry" })).toHaveValue(
       "Keep this",
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this draft and choose another type?",
-    );
-    expect(screen.getByText("Your current draft is still here.")).toBeVisible();
 
     confirm.mockReturnValue(true);
+    swipeComposerClosed();
+    await finishSheetClose();
+
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
     expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Entry" })).toBeNull();
   });
 
   it("validates image files before creating private temporary URLs", async () => {
@@ -1721,16 +1828,13 @@ describe("MomentComposer", () => {
     input = screen.getByLabelText(/Choose photo/u);
     await user.upload(input, first);
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    swipeComposerClosed();
     expect(revokeObjectURL).toHaveBeenCalledTimes(2);
     expect(screen.getByAltText("Selected photo preview")).toBeVisible();
 
     confirm.mockReturnValue(true);
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    swipeComposerClosed();
+    await finishSheetClose();
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       3,
       "blob:composer-preview-3",
@@ -1762,7 +1866,7 @@ describe("MomentComposer", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
   });
 
-  it("revokes a photo exactly once when an accepted type change discards it", async () => {
+  it("revokes a photo exactly once when swipe dismiss discards the draft", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: /^Photo/u }));
@@ -1770,15 +1874,12 @@ describe("MomentComposer", () => {
       screen.getByLabelText(/Choose photo/u),
       new File(["photo"], "private.jpg", { type: "image/jpeg" }),
     );
-    await user.click(screen.getByRole("button", { name: /Choose another/ }));
-    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    swipeComposerClosed();
 
-    expect(confirm).toHaveBeenCalledWith(
-      "Discard this draft and choose another type?",
-    );
+    expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
+    await finishSheetClose();
     expect(revokeObjectURL).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:composer-preview-1");
-    expect(screen.getByRole("button", { name: /^Book,/u })).toBeVisible();
   });
 
   it.each([["Written entry", "Entry", "Write a thought"]])(
@@ -1852,9 +1953,7 @@ describe("MomentComposer", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await mutate(user);
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    swipeComposerClosed();
     expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("dialog")).toBeVisible();
   });

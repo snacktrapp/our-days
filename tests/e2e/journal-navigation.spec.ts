@@ -231,7 +231,7 @@ test("primary screens and composer states have no serious axe violations", async
     ),
   ).toEqual([]);
   await page
-    .locator(".composer-type-picker")
+    .locator(".new-moment-composer-dialog")
     .getByRole("button", {
       name: "Written entry Text, date, and details",
       exact: true,

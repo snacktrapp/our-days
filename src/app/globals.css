@@ -38,15 +38,6 @@
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
-  --type-picker-width: min(
-    260px,
-    calc(100dvw - 2 * var(--bottom-nav-inline-gap))
-  );
-  --type-picker-top: var(--header-drawer-top);
-  --type-picker-left: max(
-    var(--bottom-nav-inline-gap),
-    calc((100dvw - 430px) / 2 + var(--bottom-nav-inline-gap))
-  );
   --nav-pill-fill: rgba(7, 17, 13, 0.64);
   --nav-pill-blur: 14px;
   --journal-grid-line: rgba(134, 166, 151, 0.045);
@@ -120,9 +111,8 @@ body.composer-scroll-locked {
 }
 
 /* Safari paints html/body and theme-color in the toolbar / home-indicator
-   gap. Photo fullscreen covers the journal, so that canvas goes black.
-   New moment is a popover: frost must keep sampling the grid, so
-   composer-scroll-locked does not paint over --grid-surface. */
+   gap. Photo fullscreen and the Activity / New moment sheets cover the
+   journal, so that canvas goes black via lockOverlayChrome. */
 html.overlay-open,
 html.overlay-open body,
 html[data-theme].overlay-open,
@@ -3706,17 +3696,6 @@ button:focus-visible,
   font-size: 9px;
   line-height: 1.35;
 }
-.composer-back {
-  min-height: 44px;
-  margin: -16px 0 3px -8px;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
 .composer-field,
 .photo-input {
   margin-top: 12px;
@@ -5570,15 +5549,6 @@ button:focus-visible,
   color: var(--ink);
 }
 
-.composer-back {
-  color: var(--teal);
-  font-family: var(--font-interface);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .photo-input,
 .composer-preview-card {
   border-color: color-mix(in srgb, var(--clay) 58%, transparent);
@@ -6040,12 +6010,31 @@ button:focus-visible,
 }
 
 .activity-sheet {
-  height: min(88dvh, calc(100dvh - max(16px, env(safe-area-inset-top))));
-  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  --activity-sheet-top-gap: max(20px, env(safe-area-inset-top, 0px));
+  height: min(88dvh, calc(100dvh - var(--activity-sheet-top-gap)));
+  max-height: calc(100dvh - var(--activity-sheet-top-gap));
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+}
+
+.composer-dialog[open] .activity-sheet {
+  max-height: calc(100% - var(--activity-sheet-top-gap));
+}
+
+.activity-sheet-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  flex: 0 0 auto;
+  background: #0d1a14;
+}
+
+.activity-sheet-chrome .sheet-handle,
+.activity-sheet-chrome .activity-sheet-bar {
+  touch-action: none;
 }
 
 .activity-sheet.is-dragging:not(.is-closing) {
@@ -6447,6 +6436,7 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .composer-sheet,
 :root[data-theme="light"] .moment-detail-sheet,
 :root[data-theme="light"] .moment-detail-sticky-bar,
+:root[data-theme="light"] .activity-sheet-chrome,
 :root[data-theme="light"] .sheet-close {
   background: var(--paper);
 }
@@ -6485,24 +6475,23 @@ html[data-theme].overlay-open .app-shell::before,
   }
 }
 
-/* Entry choices stay the existing compact list. The window sits above the
-   bottom bar and pops in place; it is not a header drawer or a sheet. */
-.new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
-  padding: var(--header-drawer-padding);
+/* Entry choices stay the existing compact list inside the shared
+   Activity tall-sheet chrome. */
+.composer-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px max(20px, env(safe-area-inset-bottom));
 }
 
-.new-moment-composer-dialog .composer-sheet > .sheet-close {
-  top: 0;
-  right: 0;
-}
-
-.new-moment-composer-dialog .composer-sheet h2 {
-  min-height: 22px;
-  margin: 0 44px 8px 0;
-  font-family: var(--font-interface);
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.3;
+.new-moment-composer-dialog.composer-editor-open .composer-sheet-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
 .new-moment-composer-dialog .moment-choices {
@@ -7279,121 +7268,23 @@ html[data-theme].overlay-open .app-shell::before,
   max-height: 360px;
 }
 
-/* Review stays a compact panel above the tab bar. Type selection is a
-   separate popover under the header + and is positioned below. */
-.new-moment-composer-dialog[open]:not(.composer-editor-fullscreen):not(
-    .composer-type-picker
-  ) {
+/* New moment uses the same tall-sheet chrome as Activity: rounded top,
+   grab handle, Done, and a viewport scrim. Type picker and editor share
+   this shell; only the body content changes. */
+.new-moment-composer-dialog[open] {
   align-items: flex-end;
   justify-content: center;
 }
 
-.new-moment-composer-dialog:not(.composer-editor-fullscreen):not(
-    .composer-type-picker
-  )
-  .composer-sheet {
-  width: min(
-    calc(100% - 2 * var(--bottom-nav-inline-gap)),
-    calc(430px - 2 * var(--bottom-nav-inline-gap))
-  );
-  max-height: calc(100dvh - 72px - env(safe-area-inset-top));
-  position: fixed;
-  top: auto;
-  right: 0;
-  bottom: calc(
-    56px + (2 * var(--bottom-nav-float-gap)) + env(safe-area-inset-bottom)
-  );
-  left: 0;
-  margin: 0 auto;
-  border-radius: var(--header-drawer-radius);
-  transform-origin: 50% 0;
-  animation: none;
+.new-moment-composer-dialog .activity-sheet-bar {
+  justify-content: flex-start;
+  padding-right: 20px;
 }
 
-/* Type picker is a body-portaled popover, not a <dialog>. Native dialog
-   chrome (and the themed .composer-dialog dim + blur) is what flattened
-   frost: dark left a green slab on the bottom pill, light killed the top
-   pill — leftover rgba fills plus backdrop-filter on a viewport layer.
-   The wrapper is only as big as the sheet, under the header +, so both
-   pills keep sampling the grid in both themes. Fullscreen capture still
-   uses showModal() and is not restyled here. */
-.new-moment-composer-dialog.composer-type-picker,
-:root[data-theme="dark"] .new-moment-composer-dialog.composer-type-picker,
-:root[data-theme="light"] .new-moment-composer-dialog.composer-type-picker {
-  position: fixed;
-  inset: auto;
-  top: var(--type-picker-top);
-  left: var(--type-picker-left);
-  width: var(--type-picker-width);
-  max-width: var(--type-picker-width);
-  height: auto;
-  max-height: calc(100dvh - var(--type-picker-top) - 24px);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  overflow: visible;
-  z-index: 150;
-  display: block;
-  align-items: unset;
-  justify-content: unset;
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
-  pointer-events: none;
-}
-
-.new-moment-composer-dialog.composer-type-picker .composer-sheet {
-  width: 100%;
-  max-height: inherit;
-  position: relative;
-  top: auto;
-  right: auto;
-  bottom: auto;
-  left: auto;
-  margin: 0;
-  overflow: hidden;
-  /* Sheet default is 14px 14px 0 0 (bottom-sheet). This popover needs
-     the same radius on all four corners. */
-  border-radius: 14px;
-  transform-origin: 30px 0;
-  pointer-events: auto;
-}
-
-.new-moment-composer-dialog,
-:root[data-theme="light"] .new-moment-composer-dialog {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.new-moment-composer-dialog::backdrop {
-  background: transparent;
-  backdrop-filter: none;
-}
-
-.quick-compose > .private-label {
-  margin-top: 0;
-}
-
-.new-moment-composer-dialog .composer-sheet > .sheet-handle {
+.new-moment-composer-dialog .composer-editor-header,
+.new-moment-composer-dialog .composer-back,
+.new-moment-composer-dialog .composer-fullscreen-form > .private-label {
   display: none;
-}
-
-.new-moment-composer-dialog .composer-sheet > .sheet-close {
-  width: 44px;
-  height: 44px;
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
 }
 
 /* Header drawers share one surface and one close control. Their height and
@@ -7406,39 +7297,18 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--ink);
 }
 
-/* Compact overlay windows share the family-switcher / ⋯ chrome. Type picker
-   and notifications previously dropped the hairline, which is why they
-   vanished into the grid. Do not restyle the fullscreen composer. */
+/* Compact overlay windows share the family-switcher / ⋯ chrome. */
 .title-switcher nav,
 .connected-moment-menu,
 .quick-reaction-control .inline-reaction-picker,
-.new-moment-composer-dialog.composer-type-picker .composer-sheet,
 :root[data-theme="light"] .title-switcher nav,
 :root[data-theme="light"] .connected-moment-menu,
-:root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
-:root[data-theme="light"]
-  .new-moment-composer-dialog.composer-type-picker
-  .composer-sheet,
-.new-moment-composer-dialog.composer-type-picker
-  .header-drawer-surface.composer-sheet,
-:root[data-theme="light"]
-  .new-moment-composer-dialog.composer-type-picker
-  .header-drawer-surface.composer-sheet {
+:root[data-theme="light"] .quick-reaction-control .inline-reaction-picker {
   border: 1px solid var(--hairline);
   background: var(--overlay-popover-fill);
   box-shadow: var(--header-drawer-shadow);
   backdrop-filter: blur(var(--overlay-popover-blur));
   -webkit-backdrop-filter: blur(var(--overlay-popover-blur));
-}
-
-.new-moment-composer-dialog.composer-type-picker .composer-sheet,
-.new-moment-composer-dialog.composer-type-picker
-  .header-drawer-surface.composer-sheet,
-:root[data-theme="light"]
-  .new-moment-composer-dialog.composer-type-picker
-  .header-drawer-surface.composer-sheet {
-  overflow: hidden;
-  border-radius: 14px;
 }
 
 .header-drawer-close {
@@ -7464,89 +7334,12 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--ink);
 }
 
-@keyframes composer-ease-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes composer-editor-ease-up {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-@media (min-width: 431px) and (hover: hover) and (pointer: fine) {
-  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
-    max-height: calc(100dvh - 92px);
-  }
-}
-
-/* Once an entry type is chosen, the composer becomes a full-height app
-   surface. The timeline remains mounted behind it for drafts and optimistic
-   media uploads, while only the form body scrolls. */
-.composer-editor-fullscreen[open] {
-  align-items: stretch;
-  justify-content: center;
-}
-
-.composer-editor-fullscreen .composer-sheet {
-  width: min(100dvw, 430px);
-  height: 100dvh;
-  max-height: 100dvh;
-  inset: 0 auto auto 50%;
-  margin: 0;
-  padding: 0;
-  transform: translateX(-50%);
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  animation: composer-editor-ease-up 180ms ease backwards;
-}
-
-.composer-editor-fullscreen .composer-sheet > .sheet-close {
-  z-index: 6;
-  top: env(safe-area-inset-top);
-  right: 4px;
-}
-
 .composer-fullscreen-form {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
-}
-
-.composer-editor-header {
-  min-height: calc(62px + env(safe-area-inset-top));
-  padding: calc(8px + env(safe-area-inset-top)) 52px 8px 16px;
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--cream);
-}
-
-.composer-editor-header .composer-back {
-  width: max-content;
-  min-height: 44px;
-  margin: -8px 0;
-  padding: 0;
-}
-
-.composer-editor-header .private-label {
-  margin: 0;
 }
 
 .composer-editor-scroll {
@@ -8189,10 +7982,6 @@ iframe.composer-location-map {
   color: #4f5d56;
 }
 
-:root[data-theme="light"] .composer-back {
-  color: #285f5b;
-}
-
 :root[data-theme="light"] .composer-sheet .private-label {
   color: #3f6238;
 }
@@ -8290,17 +8079,14 @@ iframe.composer-location-map {
   .overlay-popover,
   .quick-reaction-control .inline-reaction-picker,
   .connected-moment-menu,
-  .title-switcher[open] nav,
-  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
+  .title-switcher[open] nav {
     animation: overlay-popover-in 180ms ease-out backwards;
   }
 
   .overlay-popover.is-closing,
   .inline-reaction-picker.is-closing,
   .connected-moment-menu.is-closing,
-  .title-switcher[open] nav.is-closing,
-  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
-    .composer-sheet.is-closing {
+  .title-switcher[open] nav.is-closing {
     animation: overlay-popover-out 120ms ease-in forwards;
   }
 
@@ -8399,9 +8185,6 @@ iframe.composer-location-map {
   .connected-moment-menu.is-closing,
   .title-switcher[open] nav,
   .title-switcher[open] nav.is-closing,
-  .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet,
-  .new-moment-composer-dialog:not(.composer-editor-fullscreen)
-    .composer-sheet.is-closing,
   .activity-sheet,
   .activity-sheet.is-closing {
     animation: none;

@@ -267,19 +267,17 @@ describe("ConnectedMomentControl", () => {
 
     await user.clear(screen.getByLabelText("Entry"));
     await user.type(screen.getByLabelText("Entry"), "A changed draft.");
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
+    await user.keyboard("{Escape}");
     expect(confirm).toHaveBeenCalledWith(
       "Discard your unsaved changes to this moment?",
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     confirm.mockReturnValueOnce(true);
-    await user.click(
-      screen.getByRole("button", { name: "Close moment composer" }),
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(document.querySelector(".new-moment-composer-dialog")).toBeNull();
+    });
 
     await user.click(screen.getByRole("button", { name: /^Moment options/u }));
     await user.click(screen.getByRole("button", { name: /^Edit/u }));
