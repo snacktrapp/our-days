@@ -7,6 +7,7 @@ import {
   localJournalIsEnabled,
   supabaseResourceIsActive,
 } from "../../../config/our-days-environment";
+import { readActiveCircleCookie } from "@/lib/auth/active-circle";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -24,6 +25,19 @@ export type JournalAccessState =
   | JournalAccess
   | Readonly<{ mode: "anonymous" }>
   | Readonly<{ mode: "no-access" }>;
+
+export type JournalAccessPreference = Readonly<{
+  circleId?: string | null;
+  personId?: string | null;
+}>;
+
+export type JournalCircleMembership = Readonly<{
+  membershipId: string;
+  circleId: string;
+  personId: string;
+  role: string;
+  circleName?: string;
+}>;
 
 function isUnavailableFamilySession(error: unknown) {
   if (!error || typeof error !== "object") return false;
@@ -55,6 +69,36 @@ function isTransientFamilySessionError(error: unknown) {
   );
 }
 
+type MembershipRow = Readonly<{
+  id: string;
+  circle_id: string;
+  person_id: string;
+  role: string;
+}>;
+
+function toAccess(membership: MembershipRow) {
+  return {
+    mode: "authenticated" as const,
+    membershipId: membership.id,
+    circleId: membership.circle_id,
+    personId: membership.person_id,
+    role: membership.role,
+  };
+}
+
+export function selectJournalMembership(
+  memberships: readonly MembershipRow[],
+  preferredCircleId?: string | null,
+) {
+  if (preferredCircleId) {
+    const match = memberships.find(
+      (membership) => membership.circle_id === preferredCircleId,
+    );
+    if (match) return match;
+  }
+  return memberships[0] ?? null;
+}
+
 async function readActiveMemberships(
   supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
   userId: string,
@@ -65,18 +109,29 @@ async function readActiveMemberships(
     .eq("user_id", userId)
     .eq("status", "active")
     .order("joined_at", { ascending: true })
-    .limit(2);
+    .limit(50);
 }
 
-async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
+type Identity =
+  | Readonly<{ mode: "preview" }>
+  | Readonly<{ mode: "anonymous" }>
+  | Readonly<{ mode: "no-access" }>
+  | Readonly<{
+      mode: "authenticated";
+      memberships: readonly MembershipRow[];
+    }>;
+
+async function readIdentityUncached(): Promise<Identity> {
   await connection();
 
   if (isDesignPreviewEnabled()) return { mode: "preview" };
   if (localJournalIsEnabled()) {
-    const { readLocalJournalAccess } = await import("@/lib/local-journal/auth");
-    const localAccess = await readLocalJournalAccess();
-    if (!localAccess) return { mode: "anonymous" };
-    return { mode: "authenticated", ...localAccess };
+    const { readLocalJournalMemberships } =
+      await import("@/lib/local-journal/auth");
+    const memberships = await readLocalJournalMemberships();
+    if (!memberships) return { mode: "anonymous" };
+    if (memberships.length === 0) return { mode: "no-access" };
+    return { mode: "authenticated", memberships };
   }
   if (!supabaseResourceIsActive()) {
     return { mode: "anonymous" };
@@ -109,22 +164,73 @@ async function readJournalAccessStateUncached(): Promise<JournalAccessState> {
     if (isUnavailableFamilySession(error)) return { mode: "anonymous" };
     throw error;
   }
-  const membership = data?.[0];
-  if (!membership) return { mode: "no-access" };
+  if (!data?.length) return { mode: "no-access" };
 
-  return {
-    mode: "authenticated",
+  return { mode: "authenticated", memberships: data };
+}
+
+const readIdentity = cache(readIdentityUncached);
+
+async function circleIdForPerson(
+  personId: string,
+  memberships: readonly MembershipRow[],
+) {
+  const own = memberships.find(
+    (membership) => membership.person_id === personId,
+  );
+  if (own) return own.circle_id;
+  if (localJournalIsEnabled()) {
+    const { circleIdForLocalPerson } = await import("@/lib/local-journal/auth");
+    return circleIdForLocalPerson(personId);
+  }
+  if (!supabaseResourceIsActive()) return null;
+  const supabase = await createOurDaysServerClient();
+  const { data } = await supabase
+    .from("people")
+    .select("circle_id")
+    .eq("id", personId)
+    .maybeSingle();
+  return data?.circle_id ?? null;
+}
+
+export async function readJournalAccessState(
+  preference?: JournalAccessPreference,
+): Promise<JournalAccessState> {
+  const identity = await readIdentity();
+  if (identity.mode !== "authenticated") return identity;
+
+  let preferredCircleId =
+    preference?.circleId ?? (await readActiveCircleCookie());
+  if (preference?.personId) {
+    preferredCircleId =
+      (await circleIdForPerson(preference.personId, identity.memberships)) ??
+      preferredCircleId;
+  }
+  const membership = selectJournalMembership(
+    identity.memberships,
+    preferredCircleId,
+  );
+  if (!membership) return { mode: "no-access" };
+  return toAccess(membership);
+}
+
+export async function readJournalCircleMemberships(): Promise<
+  readonly JournalCircleMembership[]
+> {
+  const identity = await readIdentity();
+  if (identity.mode !== "authenticated") return [];
+  return identity.memberships.map((membership) => ({
     membershipId: membership.id,
     circleId: membership.circle_id,
     personId: membership.person_id,
     role: membership.role,
-  };
+  }));
 }
 
-export const readJournalAccessState = cache(readJournalAccessStateUncached);
-
-export async function requireJournalAccess(): Promise<JournalAccess> {
-  const access = await readJournalAccessState();
+export async function requireJournalAccess(
+  preference?: JournalAccessPreference,
+): Promise<JournalAccess> {
+  const access = await readJournalAccessState(preference);
   if (access.mode === "anonymous") redirect("/sign-in");
   if (access.mode === "no-access") redirect("/access-unavailable");
   return access;

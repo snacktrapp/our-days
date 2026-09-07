@@ -39,6 +39,25 @@ describe("security proxy", () => {
     vi.clearAllMocks();
   });
 
+  it("remembers the selected group from the family query", async () => {
+    const response = await proxy(
+      new NextRequest(
+        "https://journal.example.com/family?circle=created&name=Cousins",
+      ),
+    );
+    const setCookies = response.headers.getSetCookie();
+    expect(
+      setCookies.some((cookie) =>
+        cookie.includes("our-days-active-circle=created"),
+      ),
+    ).toBe(true);
+    expect(
+      setCookies.some((cookie) =>
+        cookie.includes("our-days-created-group-name=Cousins"),
+      ),
+    ).toBe(true);
+  });
+
   it("issues a fresh strict policy and ignores attacker nonce headers", async () => {
     const request = () =>
       new NextRequest("https://journal.example.com/family", {

@@ -387,32 +387,71 @@ const familyEntries = [
 ] as const satisfies readonly TimelineEntryViewModel[];
 
 const previewFamilyName = "All our days";
+const previewFamilyId = "family";
 
-function previewSwitcher(currentHref: string) {
+export type PreviewTimelineOptions = Readonly<{
+  extraGroup?: Readonly<{ id: string; name: string }>;
+  selectedGroupId?: string | null;
+}>;
+
+function previewGroups(extraGroup?: PreviewTimelineOptions["extraGroup"]) {
+  return [
+    { id: previewFamilyId, name: previewFamilyName },
+    ...(extraGroup ? [extraGroup] : []),
+  ];
+}
+
+function previewSwitcher(
+  currentHref: string,
+  options: PreviewTimelineOptions = {},
+  people = personalJournals,
+) {
+  const groups = previewGroups(options.extraGroup);
+  const selectedGroupId =
+    options.selectedGroupId &&
+    groups.some((group) => group.id === options.selectedGroupId)
+      ? options.selectedGroupId
+      : previewFamilyId;
+  const switcherPeople =
+    selectedGroupId === previewFamilyId
+      ? people
+      : people.filter((person) => person.id === "brian");
   return buildJournalSwitcher({
-    groupLabel: previewFamilyName,
-    people: personalJournals,
+    groups,
+    people: switcherPeople,
     viewerPersonId: "brian",
     currentHref,
+    activeGroupId: selectedGroupId,
   });
 }
 
-export function getFamilyTimelineFixture(): TimelineViewModel {
-  const moments = (familyEntries as readonly TimelineEntryViewModel[])
-    .filter(isMomentEntry)
-    .map((entry) => entry.moment);
-  const switcher = previewSwitcher("/family");
+export function getFamilyTimelineFixture(
+  options: PreviewTimelineOptions = {},
+): TimelineViewModel {
+  const selectedGroupId = options.selectedGroupId ?? previewFamilyId;
+  const extraSelected =
+    selectedGroupId !== previewFamilyId && options.extraGroup
+      ? options.extraGroup
+      : null;
+  const moments = extraSelected
+    ? []
+    : (familyEntries as readonly TimelineEntryViewModel[])
+        .filter(isMomentEntry)
+        .map((entry) => entry.moment);
+  const currentHref =
+    extraSelected && options.extraGroup
+      ? `/family?circle=${options.extraGroup.id}`
+      : "/family";
+  const switcher = previewSwitcher(currentHref, options);
+  const title = extraSelected ? extraSelected.name : previewFamilyName;
 
   return {
-    chrome: chrome(
-      "teal",
-      previewFamilyName,
-      "brian",
-      journalSwitcherEyebrow(switcher),
-    ),
+    chrome: chrome("teal", title, "brian", journalSwitcherEyebrow(switcher)),
     interaction: timelineInteraction,
     switcher,
-    entries: buildTimelineEntries(moments, designPreviewToday, false),
+    entries: extraSelected
+      ? buildTimelineEntries([], designPreviewToday, false)
+      : buildTimelineEntries(moments, designPreviewToday, false),
   };
 }
 
@@ -503,13 +542,21 @@ function personalSummary(entries: readonly TimelineEntryViewModel[]): string {
 
 export function getPersonalTimelineFixture(
   personId: string,
+  options: PreviewTimelineOptions = {},
 ): TimelineViewModel | null {
   const person = personalJournals.find(
     (candidate) => candidate.id === personId,
   );
   if (!person) return null;
+  if (
+    options.selectedGroupId &&
+    options.selectedGroupId !== previewFamilyId &&
+    person.id !== "brian"
+  ) {
+    return null;
+  }
   const entries = personalTimelineEntries(person);
-  const switcher = previewSwitcher(`/people/${person.id}`);
+  const switcher = previewSwitcher(`/people/${person.id}`, options);
 
   return {
     chrome: chrome(
@@ -580,7 +627,9 @@ export function getPeopleFixture(): PeopleViewModel {
   };
 }
 
-export function getFamilySettingsFixture(): FamilySettingsViewModel {
+export function getFamilySettingsFixture(
+  options: PreviewTimelineOptions = {},
+): FamilySettingsViewModel {
   return {
     chrome: chrome("teal", "Account"),
     panel: {
@@ -588,6 +637,10 @@ export function getFamilySettingsFixture(): FamilySettingsViewModel {
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: "brian",
+      groups: previewGroups(options.extraGroup).map((group) => ({
+        ...group,
+        memberCount: group.id === previewFamilyId ? 5 : 1,
+      })),
       members: [
         {
           id: "brian",

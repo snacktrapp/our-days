@@ -5,6 +5,8 @@ import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.se
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { loadConnectedTimeline } from "@/data/moments.server";
+import { selectActiveGroupAction } from "@/features/groups/create-group-action";
+import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -21,23 +23,30 @@ import {
 export default async function FamilyPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ pages?: string; snapshot?: string }>;
+  searchParams: Promise<{
+    pages?: string;
+    snapshot?: string;
+    circle?: string;
+    name?: string;
+  }>;
 }>) {
-  const access = await requireJournalAccess();
+  const params = await searchParams;
+  const access = await requireJournalAccess({ circleId: params.circle });
   if (access.mode === "preview") {
-    const model = getFamilyTimelineFixture();
+    const model = getFamilyTimelineFixture(await previewGroupOptions(params));
     return (
       <JournalChrome
         model={model.chrome}
         section="timeline"
         switcher={model.switcher}
+        onSelectGroup={selectActiveGroupAction}
       >
         <PhoneNotificationsAnnouncement />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
   }
-  const { pages, snapshot } = await searchParams;
+  const { pages, snapshot } = params;
   const context = await loadConnectedJournalContext(access);
   const model = await loadConnectedTimeline(access, context, {
     pages: Number(pages ?? "1"),
@@ -49,6 +58,7 @@ export default async function FamilyPage({
       section="timeline"
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
+      onSelectGroup={selectActiveGroupAction}
     >
       <PhoneNotificationsAnnouncement />
       <TimelineFeed

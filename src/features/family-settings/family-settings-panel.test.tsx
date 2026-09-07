@@ -13,6 +13,7 @@ const model = {
   mode: "preview",
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
+  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
   members: [
     {
       id: "current",
@@ -67,6 +68,7 @@ const connectedOrganizerModel = {
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
   canManageAccess: true,
+  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
   members: model.members.map((member) => ({
     ...member,
     guardianMembershipIds:
@@ -150,6 +152,37 @@ const connectedOperationsModel = {
 };
 
 describe("FamilySettingsPanel", () => {
+  it("lists circles and offers a required-name create form on Account", async () => {
+    const user = userEvent.setup();
+    const createGroupAction = vi.fn();
+    render(
+      <FamilySettingsPanel
+        model={model}
+        createGroupAction={createGroupAction}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Your groups" })).toBeVisible();
+    expect(screen.getByText("All our days")).toBeVisible();
+    expect(screen.getByText("4 people")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Create a new group" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Starts a separate circle. You’re the organizer."),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Group name")).toBeRequired();
+    expect(screen.getByRole("button", { name: "Create" })).toBeVisible();
+
+    await user.type(screen.getByLabelText("Group name"), "Cousins");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => {
+      expect(createGroupAction).toHaveBeenCalled();
+    });
+    const formData = createGroupAction.mock.calls[0]?.[0] as FormData;
+    expect(formData.get("name")).toBe("Cousins");
+  });
+
   it("distinguishes account access from managed journal profiles", () => {
     render(<FamilySettingsPanel model={model} />);
 

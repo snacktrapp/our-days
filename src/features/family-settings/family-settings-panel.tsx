@@ -14,6 +14,7 @@ import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
+  FamilyGroupViewModel,
   FamilySettingsPanelViewModel,
   GuardianOptionViewModel,
   PendingFamilyInvitationViewModel,
@@ -22,6 +23,10 @@ import type {
 
 const SIMPLE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+
+type CreateGroupActionResult = Readonly<
+  { ok: true; href: string } | { ok: false; message: string }
+>;
 
 type ConnectedActions = Readonly<{
   requestInvitation?: (input: {
@@ -49,15 +54,20 @@ type ConnectedActions = Readonly<{
 export function FamilySettingsPanel({
   model,
   actions,
+  createGroupAction,
   children,
 }: {
   model: FamilySettingsPanelViewModel;
   actions?: ConnectedActions;
+  createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   children?: ReactNode;
 }) {
   if (model.mode === "preview") {
     return (
-      <PreviewFamilySettingsPanel model={model}>
+      <PreviewFamilySettingsPanel
+        model={model}
+        createGroupAction={createGroupAction}
+      >
         {children}
       </PreviewFamilySettingsPanel>
     );
@@ -69,7 +79,11 @@ export function FamilySettingsPanel({
     return <AccountPanelInterrupted>{children}</AccountPanelInterrupted>;
   }
   return (
-    <ConnectedFamilySettingsPanel model={model} actions={actions}>
+    <ConnectedFamilySettingsPanel
+      model={model}
+      actions={actions}
+      createGroupAction={createGroupAction}
+    >
       {children}
     </ConnectedFamilySettingsPanel>
   );
@@ -188,11 +202,90 @@ function MemberList({
   );
 }
 
+function peopleCountLabel(count: number) {
+  return count === 1 ? "1 person" : `${count} people`;
+}
+
+function GroupsSection({
+  groups,
+  createGroupAction,
+}: {
+  groups: readonly FamilyGroupViewModel[];
+  createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <>
+      <section
+        className="settings-section groups-section"
+        aria-labelledby="your-groups-heading"
+      >
+        <div className="settings-heading">
+          <span>Your circles</span>
+          <h2 id="your-groups-heading">Your groups</h2>
+        </div>
+        <ul className="access-list">
+          {groups.map((group) => (
+            <li key={group.id}>
+              <div className="access-member-copy">
+                <strong>{group.name}</strong>
+                <small>{peopleCountLabel(group.memberCount)}</small>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {createGroupAction ? (
+        <section
+          className="settings-section groups-section groups-create-section"
+          aria-labelledby="create-group-heading"
+        >
+          <div className="settings-heading">
+            <h2 id="create-group-heading">Create a new group</h2>
+            <p>Starts a separate circle. You’re the organizer.</p>
+          </div>
+          <form
+            action={(formData) => {
+              startTransition(async () => {
+                const result = await createGroupAction(formData);
+                if (result && !result.ok) setError(result.message);
+              });
+            }}
+          >
+            <label htmlFor="create-group-name">Group name</label>
+            <input
+              id="create-group-name"
+              name="name"
+              required
+              maxLength={80}
+              autoComplete="off"
+            />
+            {error ? (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            ) : (
+              <p>A name is required.</p>
+            )}
+            <button type="submit" disabled={pending}>
+              {pending ? "Creating…" : "Create"}
+            </button>
+          </form>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 function PreviewFamilySettingsPanel({
   model,
+  createGroupAction,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
+  createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   children?: ReactNode;
 }) {
   const [email, setEmail] = useState("");
@@ -252,6 +345,11 @@ function PreviewFamilySettingsPanel({
         Local design preview · Access labels are illustrative; no accounts or
         permissions are active
       </p>
+
+      <GroupsSection
+        groups={model.groups}
+        createGroupAction={createGroupAction}
+      />
 
       <section className="settings-section" aria-labelledby="access-heading">
         <SettingsAccessHeading />
@@ -366,10 +464,12 @@ function PreviewFamilySettingsPanel({
 function ConnectedFamilySettingsPanel({
   model,
   actions,
+  createGroupAction,
   children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
+  createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   children?: ReactNode;
 }) {
   const [accessReviewId, setAccessReviewId] = useState<string | null>(null);
@@ -694,6 +794,11 @@ function ConnectedFamilySettingsPanel({
           {result.message}
         </p>
       ) : null}
+
+      <GroupsSection
+        groups={model.groups}
+        createGroupAction={createGroupAction}
+      />
 
       <section className="settings-section" aria-labelledby="access-heading">
         <SettingsAccessHeading />

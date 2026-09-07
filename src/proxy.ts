@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { buildContentSecurityPolicy } from "@/lib/content-security-policy";
 import type { Database } from "@/lib/supabase/database.types";
+import { applyActiveCircleCookie } from "@/lib/auth/active-circle-middleware";
 import { readOptionalSupabasePublicConfig } from "@/lib/supabase/public-config";
 
 export async function proxy(request: NextRequest) {
@@ -32,7 +33,7 @@ export async function proxy(request: NextRequest) {
 
   let response = buildResponse();
   const supabaseConfig = readOptionalSupabasePublicConfig();
-  if (!supabaseConfig) return response;
+  if (!supabaseConfig) return applyActiveCircleCookie(request, response);
 
   const supabase = createServerClient<Database>(
     supabaseConfig.url,
@@ -61,7 +62,7 @@ export async function proxy(request: NextRequest) {
   );
 
   await supabase.auth.getClaims();
-  return response;
+  return applyActiveCircleCookie(request, response);
 }
 
 export const config = {

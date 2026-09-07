@@ -30,8 +30,9 @@ describe("journal switcher grammar", () => {
       {
         kind: "group",
         label: "Trapp Family",
-        href: "/family",
+        href: "/family?circle=family",
         current: true,
+        circleId: "family",
       },
       {
         kind: "person",
@@ -48,6 +49,42 @@ describe("journal switcher grammar", () => {
     ]);
   });
 
+  it("lists every group the member is in after You and before people", () => {
+    expect(
+      buildJournalSwitcher({
+        groups: [
+          { id: "family", name: "Trapp Family" },
+          { id: "cousins", name: "Cousins" },
+        ],
+        people: [{ id: "brian", name: "Brian" }],
+        viewerPersonId: "brian",
+        currentHref: "/family?circle=cousins",
+        activeGroupId: "cousins",
+      }),
+    ).toEqual([
+      {
+        kind: "you",
+        label: "Brian",
+        href: "/people/brian",
+        current: false,
+      },
+      {
+        kind: "group",
+        label: "Trapp Family",
+        href: "/family?circle=family",
+        current: false,
+        circleId: "family",
+      },
+      {
+        kind: "group",
+        label: "Cousins",
+        href: "/family?circle=cousins",
+        current: true,
+        circleId: "cousins",
+      },
+    ]);
+  });
+
   it("does not invent a You row when the viewer is not in the list", () => {
     expect(
       buildJournalSwitcher({
@@ -60,8 +97,9 @@ describe("journal switcher grammar", () => {
       {
         kind: "group",
         label: "Our family",
-        href: "/family",
+        href: "/family?circle=family",
         current: false,
+        circleId: "family",
       },
       {
         kind: "person",

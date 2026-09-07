@@ -189,6 +189,42 @@ export async function readLocalJournal() {
   return withStoreLock(() => readDocumentUnlocked());
 }
 
+export async function createLocalCircle(access: LocalAccess, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 80) {
+    throw new Error("A group name is required.");
+  }
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const currentExtra = extraCircleForAccess(document, access);
+    const sourcePerson = currentExtra
+      ? {
+          displayName: currentExtra.displayName,
+          accentToken: currentExtra.accentToken,
+        }
+      : document.people.find((person) => person.id === access.personId);
+    if (!sourcePerson) throw new Error("Member profile is unavailable");
+    const createdAt = nowIso();
+    const extra = {
+      id: randomUUID(),
+      name: trimmed,
+      timeZone: document.circle.timeZone,
+      createdAt,
+      membershipId: randomUUID(),
+      personId: randomUUID(),
+      displayName: sourcePerson.displayName,
+      accentToken: sourcePerson.accentToken,
+      role: "organizer" as const,
+    };
+    writeDocumentUnlocked({
+      ...document,
+      extraCircles: [...(document.extraCircles ?? []), extra],
+    });
+    return { circleId: extra.id };
+  });
+}
+
 export async function findLocalAccount(email: string) {
   const document = await readLocalJournal();
   return (
@@ -203,10 +239,32 @@ export type LocalAccess = Readonly<{
   role: string;
 }>;
 
+function extraCircleForAccess(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  return (document.extraCircles ?? []).find(
+    (circle) =>
+      circle.id === access.circleId &&
+      circle.membershipId === access.membershipId &&
+      circle.personId === access.personId,
+  );
+}
+
 function requireMembership(
   document: LocalJournalDocument,
   access: LocalAccess,
 ) {
+  const extra = extraCircleForAccess(document, access);
+  if (extra) {
+    return {
+      id: extra.membershipId,
+      personId: extra.personId,
+      role: extra.role,
+      status: "active" as const,
+      joinedAt: extra.createdAt,
+    };
+  }
   if (access.circleId !== document.circle.id) {
     throw new Error("That family is not available.");
   }
@@ -225,6 +283,9 @@ function canWriteJournal(
   access: LocalAccess,
   journalPersonId: string | null,
 ) {
+  if (extraCircleForAccess(document, access)) {
+    return !journalPersonId || journalPersonId === access.personId;
+  }
   if (!journalPersonId) return hasOrganizerPrivilege(access.role);
   if (journalPersonId === access.personId) return true;
   const person = document.people.find(
@@ -289,6 +350,7 @@ export async function createLocalWrittenMoment(
     const createdAt = nowIso();
     const moment: LocalMoment = {
       id: randomUUID(),
+      circleId: access.circleId,
       journalPersonId: input.journalPersonId,
       recordedByMembershipId: access.membershipId,
       kind: input.kind,
@@ -337,6 +399,7 @@ export async function createLocalInsightMoment(
     const createdAt = nowIso();
     const moment: LocalMoment = {
       id: randomUUID(),
+      circleId: access.circleId,
       journalPersonId: null,
       recordedByMembershipId: access.membershipId,
       kind: "insight",

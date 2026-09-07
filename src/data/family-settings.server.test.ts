@@ -51,6 +51,10 @@ const context: ConnectedJournalContext = {
     },
   },
   people: [],
+  groups: [
+    { id: organizerAccess.circleId, name: "Cedar Circle" },
+    { id: "20000000-0000-4000-8000-000000000099", name: "Cousins" },
+  ],
 };
 
 const people = [
@@ -238,6 +242,10 @@ describe("connected family settings data", () => {
       mode: "connected",
       canManageAccess: true,
       invitationDelivery: "disabled",
+      groups: (context.groups ?? []).map((group) => ({
+        ...group,
+        memberCount: group.id === organizerAccess.circleId ? 3 : 0,
+      })),
     });
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");

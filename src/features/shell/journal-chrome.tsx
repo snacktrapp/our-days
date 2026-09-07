@@ -35,20 +35,27 @@ type JournalChromeProps = Readonly<{
   createMomentAction?: SaveFamilyMomentAction;
   standaloneNavigation?: boolean;
   switcher?: readonly FamilyTimelineSwitcherItem[];
+  onSelectGroup?: (circleId: string) => void;
 }>;
 
 function PrimaryJournalHeader({
   model,
   createMomentAction,
   switcher,
+  onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
   createMomentAction?: SaveFamilyMomentAction;
   switcher?: readonly FamilyTimelineSwitcherItem[];
+  onSelectGroup?: (circleId: string) => void;
 }>) {
   const title =
     switcher && switcher.length > 0 ? (
-      <FamilyTitleSwitcher model={model} switcher={switcher} />
+      <FamilyTitleSwitcher
+        model={model}
+        switcher={switcher}
+        onSelectGroup={onSelectGroup}
+      />
     ) : (
       <StaticJournalTitle model={model} />
     );
@@ -91,6 +98,7 @@ function JournalStage({
   children,
   createMomentAction,
   switcher,
+  onSelectGroup,
 }: JournalChromeProps) {
   const pendingRoute = usePendingJournalRoute();
   const pending = pendingRoute?.pending ?? null;
@@ -103,6 +111,7 @@ function JournalStage({
         model={chromeModel}
         createMomentAction={createMomentAction}
         switcher={switcher}
+        onSelectGroup={onSelectGroup}
       />
     );
 
@@ -140,6 +149,7 @@ export function JournalChrome({
   children,
   createMomentAction,
   switcher,
+  onSelectGroup,
 }: JournalChromeProps) {
   return (
     <ComposerSessionProvider
@@ -153,6 +163,7 @@ export function JournalChrome({
             section={section}
             createMomentAction={createMomentAction}
             switcher={switcher}
+            onSelectGroup={onSelectGroup}
           >
             {children}
           </JournalStage>

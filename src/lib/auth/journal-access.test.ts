@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   connection: vi.fn(),
+  cookies: vi.fn(),
   createClient: vi.fn(),
   getClaims: vi.fn(),
   isPreview: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", () => ({ connection: mocks.connection }));
+vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
 vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("@/lib/design-preview.server", () => ({
   isDesignPreviewEnabled: mocks.isPreview,
@@ -43,6 +45,9 @@ describe("journal access boundary", () => {
   beforeEach(() => {
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.isPreview.mockReturnValue(false);
+    mocks.cookies.mockResolvedValue({
+      get: () => undefined,
+    });
     mocks.getClaims.mockResolvedValue({
       data: { claims: { sub: "user-a" } },
       error: null,
@@ -189,6 +194,38 @@ describe("journal access boundary", () => {
       role: "organizer",
     });
     expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the last selected circle when the member belongs to more than one", async () => {
+    mocks.limit.mockResolvedValueOnce({
+      data: [
+        {
+          circle_id: "circle-a",
+          id: "membership-a",
+          person_id: "person-a",
+          role: "organizer",
+        },
+        {
+          circle_id: "circle-b",
+          id: "membership-b",
+          person_id: "person-b",
+          role: "organizer",
+        },
+      ],
+      error: null,
+    });
+    mocks.cookies.mockResolvedValueOnce({
+      get: (name: string) =>
+        name === "our-days-active-circle" ? { value: "circle-b" } : undefined,
+    });
+
+    await expect(requireJournalAccess()).resolves.toEqual({
+      mode: "authenticated",
+      circleId: "circle-b",
+      membershipId: "membership-b",
+      personId: "person-b",
+      role: "organizer",
+    });
   });
 
   it("fails a server-revoked Auth session closed at the sign-in boundary", async () => {

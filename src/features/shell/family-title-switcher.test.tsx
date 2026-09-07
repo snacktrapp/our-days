@@ -137,6 +137,23 @@ describe("FamilyTitleSwitcher", () => {
     );
   });
 
+  it("is a feed filter only and does not offer create or admin actions", () => {
+    const { container } = render(
+      <FamilyTitleSwitcher model={model} switcher={switcher} />,
+    );
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    expect(container.querySelector(".title-switcher")).toHaveAttribute("open");
+    expect(
+      screen.queryByRole("button", { name: "Create group" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Group name")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("closes the switcher on the same frame as a row press", () => {
     const { container } = render(
       <FamilyTitleSwitcher model={model} switcher={switcher} />,

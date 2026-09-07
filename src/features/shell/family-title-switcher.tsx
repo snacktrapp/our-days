@@ -111,9 +111,11 @@ function SwitcherLink({
 export function FamilyTitleSwitcher({
   model,
   switcher,
+  onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
   switcher: readonly FamilyTimelineSwitcherItem[];
+  onSelectGroup?: (circleId: string) => void;
 }>) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [chosenHref, setChosenHref] = useState<string | null>(null);
@@ -140,6 +142,9 @@ export function FamilyTitleSwitcher({
   function chooseItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);
     dismissSwitcherImmediately();
+    if (item.kind === "group" && item.circleId) {
+      onSelectGroup?.(item.circleId);
+    }
     window.dispatchEvent(
       new CustomEvent("our-days:navigate-section", {
         detail: { href: item.href },
