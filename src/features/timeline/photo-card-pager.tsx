@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -14,10 +15,11 @@ import { photoAlbum } from "@/features/moments/moment-photos";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
 import {
   albumIndexes,
+  albumSlideWidth,
   axisLockPx,
   clampDragDx,
   frameImage,
-  pairTransform,
+  pairSlideTransform,
   slideMs,
   swipeThreshold,
   waitForImageReady,
@@ -40,6 +42,7 @@ export function PhotoCardPager({
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const [stageHeight, setStageHeight] = useState<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const slideWidthRef = useRef(0);
   const pairRef = useRef<AlbumPair | null>(null);
   const pendingToRef = useRef<number | null>(null);
   const finishTimerRef = useRef<number | null>(null);
@@ -60,8 +63,18 @@ export function PhotoCardPager({
   const suppressClickRef = useRef(false);
 
   function writePair(next: AlbumPair | null) {
+    if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
+      const width = readSlideWidth();
+      next = width > 0 ? { ...next, slideWidth: width } : next;
+    }
     pairRef.current = next;
     setPair(next);
+  }
+
+  function readSlideWidth() {
+    const next = albumSlideWidth(stageRef.current);
+    if (next > 0) slideWidthRef.current = next;
+    return slideWidthRef.current;
   }
 
   const current = photos[index] ??
@@ -142,6 +155,27 @@ export function PhotoCardPager({
     if (estimated > 0) setStageHeight(estimated);
   }
 
+  useLayoutEffect(() => {
+    if (photos.length < 2) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const update = () => {
+      const width = albumSlideWidth(stage);
+      if (width > 0) {
+        slideWidthRef.current = width;
+        stage.style.setProperty("--photo-card-slide-width", `${width}px`);
+      }
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [photos.length]);
+
   useEffect(
     () => () => {
       clearFinishTimer();
@@ -201,11 +235,7 @@ export function PhotoCardPager({
   function beginHorizontalDrag(rawDx: number) {
     const direction: 1 | -1 = rawDx < 0 ? 1 : -1;
     const to = wrapIndex(index + direction, photos.length);
-    const dx = clampDragDx(
-      rawDx,
-      direction,
-      stageRef.current?.clientWidth ?? 0,
-    );
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
     pendingToRef.current = to;
     pendingDragRef.current = { to, direction, dx, commit: false };
     if (overlayMotionReduced()) return;
@@ -220,11 +250,7 @@ export function PhotoCardPager({
     const direction: 1 | -1 =
       rawDx === 0 ? (pairRef.current?.direction ?? 1) : rawDx < 0 ? 1 : -1;
     const to = wrapIndex(index + direction, photos.length);
-    const dx = clampDragDx(
-      rawDx,
-      direction,
-      stageRef.current?.clientWidth ?? 0,
-    );
+    const dx = clampDragDx(rawDx, direction, readSlideWidth());
     if (pointerRef.current) pointerRef.current.dx = dx;
     const pending = pendingDragRef.current;
     if (pending) {
@@ -370,7 +396,7 @@ export function PhotoCardPager({
   const stageStyle: CSSProperties | undefined =
     stageHeight == null ? undefined : { height: stageHeight };
   const trackStyle: CSSProperties | undefined = pair
-    ? { transform: pairTransform(pair) }
+    ? { transform: pairSlideTransform(pair, pair.slideWidth ?? 0) }
     : undefined;
 
   function renderFrame(

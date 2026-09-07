@@ -464,9 +464,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.getByRole("dialog").querySelector("img")?.src).toMatch(
       /^blob:/u,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -478,9 +476,7 @@ describe("MomentCard timeline media", () => {
     );
     expect(screen.getByRole("img", { name: "First light" })).toBe(first);
     expect(last).toHaveAttribute("src", lastSrc);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

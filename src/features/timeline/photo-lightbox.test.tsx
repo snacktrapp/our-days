@@ -135,6 +135,9 @@ describe("photo lightbox", () => {
     expect(stage).toBeTruthy();
     expect(stage.contains(overlay)).toBe(true);
     expect(screen.getByRole("dialog")).toHaveClass("photo-lightbox");
+    expect(screen.getByRole("button", { name: "Done" })).toHaveTextContent(
+      "Done",
+    );
     expect(screen.getByRole("dialog").closest(".timeline")).toBeNull();
     expect(screen.getByRole("dialog").closest(".photo-frame")).toBeNull();
     expect(document.body.contains(screen.getByRole("dialog"))).toBe(true);
@@ -153,9 +156,7 @@ describe("photo lightbox", () => {
     expect(overlay).toHaveAttribute("src", "blob:overlay-1");
     expect(overlay).not.toBe(card);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.getByRole("dialog")).toHaveAttribute(
       "data-motion",
       "closing",
@@ -204,9 +205,7 @@ describe("photo lightbox", () => {
     ).toHaveAttribute("src", "blob:overlay-1");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -219,9 +218,7 @@ describe("photo lightbox", () => {
     expect(
       await screen.findByRole("img", { name: "Last light" }),
     ).toHaveAttribute("src", "blob:overlay-2");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -568,10 +565,8 @@ describe("photo lightbox", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Open photo full screen: Porch" }),
     );
-    await screen.findByRole("button", { name: "Close full-screen media" });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close full-screen media" }),
-    );
+    await screen.findByRole("button", { name: "Done" });
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
