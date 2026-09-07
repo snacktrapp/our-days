@@ -13,6 +13,11 @@ import {
   VideoUploadError,
   type VideoMomentDraft,
 } from "./video-upload";
+import { inspectVideoFile } from "@/features/video/inspect-video-file";
+import {
+  rememberVideoFrame,
+  rememberVideoPoster,
+} from "@/features/video/video-poster-store";
 
 export type OptimisticMediaUploadStage =
   | Readonly<{ state: "preparing" }>
@@ -63,7 +68,12 @@ export type StartPhotoUploadInput = CommonUploadInput &
   }>;
 
 export type StartVideoUploadInput = CommonUploadInput &
-  Readonly<{ draft: VideoMomentDraft }>;
+  Readonly<{
+    draft: Omit<VideoMomentDraft, "durationMs"> & { durationMs?: number };
+    posterDataUrl?: string;
+    width?: number;
+    height?: number;
+  }>;
 
 type QueuedUpload =
   | Readonly<{ kind: "photo"; input: StartPhotoUploadInput }>
@@ -137,7 +147,9 @@ function photoFiles(input: StartPhotoUploadInput) {
 
 function createOptimisticUpload(
   kind: "photo" | "video",
-  input: CommonUploadInput & { draft: PhotoMomentDraft | VideoMomentDraft },
+  input: CommonUploadInput & {
+    draft: { circleId: string; body: string; occurredOn: string };
+  },
   totalFiles: number,
 ) {
   const id = crypto.randomUUID();
@@ -270,6 +282,39 @@ function beginPhotoUpload(input: StartPhotoUploadInput) {
   });
 }
 
+function rememberPoster(
+  momentId: string | undefined,
+  posterDataUrl?: string,
+  width?: number,
+  height?: number,
+) {
+  if (momentId && posterDataUrl) rememberVideoPoster(momentId, posterDataUrl);
+  if (momentId && width && height) rememberVideoFrame(momentId, width, height);
+}
+
+async function preparedVideoDraft(
+  input: StartVideoUploadInput,
+  signal: AbortSignal,
+) {
+  let durationMs = input.draft.durationMs;
+  let posterDataUrl = input.posterDataUrl;
+  let width = input.width;
+  let height = input.height;
+  if (!durationMs || !posterDataUrl || !width || !height) {
+    const inspected = await inspectVideoFile(input.file, signal);
+    durationMs = durationMs ?? inspected.durationMs;
+    posterDataUrl = posterDataUrl ?? inspected.posterDataUrl ?? undefined;
+    width = width ?? inspected.width;
+    height = height ?? inspected.height;
+  }
+  return {
+    draft: { ...input.draft, durationMs },
+    posterDataUrl,
+    width,
+    height,
+  };
+}
+
 function beginVideoUpload(input: StartVideoUploadInput) {
   const id = createOptimisticUpload("video", input, 1);
   const attempt = createVideoUploadAttempt();
@@ -279,13 +324,20 @@ function beginVideoUpload(input: StartVideoUploadInput) {
 
   void (async () => {
     try {
+      const prepared = await preparedVideoDraft(input, controller.signal);
       const result = await uploadVideoMoment(
         input.file,
-        input.draft,
+        prepared.draft,
         attempt,
         controller.signal,
         (stage) => {
           if (controller.signal.aborted || !uploadStillExists(id)) return;
+          rememberPoster(
+            attempt.momentId,
+            prepared.posterDataUrl,
+            prepared.width,
+            prepared.height,
+          );
           updateOptimisticMediaUpload(id, {
             momentId: attempt.momentId,
             stage,
@@ -293,6 +345,12 @@ function beginVideoUpload(input: StartVideoUploadInput) {
         },
       );
       if (!uploadStillExists(id)) return;
+      rememberPoster(
+        result.momentId,
+        prepared.posterDataUrl,
+        prepared.width,
+        prepared.height,
+      );
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,
@@ -433,13 +491,23 @@ export function retryOptimisticMediaUpload(id: string) {
   controllers.set(id, controller);
   void (async () => {
     try {
+      const prepared = await preparedVideoDraft(
+        record.input,
+        controller.signal,
+      );
       const result = await uploadVideoMoment(
         record.input.file,
-        record.input.draft,
+        prepared.draft,
         attempt,
         controller.signal,
         (stage) => {
           if (controller.signal.aborted || !uploadStillExists(id)) return;
+          rememberPoster(
+            attempt.momentId ?? upload.momentId,
+            prepared.posterDataUrl,
+            prepared.width,
+            prepared.height,
+          );
           updateOptimisticMediaUpload(id, {
             momentId: attempt.momentId ?? upload.momentId,
             stage,
@@ -447,6 +515,12 @@ export function retryOptimisticMediaUpload(id: string) {
         },
       );
       if (!uploadStillExists(id)) return;
+      rememberPoster(
+        result.momentId,
+        prepared.posterDataUrl,
+        prepared.width,
+        prepared.height,
+      );
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,

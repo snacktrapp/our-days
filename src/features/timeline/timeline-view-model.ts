@@ -132,6 +132,7 @@ export type VideoMomentViewModel = TimelineMomentBase &
     kind: "video";
     video: Readonly<{
       src: string;
+      poster?: string;
       durationMs?: number;
       width?: number;
       height?: number;

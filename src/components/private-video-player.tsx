@@ -7,6 +7,8 @@ export function PrivateVideoPlayer({
   label,
   preload = "metadata",
   controls = true,
+  autoPlay = false,
+  poster,
   width,
   height,
 }: Readonly<{
@@ -14,6 +16,8 @@ export function PrivateVideoPlayer({
   label: string;
   preload?: "none" | "metadata";
   controls?: boolean;
+  autoPlay?: boolean;
+  poster?: string;
   width?: number;
   height?: number;
 }>) {
@@ -37,6 +41,7 @@ export function PrivateVideoPlayer({
   return (
     <video
       src={src}
+      poster={poster}
       aria-label={label}
       width={width}
       height={height}
@@ -46,6 +51,7 @@ export function PrivateVideoPlayer({
       disableRemotePlayback
       playsInline
       preload={preload}
+      autoPlay={autoPlay}
       onError={() => setUnavailable(true)}
     />
   );

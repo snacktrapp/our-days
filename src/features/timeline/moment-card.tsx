@@ -1,7 +1,5 @@
 import { CspPublicImage } from "@/components/csp-image";
-import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
-import { PrivateVideoPlayer } from "@/components/private-video-player";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
@@ -18,6 +16,7 @@ import type {
   MomentInteractionViewModel,
   TimelineMomentViewModel,
 } from "./timeline-view-model";
+import { VideoMomentMedia } from "./video-moment-media";
 
 function PhotoFrameSizer({
   width,
@@ -107,47 +106,26 @@ export function MomentCard({
               : "Photo";
 
   if (moment.kind === "photo" || moment.kind === "video") {
-    const mediaWidth =
-      moment.kind === "video" ? moment.video.width : moment.image.width;
+    const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
-      moment.kind === "video" ? moment.video.height : moment.image.height;
+      moment.kind === "photo" ? moment.image.height : undefined;
     const knownRatio = Boolean(mediaWidth && mediaHeight);
     return (
       <div
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
       >
-        <div
-          className={`photo-frame has-reserved-frame ${moment.kind === "video" ? "video-frame" : ""}${
-            knownRatio ? " has-known-ratio" : ""
-          }`}
-        >
-          <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
-          {moment.kind === "video" ? (
-            <FullscreenMediaViewer
-              kind="video"
-              label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-              reactionTargetId={moment.id}
-              preview={
-                <PrivateVideoPlayer
-                  src={moment.video.src}
-                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-                  preload={preload ? "metadata" : "none"}
-                  controls={false}
-                  width={moment.video.width}
-                  height={moment.video.height}
-                />
-              }
-              fullscreenMedia={
-                <PrivateVideoPlayer
-                  src={moment.video.src}
-                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-                  preload="metadata"
-                  width={moment.video.width}
-                  height={moment.video.height}
-                />
-              }
-            />
-          ) : (
+        {moment.kind === "video" ? (
+          <VideoMomentMedia
+            moment={moment}
+            label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
+          />
+        ) : (
+          <div
+            className={`photo-frame has-reserved-frame${
+              knownRatio ? " has-known-ratio" : ""
+            }`}
+          >
+            <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
             <PhotoCardPager
               moment={moment}
               images={photoAlbum(moment).map((photo) =>
@@ -173,8 +151,8 @@ export function MomentCard({
                 ),
               )}
             />
-          )}
-        </div>
+          </div>
+        )}
         <div className="card-copy">
           <div className="photo-card-heading">
             <p className="moment-kicker">{typeLabel}</p>

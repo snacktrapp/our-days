@@ -6979,6 +6979,8 @@ html[data-theme].overlay-open .app-shell::before,
 
 .media-viewer-trigger > img,
 .media-viewer-trigger > video,
+.media-viewer-trigger > .video-card-poster,
+.media-viewer-trigger > .video-card-mat,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
   width: 100%;
@@ -6991,6 +6993,43 @@ html[data-theme].overlay-open .app-shell::before,
 
 .video-viewer-trigger {
   cursor: pointer;
+  background: transparent;
+}
+
+.video-frame {
+  background: transparent;
+}
+
+.video-card-poster,
+.video-card-mat {
+  width: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  display: block;
+  background: transparent;
+  object-fit: contain;
+  object-position: center;
+}
+
+.video-card-mat {
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  background: color-mix(in srgb, var(--cream) 28%, transparent);
+}
+
+.photo-frame.has-known-ratio.has-reserved-frame .video-card-poster,
+.photo-frame.has-known-ratio.has-reserved-frame .video-card-mat,
+.photo-frame.has-known-ratio.has-reserved-frame
+  .media-viewer-trigger
+  > .video-card-poster,
+.photo-frame.has-known-ratio.has-reserved-frame
+  .media-viewer-trigger
+  > .video-card-mat {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .video-viewer-play {
@@ -7237,7 +7276,7 @@ html[data-theme].overlay-open .app-shell::before,
 
 .fullscreen-media-dialog[open] {
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .fullscreen-media-dialog::backdrop {
@@ -7247,8 +7286,37 @@ html[data-theme].overlay-open .app-shell::before,
 .media-viewer-dimmer {
   position: absolute;
   inset: 0;
+  z-index: 0;
+  grid-column: 1;
+  grid-row: 1 / -1;
   background: #020403;
   pointer-events: none;
+}
+
+.media-viewer-chrome {
+  position: relative;
+  z-index: 2;
+  grid-row: 1;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  padding: max(12px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px)) 12px
+    max(12px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(
+    to bottom,
+    rgba(2, 4, 3, 0.92),
+    rgba(2, 4, 3, 0.55) 72%,
+    rgba(2, 4, 3, 0)
+  );
+}
+
+.media-viewer-chrome .photo-lightbox-close.media-viewer-close {
+  position: relative;
+  top: auto;
+  right: auto;
 }
 
 .media-viewer-photo,
@@ -7258,6 +7326,8 @@ html[data-theme].overlay-open .app-shell::before,
   width: 100%;
   height: 100%;
   position: relative;
+  z-index: 1;
+  grid-row: 2;
   display: grid;
   place-items: center;
   overflow: auto;

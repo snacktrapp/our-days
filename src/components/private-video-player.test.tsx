@@ -39,4 +39,18 @@ describe("PrivateVideoPlayer", () => {
       "controls",
     );
   });
+
+  it("can start from a poster and autoplay in the lightbox", () => {
+    render(
+      <PrivateVideoPlayer
+        src="/api/media/videos/one"
+        label="Family video"
+        poster="data:image/jpeg;base64,abc"
+        autoPlay
+      />,
+    );
+    const video = screen.getByLabelText("Family video");
+    expect(video).toHaveAttribute("poster", "data:image/jpeg;base64,abc");
+    expect(video).toHaveAttribute("autoplay");
+  });
 });

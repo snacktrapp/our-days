@@ -143,6 +143,7 @@ describe("connected private video upload", () => {
       1,
       "reserve_video_moment",
       expect.objectContaining({
+        audience: "family",
         duration_ms: 12_400,
         expected_mime_type: "video/mp4",
         expected_size_bytes: file.size,
@@ -190,6 +191,43 @@ describe("connected private video upload", () => {
       "60 seconds or shorter",
     );
     expect(createClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("local private video upload", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("posts Just Me with the same local journal fields as photos", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(typeof _input === "string" ? _input : "").toBe(
+        "/api/media/local/video",
+      );
+      expect(init?.method).toBe("POST");
+      const body = init?.body;
+      expect(body).toBeInstanceOf(FormData);
+      if (!(body instanceof FormData)) {
+        throw new Error("Local video upload must post FormData.");
+      }
+      expect(body.get("audience")).toBe("just_me");
+      expect(body.get("durationMs")).toBe("12400");
+      expect(body.get("journalPersonId")).toBe(draft.journalPersonId);
+      return Response.json({ momentId });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        { ...draft, audience: "just_me" },
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+      ),
+    ).resolves.toEqual({ momentId });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

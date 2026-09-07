@@ -150,14 +150,14 @@ The decision-independent functional preview for years and On This Day is recorde
 
 The connected Milestones archive checkpoint is recorded in `docs/quality/PHASE_6_MILESTONES_CHECKPOINT_REPORT.md`. It adds a count-free landing doorway and dedicated circle-authorized journey while preserving the central timeline, stable traversal, and existing moment actions.
 
-The isolated local short-video preview is recorded in `docs/quality/VIDEO_FEASIBILITY_REPORT.md`. It establishes a quiet timeline treatment, bounded on-device inspection, and a no-upload/no-persistence lifecycle only. Video remains absent from Add Moment, PD-004 remains pending, and upload/transcode/playback/export/deletion work remains deferred.
+The isolated local short-video preview is recorded in `docs/quality/VIDEO_FEASIBILITY_REPORT.md`. It established the quiet timeline treatment and on-device inspection contract.
+
+PD-004 is accepted. Live Add Moment now shares the photo/media intake for one short clip, and the Home timeline presents video moments with a still mat, play control, no autoplay, letterboxed `playsInline` playback, and photo-lightbox Done dismiss. The v1 quality report is `docs/quality/SHORT_VIDEO_V1_REPORT.md`. Multi-clip albums, trimmer/editor UI, autoplay feeds, and People/Memories redesign remain out of scope.
 
 Deliver:
 
 - Years, dates, milestones, and On This Day based on `occurred_on`.
-- After PD-004 is accepted, a measured production video spike for iPhone PWA upload, transcoding, playback, storage, export, and purge. Ship the capped feature only if it meets the same retry/privacy bar.
-
-Entry prerequisite for post-MVP production video work (not for the completed local-only preview): PD-004 is accepted.
+- One short private video per moment through live composer and timeline, using the Phase 4E reservation/TUS/finalize path.
 
 Gate: timezone/date-only fixtures pass; video has a recorded ship/defer decision with evidence.
 

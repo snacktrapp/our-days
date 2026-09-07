@@ -342,6 +342,9 @@ export function MomentComposer({
     photoItemsRef.current = photoItems;
   }, [photoItems]);
   const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
+  const [videoPosterDataUrl, setVideoPosterDataUrl] = useState<string | null>(
+    null,
+  );
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -495,6 +498,7 @@ export function MomentComposer({
       setPhotoItems([]);
       setPhotoDecodeState("empty");
       setVideoDurationMs(null);
+      setVideoPosterDataUrl(null);
       setPhotoError(null);
       setContentError(null);
       setSaveError(null);
@@ -667,6 +671,7 @@ export function MomentComposer({
         setPhotoFile(null);
         setPhotoDecodeState("empty");
         setVideoDurationMs(null);
+        setVideoPosterDataUrl(null);
       }
       if (photoInputRef.current) photoInputRef.current.value = "";
       return;
@@ -785,7 +790,23 @@ export function MomentComposer({
       return;
     }
     setVideoDurationMs(durationMs);
-    if (frameReady) acceptDecodedPhoto(expectedUrl);
+    if (frameReady) {
+      try {
+        const canvas = document.createElement("canvas");
+        const scale = Math.min(1, 720 / Math.max(1, videoWidth));
+        canvas.width = Math.max(1, Math.round(videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(videoHeight * scale));
+        const context = canvas.getContext("2d");
+        context?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const poster = context ? canvas.toDataURL("image/jpeg", 0.72) : "";
+        if (poster.startsWith("data:image/jpeg")) {
+          setVideoPosterDataUrl(poster);
+        }
+      } catch {
+        setVideoPosterDataUrl(null);
+      }
+      acceptDecodedPhoto(expectedUrl);
+    }
   };
 
   const chooseMode = (nextMode: ComposerMode) => {
@@ -834,16 +855,17 @@ export function MomentComposer({
   };
 
   const validateDraft = () => {
-    if (
-      (mode === "photo" || mode === "video") &&
-      !editingExistingMedia &&
-      !photoReady
-    ) {
+    if (mode === "video" && !editingExistingMedia && !photoFile) {
+      setPhotoError("Choose a video for this preview.");
+      photoInputRef.current?.focus();
+      return false;
+    }
+    if (mode === "photo" && !editingExistingMedia && !photoReady) {
       setPhotoError(
         photoDecodeState === "decoding" ||
           photoItems.some((item) => item.decodeState === "decoding")
-          ? `Wait for this ${mode} to finish loading.`
-          : `Choose a ${mode} for this preview.`,
+          ? "Wait for this photo to finish loading."
+          : "Choose a photo for this preview.",
       );
       photoInputRef.current?.focus();
       return;
@@ -1023,10 +1045,8 @@ export function MomentComposer({
         !connectedPhotoAvailable ||
         !model.circleId ||
         !(mode === "photo"
-          ? photoItems.some((item) => item.file)
-          : photoFile) ||
-        !photoReady ||
-        (mode === "video" && !videoDurationMs)
+          ? photoItems.some((item) => item.file) && photoReady
+          : photoFile)
       ) {
         setSaveError(`Choose the ${mode} again and try once more.`);
         return;
@@ -1066,10 +1086,11 @@ export function MomentComposer({
       } else {
         startOptimisticVideoUpload({
           ...common,
+          posterDataUrl: videoPosterDataUrl ?? undefined,
           draft: {
             body: capturedBody,
             circleId: model.circleId,
-            durationMs: videoDurationMs!,
+            durationMs: videoDurationMs ?? undefined,
             journalPersonId: savedJournalPersonId,
             occurredAt,
             occurredOn: savedOccurredOn,

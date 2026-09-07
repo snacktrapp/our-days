@@ -366,6 +366,154 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("presents a video moment as a poster card and starts play on one tap", () => {
+    const play = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      value: play,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const poster =
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIhwgMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGfAD//2Q==";
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "kitchen-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/kitchen-video",
+            poster,
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".video-card-poster")).toHaveAttribute(
+      "src",
+      poster,
+    );
+    expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
+    expect(container.querySelector(".video-card")).not.toBeNull();
+    expect(container.querySelector(".video-frame")).toHaveClass(
+      "has-known-ratio",
+      "has-reserved-frame",
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 160 90",
+    );
+    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
+      "▶",
+    );
+    expect(screen.getByText("Video")).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Video in Molly’s journal from Aug 28, 2026",
+      }),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: "Full-screen video: Video in Molly’s journal from Aug 28, 2026",
+    });
+    const lightboxVideo = dialog.querySelector("video");
+    expect(lightboxVideo).toHaveAttribute("controls");
+    expect(lightboxVideo).toHaveAttribute("playsinline");
+    expect(lightboxVideo).toHaveAttribute("autoplay");
+    expect(lightboxVideo).toHaveAttribute("poster", poster);
+    expect(play).toHaveBeenCalled();
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(done.closest(".media-viewer-chrome")).not.toBeNull();
+    expect(
+      dialog
+        .querySelector(".media-viewer-chrome")
+        ?.compareDocumentPosition(dialog.querySelector(".media-viewer-video")!),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.click(done);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps a play badge on a dark mat when no poster is ready yet", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "pending-poster-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/pending-poster-video",
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".video-card-mat")).not.toBeNull();
+    expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
+    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
+      "▶",
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 160 90",
+    );
+  });
+
+  it("sizes a portrait video to a tall native frame instead of a 4:3 mat", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "portrait-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/portrait-video",
+            width: 1080,
+            height: 1920,
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 1080 1920",
+    );
+    expect(container.querySelector(".video-frame")).toHaveClass(
+      "has-known-ratio",
+    );
+  });
+
+  it("does not reserve a 4:3 video frame when the clip size is unknown", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "unknown-ratio-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/unknown-ratio-video",
+          },
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".photo-frame-sizer")).toBeNull();
+    expect(container.querySelector(".video-frame")).not.toHaveClass(
+      "has-reserved-frame",
+    );
+  });
+
   it("keeps a portrait photo at its native 9:16 frame", () => {
     render(
       <MomentCard

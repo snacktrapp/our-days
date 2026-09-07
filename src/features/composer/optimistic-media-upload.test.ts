@@ -3,10 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const photoUpload = vi.hoisted(() => ({
   upload: vi.fn(),
 }));
+const videoUpload = vi.hoisted(() => ({
+  upload: vi.fn(),
+}));
+const videoInspect = vi.hoisted(() => ({
+  inspect: vi.fn(),
+}));
 
 vi.mock("./photo-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./photo-upload")>()),
   uploadPhotoMoment: photoUpload.upload,
+}));
+vi.mock("./video-upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./video-upload")>()),
+  uploadVideoMoment: videoUpload.upload,
+}));
+vi.mock("@/features/video/inspect-video-file", () => ({
+  inspectVideoFile: videoInspect.inspect,
 }));
 
 import { PhotoUploadError } from "./photo-upload";
@@ -16,6 +29,7 @@ import {
   queuedOptimisticMediaUploadCount,
   retryOptimisticMediaUpload,
   startOptimisticPhotoUpload,
+  startOptimisticVideoUpload,
 } from "./optimistic-media-upload";
 
 const person = {
@@ -126,6 +140,48 @@ describe("optimistic media upload queue", () => {
       expect.objectContaining({
         existingMomentId: "d6000000-0000-4000-8000-000000000002",
       }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+  });
+
+  it("inspects a video after Save when duration is not ready yet", async () => {
+    videoInspect.inspect.mockResolvedValue({
+      durationMs: 8_000,
+      width: 1280,
+      height: 720,
+      posterDataUrl: "data:image/jpeg;base64,abc",
+    });
+    videoUpload.upload.mockResolvedValue({
+      momentId: "d6000000-0000-4000-8000-000000000014",
+    });
+    const file = new File([new Uint8Array(24)], "wave.mp4", {
+      type: "video/mp4",
+    });
+
+    startOptimisticVideoUpload({
+      draft: { ...draft, durationMs: undefined },
+      file,
+      occurredTime: "14:58",
+      person,
+    });
+
+    expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+      state: "preparing",
+    });
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "published",
+      }),
+    );
+    expect(videoInspect.inspect).toHaveBeenCalledWith(
+      file,
+      expect.any(AbortSignal),
+    );
+    expect(videoUpload.upload).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ durationMs: 8_000 }),
       expect.any(Object),
       expect.any(AbortSignal),
       expect.any(Function),

@@ -34,6 +34,9 @@ const photoUpload = vi.hoisted(() => ({
 const videoUpload = vi.hoisted(() => ({
   upload: vi.fn(),
 }));
+const videoInspect = vi.hoisted(() => ({
+  inspect: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
   usePathname: () => "/family",
@@ -45,6 +48,9 @@ vi.mock("./photo-upload", async (importOriginal) => ({
 vi.mock("./video-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./video-upload")>()),
   uploadVideoMoment: videoUpload.upload,
+}));
+vi.mock("@/features/video/inspect-video-file", () => ({
+  inspectVideoFile: videoInspect.inspect,
 }));
 
 const people = [
@@ -166,6 +172,14 @@ beforeEach(() => {
   navigation.replace.mockClear();
   photoUpload.upload.mockReset();
   videoUpload.upload.mockReset();
+  videoInspect.inspect.mockReset();
+  videoInspect.inspect.mockResolvedValue({
+    durationMs: 12_400,
+    width: 1920,
+    height: 1080,
+    posterDataUrl:
+      "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIhwgMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGfAD//2Q==",
+  });
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
   Object.defineProperty(URL, "createObjectURL", {
@@ -637,6 +651,9 @@ describe("MomentComposer", () => {
     fireEvent.loadedData(preview);
 
     expect(screen.getByText("Video ready to upload privately.")).toBeVisible();
+    expect(
+      screen.queryByText("Wait for this video to finish loading."),
+    ).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -649,6 +666,56 @@ describe("MomentComposer", () => {
     );
     expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
+  });
+
+  it("saves a selected video immediately without waiting for decode", async () => {
+    videoUpload.upload.mockImplementation(
+      async (
+        _file: File,
+        _draft: unknown,
+        _attempt: unknown,
+        _signal: AbortSignal,
+        onStage: (stage: unknown) => void,
+      ) => {
+        onStage({ state: "uploading", progress: 0.4 });
+        return { momentId: "d6000000-0000-4000-8000-000000000013" };
+      },
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    render(<ConnectedFamilyHarness />);
+    await user.click(
+      screen.getByRole("button", { name: "Open connected family composer" }),
+    );
+    await user.click(screen.getByRole("button", { name: /^Photo or video/u }));
+    const file = new File([new Uint8Array(24)], "wave.mp4", {
+      type: "video/mp4",
+    });
+    await user.upload(screen.getByLabelText(/Choose photo or video/u), file);
+
+    expect(
+      screen.getByText("Preparing this video on your device."),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("Wait for this video to finish loading."),
+    ).toBeNull();
+    expect(
+      screen.queryByText("Wait for this photo to finish loading."),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(videoUpload.upload).toHaveBeenCalledWith(
+        file,
+        expect.objectContaining({ durationMs: 12_400 }),
+        expect.objectContaining({ requestKey: expect.any(String) }),
+        expect.any(AbortSignal),
+        expect.any(Function),
+      ),
+    );
+    expect(videoInspect.inspect).toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
 
   it("rejects HEIC truthfully before a connected upload starts", async () => {

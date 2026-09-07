@@ -63,6 +63,7 @@ export async function POST(request: Request) {
       readString(form, "latitude"),
       readString(form, "longitude"),
     );
+    const audienceValue = readString(form, "audience");
     const moment = await publishVerifiedVideoMoment(access, {
       file,
       journalPersonId: readString(form, "journalPersonId"),
@@ -75,6 +76,10 @@ export async function POST(request: Request) {
       occurredAt: readString(form, "occurredAt") || null,
       occurredTimezone: readString(form, "occurredTimezone") || null,
       durationMs: Number(readString(form, "durationMs")),
+      audience:
+        audienceValue === "just_me" || audienceValue === "family"
+          ? audienceValue
+          : undefined,
     });
     return json(200, {
       momentId: moment.id,
