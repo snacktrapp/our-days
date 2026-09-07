@@ -9,6 +9,12 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
+  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Group");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "Home", exact: true }),
+  ).toBeVisible();
   await page.locator(".title-switcher summary").click();
   await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
   await expect(page.locator(".title-switcher nav")).toHaveCSS(
@@ -20,9 +26,20 @@ test("route-based journal navigation preserves the approved views", async ({
     "1px",
   );
   await expect(
+    page.locator(".title-switcher nav a .title-switcher-type-pill"),
+  ).toHaveText(["You", "Group", "Person", "Person", "Person", "Person"]);
+  await expect(page.locator(".title-switcher nav a").first()).toHaveText(
+    /Brian/u,
+  );
+  await expect(
     page
       .getByRole("navigation", { name: "Choose a family timeline" })
-      .getByRole("link", { name: "Family", exact: true }),
+      .getByRole("link", { name: "Just Me" }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Choose a family timeline" })
+      .getByRole("link", { name: "All our days", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(
     page
@@ -33,11 +50,13 @@ test("route-based journal navigation preserves the approved views", async ({
     .getByRole("navigation", { name: "Choose a family timeline" })
     .getByRole("link", { name: "Molly", exact: true })
     .click();
+  await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
   await expect(page).toHaveURL(/\/people\/molly$/);
-  await expect(
-    page.getByRole("heading", { name: "Molly’s days" }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Family", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link", { name: "Home", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/family$/);
   await expect(
     page.getByRole("heading", { name: "All our days" }),
@@ -70,9 +89,7 @@ test("route-based journal navigation preserves the approved views", async ({
 
   await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(page).toHaveURL(/\/people\/molly$/);
-  await expect(
-    page.getByRole("heading", { name: "Molly’s days" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
   await page.locator(".title-switcher summary").click();
   await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");

@@ -4,12 +4,15 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
+import {
+  journalSwitcherTypeLabel,
+  type FamilyTimelineSwitcherItem,
+} from "./journal-switcher";
 
-export type FamilyTimelineSwitcherItem = Readonly<{
-  label: string;
-  href: string;
-  current: boolean;
-}>;
+export type {
+  FamilyTimelineSwitcherItem,
+  JournalSwitcherKind,
+} from "./journal-switcher";
 
 function TitleCopy({
   model,
@@ -59,6 +62,18 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 
+function SwitcherCheck() {
+  return (
+    <svg
+      className="title-switcher-check"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    >
+      <path d="m3.5 8.2 3 3 6-6.4" />
+    </svg>
+  );
+}
+
 function SwitcherLink({
   item,
   current,
@@ -82,7 +97,13 @@ function SwitcherLink({
       onPointerDown={acknowledge}
       onClick={acknowledge}
     >
+      <span className="title-switcher-check-slot" aria-hidden="true">
+        {current ? <SwitcherCheck /> : null}
+      </span>
       <span className="title-switcher-link-label">{item.label}</span>
+      <span className="title-switcher-type-pill" aria-hidden="true">
+        {journalSwitcherTypeLabel(item.kind)}
+      </span>
     </Link>
   );
 }
@@ -101,13 +122,24 @@ export function FamilyTitleSwitcher({
   const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
   const currentHref = chosenHref ?? serverCurrentHref;
   const chosenItem = switcher.find((item) => item.href === currentHref);
-  const displayModel =
-    chosenItem && chosenHref && chosenItem.href.startsWith("/people/")
-      ? { ...model, title: chosenItem.label }
-      : model;
+  const displayModel = chosenItem
+    ? {
+        ...model,
+        title: chosenItem.label,
+        eyebrow: journalSwitcherTypeLabel(chosenItem.kind),
+      }
+    : model;
+
+  function dismissSwitcherImmediately() {
+    const details = detailsRef.current;
+    if (!details?.open) return;
+    cancel();
+    details.open = false;
+  }
 
   function chooseItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);
+    dismissSwitcherImmediately();
     window.dispatchEvent(
       new CustomEvent("our-days:navigate-section", {
         detail: { href: item.href },

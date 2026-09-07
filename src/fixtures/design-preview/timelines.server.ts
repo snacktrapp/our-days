@@ -13,6 +13,10 @@ import type {
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
+import {
+  buildJournalSwitcher,
+  journalSwitcherEyebrow,
+} from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import { buildTimelineEntries } from "@/data/moments.server";
 import {
@@ -93,11 +97,12 @@ function chrome(
   accent: AccentToken,
   title: string,
   defaultJournalPersonId = "brian",
+  eyebrow = "Our family",
 ): JournalChromeViewModel {
   return {
     accent,
     title,
-    eyebrow: "Our family",
+    eyebrow,
     familyMark,
     notifications: [
       {
@@ -381,18 +386,32 @@ const familyEntries = [
   },
 ] as const satisfies readonly TimelineEntryViewModel[];
 
+const previewFamilyName = "All our days";
+
+function previewSwitcher(currentHref: string) {
+  return buildJournalSwitcher({
+    groupLabel: previewFamilyName,
+    people: personalJournals,
+    viewerPersonId: "brian",
+    currentHref,
+  });
+}
+
 export function getFamilyTimelineFixture(): TimelineViewModel {
   const moments = (familyEntries as readonly TimelineEntryViewModel[])
     .filter(isMomentEntry)
     .map((entry) => entry.moment);
+  const switcher = previewSwitcher("/family");
 
   return {
-    chrome: chrome("teal", "All our days"),
+    chrome: chrome(
+      "teal",
+      previewFamilyName,
+      "brian",
+      journalSwitcherEyebrow(switcher),
+    ),
     interaction: timelineInteraction,
-    switcher: [
-      { label: "Family", href: "/family", current: true },
-      { label: "Molly", href: "/people/molly", current: false },
-    ],
+    switcher,
     entries: buildTimelineEntries(moments, designPreviewToday, false),
   };
 }
@@ -490,22 +509,17 @@ export function getPersonalTimelineFixture(
   );
   if (!person) return null;
   const entries = personalTimelineEntries(person);
+  const switcher = previewSwitcher(`/people/${person.id}`);
 
   return {
     chrome: chrome(
       person.accent,
-      `${person.name}’s days`,
+      person.name,
       person.composerJournalPersonId,
+      journalSwitcherEyebrow(switcher),
     ),
     interaction: timelineInteraction,
-    switcher: [
-      { label: "Family", href: "/family", current: false },
-      {
-        label: person.name,
-        href: `/people/${person.id}`,
-        current: true,
-      },
-    ],
+    switcher,
     timelineLabel: `Chronological moments for ${person.name}`,
     personalIntro: {
       initial: person.initial,

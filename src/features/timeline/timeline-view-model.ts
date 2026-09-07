@@ -1,4 +1,5 @@
 import type { AccentToken } from "@/features/accent-token";
+import type { FamilyTimelineSwitcherItem } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
 export type MomentKind =
@@ -231,11 +232,7 @@ export type TimelineEntryViewModel =
 export type TimelineViewModel = Readonly<{
   chrome: JournalChromeViewModel;
   interaction?: MomentInteractionViewModel;
-  switcher: readonly Readonly<{
-    label: string;
-    href: string;
-    current: boolean;
-  }>[];
+  switcher: readonly FamilyTimelineSwitcherItem[];
   timelineLabel?: string;
   personalIntro?: Readonly<{
     initial: string;

@@ -49,6 +49,32 @@ describe("design preview timeline chronology", () => {
     });
   });
 
+  it("teaches the family switcher the group / person / you grammar", () => {
+    const family = getFamilyTimelineFixture();
+    expect(family.chrome.eyebrow).toBe("Group");
+    expect(family.chrome.title).toBe("All our days");
+    expect(family.switcher.map((item) => [item.kind, item.label])).toEqual([
+      ["you", "Brian"],
+      ["group", "All our days"],
+      ["person", "Molly"],
+      ["person", "Avery"],
+      ["person", "Sam"],
+      ["person", "June"],
+    ]);
+
+    const molly = getPersonalTimelineFixture("molly");
+    expect(molly?.chrome.eyebrow).toBe("Person");
+    expect(molly?.chrome.title).toBe("Molly");
+    expect(molly?.switcher.find((item) => item.current)).toMatchObject({
+      kind: "person",
+      label: "Molly",
+    });
+
+    const brian = getPersonalTimelineFixture("brian");
+    expect(brian?.chrome.eyebrow).toBe("You");
+    expect(brian?.chrome.title).toBe("Brian");
+  });
+
   it("uses the same date-marker grammar in personal journals", () => {
     const timeline = getPersonalTimelineFixture("brian");
     expect(timeline).not.toBeNull();
