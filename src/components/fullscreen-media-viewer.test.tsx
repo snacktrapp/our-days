@@ -29,6 +29,10 @@ describe("FullscreenMediaViewer", () => {
       name: "Full-screen video: Family video",
     });
     expect(dialog.querySelector("video")).toHaveAttribute("controls");
+    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "×" })).toBeNull();
     expect(screen.queryByText("Rotate for a wider view")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

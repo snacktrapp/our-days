@@ -100,9 +100,22 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toBeVisible({
     timeout: 20_000,
   });
-  await expect(
-    page.locator('[data-moment-kind="video"]').first(),
-  ).toBeVisible();
+  const videoCard = page.locator('[data-moment-kind="video"]').first();
+  await expect(videoCard).toBeVisible();
+  await expect(videoCard.getByText("Video", { exact: true })).toBeVisible();
+  const timelineVideo = videoCard.locator("video");
+  await expect(timelineVideo).toHaveAttribute("playsinline");
+  await expect(timelineVideo).not.toHaveAttribute("autoplay");
+  await expect(timelineVideo).not.toHaveAttribute("controls");
+  await videoCard
+    .getByRole("button", { name: /Open video full screen/u })
+    .click();
+  const fullscreen = page.getByRole("dialog", { name: /Full-screen video/u });
+  await expect(fullscreen).toBeVisible();
+  await expect(fullscreen.locator("video")).toHaveAttribute("controls");
+  await expect(fullscreen.locator("video")).toHaveAttribute("playsinline");
+  await fullscreen.getByRole("button", { name: "Done" }).click();
+  await expect(fullscreen).toBeHidden();
 
   await page.goto("/memories");
   await expect(page.getByText("On this day", { exact: true })).toBeVisible();

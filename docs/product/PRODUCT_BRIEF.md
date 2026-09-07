@@ -41,7 +41,7 @@ No public identity, follower graph, discovery, recommendations, ads, streaks, en
 - Brian and Molly as co-organizers
 - Five person records, including managed profiles for children who do not yet sign in
 - Combined chronological timeline and individual person timelines
-- Photo and written moments
+- Photo, short video (one clip per moment, about 60 seconds), and written moments
 - An authoritative `occurred_on` family-calendar date independent of upload time, with optional precise time/timezone for memories that have one
 - Optional place and tagged people
 - Milestone moment type
@@ -63,8 +63,7 @@ No public identity, follower graph, discovery, recommendations, ads, streaks, en
 - Photo books, printing, collaborative albums, and external sharing links
 - Granular per-post audiences inside a circle
 - Imports from legacy social networks or camera-roll backfills
-- Short video; if later approved, begin with one clip per moment and a
-  60-second limit
+- Multi-clip video albums, trimmer/editor UI, and autoplay video feeds
 - Automated large-family onboarding and sophisticated notifications
 - Deep archival formats and elaborate deletion automation beyond the MVP's
   understandable export and deletion guarantees
@@ -210,11 +209,10 @@ The authoritative, gated delivery plan is `docs/architecture/PHASES.md`. Externa
 
 Brian accepted the child-journal/guardian model (PD-001), adult authorship and deletion boundary (PD-002), and invitation-bound emailed code/link sign-in (PD-003) on 2026-08-30. Their exact binding wording is recorded in `docs/architecture/DECISIONS.md`.
 
-The remaining decisions are intentionally deferred until their consuming phases:
+Brian accepted the short-video cap (PD-004) on 2026-09-07: one clip per moment, about 60 seconds, through live Add Moment and the Home timeline. The remaining decisions are intentionally deferred until their consuming phases:
 
-1. **Video boundary (PD-004):** Is a 60-second, one-video-per-moment cap acceptable for the first release? This keeps transcoding, mobile upload recovery, storage cost, and export behavior testable.
-2. **Trash (PD-005):** Is a 30-day private trash acceptable, with hard purge performed only by an authorized idempotent worker? Recommendation: yes.
-3. **Derivative delivery (PD-006):** Prefer roughly one-minute signed display URLs after a fresh membership check, accepting that pre-issued URLs survive until expiry, or require an authenticated proxy for stricter immediate revocation? Recommendation: short-lived display URLs for MVP; originals always use authenticated delivery.
+1. **Trash (PD-005):** Is a 30-day private trash acceptable, with hard purge performed only by an authorized idempotent worker? Recommendation: yes.
+2. **Derivative delivery (PD-006):** Prefer roughly one-minute signed display URLs after a fresh membership check, accepting that pre-issued URLs survive until expiry, or require an authenticated proxy for stricter immediate revocation? Recommendation: short-lived display URLs for MVP; originals always use authenticated delivery.
 
 Names, logo, exact colors, reaction vocabulary, and the eventual native path can wait until the timeline direction is approved.
 

@@ -89,11 +89,10 @@ export function FullscreenMediaViewer({
           </h2>
           <button
             type="button"
-            className="media-viewer-close"
-            aria-label="Close full-screen media"
+            className="photo-lightbox-close media-viewer-close"
             onClick={close}
           >
-            ×
+            Done
           </button>
           <div className="media-viewer-video">{fullscreenMedia}</div>
         </dialog>

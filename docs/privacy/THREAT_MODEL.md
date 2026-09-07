@@ -65,7 +65,7 @@ The browser and every request parameter are untrusted. Supabase Auth establishes
 - Signed derivative URLs have residual access until expiry; PD-006 chooses the window versus an authenticated media proxy.
 - Trash retention and immediate purge authority require PD-002/PD-005 approval.
 - Backup region/retention and paid recovery features require infrastructure approval.
-- Video duration/size/codec, upload/transcode provider, playback/revocation, and MVP inclusion remain pending under PD-004 and its measured production spike.
+- PD-004 shipped one short original clip per moment without transcoding. Poster derivatives, HEVC/HDR hardening, and export/purge of video objects remain later media work.
 
 ## Required adversarial actors
 

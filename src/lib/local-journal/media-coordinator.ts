@@ -234,6 +234,7 @@ export async function publishVerifiedVideoMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     durationMs: number;
+    audience?: "family" | "just_me";
   }>,
 ) {
   requireUuid(input.journalPersonId, "journal");
@@ -274,6 +275,7 @@ export async function publishVerifiedVideoMoment(
     occurredOn: input.occurredOn,
     occurredAt: input.occurredAt,
     occurredTimezone: input.occurredTimezone,
+    audience: input.audience,
     media: { ...media, durationMs: input.durationMs },
   });
 }

@@ -298,6 +298,7 @@ async function uploadLocalVideoMoment(
   body.set("occurredTimezone", draft.occurredTimezone ?? "");
   body.set("durationMs", String(draft.durationMs));
   body.set("requestKey", attempt.requestKey);
+  body.set("audience", draft.audience ?? "family");
   const response = await fetch("/api/media/local/video", {
     body,
     credentials: "same-origin",

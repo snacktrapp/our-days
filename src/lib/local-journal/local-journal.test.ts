@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +24,10 @@ import {
   setLocalReaction,
   type LocalAccess,
 } from "./store";
-import { publishVerifiedPhotoMoment } from "./media-coordinator";
+import {
+  publishVerifiedPhotoMoment,
+  publishVerifiedVideoMoment,
+} from "./media-coordinator";
 import { loadLocalJournalContext, loadLocalTimeline } from "./views";
 
 const access: LocalAccess = {
@@ -245,5 +248,56 @@ describe("local journal happy path", () => {
         reactionId: "held-close",
       }),
     ).rejects.toThrow("That response could not be saved.");
+  });
+
+  it("keeps a Just Me video on the author's journal only", async () => {
+    const jordanAccess: LocalAccess = {
+      membershipId: localJordanMembershipId,
+      circleId: localCircleId,
+      personId: localJordanPersonId,
+      role: "member",
+    };
+    const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
+    await publishVerifiedVideoMoment(access, {
+      file: new File([videoBytes], "wave.mp4", { type: "video/mp4" }),
+      journalPersonId: localAlexPersonId,
+      body: "A porch clip just for me.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      durationMs: 1_000,
+      audience: "just_me",
+    });
+    const context = await loadLocalJournalContext(access);
+    const texts = (timeline: Awaited<ReturnType<typeof loadLocalTimeline>>) =>
+      timeline.entries.flatMap((entry) =>
+        entry.entryType === "moment" ? [entry.moment.text] : [],
+      );
+    const family = await loadLocalTimeline(access, context, { pages: 1 });
+    const ownJournal = await loadLocalTimeline(access, context, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const jordanView = await loadLocalTimeline(
+      jordanAccess,
+      await loadLocalJournalContext(jordanAccess),
+      { journalPersonId: localAlexPersonId, pages: 1 },
+    );
+    const ownMoment = ownJournal.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "A porch clip just for me.",
+    );
+    expect(texts(family)).not.toContain("A porch clip just for me.");
+    expect(texts(ownJournal)).toContain("A porch clip just for me.");
+    expect(texts(jordanView)).not.toContain("A porch clip just for me.");
+    expect(ownMoment?.entryType).toBe("moment");
+    if (ownMoment?.entryType !== "moment") {
+      throw new Error("Just Me video missing from the author's journal");
+    }
+    expect(ownMoment.moment.kind).toBe("video");
+    expect(ownMoment.moment.showJustMeBadge).toBe(true);
   });
 });

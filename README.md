@@ -75,6 +75,7 @@ Rendered pages use a fresh nonce CSP and request-time rendering. Production allo
 - `docs/quality/FAMILY_SETTINGS_PREVIEW_REPORT.md` — invitation/access preview contract and privacy proof
 - `docs/quality/PERSONAL_JOURNALS_PREVIEW_REPORT.md` — individual journal ownership, empty-state, and route privacy evidence
 - `docs/quality/VIDEO_FEASIBILITY_REPORT.md` — isolated local short-video treatment, lifecycle evidence, and production stop/defer gates
+- `docs/quality/SHORT_VIDEO_V1_REPORT.md` — PD-004 live composer + timeline wiring for one short private clip per moment
 - `docs/quality/PHASE_4A_PHOTO_INTAKE_FOUNDATION_REPORT.md` — fingerprint-bound direct-TUS quarantine contract, concurrency limitation, and immutable-promotion gates
 - `docs/quality/PHASE_4B_IMMUTABLE_PHOTO_PROMOTION_REPORT.md` — isolated byte validation, immutable original promotion, adversarial races, and remaining media gates
 - `docs/quality/PHASE_4C_PRIVATE_PHOTO_DERIVATIVE_REPORT.md` — orientation-correct metadata-safe private display derivation and remaining delivery gates

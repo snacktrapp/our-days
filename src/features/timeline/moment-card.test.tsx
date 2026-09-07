@@ -366,6 +366,54 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("presents a video moment as a still mat with play control and Done fullscreen", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "kitchen-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/kitchen-video",
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    const video = screen.getByLabelText(
+      "Video in Molly’s journal from Aug 28, 2026",
+    );
+    expect(video.tagName).toBe("VIDEO");
+    expect(video).toHaveAttribute("playsinline");
+    expect(video).not.toHaveAttribute("autoplay");
+    expect(video).not.toHaveAttribute("controls");
+    expect(container.querySelector(".video-card")).not.toBeNull();
+    expect(container.querySelector(".video-frame")).toHaveClass(
+      "has-known-ratio",
+    );
+    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
+      "▶",
+    );
+    expect(screen.getByText("Video")).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Video in Molly’s journal from Aug 28, 2026",
+      }),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name: "Full-screen video: Video in Molly’s journal from Aug 28, 2026",
+    });
+    expect(dialog.querySelector("video")).toHaveAttribute("controls");
+    expect(dialog.querySelector("video")).toHaveAttribute("playsinline");
+    expect(dialog.querySelector("video")).not.toHaveAttribute("autoplay");
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("keeps a portrait photo at its native 9:16 frame", () => {
     render(
       <MomentCard
