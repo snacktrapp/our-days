@@ -10,10 +10,7 @@ export function pathWithoutSearch(href: string) {
 
 export function sectionFromPathname(
   pathname: string | null,
-): Extract<
-  JournalSection,
-  "timeline" | "people" | "memories" | "settings"
-> | null {
+): Extract<JournalSection, "timeline" | "memories" | "settings"> | null {
   const path = pathname ?? "";
   if (
     path === "/family" ||
