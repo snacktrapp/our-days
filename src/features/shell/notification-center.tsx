@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 import type { JournalChromeViewModel } from "./shell-view-model";
-import { useOverlayPopoverClose } from "./use-overlay-popover-close";
+import { lockOverlayChrome, unlockOverlayChrome } from "./overlay-chrome";
+import {
+  sheetCloseMs,
+  useOverlayPopoverClose,
+} from "./use-overlay-popover-close";
+import { useSheetDismiss } from "./use-sheet-dismiss";
 
 type NotificationItem = NonNullable<
   JournalChromeViewModel["notifications"]
@@ -19,6 +28,7 @@ type NotificationItem = NonNullable<
 
 const storageKey = "our-days:seen-notifications";
 const storageEvent = "our-days-notifications-seen";
+export const activityPageSize = 20;
 
 function subscribeToSeenNotifications(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -37,12 +47,17 @@ export function NotificationCenter({
   items = [],
 }: Readonly<{ items?: readonly NotificationItem[] }>) {
   const panelId = useId();
+  const titleId = useId();
   const [open, setOpen] = useState(false);
-  const centerRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(activityPageSize);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const headingRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLLIElement>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
-    useOverlayPopoverClose();
+    useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const seenSnapshot = useSyncExternalStore(
     subscribeToSeenNotifications,
     readSeenNotifications,
@@ -63,34 +78,32 @@ export function NotificationCenter({
   const closePanel = useCallback(() => {
     requestClose(() => {
       setOpen(false);
+      setVisibleCount(activityPageSize);
       window.requestAnimationFrame(() => triggerRef.current?.focus());
     });
   }, [requestClose]);
+
+  const dismissGesture = useSheetDismiss({
+    onDismiss: closePanel,
+    scrollerRef,
+    sheetRef,
+  });
+
+  const dialogMounted = useModalDialog(open, dialogRef);
+
+  useLayoutEffect(() => {
+    if (!dialogMounted) return;
+    lockOverlayChrome();
+    return () => unlockOverlayChrome();
+  }, [dialogMounted]);
 
   useEffect(() => {
     if (!open) return;
     const focusFrame = window.requestAnimationFrame(() =>
       headingRef.current?.focus({ preventScroll: true }),
     );
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closePanel();
-    };
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !centerRef.current?.contains(event.target)
-      ) {
-        closePanel();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    document.addEventListener("pointerdown", closeOnOutsidePress);
-    return () => {
-      window.cancelAnimationFrame(focusFrame);
-      window.removeEventListener("keydown", closeOnEscape);
-      document.removeEventListener("pointerdown", closeOnOutsidePress);
-    };
-  }, [closePanel, open]);
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [open]);
 
   const unseenIds = useMemo(
     () =>
@@ -98,16 +111,54 @@ export function NotificationCenter({
     [items, seenIds],
   );
 
+  const visibleItems = items.slice(0, visibleCount);
+  const hasMore = visibleCount < items.length;
+
+  useEffect(() => {
+    if (!open || !hasMore) return;
+    const sentinel = sentinelRef.current;
+    const root = scrollerRef.current;
+    if (!sentinel || !root || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setVisibleCount((count) =>
+          Math.min(items.length, count + activityPageSize),
+        );
+      },
+      { root, rootMargin: "96px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, items.length, open, visibleItems.length]);
+
+  const revealEarlier = () => {
+    setVisibleCount((count) =>
+      Math.min(items.length, count + activityPageSize),
+    );
+  };
+
+  const onListScroll = () => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !hasMore) return;
+    if (
+      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <
+      96
+    ) {
+      revealEarlier();
+    }
+  };
+
   const toggle = () => {
     if (open) {
-      if (closingRef.current) {
-        cancel();
-        return;
-      }
+      if (closingRef.current) return;
       closePanel();
       return;
     }
     cancel();
+    setVisibleCount(activityPageSize);
     setOpen(true);
     if (unseenIds.length === 0) return;
     const nextSeen = Array.from(new Set([...seenIds, ...unseenIds])).slice(
@@ -121,8 +172,87 @@ export function NotificationCenter({
     }
   };
 
+  const sheet = (
+    <dialog
+      ref={dialogRef}
+      id={panelId}
+      className="composer-dialog activity-dialog"
+      aria-labelledby={titleId}
+      aria-modal="true"
+      aria-hidden={closing ? true : undefined}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closePanel();
+          return;
+        }
+        containDialogFocus(event);
+      }}
+      onCancel={(event) => {
+        event.preventDefault();
+        closePanel();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) closePanel();
+      }}
+    >
+      <section
+        ref={sheetRef}
+        className={`composer-sheet activity-sheet${closing ? " is-closing" : ""}`}
+        onAnimationEnd={onAnimationEnd}
+        onPointerDown={dismissGesture.onPointerDown}
+        onPointerMove={dismissGesture.onPointerMove}
+        onPointerUp={dismissGesture.onPointerUp}
+        onPointerCancel={dismissGesture.onPointerCancel}
+      >
+        <span className="sheet-handle" aria-hidden="true" />
+        <header className="activity-sheet-bar">
+          <h2 ref={headingRef} id={titleId} tabIndex={-1}>
+            Activity
+          </h2>
+          <button
+            className="sheet-close activity-sheet-done"
+            type="button"
+            onClick={closePanel}
+          >
+            Done
+          </button>
+        </header>
+        <div
+          ref={scrollerRef}
+          className="activity-sheet-list"
+          onScroll={onListScroll}
+        >
+          {items.length > 0 ? (
+            <ol>
+              {visibleItems.map((item) => (
+                <li key={item.id}>
+                  <Link href={item.href} onClick={() => setOpen(false)}>
+                    <span>
+                      <strong>{item.actorName}</strong> {item.message}
+                    </span>
+                    <time>{item.displayDate}</time>
+                  </Link>
+                </li>
+              ))}
+              {hasMore ? (
+                <li ref={sentinelRef} className="activity-sheet-more">
+                  <button type="button" onClick={revealEarlier}>
+                    Earlier activity
+                  </button>
+                </li>
+              ) : null}
+            </ol>
+          ) : (
+            <p>No new family activity.</p>
+          )}
+        </div>
+      </section>
+    </dialog>
+  );
+
   return (
-    <div ref={centerRef} className="notification-center">
+    <div className="notification-center">
       <button
         ref={triggerRef}
         className="notification-trigger"
@@ -143,47 +273,9 @@ export function NotificationCenter({
           <span className="notification-dot" aria-hidden="true" />
         ) : null}
       </button>
-      {open ? (
-        <section
-          id={panelId}
-          className={`notification-panel header-drawer-surface overlay-popover${
-            closing ? " is-closing" : ""
-          }`}
-          aria-label="Notifications"
-          aria-hidden={closing ? true : undefined}
-          onAnimationEnd={onAnimationEnd}
-        >
-          <div className="notification-heading">
-            <strong ref={headingRef} tabIndex={-1}>
-              Activity
-            </strong>
-            <button
-              className="header-drawer-close"
-              type="button"
-              aria-label="Close notifications"
-              onClick={closePanel}
-            >
-              ×
-            </button>
-          </div>
-          {items.length > 0 ? (
-            <ol>
-              {items.map((item) => (
-                <li key={item.id}>
-                  <Link href={item.href} onClick={() => setOpen(false)}>
-                    <span>
-                      <strong>{item.actorName}</strong> {item.message}
-                    </span>
-                    <time>{item.displayDate}</time>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>No new family activity.</p>
-          )}
-        </section>
-      ) : null}
+      {dialogMounted && typeof document !== "undefined"
+        ? createPortal(sheet, document.body)
+        : null}
     </div>
   );
 }

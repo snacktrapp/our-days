@@ -302,26 +302,29 @@ test("composer is modal, contains focus, protects every draft, and restores focu
 }) => {
   await page.goto("/family");
   await page.getByRole("button", { name: /Open notifications/u }).click();
-  const notificationPanel = page.getByRole("region", {
-    name: "Notifications",
-  });
-  await expect(notificationPanel).toBeVisible();
-  await expect(notificationPanel).toHaveCSS(
-    "animation-name",
-    "overlay-popover-in",
-  );
-  const notificationTop = await notificationPanel.evaluate((element) =>
-    Math.round(element.getBoundingClientRect().top),
-  );
-  const notificationChrome = await notificationPanel.evaluate((element) => {
-    const style = getComputedStyle(element);
+  const activityDialog = page.getByRole("dialog", { name: "Activity" });
+  await expect(activityDialog).toBeVisible();
+  const activitySheet = activityDialog.locator(".activity-sheet");
+  await expect(activitySheet).toHaveClass(/composer-sheet/u);
+  await expect(activitySheet.locator(".sheet-handle")).toBeVisible();
+  await expect(
+    activityDialog.getByRole("button", { name: "Done" }),
+  ).toBeVisible();
+  await expect(activitySheet).toHaveCSS("animation-name", "sheet-up");
+  const activityGeometry = await activitySheet.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
     return {
-      borderWidth: style.borderTopWidth,
-      borderColor: style.borderTopColor,
+      height: rect.height,
+      radius: getComputedStyle(element).borderTopLeftRadius,
+      viewport: window.innerHeight,
     };
   });
-  expect(notificationChrome.borderWidth).toBe("1px");
-  await page.getByRole("button", { name: "Close notifications" }).click();
+  expect(activityGeometry.height).toBeGreaterThan(
+    activityGeometry.viewport * 0.6,
+  );
+  expect(Number.parseFloat(activityGeometry.radius)).toBeGreaterThanOrEqual(14);
+  await activityDialog.getByRole("button", { name: "Done" }).click();
+  await expect(activityDialog).toBeHidden();
 
   const trigger = page.getByRole("button", { name: "Add moment" });
   const dialog = await openComposer(page);
@@ -389,20 +392,8 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   expect(chooserPlacement?.alignedToPill).toBe(true);
   expect(chooserPlacement?.compact).toBe(true);
   expect(chooserPlacement?.parkedOnNav).toBe(false);
-  expect(
-    Math.abs((chooserPlacement?.top ?? 0) - notificationTop),
-  ).toBeLessThanOrEqual(1);
   expect(chooserPlacement?.addAnimation).toBe("none");
   await expect(overlaySheet).toHaveCSS("border-top-width", "1px");
-  expect(
-    await overlaySheet.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return {
-        borderWidth: style.borderTopWidth,
-        borderColor: style.borderTopColor,
-      };
-    }),
-  ).toEqual(notificationChrome);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 

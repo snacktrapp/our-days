@@ -4481,6 +4481,14 @@ button:focus-visible,
     transform: translateY(0);
   }
 }
+@keyframes sheet-down {
+  from {
+    transform: translateY(var(--activity-sheet-drag, 0px));
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
 
 .bottom-nav {
   height: 56px;
@@ -6031,54 +6039,89 @@ button:focus-visible,
   background: var(--clay);
 }
 
-.notification-panel {
-  position: absolute;
-  z-index: 35;
-  top: calc(100% + var(--header-drawer-gap));
-  right: 0;
-  width: min(310px, calc(100dvw - 32px));
-  padding: var(--header-drawer-padding);
-  border-radius: var(--header-drawer-radius);
-  color: var(--ink);
-  transform-origin: calc(100% - 8px) 0;
+.activity-sheet {
+  height: min(88dvh, calc(100dvh - max(16px, env(safe-area-inset-top))));
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
-.notification-heading {
+.activity-sheet.is-dragging:not(.is-closing) {
+  animation: none;
+  transition: none;
+  transform: translateY(var(--activity-sheet-drag, 0px));
+}
+
+.activity-sheet .sheet-handle,
+.activity-sheet-bar {
+  touch-action: none;
+}
+
+.activity-sheet-bar {
+  width: 100%;
+  min-height: 64px;
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 12px;
+  padding: 22px 16px 10px 20px;
 }
 
-.notification-heading > strong {
+.activity-sheet-bar h2 {
+  max-width: none;
+  margin: 0;
   font-family: var(--font-interface);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.activity-sheet-bar h2:focus,
+.activity-sheet-bar h2:focus-visible {
+  outline: none;
+}
+
+.activity-sheet .sheet-close.activity-sheet-done {
+  width: auto;
+  min-width: 64px;
+  min-height: 44px;
+  position: static;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 12px;
   font-size: 15px;
   font-weight: 650;
 }
 
-.notification-heading > strong:focus,
-.notification-heading > strong:focus-visible {
-  outline: none;
+.activity-sheet-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px max(20px, env(safe-area-inset-bottom));
 }
 
-.notification-heading button {
-  margin: -11px -11px -11px 0;
-}
-
-.notification-panel ol {
+.activity-sheet-list ol {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.notification-panel li + li {
+.activity-sheet-list li + li {
   border-top: 1px solid var(--hairline);
 }
 
-.notification-panel a {
+.activity-sheet-list a {
   display: grid;
   gap: 4px;
-  padding: 10px 0;
+  padding: 12px 0;
   color: inherit;
   font-family: var(--font-interface);
   font-size: 13px;
@@ -6086,15 +6129,32 @@ button:focus-visible,
   text-decoration: none;
 }
 
-.notification-panel time,
-.notification-panel > p {
+.activity-sheet-list time,
+.activity-sheet-list > p {
   color: var(--muted);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 9px;
 }
 
-.notification-panel > p {
+.activity-sheet-list > p {
   margin: 12px 0 4px;
+}
+
+.activity-sheet-more {
+  border-top: 1px solid var(--hairline);
+}
+
+.activity-sheet-more button {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .account-tools {
@@ -7350,19 +7410,15 @@ html[data-theme].overlay-open .app-shell::before,
    and notifications previously dropped the hairline, which is why they
    vanished into the grid. Do not restyle the fullscreen composer. */
 .title-switcher nav,
-.notification-panel,
 .connected-moment-menu,
 .quick-reaction-control .inline-reaction-picker,
 .new-moment-composer-dialog.composer-type-picker .composer-sheet,
 :root[data-theme="light"] .title-switcher nav,
-:root[data-theme="light"] .notification-panel,
 :root[data-theme="light"] .connected-moment-menu,
 :root[data-theme="light"] .quick-reaction-control .inline-reaction-picker,
 :root[data-theme="light"]
   .new-moment-composer-dialog.composer-type-picker
   .composer-sheet,
-.header-drawer-surface.notification-panel,
-:root[data-theme="light"] .header-drawer-surface.notification-panel,
 .new-moment-composer-dialog.composer-type-picker
   .header-drawer-surface.composer-sheet,
 :root[data-theme="light"]
@@ -8234,7 +8290,6 @@ iframe.composer-location-map {
   .overlay-popover,
   .quick-reaction-control .inline-reaction-picker,
   .connected-moment-menu,
-  .notification-panel,
   .title-switcher[open] nav,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet {
     animation: overlay-popover-in 180ms ease-out backwards;
@@ -8243,11 +8298,14 @@ iframe.composer-location-map {
   .overlay-popover.is-closing,
   .inline-reaction-picker.is-closing,
   .connected-moment-menu.is-closing,
-  .notification-panel.is-closing,
   .title-switcher[open] nav.is-closing,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen)
     .composer-sheet.is-closing {
     animation: overlay-popover-out 120ms ease-in forwards;
+  }
+
+  .activity-sheet.is-closing {
+    animation: sheet-down 200ms ease-in forwards;
   }
 
   .timeline-pull-shell[data-pull-state="settling"] .timeline-pull-root,
@@ -8339,13 +8397,13 @@ iframe.composer-location-map {
   .quick-reaction-control .inline-reaction-picker.is-closing,
   .connected-moment-menu,
   .connected-moment-menu.is-closing,
-  .notification-panel,
-  .notification-panel.is-closing,
   .title-switcher[open] nav,
   .title-switcher[open] nav.is-closing,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen) .composer-sheet,
   .new-moment-composer-dialog:not(.composer-editor-fullscreen)
-    .composer-sheet.is-closing {
+    .composer-sheet.is-closing,
+  .activity-sheet,
+  .activity-sheet.is-closing {
     animation: none;
   }
 
