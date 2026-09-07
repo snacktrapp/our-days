@@ -147,6 +147,13 @@ function ConnectedFamilyHarness({
           circleId: "20000000-0000-4000-8000-000000000001",
           experience: "connected-family",
           photoPostingEnabled: true,
+          postableCircles: [
+            {
+              id: "20000000-0000-4000-8000-000000000001",
+              name: "Trapp Family",
+              personId: "brian",
+            },
+          ],
         }}
         open={open}
         returnFocusRef={triggerRef}
@@ -506,9 +513,14 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "A private thought.");
+    expect(
+      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Just me" }));
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    expect(screen.getByRole("radio", { name: "Family" })).toBeChecked();
-    await user.click(screen.getByRole("radio", { name: "Just Me" }));
     expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
     expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -518,10 +530,53 @@ describe("MomentComposer", () => {
           journalPersonId: "brian",
           audience: "just_me",
           taggedPersonIds: [],
+          circleIds: [],
         }),
       ),
     );
     expect(navigation.replace).toHaveBeenCalledWith("/people/brian");
+  });
+
+  it("posts one moment to two circles from the Post to checklist", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+        saveFamilyMoment={save}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "One porch, two circles.");
+    await user.click(
+      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    expect(
+      screen.getByRole("button", { name: /Post to, Trapp Family \+ Cousins/u }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "family",
+          circleIds: ["family", "cousins"],
+        }),
+      ),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family?circle=family");
   });
 
   it("offers only the production-ready written path in a connected journal", async () => {

@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { localJournalIsEnabled } from "../../../config/our-days-environment";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import {
+  readJournalCircleMemberships,
+  requireJournalAccess,
+} from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
@@ -53,6 +56,43 @@ function validBody(value: unknown): value is string {
     value.trim().length > 0 &&
     value.trim().length <= 4000
   );
+}
+
+function validatedCircleIds(
+  requested: readonly string[] | undefined,
+  allowed: ReadonlySet<string>,
+) {
+  if (!requested || requested.length === 0) return undefined;
+  const unique = [...new Set(requested)];
+  if (unique.some((id) => !uuidPattern.test(id) || !allowed.has(id))) {
+    return null;
+  }
+  return unique;
+}
+
+async function resolveCreateCircle(input: {
+  audience?: "family" | "just_me";
+  circleIds?: readonly string[];
+}) {
+  const memberships = await readJournalCircleMemberships();
+  const allowed = new Set(memberships.map((membership) => membership.circleId));
+  const audience = normalizeMomentAudience(input.audience);
+  if (audience === "just_me") {
+    return {
+      access: await requireJournalAccess(),
+      audience,
+      circleIds: undefined as string[] | undefined,
+    };
+  }
+  const circleIds = validatedCircleIds(input.circleIds, allowed);
+  if (circleIds === null) return null;
+  return {
+    access: await requireJournalAccess(
+      circleIds?.[0] ? { circleId: circleIds[0] } : undefined,
+    ),
+    audience,
+    circleIds,
+  };
 }
 
 function validFamilyPayload(input: {
@@ -165,11 +205,16 @@ export async function createFamilyMomentAction(input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
+  circleIds?: readonly string[];
 }): Promise<MomentActionResult> {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
   }
-  const access = await requireJournalAccess();
+  const resolved = await resolveCreateCircle(input);
+  if (!resolved) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
+  const { access, audience, circleIds } = resolved;
   if (access.mode !== "authenticated") {
     return { ok: false, message: "Preview moments are not saved." };
   }
@@ -203,7 +248,8 @@ export async function createFamilyMomentAction(input: {
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
         occurredTimezone: input.occurredTimezone,
-        audience: normalizeMomentAudience(input.audience),
+        audience,
+        circleIds,
       });
       refreshMomentSurfaces(input.journalPersonId);
       return { ok: true, message: "Moment saved.", momentId };
@@ -231,7 +277,8 @@ export async function createFamilyMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
-    audience: normalizeMomentAudience(input.audience),
+    audience,
+    ...(circleIds ? { circle_ids: circleIds } : {}),
     ...coordinates,
   };
   let { data, error } = await supabase.rpc("create_family_moment", payload);
@@ -248,7 +295,7 @@ export async function createFamilyMomentAction(input: {
       message: "That moment could not be saved. Your draft is still here.",
     };
   }
-  if (normalizeMomentAudience(input.audience) === "family") {
+  if (audience === "family") {
     void deliverActivityWebPush(supabase, "moment", data);
   }
   refreshMomentSurfaces(input.journalPersonId);
@@ -791,11 +838,16 @@ export async function createWrittenMomentAction(input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
+  circleIds?: readonly string[];
 }) {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
   }
-  const access = await requireJournalAccess();
+  const resolved = await resolveCreateCircle(input);
+  if (!resolved) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
+  const { access, audience, circleIds } = resolved;
   if (access.mode !== "authenticated") {
     return { ok: false, message: "Preview moments are not saved." };
   }
@@ -819,7 +871,8 @@ export async function createWrittenMomentAction(input: {
         occurredOn: input.occurredOn,
         occurredAt: input.occurredAt,
         occurredTimezone: input.occurredTimezone,
-        audience: normalizeMomentAudience(input.audience),
+        audience,
+        circleIds,
       });
       refreshMomentSurfaces(input.journalPersonId);
       return { ok: true, message: "Moment saved.", momentId };
@@ -838,14 +891,15 @@ export async function createWrittenMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
-    audience: normalizeMomentAudience(input.audience),
+    audience,
+    ...(circleIds ? { circle_ids: circleIds } : {}),
   });
   if (error || !data)
     return {
       ok: false,
       message: "That moment could not be saved. Your draft is still here.",
     };
-  if (normalizeMomentAudience(input.audience) === "family") {
+  if (audience === "family") {
     void deliverActivityWebPush(supabase, "moment", data);
   }
   refreshMomentSurfaces(input.journalPersonId);

@@ -251,6 +251,44 @@ function extraCircleForAccess(
   );
 }
 
+function writeAccessForCircle(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  circleId: string,
+): LocalAccess {
+  if (circleId === access.circleId) {
+    requireMembership(document, access);
+    return access;
+  }
+  if (circleId === document.circle.id) {
+    const account = document.accounts[0];
+    const membership = account
+      ? document.memberships.find(
+          (candidate) => candidate.id === account.membershipId,
+        )
+      : undefined;
+    if (!account || !membership) {
+      throw new Error("That family is not available.");
+    }
+    return {
+      membershipId: membership.id,
+      circleId: document.circle.id,
+      personId: membership.personId,
+      role: membership.role,
+    };
+  }
+  const extra = (document.extraCircles ?? []).find(
+    (circle) => circle.id === circleId,
+  );
+  if (!extra) throw new Error("That family is not available.");
+  return {
+    membershipId: extra.membershipId,
+    circleId: extra.id,
+    personId: extra.personId,
+    role: extra.role,
+  };
+}
+
 function requireMembership(
   document: LocalJournalDocument,
   access: LocalAccess,
@@ -331,6 +369,7 @@ export async function createLocalWrittenMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
   }>,
 ) {
   return withStoreLock(() => {
@@ -343,28 +382,40 @@ export async function createLocalWrittenMoment(
       throw new Error("That moment type is not available.");
     }
     const document = readDocumentUnlocked();
-    requireMembership(document, access);
-    if (!canWriteJournal(document, access, input.journalPersonId)) {
+    const audience = resolvedAudience(
+      access,
+      input.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId =
+      audience === "just_me"
+        ? access.circleId
+        : (input.circleIds?.[0] ?? access.circleId);
+    const writeAccess = writeAccessForCircle(document, access, primaryCircleId);
+    if (!canWriteJournal(document, writeAccess, input.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
     const createdAt = nowIso();
     const moment: LocalMoment = {
       id: randomUUID(),
-      circleId: access.circleId,
+      circleId: writeAccess.circleId,
+      circleIds:
+        audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds ?? [writeAccess.circleId])],
       journalPersonId: input.journalPersonId,
-      recordedByMembershipId: access.membershipId,
+      recordedByMembershipId: writeAccess.membershipId,
       kind: input.kind,
       title: input.title,
       body: input.body,
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(access, input.journalPersonId, input.audience),
+      audience,
       revision: 1,
       createdAt,
       updatedAt: createdAt,
@@ -540,13 +591,23 @@ export async function publishLocalMediaMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
     media: LocalMedia;
   }>,
 ) {
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
-    requireMembership(document, access);
-    if (!canWriteJournal(document, access, input.journalPersonId)) {
+    const audience = resolvedAudience(
+      access,
+      input.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId =
+      audience === "just_me"
+        ? access.circleId
+        : (input.circleIds?.[0] ?? access.circleId);
+    const writeAccess = writeAccessForCircle(document, access, primaryCircleId);
+    if (!canWriteJournal(document, writeAccess, input.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
     const createdAt = nowIso();
@@ -554,20 +615,24 @@ export async function publishLocalMediaMoment(
       input.kind === "photo" ? { id: randomUUID(), ...input.media } : undefined;
     const moment: LocalMoment = {
       id: randomUUID(),
+      circleId: writeAccess.circleId,
+      circleIds:
+        audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds ?? [writeAccess.circleId])],
       journalPersonId: input.journalPersonId,
-      recordedByMembershipId: access.membershipId,
+      recordedByMembershipId: writeAccess.membershipId,
       kind: input.kind,
       title: "",
       body: input.body,
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(access, input.journalPersonId, input.audience),
+      audience,
       revision: 1,
       createdAt,
       updatedAt: createdAt,

@@ -7639,6 +7639,59 @@ html[data-theme].overlay-open .app-shell::before,
   position: relative;
 }
 
+.composer-post-to-picker {
+  position: relative;
+  width: min(100%, 280px);
+  justify-self: start;
+}
+
+.composer-post-to-menu {
+  position: absolute;
+  z-index: 4;
+  top: 100%;
+  left: 0;
+  width: min(calc(100vw - 48px), 280px);
+  margin-top: 6px;
+}
+
+.composer-post-to-menu .post-to-circles {
+  margin: 0;
+}
+
+.composer-post-to-menu .post-to-circles > div {
+  grid-template-columns: 1fr;
+}
+
+.composer-post-to-menu .post-to-circles label,
+.composer-post-to-menu .post-to-just-me {
+  font-family: var(--font-record), Georgia, serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.composer-post-to-menu .post-to-just-me {
+  min-height: 44px;
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 9px 6px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--hairline);
+  cursor: pointer;
+}
+
+.composer-post-to-menu .post-to-just-me input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
 .composer-journal-trigger {
   font-size: 13px;
 }

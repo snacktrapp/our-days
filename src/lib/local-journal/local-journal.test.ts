@@ -17,9 +17,11 @@ import {
   localJordanPersonId,
 } from "./ids";
 import {
+  createLocalCircle,
   createLocalInsightMoment,
   createLocalWrittenMoment,
   findLocalAccount,
+  readLocalJournal,
   resetLocalJournalForTests,
   setLocalReaction,
   type LocalAccess,
@@ -299,5 +301,64 @@ describe("local journal happy path", () => {
     }
     expect(ownMoment.moment.kind).toBe("video");
     expect(ownMoment.moment.showJustMeBadge).toBe(true);
+  });
+
+  it("shows a multi-circle moment in each selected Home group", async () => {
+    const extra = await createLocalCircle(access, "Cousins");
+    const extraCircle = (await readLocalJournal()).extraCircles?.find(
+      (circle) => circle.id === extra.circleId,
+    );
+    if (!extraCircle) throw new Error("Cousins circle missing");
+    await createLocalWrittenMoment(access, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "One porch, two circles.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      circleIds: [localCircleId, extra.circleId],
+    });
+    const extraAccess: LocalAccess = {
+      membershipId: extraCircle.membershipId,
+      circleId: extraCircle.id,
+      personId: extraCircle.personId,
+      role: extraCircle.role,
+    };
+    const homeContext = await loadLocalJournalContext(access);
+    const extraContext = await loadLocalJournalContext(extraAccess);
+    const texts = (timeline: Awaited<ReturnType<typeof loadLocalTimeline>>) =>
+      timeline.entries.flatMap((entry) =>
+        entry.entryType === "moment" ? [entry.moment.text] : [],
+      );
+    const home = await loadLocalTimeline(access, homeContext, { pages: 1 });
+    const cousins = await loadLocalTimeline(extraAccess, extraContext, {
+      pages: 1,
+    });
+    expect(texts(home)).toContain("One porch, two circles.");
+    expect(texts(cousins)).toContain("One porch, two circles.");
+
+    await createLocalWrittenMoment(access, {
+      journalPersonId: extraCircle.personId,
+      kind: "thought",
+      title: "",
+      body: "Cousins only.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      circleIds: [extra.circleId],
+    });
+    const homeAfter = await loadLocalTimeline(access, homeContext, {
+      pages: 1,
+    });
+    const cousinsAfter = await loadLocalTimeline(extraAccess, extraContext, {
+      pages: 1,
+    });
+    expect(texts(homeAfter)).not.toContain("Cousins only.");
+    expect(texts(cousinsAfter)).toContain("Cousins only.");
   });
 });

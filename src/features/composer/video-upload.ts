@@ -55,6 +55,7 @@ export type VideoMomentDraft = Readonly<{
   longitude?: number | null;
   taggedPersonIds: readonly string[];
   audience?: "family" | "just_me";
+  circleIds?: readonly string[];
 }>;
 
 export class VideoUploadError extends Error {
@@ -299,6 +300,9 @@ async function uploadLocalVideoMoment(
   body.set("durationMs", String(draft.durationMs));
   body.set("requestKey", attempt.requestKey);
   body.set("audience", draft.audience ?? "family");
+  if (draft.circleIds?.length) {
+    body.set("circleIds", JSON.stringify([...draft.circleIds]));
+  }
   const response = await fetch("/api/media/local/video", {
     body,
     credentials: "same-origin",
@@ -370,6 +374,7 @@ export async function uploadVideoMoment(
       request_key: attempt.requestKey,
       tagged_person_ids: [...draft.taggedPersonIds],
       audience: draft.audience ?? "family",
+      ...(draft.circleIds?.length ? { circle_ids: [...draft.circleIds] } : {}),
     },
   );
   const reservation = firstRow(reservationRows);

@@ -15,6 +15,14 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
 vi.mock("@/lib/auth/journal-access", () => ({
   requireJournalAccess: mocks.requireAccess,
+  readJournalCircleMemberships: vi.fn().mockResolvedValue([
+    {
+      membershipId: "membership-a",
+      circleId: "20000000-0000-4000-8000-000000000001",
+      personId: "30000000-0000-4000-8000-000000000001",
+      role: "organizer",
+    },
+  ]),
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,

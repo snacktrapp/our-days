@@ -130,6 +130,10 @@ function chrome(
       recordedByName: "Brian",
       journalPeople: composerJournalPeople,
       taggablePeople: composerPeople,
+      circleId: "family",
+      postableCircles: [
+        { id: "family", name: "All our days", personId: "brian" },
+      ],
     },
   };
 }
@@ -448,8 +452,25 @@ export function getFamilyTimelineFixture(
   const switcher = previewSwitcher(currentHref, options);
   const title = extraSelected ? extraSelected.name : previewFamilyName;
 
+  const familyChrome = chrome(
+    "teal",
+    title,
+    "brian",
+    journalSwitcherEyebrow(switcher),
+  );
   return {
-    chrome: chrome("teal", title, "brian", journalSwitcherEyebrow(switcher)),
+    chrome: {
+      ...familyChrome,
+      composer: {
+        ...familyChrome.composer,
+        circleId: selectedGroupId,
+        postableCircles: previewGroups(options.extraGroup).map((group) => ({
+          id: group.id,
+          name: group.name,
+          personId: "brian",
+        })),
+      },
+    },
     interaction: timelineInteraction,
     switcher,
     entries: extraSelected

@@ -108,6 +108,36 @@ export type Database = {
           },
         ];
       };
+      moment_circles: {
+        Row: {
+          circle_id: string;
+          moment_id: string;
+        };
+        Insert: {
+          circle_id: string;
+          moment_id: string;
+        };
+        Update: {
+          circle_id?: string;
+          moment_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_circles_circle_id_fkey";
+            columns: ["circle_id"];
+            isOneToOne: false;
+            referencedRelation: "circles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moment_circles_moment_id_fkey";
+            columns: ["moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       moment_notes: {
         Row: {
           author_membership_id: string;
@@ -738,6 +768,7 @@ export type Database = {
           longitude?: number | null;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: string;
       };
@@ -787,6 +818,7 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: string;
       };
@@ -1192,6 +1224,7 @@ export type Database = {
           request_key?: string;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1217,6 +1250,7 @@ export type Database = {
           request_key?: string;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;

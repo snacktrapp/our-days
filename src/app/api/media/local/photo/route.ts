@@ -65,6 +65,21 @@ export async function POST(request: Request) {
     );
     const audienceValue = readString(form, "audience");
     const existingMomentId = readString(form, "existingMomentId");
+    let circleIds: string[] | undefined;
+    try {
+      const raw = readString(form, "circleIds");
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+          Array.isArray(parsed) &&
+          parsed.every((value) => typeof value === "string")
+        ) {
+          circleIds = parsed;
+        }
+      }
+    } catch {
+      circleIds = undefined;
+    }
     const moment = await publishVerifiedPhotoMoment(access, {
       file,
       journalPersonId: readString(form, "journalPersonId"),
@@ -81,6 +96,7 @@ export async function POST(request: Request) {
         audienceValue === "just_me" || audienceValue === "family"
           ? audienceValue
           : undefined,
+      circleIds,
       existingMomentId: existingMomentId || undefined,
     });
     return json(200, {

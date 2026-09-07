@@ -49,6 +49,7 @@ export type PhotoMomentDraft = Readonly<{
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
+  circleIds?: readonly string[];
   existingMomentId?: string;
 }>;
 
@@ -620,6 +621,9 @@ async function uploadLocalPhotoMoment(
   body.set("sha256", sha256);
   body.set("requestKey", attempt.requestKey);
   body.set("audience", draft.audience ?? "family");
+  if (draft.circleIds?.length) {
+    body.set("circleIds", JSON.stringify([...draft.circleIds]));
+  }
   if (draft.existingMomentId) {
     body.set("existingMomentId", draft.existingMomentId);
   }
@@ -823,6 +827,9 @@ export async function uploadPhotoMoment(
             request_key: attempt.requestKey,
             tagged_person_ids: [...draft.taggedPersonIds],
             audience: draft.audience ?? "family",
+            ...(draft.circleIds?.length
+              ? { circle_ids: [...draft.circleIds] }
+              : {}),
           });
     const reservationQuotaMessage = photoQuotaMessage(reservationError);
     if (reservationQuotaMessage) {

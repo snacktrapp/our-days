@@ -22,6 +22,7 @@ export type SaveFamilyMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type SaveWrittenMomentAction = (input: {
@@ -31,6 +32,7 @@ export type SaveWrittenMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type UpdateFamilyMomentAction = (input: {

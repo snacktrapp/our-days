@@ -287,7 +287,8 @@ export function mapTimelineRow(
     kicker:
       row.moment_kind === "insight"
         ? "An insight"
-        : row.recorder_person_id === row.moment_journal_person_id
+        : row.recorder_person_id === row.moment_journal_person_id ||
+            !row.recorder_person_name
           ? row.moment_kind === "milestone"
             ? "A milestone"
             : row.moment_kind === "location"
