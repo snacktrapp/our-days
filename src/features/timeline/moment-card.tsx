@@ -2,6 +2,7 @@ import { CspPublicImage } from "@/components/csp-image";
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
+import { useVideoPoster } from "@/features/video/video-poster-store";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
@@ -17,7 +18,53 @@ import type {
   MomentDetailViewModel,
   MomentInteractionViewModel,
   TimelineMomentViewModel,
+  VideoMomentViewModel,
 } from "./timeline-view-model";
+
+function VideoMomentMedia({
+  moment,
+  label,
+}: Readonly<{
+  moment: VideoMomentViewModel;
+  label: string;
+}>) {
+  const storedPoster = useVideoPoster(moment.id);
+  const poster = moment.video.poster ?? storedPoster ?? undefined;
+  return (
+    <FullscreenMediaViewer
+      kind="video"
+      label={label}
+      reactionTargetId={moment.id}
+      preview={
+        poster ? (
+          // Poster is a local data URL captured during prep; it must not
+          // enter the public image optimizer.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="video-card-poster"
+            src={poster}
+            alt=""
+            width={moment.video.width}
+            height={moment.video.height}
+          />
+        ) : (
+          <div className="video-card-mat" aria-hidden="true" />
+        )
+      }
+      fullscreenMedia={
+        <PrivateVideoPlayer
+          src={moment.video.src}
+          label={label}
+          poster={poster}
+          preload="metadata"
+          autoPlay
+          width={moment.video.width}
+          height={moment.video.height}
+        />
+      }
+    />
+  );
+}
 
 function PhotoFrameSizer({
   width,
@@ -123,29 +170,9 @@ export function MomentCard({
         >
           <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
           {moment.kind === "video" ? (
-            <FullscreenMediaViewer
-              kind="video"
+            <VideoMomentMedia
+              moment={moment}
               label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-              reactionTargetId={moment.id}
-              preview={
-                <PrivateVideoPlayer
-                  src={moment.video.src}
-                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-                  preload={preload ? "metadata" : "none"}
-                  controls={false}
-                  width={moment.video.width}
-                  height={moment.video.height}
-                />
-              }
-              fullscreenMedia={
-                <PrivateVideoPlayer
-                  src={moment.video.src}
-                  label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
-                  preload="metadata"
-                  width={moment.video.width}
-                  height={moment.video.height}
-                />
-              }
             />
           ) : (
             <PhotoCardPager

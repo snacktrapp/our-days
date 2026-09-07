@@ -88,9 +88,9 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await page
     .locator('input[type="file"]')
     .setInputFiles("tests/fixtures/synthetic-short.mp4");
-  await expect(page.getByText("Video ready to upload privately.")).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(
+    page.getByText("Wait for this video to finish loading."),
+  ).toHaveCount(0);
   await page.getByRole("textbox", { name: "Note" }).fill("A one-second wave.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
@@ -103,18 +103,31 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   const videoCard = page.locator('[data-moment-kind="video"]').first();
   await expect(videoCard).toBeVisible();
   await expect(videoCard.getByText("Video", { exact: true })).toBeVisible();
-  const timelineVideo = videoCard.locator("video");
-  await expect(timelineVideo).toHaveAttribute("playsinline");
-  await expect(timelineVideo).not.toHaveAttribute("autoplay");
-  await expect(timelineVideo).not.toHaveAttribute("controls");
+  await expect(videoCard.locator(".video-viewer-play")).toBeVisible();
+  await expect(videoCard.locator("video")).toHaveCount(0);
+  await expect(
+    videoCard.locator(".video-card-poster, .video-card-mat"),
+  ).toBeVisible();
   await videoCard
     .getByRole("button", { name: /Open video full screen/u })
     .click();
   const fullscreen = page.getByRole("dialog", { name: /Full-screen video/u });
   await expect(fullscreen).toBeVisible();
-  await expect(fullscreen.locator("video")).toHaveAttribute("controls");
-  await expect(fullscreen.locator("video")).toHaveAttribute("playsinline");
-  await fullscreen.getByRole("button", { name: "Done" }).click();
+  const lightboxVideo = fullscreen.locator("video");
+  await expect(lightboxVideo).toHaveAttribute("controls");
+  await expect(lightboxVideo).toHaveAttribute("playsinline");
+  await expect(lightboxVideo).toHaveAttribute("autoplay");
+  await expect
+    .poll(async () => lightboxVideo.evaluate((node) => !node.paused), {
+      timeout: 8_000,
+    })
+    .toBe(true);
+  const done = fullscreen.getByRole("button", { name: "Done" });
+  await expect(done).toBeVisible();
+  await expect(fullscreen.locator(".media-viewer-chrome")).toContainText(
+    "Done",
+  );
+  await done.click();
   await expect(fullscreen).toBeHidden();
 
   await page.goto("/memories");
