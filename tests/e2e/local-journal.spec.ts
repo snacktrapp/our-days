@@ -118,9 +118,13 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(lightboxVideo).toHaveAttribute("playsinline");
   await expect(lightboxVideo).toHaveAttribute("autoplay");
   await expect
-    .poll(async () => lightboxVideo.evaluate((node) => !node.paused), {
-      timeout: 8_000,
-    })
+    .poll(
+      async () =>
+        lightboxVideo.evaluate((node) => !(node as HTMLVideoElement).paused),
+      {
+        timeout: 8_000,
+      },
+    )
     .toBe(true);
   const done = fullscreen.getByRole("button", { name: "Done" });
   await expect(done).toBeVisible();

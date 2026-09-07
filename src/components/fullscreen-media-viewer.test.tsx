@@ -21,7 +21,7 @@ describe("FullscreenMediaViewer", () => {
       <FullscreenMediaViewer
         kind="video"
         label="Family video"
-        preview={<img src="/poster.jpg" alt="" />}
+        preview={<div className="video-card-mat" aria-hidden="true" />}
         fullscreenMedia={
           <video src="/video.mp4" aria-label="Family video" controls />
         }
