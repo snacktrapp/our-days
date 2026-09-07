@@ -411,6 +411,7 @@ test("members can create a second group from Account and filter Home without cos
   ).toHaveCount(0);
   await page.getByRole("link", { name: "All our days", exact: true }).click();
   await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
+  await expect(page).toHaveURL(/circle=family/);
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();

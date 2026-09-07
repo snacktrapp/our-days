@@ -31,10 +31,8 @@ export function isGroupHomeHref(href: string) {
   return path === "/family";
 }
 
-export function groupHomeHref(circleId: string, isDefault: boolean) {
-  return isDefault
-    ? "/family"
-    : `/family?circle=${encodeURIComponent(circleId)}`;
+export function groupHomeHref(circleId: string) {
+  return `/family?circle=${encodeURIComponent(circleId)}`;
 }
 
 export function buildJournalSwitcher(input: {
@@ -73,10 +71,10 @@ export function buildJournalSwitcher(input: {
           },
         ]
       : []),
-    ...groups.map((group, index) => ({
+    ...groups.map((group) => ({
       kind: "group" as const,
       label: group.name,
-      href: groupHomeHref(group.id, index === 0),
+      href: groupHomeHref(group.id),
       current: onGroupHome && group.id === activeGroupId,
       circleId: group.id,
     })),

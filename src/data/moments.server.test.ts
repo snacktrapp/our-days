@@ -524,7 +524,7 @@ describe("connected timeline mapping", () => {
       {
         kind: "group",
         label: "Our family",
-        href: "/family",
+        href: "/family?circle=circle",
         current: false,
         circleId: "circle",
       },

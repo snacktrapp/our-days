@@ -30,7 +30,7 @@ describe("journal switcher grammar", () => {
       {
         kind: "group",
         label: "Trapp Family",
-        href: "/family",
+        href: "/family?circle=family",
         current: true,
         circleId: "family",
       },
@@ -71,7 +71,7 @@ describe("journal switcher grammar", () => {
       {
         kind: "group",
         label: "Trapp Family",
-        href: "/family",
+        href: "/family?circle=family",
         current: false,
         circleId: "family",
       },
@@ -97,7 +97,7 @@ describe("journal switcher grammar", () => {
       {
         kind: "group",
         label: "Our family",
-        href: "/family",
+        href: "/family?circle=family",
         current: false,
         circleId: "family",
       },
