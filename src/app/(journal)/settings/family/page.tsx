@@ -25,15 +25,25 @@ import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 import { createGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 
-export default async function FamilySettingsPage() {
+export default async function FamilySettingsPage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<{ inviteCircle?: string }>;
+}>) {
+  const { inviteCircle } = await searchParams;
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
     const model = getFamilySettingsFixture(await previewGroupOptions());
+    const inviteGroup = model.panel.groups.find(
+      (group) => group.id === inviteCircle,
+    );
     return (
       <JournalChrome model={model.chrome} section="settings">
         <FamilySettingsPanel
           model={model.panel}
           createGroupAction={createGroupAction}
+          inviteCircleId={inviteGroup?.id}
+          inviteCircleName={inviteGroup?.name}
         >
           <AccountTools />
         </FamilySettingsPanel>
@@ -79,6 +89,9 @@ export default async function FamilySettingsPage() {
     invitationDeliveryIsEnabled(),
     memberCounts,
   );
+  const inviteGroup = model.panel.groups.find(
+    (group) => group.id === inviteCircle,
+  );
 
   return (
     <JournalChrome
@@ -89,6 +102,8 @@ export default async function FamilySettingsPage() {
       <FamilySettingsPanel
         model={model.panel}
         createGroupAction={createGroupAction}
+        inviteCircleId={inviteGroup?.id}
+        inviteCircleName={inviteGroup?.name}
         actions={{
           requestInvitation: requestFamilyInvitationAction,
           revokeMembership: revokeFamilyMembershipAction,

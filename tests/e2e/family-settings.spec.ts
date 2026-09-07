@@ -36,9 +36,12 @@ test("family settings makes access and invitation boundaries explicit", async ({
   page,
 }) => {
   await page.goto("/people");
-  await page.getByRole("link", { name: "Family access & invitations" }).click();
-  await expect(page).toHaveURL(/\/settings\/family$/u);
+  await page.getByRole("link", { name: "Invite into this circle" }).click();
+  await expect(page).toHaveURL(/inviteCircle=family/u);
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Invite into All our days" }),
+  ).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
     page.getByRole("navigation", { name: "Choose a family timeline" }),

@@ -183,6 +183,19 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("name")).toBe("Cousins");
   });
 
+  it("names the Account invite form for the circle People asked to invite into", () => {
+    render(
+      <FamilySettingsPanel
+        model={model}
+        inviteCircleId="family"
+        inviteCircleName="All our days"
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Invite into All our days" }),
+    ).toBeVisible();
+  });
+
   it("distinguishes account access from managed journal profiles", () => {
     render(<FamilySettingsPanel model={model} />);
 
@@ -491,6 +504,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedInvitationModel}
+        inviteCircleId="family"
         actions={{
           requestInvitation,
           revokeMembership: vi.fn(),
@@ -532,6 +546,7 @@ describe("FamilySettingsPanel", () => {
     expect(requestInvitation.mock.calls[0]?.[0]).toMatchObject({
       displayName: "Aunt June",
       email: "june@example.com",
+      circleId: "family",
     });
     expect(requestInvitation.mock.calls[1]?.[0].requestKey).toBe(
       requestInvitation.mock.calls[0]?.[0].requestKey,

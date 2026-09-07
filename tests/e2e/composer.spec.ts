@@ -323,7 +323,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(activitySheet.locator(".sheet-handle")).toBeVisible();
   await expect(
     activityDialog.getByRole("button", { name: "Done" }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(activitySheet).toHaveCSS("animation-name", "sheet-up");
   const activityGeometry = await activitySheet.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -337,7 +337,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     activityGeometry.viewport * 0.6,
   );
   expect(Number.parseFloat(activityGeometry.radius)).toBeGreaterThanOrEqual(14);
-  await activityDialog.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Escape");
   await expect(activityDialog).toBeHidden();
 
   const trigger = page.getByRole("button", { name: "Add moment" });

@@ -33,6 +33,7 @@ type ConnectedActions = Readonly<{
     displayName: string;
     email: string;
     requestKey: string;
+    circleId?: string;
   }) => Promise<FamilySettingsActionResult>;
   revokeMembership: (input: {
     membershipId: string;
@@ -55,11 +56,15 @@ export function FamilySettingsPanel({
   model,
   actions,
   createGroupAction,
+  inviteCircleId,
+  inviteCircleName,
   children,
 }: {
   model: FamilySettingsPanelViewModel;
   actions?: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  inviteCircleId?: string;
+  inviteCircleName?: string;
   children?: ReactNode;
 }) {
   if (model.mode === "preview") {
@@ -67,6 +72,7 @@ export function FamilySettingsPanel({
       <PreviewFamilySettingsPanel
         model={model}
         createGroupAction={createGroupAction}
+        inviteCircleName={inviteCircleName}
       >
         {children}
       </PreviewFamilySettingsPanel>
@@ -83,6 +89,8 @@ export function FamilySettingsPanel({
       model={model}
       actions={actions}
       createGroupAction={createGroupAction}
+      inviteCircleId={inviteCircleId}
+      inviteCircleName={inviteCircleName}
     >
       {children}
     </ConnectedFamilySettingsPanel>
@@ -282,10 +290,12 @@ function GroupsSection({
 function PreviewFamilySettingsPanel({
   model,
   createGroupAction,
+  inviteCircleName,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  inviteCircleName?: string;
   children?: ReactNode;
 }) {
   const [email, setEmail] = useState("");
@@ -393,7 +403,11 @@ function PreviewFamilySettingsPanel({
       >
         <div className="settings-heading">
           <span>Invitation only</span>
-          <h2 id="invite-heading">Invite a family member</h2>
+          <h2 id="invite-heading">
+            {inviteCircleName
+              ? `Invite into ${inviteCircleName}`
+              : "Invite a family member"}
+          </h2>
           <p>
             New relatives will join only after accepting a secure invitation
             sent to their email address.
@@ -465,11 +479,15 @@ function ConnectedFamilySettingsPanel({
   model,
   actions,
   createGroupAction,
+  inviteCircleId,
+  inviteCircleName,
   children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  inviteCircleId?: string;
+  inviteCircleName?: string;
   children?: ReactNode;
 }) {
   const [accessReviewId, setAccessReviewId] = useState<string | null>(null);
@@ -624,6 +642,7 @@ function ConnectedFamilySettingsPanel({
         const nextResult = await requestInvitation({
           ...draft,
           requestKey,
+          circleId: inviteCircleId,
         });
         if (nextResult.ok || alreadyListed) {
           inviteRequestKeyRef.current = null;
@@ -962,7 +981,11 @@ function ConnectedFamilySettingsPanel({
       >
         <div className="settings-heading">
           <span>Invitation only</span>
-          <h2 id="invite-heading">Family invitations</h2>
+          <h2 id="invite-heading">
+            {inviteCircleName
+              ? `Invite into ${inviteCircleName}`
+              : "Family invitations"}
+          </h2>
           <p>
             Only organizers can manage invitations. Addresses are used for
             private delivery and are not shown again after a request is sent.

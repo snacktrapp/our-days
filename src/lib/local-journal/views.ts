@@ -20,6 +20,8 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
+import type { PeopleViewModel } from "@/features/people/people-view-model";
+import { buildPeopleViewModel } from "@/features/people/people-view-model";
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
 import {
   buildActivityNotifications,
@@ -27,7 +29,12 @@ import {
   mapDatabaseAccent,
   plainToday,
 } from "@/data/journal-context.server";
-import { journalContextLabel } from "@/lib/circle-roles";
+import {
+  hasOrganizerPrivilege,
+  isOperationsMembership,
+  journalContextLabel,
+  journalDirectoryRoleLabel,
+} from "@/lib/circle-roles";
 import {
   buildTimelineEntries,
   connectedTimelineInteraction,
@@ -379,6 +386,79 @@ export async function loadLocalJournalContext(
     chrome,
     people: surface.people,
   };
+}
+
+export async function loadLocalPeopleDirectory(
+  access: LocalAccess,
+  context: ConnectedJournalContext,
+): Promise<PeopleViewModel> {
+  const document = await readLocalJournal();
+  const groups = localGroups(document);
+  return buildPeopleViewModel({
+    chrome: context.chrome,
+    groups: groups.map((group) => {
+      const extra = (document.extraCircles ?? []).find(
+        (circle) => circle.id === group.id,
+      );
+      if (extra) {
+        return {
+          id: extra.id,
+          name: extra.name,
+          canInvite: hasOrganizerPrivilege(extra.role),
+          members: isOperationsMembership(extra)
+            ? []
+            : [
+                {
+                  id: extra.personId,
+                  name: extra.displayName,
+                  initial: initialFor(extra.displayName),
+                  accent: mapDatabaseAccent(extra.accentToken),
+                  roleLabel: journalDirectoryRoleLabel("account", extra.role),
+                  journalHref: `/people/${extra.personId}`,
+                },
+              ],
+        };
+      }
+      const membershipByPerson = new Map(
+        document.memberships.map((membership) => [
+          membership.personId,
+          membership,
+        ]),
+      );
+      const viewer = document.memberships.find(
+        (membership) => membership.id === access.membershipId,
+      );
+      return {
+        id: group.id,
+        name: group.name,
+        canInvite: hasOrganizerPrivilege(viewer?.role ?? access.role),
+        members: document.people.flatMap((person) => {
+          const membership = membershipByPerson.get(person.id);
+          if (
+            isOperationsMembership({
+              role: membership?.role,
+              directoryKind: membership?.directoryKind,
+            })
+          ) {
+            return [];
+          }
+          return [
+            {
+              id: person.id,
+              name: person.displayName,
+              initial: initialFor(person.displayName),
+              accent: mapDatabaseAccent(person.accentToken),
+              roleLabel: journalDirectoryRoleLabel(
+                person.profileKind,
+                membership?.role,
+              ),
+              journalHref: `/people/${person.id}`,
+            },
+          ];
+        }),
+      };
+    }),
+  });
 }
 
 function visibleMoments(

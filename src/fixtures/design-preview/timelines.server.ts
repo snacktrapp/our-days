@@ -10,7 +10,10 @@ import type {
   MemoriesViewModel,
   MemoryJourneyViewModel,
 } from "@/features/memories/memories-view-model";
-import type { PeopleViewModel } from "@/features/people/people-view-model";
+import {
+  buildPeopleViewModel,
+  type PeopleViewModel,
+} from "@/features/people/people-view-model";
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import {
@@ -578,53 +581,70 @@ export function getPersonalTimelineFixture(
   };
 }
 
-export function getPeopleFixture(): PeopleViewModel {
-  return {
+const familyPeople = [
+  {
+    id: "brian",
+    name: "Brian",
+    initial: "B",
+    accent: "teal" as const,
+    roleLabel: "Co-organizer",
+    journalHref: "/people/brian",
+  },
+  {
+    id: "molly",
+    name: "Molly",
+    initial: "M",
+    accent: "clay" as const,
+    roleLabel: "Co-organizer",
+    journalHref: "/people/molly",
+  },
+  {
+    id: "avery",
+    name: "Avery",
+    initial: "A",
+    accent: "ochre" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/avery",
+  },
+  {
+    id: "sam",
+    name: "Sam",
+    initial: "S",
+    accent: "slate" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/sam",
+  },
+  {
+    id: "june",
+    name: "June",
+    initial: "J",
+    accent: "moss" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/june",
+  },
+] as const;
+
+export function getPeopleFixture(
+  options: PreviewTimelineOptions = {},
+): PeopleViewModel {
+  return buildPeopleViewModel({
     chrome: chrome("teal", "Our people"),
-    intro: "Individual journals within this family archive.",
-    people: [
-      {
-        id: "brian",
-        name: "Brian",
-        initial: "B",
-        accent: "teal",
-        roleLabel: "Co-organizer",
-        journalHref: "/people/brian",
-      },
-      {
-        id: "molly",
-        name: "Molly",
-        initial: "M",
-        accent: "clay",
-        roleLabel: "Co-organizer",
-        journalHref: "/people/molly",
-      },
-      {
-        id: "avery",
-        name: "Avery",
-        initial: "A",
-        accent: "ochre",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/avery",
-      },
-      {
-        id: "sam",
-        name: "Sam",
-        initial: "S",
-        accent: "slate",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/sam",
-      },
-      {
-        id: "june",
-        name: "June",
-        initial: "J",
-        accent: "moss",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/june",
-      },
-    ],
-  };
+    groups: previewGroups(options.extraGroup).map((group) =>
+      group.id === previewFamilyId
+        ? {
+            id: group.id,
+            name: group.name,
+            canInvite: true,
+            members: familyPeople,
+          }
+        : {
+            id: group.id,
+            name: group.name,
+            canInvite: true,
+            members: [familyPeople[0]],
+          },
+    ),
+  });
 }
 
 export function getFamilySettingsFixture(

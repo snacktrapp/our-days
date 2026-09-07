@@ -3,6 +3,8 @@ import { PeoplePanel } from "@/features/people/people-panel";
 import { getPeopleFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
+import { loadPeopleDirectory } from "@/data/people.server";
+import { previewGroupOptions } from "@/data/preview-groups.server";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 
 export default async function PeoplePage({
@@ -16,7 +18,7 @@ export default async function PeoplePage({
     if (previewLoading === "navigation") {
       await new Promise((resolve) => setTimeout(resolve, 900));
     }
-    const model = getPeopleFixture();
+    const model = getPeopleFixture(await previewGroupOptions());
     return (
       <JournalChrome model={model.chrome} section="people">
         <PeoplePanel model={model} />
@@ -24,12 +26,7 @@ export default async function PeoplePage({
     );
   }
   const context = await loadConnectedJournalContext(access);
-  const model = {
-    chrome: { ...context.chrome, title: "Our people" },
-    intro: "Individual journals within this family archive.",
-    people: context.people,
-    familySettingsHref: null,
-  };
+  const model = await loadPeopleDirectory(access, context);
   return (
     <JournalChrome
       model={model.chrome}

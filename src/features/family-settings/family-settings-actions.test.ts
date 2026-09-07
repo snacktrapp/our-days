@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   membershipMaybeSingle: vi.fn(),
   revalidatePath: vi.fn(),
   requireAccess: vi.fn(),
+  readMemberships: vi.fn(),
   rpc: vi.fn(),
   signInWithOtp: vi.fn(),
 }));
@@ -18,6 +19,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
 vi.mock("@/lib/auth/journal-access", () => ({
   requireJournalAccess: mocks.requireAccess,
+  readJournalCircleMemberships: mocks.readMemberships,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
@@ -358,6 +360,46 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
       "/settings/family",
+    );
+  });
+
+  it("requests an invitation into a named circle the organizer belongs to", async () => {
+    const otherCircleId = "20000000-0000-4000-8000-000000000099";
+    mocks.readMemberships.mockResolvedValueOnce([
+      {
+        membershipId: organizerMembershipId,
+        circleId: "20000000-0000-4000-8000-000000000001",
+        personId: "30000000-0000-4000-8000-000000000001",
+        role: "organizer",
+      },
+      {
+        membershipId: "40000000-0000-4000-8000-000000000099",
+        circleId: otherCircleId,
+        personId: "30000000-0000-4000-8000-000000000001",
+        role: "organizer",
+      },
+    ]);
+    mocks.rpc.mockResolvedValueOnce({ data: emailRequestId, error: null });
+
+    await expect(
+      requestFamilyInvitationAction({
+        displayName: "Aunt",
+        email: "aunt@example.com",
+        requestKey,
+        circleId: otherCircleId,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Private invitation requested.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
+      "request_invitation_email",
+      {
+        circle_id: otherCircleId,
+        display_name: "Aunt",
+        email: "aunt@example.com",
+        request_key: requestKey,
+      },
     );
   });
 
