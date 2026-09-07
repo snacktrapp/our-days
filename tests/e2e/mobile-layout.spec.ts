@@ -176,7 +176,7 @@ test("reduced-motion preference removes entrance animations", async ({
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await page.getByRole("button", { name: /Open notifications/u }).click();
-  await expect(page.locator(".notification-panel")).toHaveCSS(
+  await expect(page.locator(".activity-sheet")).toHaveCSS(
     "animation-name",
     "none",
   );
