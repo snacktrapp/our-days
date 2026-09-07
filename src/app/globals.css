@@ -19,7 +19,7 @@
   --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
   --chrome-eyebrow: 650 9px / 1.2 var(--font-record);
-  --chrome-title: 600 16px / 1.25 var(--font-record);
+  --chrome-title: 600 16px / 1.25 var(--font-interface);
   --chrome-body: 400 12px / 1.45 var(--font-interface);
   --chrome-meta: 600 10px / 1.35 var(--font-record);
   --header-drawer-radius: 10px;
@@ -2155,6 +2155,13 @@ button:focus-visible,
   font: var(--chrome-body);
   text-align: left;
 }
+.chrome-meta {
+  font: var(--chrome-meta);
+  letter-spacing: 0.04em;
+}
+.people-group .settings-heading p {
+  font: var(--chrome-meta);
+}
 .people-list {
   overflow: hidden;
   border: 1px solid var(--hairline);
@@ -2203,7 +2210,7 @@ button:focus-visible,
 .person-arrow {
   margin-left: auto;
   color: #514a43;
-  font-size: 9px;
+  font: var(--chrome-meta);
 }
 .invite-button {
   width: 100%;
@@ -2579,8 +2586,7 @@ button:focus-visible,
   min-height: 32px;
   margin: 6px 1px 7px;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font: var(--chrome-body);
 }
 .invite-section form > .field-error,
 .groups-section form > .field-error {
@@ -2598,8 +2604,7 @@ button:focus-visible,
 .invite-section form > small {
   margin-top: 9px;
   color: #526047;
-  font-size: 11px;
-  line-height: 1.35;
+  font: var(--chrome-meta);
   text-align: center;
 }
 .invite-section form.connected-invite-form {
@@ -2617,13 +2622,12 @@ button:focus-visible,
   margin: 6px 0 9px;
   display: block;
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 18px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .invite-review-email {
   overflow-wrap: anywhere;
   color: #526047 !important;
+  font: var(--chrome-body);
   font-weight: 700;
 }
 .invite-review > div {
@@ -2660,9 +2664,7 @@ button:focus-visible,
 }
 .pending-invitation-list strong {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 14px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .invitation-status {
   width: fit-content;
@@ -2671,10 +2673,8 @@ button:focus-visible,
   border-radius: 999px;
   background: color-mix(in srgb, var(--teal) 6%, var(--cream));
   color: #526047;
-  font-size: 9px;
+  font: var(--chrome-meta);
   font-style: normal;
-  font-weight: 750;
-  line-height: 1.4;
 }
 .status-queued,
 .status-provisioned {
@@ -2682,8 +2682,7 @@ button:focus-visible,
 }
 .pending-invitation-list small {
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font: var(--chrome-meta);
 }
 .pending-invitation-list button {
   min-width: 78px;
@@ -2702,8 +2701,7 @@ button:focus-visible,
   padding: 13px 16px 16px;
   border-top: 1px solid var(--hairline);
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font: var(--chrome-body);
 }
 .settings-delivery-boundary {
   margin: 12px;
@@ -2715,15 +2713,12 @@ button:focus-visible,
 .settings-delivery-boundary strong {
   display: block;
   color: var(--ink);
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .settings-delivery-boundary p {
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font: var(--chrome-body);
 }
 .connected-invite-review {
   margin-top: 12px;
@@ -5434,6 +5429,7 @@ button:focus-visible,
 
 .person-arrow {
   color: var(--muted);
+  font: var(--chrome-meta);
 }
 
 .memory-feature-written,
