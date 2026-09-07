@@ -331,38 +331,86 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
+  function mockCardSlideWidth(width: number) {
+    const previous = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        if (this.classList?.contains("photo-card-pager-stage")) return width;
+        return 0;
+      },
+    });
+    return () => {
+      if (previous) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", previous);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+    };
+  }
+
+  it("locks each album slide to the stage width", () => {
+    const restoreWidth = mockCardSlideWidth(390);
+    try {
+      renderPager(porchAlbum(4));
+      const node = stage();
+      expect(node?.style.getPropertyValue("--photo-card-slide-width")).toBe(
+        "390px",
+      );
+      expect(
+        document.querySelectorAll(".photo-card-pager-frame.is-outgoing"),
+      ).toHaveLength(1);
+      expect(
+        document.querySelectorAll(".photo-card-pager-frame.is-parked"),
+      ).toHaveLength(3);
+    } finally {
+      restoreWidth();
+    }
+  });
+
   it("follows a horizontal drag live, then snaps past the threshold", () => {
-    const { container } = renderPager();
-    markPagerImagesReady();
-    const pager = container.querySelector(".photo-card-pager")!;
+    const restoreWidth = mockCardSlideWidth(390);
+    try {
+      const { container } = renderPager();
+      markPagerImagesReady();
+      const pager = container.querySelector(".photo-card-pager")!;
 
-    fireEvent.pointerDown(pager, {
-      pointerId: 2,
-      pointerType: "touch",
-      clientX: 180,
-      clientY: 80,
-    });
-    fireEvent.pointerMove(pager, {
-      pointerId: 2,
-      pointerType: "touch",
-      clientX: 120,
-      clientY: 84,
-    });
+      fireEvent.pointerDown(pager, {
+        pointerId: 2,
+        pointerType: "touch",
+        clientX: 180,
+        clientY: 80,
+      });
+      fireEvent.pointerMove(pager, {
+        pointerId: 2,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
 
-    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
-    expect(track()).toHaveAttribute("data-phase", "drag");
-    expect(track()).toHaveAttribute("data-dx", "-60");
-    expect((track() as HTMLElement).style.transform).toContain("-60px");
+      expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+      expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
+      expect(track()).toHaveAttribute("data-phase", "drag");
+      expect(track()).toHaveAttribute("data-dx", "-60");
+      expect((track() as HTMLElement).style.transform).toBe("translateX(-60px)");
 
-    fireEvent.pointerUp(pager, {
-      pointerId: 2,
-      pointerType: "touch",
-      clientX: 120,
-      clientY: 84,
-    });
-    expect(track()).toHaveAttribute("data-direction", "next");
-    expect(track()).toHaveClass("is-sliding");
+      fireEvent.pointerUp(pager, {
+        pointerId: 2,
+        pointerType: "touch",
+        clientX: 120,
+        clientY: 84,
+      });
+      expect(track()).toHaveAttribute("data-direction", "next");
+      expect(track()).toHaveClass("is-sliding");
+      expect((track() as HTMLElement).style.transform).toBe(
+        "translateX(-390px)",
+      );
+    } finally {
+      restoreWidth();
+    }
   });
 
   it("springs back when a horizontal drag is released before the threshold", () => {

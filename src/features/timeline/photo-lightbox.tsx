@@ -742,10 +742,9 @@ function PhotoLightboxLayer({
       <button
         type="button"
         className="photo-lightbox-close media-viewer-close"
-        aria-label="Close full-screen media"
         onClick={close}
       >
-        ×
+        Done
       </button>
       <div
         ref={stageRef}
