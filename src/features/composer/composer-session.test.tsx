@@ -62,7 +62,13 @@ describe("ComposerSessionProvider", () => {
 
     const trigger = screen.getByRole("button", { name: "Add moment" });
     await user.click(trigger);
-    expect(screen.getByRole("dialog")).toHaveClass("composer-type-picker");
+    const dialog = screen.getByRole("dialog", { name: "New moment" });
+    expect(dialog).toHaveClass("composer-dialog");
+    expect(dialog).toHaveClass("composer-type-picker");
+    expect(dialog.querySelector(".activity-sheet")).toHaveClass(
+      "composer-sheet",
+    );
+    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     await user.click(trigger);

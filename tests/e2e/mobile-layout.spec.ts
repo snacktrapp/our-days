@@ -222,92 +222,40 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
   });
 });
 
-async function expectTypePickerKeepsFrostedNav(page: Page) {
+async function expectComposerMatchesActivitySheet(page: Page) {
   await page.getByRole("button", { name: "Add moment" }).click();
-  const picker = page.locator(
-    ".new-moment-composer-dialog.composer-type-picker",
-  );
+  const picker = page.locator(".new-moment-composer-dialog");
   await expect(picker).toBeVisible();
   await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(0);
-  expect(await picker.evaluate((element) => element.tagName)).toBe("DIV");
+  expect(await picker.evaluate((element) => element.tagName)).toBe("DIALOG");
   expect(await picker.evaluate((element) => element.matches(":modal"))).toBe(
-    false,
+    true,
   );
-  await expectFrostedNavPill(page.locator(".topbar"));
-  await expectFrostedNavPill(page.locator(".bottom-nav"));
-  const slab = await picker.evaluate((element) => {
-    const style = getComputedStyle(element);
+  await expect(picker).toHaveClass(/composer-dialog/u);
+  const sheet = picker.locator(".composer-sheet");
+  await expect(sheet).toHaveClass(/activity-sheet/u);
+  await expect(sheet.locator(".sheet-handle")).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Done" })).toBeVisible();
+  const geometry = await sheet.evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    const nav = document.querySelector(".bottom-nav")!.getBoundingClientRect();
-    const topbar = document.querySelector(".topbar")!.getBoundingClientRect();
+    const style = getComputedStyle(element);
     return {
-      alpha: style.backgroundColor.startsWith("rgba(")
-        ? Number.parseFloat(
-            style.backgroundColor.slice(
-              style.backgroundColor.lastIndexOf(",") + 1,
-              -1,
-            ),
-          )
-        : style.backgroundColor.startsWith("rgb(")
-          ? 1
-          : style.backgroundColor === "transparent" ||
-              style.backgroundColor === "rgba(0, 0, 0, 0)"
-            ? 0
-            : Number.NaN,
-      backdrop: style.backdropFilter,
-      bottom: rect.bottom,
       height: rect.height,
-      navTop: nav.top,
-      parentIsBody: element.parentElement === document.body,
-      themedDialog: element.classList.contains("composer-dialog"),
-      top: rect.top,
-      topbarBottom: topbar.bottom,
+      radius: style.borderTopLeftRadius,
+      bottomRadius: style.borderBottomLeftRadius,
+      viewport: window.innerHeight,
     };
   });
-  expect(slab.alpha).toBeLessThan(0.05);
-  expect(slab.backdrop === "none" || slab.backdrop === "").toBe(true);
-  expect(slab.themedDialog).toBe(false);
-  expect(slab.parentIsBody).toBe(true);
-  expect(slab.top).toBeGreaterThanOrEqual(slab.topbarBottom - 1);
-  expect(slab.bottom).toBeLessThan(slab.navTop);
-  const corners = await picker.locator(".composer-sheet").evaluate((sheet) => {
-    const style = getComputedStyle(sheet);
-    return {
-      bottomLeft: style.borderBottomLeftRadius,
-      bottomRight: style.borderBottomRightRadius,
-      topLeft: style.borderTopLeftRadius,
-      topRight: style.borderTopRightRadius,
-    };
-  });
-  expect(corners.bottomLeft).toBe(corners.topLeft);
-  expect(corners.bottomRight).toBe(corners.topRight);
-  expect(Number.parseFloat(corners.topLeft)).toBeGreaterThan(0);
-  const canvas = await page.evaluate(() => {
-    const root = document.documentElement;
-    const rootStyle = getComputedStyle(root);
-    const shell = document.querySelector(".app-shell");
-    const layer = shell ? getComputedStyle(shell, "::before") : null;
-    return {
-      html: rootStyle.backgroundColor,
-      htmlImage: rootStyle.backgroundImage,
-      body: getComputedStyle(document.body).backgroundColor,
-      grid: layer?.backgroundImage ?? "",
-      theme: root.dataset.theme,
-    };
-  });
-  const expectedCanvas =
-    canvas.theme === "light" ? "rgb(231, 223, 211)" : "rgb(11, 23, 18)";
-  expect(canvas.html).toBe(expectedCanvas);
-  expect(canvas.body).toBe(expectedCanvas);
-  expect(canvas.htmlImage).toContain("linear-gradient");
-  expect(canvas.grid).toContain("linear-gradient");
+  expect(geometry.height).toBeGreaterThan(geometry.viewport * 0.6);
+  expect(Number.parseFloat(geometry.radius)).toBeGreaterThanOrEqual(14);
+  expect(Number.parseFloat(geometry.bottomRadius)).toBe(0);
   const themeColor = await page
     .locator('meta[name="theme-color"]')
     .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
-  expect(themeColor.includes("#000000")).toBe(false);
+  expect(themeColor.includes("#000000")).toBe(true);
 }
 
-test("New moment type picker keeps frosted nav chrome over the grid in dark", async ({
+test("New moment composer uses the Activity tall sheet in dark", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -317,10 +265,10 @@ test("New moment type picker keeps frosted nav chrome over the grid in dark", as
   });
   await page.goto("/family");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expectTypePickerKeepsFrostedNav(page);
+  await expectComposerMatchesActivitySheet(page);
 });
 
-test("New moment type picker keeps frosted nav chrome over the grid in light", async ({
+test("New moment composer uses the Activity tall sheet in light", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -330,7 +278,7 @@ test("New moment type picker keeps frosted nav chrome over the grid in light", a
   });
   await page.goto("/family");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expectTypePickerKeepsFrostedNav(page);
+  await expectComposerMatchesActivitySheet(page);
 });
 
 test("moment options open as a compact popover under the trigger without inline positioning", async ({
