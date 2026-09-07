@@ -266,9 +266,7 @@ function GroupsSection({
               <p className="field-error" role="alert">
                 {error}
               </p>
-            ) : (
-              <p>A name is required.</p>
-            )}
+            ) : null}
             <button type="submit" disabled={pending}>
               {pending ? "Creating…" : "Create"}
             </button>
