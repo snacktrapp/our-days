@@ -1,7 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilyTitleSwitcher } from "./family-title-switcher";
 import type { JournalChromeViewModel } from "./shell-view-model";
+
+const navigation = vi.hoisted(() => ({
+  push: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => navigation,
+}));
 
 const model = {
   accent: "teal",
@@ -16,6 +24,10 @@ const switcher = [
 ] as const;
 
 describe("FamilyTitleSwitcher", () => {
+  afterEach(() => {
+    navigation.push.mockClear();
+  });
+
   it("pops the family list and dismisses it with a reverse pop", () => {
     const { container } = render(
       <FamilyTitleSwitcher model={model} switcher={switcher} />,
@@ -90,6 +102,7 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.getByRole("link", { name: "All our days" })).not.toHaveClass(
       "active",
     );
+    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
   });
 
   it("moves the current highlight to the pressed journal immediately", () => {

@@ -6,6 +6,9 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: vi.fn(),
 }));
+vi.mock("@/lib/auth/journal-access", () => ({
+  readJournalCircleMemberships: vi.fn(async () => []),
+}));
 
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import type { ConnectedJournalContext } from "./journal-context.server";
@@ -94,11 +97,13 @@ const memberships = [
 function queryResult(data: unknown[], error: unknown = null) {
   const chain = {
     eq: vi.fn(),
+    in: vi.fn(),
     order: vi.fn(),
     select: vi.fn(),
   };
   chain.select.mockReturnValue(chain);
   chain.eq.mockReturnValue(chain);
+  chain.in.mockReturnValue(chain);
   chain.order.mockResolvedValue({ data, error });
   return chain;
 }
@@ -106,11 +111,13 @@ function queryResult(data: unknown[], error: unknown = null) {
 function guardianQueryResult(data: unknown[], error: unknown = null) {
   const chain = {
     eq: vi.fn(),
+    in: vi.fn(),
     is: vi.fn(),
     select: vi.fn(),
   };
   chain.select.mockReturnValue(chain);
   chain.eq.mockReturnValue(chain);
+  chain.in.mockReturnValue(chain);
   chain.is.mockResolvedValue({ data, error });
   return chain;
 }
@@ -250,7 +257,7 @@ describe("connected family settings data", () => {
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");
     }
-    expect(model.panel.members).toEqual([
+    expect(model.panel.groups[0]?.members).toEqual([
       expect.objectContaining({
         id: organizerAccess.personId,
         membershipId: organizerAccess.membershipId,
@@ -274,7 +281,7 @@ describe("connected family settings data", () => {
         canReviewRemoval: false,
       }),
     ]);
-    expect(model.panel.pendingInvitations).toEqual([
+    expect(model.panel.groups[0]?.pendingInvitations).toEqual([
       {
         emailRequestId: "90000000-0000-4000-8000-000000000001",
         displayName: "Grandparent",
@@ -284,7 +291,7 @@ describe("connected family settings data", () => {
         expiresLabel: "Expires Aug 31, 2026",
       },
     ]);
-    expect(model.panel.guardianOptions).toEqual([
+    expect(model.panel.groups[0]?.guardianOptions).toEqual([
       expect.objectContaining({
         membershipId: organizerAccess.membershipId,
         role: "organizer",
@@ -316,20 +323,20 @@ describe("connected family settings data", () => {
     expect(model.panel).toMatchObject({
       mode: "connected",
       canManageAccess: false,
-      pendingInvitations: [],
     });
+    expect(model.panel.groups[0]?.pendingInvitations).toEqual([]);
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");
     }
     expect(
-      model.panel.members.every(
+      model.panel.groups[0]?.members.every(
         (member) =>
           !member.canReviewRemoval &&
           !member.canManageRole &&
           !member.canManageJournal,
       ),
     ).toBe(true);
-    expect(model.panel.guardianOptions).toEqual([]);
+    expect(model.panel.groups[0]?.guardianOptions).toEqual([]);
   });
 
   it("keeps Operations visible on Account without journal-role controls", () => {
@@ -370,7 +377,7 @@ describe("connected family settings data", () => {
     if (model.panel.mode !== "connected") {
       throw new Error("Expected connected family settings");
     }
-    expect(model.panel.members).toEqual(
+    expect(model.panel.groups[0]?.members).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: operationsPersonId,
@@ -383,7 +390,7 @@ describe("connected family settings data", () => {
         }),
       ]),
     );
-    expect(model.panel.guardianOptions).toEqual(
+    expect(model.panel.groups[0]?.guardianOptions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           membershipId: operationsMembershipId,
@@ -392,7 +399,7 @@ describe("connected family settings data", () => {
       ]),
     );
     expect(
-      model.panel.members.some(
+      model.panel.groups[0]?.members.some(
         (member) => member.relationshipLabel === "Operations",
       ),
     ).toBe(true);

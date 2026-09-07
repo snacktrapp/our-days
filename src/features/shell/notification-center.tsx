@@ -211,13 +211,6 @@ export function NotificationCenter({
             <h2 ref={headingRef} id={titleId} tabIndex={-1}>
               Activity
             </h2>
-            <button
-              className="sheet-close activity-sheet-done"
-              type="button"
-              onClick={closePanel}
-            >
-              Done
-            </button>
           </header>
         </div>
         <div

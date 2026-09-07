@@ -25,7 +25,7 @@ describe("PrimaryNavigation", () => {
       name: "Primary navigation",
     });
     expect(navigation).toHaveTextContent("Home");
-    expect(navigation).toHaveTextContent("People");
+    expect(navigation).not.toHaveTextContent("People");
     expect(navigation).toHaveTextContent("Memories");
     expect(navigation).toHaveTextContent("Account");
     expect(navigation).not.toHaveTextContent("Add");
@@ -54,15 +54,15 @@ describe("PrimaryNavigation", () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);
 
-    const people = screen.getByRole("link", { name: "People" });
-    await user.click(people);
+    const account = screen.getByRole("link", { name: "Account" });
+    await user.click(account);
 
-    expect(people).toHaveClass("active");
-    expect(people).toHaveAttribute("aria-current", "page");
+    expect(account).toHaveClass("active");
+    expect(account).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Home" })).not.toHaveClass(
       "active",
     );
-    expect(people.querySelector(".nav-symbol-pending")).toBeNull();
+    expect(account.querySelector(".nav-symbol-pending")).toBeNull();
     expect(
       screen
         .getByRole("link", { name: "Home" })
@@ -82,8 +82,8 @@ describe("PrimaryNavigation", () => {
       );
     });
 
-    expect(screen.getByRole("link", { name: "People" })).toHaveClass("active");
-    expect(screen.getByRole("link", { name: "Home" })).not.toHaveClass(
+    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("active");
+    expect(screen.getByRole("link", { name: "Account" })).not.toHaveClass(
       "active",
     );
   });
@@ -116,7 +116,7 @@ describe("PrimaryNavigation", () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);
 
-    await user.click(screen.getByRole("link", { name: "People" }));
+    await user.click(screen.getByRole("link", { name: "Account" }));
 
     expect(document.documentElement.getAttribute("style")).toBeNull();
     expect(

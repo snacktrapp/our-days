@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
@@ -117,6 +118,7 @@ export function FamilyTitleSwitcher({
   switcher: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
 }>) {
+  const router = useRouter();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [chosenHref, setChosenHref] = useState<string | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
@@ -145,6 +147,7 @@ export function FamilyTitleSwitcher({
     if (item.kind === "group" && item.circleId) {
       onSelectGroup?.(item.circleId);
     }
+    router.push(item.href);
     window.dispatchEvent(
       new CustomEvent("our-days:navigate-section", {
         detail: { href: item.href },

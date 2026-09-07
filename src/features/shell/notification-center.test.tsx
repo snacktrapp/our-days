@@ -48,7 +48,7 @@ describe("NotificationCenter", () => {
     expect(
       screen.getByRole("button", { name: "Open notifications" }),
     ).toHaveAccessibleName("Open notifications");
-    expect(screen.getByRole("button", { name: "Done" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(
       window.localStorage.getItem("our-days:seen-notifications"),
     ).toContain("note-one");
@@ -57,9 +57,9 @@ describe("NotificationCenter", () => {
     expect(screen.queryByRole("dialog", { name: "Activity" })).toBeNull();
   });
 
-  it("dismisses the activity sheet with Done and a reverse sheet motion", async () => {
+  it("dismisses the activity sheet with Escape and a reverse sheet motion", async () => {
     const { user } = await openActivity();
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.keyboard("{Escape}");
     const sheet = document.querySelector(".activity-sheet");
     expect(sheet).toHaveClass("composer-sheet");
     expect(sheet).toHaveClass("is-closing");
@@ -83,7 +83,7 @@ describe("NotificationCenter", () => {
     }));
     try {
       const { user } = await openActivity();
-      await user.click(screen.getByRole("button", { name: "Done" }));
+      await user.keyboard("{Escape}");
       expect(screen.queryByRole("dialog", { name: "Activity" })).toBeNull();
       expect(document.querySelector(".activity-sheet")).toBeNull();
     } finally {
@@ -176,7 +176,7 @@ describe("NotificationCenter", () => {
 
   it("does not reopen Activity when the heart is tapped during close", async () => {
     const { user } = await openActivity();
-    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.keyboard("{Escape}");
     const sheet = document.querySelector(".activity-sheet");
     expect(sheet).toHaveClass("is-closing");
     await user.click(

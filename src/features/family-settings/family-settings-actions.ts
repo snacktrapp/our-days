@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import {
+  readJournalCircleMemberships,
+  requireJournalAccess,
+} from "@/lib/auth/journal-access";
+import { isActiveCircleToken } from "@/lib/auth/active-circle-shared";
 import { hasOrganizerPrivilege } from "@/lib/circle-roles";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createClient } from "@supabase/supabase-js";
@@ -62,13 +66,26 @@ async function hasExpectedOrigin() {
   );
 }
 
-async function requireOrganizer() {
+async function requireOrganizer(circleId?: string | null) {
   if (!(await hasExpectedOrigin())) return null;
   const access = await requireJournalAccess();
-  if (access.mode !== "authenticated" || !hasOrganizerPrivilege(access.role)) {
-    return null;
+  if (access.mode !== "authenticated") return null;
+  if (!circleId || circleId === access.circleId) {
+    return hasOrganizerPrivilege(access.role) ? access : null;
   }
-  return access;
+  if (!isActiveCircleToken(circleId)) return null;
+  const memberships = await readJournalCircleMemberships();
+  const target = memberships.find(
+    (membership) => membership.circleId === circleId,
+  );
+  if (!target || !hasOrganizerPrivilege(target.role)) return null;
+  return {
+    mode: "authenticated" as const,
+    membershipId: target.membershipId,
+    circleId: target.circleId,
+    personId: target.personId,
+    role: target.role,
+  };
 }
 
 function refreshFamilyAccessSurfaces(personId?: string) {
@@ -81,7 +98,7 @@ function refreshFamilyAccessSurfaces(personId?: string) {
 export async function setFamilyMembershipRoleAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const membershipId = readUuid(input, "membershipId");
   const role = readRole(input);
   if (
@@ -139,7 +156,7 @@ export async function setFamilyMembershipRoleAction(
 export async function setManagedProfileGuardianAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const managedPersonId = readUuid(input, "managedPersonId");
   const guardianMembershipId = readUuid(input, "guardianMembershipId");
   const grantAccess = readBoolean(input, "grantAccess");
@@ -199,7 +216,7 @@ export async function setManagedProfileGuardianAction(
 export async function revokeFamilyMembershipAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   if (!access) {
     return { ok: false, message: "That access change was not allowed." };
   }
@@ -243,7 +260,8 @@ export async function revokeFamilyMembershipAction(
 export async function requestFamilyInvitationAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const circleId = readText(input, "circleId");
+  const access = await requireOrganizer(circleId);
   const displayName = readText(input, "displayName")?.trim() ?? "";
   const email = readText(input, "email")?.trim().toLowerCase() ?? "";
   const requestKey = readUuid(input, "requestKey");
@@ -321,7 +339,7 @@ async function sendInvitedMagicLink(email: string) {
 export async function withdrawFamilyInvitationEmailRequestAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const emailRequestId = readUuid(input, "emailRequestId");
   if (!access || !emailRequestId) {
     return { ok: false, message: "That invitation change was not allowed." };

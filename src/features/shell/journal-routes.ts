@@ -10,15 +10,16 @@ export function pathWithoutSearch(href: string) {
 
 export function sectionFromPathname(
   pathname: string | null,
-): Extract<
-  JournalSection,
-  "timeline" | "people" | "memories" | "settings"
-> | null {
+): Extract<JournalSection, "timeline" | "memories" | "settings"> | null {
   const path = pathname ?? "";
-  if (path === "/family" || path.startsWith("/journal")) {
+  if (
+    path === "/family" ||
+    path.startsWith("/journal") ||
+    path.startsWith("/people/")
+  ) {
     return "timeline";
   }
-  if (path.startsWith("/people")) return "people";
+  if (path === "/people") return "settings";
   if (path.startsWith("/memories")) return "memories";
   if (path.startsWith("/settings")) return "settings";
   return null;
@@ -28,7 +29,7 @@ export function skeletonKindFromPathname(
   pathname: string | null,
 ): JournalSkeletonKind | null {
   const path = pathWithoutSearch(pathname ?? "");
-  if (path === "/people") return "people";
+  if (path === "/people") return "settings";
   if (
     path === "/family" ||
     path.startsWith("/journal") ||

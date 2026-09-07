@@ -23,28 +23,24 @@ describe("route pending skeleton", () => {
     expect(container.querySelector(".timeline-empty-state")).toBeNull();
   });
 
-  it("keeps People and Account on the graph-paper field without empty boxes", () => {
-    const { rerender, container } = render(
-      <RoutePendingSkeleton kind="people" />,
+  it("keeps Account on the graph-paper field without empty boxes", () => {
+    const { container } = render(<RoutePendingSkeleton kind="settings" />);
+    const account = screen.getByRole("region", { name: "Opening account" });
+    expect(account).toHaveClass(
+      "route-pending-field",
+      "route-pending-skeleton",
     );
-    const people = screen.getByRole("region", { name: "Opening people" });
-    expect(people).toHaveClass("route-pending-field", "route-pending-skeleton");
-    expect(people.childElementCount).toBe(0);
-    expect(people).not.toHaveClass("route-pending-glow");
+    expect(account.childElementCount).toBe(0);
+    expect(account).not.toHaveClass("route-pending-glow");
     expect(container.querySelector(".route-pending-glow")).toBeNull();
     expect(container.querySelector(".route-pending-row")).toBeNull();
     expect(container.querySelector(".route-pending-card")).toBeNull();
-    rerender(<RoutePendingSkeleton kind="settings" />);
-    expect(screen.getByRole("region", { name: "Opening account" })).toHaveClass(
-      "route-pending-field",
-    );
-    expect(container.querySelector(".route-pending-row")).toBeNull();
   });
 
   it("updates destination titles without inventing an empty journal", () => {
     expect(
-      pendingChromeModel(model, { href: "/people", kind: "people" }).title,
-    ).toBe("Our people");
+      pendingChromeModel(model, { href: "/people", kind: "settings" }).title,
+    ).toBe("Account");
     expect(
       pendingChromeModel(model, { href: "/settings/family", kind: "settings" })
         .title,

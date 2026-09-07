@@ -18,6 +18,10 @@
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
+  --chrome-eyebrow: 650 9px / 1.2 var(--font-record);
+  --chrome-title: 600 16px / 1.25 var(--font-interface);
+  --chrome-body: 400 12px / 1.45 var(--font-interface);
+  --chrome-meta: 600 10px / 1.35 var(--font-record);
   --header-drawer-radius: 10px;
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
@@ -2143,6 +2147,21 @@ button:focus-visible,
   line-height: 1.5;
   text-align: center;
 }
+.people-panel .section-intro,
+.chrome-body {
+  max-width: none;
+  margin: 0 4px 2px;
+  color: var(--muted);
+  font: var(--chrome-body);
+  text-align: left;
+}
+.chrome-meta {
+  font: var(--chrome-meta);
+  letter-spacing: 0.04em;
+}
+.people-group .settings-heading p {
+  font: var(--chrome-meta);
+}
 .people-list {
   overflow: hidden;
   border: 1px solid var(--hairline);
@@ -2179,19 +2198,19 @@ button:focus-visible,
   flex-direction: column;
 }
 .person-copy strong {
-  font-family: Georgia, serif;
-  font-size: 16px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .person-copy small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 9px;
+  font: var(--chrome-meta);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 .person-arrow {
   margin-left: auto;
   color: #514a43;
-  font-size: 9px;
+  font: var(--chrome-meta);
 }
 .invite-button {
   width: 100%;
@@ -2201,11 +2220,25 @@ button:focus-visible,
   border-radius: 16px;
   background: transparent;
   color: var(--ink);
-  font-size: 11px;
+  font: var(--chrome-meta);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   display: grid;
   place-items: center;
   text-decoration: none;
+}
+.people-group .people-list {
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
+}
+.people-group .invite-button {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
 }
 
 .family-settings-panel {
@@ -2266,28 +2299,92 @@ button:focus-visible,
 }
 .settings-heading > span,
 .access-review > span,
-.invite-review > span {
+.invite-review > span,
+.guardian-options legend {
   color: var(--teal);
-  font-size: 9px;
-  font-weight: 750;
+  font: var(--chrome-eyebrow);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 .settings-heading h2,
-.access-review h3 {
+.access-review h3,
+.invite-review > h3 {
   margin: 5px 0 7px;
-  font-family: Georgia, serif;
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 1.18;
+  font: var(--chrome-title);
+  letter-spacing: 0;
 }
 .settings-heading p,
 .access-review p,
-.invite-review p {
+.invite-review p,
+.chrome-body {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.48;
+  font: var(--chrome-body);
+}
+.circle-accordion {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline);
+  list-style: none;
+}
+.circle-accordion-item {
+  border-bottom: 1px solid var(--hairline);
+}
+.circle-accordion-item:last-child {
+  border-bottom: 0;
+}
+.circle-accordion-trigger {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.circle-accordion-trigger .access-member-copy {
+  flex: 1;
+}
+.circle-accordion-chevron {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.circle-accordion-chevron svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms ease;
+}
+.circle-accordion-trigger[aria-expanded="true"] .circle-accordion-chevron svg {
+  transform: rotate(180deg);
+}
+.circle-accordion-panel {
+  border-top: 1px solid var(--hairline);
+}
+.circle-access-heading,
+.circle-invite-section .settings-heading {
+  padding-top: 14px;
+}
+.circle-invite-section {
+  scroll-margin-top: 16px;
+}
+.circle-invite-section .settings-heading h3,
+.circle-access-heading h3 {
+  margin: 5px 0 7px;
+  font: var(--chrome-title);
+  letter-spacing: 0;
 }
 .access-list {
   margin: 0;
@@ -2313,15 +2410,13 @@ button:focus-visible,
 }
 .access-member-copy strong {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .access-member-copy small,
 .access-member-copy > span {
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.3;
+  font: var(--chrome-meta);
+  letter-spacing: 0.02em;
 }
 .access-member-copy > span {
   color: #526047;
@@ -2413,9 +2508,7 @@ button:focus-visible,
 }
 .settings-role-card strong {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 14px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .settings-role-card p {
   overflow-wrap: anywhere;
@@ -2448,8 +2541,7 @@ button:focus-visible,
 .guardian-options legend {
   padding: 0;
   color: var(--teal);
-  font-size: 9px;
-  font-weight: 750;
+  font: var(--chrome-eyebrow);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -2485,14 +2577,13 @@ button:focus-visible,
   overflow-wrap: anywhere;
 }
 .guardian-options strong {
-  font-family: Georgia, serif;
-  font-size: 13px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .guardian-options small {
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font: var(--chrome-meta);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .settings-removal-zone {
   margin-top: 14px;
@@ -2523,7 +2614,7 @@ button:focus-visible,
   scroll-margin-top: 16px;
 }
 .groups-create-section .settings-heading h2 {
-  font-size: 26px;
+  font: var(--chrome-title);
 }
 .invite-section form,
 .groups-section form {
@@ -2534,8 +2625,9 @@ button:focus-visible,
 .groups-section form label {
   margin-bottom: 6px;
   color: #60574e;
-  font-size: 11px;
-  font-weight: 700;
+  font: var(--chrome-meta);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .invite-section form input,
 .groups-section form input {
@@ -2559,8 +2651,7 @@ button:focus-visible,
   min-height: 32px;
   margin: 6px 1px 7px;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font: var(--chrome-body);
 }
 .invite-section form > .field-error,
 .groups-section form > .field-error {
@@ -2578,8 +2669,7 @@ button:focus-visible,
 .invite-section form > small {
   margin-top: 9px;
   color: #526047;
-  font-size: 11px;
-  line-height: 1.35;
+  font: var(--chrome-meta);
   text-align: center;
 }
 .invite-section form.connected-invite-form {
@@ -2597,13 +2687,12 @@ button:focus-visible,
   margin: 6px 0 9px;
   display: block;
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 18px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .invite-review-email {
   overflow-wrap: anywhere;
   color: #526047 !important;
+  font: var(--chrome-body);
   font-weight: 700;
 }
 .invite-review > div {
@@ -2640,9 +2729,7 @@ button:focus-visible,
 }
 .pending-invitation-list strong {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 14px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .invitation-status {
   width: fit-content;
@@ -2651,10 +2738,8 @@ button:focus-visible,
   border-radius: 999px;
   background: color-mix(in srgb, var(--teal) 6%, var(--cream));
   color: #526047;
-  font-size: 9px;
+  font: var(--chrome-meta);
   font-style: normal;
-  font-weight: 750;
-  line-height: 1.4;
 }
 .status-queued,
 .status-provisioned {
@@ -2662,8 +2747,7 @@ button:focus-visible,
 }
 .pending-invitation-list small {
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
+  font: var(--chrome-meta);
 }
 .pending-invitation-list button {
   min-width: 78px;
@@ -2682,8 +2766,7 @@ button:focus-visible,
   padding: 13px 16px 16px;
   border-top: 1px solid var(--hairline);
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font: var(--chrome-body);
 }
 .settings-delivery-boundary {
   margin: 12px;
@@ -2695,15 +2778,12 @@ button:focus-visible,
 .settings-delivery-boundary strong {
   display: block;
   color: var(--ink);
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 .settings-delivery-boundary p {
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font: var(--chrome-body);
 }
 .connected-invite-review {
   margin-top: 12px;
@@ -4539,8 +4619,8 @@ button:focus-visible,
     calc(430px - 2 * var(--bottom-nav-inline-gap))
   );
   margin-inline: auto;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  justify-content: center;
   align-items: center;
   padding: 3px 8px;
   border: 1px solid var(--hairline);
@@ -4558,6 +4638,8 @@ button:focus-visible,
 }
 
 .nav-item {
+  flex: 1 1 0;
+  min-width: 0;
   height: 54px;
   border: 0;
   background: none;
@@ -5358,9 +5440,7 @@ button:focus-visible,
   max-width: 320px;
   margin-bottom: 18px;
   color: var(--muted);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.45;
+  font: var(--chrome-body);
 }
 
 .section-intro p,
@@ -5404,20 +5484,19 @@ button:focus-visible,
 }
 
 .person-copy strong {
-  font-family: inherit;
-  font-size: 14px;
+  font: var(--chrome-title);
 }
 
 .person-copy small {
   color: var(--muted);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 8px;
+  font: var(--chrome-meta);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .person-arrow {
   color: var(--muted);
+  font: var(--chrome-meta);
 }
 
 .memory-feature-written,
@@ -6114,9 +6193,9 @@ button:focus-visible,
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-  padding: 22px 16px 10px 20px;
+  padding: 22px 20px 10px;
 }
 
 .activity-sheet-bar h2 {
@@ -6131,18 +6210,6 @@ button:focus-visible,
 .activity-sheet-bar h2:focus,
 .activity-sheet-bar h2:focus-visible {
   outline: none;
-}
-
-.activity-sheet .sheet-close.activity-sheet-done {
-  width: auto;
-  min-width: 64px;
-  min-height: 44px;
-  position: static;
-  margin: 0;
-  padding: 0 14px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 650;
 }
 
 .activity-sheet-list {
@@ -6236,9 +6303,7 @@ button:focus-visible,
 
 .notification-preference-row strong {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 
 .notification-preference-row:disabled {
@@ -6350,17 +6415,13 @@ button:focus-visible,
 .account-tool-link strong,
 .account-sign-out button {
   overflow-wrap: anywhere;
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 500;
+  font: var(--chrome-title);
 }
 
 .account-tool-link small {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
+  font: var(--chrome-meta);
   letter-spacing: 0.04em;
-  line-height: 1.3;
   text-transform: uppercase;
 }
 
@@ -6659,9 +6720,13 @@ html[data-theme].overlay-open .app-shell::before,
 .guardian-options strong,
 .invite-review > h3,
 .pending-invitation-list strong,
-.settings-delivery-boundary strong {
+.settings-delivery-boundary strong,
+.person-copy strong,
+.notification-preference-row strong,
+.account-tool-link strong,
+.account-sign-out button {
   color: var(--ink);
-  font-family: inherit;
+  font: var(--chrome-title);
 }
 
 .settings-heading > span,
@@ -6669,6 +6734,7 @@ html[data-theme].overlay-open .app-shell::before,
 .invite-review > span,
 .guardian-options legend {
   color: var(--teal);
+  font: var(--chrome-eyebrow);
 }
 
 .settings-preview-banner,
@@ -7435,8 +7501,8 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 /* New moment uses the same tall-sheet chrome as Activity: rounded top,
-   grab handle, Done, and a viewport scrim. Type picker and editor share
-   this shell; only the body content changes. */
+   grab handle, swipe-down dismiss, and a viewport scrim. Type picker and
+   editor share this shell; only the body content changes. */
 .new-moment-composer-dialog[open] {
   align-items: flex-end;
   justify-content: center;
@@ -8186,6 +8252,14 @@ iframe.composer-location-map {
   box-shadow: none;
 }
 
+.people-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  padding: 18px 18px 24px;
+}
+
 /* Account used to wrap everything in the leftover full-page section-panel card
    (min-height 100svh and 120px bottom padding). That empty shell sat under
    Journal tools after the inner cards. Size to content only. */
@@ -8329,7 +8403,8 @@ iframe.composer-location-map {
     transform: none;
   }
 
-  .title-switcher-heading svg {
+  .title-switcher-heading svg,
+  .circle-accordion-chevron svg {
     transition: none;
   }
 

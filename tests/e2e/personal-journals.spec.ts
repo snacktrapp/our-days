@@ -38,11 +38,15 @@ const journals = [
   },
 ] as const;
 
-test("People links to five distinct, owner-correct life journals", async ({
+test("Home switcher PERSON chips open five distinct, owner-correct life journals", async ({
   page,
 }) => {
-  await page.goto("/people");
-  const journalLinks = page.getByRole("link", { name: /View journal/u });
+  await page.goto("/family");
+  await page.locator(".title-switcher summary").click();
+  const journalLinks = page
+    .getByRole("navigation", { name: "Choose a family timeline" })
+    .getByRole("link")
+    .filter({ hasNotText: "All our days" });
   await expect(journalLinks).toHaveCount(5);
   expect(
     await journalLinks.evaluateAll((links) =>
@@ -128,8 +132,11 @@ test("managed journal defaults retain adult recorder truth across client navigat
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 
-  await page.getByRole("link", { name: "People" }).click();
-  await page.locator('a[href="/people/sam"]').click();
+  await page.locator(".title-switcher summary").click();
+  await page
+    .getByRole("navigation", { name: "Choose a family timeline" })
+    .getByRole("link", { name: "Sam", exact: true })
+    .click();
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
   await page.getByRole("button", { name: /Details/u }).click();

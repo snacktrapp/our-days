@@ -38,7 +38,7 @@ export default async function PersonJournalPage({
     return (
       <JournalChrome
         model={model.chrome}
-        section="people"
+        section="timeline"
         switcher={model.switcher}
         onSelectGroup={selectActiveGroupAction}
       >
@@ -61,7 +61,7 @@ export default async function PersonJournalPage({
   return (
     <JournalChrome
       model={model.chrome}
-      section="people"
+      section="timeline"
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
       onSelectGroup={selectActiveGroupAction}

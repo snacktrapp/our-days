@@ -9,119 +9,155 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
+const previewMembers = [
+  {
+    id: "current",
+    membershipId: "current-membership",
+    profileKind: "account" as const,
+    role: "organizer" as const,
+    name: "Current person",
+    initial: "C",
+    accent: "teal" as const,
+    relationshipLabel: "Co-organizer",
+    accessLabel: "Account · Can sign in",
+    guardianMembershipIds: [] as string[],
+    canManageRole: false,
+    canManageJournal: false,
+    canReviewRemoval: false,
+  },
+  {
+    id: "other",
+    membershipId: "other-membership",
+    profileKind: "account" as const,
+    role: "organizer" as const,
+    name: "Other organizer",
+    initial: "O",
+    accent: "clay" as const,
+    relationshipLabel: "Co-organizer",
+    accessLabel: "Account · Can sign in",
+    guardianMembershipIds: [] as string[],
+    canManageRole: false,
+    canManageJournal: false,
+    canReviewRemoval: true,
+  },
+  {
+    id: "child",
+    membershipId: null,
+    profileKind: "managed" as const,
+    role: null,
+    name: "Child profile",
+    initial: "C",
+    accent: "ochre" as const,
+    relationshipLabel: "Child journal",
+    accessLabel: "Managed profile · No sign-in",
+    guardianMembershipIds: [] as string[],
+    canManageRole: false,
+    canManageJournal: false,
+    canReviewRemoval: false,
+  },
+];
+
+const connectedMembers = previewMembers.map((member) => ({
+  ...member,
+  guardianMembershipIds:
+    member.profileKind === "managed"
+      ? ["current-membership", "other-membership"]
+      : [],
+  canManageRole: member.profileKind === "account" && member.id !== "current",
+  canManageJournal: member.profileKind === "managed",
+}));
+
+const guardianOptions = [
+  {
+    membershipId: "current-membership",
+    personId: "current",
+    name: "Current person",
+    role: "organizer" as const,
+  },
+  {
+    membershipId: "other-membership",
+    personId: "other",
+    name: "Other organizer",
+    role: "organizer" as const,
+  },
+];
+
+const pendingInvitations = [
+  {
+    emailRequestId: "11111111-1111-4111-8111-111111111111",
+    displayName: "Grandma",
+    state: "delivered" as const,
+    statusLabel: "Pending",
+    createdLabel: "Invited Aug 20, 2026",
+    expiresLabel: "Expires Sep 3, 2026",
+  },
+];
+
 const model = {
-  mode: "preview",
+  mode: "preview" as const,
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
-  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
-  members: [
+  groups: [
     {
-      id: "current",
-      membershipId: "current-membership",
-      profileKind: "account",
-      role: "organizer",
-      name: "Current person",
-      initial: "C",
-      accent: "teal",
-      relationshipLabel: "Co-organizer",
-      accessLabel: "Account · Can sign in",
-      guardianMembershipIds: [],
-      canManageRole: false,
-      canManageJournal: false,
-      canReviewRemoval: false,
-    },
-    {
-      id: "other",
-      membershipId: "other-membership",
-      profileKind: "account",
-      role: "organizer",
-      name: "Other organizer",
-      initial: "O",
-      accent: "clay",
-      relationshipLabel: "Co-organizer",
-      accessLabel: "Account · Can sign in",
-      guardianMembershipIds: [],
-      canManageRole: false,
-      canManageJournal: false,
-      canReviewRemoval: true,
-    },
-    {
-      id: "child",
-      membershipId: null,
-      profileKind: "managed",
-      role: null,
-      name: "Child profile",
-      initial: "C",
-      accent: "ochre",
-      relationshipLabel: "Child journal",
-      accessLabel: "Managed profile · No sign-in",
-      guardianMembershipIds: [],
-      canManageRole: false,
-      canManageJournal: false,
-      canReviewRemoval: false,
+      id: "family",
+      name: "All our days",
+      memberCount: previewMembers.length,
+      currentMemberId: "current",
+      canManageAccess: true,
+      members: previewMembers,
+      guardianOptions: [],
+      pendingInvitations: [],
     },
   ],
-} as const;
+};
 
 const connectedOrganizerModel = {
-  mode: "connected",
+  mode: "connected" as const,
   intro: "A small, invitation-only circle.",
   currentMemberId: "current",
   canManageAccess: true,
-  groups: [{ id: "family", name: "All our days", memberCount: 4 }],
-  members: model.members.map((member) => ({
-    ...member,
-    guardianMembershipIds:
-      member.profileKind === "managed"
-        ? ["current-membership", "other-membership"]
-        : [],
-    canManageRole: member.profileKind === "account" && member.id !== "current",
-    canManageJournal: member.profileKind === "managed",
-  })),
-  guardianOptions: [
+  invitationDelivery: "disabled" as const,
+  groups: [
     {
-      membershipId: "current-membership",
-      personId: "current",
-      name: "Current person",
-      role: "organizer",
-    },
-    {
-      membershipId: "other-membership",
-      personId: "other",
-      name: "Other organizer",
-      role: "organizer",
+      id: "family",
+      name: "All our days",
+      memberCount: connectedMembers.length,
+      currentMemberId: "current",
+      canManageAccess: true,
+      members: connectedMembers,
+      guardianOptions,
+      pendingInvitations,
     },
   ],
-  pendingInvitations: [
-    {
-      emailRequestId: "11111111-1111-4111-8111-111111111111",
-      displayName: "Grandma",
-      state: "delivered",
-      statusLabel: "Pending",
-      createdLabel: "Invited Aug 20, 2026",
-      expiresLabel: "Expires Sep 3, 2026",
-    },
-  ],
-  invitationDelivery: "disabled",
-} as const;
+};
 
 const connectedInvitationModel = {
   ...connectedOrganizerModel,
-  invitationDelivery: "enabled",
-} as const;
+  invitationDelivery: "enabled" as const,
+};
 
 const connectedMemberModel = {
   ...connectedOrganizerModel,
   canManageAccess: false,
-  members: connectedOrganizerModel.members.map((member) => ({
-    ...member,
-    canManageRole: false,
-    canManageJournal: false,
-    canReviewRemoval: false,
-  })),
-  guardianOptions: [],
-  pendingInvitations: [],
-} as const;
+  groups: [
+    {
+      ...connectedOrganizerModel.groups[0],
+      canManageAccess: false,
+      members: connectedMembers.map((member) => ({
+        ...member,
+        canManageRole: false,
+        canManageJournal: false,
+        canReviewRemoval: false,
+      })),
+      guardianOptions: [],
+      pendingInvitations: [],
+    },
+  ],
+};
+
+async function openFamilyCircle(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /All our days/u }));
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -131,22 +167,28 @@ afterEach(() => {
 
 const connectedOperationsModel = {
   ...connectedOrganizerModel,
-  members: [
-    ...connectedOrganizerModel.members,
+  groups: [
     {
-      id: "tars",
-      membershipId: "tars-membership",
-      profileKind: "account" as const,
-      role: "operations" as const,
-      name: "TARS",
-      initial: "T",
-      accent: "slate" as const,
-      relationshipLabel: "Operations",
-      accessLabel: "Account · Can sign in",
-      guardianMembershipIds: [],
-      canManageRole: false,
-      canManageJournal: false,
-      canReviewRemoval: true,
+      ...connectedOrganizerModel.groups[0],
+      memberCount: connectedOrganizerModel.groups[0].members.length + 1,
+      members: [
+        ...connectedOrganizerModel.groups[0].members,
+        {
+          id: "tars",
+          membershipId: "tars-membership",
+          profileKind: "account" as const,
+          role: "operations" as const,
+          name: "TARS",
+          initial: "T",
+          accent: "slate" as const,
+          relationshipLabel: "Operations",
+          accessLabel: "Account · Can sign in",
+          guardianMembershipIds: [],
+          canManageRole: false,
+          canManageJournal: false,
+          canReviewRemoval: true,
+        },
+      ],
     },
   ],
 };
@@ -164,7 +206,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getByRole("heading", { name: "Your groups" })).toBeVisible();
     expect(screen.getByText("All our days")).toBeVisible();
-    expect(screen.getByText("4 people")).toBeVisible();
+    expect(screen.getByText("3 people")).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "Create a new group" }),
     ).toBeVisible();
@@ -183,8 +225,67 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("name")).toBe("Cousins");
   });
 
-  it("distinguishes account access from managed journal profiles", () => {
+  it("opens one circle at a time and keeps create separate from group names", async () => {
+    const user = userEvent.setup();
+    const twoCircles = {
+      ...model,
+      groups: [
+        model.groups[0],
+        {
+          id: "cousins",
+          name: "Cousins",
+          memberCount: 1,
+          currentMemberId: "current",
+          canManageAccess: true,
+          members: [previewMembers[0]],
+          guardianOptions: [],
+          pendingInvitations: [],
+        },
+      ],
+    };
+    render(<FamilySettingsPanel model={twoCircles} />);
+
+    const familyTrigger = screen.getByRole("button", {
+      name: /All our days/u,
+    });
+    expect(familyTrigger).toHaveAttribute("aria-expanded", "false");
+    expect(
+      familyTrigger.querySelector(".circle-accordion-chevron"),
+    ).not.toBeNull();
+    expect(screen.queryByText(/Current person/u)).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "Invite into All our days" }),
+    ).toBeNull();
+    await openFamilyCircle(user);
+    expect(familyTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/Current person/u)).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Invite into All our days" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Cousins/u }));
+    expect(screen.queryByText("Other organizer")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Invite into Cousins" }),
+    ).toBeVisible();
+  });
+
+  it("names the Account invite form for the circle People asked to invite into", () => {
+    render(
+      <FamilySettingsPanel
+        model={model}
+        inviteCircleId="family"
+        inviteCircleName="All our days"
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { name: "Invite into All our days" }),
+    ).toBeVisible();
+  });
+
+  it("distinguishes account access from managed journal profiles", async () => {
+    const user = userEvent.setup();
     render(<FamilySettingsPanel model={model} />);
+    await openFamilyCircle(user);
 
     expect(screen.getAllByText("Account · Can sign in")).toHaveLength(2);
     expect(screen.getByText("Managed profile · No sign-in")).toBeVisible();
@@ -204,6 +305,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOperationsModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),
@@ -245,7 +347,7 @@ describe("FamilySettingsPanel", () => {
 
   it("validates, trims, previews, edits, and clears an invitation locally", async () => {
     const user = userEvent.setup();
-    render(<FamilySettingsPanel model={model} />);
+    render(<FamilySettingsPanel model={model} inviteCircleId="family" />);
     const input = screen.getByRole("textbox", { name: "Email address" });
 
     await user.type(input, "not-an-email");
@@ -289,7 +391,9 @@ describe("FamilySettingsPanel", () => {
 
   it("renders adversarial invitation text literally without creating markup", async () => {
     const user = userEvent.setup();
-    const { container } = render(<FamilySettingsPanel model={model} />);
+    const { container } = render(
+      <FamilySettingsPanel model={model} inviteCircleId="family" />,
+    );
     const candidate = "family+<script>@example.com";
 
     await user.type(
@@ -328,7 +432,7 @@ describe("FamilySettingsPanel", () => {
     const historyWrite = vi.spyOn(history, "pushState");
     const historyReplace = vi.spyOn(history, "replaceState");
     const cookieWrite = vi.spyOn(Document.prototype, "cookie", "set");
-    render(<FamilySettingsPanel model={model} />);
+    render(<FamilySettingsPanel model={model} inviteCircleId="family" />);
 
     await user.click(
       screen.getByRole("button", { name: "Review access for Other organizer" }),
@@ -381,6 +485,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership,
           withdrawInvitation: vi.fn(),
@@ -408,6 +513,7 @@ describe("FamilySettingsPanel", () => {
     );
     expect(revokeMembership).toHaveBeenLastCalledWith({
       membershipId: "other-membership",
+      circleId: "family",
     });
     const error = await screen.findByRole("alert");
     expect(error).toHaveTextContent("Try again.");
@@ -440,6 +546,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation,
@@ -470,6 +577,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(withdrawInvitation).toHaveBeenCalledWith({
       emailRequestId: "11111111-1111-4111-8111-111111111111",
+      circleId: "family",
     });
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Grandma’s invitation was withdrawn.",
@@ -491,6 +599,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedInvitationModel}
+        inviteCircleId="family"
         actions={{
           requestInvitation,
           revokeMembership: vi.fn(),
@@ -532,6 +641,7 @@ describe("FamilySettingsPanel", () => {
     expect(requestInvitation.mock.calls[0]?.[0]).toMatchObject({
       displayName: "Aunt June",
       email: "june@example.com",
+      circleId: "family",
     });
     expect(requestInvitation.mock.calls[1]?.[0].requestKey).toBe(
       requestInvitation.mock.calls[0]?.[0].requestKey,
@@ -568,6 +678,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedInvitationModel}
+        inviteCircleId="family"
         actions={{
           requestInvitation,
           revokeMembership: vi.fn(),
@@ -619,6 +730,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedInvitationModel}
+        inviteCircleId="family"
         actions={{
           requestInvitation,
           revokeMembership: vi.fn(),
@@ -668,6 +780,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership,
           withdrawInvitation: vi.fn(),
@@ -712,6 +825,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),
@@ -738,6 +852,7 @@ describe("FamilySettingsPanel", () => {
     expect(setMembershipRole).toHaveBeenLastCalledWith({
       membershipId: "other-membership",
       role: "member",
+      circleId: "family",
     });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Role stayed the same.",
@@ -760,20 +875,26 @@ describe("FamilySettingsPanel", () => {
     const user = userEvent.setup();
     const promotionModel = {
       ...connectedOrganizerModel,
-      members: connectedOrganizerModel.members.map((member) =>
-        member.id === "other"
-          ? {
-              ...member,
-              role: "member" as const,
-              relationshipLabel: "Family member",
-            }
-          : member,
-      ),
+      groups: [
+        {
+          ...connectedOrganizerModel.groups[0],
+          members: connectedOrganizerModel.groups[0].members.map((member) =>
+            member.id === "other"
+              ? {
+                  ...member,
+                  role: "member" as const,
+                  relationshipLabel: "Family member",
+                }
+              : member,
+          ),
+        },
+      ],
     };
 
     render(
       <FamilySettingsPanel
         model={promotionModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),
@@ -806,6 +927,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),
@@ -838,6 +960,7 @@ describe("FamilySettingsPanel", () => {
       managedPersonId: "child",
       guardianMembershipId: "other-membership",
       grantAccess: false,
+      circleId: "family",
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
@@ -853,6 +976,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),
@@ -884,6 +1008,7 @@ describe("FamilySettingsPanel", () => {
     render(
       <FamilySettingsPanel
         model={connectedMemberModel}
+        inviteCircleId="family"
         actions={{
           revokeMembership: vi.fn(),
           withdrawInvitation: vi.fn(),

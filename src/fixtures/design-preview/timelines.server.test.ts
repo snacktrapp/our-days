@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getFamilyTimelineFixture,
+  getPeopleFixture,
   getPersonalTimelineFixture,
 } from "./timelines.server";
 
@@ -73,6 +74,33 @@ describe("design preview timeline chronology", () => {
     const brian = getPersonalTimelineFixture("brian");
     expect(brian?.chrome.eyebrow).toBe("You");
     expect(brian?.chrome.title).toBe("Brian");
+  });
+
+  it("lists every circle on People even when Home is on another group", () => {
+    const people = getPeopleFixture({
+      extraGroup: { id: "created", name: "Cousins" },
+      selectedGroupId: "created",
+    });
+    expect(people.groups.map((group) => group.name)).toEqual([
+      "All our days",
+      "Cousins",
+    ]);
+    expect(people.groups[0]?.members.map((person) => person.name)).toEqual([
+      "Brian",
+      "Molly",
+      "Avery",
+      "Sam",
+      "June",
+    ]);
+    expect(people.groups[1]?.members.map((person) => person.id)).toEqual([
+      "brian",
+    ]);
+    expect(
+      people.groups.some((group) =>
+        group.members.some((person) => person.name === "TARS"),
+      ),
+    ).toBe(false);
+    expect(people.groups[1]?.inviteHref).toContain("inviteCircle=created");
   });
 
   it("adds a created group as another GROUP row and scopes its people", () => {

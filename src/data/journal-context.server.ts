@@ -6,7 +6,7 @@ import {
   localJournalIsEnabled,
   photoPostingIsEnabled,
 } from "../../config/our-days-environment";
-import type { PeopleViewModel } from "@/features/people/people-view-model";
+import type { PersonSummaryViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import {
   readJournalCircleMemberships,
@@ -67,7 +67,7 @@ export type ConnectedJournalContext = Readonly<{
   circleTimeZone: string;
   today: string;
   chrome: JournalChromeViewModel;
-  people: PeopleViewModel["people"];
+  people: readonly PersonSummaryViewModel[];
   groups?: readonly Readonly<{ id: string; name: string }>[];
 }>;
 

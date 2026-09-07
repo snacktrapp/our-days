@@ -10,7 +10,7 @@ test("private photo notices fit and remain accessible at 320px", async ({
   await page.goto("/quality/photo-status");
 
   await expect(
-    page.getByRole("region", { name: "Private photo status" }),
+    page.getByRole("region", { name: "Private photo status" }).first(),
   ).toBeVisible();
   const layout = await page.evaluate(() => {
     const shelf = document

@@ -20,6 +20,8 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
+import type { PeopleViewModel } from "@/features/people/people-view-model";
+import { buildPeopleViewModel } from "@/features/people/people-view-model";
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
 import {
   buildActivityNotifications,
@@ -27,7 +29,12 @@ import {
   mapDatabaseAccent,
   plainToday,
 } from "@/data/journal-context.server";
-import { journalContextLabel } from "@/lib/circle-roles";
+import {
+  hasOrganizerPrivilege,
+  isOperationsMembership,
+  journalContextLabel,
+  journalDirectoryRoleLabel,
+} from "@/lib/circle-roles";
 import {
   buildTimelineEntries,
   connectedTimelineInteraction,
@@ -379,6 +386,79 @@ export async function loadLocalJournalContext(
     chrome,
     people: surface.people,
   };
+}
+
+export async function loadLocalPeopleDirectory(
+  access: LocalAccess,
+  context: ConnectedJournalContext,
+): Promise<PeopleViewModel> {
+  const document = await readLocalJournal();
+  const groups = localGroups(document);
+  return buildPeopleViewModel({
+    chrome: context.chrome,
+    groups: groups.map((group) => {
+      const extra = (document.extraCircles ?? []).find(
+        (circle) => circle.id === group.id,
+      );
+      if (extra) {
+        return {
+          id: extra.id,
+          name: extra.name,
+          canInvite: hasOrganizerPrivilege(extra.role),
+          members: isOperationsMembership(extra)
+            ? []
+            : [
+                {
+                  id: extra.personId,
+                  name: extra.displayName,
+                  initial: initialFor(extra.displayName),
+                  accent: mapDatabaseAccent(extra.accentToken),
+                  roleLabel: journalDirectoryRoleLabel("account", extra.role),
+                  journalHref: `/people/${extra.personId}`,
+                },
+              ],
+        };
+      }
+      const membershipByPerson = new Map(
+        document.memberships.map((membership) => [
+          membership.personId,
+          membership,
+        ]),
+      );
+      const viewer = document.memberships.find(
+        (membership) => membership.id === access.membershipId,
+      );
+      return {
+        id: group.id,
+        name: group.name,
+        canInvite: hasOrganizerPrivilege(viewer?.role ?? access.role),
+        members: document.people.flatMap((person) => {
+          const membership = membershipByPerson.get(person.id);
+          if (
+            isOperationsMembership({
+              role: membership?.role,
+              directoryKind: membership?.directoryKind,
+            })
+          ) {
+            return [];
+          }
+          return [
+            {
+              id: person.id,
+              name: person.displayName,
+              initial: initialFor(person.displayName),
+              accent: mapDatabaseAccent(person.accentToken),
+              roleLabel: journalDirectoryRoleLabel(
+                person.profileKind,
+                membership?.role,
+              ),
+              journalHref: `/people/${person.id}`,
+            },
+          ];
+        }),
+      };
+    }),
+  });
 }
 
 function visibleMoments(
@@ -822,36 +902,38 @@ export async function loadLocalTrash(
     });
 }
 
-export async function loadLocalFamilyAccess(access: LocalAccess) {
-  const document = await readLocalJournal();
-  const extra = (document.extraCircles ?? []).find(
-    (circle) => circle.id === access.circleId,
-  );
-  if (extra) {
-    return {
-      people: [
-        {
-          id: extra.personId,
-          displayName: extra.displayName,
-          profileKind: "account" as const,
-          accentToken: extra.accentToken,
-        },
-      ],
-      memberships: [
-        {
-          id: extra.membershipId,
-          personId: extra.personId,
-          role: extra.role,
-          directoryKind: "journal" as const,
-        },
-      ],
-      guardians: [],
-      pendingInvitations: [],
-    };
-  }
-  if (access.circleId !== document.circle.id) {
-    throw new Error("That family is not available.");
-  }
+type LocalFamilyAccessData = Readonly<{
+  people: readonly Readonly<{
+    id: string;
+    displayName: string;
+    profileKind: string;
+    accentToken: string;
+  }>[];
+  memberships: readonly Readonly<{
+    id: string;
+    personId: string;
+    role: string;
+    directoryKind?: string | null;
+  }>[];
+  guardians: readonly Readonly<{
+    managedPersonId: string;
+    guardianMembershipId: string;
+  }>[];
+  pendingInvitations: readonly never[];
+}>;
+
+function emptyLocalFamilyAccess(): LocalFamilyAccessData {
+  return {
+    people: [],
+    memberships: [],
+    guardians: [],
+    pendingInvitations: [],
+  };
+}
+
+function localFamilyCircleAccess(
+  document: Awaited<ReturnType<typeof readLocalJournal>>,
+): LocalFamilyAccessData {
   return {
     people: document.people.map((person) => ({
       id: person.id,
@@ -871,6 +953,64 @@ export async function loadLocalFamilyAccess(access: LocalAccess) {
     })),
     pendingInvitations: [],
   };
+}
+
+function localExtraCircleAccess(
+  extra: NonNullable<
+    Awaited<ReturnType<typeof readLocalJournal>>["extraCircles"]
+  >[number],
+): LocalFamilyAccessData {
+  return {
+    people: [
+      {
+        id: extra.personId,
+        displayName: extra.displayName,
+        profileKind: "account",
+        accentToken: extra.accentToken,
+      },
+    ],
+    memberships: [
+      {
+        id: extra.membershipId,
+        personId: extra.personId,
+        role: extra.role,
+        directoryKind: "journal",
+      },
+    ],
+    guardians: [],
+    pendingInvitations: [],
+  };
+}
+
+export async function loadLocalFamilyAccess(access: LocalAccess) {
+  const directory = await loadLocalFamilyDirectory(access, [access.circleId]);
+  const data = directory.get(access.circleId);
+  if (!data) throw new Error("That family is not available.");
+  return data;
+}
+
+export async function loadLocalFamilyDirectory(
+  access: LocalAccess,
+  circleIds: readonly string[],
+): Promise<ReadonlyMap<string, LocalFamilyAccessData>> {
+  void access;
+  const document = await readLocalJournal();
+  const ids = [...new Set(circleIds.filter(Boolean))];
+  const directory = new Map<string, LocalFamilyAccessData>();
+  for (const circleId of ids) {
+    if (circleId === document.circle.id) {
+      directory.set(circleId, localFamilyCircleAccess(document));
+      continue;
+    }
+    const extra = (document.extraCircles ?? []).find(
+      (circle) => circle.id === circleId,
+    );
+    directory.set(
+      circleId,
+      extra ? localExtraCircleAccess(extra) : emptyLocalFamilyAccess(),
+    );
+  }
+  return directory;
 }
 
 export async function loadLocalConversation(

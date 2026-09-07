@@ -10,7 +10,10 @@ import type {
   MemoriesViewModel,
   MemoryJourneyViewModel,
 } from "@/features/memories/memories-view-model";
-import type { PeopleViewModel } from "@/features/people/people-view-model";
+import {
+  buildPeopleViewModel,
+  type PeopleViewModel,
+} from "@/features/people/people-view-model";
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import {
@@ -578,58 +581,168 @@ export function getPersonalTimelineFixture(
   };
 }
 
-export function getPeopleFixture(): PeopleViewModel {
-  return {
+const familyPeople = [
+  {
+    id: "brian",
+    name: "Brian",
+    initial: "B",
+    accent: "teal" as const,
+    roleLabel: "Co-organizer",
+    journalHref: "/people/brian",
+  },
+  {
+    id: "molly",
+    name: "Molly",
+    initial: "M",
+    accent: "clay" as const,
+    roleLabel: "Co-organizer",
+    journalHref: "/people/molly",
+  },
+  {
+    id: "avery",
+    name: "Avery",
+    initial: "A",
+    accent: "ochre" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/avery",
+  },
+  {
+    id: "sam",
+    name: "Sam",
+    initial: "S",
+    accent: "slate" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/sam",
+  },
+  {
+    id: "june",
+    name: "June",
+    initial: "J",
+    accent: "moss" as const,
+    roleLabel: "Managed profile · No sign-in",
+    journalHref: "/people/june",
+  },
+] as const;
+
+export function getPeopleFixture(
+  options: PreviewTimelineOptions = {},
+): PeopleViewModel {
+  return buildPeopleViewModel({
     chrome: chrome("teal", "Our people"),
-    intro: "Individual journals within this family archive.",
-    people: [
-      {
-        id: "brian",
-        name: "Brian",
-        initial: "B",
-        accent: "teal",
-        roleLabel: "Co-organizer",
-        journalHref: "/people/brian",
-      },
-      {
-        id: "molly",
-        name: "Molly",
-        initial: "M",
-        accent: "clay",
-        roleLabel: "Co-organizer",
-        journalHref: "/people/molly",
-      },
-      {
-        id: "avery",
-        name: "Avery",
-        initial: "A",
-        accent: "ochre",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/avery",
-      },
-      {
-        id: "sam",
-        name: "Sam",
-        initial: "S",
-        accent: "slate",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/sam",
-      },
-      {
-        id: "june",
-        name: "June",
-        initial: "J",
-        accent: "moss",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/june",
-      },
-    ],
-  };
+    groups: previewGroups(options.extraGroup).map((group) =>
+      group.id === previewFamilyId
+        ? {
+            id: group.id,
+            name: group.name,
+            canInvite: true,
+            members: familyPeople,
+          }
+        : {
+            id: group.id,
+            name: group.name,
+            canInvite: true,
+            members: [familyPeople[0]],
+          },
+    ),
+  });
 }
 
 export function getFamilySettingsFixture(
   options: PreviewTimelineOptions = {},
 ): FamilySettingsViewModel {
+  const familyMembers = [
+    {
+      id: "brian",
+      membershipId: "preview-brian-membership",
+      profileKind: "account" as const,
+      role: "organizer" as const,
+      name: "Brian",
+      initial: "B",
+      accent: "teal" as const,
+      relationshipLabel: "Co-organizer",
+      accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: false,
+    },
+    {
+      id: "molly",
+      membershipId: "preview-molly-membership",
+      profileKind: "account" as const,
+      role: "organizer" as const,
+      name: "Molly",
+      initial: "M",
+      accent: "clay" as const,
+      relationshipLabel: "Co-organizer",
+      accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: true,
+    },
+    {
+      id: "tars",
+      membershipId: "preview-tars-membership",
+      profileKind: "account" as const,
+      role: "operations" as const,
+      name: "TARS",
+      initial: "T",
+      accent: "slate" as const,
+      relationshipLabel: "Operations",
+      accessLabel: "Account · Can sign in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: true,
+    },
+    {
+      id: "avery",
+      membershipId: null,
+      profileKind: "managed" as const,
+      role: null,
+      name: "Avery",
+      initial: "A",
+      accent: "ochre" as const,
+      relationshipLabel: "Child journal",
+      accessLabel: "Managed profile · No sign-in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: false,
+    },
+    {
+      id: "sam",
+      membershipId: null,
+      profileKind: "managed" as const,
+      role: null,
+      name: "Sam",
+      initial: "S",
+      accent: "slate" as const,
+      relationshipLabel: "Child journal",
+      accessLabel: "Managed profile · No sign-in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: false,
+    },
+    {
+      id: "june",
+      membershipId: null,
+      profileKind: "managed" as const,
+      role: null,
+      name: "June",
+      initial: "J",
+      accent: "moss" as const,
+      relationshipLabel: "Child journal",
+      accessLabel: "Managed profile · No sign-in",
+      guardianMembershipIds: [],
+      canManageRole: false,
+      canManageJournal: false,
+      canReviewRemoval: false,
+    },
+  ];
+  const extraMembers = [familyMembers[0]];
   return {
     chrome: chrome("teal", "Account"),
     panel: {
@@ -637,102 +750,20 @@ export function getFamilySettingsFixture(
       intro:
         "A small, invitation-only circle. Everyone’s place and access should stay easy to understand.",
       currentMemberId: "brian",
-      groups: previewGroups(options.extraGroup).map((group) => ({
-        ...group,
-        memberCount: group.id === previewFamilyId ? 5 : 1,
-      })),
-      members: [
-        {
-          id: "brian",
-          membershipId: "preview-brian-membership",
-          profileKind: "account",
-          role: "organizer",
-          name: "Brian",
-          initial: "B",
-          accent: "teal",
-          relationshipLabel: "Co-organizer",
-          accessLabel: "Account · Can sign in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: false,
-        },
-        {
-          id: "molly",
-          membershipId: "preview-molly-membership",
-          profileKind: "account",
-          role: "organizer",
-          name: "Molly",
-          initial: "M",
-          accent: "clay",
-          relationshipLabel: "Co-organizer",
-          accessLabel: "Account · Can sign in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: true,
-        },
-        {
-          id: "tars",
-          membershipId: "preview-tars-membership",
-          profileKind: "account",
-          role: "operations",
-          name: "TARS",
-          initial: "T",
-          accent: "slate",
-          relationshipLabel: "Operations",
-          accessLabel: "Account · Can sign in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: true,
-        },
-        {
-          id: "avery",
-          membershipId: null,
-          profileKind: "managed",
-          role: null,
-          name: "Avery",
-          initial: "A",
-          accent: "ochre",
-          relationshipLabel: "Child journal",
-          accessLabel: "Managed profile · No sign-in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: false,
-        },
-        {
-          id: "sam",
-          membershipId: null,
-          profileKind: "managed",
-          role: null,
-          name: "Sam",
-          initial: "S",
-          accent: "slate",
-          relationshipLabel: "Child journal",
-          accessLabel: "Managed profile · No sign-in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: false,
-        },
-        {
-          id: "june",
-          membershipId: null,
-          profileKind: "managed",
-          role: null,
-          name: "June",
-          initial: "J",
-          accent: "moss",
-          relationshipLabel: "Child journal",
-          accessLabel: "Managed profile · No sign-in",
-          guardianMembershipIds: [],
-          canManageRole: false,
-          canManageJournal: false,
-          canReviewRemoval: false,
-        },
-      ],
+      groups: previewGroups(options.extraGroup).map((group) => {
+        const members =
+          group.id === previewFamilyId ? familyMembers : extraMembers;
+        return {
+          id: group.id,
+          name: group.name,
+          memberCount: members.length,
+          currentMemberId: "brian",
+          canManageAccess: true,
+          members,
+          guardianOptions: [],
+          pendingInvitations: [],
+        };
+      }),
     },
   };
 }

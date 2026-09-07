@@ -725,7 +725,7 @@ test("real route transitions hold the last screen and keep the nav put", async (
   await page.goto("/family");
   await expect(page.locator(".bottom-nav")).toHaveCount(1);
 
-  await page.route(/\/people\?_rsc=/u, async (route) => {
+  await page.route(/\/settings\/family\?_rsc=/u, async (route) => {
     const requestUrl = new URL(route.request().url());
     requestUrl.searchParams.set("previewLoading", "navigation");
     await route.continue({ url: requestUrl.toString() });
@@ -778,30 +778,30 @@ test("real route transitions hold the last screen and keep the nav put", async (
 
   await page
     .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "People" })
+    .getByRole("link", { name: "Account" })
     .click({ noWaitAfter: true });
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "People" }),
+      .getByRole("link", { name: "Account" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "People" })
+      .getByRole("link", { name: "Account" })
       .locator(".nav-symbol-pending"),
   ).toHaveCount(0);
   await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
   await expect(page.locator(".journal-loading")).toHaveCount(0);
   await expect(page.locator(".route-pending-skeleton")).toHaveCount(1);
   await expect(page.locator(".timeline-empty-state")).toHaveCount(0);
-  await expect(page).toHaveURL(/\/people$/u);
-  await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/family$/u);
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "People" })
+      .getByRole("link", { name: "Account" })
       .locator(".nav-symbol-pending"),
   ).toHaveCount(0);
   const samples = await page.evaluate(() => {
@@ -850,7 +850,7 @@ test("primary navigation remains above every secondary page canvas", async ({
   for (const path of ["/people", "/memories", "/settings/family"]) {
     await page.goto(path);
     const panel = page.locator(
-      path === "/settings/family" ? ".family-settings-panel" : ".section-panel",
+      path === "/memories" ? ".section-panel" : ".family-settings-panel",
     );
     await expect(panel).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(panel).toHaveCSS("border-top-width", "0px");
