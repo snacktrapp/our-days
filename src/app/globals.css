@@ -904,7 +904,8 @@ button:focus-visible,
   width: 27px;
   height: 27px;
 }
-.just-me-pill {
+.just-me-pill,
+.audience-chip {
   position: absolute;
   top: 4px;
   right: calc(50% + 24px);
@@ -913,11 +914,116 @@ button:focus-visible,
   border-radius: 999px;
   background: var(--grid-surface);
   color: var(--muted);
+  font-family: var(--font-interface);
   font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: none;
   white-space: nowrap;
+}
+button.audience-chip {
+  cursor: pointer;
+}
+button.audience-chip:focus-visible {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
+}
+
+.audience-edit-dialog {
+  width: min(calc(100vw - 32px), 360px);
+  max-height: min(80dvh, 520px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--cream);
+  color: var(--ink);
+}
+.audience-edit-dialog::backdrop {
+  background: rgba(6, 12, 10, 0.46);
+}
+.audience-edit-sheet {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 14px;
+}
+.audience-edit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.audience-edit-bar h2 {
+  margin: 0;
+  font-family: var(--font-interface);
+  font-size: 15px;
+  font-weight: 600;
+}
+.audience-edit-bar button,
+.audience-edit-actions button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 13px;
+  cursor: pointer;
+}
+.audience-edit-sheet .post-to-circles {
+  margin: 0;
+}
+.audience-edit-sheet .post-to-circles > div {
+  grid-template-columns: 1fr;
+}
+.audience-edit-sheet .post-to-circles label,
+.audience-edit-sheet .post-to-just-me {
+  font-family: var(--font-interface);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.audience-edit-sheet .post-to-just-me {
+  min-height: 44px;
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 9px 6px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.audience-edit-sheet .post-to-just-me input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.audience-edit-message {
+  margin: 10px 0 0;
+  color: var(--clay);
+  font-family: var(--font-record);
+  font-size: 11px;
+}
+.audience-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.audience-edit-actions button:last-child {
+  color: var(--ink);
+  font-weight: 650;
+}
+.audience-edit-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .moment-meta {
   max-width: calc(50% - 34px);
@@ -5018,7 +5124,8 @@ button:focus-visible,
   font-size: 9px;
 }
 
-.just-me-pill {
+.just-me-pill,
+.audience-chip {
   top: 2px;
   right: calc(50% + 21px);
   font-size: 7px;

@@ -50,6 +50,13 @@ export type UpdateFamilyMomentAction = (input: {
   audience?: MomentAudience;
 }) => Promise<MomentActionResult>;
 
+export type SetMomentAudienceAction = (input: {
+  momentId: string;
+  revision: number;
+  audience: MomentAudience;
+  circleIds?: readonly string[];
+}) => Promise<MomentActionResult>;
+
 export type ChangeTrashAction = (input: {
   momentId: string;
   revision: number;
@@ -68,6 +75,7 @@ export type ReorderMomentPhotosAction = (input: {
 export type ConnectedMomentActions = Readonly<{
   update: UpdateFamilyMomentAction;
   trash: ChangeTrashAction;
+  setAudience?: SetMomentAudienceAction;
   removePhoto?: RemoveMomentPhotoAction;
   reorderPhotos?: ReorderMomentPhotosAction;
 }>;

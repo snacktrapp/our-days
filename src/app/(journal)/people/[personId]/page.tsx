@@ -18,6 +18,7 @@ import {
   trashMomentNoteAction,
   updateFamilyMomentAction,
   updateMomentNoteAction,
+  setMomentAudienceAction,
 } from "@/features/moments/moment-actions";
 
 export default async function PersonJournalPage({
@@ -71,6 +72,7 @@ export default async function PersonJournalPage({
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
+          setAudience: setMomentAudienceAction,
           removePhoto: removeMomentPhotoAction,
           reorderPhotos: reorderMomentPhotosAction,
         }}

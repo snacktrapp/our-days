@@ -22,6 +22,12 @@ vi.mock("@/lib/auth/journal-access", () => ({
       personId: "30000000-0000-4000-8000-000000000001",
       role: "organizer",
     },
+    {
+      membershipId: "membership-b",
+      circleId: "20000000-0000-4000-8000-000000000002",
+      personId: "30000000-0000-4000-8000-000000000007",
+      role: "organizer",
+    },
   ]),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -40,6 +46,7 @@ import {
   updateFamilyMomentAction,
   updateMomentNoteAction,
   updateWrittenMomentAction,
+  setMomentAudienceAction,
 } from "./moment-actions";
 
 const personId = "30000000-0000-4000-8000-000000000001";
@@ -221,6 +228,30 @@ describe("written moment actions", () => {
       }),
     ).resolves.toMatchObject({ ok: false });
     expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
+  it("sends a revision-checked audience change without rewriting the moment body", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 6, error: null });
+    await expect(
+      setMomentAudienceAction({
+        momentId,
+        revision: 5,
+        audience: "family",
+        circleIds: [
+          "20000000-0000-4000-8000-000000000001",
+          "20000000-0000-4000-8000-000000000002",
+        ],
+      }),
+    ).resolves.toMatchObject({ ok: true, revision: 6 });
+    expect(mocks.rpc).toHaveBeenCalledWith("set_moment_audience", {
+      moment_id: momentId,
+      expected_revision: 5,
+      audience: "family",
+      circle_ids: [
+        "20000000-0000-4000-8000-000000000001",
+        "20000000-0000-4000-8000-000000000002",
+      ],
+    });
   });
 
   it("preserves optional place and tags in one revision-checked family update", async () => {

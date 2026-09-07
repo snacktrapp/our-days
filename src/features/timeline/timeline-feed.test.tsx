@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { TimelineFeed } from "./timeline-feed";
 import type { TimelineViewModel } from "./timeline-view-model";
@@ -57,6 +57,10 @@ const composer = {
     },
   ],
   taggablePeople: [],
+  postableCircles: [
+    { id: "family", name: "Our Days", personId: "person" },
+    { id: "cousins", name: "Cousins", personId: "person-cousins" },
+  ],
 } as const;
 
 const model = {
@@ -238,7 +242,7 @@ describe("TimelineFeed", () => {
     expect(screen.getByRole("link", { name: "Listen" })).toBeVisible();
   });
 
-  it("shows a Just Me pill to the left of the avatar on the author's journal", () => {
+  it("shows a Just me chip to the left of the avatar on the author's journal", () => {
     const { container } = render(
       <TimelineFeed
         model={{
@@ -261,6 +265,8 @@ describe("TimelineFeed", () => {
                 kind: "thought",
                 audience: "just_me",
                 showJustMeBadge: true,
+                showAudienceChip: true,
+                audienceChipLabel: "Just me",
               },
             },
           ],
@@ -269,15 +275,103 @@ describe("TimelineFeed", () => {
     );
 
     const connection = container.querySelector(".connection");
-    const pill = screen.getByText("Just Me");
+    const pill = screen.getByRole("button", { name: "Audience, Just me" });
     const avatar = container.querySelector(".avatar-node");
     expect(pill).toBeVisible();
+    expect(pill).toHaveTextContent("Just me");
     expect(pill.compareDocumentPosition(avatar!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(connection?.querySelector(".moment-meta")).toHaveTextContent(
       "Person",
     );
+  });
+
+  it("opens an edit sheet from the group-count chip", () => {
+    const setAudience = vi.fn().mockResolvedValue({
+      ok: true,
+      message: "Audience updated.",
+    });
+    render(
+      <TimelineFeed
+        model={{
+          ...model,
+          switcher: [
+            {
+              kind: "person",
+              label: "Person",
+              href: "/people/person",
+              current: true,
+            },
+          ],
+          entries: [
+            {
+              id: "shared",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "two-groups-moment",
+                kind: "thought",
+                audience: "family",
+                showAudienceChip: true,
+                audienceChipLabel: "2 groups",
+                circleId: "family",
+                linkedCircleIds: ["family", "cousins"],
+                revision: 2,
+              },
+            },
+          ],
+        }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 groups" }));
+    expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(setAudience).toHaveBeenCalledWith({
+        momentId: "two-groups-moment",
+        revision: 2,
+        audience: "family",
+        circleIds: ["family"],
+      }),
+    );
+  });
+
+  it("does not show an audience chip on another person's card", () => {
+    render(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            {
+              id: "other",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "other-moment",
+                kind: "thought",
+                audience: "family",
+                personName: "Jordan",
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Audience,/u })).toBeNull();
+    expect(screen.queryByText("1 group")).toBeNull();
+    expect(screen.queryByText("Just me")).toBeNull();
   });
 
   it("keeps the date but omits a timestamp when no time was recorded", () => {

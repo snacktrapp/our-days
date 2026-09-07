@@ -82,6 +82,10 @@ type TimelineMomentBase = Readonly<{
   personAccent: AccentToken;
   audience?: "family" | "just_me";
   showJustMeBadge?: boolean;
+  showAudienceChip?: boolean;
+  audienceChipLabel?: string;
+  circleId?: string;
+  linkedCircleIds?: readonly string[];
   displayTime?: string;
   displayDate: string;
   occurredOn: string;

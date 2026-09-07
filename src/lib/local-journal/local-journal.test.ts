@@ -24,6 +24,7 @@ import {
   readLocalJournal,
   resetLocalJournalForTests,
   setLocalReaction,
+  updateLocalMomentAudience,
   type LocalAccess,
 } from "./store";
 import {
@@ -244,6 +245,8 @@ describe("local journal happy path", () => {
       throw new Error("Just Me moment missing from the author's journal");
     }
     expect(ownMoment.moment.showJustMeBadge).toBe(true);
+    expect(ownMoment.moment.showAudienceChip).toBe(true);
+    expect(ownMoment.moment.audienceChipLabel).toBe("Just me");
     await expect(
       setLocalReaction(jordanAccess, {
         momentId: ownMoment.moment.id,
@@ -360,5 +363,108 @@ describe("local journal happy path", () => {
     });
     expect(texts(homeAfter)).not.toContain("Cousins only.");
     expect(texts(cousinsAfter)).toContain("Cousins only.");
+  });
+
+  it("edits audience from the author's journal and updates both group feeds", async () => {
+    const extra = await createLocalCircle(access, "Cousins");
+    const extraCircle = (await readLocalJournal()).extraCircles?.find(
+      (circle) => circle.id === extra.circleId,
+    );
+    if (!extraCircle) throw new Error("Cousins circle missing");
+    const momentId = await createLocalWrittenMoment(access, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "Posted once, edited later.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      circleIds: [localCircleId],
+    });
+    const extraAccess: LocalAccess = {
+      membershipId: extraCircle.membershipId,
+      circleId: extraCircle.id,
+      personId: extraCircle.personId,
+      role: extraCircle.role,
+    };
+    const homeContext = await loadLocalJournalContext(access);
+    const extraContext = await loadLocalJournalContext(extraAccess);
+    const texts = (timeline: Awaited<ReturnType<typeof loadLocalTimeline>>) =>
+      timeline.entries.flatMap((entry) =>
+        entry.entryType === "moment" ? [entry.moment.text] : [],
+      );
+    const ownBefore = await loadLocalTimeline(access, homeContext, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const ownCard = ownBefore.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "Posted once, edited later.",
+    );
+    expect(ownCard?.entryType).toBe("moment");
+    if (ownCard?.entryType !== "moment") {
+      throw new Error("Author moment missing from the YOU feed");
+    }
+    expect(ownCard.moment.showAudienceChip).toBe(true);
+    expect(ownCard.moment.audienceChipLabel).toBe("1 group");
+
+    await updateLocalMomentAudience(access, {
+      momentId,
+      revision: ownCard.moment.revision ?? 1,
+      audience: "family",
+      circleIds: [localCircleId, extra.circleId],
+    });
+    const ownAfter = await loadLocalTimeline(access, homeContext, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const cousins = await loadLocalTimeline(extraAccess, extraContext, {
+      pages: 1,
+    });
+    const home = await loadLocalTimeline(access, homeContext, { pages: 1 });
+    const edited = ownAfter.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "Posted once, edited later.",
+    );
+    expect(edited?.entryType).toBe("moment");
+    if (edited?.entryType !== "moment") {
+      throw new Error("Edited moment missing from the YOU feed");
+    }
+    expect(edited.moment.audienceChipLabel).toBe("2 groups");
+    expect(texts(home)).toContain("Posted once, edited later.");
+    expect(texts(cousins)).toContain("Posted once, edited later.");
+
+    await updateLocalMomentAudience(access, {
+      momentId,
+      revision: edited.moment.revision ?? 2,
+      audience: "just_me",
+      circleIds: [],
+    });
+    const ownPrivate = await loadLocalTimeline(access, homeContext, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const homePrivate = await loadLocalTimeline(access, homeContext, {
+      pages: 1,
+    });
+    const cousinsPrivate = await loadLocalTimeline(extraAccess, extraContext, {
+      pages: 1,
+    });
+    const privateCard = ownPrivate.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "Posted once, edited later.",
+    );
+    expect(privateCard?.entryType).toBe("moment");
+    if (privateCard?.entryType !== "moment") {
+      throw new Error("Just me moment missing from the YOU feed");
+    }
+    expect(privateCard.moment.audienceChipLabel).toBe("Just me");
+    expect(texts(homePrivate)).not.toContain("Posted once, edited later.");
+    expect(texts(cousinsPrivate)).not.toContain("Posted once, edited later.");
   });
 });

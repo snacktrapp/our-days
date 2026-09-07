@@ -22,6 +22,7 @@ import {
 } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import { buildTimelineEntries } from "@/data/moments.server";
+import { formatAudienceChipLabel } from "@/features/moments/moment-audience";
 import {
   anniversaryKey,
   compareMemoryDatesDescending,
@@ -547,7 +548,20 @@ function personalTimelineEntries(
   }
 
   return buildTimelineEntries(
-    moments.map((entry) => entry.moment),
+    moments.map((entry) => ({
+      ...entry.moment,
+      showAudienceChip: true,
+      audienceChipLabel: formatAudienceChipLabel({
+        audience: entry.moment.audience,
+        linkedCircleIds:
+          entry.moment.linkedCircleIds ??
+          (entry.moment.audience === "just_me" ? [] : ["family"]),
+      }),
+      circleId: entry.moment.circleId ?? "family",
+      linkedCircleIds:
+        entry.moment.linkedCircleIds ??
+        (entry.moment.audience === "just_me" ? [] : ["family"]),
+    })),
     designPreviewToday,
     false,
     person.name,

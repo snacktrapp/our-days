@@ -541,6 +541,96 @@ export async function updateLocalWrittenMoment(
   });
 }
 
+function postableCircleIdsForAccess(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>();
+  if (
+    access.circleId === document.circle.id ||
+    document.memberships.some(
+      (membership) => membership.id === access.membershipId,
+    )
+  ) {
+    ids.add(document.circle.id);
+  }
+  for (const extra of document.extraCircles ?? []) {
+    if (
+      extra.id === access.circleId ||
+      extra.membershipId === access.membershipId ||
+      access.circleId === document.circle.id
+    ) {
+      ids.add(extra.id);
+    }
+  }
+  return ids;
+}
+
+export async function updateLocalMomentAudience(
+  access: LocalAccess,
+  input: Readonly<{
+    momentId: string;
+    revision: number;
+    audience: "family" | "just_me";
+    circleIds?: readonly string[];
+  }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = document.moments.find(
+      (moment) => moment.id === input.momentId && moment.trashedAt === null,
+    );
+    if (!current) throw new Error("That moment could not be changed.");
+    if (current.revision !== input.revision) {
+      const error = new Error("revision conflict");
+      (error as Error & { code?: string }).code = "40001";
+      throw error;
+    }
+    if (!canWriteJournal(document, access, current.journalPersonId)) {
+      throw new Error("That moment could not be changed.");
+    }
+    if (current.kind === "insight") {
+      throw new Error("That moment could not be changed.");
+    }
+    const audience = resolvedAudience(
+      access,
+      current.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId = current.circleId ?? document.circle.id;
+    const allowed = postableCircleIdsForAccess(document, access);
+    const nextCircleIds =
+      audience === "just_me"
+        ? undefined
+        : [...new Set(input.circleIds ?? [primaryCircleId])];
+    if (audience === "family") {
+      if (
+        !nextCircleIds?.length ||
+        !nextCircleIds.includes(primaryCircleId) ||
+        nextCircleIds.some((id) => !allowed.has(id))
+      ) {
+        throw new Error("That moment could not be changed.");
+      }
+    }
+    const updated: LocalMoment = {
+      ...current,
+      audience,
+      circleIds: nextCircleIds,
+      taggedPersonIds: audience === "just_me" ? [] : current.taggedPersonIds,
+      revision: nextRevision(current.revision),
+      updatedAt: nowIso(),
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: document.moments.map((moment) =>
+        moment.id === current.id ? updated : moment,
+      ),
+    });
+    return updated.revision;
+  });
+}
+
 export async function setLocalMomentTrashed(
   access: LocalAccess,
   input: Readonly<{ momentId: string; revision: number; trashed: boolean }>,

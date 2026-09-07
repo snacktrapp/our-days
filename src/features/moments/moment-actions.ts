@@ -419,6 +419,81 @@ export async function updateFamilyMomentAction(input: {
   return { ok: true, message: "Moment updated.", revision: data ?? undefined };
 }
 
+export async function setMomentAudienceAction(input: {
+  momentId: string;
+  revision: number;
+  audience?: "family" | "just_me";
+  circleIds?: readonly string[];
+}): Promise<MomentActionResult> {
+  if (!(await hasExpectedOrigin())) {
+    return { ok: false, message: "That request could not be verified." };
+  }
+  const access = await requireJournalAccess();
+  if (access.mode !== "authenticated") {
+    return { ok: false, message: "Preview moments are not saved." };
+  }
+  const audience = normalizeMomentAudience(input.audience);
+  if (
+    !uuidPattern.test(input.momentId) ||
+    !Number.isInteger(input.revision) ||
+    input.revision < 1
+  ) {
+    return { ok: false, message: "That moment could not be changed." };
+  }
+  const memberships = await readJournalCircleMemberships();
+  const allowed = new Set(memberships.map((membership) => membership.circleId));
+  const circleIds =
+    audience === "just_me" ? [] : validatedCircleIds(input.circleIds, allowed);
+  if (audience === "family" && (!circleIds || circleIds.length === 0)) {
+    return { ok: false, message: "Choose at least one circle or Just me." };
+  }
+  if (localJournalIsEnabled()) {
+    try {
+      const { updateLocalMomentAudience } = await localStore();
+      const revision = await updateLocalMomentAudience(access, {
+        momentId: input.momentId,
+        revision: input.revision,
+        audience,
+        circleIds,
+      });
+      refreshMomentSurfaces();
+      return { ok: true, message: "Audience updated.", revision };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error &&
+          (error as Error & { code?: string }).code === "40001"
+            ? "This moment changed elsewhere. Reopen it before editing again."
+            : "That moment could not be changed.",
+      };
+    }
+  }
+
+  const supabase = await createOurDaysServerClient();
+  const { data, error } = await supabase.rpc("set_moment_audience", {
+    moment_id: input.momentId,
+    expected_revision: input.revision,
+    audience,
+    circle_ids: audience === "just_me" ? [] : circleIds,
+  });
+  if (error) {
+    return {
+      ok: false,
+      message:
+        error.code === "40001"
+          ? "This moment changed elsewhere. Reopen it before editing again."
+          : "That moment could not be changed.",
+    };
+  }
+  refreshMomentSurfaces();
+  return {
+    ok: true,
+    message: "Audience updated.",
+    revision: data ?? undefined,
+  };
+}
+
 async function setMomentTrashed(
   input: { momentId: string; revision: number },
   trashed: boolean,

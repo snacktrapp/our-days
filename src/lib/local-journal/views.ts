@@ -172,6 +172,8 @@ function momentToTimelineRow(
   );
   return {
     moment_id: moment.id,
+    moment_circle_id: momentCircleId(moment, document.circle.id),
+    linked_circle_ids: momentLinkedCircleIds(moment, document.circle.id),
     moment_journal_person_id: moment.journalPersonId,
     journal_person_name: journalPerson?.displayName ?? null,
     journal_person_accent: journalPerson?.accentToken ?? null,

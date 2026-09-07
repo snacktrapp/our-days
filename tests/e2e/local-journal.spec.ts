@@ -186,7 +186,7 @@ test("Just Me stays on the author's journal and off Family", async ({
       .getByLabel("Chronological moments for Alex")
       .getByText("A porch thought just for me."),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".just-me-pill")).toHaveText("Just Me");
+  await expect(page.locator(".just-me-pill")).toHaveText("Just me");
 
   await page.goto("/family");
   await expect(page.getByLabel("Chronological family moments")).toBeVisible({
