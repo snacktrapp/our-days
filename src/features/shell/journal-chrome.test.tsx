@@ -126,8 +126,18 @@ describe("JournalChrome", () => {
         model={{ ...model, title: "All our days" }}
         section="timeline"
         switcher={[
-          { label: "Family", href: "/family", current: true },
-          { label: "Molly", href: "/people/molly", current: false },
+          {
+            kind: "group",
+            label: "All our days",
+            href: "/family",
+            current: true,
+          },
+          {
+            kind: "person",
+            label: "Molly",
+            href: "/people/molly",
+            current: false,
+          },
         ]}
       >
         <p>Moments</p>
@@ -145,7 +155,7 @@ describe("JournalChrome", () => {
     expect(
       screen.getByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "Family" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "All our days" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -183,8 +193,18 @@ describe("JournalChrome", () => {
         model={{ ...model, title: "All our days" }}
         section="timeline"
         switcher={[
-          { label: "Family", href: "/family", current: true },
-          { label: "Molly", href: "/people/molly", current: false },
+          {
+            kind: "group",
+            label: "All our days",
+            href: "/family",
+            current: true,
+          },
+          {
+            kind: "person",
+            label: "Molly",
+            href: "/people/molly",
+            current: false,
+          },
         ]}
       >
         <p>Moments</p>
@@ -203,6 +223,9 @@ describe("JournalChrome", () => {
       screen.getByRole("region", { name: "Opening this journal" }),
     ).toHaveClass("route-pending-skeleton");
     expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(document.querySelector(".title-switcher")).not.toHaveAttribute(
+      "open",
+    );
     expect(document.querySelector(".timeline-empty-state")).toBeNull();
   });
 });

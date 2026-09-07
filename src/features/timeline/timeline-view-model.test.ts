@@ -39,7 +39,9 @@ const model = {
     familyMark: [{ id: "person", initial: "P", accent: "teal" }],
   },
   interaction,
-  switcher: [{ label: "Family", href: "/family", current: true }],
+  switcher: [
+    { kind: "group", label: "Family", href: "/family", current: true },
+  ],
   entries: [
     { id: "start", entryType: "date-marker", label: "Today" },
     {

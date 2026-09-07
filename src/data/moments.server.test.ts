@@ -521,13 +521,21 @@ describe("connected timeline mapping", () => {
     expect(timeline.chrome.composer.defaultJournalPersonId).toBe("child");
     expect(timeline.chrome.composer.recorderPersonId).toBe("parent");
     expect(timeline.switcher).toEqual([
-      { label: "Family", href: "/family", current: false },
       {
+        kind: "group",
+        label: "Our family",
+        href: "/family",
+        current: false,
+      },
+      {
+        kind: "person",
         label: "Child",
         href: "/people/child",
         current: true,
       },
     ]);
+    expect(timeline.chrome.eyebrow).toBe("Person");
+    expect(timeline.chrome.title).toBe("Child");
   });
 
   it("continues beyond twenty cumulative pages without repeating page twenty", async () => {

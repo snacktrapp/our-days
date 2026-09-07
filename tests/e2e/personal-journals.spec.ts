@@ -53,7 +53,7 @@ test("People links to five distinct, owner-correct life journals", async ({
   for (const journal of journals) {
     await page.goto(`/people/${journal.id}`);
     await expect(
-      page.getByRole("heading", { name: `${journal.name}’s days` }),
+      page.getByRole("heading", { name: journal.name, exact: true }),
     ).toBeVisible();
     await expect(
       page.getByLabel(`Chronological moments for ${journal.name}`),
@@ -92,9 +92,7 @@ test("managed profiles preserve journal identity and honest empty states", async
   page,
 }) => {
   await page.goto("/people/avery");
-  await expect(
-    page.getByRole("heading", { name: "Avery’s days" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Avery" })).toBeVisible();
   await expect(page.getByText("First day of school")).toBeVisible();
   await expect(page.getByText(/earliest entry/i)).toBeVisible();
   await expect(page.getByText("The story so far")).toHaveCount(0);

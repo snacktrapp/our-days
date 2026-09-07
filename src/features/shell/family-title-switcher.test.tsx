@@ -5,13 +5,14 @@ import type { JournalChromeViewModel } from "./shell-view-model";
 
 const model = {
   accent: "teal",
-  eyebrow: "Our family",
+  eyebrow: "Group",
   title: "All our days",
 } as JournalChromeViewModel;
 
 const switcher = [
-  { label: "Family", href: "/family", current: true },
-  { label: "Molly", href: "/people/molly", current: false },
+  { kind: "you", label: "Brian", href: "/people/brian", current: false },
+  { kind: "group", label: "All our days", href: "/family", current: true },
+  { kind: "person", label: "Molly", href: "/people/molly", current: false },
 ] as const;
 
 describe("FamilyTitleSwitcher", () => {
@@ -86,7 +87,7 @@ describe("FamilyTitleSwitcher", () => {
     fireEvent.pointerDown(molly, { button: 0 });
     expect(molly).toHaveClass("active");
     expect(molly.querySelector(".title-switcher-link-pending")).toBeNull();
-    expect(screen.getByRole("link", { name: "Family" })).not.toHaveClass(
+    expect(screen.getByRole("link", { name: "All our days" })).not.toHaveClass(
       "active",
     );
   });
@@ -96,7 +97,7 @@ describe("FamilyTitleSwitcher", () => {
     fireEvent.click(
       screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
     );
-    const family = screen.getByRole("link", { name: "Family" });
+    const family = screen.getByRole("link", { name: "All our days" });
     const molly = screen.getByRole("link", { name: "Molly" });
     expect(family).toHaveClass("active");
     expect(family).toHaveAttribute("aria-current", "page");
@@ -108,5 +109,54 @@ describe("FamilyTitleSwitcher", () => {
     expect(family).not.toHaveClass("active");
     expect(family).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+  });
+
+  it("shows type pills, You first, and a check on the selected row only", () => {
+    const { container } = render(
+      <FamilyTitleSwitcher model={model} switcher={switcher} />,
+    );
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    const links = [
+      ...container.querySelectorAll(".title-switcher nav a"),
+    ] as HTMLAnchorElement[];
+    expect(links.map((link) => link.textContent)).toEqual([
+      "BrianYou",
+      "All our daysGroup",
+      "MollyPerson",
+    ]);
+    expect(links[0].querySelector(".title-switcher-check")).toBeNull();
+    expect(links[1].querySelector(".title-switcher-check")).not.toBeNull();
+    expect(links[2].querySelector(".title-switcher-check")).toBeNull();
+    expect(
+      container.querySelector(".title-lockup .title-switcher-type-pill"),
+    ).toBeNull();
+    expect(container.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
+      "Group",
+    );
+  });
+
+  it("closes the switcher on the same frame as a row press", () => {
+    const { container } = render(
+      <FamilyTitleSwitcher model={model} switcher={switcher} />,
+    );
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    expect(container.querySelector(".title-switcher")).toHaveAttribute("open");
+    fireEvent.pointerDown(screen.getByRole("link", { name: "Molly" }), {
+      button: 0,
+    });
+    expect(container.querySelector(".title-switcher")).not.toHaveAttribute(
+      "open",
+    );
+    expect(container.querySelector(".title-switcher nav")).not.toHaveClass(
+      "is-closing",
+    );
+    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(container.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
+      "Person",
+    );
   });
 });

@@ -142,7 +142,7 @@ export function PrimaryNavigation({
         prefetch={false}
       >
         <NavSymbol name="family" />
-        <span>Family</span>
+        <span>Home</span>
       </Link>
       <Link
         className={`nav-item ${selectedSection === "people" ? "active" : ""}`}

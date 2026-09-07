@@ -988,7 +988,7 @@ try {
   await invitedPage.setViewportSize({ height: 844, width: 390 });
   await invitedPage
     .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Family" })
+    .getByRole("link", { name: "Home" })
     .click();
   await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
 
@@ -1445,7 +1445,7 @@ try {
   await invitedPage.setViewportSize({ height: 844, width: 390 });
   await invitedPage
     .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Family" })
+    .getByRole("link", { name: "Home" })
     .click();
   await invitedPage.getByRole("heading", { name: "Cedar Circle" }).waitFor();
 
@@ -1632,7 +1632,7 @@ try {
   );
   await invitedPage
     .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Family" })
+    .getByRole("link", { name: "Home" })
     .click();
   await invitedPage.getByText(editedMoment).waitFor();
   invitedPage.once("dialog", (dialog) => dialog.accept());

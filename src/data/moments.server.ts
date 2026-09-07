@@ -11,6 +11,10 @@ import type { JournalAccess } from "@/lib/auth/journal-access";
 import type { Database } from "@/lib/supabase/database.types";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import {
+  buildJournalSwitcher,
+  journalSwitcherEyebrow,
+} from "@/features/shell/journal-switcher";
 import type { ConnectedJournalContext } from "./journal-context.server";
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import { mapDatabaseAccent } from "./journal-context.server";
@@ -574,29 +578,31 @@ export async function loadConnectedTimeline(
       (person) => person.id === personal.id,
     ),
   );
-  const chrome = personal
-    ? {
-        ...context.chrome,
-        accent: personal.accent,
-        title: personal.name,
-        composer: personalJournalIsWritable
-          ? {
-              ...context.chrome.composer,
-              defaultJournalPersonId: personal.id,
-            }
-          : context.chrome.composer,
-      }
-    : context.chrome;
+  const switcher = buildJournalSwitcher({
+    groupLabel: context.circleName,
+    people: context.people,
+    viewerPersonId: access.personId,
+    currentHref: personal ? `/people/${personal.id}` : "/family",
+  });
+  const chrome = {
+    ...(personal
+      ? {
+          ...context.chrome,
+          accent: personal.accent,
+          title: personal.name,
+          composer: personalJournalIsWritable
+            ? {
+                ...context.chrome.composer,
+                defaultJournalPersonId: personal.id,
+              }
+            : context.chrome.composer,
+        }
+      : context.chrome),
+    eyebrow: journalSwitcherEyebrow(switcher),
+  };
   return {
     chrome,
-    switcher: [
-      { label: "Family", href: "/family", current: !personal },
-      ...context.people.map((person) => ({
-        label: person.name,
-        href: `/people/${person.id}`,
-        current: personal?.id === person.id,
-      })),
-    ],
+    switcher,
     timelineLabel: personal
       ? `Chronological moments for ${personal.name}`
       : "Chronological family moments",

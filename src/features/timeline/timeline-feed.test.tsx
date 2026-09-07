@@ -68,7 +68,9 @@ const model = {
     familyMark: [{ id: "person", initial: "P", accent: "teal" }],
   },
   interaction,
-  switcher: [{ label: "Family", href: "/family", current: true }],
+  switcher: [
+    { kind: "group", label: "Family", href: "/family", current: true },
+  ],
   timelineLabel: "Chronological moments for Person",
   entries: [
     { id: "marker", entryType: "date-marker", label: "Today" },
@@ -242,7 +244,12 @@ describe("TimelineFeed", () => {
         model={{
           ...model,
           switcher: [
-            { label: "Person", href: "/people/person", current: true },
+            {
+              kind: "person",
+              label: "Person",
+              href: "/people/person",
+              current: true,
+            },
           ],
           entries: [
             {

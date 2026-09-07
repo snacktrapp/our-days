@@ -2,6 +2,10 @@ import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
+import {
+  buildJournalSwitcher,
+  journalSwitcherEyebrow,
+} from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type {
   MemoriesViewModel,
@@ -373,30 +377,32 @@ export async function loadLocalTimeline(
       (person) => person.id === personal.id,
     ),
   );
-  const chrome = personal
-    ? {
-        ...context.chrome,
-        accent: personal.accent,
-        title: personal.name,
-        composer: personalJournalIsWritable
-          ? {
-              ...context.chrome.composer,
-              defaultJournalPersonId: personal.id,
-            }
-          : context.chrome.composer,
-      }
-    : context.chrome;
+  const switcher = buildJournalSwitcher({
+    groupLabel: context.circleName,
+    people: context.people,
+    viewerPersonId: access.personId,
+    currentHref: personal ? `/people/${personal.id}` : "/family",
+  });
+  const chrome = {
+    ...(personal
+      ? {
+          ...context.chrome,
+          accent: personal.accent,
+          title: personal.name,
+          composer: personalJournalIsWritable
+            ? {
+                ...context.chrome.composer,
+                defaultJournalPersonId: personal.id,
+              }
+            : context.chrome.composer,
+        }
+      : context.chrome),
+    eyebrow: journalSwitcherEyebrow(switcher),
+  };
   const queryPrefix = personal ? `/people/${personal.id}` : "/family";
   return {
     chrome,
-    switcher: [
-      { label: "Family", href: "/family", current: !personal },
-      ...context.people.map((person) => ({
-        label: person.name,
-        href: `/people/${person.id}`,
-        current: personal?.id === person.id,
-      })),
-    ],
+    switcher,
     timelineLabel: personal
       ? `Chronological moments for ${personal.name}`
       : "Chronological family moments",
