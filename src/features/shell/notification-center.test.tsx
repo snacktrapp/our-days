@@ -117,20 +117,75 @@ describe("NotificationCenter", () => {
   it("dismisses when the sheet is dragged down from the handle", async () => {
     await openActivity();
     const handle = document.querySelector(".sheet-handle");
-    const sheet = document.querySelector(".activity-sheet");
+    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
     expect(handle).not.toBeNull();
     expect(sheet).not.toBeNull();
     fireEvent.pointerDown(handle!, { pointerId: 1, clientX: 40, clientY: 20 });
-    fireEvent.pointerMove(sheet!, {
+    fireEvent.pointerMove(sheet, {
       pointerId: 1,
       clientX: 40,
       clientY: 20 + sheetDismissThresholdPx,
     });
-    fireEvent.pointerUp(sheet!, {
+    fireEvent.pointerUp(sheet, {
       pointerId: 1,
       clientX: 40,
       clientY: 20 + sheetDismissThresholdPx,
     });
     expect(sheet).toHaveClass("is-closing");
+    expect(sheet.style.getPropertyValue("--activity-sheet-drag")).toBe(
+      `${sheetDismissThresholdPx}px`,
+    );
+  });
+
+  it("dismisses a downward pull when the list is scrolled to the top", async () => {
+    await openActivity();
+    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
+    const list = document.querySelector(".activity-sheet-list") as HTMLElement;
+    Object.defineProperty(list, "scrollTop", { configurable: true, value: 0 });
+    fireEvent.pointerDown(list, { pointerId: 3, clientX: 40, clientY: 80 });
+    fireEvent.pointerMove(sheet, {
+      pointerId: 3,
+      clientX: 40,
+      clientY: 80 + sheetDismissThresholdPx,
+    });
+    fireEvent.pointerUp(sheet, {
+      pointerId: 3,
+      clientX: 40,
+      clientY: 80 + sheetDismissThresholdPx,
+    });
+    expect(sheet).toHaveClass("is-closing");
+    expect(sheet.style.getPropertyValue("--activity-sheet-drag")).toBe(
+      `${sheetDismissThresholdPx}px`,
+    );
+  });
+
+  it("keeps a cancelled drag from restarting open motion", async () => {
+    await openActivity();
+    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
+    fireEvent.pointerDown(sheet, { pointerId: 2, clientX: 40, clientY: 20 });
+    fireEvent.pointerMove(sheet, {
+      pointerId: 2,
+      clientX: 40,
+      clientY: 40,
+    });
+    fireEvent.pointerUp(sheet, { pointerId: 2, clientX: 40, clientY: 40 });
+    expect(sheet).not.toHaveClass("is-closing");
+    expect(sheet).not.toHaveClass("is-dragging");
+    expect(sheet.style.getPropertyValue("--activity-sheet-drag")).toBe("");
+  });
+
+  it("does not reopen Activity when the heart is tapped during close", async () => {
+    const { user } = await openActivity();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    const sheet = document.querySelector(".activity-sheet");
+    expect(sheet).toHaveClass("is-closing");
+    await user.click(
+      screen.getByRole("button", { name: "Open notifications" }),
+    );
+    expect(document.querySelector(".activity-sheet")).toHaveClass("is-closing");
+    expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
   });
 });

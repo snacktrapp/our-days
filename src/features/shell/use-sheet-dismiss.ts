@@ -111,12 +111,26 @@ export function useSheetDismiss({
       if (!start || start.id !== event.pointerId) return;
       const dy = event.clientY - start.y;
       const dragged = start.axis === "y" && dy > sheetDismissAxisPx;
-      clearDrag();
-      if (!dragged) return;
+      if (!dragged) {
+        clearDrag();
+        return;
+      }
       event.preventDefault();
-      if (sheetDismissShouldCommit(dy)) onDismiss();
+      if (!sheetDismissShouldCommit(dy)) {
+        clearDrag();
+        return;
+      }
+      // Keep the drag offset so close continues down from here. Clearing it
+      // first snaps the sheet back up and retriggers sheet-up.
+      if (overlayMotionReduced()) {
+        clearDrag();
+        onDismiss();
+        return;
+      }
+      writeDrag(dy);
+      onDismiss();
     },
-    [clearDrag, onDismiss],
+    [clearDrag, onDismiss, writeDrag],
   );
 
   return {

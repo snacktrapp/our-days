@@ -153,10 +153,7 @@ export function NotificationCenter({
 
   const toggle = () => {
     if (open) {
-      if (closingRef.current) {
-        cancel();
-        return;
-      }
+      if (closingRef.current) return;
       closePanel();
       return;
     }

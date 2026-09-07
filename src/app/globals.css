@@ -4483,7 +4483,7 @@ button:focus-visible,
 }
 @keyframes sheet-down {
   from {
-    transform: translateY(0);
+    transform: translateY(var(--activity-sheet-drag, 0px));
   }
   to {
     transform: translateY(100%);
@@ -6048,7 +6048,7 @@ button:focus-visible,
   padding: 0;
 }
 
-.activity-sheet.is-dragging {
+.activity-sheet.is-dragging:not(.is-closing) {
   animation: none;
   transition: none;
   transform: translateY(var(--activity-sheet-drag, 0px));
