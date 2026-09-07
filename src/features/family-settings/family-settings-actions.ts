@@ -98,7 +98,7 @@ function refreshFamilyAccessSurfaces(personId?: string) {
 export async function setFamilyMembershipRoleAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const membershipId = readUuid(input, "membershipId");
   const role = readRole(input);
   if (
@@ -156,7 +156,7 @@ export async function setFamilyMembershipRoleAction(
 export async function setManagedProfileGuardianAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const managedPersonId = readUuid(input, "managedPersonId");
   const guardianMembershipId = readUuid(input, "guardianMembershipId");
   const grantAccess = readBoolean(input, "grantAccess");
@@ -216,7 +216,7 @@ export async function setManagedProfileGuardianAction(
 export async function revokeFamilyMembershipAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   if (!access) {
     return { ok: false, message: "That access change was not allowed." };
   }
@@ -339,7 +339,7 @@ async function sendInvitedMagicLink(email: string) {
 export async function withdrawFamilyInvitationEmailRequestAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
-  const access = await requireOrganizer();
+  const access = await requireOrganizer(readText(input, "circleId"));
   const emailRequestId = readUuid(input, "emailRequestId");
   if (!access || !emailRequestId) {
     return { ok: false, message: "That invitation change was not allowed." };

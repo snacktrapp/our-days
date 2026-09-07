@@ -10,7 +10,7 @@ import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-
 
 type PrimarySection = Extract<
   JournalSection,
-  "timeline" | "people" | "memories" | "settings"
+  "timeline" | "memories" | "settings"
 >;
 
 function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -26,22 +26,13 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
 function NavIcon({
   name,
 }: {
-  name: "family" | "people" | "memories" | "account";
+  name: "family" | "memories" | "account";
 }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3.5 10.5 12 3.75l8.5 6.75" />
         <path d="M5.75 9.25v10h12.5v-10M9.5 19.25v-5.5h5v5.5" />
-      </svg>
-    );
-  }
-  if (name === "people") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="9" cy="8" r="3" />
-        <path d="M3.75 19c.45-3.45 2.2-5.25 5.25-5.25s4.8 1.8 5.25 5.25" />
-        <path d="M14.75 5.75a3 3 0 0 1 0 5.5M16.25 14c2.3.55 3.65 2.2 4 5" />
       </svg>
     );
   }
@@ -66,7 +57,7 @@ function NavIcon({
 function NavSymbol({
   name,
 }: {
-  name: "family" | "people" | "memories" | "account";
+  name: "family" | "memories" | "account";
 }) {
   return (
     <span className="nav-symbol" aria-hidden="true">
@@ -143,16 +134,6 @@ export function PrimaryNavigation({
       >
         <NavSymbol name="family" />
         <span>Home</span>
-      </Link>
-      <Link
-        className={`nav-item ${selectedSection === "people" ? "active" : ""}`}
-        aria-current={selectedSection === "people" ? "page" : undefined}
-        href="/people"
-        onClick={selectImmediately("people")}
-        prefetch={false}
-      >
-        <NavSymbol name="people" />
-        <span>People</span>
       </Link>
       {memoriesHref === null ? (
         <span className="nav-item nav-item-unavailable" aria-hidden="true" />

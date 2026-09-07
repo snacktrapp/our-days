@@ -75,17 +75,19 @@ test("route-based journal navigation preserves the approved views", async ({
     ),
   ).toHaveCount(0);
 
-  await page.getByRole("link", { name: "People" }).click();
-  await expect(page).toHaveURL(/\/people$/);
-  await expect(page.getByRole("heading", { name: "Our people" })).toBeVisible();
+  await page.getByRole("link", { name: "Account" }).click();
+  await expect(page).toHaveURL(/\/settings\/family$/);
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
-  ).toBeVisible();
-  await expect(page.getByText("5 people")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Invite into this circle" }),
-  ).toBeVisible();
+    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "People" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /All our days/u })).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
+  await page.getByRole("button", { name: /All our days/u }).click();
+  await expect(page.getByText("TARS")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Invite into All our days" }),
+  ).toBeVisible();
   await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
   await expect(page.locator(".journal-loading")).toHaveCount(0);
   await expect(page.locator(".phone-stage")).toHaveCSS("transform", "none");
@@ -94,7 +96,12 @@ test("route-based journal navigation preserves the approved views", async ({
     "none",
   );
 
-  await page.getByRole("link", { name: /Molly.*View journal/ }).click();
+  await page.goto("/family");
+  await page.locator(".title-switcher summary").click();
+  await page
+    .getByRole("navigation", { name: "Choose a family timeline" })
+    .getByRole("link", { name: "Molly", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/people\/molly$/);
   await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
@@ -107,7 +114,7 @@ test("route-based journal navigation preserves the approved views", async ({
   ).toHaveAttribute("aria-current", "page");
 
   await page.goBack();
-  await expect(page).toHaveURL(/\/people$/);
+  await expect(page).toHaveURL(/\/family$/);
   await page.goForward();
   await expect(page).toHaveURL(/\/people\/molly$/);
 
@@ -421,15 +428,15 @@ test("members can create a second group from Account and filter Home without cos
   await expect(
     page.getByRole("link", { name: "Molly", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "People" }).click();
-  await expect(
-    page.getByRole("heading", { name: "All our days" }),
-  ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
+  await page.getByRole("link", { name: "Account" }).click();
+  await expect(page.getByRole("button", { name: /All our days/u })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cousins/u })).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
+  await page.getByRole("button", { name: /Cousins/u }).click();
   await expect(
-    page.getByRole("link", { name: "Invite into this circle" }),
-  ).toHaveCount(2);
+    page.getByRole("heading", { name: "Invite into Cousins" }),
+  ).toBeVisible();
+  await expect(page.getByText("TARS")).toHaveCount(0);
   await page.getByRole("link", { name: "Home" }).click();
   await page.locator(".title-switcher summary").click();
   await page.getByRole("link", { name: "All our days", exact: true }).click();

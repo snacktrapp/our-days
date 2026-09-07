@@ -14,7 +14,7 @@ import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
-  FamilyGroupViewModel,
+  FamilyCircleViewModel,
   FamilySettingsPanelViewModel,
   GuardianOptionViewModel,
   PendingFamilyInvitationViewModel,
@@ -37,18 +37,22 @@ type ConnectedActions = Readonly<{
   }) => Promise<FamilySettingsActionResult>;
   revokeMembership: (input: {
     membershipId: string;
+    circleId?: string;
   }) => Promise<FamilySettingsActionResult>;
   withdrawInvitation: (input: {
     emailRequestId: string;
+    circleId?: string;
   }) => Promise<FamilySettingsActionResult>;
   setMembershipRole: (input: {
     membershipId: string;
     role: "member" | "organizer";
+    circleId?: string;
   }) => Promise<FamilySettingsActionResult>;
   setGuardian: (input: {
     managedPersonId: string;
     guardianMembershipId: string;
     grantAccess: boolean;
+    circleId?: string;
   }) => Promise<FamilySettingsActionResult>;
 }>;
 
@@ -67,12 +71,13 @@ export function FamilySettingsPanel({
   inviteCircleName?: string;
   children?: ReactNode;
 }) {
+  void inviteCircleName;
   if (model.mode === "preview") {
     return (
       <PreviewFamilySettingsPanel
         model={model}
         createGroupAction={createGroupAction}
-        inviteCircleName={inviteCircleName}
+        inviteCircleId={inviteCircleId}
       >
         {children}
       </PreviewFamilySettingsPanel>
@@ -90,7 +95,6 @@ export function FamilySettingsPanel({
       actions={actions}
       createGroupAction={createGroupAction}
       inviteCircleId={inviteCircleId}
-      inviteCircleName={inviteCircleName}
     >
       {children}
     </ConnectedFamilySettingsPanel>
@@ -101,8 +105,14 @@ function pendingInitial(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
 }
 
+function peopleCountLabel(count: number) {
+  return count === 1 ? "1 person" : `${count} people`;
+}
+
 function MemberList({
-  model,
+  members,
+  currentMemberId,
+  mode,
   reviewId,
   setReviewId,
   triggerRef,
@@ -112,8 +122,9 @@ function MemberList({
   setInvitationReviewId,
   invitationTriggerRef,
 }: {
-  model:
-    PreviewFamilySettingsPanelViewModel | ConnectedFamilySettingsPanelViewModel;
+  members: readonly FamilyAccessMemberViewModel[];
+  currentMemberId: string;
+  mode: "preview" | "connected";
   reviewId: string | null;
   setReviewId: (id: string | null) => void;
   triggerRef: MutableRefObject<HTMLButtonElement | null>;
@@ -125,7 +136,7 @@ function MemberList({
 }) {
   return (
     <ul className="access-list">
-      {model.members.map((member) => (
+      {members.map((member) => (
         <li key={member.id}>
           <span
             className={`person-avatar dot-${member.accent}`}
@@ -136,18 +147,18 @@ function MemberList({
           <span className="access-member-copy">
             <strong>
               {member.name}
-              {member.id === model.currentMemberId ? " · You" : ""}
+              {member.id === currentMemberId ? " · You" : ""}
             </strong>
             <small>{member.relationshipLabel}</small>
             <span>{member.accessLabel}</span>
           </span>
           {member.canReviewRemoval ||
-          (model.mode === "connected" &&
+          (mode === "connected" &&
             (member.canManageRole || member.canManageJournal)) ? (
             <button
               type="button"
               aria-label={
-                model.mode === "connected"
+                mode === "connected"
                   ? member.profileKind === "managed"
                     ? `Manage journal for ${member.name}`
                     : `Manage role and access for ${member.name}`
@@ -162,7 +173,7 @@ function MemberList({
                 setReviewId(reviewId === member.id ? null : member.id);
               }}
             >
-              {model.mode === "connected"
+              {mode === "connected"
                 ? member.profileKind === "managed"
                   ? "Manage journal"
                   : "Manage"
@@ -210,94 +221,123 @@ function MemberList({
   );
 }
 
-function peopleCountLabel(count: number) {
-  return count === 1 ? "1 person" : `${count} people`;
-}
-
-function GroupsSection({
-  groups,
+function CreateGroupCard({
   createGroupAction,
 }: {
-  groups: readonly FamilyGroupViewModel[];
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  if (!createGroupAction) return null;
 
   return (
-    <>
-      <section
-        className="settings-section groups-section"
-        aria-labelledby="your-groups-heading"
+    <section
+      className="settings-section groups-section groups-create-section"
+      aria-labelledby="create-group-heading"
+    >
+      <div className="settings-heading">
+        <h2 id="create-group-heading">Create a new group</h2>
+        <p>Starts a separate circle. You’re the organizer.</p>
+      </div>
+      <form
+        action={(formData) => {
+          startTransition(async () => {
+            const result = await createGroupAction(formData);
+            if (result && !result.ok) setError(result.message);
+          });
+        }}
       >
-        <div className="settings-heading">
-          <span>Your circles</span>
-          <h2 id="your-groups-heading">Your groups</h2>
-        </div>
-        <ul className="access-list">
-          {groups.map((group) => (
-            <li key={group.id}>
-              <div className="access-member-copy">
-                <strong>{group.name}</strong>
-                <small>{peopleCountLabel(group.memberCount)}</small>
-              </div>
+        <label htmlFor="create-group-name">Group name</label>
+        <input
+          id="create-group-name"
+          name="name"
+          required
+          maxLength={80}
+          autoComplete="off"
+        />
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : (
+          <p>A name is required.</p>
+        )}
+        <button type="submit" disabled={pending}>
+          {pending ? "Creating…" : "Create"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function CirclesAccordion({
+  groups,
+  openCircleId,
+  onToggle,
+  renderOpenCircle,
+}: {
+  groups: readonly FamilyCircleViewModel[];
+  openCircleId: string | null;
+  onToggle: (circleId: string) => void;
+  renderOpenCircle: (circle: FamilyCircleViewModel) => ReactNode;
+}) {
+  return (
+    <section
+      className="settings-section groups-section"
+      aria-labelledby="your-groups-heading"
+    >
+      <div className="settings-heading">
+        <span>Your circles</span>
+        <h2 id="your-groups-heading">Your groups</h2>
+      </div>
+      <ul className="circle-accordion">
+        {groups.map((group) => {
+          const open = openCircleId === group.id;
+          const panelId = `circle-panel-${group.id}`;
+          return (
+            <li
+              key={group.id}
+              className={`circle-accordion-item${open ? " is-open" : ""}`}
+            >
+              <button
+                type="button"
+                className="circle-accordion-trigger"
+                aria-expanded={open}
+                aria-controls={panelId}
+                onClick={() => onToggle(group.id)}
+              >
+                <span className="access-member-copy">
+                  <strong>{group.name}</strong>
+                  <small>{peopleCountLabel(group.memberCount)}</small>
+                </span>
+              </button>
+              {open ? (
+                <div className="circle-accordion-panel" id={panelId}>
+                  {renderOpenCircle(group)}
+                </div>
+              ) : null}
             </li>
-          ))}
-        </ul>
-      </section>
-      {createGroupAction ? (
-        <section
-          className="settings-section groups-section groups-create-section"
-          aria-labelledby="create-group-heading"
-        >
-          <div className="settings-heading">
-            <h2 id="create-group-heading">Create a new group</h2>
-            <p>Starts a separate circle. You’re the organizer.</p>
-          </div>
-          <form
-            action={(formData) => {
-              startTransition(async () => {
-                const result = await createGroupAction(formData);
-                if (result && !result.ok) setError(result.message);
-              });
-            }}
-          >
-            <label htmlFor="create-group-name">Group name</label>
-            <input
-              id="create-group-name"
-              name="name"
-              required
-              maxLength={80}
-              autoComplete="off"
-            />
-            {error ? (
-              <p className="field-error" role="alert">
-                {error}
-              </p>
-            ) : (
-              <p>A name is required.</p>
-            )}
-            <button type="submit" disabled={pending}>
-              {pending ? "Creating…" : "Create"}
-            </button>
-          </form>
-        </section>
-      ) : null}
-    </>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
 function PreviewFamilySettingsPanel({
   model,
   createGroupAction,
-  inviteCircleName,
+  inviteCircleId,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
-  inviteCircleName?: string;
+  inviteCircleId?: string;
   children?: ReactNode;
 }) {
+  const [openCircleId, setOpenCircleId] = useState<string | null>(
+    inviteCircleId ?? null,
+  );
   const [email, setEmail] = useState("");
   const [reviewEmail, setReviewEmail] = useState<string | null>(null);
   const [emailError, setEmailError] = useState("");
@@ -307,7 +347,9 @@ function PreviewFamilySettingsPanel({
   const accessTriggerRef = useRef<HTMLButtonElement>(null);
   const accessHeadingRef = useRef<HTMLHeadingElement>(null);
   const inviteReviewHeadingRef = useRef<HTMLHeadingElement>(null);
-  const accessReviewMember = model.members.find(
+  const openCircle =
+    model.groups.find((group) => group.id === openCircleId) ?? null;
+  const accessReviewMember = openCircle?.members.find(
     (member) => member.id === accessReviewId,
   );
 
@@ -324,6 +366,13 @@ function PreviewFamilySettingsPanel({
   useEffect(() => {
     if (accessReviewId) accessHeadingRef.current?.focus();
   }, [accessReviewId]);
+
+  function toggleCircle(circleId: string) {
+    setOpenCircleId((current) => (current === circleId ? null : circleId));
+    setAccessReviewId(null);
+    setReviewEmail(null);
+    setEmailError("");
+  }
 
   function previewInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -356,120 +405,137 @@ function PreviewFamilySettingsPanel({
         permissions are active
       </p>
 
-      <GroupsSection
+      <CirclesAccordion
         groups={model.groups}
-        createGroupAction={createGroupAction}
+        openCircleId={openCircleId}
+        onToggle={toggleCircle}
+        renderOpenCircle={(circle) => (
+          <>
+            <div className="settings-heading circle-access-heading">
+              <span>Private circle</span>
+              <h3 id="access-heading">People and access</h3>
+              <p>
+                Accounts can sign in. Child journals have no sign-in and are
+                cared for by organizers and assigned guardians.
+              </p>
+            </div>
+            <MemberList
+              members={circle.members}
+              currentMemberId={circle.currentMemberId}
+              mode="preview"
+              reviewId={accessReviewId}
+              setReviewId={setAccessReviewId}
+              triggerRef={accessTriggerRef}
+            />
+            {accessReviewMember ? (
+              <aside
+                id="access-review"
+                className="access-review"
+                aria-labelledby="access-review-heading"
+              >
+                <span>Removal preview</span>
+                <h3
+                  ref={accessHeadingRef}
+                  id="access-review-heading"
+                  tabIndex={-1}
+                >
+                  Review {accessReviewMember.name}’s access
+                </h3>
+                <RemovalConsequences preview />
+                <p className="preview-honesty">
+                  Local design preview · No access is changed
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccessReviewId(null);
+                    accessTriggerRef.current?.focus();
+                  }}
+                >
+                  Close review
+                </button>
+              </aside>
+            ) : null}
+            <section
+              className="invite-section circle-invite-section"
+              id="invite"
+              aria-labelledby="invite-heading"
+            >
+              <div className="settings-heading">
+                <span>Invitation only</span>
+                <h3 id="invite-heading">Invite into {circle.name}</h3>
+                <p>
+                  New relatives will join only after accepting a secure
+                  invitation sent to their email address.
+                </p>
+              </div>
+              {reviewEmail ? (
+                <div className="invite-review">
+                  <span>Invitation preview</span>
+                  <h3 ref={inviteReviewHeadingRef} tabIndex={-1}>
+                    {reviewEmail}
+                  </h3>
+                  <InvitationConsequences />
+                  <p className="preview-honesty">
+                    Local design preview · Our Days did not send email or create
+                    an invite
+                  </p>
+                  <div>
+                    <button type="button" onClick={returnToInviteEdit}>
+                      Back to edit
+                    </button>
+                    <button type="button" onClick={clearInvitePreview}>
+                      Clear preview
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form noValidate onSubmit={previewInvite}>
+                  <label htmlFor="family-invite-email">Email address</label>
+                  <input
+                    ref={emailRef}
+                    id="family-invite-email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    value={email}
+                    aria-invalid={emailError ? true : undefined}
+                    aria-describedby={
+                      emailError ? "family-invite-error" : "family-invite-help"
+                    }
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (emailError) setEmailError("");
+                    }}
+                  />
+                  {emailError ? (
+                    <p
+                      id="family-invite-error"
+                      className="field-error"
+                      role="alert"
+                    >
+                      {emailError}
+                    </p>
+                  ) : (
+                    <p id="family-invite-help">
+                      You can review the address before anything is sent.
+                    </p>
+                  )}
+                  <button type="submit">Review invitation</button>
+                  <small>
+                    Local design preview · Our Days does not send or save this
+                    preview
+                  </small>
+                </form>
+              )}
+            </section>
+          </>
+        )}
       />
 
-      <section className="settings-section" aria-labelledby="access-heading">
-        <SettingsAccessHeading />
-        <MemberList
-          model={model}
-          reviewId={accessReviewId}
-          setReviewId={setAccessReviewId}
-          triggerRef={accessTriggerRef}
-        />
-        {accessReviewMember ? (
-          <aside
-            id="access-review"
-            className="access-review"
-            aria-labelledby="access-review-heading"
-          >
-            <span>Removal preview</span>
-            <h3 ref={accessHeadingRef} id="access-review-heading" tabIndex={-1}>
-              Review {accessReviewMember.name}’s access
-            </h3>
-            <RemovalConsequences preview />
-            <p className="preview-honesty">
-              Local design preview · No access is changed
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setAccessReviewId(null);
-                accessTriggerRef.current?.focus();
-              }}
-            >
-              Close review
-            </button>
-          </aside>
-        ) : null}
-      </section>
-
-      <section
-        className="settings-section invite-section"
-        id="invite"
-        aria-labelledby="invite-heading"
-      >
-        <div className="settings-heading">
-          <span>Invitation only</span>
-          <h2 id="invite-heading">
-            {inviteCircleName
-              ? `Invite into ${inviteCircleName}`
-              : "Invite a family member"}
-          </h2>
-          <p>
-            New relatives will join only after accepting a secure invitation
-            sent to their email address.
-          </p>
-        </div>
-        {reviewEmail ? (
-          <div className="invite-review">
-            <span>Invitation preview</span>
-            <h3 ref={inviteReviewHeadingRef} tabIndex={-1}>
-              {reviewEmail}
-            </h3>
-            <InvitationConsequences />
-            <p className="preview-honesty">
-              Local design preview · Our Days did not send email or create an
-              invite
-            </p>
-            <div>
-              <button type="button" onClick={returnToInviteEdit}>
-                Back to edit
-              </button>
-              <button type="button" onClick={clearInvitePreview}>
-                Clear preview
-              </button>
-            </div>
-          </div>
-        ) : (
-          <form noValidate onSubmit={previewInvite}>
-            <label htmlFor="family-invite-email">Email address</label>
-            <input
-              ref={emailRef}
-              id="family-invite-email"
-              name="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              maxLength={254}
-              value={email}
-              aria-invalid={emailError ? true : undefined}
-              aria-describedby={
-                emailError ? "family-invite-error" : "family-invite-help"
-              }
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (emailError) setEmailError("");
-              }}
-            />
-            {emailError ? (
-              <p id="family-invite-error" className="field-error" role="alert">
-                {emailError}
-              </p>
-            ) : (
-              <p id="family-invite-help">
-                You can review the address before anything is sent.
-              </p>
-            )}
-            <button type="submit">Review invitation</button>
-            <small>
-              Local design preview · Our Days does not send or save this preview
-            </small>
-          </form>
-        )}
-      </section>
+      <CreateGroupCard createGroupAction={createGroupAction} />
       {children}
     </section>
   );
@@ -480,16 +546,17 @@ function ConnectedFamilySettingsPanel({
   actions,
   createGroupAction,
   inviteCircleId,
-  inviteCircleName,
   children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
-  inviteCircleName?: string;
   children?: ReactNode;
 }) {
+  const [openCircleId, setOpenCircleId] = useState<string | null>(
+    inviteCircleId ?? null,
+  );
   const [accessReviewId, setAccessReviewId] = useState<string | null>(null);
   const [invitationReviewId, setInvitationReviewId] = useState<string | null>(
     null,
@@ -519,16 +586,18 @@ function ConnectedFamilySettingsPanel({
   const inviteRequestKeyRef = useRef<string | null>(null);
   const restoreInviteFormFocusRef = useRef(false);
   const resultRef = useRef<HTMLParagraphElement>(null);
-  const accessReviewMember = model.members.find(
+  const openCircle =
+    model.groups.find((group) => group.id === openCircleId) ?? null;
+  const accessReviewMember = openCircle?.members.find(
     (member) => member.id === accessReviewId,
   );
   const listedNames = new Set(
-    model.pendingInvitations.map((item) =>
+    (openCircle?.pendingInvitations ?? []).map((item) =>
       item.displayName.trim().toLowerCase(),
     ),
   );
   const pendingInvitations = [
-    ...model.pendingInvitations,
+    ...(openCircle?.pendingInvitations ?? []),
     ...optimisticPending.filter(
       (item) => !listedNames.has(item.displayName.trim().toLowerCase()),
     ),
@@ -560,6 +629,17 @@ function ConnectedFamilySettingsPanel({
   useEffect(() => {
     if (result) resultRef.current?.focus();
   }, [result]);
+
+  function toggleCircle(circleId: string) {
+    setOpenCircleId((current) => (current === circleId ? null : circleId));
+    setAccessReviewId(null);
+    setInvitationReviewId(null);
+    setInviteDraft(null);
+    setInviteFormError("");
+    setInviteFormErrorField(null);
+    setOptimisticPending([]);
+    setResult(null);
+  }
 
   function closeAccessReview() {
     setAccessReviewId(null);
@@ -622,27 +702,25 @@ function ConnectedFamilySettingsPanel({
   }
 
   function sendInvitationRequest() {
-    if (!inviteDraft || !actions.requestInvitation) return;
+    if (!inviteDraft || !actions.requestInvitation || !openCircle) return;
     const requestInvitation = actions.requestInvitation;
     const draft = inviteDraft;
     const requestKey =
       inviteRequestKeyRef.current ?? window.crypto.randomUUID();
     inviteRequestKeyRef.current = requestKey;
-    const alreadyListed = model.pendingInvitations.some(
+    const alreadyListed = (openCircle.pendingInvitations ?? []).some(
       (item) =>
         item.displayName.trim().toLowerCase() ===
         draft.displayName.trim().toLowerCase(),
     );
     setResult(null);
-    // Close Review before the server action refreshes the tree. A queued
-    // row plus a lingering review is what Brian saw on iPhone.
     resetInviteComposer();
     startTransition(async () => {
       try {
         const nextResult = await requestInvitation({
           ...draft,
           requestKey,
-          circleId: inviteCircleId,
+          circleId: openCircle.id,
         });
         if (nextResult.ok || alreadyListed) {
           inviteRequestKeyRef.current = null;
@@ -685,11 +763,14 @@ function ConnectedFamilySettingsPanel({
 
   function removeAccess() {
     const membershipId = accessReviewMember?.membershipId;
-    if (!membershipId) return;
+    if (!membershipId || !openCircle) return;
     setResult(null);
     startTransition(async () => {
       try {
-        const nextResult = await actions.revokeMembership({ membershipId });
+        const nextResult = await actions.revokeMembership({
+          membershipId,
+          circleId: openCircle.id,
+        });
         setResult(
           nextResult.ok
             ? {
@@ -710,13 +791,14 @@ function ConnectedFamilySettingsPanel({
 
   function changeRole(role: "member" | "organizer") {
     const membershipId = accessReviewMember?.membershipId;
-    if (!membershipId) return;
+    if (!membershipId || !openCircle) return;
     setResult(null);
     startTransition(async () => {
       try {
         const nextResult = await actions.setMembershipRole({
           membershipId,
           role,
+          circleId: openCircle.id,
         });
         setResult(
           nextResult.ok
@@ -741,19 +823,24 @@ function ConnectedFamilySettingsPanel({
 
   function changeGuardian(guardianMembershipId: string, grantAccess: boolean) {
     const managedPersonId = accessReviewMember?.id;
-    if (!managedPersonId || accessReviewMember.profileKind !== "managed") {
+    if (
+      !managedPersonId ||
+      accessReviewMember.profileKind !== "managed" ||
+      !openCircle
+    ) {
       return;
     }
     setResult(null);
     startTransition(async () => {
       try {
-        const guardianName = model.guardianOptions.find(
+        const guardianName = openCircle.guardianOptions.find(
           (guardian) => guardian.membershipId === guardianMembershipId,
         )?.name;
         const nextResult = await actions.setGuardian({
           managedPersonId,
           guardianMembershipId,
           grantAccess,
+          circleId: openCircle.id,
         });
         setResult(
           nextResult.ok && guardianName
@@ -775,13 +862,14 @@ function ConnectedFamilySettingsPanel({
   }
 
   function withdrawInvitation() {
-    if (!invitation) return;
+    if (!invitation || !openCircle) return;
     const emailRequestId = invitation.emailRequestId;
     setResult(null);
     startTransition(async () => {
       try {
         const nextResult = await actions.withdrawInvitation({
           emailRequestId,
+          circleId: openCircle.id,
         });
         setResult(
           nextResult.ok
@@ -814,327 +902,345 @@ function ConnectedFamilySettingsPanel({
         </p>
       ) : null}
 
-      <GroupsSection
+      <CirclesAccordion
         groups={model.groups}
-        createGroupAction={createGroupAction}
-      />
-
-      <section className="settings-section" aria-labelledby="access-heading">
-        <SettingsAccessHeading />
-        <MemberList
-          model={model}
-          reviewId={accessReviewId}
-          setReviewId={(id) => {
-            setResult(null);
-            setInvitationReviewId(null);
-            setAccessReviewId(id);
-          }}
-          triggerRef={accessTriggerRef}
-          disabled={isPending}
-          pendingInvitations={pendingInvitations}
-          invitationReviewId={invitationReviewId}
-          setInvitationReviewId={(id) => {
-            setResult(null);
-            setInviteDraft(null);
-            setInvitationReviewId(id);
-          }}
-          invitationTriggerRef={invitationTriggerRef}
-        />
-        {accessReviewMember ? (
-          <aside
-            id="access-review"
-            className="access-review"
-            aria-labelledby="access-review-heading"
-          >
-            <span>
-              {accessReviewMember.profileKind === "managed"
-                ? "Child journal care"
-                : "Role and access"}
-            </span>
-            <h3 ref={accessHeadingRef} id="access-review-heading" tabIndex={-1}>
-              {accessReviewMember.profileKind === "managed"
-                ? `Care for ${accessReviewMember.name}’s journal`
-                : `Manage ${accessReviewMember.name}`}
-            </h3>
-            {accessReviewMember.profileKind === "managed" ? (
-              <JournalCareReview
-                member={accessReviewMember}
-                guardianOptions={model.guardianOptions}
-                disabled={isPending}
-                onChange={changeGuardian}
-              />
-            ) : (
-              <AccountRoleReview
-                member={accessReviewMember}
-                managedProfiles={model.members.filter(
-                  (member) => member.profileKind === "managed",
-                )}
-                disabled={isPending}
-                onChangeRole={changeRole}
-              />
-            )}
-            {journalCareSuccess ? (
-              <p
-                ref={resultRef}
-                className="settings-action-message settings-inline-message"
-                role="status"
-                tabIndex={-1}
-              >
-                {result.message}
-              </p>
-            ) : null}
-            {result && !result.ok ? (
-              <p
-                ref={resultRef}
-                className="settings-action-message settings-action-error"
-                role="alert"
-                tabIndex={-1}
-              >
-                {result.message}
-              </p>
-            ) : null}
-            {accessReviewMember.profileKind === "account" ? (
-              <div className="settings-removal-zone">
-                <RemovalConsequences />
-                <p className="settings-confirmation-copy">
-                  This change is immediate and will also end any guardian
-                  authority tied to this account.
-                </p>
-                <button
-                  type="button"
-                  aria-label={`Remove access for ${accessReviewMember.name}`}
-                  aria-busy={isPending || undefined}
-                  className="settings-danger-button"
-                  disabled={isPending}
-                  onClick={removeAccess}
-                >
-                  Remove access
-                </button>
-              </div>
-            ) : null}
-            <div className="settings-review-actions settings-review-close">
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={closeAccessReview}
-              >
-                Done
-              </button>
-            </div>
-          </aside>
-        ) : null}
-        {invitation ? (
-          <aside
-            id="invitation-review"
-            className="invite-review connected-invite-review"
-            aria-labelledby="invitation-review-heading"
-          >
-            <span>Withdraw invitation</span>
-            <h3
-              ref={invitationHeadingRef}
-              id="invitation-review-heading"
-              tabIndex={-1}
-            >
-              Review {invitation.displayName}’s invitation
-            </h3>
-            <p>
-              Withdrawing it prevents this invitation from being accepted. It
-              does not change access for anyone already in the circle.
-            </p>
-            {result && !result.ok ? (
-              <p
-                ref={resultRef}
-                className="settings-action-message settings-action-error"
-                role="alert"
-                tabIndex={-1}
-              >
-                {result.message}
-              </p>
-            ) : null}
-            <div className="settings-review-actions">
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={closeInvitationReview}
-              >
-                Keep invitation
-              </button>
-              <button
-                type="button"
-                aria-label={`Withdraw invitation for ${invitation.displayName}`}
-                aria-busy={isPending || undefined}
-                className="settings-danger-button"
-                disabled={isPending}
-                onClick={withdrawInvitation}
-              >
-                Withdraw invitation
-              </button>
-            </div>
-          </aside>
-        ) : null}
-      </section>
-
-      <section
-        className="settings-section invite-section"
-        id="invite"
-        aria-labelledby="invite-heading"
-      >
-        <div className="settings-heading">
-          <span>Invitation only</span>
-          <h2 id="invite-heading">
-            {inviteCircleName
-              ? `Invite into ${inviteCircleName}`
-              : "Family invitations"}
-          </h2>
-          <p>
-            Only organizers can manage invitations. Addresses are used for
-            private delivery and are not shown again after a request is sent.
-          </p>
-        </div>
-        {model.canManageAccess ? (
+        openCircleId={openCircleId}
+        onToggle={toggleCircle}
+        renderOpenCircle={(circle) => (
           <>
-            {model.invitationDelivery === "enabled" ? (
-              inviteDraft ? (
-                <aside
-                  className="invite-review connected-invite-request-review"
-                  aria-labelledby="invitation-request-review-heading"
+            <div className="settings-heading circle-access-heading">
+              <span>Private circle</span>
+              <h3 id="access-heading">People and access</h3>
+              <p>
+                Accounts can sign in. Child journals have no sign-in and are
+                cared for by organizers and assigned guardians.
+              </p>
+            </div>
+            <MemberList
+              members={circle.members}
+              currentMemberId={circle.currentMemberId}
+              mode="connected"
+              reviewId={accessReviewId}
+              setReviewId={(id) => {
+                setResult(null);
+                setInvitationReviewId(null);
+                setAccessReviewId(id);
+              }}
+              triggerRef={accessTriggerRef}
+              disabled={isPending}
+              pendingInvitations={
+                circle.id === openCircle?.id ? pendingInvitations : []
+              }
+              invitationReviewId={invitationReviewId}
+              setInvitationReviewId={(id) => {
+                setResult(null);
+                setInviteDraft(null);
+                setInvitationReviewId(id);
+              }}
+              invitationTriggerRef={invitationTriggerRef}
+            />
+            {accessReviewMember ? (
+              <aside
+                id="access-review"
+                className="access-review"
+                aria-labelledby="access-review-heading"
+              >
+                <span>
+                  {accessReviewMember.profileKind === "managed"
+                    ? "Child journal care"
+                    : "Role and access"}
+                </span>
+                <h3
+                  ref={accessHeadingRef}
+                  id="access-review-heading"
+                  tabIndex={-1}
                 >
-                  <span>Review invitation</span>
-                  <h3
-                    ref={inviteDraftHeadingRef}
-                    id="invitation-request-review-heading"
+                  {accessReviewMember.profileKind === "managed"
+                    ? `Care for ${accessReviewMember.name}’s journal`
+                    : `Manage ${accessReviewMember.name}`}
+                </h3>
+                {accessReviewMember.profileKind === "managed" ? (
+                  <JournalCareReview
+                    member={accessReviewMember}
+                    guardianOptions={circle.guardianOptions}
+                    disabled={isPending}
+                    onChange={changeGuardian}
+                  />
+                ) : (
+                  <AccountRoleReview
+                    member={accessReviewMember}
+                    managedProfiles={circle.members.filter(
+                      (member) => member.profileKind === "managed",
+                    )}
+                    disabled={isPending}
+                    onChangeRole={changeRole}
+                  />
+                )}
+                {journalCareSuccess ? (
+                  <p
+                    ref={resultRef}
+                    className="settings-action-message settings-inline-message"
+                    role="status"
                     tabIndex={-1}
                   >
-                    Invite {inviteDraft.displayName}
-                  </h3>
-                  <p className="invite-review-email">{inviteDraft.email}</p>
-                  <InvitationConsequences />
-                  {result && !result.ok ? (
-                    <p
-                      ref={resultRef}
-                      className="settings-action-message settings-action-error settings-inline-message"
-                      role="alert"
-                      tabIndex={-1}
-                    >
-                      {result.message}
+                    {result.message}
+                  </p>
+                ) : null}
+                {result && !result.ok ? (
+                  <p
+                    ref={resultRef}
+                    className="settings-action-message settings-action-error"
+                    role="alert"
+                    tabIndex={-1}
+                  >
+                    {result.message}
+                  </p>
+                ) : null}
+                {accessReviewMember.profileKind === "account" ? (
+                  <div className="settings-removal-zone">
+                    <RemovalConsequences />
+                    <p className="settings-confirmation-copy">
+                      This change is immediate and will also end any guardian
+                      authority tied to this account.
                     </p>
-                  ) : null}
-                  <div className="settings-review-actions">
                     <button
                       type="button"
-                      disabled={isPending}
-                      onClick={editInvitationRequest}
-                    >
-                      Back to edit
-                    </button>
-                    <button
-                      type="button"
+                      aria-label={`Remove access for ${accessReviewMember.name}`}
                       aria-busy={isPending || undefined}
+                      className="settings-danger-button"
                       disabled={isPending}
-                      onClick={sendInvitationRequest}
+                      onClick={removeAccess}
                     >
-                      {isPending ? "Sending…" : "Send private invitation"}
+                      Remove access
                     </button>
                   </div>
-                </aside>
-              ) : (
-                <form
-                  className="connected-invite-form"
-                  noValidate
-                  onSubmit={reviewInvitationRequest}
-                >
-                  <label htmlFor="connected-family-invite-name">
-                    Family member’s name
-                  </label>
-                  <input
-                    ref={inviteNameRef}
-                    id="connected-family-invite-name"
-                    name="displayName"
-                    type="text"
-                    autoComplete="off"
-                    maxLength={80}
-                    required
+                ) : null}
+                <div className="settings-review-actions settings-review-close">
+                  <button
+                    type="button"
                     disabled={isPending}
-                    value={inviteName}
-                    aria-invalid={
-                      inviteFormErrorField === "name" ? true : undefined
-                    }
-                    aria-describedby={
-                      inviteFormErrorField === "name"
-                        ? "connected-family-invite-error"
-                        : undefined
-                    }
-                    onChange={(event) => {
-                      setInviteName(event.target.value);
-                      setInviteFormError("");
-                      setInviteFormErrorField(null);
-                    }}
-                  />
-                  <label htmlFor="connected-family-invite-email">
-                    Email address
-                  </label>
-                  <input
-                    ref={inviteEmailRef}
-                    id="connected-family-invite-email"
-                    name="email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    maxLength={254}
-                    required
-                    disabled={isPending}
-                    value={inviteEmail}
-                    aria-invalid={
-                      inviteFormErrorField === "email" ? true : undefined
-                    }
-                    aria-describedby={
-                      inviteFormErrorField === "email"
-                        ? "connected-family-invite-error"
-                        : "connected-family-invite-help"
-                    }
-                    onChange={(event) => {
-                      setInviteEmail(event.target.value);
-                      setInviteFormError("");
-                      setInviteFormErrorField(null);
-                    }}
-                  />
-                  {inviteFormError ? (
-                    <p
-                      id="connected-family-invite-error"
-                      className="field-error"
-                      role="alert"
-                    >
-                      {inviteFormError}
-                    </p>
-                  ) : (
-                    <p id="connected-family-invite-help">
-                      You can review both details before anything is sent.
-                    </p>
-                  )}
-                  <button type="submit" disabled={isPending}>
-                    Review invitation
+                    onClick={closeAccessReview}
+                  >
+                    Done
                   </button>
-                </form>
-              )
+                </div>
+              </aside>
             ) : null}
-            {model.invitationDelivery === "disabled" ? (
-              <div className="settings-delivery-boundary">
-                <strong>New invitations are not connected yet</strong>
+            {invitation ? (
+              <aside
+                id="invitation-review"
+                className="invite-review connected-invite-review"
+                aria-labelledby="invitation-review-heading"
+              >
+                <span>Withdraw invitation</span>
+                <h3
+                  ref={invitationHeadingRef}
+                  id="invitation-review-heading"
+                  tabIndex={-1}
+                >
+                  Review {invitation.displayName}’s invitation
+                </h3>
                 <p>
-                  Our Days will enable sending after its private email worker
-                  can provision the account and deliver a short-lived link
-                  safely. No invitation is created from this screen today.
+                  Withdrawing it prevents this invitation from being accepted.
+                  It does not change access for anyone already in the circle.
+                </p>
+                {result && !result.ok ? (
+                  <p
+                    ref={resultRef}
+                    className="settings-action-message settings-action-error"
+                    role="alert"
+                    tabIndex={-1}
+                  >
+                    {result.message}
+                  </p>
+                ) : null}
+                <div className="settings-review-actions">
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={closeInvitationReview}
+                  >
+                    Keep invitation
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Withdraw invitation for ${invitation.displayName}`}
+                    aria-busy={isPending || undefined}
+                    className="settings-danger-button"
+                    disabled={isPending}
+                    onClick={withdrawInvitation}
+                  >
+                    Withdraw invitation
+                  </button>
+                </div>
+              </aside>
+            ) : null}
+            <section
+              className="invite-section circle-invite-section"
+              id="invite"
+              aria-labelledby="invite-heading"
+            >
+              <div className="settings-heading">
+                <span>Invitation only</span>
+                <h3 id="invite-heading">Invite into {circle.name}</h3>
+                <p>
+                  Only organizers can manage invitations. Addresses are used for
+                  private delivery and are not shown again after a request is
+                  sent.
                 </p>
               </div>
-            ) : null}
+              {circle.canManageAccess ? (
+                <>
+                  {model.invitationDelivery === "enabled" ? (
+                    inviteDraft ? (
+                      <aside
+                        className="invite-review connected-invite-request-review"
+                        aria-labelledby="invitation-request-review-heading"
+                      >
+                        <span>Review invitation</span>
+                        <h3
+                          ref={inviteDraftHeadingRef}
+                          id="invitation-request-review-heading"
+                          tabIndex={-1}
+                        >
+                          Invite {inviteDraft.displayName}
+                        </h3>
+                        <p className="invite-review-email">
+                          {inviteDraft.email}
+                        </p>
+                        <InvitationConsequences />
+                        {result && !result.ok ? (
+                          <p
+                            ref={resultRef}
+                            className="settings-action-message settings-action-error settings-inline-message"
+                            role="alert"
+                            tabIndex={-1}
+                          >
+                            {result.message}
+                          </p>
+                        ) : null}
+                        <div className="settings-review-actions">
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={editInvitationRequest}
+                          >
+                            Back to edit
+                          </button>
+                          <button
+                            type="button"
+                            aria-busy={isPending || undefined}
+                            disabled={isPending}
+                            onClick={sendInvitationRequest}
+                          >
+                            {isPending ? "Sending…" : "Send private invitation"}
+                          </button>
+                        </div>
+                      </aside>
+                    ) : (
+                      <form
+                        className="connected-invite-form"
+                        noValidate
+                        onSubmit={reviewInvitationRequest}
+                      >
+                        <label htmlFor="connected-family-invite-name">
+                          Family member’s name
+                        </label>
+                        <input
+                          ref={inviteNameRef}
+                          id="connected-family-invite-name"
+                          name="displayName"
+                          type="text"
+                          autoComplete="off"
+                          maxLength={80}
+                          required
+                          disabled={isPending}
+                          value={inviteName}
+                          aria-invalid={
+                            inviteFormErrorField === "name" ? true : undefined
+                          }
+                          aria-describedby={
+                            inviteFormErrorField === "name"
+                              ? "connected-family-invite-error"
+                              : undefined
+                          }
+                          onChange={(event) => {
+                            setInviteName(event.target.value);
+                            setInviteFormError("");
+                            setInviteFormErrorField(null);
+                          }}
+                        />
+                        <label htmlFor="connected-family-invite-email">
+                          Email address
+                        </label>
+                        <input
+                          ref={inviteEmailRef}
+                          id="connected-family-invite-email"
+                          name="email"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          maxLength={254}
+                          required
+                          disabled={isPending}
+                          value={inviteEmail}
+                          aria-invalid={
+                            inviteFormErrorField === "email" ? true : undefined
+                          }
+                          aria-describedby={
+                            inviteFormErrorField === "email"
+                              ? "connected-family-invite-error"
+                              : "connected-family-invite-help"
+                          }
+                          onChange={(event) => {
+                            setInviteEmail(event.target.value);
+                            setInviteFormError("");
+                            setInviteFormErrorField(null);
+                          }}
+                        />
+                        {inviteFormError ? (
+                          <p
+                            id="connected-family-invite-error"
+                            className="field-error"
+                            role="alert"
+                          >
+                            {inviteFormError}
+                          </p>
+                        ) : (
+                          <p id="connected-family-invite-help">
+                            You can review both details before anything is sent.
+                          </p>
+                        )}
+                        <button type="submit" disabled={isPending}>
+                          Review invitation
+                        </button>
+                      </form>
+                    )
+                  ) : null}
+                  {model.invitationDelivery === "disabled" ? (
+                    <div className="settings-delivery-boundary">
+                      <strong>New invitations are not connected yet</strong>
+                      <p>
+                        Our Days will enable sending after its private email
+                        worker can provision the account and deliver a
+                        short-lived link safely. No invitation is created from
+                        this screen today.
+                      </p>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="settings-empty-copy">
+                  An organizer can withdraw pending invitations. Sending new
+                  invitations will appear after private delivery is connected.
+                </p>
+              )}
+            </section>
           </>
-        ) : (
-          <p className="settings-empty-copy">
-            An organizer can withdraw pending invitations. Sending new
-            invitations will appear after private delivery is connected.
-          </p>
         )}
-      </section>
+      />
+
+      <CreateGroupCard createGroupAction={createGroupAction} />
       {children}
     </section>
   );
@@ -1163,7 +1269,7 @@ function AccountRoleReview({
         <p>
           Operations has full organizer access — invites, membership, journal
           care, and Insights. They are not a family journal person and do not
-          appear in Family or People.
+          appear in Family.
         </p>
       </div>
     );
@@ -1264,19 +1370,6 @@ function JournalCareReview({
         </ul>
       </fieldset>
     </>
-  );
-}
-
-function SettingsAccessHeading() {
-  return (
-    <div className="settings-heading">
-      <span>Private circle</span>
-      <h2 id="access-heading">People and access</h2>
-      <p>
-        Accounts can sign in. Child journals have no sign-in and are cared for
-        by organizers and assigned guardians.
-      </p>
-    </div>
   );
 }
 

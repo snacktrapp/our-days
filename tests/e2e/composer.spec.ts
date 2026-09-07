@@ -407,7 +407,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   let backgroundBlocked = false;
   try {
     await page
-      .locator('a[href="/people"]')
+      .locator('a[href="/settings/family"]')
       .first()
       .click({ trial: true, timeout: 500 });
   } catch {

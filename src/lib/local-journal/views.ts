@@ -902,36 +902,38 @@ export async function loadLocalTrash(
     });
 }
 
-export async function loadLocalFamilyAccess(access: LocalAccess) {
-  const document = await readLocalJournal();
-  const extra = (document.extraCircles ?? []).find(
-    (circle) => circle.id === access.circleId,
-  );
-  if (extra) {
-    return {
-      people: [
-        {
-          id: extra.personId,
-          displayName: extra.displayName,
-          profileKind: "account" as const,
-          accentToken: extra.accentToken,
-        },
-      ],
-      memberships: [
-        {
-          id: extra.membershipId,
-          personId: extra.personId,
-          role: extra.role,
-          directoryKind: "journal" as const,
-        },
-      ],
-      guardians: [],
-      pendingInvitations: [],
-    };
-  }
-  if (access.circleId !== document.circle.id) {
-    throw new Error("That family is not available.");
-  }
+type LocalFamilyAccessData = Readonly<{
+  people: readonly Readonly<{
+    id: string;
+    displayName: string;
+    profileKind: string;
+    accentToken: string;
+  }>[];
+  memberships: readonly Readonly<{
+    id: string;
+    personId: string;
+    role: string;
+    directoryKind?: string | null;
+  }>[];
+  guardians: readonly Readonly<{
+    managedPersonId: string;
+    guardianMembershipId: string;
+  }>[];
+  pendingInvitations: readonly never[];
+}>;
+
+function emptyLocalFamilyAccess(): LocalFamilyAccessData {
+  return {
+    people: [],
+    memberships: [],
+    guardians: [],
+    pendingInvitations: [],
+  };
+}
+
+function localFamilyCircleAccess(
+  document: Awaited<ReturnType<typeof readLocalJournal>>,
+): LocalFamilyAccessData {
   return {
     people: document.people.map((person) => ({
       id: person.id,
@@ -951,6 +953,64 @@ export async function loadLocalFamilyAccess(access: LocalAccess) {
     })),
     pendingInvitations: [],
   };
+}
+
+function localExtraCircleAccess(
+  extra: NonNullable<
+    Awaited<ReturnType<typeof readLocalJournal>>["extraCircles"]
+  >[number],
+): LocalFamilyAccessData {
+  return {
+    people: [
+      {
+        id: extra.personId,
+        displayName: extra.displayName,
+        profileKind: "account",
+        accentToken: extra.accentToken,
+      },
+    ],
+    memberships: [
+      {
+        id: extra.membershipId,
+        personId: extra.personId,
+        role: extra.role,
+        directoryKind: "journal",
+      },
+    ],
+    guardians: [],
+    pendingInvitations: [],
+  };
+}
+
+export async function loadLocalFamilyAccess(access: LocalAccess) {
+  const directory = await loadLocalFamilyDirectory(access, [access.circleId]);
+  const data = directory.get(access.circleId);
+  if (!data) throw new Error("That family is not available.");
+  return data;
+}
+
+export async function loadLocalFamilyDirectory(
+  access: LocalAccess,
+  circleIds: readonly string[],
+): Promise<ReadonlyMap<string, LocalFamilyAccessData>> {
+  void access;
+  const document = await readLocalJournal();
+  const ids = [...new Set(circleIds.filter(Boolean))];
+  const directory = new Map<string, LocalFamilyAccessData>();
+  for (const circleId of ids) {
+    if (circleId === document.circle.id) {
+      directory.set(circleId, localFamilyCircleAccess(document));
+      continue;
+    }
+    const extra = (document.extraCircles ?? []).find(
+      (circle) => circle.id === circleId,
+    );
+    directory.set(
+      circleId,
+      extra ? localExtraCircleAccess(extra) : emptyLocalFamilyAccess(),
+    );
+  }
+  return directory;
 }
 
 export async function loadLocalConversation(

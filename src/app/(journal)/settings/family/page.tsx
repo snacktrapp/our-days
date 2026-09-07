@@ -5,11 +5,14 @@ import {
   JournalRefreshInterrupted,
 } from "@/features/shell/journal-interrupted";
 import { getFamilySettingsFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import {
+  readJournalCircleMemberships,
+  requireJournalAccess,
+} from "@/lib/auth/journal-access";
 import {
   buildConnectedFamilySettingsModel,
   loadConnectedFamilyAccess,
-  loadGroupMemberCounts,
+  loadConnectedFamilyDirectory,
 } from "@/data/family-settings.server";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import {
@@ -58,9 +61,21 @@ export default async function FamilySettingsPage({
     return <JournalRefreshInterrupted />;
   }
 
+  const groupIds = (context.groups ?? [{ id: access.circleId }]).map(
+    (group) => group.id,
+  );
+
   let familyAccess;
+  let directory;
+  let viewerMemberships;
   try {
-    familyAccess = await loadConnectedFamilyAccess(access);
+    [directory, viewerMemberships] = await Promise.all([
+      loadConnectedFamilyDirectory(access, groupIds),
+      readJournalCircleMemberships(),
+    ]);
+    familyAccess =
+      directory.get(access.circleId) ??
+      (await loadConnectedFamilyAccess(access));
   } catch {
     return (
       <JournalChrome
@@ -79,15 +94,16 @@ export default async function FamilySettingsPage({
     );
   }
 
-  const memberCounts = await loadGroupMemberCounts(
-    (context.groups ?? [{ id: access.circleId }]).map((group) => group.id),
-  );
   const model = buildConnectedFamilySettingsModel(
     access,
     context,
     familyAccess,
     invitationDeliveryIsEnabled(),
-    memberCounts,
+    new Map(
+      [...directory.entries()].map(([id, data]) => [id, data.people.length]),
+    ),
+    directory,
+    viewerMemberships,
   );
   const inviteGroup = model.panel.groups.find(
     (group) => group.id === inviteCircle,

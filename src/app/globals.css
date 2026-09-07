@@ -2321,6 +2321,50 @@ button:focus-visible,
   color: var(--muted);
   font: var(--chrome-body);
 }
+.circle-accordion {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline);
+  list-style: none;
+}
+.circle-accordion-item {
+  border-bottom: 1px solid var(--hairline);
+}
+.circle-accordion-item:last-child {
+  border-bottom: 0;
+}
+.circle-accordion-trigger {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.circle-accordion-trigger .access-member-copy {
+  flex: 1;
+}
+.circle-accordion-panel {
+  border-top: 1px solid var(--hairline);
+}
+.circle-access-heading,
+.circle-invite-section .settings-heading {
+  padding-top: 14px;
+}
+.circle-invite-section {
+  scroll-margin-top: 16px;
+}
+.circle-invite-section .settings-heading h3,
+.circle-access-heading h3 {
+  margin: 5px 0 7px;
+  font: var(--chrome-title);
+  letter-spacing: 0;
+}
 .access-list {
   margin: 0;
   padding: 0;

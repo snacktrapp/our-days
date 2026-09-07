@@ -33,18 +33,22 @@ export type PendingFamilyInvitationViewModel = Readonly<{
   expiresLabel: string;
 }>;
 
-export type FamilyGroupViewModel = Readonly<{
+export type FamilyCircleViewModel = Readonly<{
   id: string;
   name: string;
   memberCount: number;
+  currentMemberId: string;
+  canManageAccess: boolean;
+  members: readonly FamilyAccessMemberViewModel[];
+  guardianOptions: readonly GuardianOptionViewModel[];
+  pendingInvitations: readonly PendingFamilyInvitationViewModel[];
 }>;
 
 export type PreviewFamilySettingsPanelViewModel = Readonly<{
   mode: "preview";
   intro: string;
   currentMemberId: string;
-  groups: readonly FamilyGroupViewModel[];
-  members: readonly FamilyAccessMemberViewModel[];
+  groups: readonly FamilyCircleViewModel[];
 }>;
 
 export type ConnectedFamilySettingsPanelViewModel = Readonly<{
@@ -52,10 +56,7 @@ export type ConnectedFamilySettingsPanelViewModel = Readonly<{
   intro: string;
   currentMemberId: string;
   canManageAccess: boolean;
-  groups: readonly FamilyGroupViewModel[];
-  members: readonly FamilyAccessMemberViewModel[];
-  guardianOptions: readonly GuardianOptionViewModel[];
-  pendingInvitations: readonly PendingFamilyInvitationViewModel[];
+  groups: readonly FamilyCircleViewModel[];
   invitationDelivery: "disabled" | "enabled";
 }>;
 

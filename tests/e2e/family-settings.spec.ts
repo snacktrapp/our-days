@@ -35,10 +35,9 @@ async function browserState(page: Page) {
 test("family settings makes access and invitation boundaries explicit", async ({
   page,
 }) => {
-  await page.goto("/people");
-  await page.getByRole("link", { name: "Invite into this circle" }).click();
-  await expect(page).toHaveURL(/inviteCircle=family/u);
+  await page.goto("/settings/family");
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await page.getByRole("button", { name: /All our days/u }).click();
   await expect(
     page.getByRole("heading", { name: "Invite into All our days" }),
   ).toBeVisible();
@@ -113,6 +112,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
   page,
 }) => {
   await page.goto("/settings/family");
+  await page.getByRole("button", { name: /All our days/u }).click();
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
   const before = await browserState(page);
@@ -133,6 +133,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
   expect(await browserState(page)).toEqual(before);
 
   await page.reload();
+  await page.getByRole("button", { name: /All our days/u }).click();
   await expect(
     page.getByRole("textbox", { name: "Email address" }),
   ).toHaveValue("");
@@ -142,6 +143,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
 test("family settings remains usable at keyboard height", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 350 });
   await page.goto("/settings/family#invite");
+  await page.getByRole("button", { name: /All our days/u }).click();
   const input = page.getByRole("textbox", { name: "Email address" });
   await input.scrollIntoViewIfNeeded();
   await input.fill("relative@example.com");
@@ -174,6 +176,7 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
   ).toEqual([]);
 
   await page.reload();
+  await page.getByRole("button", { name: /All our days/u }).click();
   const accessTrigger = page.getByRole("button", {
     name: "Review access for Molly",
   });
@@ -213,6 +216,9 @@ test("the shared Account navigation opens settings and returns through the prima
   await expect(
     page.getByRole("heading", { name: "Journal tools" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "People" }).click();
-  await expect(page).toHaveURL(/\/people$/u);
+  await expect(
+    page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "People" }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Home" }).click();
+  await expect(page).toHaveURL(/\/family$/u);
 });
