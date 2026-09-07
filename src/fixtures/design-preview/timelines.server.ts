@@ -387,32 +387,71 @@ const familyEntries = [
 ] as const satisfies readonly TimelineEntryViewModel[];
 
 const previewFamilyName = "All our days";
+const previewFamilyId = "family";
 
-function previewSwitcher(currentHref: string) {
+export type PreviewTimelineOptions = Readonly<{
+  extraGroup?: Readonly<{ id: string; name: string }>;
+  selectedGroupId?: string | null;
+}>;
+
+function previewGroups(extraGroup?: PreviewTimelineOptions["extraGroup"]) {
+  return [
+    { id: previewFamilyId, name: previewFamilyName },
+    ...(extraGroup ? [extraGroup] : []),
+  ];
+}
+
+function previewSwitcher(
+  currentHref: string,
+  options: PreviewTimelineOptions = {},
+  people = personalJournals,
+) {
+  const groups = previewGroups(options.extraGroup);
+  const selectedGroupId =
+    options.selectedGroupId &&
+    groups.some((group) => group.id === options.selectedGroupId)
+      ? options.selectedGroupId
+      : previewFamilyId;
+  const switcherPeople =
+    selectedGroupId === previewFamilyId
+      ? people
+      : people.filter((person) => person.id === "brian");
   return buildJournalSwitcher({
-    groupLabel: previewFamilyName,
-    people: personalJournals,
+    groups,
+    people: switcherPeople,
     viewerPersonId: "brian",
     currentHref,
+    activeGroupId: selectedGroupId,
   });
 }
 
-export function getFamilyTimelineFixture(): TimelineViewModel {
-  const moments = (familyEntries as readonly TimelineEntryViewModel[])
-    .filter(isMomentEntry)
-    .map((entry) => entry.moment);
-  const switcher = previewSwitcher("/family");
+export function getFamilyTimelineFixture(
+  options: PreviewTimelineOptions = {},
+): TimelineViewModel {
+  const selectedGroupId = options.selectedGroupId ?? previewFamilyId;
+  const extraSelected =
+    selectedGroupId !== previewFamilyId && options.extraGroup
+      ? options.extraGroup
+      : null;
+  const moments = extraSelected
+    ? []
+    : (familyEntries as readonly TimelineEntryViewModel[])
+        .filter(isMomentEntry)
+        .map((entry) => entry.moment);
+  const currentHref =
+    extraSelected && options.extraGroup
+      ? `/family?circle=${options.extraGroup.id}`
+      : "/family";
+  const switcher = previewSwitcher(currentHref, options);
+  const title = extraSelected ? extraSelected.name : previewFamilyName;
 
   return {
-    chrome: chrome(
-      "teal",
-      previewFamilyName,
-      "brian",
-      journalSwitcherEyebrow(switcher),
-    ),
+    chrome: chrome("teal", title, "brian", journalSwitcherEyebrow(switcher)),
     interaction: timelineInteraction,
     switcher,
-    entries: buildTimelineEntries(moments, designPreviewToday, false),
+    entries: extraSelected
+      ? buildTimelineEntries([], designPreviewToday, false)
+      : buildTimelineEntries(moments, designPreviewToday, false),
   };
 }
 
@@ -503,13 +542,21 @@ function personalSummary(entries: readonly TimelineEntryViewModel[]): string {
 
 export function getPersonalTimelineFixture(
   personId: string,
+  options: PreviewTimelineOptions = {},
 ): TimelineViewModel | null {
   const person = personalJournals.find(
     (candidate) => candidate.id === personId,
   );
   if (!person) return null;
+  if (
+    options.selectedGroupId &&
+    options.selectedGroupId !== previewFamilyId &&
+    person.id !== "brian"
+  ) {
+    return null;
+  }
   const entries = personalTimelineEntries(person);
-  const switcher = previewSwitcher(`/people/${person.id}`);
+  const switcher = previewSwitcher(`/people/${person.id}`, options);
 
   return {
     chrome: chrome(
@@ -531,51 +578,65 @@ export function getPersonalTimelineFixture(
   };
 }
 
-export function getPeopleFixture(): PeopleViewModel {
+export function getPeopleFixture(
+  options: PreviewTimelineOptions = {},
+): PeopleViewModel {
+  const extraSelected =
+    options.selectedGroupId &&
+    options.selectedGroupId !== previewFamilyId &&
+    options.extraGroup
+      ? options.extraGroup
+      : null;
   return {
     chrome: chrome("teal", "Our people"),
-    intro: "Individual journals within this family archive.",
+    intro: extraSelected
+      ? "People in this group."
+      : "Individual journals within this family archive.",
     people: [
       {
         id: "brian",
         name: "Brian",
         initial: "B",
         accent: "teal",
-        roleLabel: "Co-organizer",
+        roleLabel: extraSelected ? "Organizer" : "Co-organizer",
         journalHref: "/people/brian",
       },
-      {
-        id: "molly",
-        name: "Molly",
-        initial: "M",
-        accent: "clay",
-        roleLabel: "Co-organizer",
-        journalHref: "/people/molly",
-      },
-      {
-        id: "avery",
-        name: "Avery",
-        initial: "A",
-        accent: "ochre",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/avery",
-      },
-      {
-        id: "sam",
-        name: "Sam",
-        initial: "S",
-        accent: "slate",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/sam",
-      },
-      {
-        id: "june",
-        name: "June",
-        initial: "J",
-        accent: "moss",
-        roleLabel: "Managed profile · No sign-in",
-        journalHref: "/people/june",
-      },
+      ...(extraSelected
+        ? []
+        : [
+            {
+              id: "molly",
+              name: "Molly",
+              initial: "M",
+              accent: "clay" as const,
+              roleLabel: "Co-organizer",
+              journalHref: "/people/molly",
+            },
+            {
+              id: "avery",
+              name: "Avery",
+              initial: "A",
+              accent: "ochre" as const,
+              roleLabel: "Managed profile · No sign-in",
+              journalHref: "/people/avery",
+            },
+            {
+              id: "sam",
+              name: "Sam",
+              initial: "S",
+              accent: "slate" as const,
+              roleLabel: "Managed profile · No sign-in",
+              journalHref: "/people/sam",
+            },
+            {
+              id: "june",
+              name: "June",
+              initial: "J",
+              accent: "moss" as const,
+              roleLabel: "Managed profile · No sign-in",
+              journalHref: "/people/june",
+            },
+          ]),
     ],
   };
 }

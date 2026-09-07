@@ -32,6 +32,7 @@ describe("journal switcher grammar", () => {
         label: "Trapp Family",
         href: "/family",
         current: true,
+        circleId: "family",
       },
       {
         kind: "person",
@@ -44,6 +45,42 @@ describe("journal switcher grammar", () => {
         label: "Calvin",
         href: "/people/calvin",
         current: false,
+      },
+    ]);
+  });
+
+  it("lists every group the member is in after You and before people", () => {
+    expect(
+      buildJournalSwitcher({
+        groups: [
+          { id: "family", name: "Trapp Family" },
+          { id: "cousins", name: "Cousins" },
+        ],
+        people: [{ id: "brian", name: "Brian" }],
+        viewerPersonId: "brian",
+        currentHref: "/family?circle=cousins",
+        activeGroupId: "cousins",
+      }),
+    ).toEqual([
+      {
+        kind: "you",
+        label: "Brian",
+        href: "/people/brian",
+        current: false,
+      },
+      {
+        kind: "group",
+        label: "Trapp Family",
+        href: "/family",
+        current: false,
+        circleId: "family",
+      },
+      {
+        kind: "group",
+        label: "Cousins",
+        href: "/family?circle=cousins",
+        current: true,
+        circleId: "cousins",
       },
     ]);
   });
@@ -62,6 +99,7 @@ describe("journal switcher grammar", () => {
         label: "Our family",
         href: "/family",
         current: false,
+        circleId: "family",
       },
       {
         kind: "person",

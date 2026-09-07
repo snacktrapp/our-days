@@ -5,6 +5,12 @@ export type FamilyTimelineSwitcherItem = Readonly<{
   label: string;
   href: string;
   current: boolean;
+  circleId?: string;
+}>;
+
+export type JournalSwitcherGroup = Readonly<{
+  id: string;
+  name: string;
 }>;
 
 export function journalSwitcherTypeLabel(kind: JournalSwitcherKind) {
@@ -20,17 +26,41 @@ export function journalSwitcherEyebrow(
   return journalSwitcherTypeLabel(current?.kind ?? "group");
 }
 
+export function isGroupHomeHref(href: string) {
+  const path = href.split("?")[0] ?? href;
+  return path === "/family";
+}
+
+export function groupHomeHref(circleId: string, isDefault: boolean) {
+  return isDefault
+    ? "/family"
+    : `/family?circle=${encodeURIComponent(circleId)}`;
+}
+
 export function buildJournalSwitcher(input: {
-  groupLabel: string;
+  groups?: readonly JournalSwitcherGroup[];
+  groupLabel?: string;
   people: readonly Readonly<{ id: string; name: string }>[];
   viewerPersonId?: string | null;
   currentHref: string;
+  activeGroupId?: string | null;
 }): FamilyTimelineSwitcherItem[] {
+  const groups =
+    input.groups && input.groups.length > 0
+      ? input.groups
+      : [
+          {
+            id: input.activeGroupId ?? "family",
+            name: input.groupLabel ?? "Our family",
+          },
+        ];
+  const activeGroupId = input.activeGroupId ?? groups[0]?.id;
   const currentHref = input.currentHref;
   const viewer = input.viewerPersonId
     ? input.people.find((person) => person.id === input.viewerPersonId)
     : undefined;
   const others = input.people.filter((person) => person.id !== viewer?.id);
+  const onGroupHome = isGroupHomeHref(currentHref);
 
   return [
     ...(viewer
@@ -43,12 +73,13 @@ export function buildJournalSwitcher(input: {
           },
         ]
       : []),
-    {
+    ...groups.map((group, index) => ({
       kind: "group" as const,
-      label: input.groupLabel,
-      href: "/family",
-      current: currentHref === "/family",
-    },
+      label: group.name,
+      href: groupHomeHref(group.id, index === 0),
+      current: onGroupHome && group.id === activeGroupId,
+      circleId: group.id,
+    })),
     ...others.map((person) => ({
       kind: "person" as const,
       label: person.name,

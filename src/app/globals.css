@@ -690,6 +690,66 @@ button:focus-visible,
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+.title-switcher-create,
+.title-switcher-create-form {
+  margin: 4px 8px 8px;
+  width: calc(100% - 16px);
+}
+
+.title-switcher-create {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px dashed var(--hairline);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.title-switcher-create-form {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+
+.title-switcher-create-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.title-switcher-create-form input {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--paper, transparent);
+  color: var(--ink);
+  font: inherit;
+}
+
+.title-switcher-create-form button {
+  min-height: 40px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+}
+
+.title-switcher-create-form [role="alert"] {
+  margin: 0;
+  color: var(--danger, #8a2b2b);
+  font-size: 12px;
+}
 .title-switcher nav a.is-pending,
 .title-switcher nav a:active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);

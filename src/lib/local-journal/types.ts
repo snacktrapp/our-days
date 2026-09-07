@@ -43,6 +43,7 @@ export type LocalMedia = Readonly<{
 
 export type LocalMoment = Readonly<{
   id: string;
+  circleId?: string;
   journalPersonId: string | null;
   recordedByMembershipId: string;
   audience?: "family" | "just_me";
@@ -86,6 +87,18 @@ export type LocalReaction = Readonly<{
   removedAt: string | null;
 }>;
 
+export type LocalExtraCircle = Readonly<{
+  id: string;
+  name: string;
+  timeZone: string;
+  createdAt: string;
+  membershipId: string;
+  personId: string;
+  displayName: string;
+  accentToken: LocalPerson["accentToken"];
+  role: LocalMembership["role"];
+}>;
+
 export type LocalJournalDocument = Readonly<{
   version: 1;
   circle: Readonly<{
@@ -93,6 +106,7 @@ export type LocalJournalDocument = Readonly<{
     name: string;
     timeZone: string;
   }>;
+  extraCircles?: readonly LocalExtraCircle[];
   people: readonly LocalPerson[];
   memberships: readonly LocalMembership[];
   accounts: readonly LocalAccount[];

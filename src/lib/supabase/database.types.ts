@@ -719,6 +719,10 @@ export type Database = {
         };
         Returns: string;
       };
+      create_circle: {
+        Args: { circle_name: string };
+        Returns: string;
+      };
       create_family_moment: {
         Args: {
           circle_id: string;

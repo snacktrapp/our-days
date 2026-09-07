@@ -194,11 +194,73 @@ function momentToTimelineRow(
   } as TimelineRow;
 }
 
+function localGroups(
+  document: LocalJournalDocument,
+): readonly { id: string; name: string }[] {
+  return [
+    { id: document.circle.id, name: document.circle.name },
+    ...(document.extraCircles ?? []).map((circle) => ({
+      id: circle.id,
+      name: circle.name,
+    })),
+  ];
+}
+
+function momentCircleId(moment: LocalMoment, defaultCircleId: string) {
+  return moment.circleId ?? defaultCircleId;
+}
+
 export async function loadLocalJournalContext(
   access: LocalAccess,
 ): Promise<ConnectedJournalContext> {
   const document = await readLocalJournal();
-  const today = plainToday(document.circle.timeZone);
+  const extra = (document.extraCircles ?? []).find(
+    (circle) => circle.id === access.circleId,
+  );
+  const today = plainToday(extra?.timeZone ?? document.circle.timeZone);
+  const groups = localGroups(document);
+  if (extra) {
+    const recorder = {
+      id: extra.personId,
+      name: extra.displayName,
+      initial: initialFor(extra.displayName),
+      accent: mapDatabaseAccent(extra.accentToken),
+      contextLabel: "You",
+      profileKind: "account",
+      role: extra.role,
+      directoryKind: "journal" as const,
+    };
+    const surface = buildJournalPersonSurface([recorder], access, new Set());
+    const composer: MomentComposerViewModel = {
+      experience: "connected-family",
+      circleId: extra.id,
+      photoPostingEnabled: true,
+      previewToday: today,
+      defaultJournalPersonId: extra.personId,
+      recorderPersonId: extra.personId,
+      recordedByName: extra.displayName,
+      journalPeople: surface.journalPeople,
+      taggablePeople: surface.taggablePeople,
+    };
+    return {
+      circleName: extra.name,
+      circleTimeZone: extra.timeZone,
+      today,
+      groups,
+      chrome: {
+        accent: recorder.accent,
+        title: extra.name,
+        eyebrow: "Group",
+        familyMark: surface.familyMark,
+        composer,
+        timelineOptionsHref: "/trash",
+        settingsHref: "/settings/family",
+        memoriesHref: "/memories",
+        notifications: [],
+      },
+      people: surface.people,
+    };
+  }
   const personNameById = new Map(
     document.people.map((person) => [person.id, person.displayName]),
   );
@@ -246,7 +308,7 @@ export async function loadLocalJournalContext(
   );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
-    circleId: document.circle.id,
+    circleId: access.circleId,
     photoPostingEnabled: true,
     previewToday: today,
     defaultJournalPersonId: access.personId,
@@ -313,6 +375,7 @@ export async function loadLocalJournalContext(
     circleName: document.circle.name,
     circleTimeZone: document.circle.timeZone,
     today,
+    groups,
     chrome,
     people: surface.people,
   };
@@ -326,6 +389,9 @@ function visibleMoments(
   return document.moments
     .filter((moment) => {
       if (moment.trashedAt !== null) return false;
+      if (momentCircleId(moment, document.circle.id) !== access.circleId) {
+        return false;
+      }
       if (!journalPersonId) return moment.audience !== "just_me";
       if (moment.journalPersonId !== journalPersonId) return false;
       if (moment.audience !== "just_me") return true;
@@ -378,10 +444,12 @@ export async function loadLocalTimeline(
     ),
   );
   const switcher = buildJournalSwitcher({
+    groups: context.groups,
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
     currentHref: personal ? `/people/${personal.id}` : "/family",
+    activeGroupId: access.circleId,
   });
   const chrome = {
     ...(personal
@@ -756,6 +824,31 @@ export async function loadLocalTrash(
 
 export async function loadLocalFamilyAccess(access: LocalAccess) {
   const document = await readLocalJournal();
+  const extra = (document.extraCircles ?? []).find(
+    (circle) => circle.id === access.circleId,
+  );
+  if (extra) {
+    return {
+      people: [
+        {
+          id: extra.personId,
+          displayName: extra.displayName,
+          profileKind: "account" as const,
+          accentToken: extra.accentToken,
+        },
+      ],
+      memberships: [
+        {
+          id: extra.membershipId,
+          personId: extra.personId,
+          role: extra.role,
+          directoryKind: "journal" as const,
+        },
+      ],
+      guardians: [],
+      pendingInvitations: [],
+    };
+  }
   if (access.circleId !== document.circle.id) {
     throw new Error("That family is not available.");
   }

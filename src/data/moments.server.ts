@@ -579,10 +579,12 @@ export async function loadConnectedTimeline(
     ),
   );
   const switcher = buildJournalSwitcher({
+    groups: context.groups,
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
     currentHref: personal ? `/people/${personal.id}` : "/family",
+    activeGroupId: access.circleId,
   });
   const chrome = {
     ...(personal

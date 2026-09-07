@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { findLocalAccount, readLocalJournal, type LocalAccess } from "./store";
 import { localCircleId } from "./ids";
+import { readActiveCircleCookie } from "@/lib/auth/active-circle";
 
 const cookieName = "our-days-local-session";
 const sessionDays = 14;
@@ -110,7 +111,28 @@ export async function createLocalJournalSession(email: string) {
   } satisfies LocalAccess;
 }
 
-export async function readLocalJournalAccess(): Promise<LocalAccess | null> {
+function extraCircleAccess(
+  extra: NonNullable<
+    Awaited<ReturnType<typeof readLocalJournal>>["extraCircles"]
+  >[number],
+): LocalAccess {
+  return {
+    membershipId: extra.membershipId,
+    circleId: extra.id,
+    personId: extra.personId,
+    role: extra.role,
+  };
+}
+
+export async function readLocalJournalMemberships(): Promise<
+  | readonly {
+      id: string;
+      circle_id: string;
+      person_id: string;
+      role: string;
+    }[]
+  | null
+> {
   const cookieStore = await cookies();
   const payload = parseSession(cookieStore.get(cookieName)?.value);
   if (!payload) return null;
@@ -122,11 +144,58 @@ export async function readLocalJournalAccess(): Promise<LocalAccess | null> {
   ) {
     return null;
   }
+  const document = await readLocalJournal();
+  const extras = (document.extraCircles ?? []).filter(
+    (circle) => circle.displayName && circle.membershipId,
+  );
+  return [
+    {
+      id: account.membershipId,
+      circle_id: localCircleId,
+      person_id: account.personId,
+      role: payload.role,
+    },
+    ...extras.map((circle) => ({
+      id: circle.membershipId,
+      circle_id: circle.id,
+      person_id: circle.personId,
+      role: circle.role,
+    })),
+  ];
+}
+
+export async function circleIdForLocalPerson(personId: string) {
+  const document = await readLocalJournal();
+  if (document.people.some((person) => person.id === personId)) {
+    return localCircleId;
+  }
+  const extra = (document.extraCircles ?? []).find(
+    (circle) => circle.personId === personId,
+  );
+  return extra?.id ?? null;
+}
+
+export async function readLocalJournalAccess(): Promise<LocalAccess | null> {
+  const memberships = await readLocalJournalMemberships();
+  if (!memberships) return null;
+  if (memberships.length === 0) return null;
+  const preferred = await readActiveCircleCookie();
+  const selected =
+    (preferred &&
+      memberships.find((membership) => membership.circle_id === preferred)) ||
+    memberships[0];
+  const extra =
+    selected.circle_id === localCircleId
+      ? null
+      : (await readLocalJournal()).extraCircles?.find(
+          (circle) => circle.id === selected.circle_id,
+        );
+  if (extra) return extraCircleAccess(extra);
   return {
-    membershipId: payload.membershipId,
-    circleId: localCircleId,
-    personId: payload.personId,
-    role: payload.role,
+    membershipId: selected.id,
+    circleId: selected.circle_id,
+    personId: selected.person_id,
+    role: selected.role,
   };
 }
 

@@ -8,7 +8,10 @@ import {
 } from "../../config/our-days-environment";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
-import type { JournalAccess } from "@/lib/auth/journal-access";
+import {
+  readJournalCircleMemberships,
+  type JournalAccess,
+} from "@/lib/auth/journal-access";
 import {
   hasOrganizerPrivilege,
   isOperationsMembership,
@@ -65,6 +68,7 @@ export type ConnectedJournalContext = Readonly<{
   today: string;
   chrome: JournalChromeViewModel;
   people: PeopleViewModel["people"];
+  groups?: readonly Readonly<{ id: string; name: string }>[];
 }>;
 
 export type JournalPersonOption = Readonly<{
@@ -207,6 +211,7 @@ export async function loadConnectedJournalContext(
     return loadLocalJournalContext(access);
   }
   const supabase = await createOurDaysServerClient();
+  const circleMemberships = await readJournalCircleMemberships();
   const [
     circleResult,
     peopleResult,
@@ -280,6 +285,30 @@ export async function loadConnectedJournalContext(
     reactionsResult.error;
   if (error) throw error;
   if (!circleResult.data) throw new Error("Circle is unavailable");
+
+  const groupIds = [
+    ...new Set(circleMemberships.map((membership) => membership.circleId)),
+  ];
+  const groupsResult =
+    groupIds.length === 0
+      ? { data: [] as { id: string; name: string }[], error: null }
+      : await supabase.from("circles").select("id, name").in("id", groupIds);
+  if (groupsResult.error) throw groupsResult.error;
+  const groupNameById = new Map(
+    (groupsResult.data ?? []).map((circle) => [circle.id, circle.name]),
+  );
+  const groups = (
+    circleMemberships.length > 0
+      ? circleMemberships
+      : [{ circleId: access.circleId }]
+  ).map((membership) => ({
+    id: membership.circleId,
+    name:
+      groupNameById.get(membership.circleId) ??
+      (membership.circleId === access.circleId
+        ? circleResult.data.name
+        : "Group"),
+  }));
 
   const memberships = membershipsResult.data ?? [];
   const people = peopleResult.data ?? [];
@@ -372,6 +401,7 @@ export async function loadConnectedJournalContext(
     circleName: circleResult.data.name,
     circleTimeZone: circleResult.data.time_zone,
     today: composer.previewToday,
+    groups,
     chrome,
     people: surface.people,
   };

@@ -75,6 +75,23 @@ describe("design preview timeline chronology", () => {
     expect(brian?.chrome.title).toBe("Brian");
   });
 
+  it("adds a created group as another GROUP row and scopes its people", () => {
+    const cousins = getFamilyTimelineFixture({
+      extraGroup: { id: "created", name: "Cousins" },
+      selectedGroupId: "created",
+    });
+    expect(cousins.chrome.title).toBe("Cousins");
+    expect(cousins.chrome.eyebrow).toBe("Group");
+    expect(cousins.switcher.map((item) => [item.kind, item.label])).toEqual([
+      ["you", "Brian"],
+      ["group", "All our days"],
+      ["group", "Cousins"],
+    ]);
+    expect(
+      cousins.entries.filter((entry) => entry.entryType === "moment"),
+    ).toEqual([]);
+  });
+
   it("uses the same date-marker grammar in personal journals", () => {
     const timeline = getPersonalTimelineFixture("brian");
     expect(timeline).not.toBeNull();
