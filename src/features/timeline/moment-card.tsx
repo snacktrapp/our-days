@@ -17,6 +17,7 @@ import type {
   TimelineMomentViewModel,
 } from "./timeline-view-model";
 import { VideoMomentMedia } from "./video-moment-media";
+import { MomentPlaceButton, MomentPlaceMeta } from "./moment-place-meta";
 
 function PhotoFrameSizer({
   width,
@@ -155,7 +156,13 @@ export function MomentCard({
         )}
         <div className="card-copy">
           <div className="photo-card-heading">
-            <p className="moment-kicker">{typeLabel}</p>
+            <MomentPlaceMeta
+              heading
+              typeLabel={typeLabel}
+              placeName={moment.placeName}
+              latitude={moment.latitude}
+              longitude={moment.longitude}
+            />
             {connectedActions && moment.canChange ? (
               <ConnectedMomentControl
                 moment={moment}
@@ -186,9 +193,12 @@ export function MomentCard({
       <div
         className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
       >
-        <span className="thought-label">
-          {bibleVerse ? "Bible verse" : typeLabel}
-        </span>
+        <MomentPlaceMeta
+          typeLabel={bibleVerse ? "Verse" : typeLabel}
+          placeName={moment.placeName}
+          latitude={moment.latitude}
+          longitude={moment.longitude}
+        />
         {bibleVerse ? (
           <ExpandableThoughtCopy
             momentId={moment.id}
@@ -202,9 +212,6 @@ export function MomentCard({
             “{moment.text}”
           </ExpandableThoughtCopy>
         )}
-        {moment.placeName ? (
-          <p className="moment-place-label">⌖ {moment.placeName}</p>
-        ) : null}
         {interaction ? (
           <MomentConversationControl
             interaction={interaction}
@@ -295,7 +302,16 @@ export function MomentCard({
               />
             ) : null}
           </div>
-          <h3>{moment.place}</h3>
+          <h3>
+            <MomentPlaceButton
+              placeName={moment.place}
+              latitude={moment.latitude}
+              longitude={moment.longitude}
+              className="moment-place-title"
+            >
+              {moment.place}
+            </MomentPlaceButton>
+          </h3>
           <p>{moment.text}</p>
           {interaction ? (
             <MomentConversationControl
@@ -319,12 +335,14 @@ export function MomentCard({
         {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
-        <span>{typeLabel}</span>
+        <MomentPlaceMeta
+          typeLabel={typeLabel}
+          placeName={moment.placeName}
+          latitude={moment.latitude}
+          longitude={moment.longitude}
+        />
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
-        {moment.placeName ? (
-          <p className="moment-place-label">⌖ {moment.placeName}</p>
-        ) : null}
       </div>
       {interaction ? (
         <MomentConversationControl

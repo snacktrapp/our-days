@@ -505,7 +505,10 @@ describe("MomentComposer", () => {
     expect(
       screen.queryByRole("button", { name: /^Journal,/u }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(
+      screen.queryByRole("button", { name: /^Details/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -547,10 +550,20 @@ describe("MomentComposer", () => {
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(
+      screen.queryByRole("button", { name: /^Details/u }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Who else was part of this?")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.getByText("Post to")).toBeVisible();
+    expect(
+      screen.queryByText("No location is read from your media."),
+    ).toBeNull();
+    expect(
+      screen.queryByText("This will appear in its true chronological place."),
+    ).toBeNull();
   });
 
   it("keeps Who else tags when switching Post to Just me", async () => {
@@ -576,7 +589,7 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "Molly was there.");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "Just me" }));
@@ -742,7 +755,6 @@ describe("MomentComposer", () => {
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
     await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "The porch");
     await setComposerTime(user, "2", "45", "PM");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -1501,7 +1513,10 @@ describe("MomentComposer", () => {
 
     await user.type(text, "A brave blue door.");
     await setComposerDate(user, "2023-08-21");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /^Details/u }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Journal,/u }),
     ).not.toBeInTheDocument();
@@ -1625,7 +1640,6 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "Oak Street School");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -1823,9 +1837,7 @@ describe("MomentComposer", () => {
     ).toBeNull();
     expect(screen.queryByLabelText("Your thought")).toBeNull();
     expect(screen.getByLabelText("Entry")).toHaveValue("Worth keeping.");
-    expect(
-      screen.getByRole("button", { name: /^Place, Cedar Park/u }),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Cedar Park");
 
     await user.type(screen.getByLabelText("Entry"), " Still.");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -2214,7 +2226,9 @@ describe("MomentComposer", () => {
   it("does not offer a Journal picker on create", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
-    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(
+      screen.queryByRole("button", { name: /^Details/u }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Journal,/u }),
     ).not.toBeInTheDocument();
@@ -2237,14 +2251,12 @@ describe("MomentComposer", () => {
     [
       "people tag",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.click(screen.getByRole("button", { name: /Details/ }));
         await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
       },
     ],
     [
       "place",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.click(screen.getByRole("button", { name: /Details/ }));
         await setComposerPlace(user, "The porch");
       },
     ],

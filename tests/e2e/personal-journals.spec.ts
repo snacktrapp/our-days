@@ -122,7 +122,6 @@ test("composer posts onto the recorder journal and hides the Journal picker", as
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
   await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
-  await page.getByRole("button", { name: /Details/u }).click();
   await expect(page.getByRole("button", { name: /^Journal,/u })).toHaveCount(0);
   await expect(page.getByText("Recorded by Brian")).toHaveCount(0);
   await page
@@ -139,7 +138,6 @@ test("composer posts onto the recorder journal and hides the Journal picker", as
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
   await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
-  await page.getByRole("button", { name: /Details/u }).click();
   await expect(page.getByRole("button", { name: /^Journal,/u })).toHaveCount(0);
   await expect(page.getByText("Recorded by Brian")).toHaveCount(0);
 });

@@ -34,7 +34,12 @@ describe("MapTiler geocoding", () => {
     await expect(
       searchMapTilerPlaces("Sand Harbor", "public-key"),
     ).resolves.toEqual([
-      { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+      {
+        label: "Sand Harbor",
+        detail: "Sand Harbor, NV",
+        latitude: 39.2,
+        longitude: -119.93,
+      },
     ]);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       "api.maptiler.com/geocoding",

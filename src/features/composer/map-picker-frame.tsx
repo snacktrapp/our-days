@@ -12,21 +12,27 @@ export function MapPickerFrame({
   longitude,
   title,
   className,
+  interactive = true,
   onMoved,
+  onEscape,
 }: Readonly<{
   latitude: number;
   longitude: number;
   title: string;
   className?: string;
-  onMoved: (latitude: number, longitude: number) => void;
+  interactive?: boolean;
+  onMoved?: (latitude: number, longitude: number) => void;
+  onEscape?: () => void;
 }>) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
   const onMovedRef = useRef(onMoved);
+  const onEscapeRef = useRef(onEscape);
 
   useEffect(() => {
     onMovedRef.current = onMoved;
-  }, [onMoved]);
+    onEscapeRef.current = onEscape;
+  }, [onEscape, onMoved]);
 
   const postInit = useCallback(() => {
     iframeRef.current?.contentWindow?.postMessage(
@@ -35,10 +41,11 @@ export function MapPickerFrame({
         type: "init",
         latitude,
         longitude,
+        interactive,
       },
       window.location.origin,
     );
-  }, [latitude, longitude]);
+  }, [interactive, latitude, longitude]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -49,8 +56,12 @@ export function MapPickerFrame({
         postInit();
         return;
       }
+      if (event.data.type === "escape") {
+        onEscapeRef.current?.();
+        return;
+      }
       if (event.data.type === "moved") {
-        onMovedRef.current(event.data.latitude, event.data.longitude);
+        onMovedRef.current?.(event.data.latitude, event.data.longitude);
       }
     };
     window.addEventListener("message", onMessage);
@@ -76,6 +87,7 @@ export function MapPickerFrame({
       className={className}
       title={title}
       src={MAP_PICKER_PATH}
+      loading="eager"
       onLoad={postInit}
     />
   );

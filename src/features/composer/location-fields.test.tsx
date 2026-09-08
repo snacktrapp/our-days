@@ -10,12 +10,12 @@ describe("location fields", () => {
     vi.unstubAllGlobals();
   });
 
-  it("opens search in the location sheet without a nested tap", async () => {
+  it("shows one-step search without an Add a place trigger", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(
       <LocationFields
-        required
+        optional
         value={emptyPlaceSelection()}
         onChange={onChange}
       />,
@@ -26,12 +26,14 @@ describe("location fields", () => {
     ).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
     expect(screen.getByLabelText("Place name")).toBeVisible();
-    expect(screen.getByLabelText("Place name")).toHaveFocus();
     expect(screen.getByLabelText("Place name")).toHaveAttribute(
       "placeholder",
       "Search for a place",
     );
+    expect(screen.getByText("Search for a place")).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "The porch");
     expect(onChange).toHaveBeenLastCalledWith({
@@ -39,9 +41,31 @@ describe("location fields", () => {
       latitude: null,
       longitude: null,
     });
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
+    expect(document.querySelector(".composer-picker-secondary")).toBeNull();
+  });
 
-    await user.keyboard("{Escape}");
-    expect(screen.getByLabelText("Place name")).toBeVisible();
+  it("clears typed text from the inline control and focuses the field", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <LocationFields
+        optional
+        value={emptyPlaceSelection()}
+        onChange={onChange}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Place name"), "The porch");
+    await user.click(screen.getByRole("button", { name: "Clear place" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "",
+      latitude: null,
+      longitude: null,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("");
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
   });
 
   it("keeps a typed label after choosing a searched place", async () => {
@@ -50,7 +74,12 @@ describe("location fields", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => [
-          { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+          {
+            label: "Sand Harbor",
+            detail: "Sand Harbor, NV, United States",
+            latitude: 39.2,
+            longitude: -119.93,
+          },
         ],
       }),
     );
@@ -64,7 +93,7 @@ describe("location fields", () => {
       />,
     );
 
-    expect(screen.getByText("Search")).toBeVisible();
+    expect(screen.getByText("Search for a place")).toBeVisible();
     expect(screen.queryByText("Map unavailable")).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "Sand");
@@ -75,13 +104,14 @@ describe("location fields", () => {
     });
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Sand Harbor, NV" }),
+        screen.getByRole("button", { name: /Sand Harbor/u }),
       ).toBeVisible(),
     );
+    expect(screen.getByText("Sand Harbor, NV, United States")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Sand Harbor, NV" }));
+    await user.click(screen.getByRole("button", { name: /Sand Harbor/u }));
     expect(onChange).toHaveBeenLastCalledWith({
-      label: "Sand Harbor, NV",
+      label: "Sand Harbor",
       latitude: 39.2,
       longitude: -119.93,
     });
@@ -90,22 +120,90 @@ describe("location fields", () => {
       <LocationFields
         required
         value={{
-          label: "Sand Harbor, NV",
+          label: "Sand Harbor",
           latitude: 39.2,
           longitude: -119.93,
         }}
         onChange={onChange}
       />,
     );
-    expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor, NV");
-    expect(
-      screen.queryByTitle("Map of Sand Harbor, NV"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor");
+    expect(screen.queryByTitle("Map of Sand Harbor")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sand Harbor/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
   });
 
-  it("keeps optional Details place behind a compact trigger", async () => {
+  it("clears suggestions immediately and does not search the chosen label again", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          label: "Bass Lake",
+          detail: "Bass Lake, CA, United States",
+          latitude: 37.3247,
+          longitude: -119.5664,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onChange = vi.fn();
     const user = userEvent.setup();
+    const { rerender } = render(
+      <LocationFields
+        optional
+        value={emptyPlaceSelection()}
+        onChange={onChange}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Place name"), "Bass");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Bass Lake/u })).toBeVisible(),
+    );
+    const callsAfterSearch = fetchMock.mock.calls.length;
+    expect(callsAfterSearch).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /Bass Lake/u }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "Bass Lake",
+      latitude: 37.3247,
+      longitude: -119.5664,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("Bass Lake");
+    expect(screen.queryByRole("button", { name: /Bass Lake/u })).toBeNull();
+    expect(screen.queryByText("Bass Lake, CA, United States")).toBeNull();
+
+    rerender(
+      <LocationFields
+        optional
+        value={{
+          label: "Bass Lake",
+          latitude: 37.3247,
+          longitude: -119.5664,
+        }}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Bass Lake/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Clear place" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "",
+      latitude: null,
+      longitude: null,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 400);
+    });
+    expect(fetchMock.mock.calls.length).toBe(callsAfterSearch);
+  });
+
+  it("does not fold optional place behind a second search popup", () => {
     render(
       <LocationFields
         optional
@@ -114,18 +212,11 @@ describe("location fields", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
-    expect(screen.queryByLabelText("Place name")).toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    );
-    expect(
-      screen.getByRole("dialog", { name: "Choose a place" }),
-    ).toBeVisible();
     expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeNull();
   });
 
   it("shows a visible error when place search is unavailable", async () => {

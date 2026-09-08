@@ -437,7 +437,6 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
-  await page.getByRole("button", { name: /Details/u }).click();
   await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
     0,
   );
@@ -839,7 +838,6 @@ test("expanded capture states have no serious axe violations", async ({
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
-  await page.getByRole("button", { name: /Details/u }).click();
   await scan();
   await scan();
 });
@@ -919,7 +917,6 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     .click();
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("Short screen");
-  await page.getByRole("button", { name: /Details/u }).click();
 
   await page.setViewportSize({ width: 320, height: 350 });
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
@@ -929,9 +926,8 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
   for (const control of [
     text,
     page.getByRole("button", { name: /^Moment date,/u }),
-    page.getByRole("button", { name: /Details/u }),
     mollyTag,
-    page.getByRole("button", { name: /^Place,/u }),
+    page.getByLabel("Place name"),
     page.getByRole("button", { name: "Save" }),
   ]) {
     await expectReachable(control);

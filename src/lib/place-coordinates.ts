@@ -51,3 +51,27 @@ export function validPlaceCoordinates(latitude: unknown, longitude: unknown) {
 export function trimmedPlaceLabel(value: string) {
   return value.trim().slice(0, 160);
 }
+
+/** First comma-separated segment so cards store “Sand Harbor”, not the full address. */
+export function shortPlaceLabel(value: string) {
+  const trimmed = trimmedPlaceLabel(value);
+  if (!trimmed) return "";
+  const comma = trimmed.indexOf(",");
+  return comma > 0 ? trimmed.slice(0, comma).trim() : trimmed;
+}
+
+/** Apple Maps https works on iOS, and falls back on Android/desktop. */
+export function buildAppleMapsUrl(
+  placeName: string,
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): string | null {
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
+  if (!coordinates) return null;
+  const query =
+    shortPlaceLabel(placeName) ||
+    `${coordinates.latitude},${coordinates.longitude}`;
+  const lat = coordinates.latitude;
+  const lng = coordinates.longitude;
+  return `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(query)}&z=12`;
+}
