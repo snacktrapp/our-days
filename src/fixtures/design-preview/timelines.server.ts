@@ -471,6 +471,17 @@ export function getFamilyTimelineFixture(
       composer: {
         ...familyChrome.composer,
         circleId: selectedGroupId,
+        taggablePeople: extraSelected
+          ? composerPeople.filter((person) => person.id === "brian")
+          : familyChrome.composer.taggablePeople,
+        taggablePeopleByCircle: Object.fromEntries(
+          previewGroups(options.extraGroup).map((group) => [
+            group.id,
+            group.id === previewFamilyId
+              ? composerPeople
+              : composerPeople.filter((person) => person.id === "brian"),
+          ]),
+        ),
         postableCircles: previewGroups(options.extraGroup).map((group) => ({
           id: group.id,
           name: group.name,

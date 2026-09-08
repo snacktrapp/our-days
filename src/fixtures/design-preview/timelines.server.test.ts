@@ -118,6 +118,14 @@ describe("design preview timeline chronology", () => {
     expect(
       cousins.entries.filter((entry) => entry.entryType === "moment"),
     ).toEqual([]);
+    expect(
+      cousins.chrome.composer.taggablePeople.map((person) => person.id),
+    ).toEqual(["brian"]);
+    expect(
+      cousins.chrome.composer.taggablePeopleByCircle?.family.map(
+        (person) => person.id,
+      ),
+    ).toEqual(["brian", "molly", "avery", "sam", "june"]);
   });
 
   it("uses the same date-marker grammar in personal journals", () => {

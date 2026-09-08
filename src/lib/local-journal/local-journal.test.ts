@@ -11,6 +11,7 @@ vi.mock("server-only", () => ({}));
 import {
   localAlexMembershipId,
   localAlexPersonId,
+  localCaseyPersonId,
   localCircleId,
   localFamilyEmail,
   localJordanMembershipId,
@@ -378,6 +379,25 @@ describe("local journal happy path", () => {
     });
     expect(texts(home)).toContain("One porch, two circles.");
     expect(texts(cousins)).toContain("One porch, two circles.");
+    expect(
+      extraContext.chrome.composer.taggablePeople.map((person) => person.id),
+    ).toEqual([extraCircle.personId]);
+    expect(
+      extraContext.chrome.composer.taggablePeopleByCircle?.[localCircleId]?.map(
+        (person) => person.id,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        localAlexPersonId,
+        localJordanPersonId,
+        localCaseyPersonId,
+      ]),
+    );
+    expect(
+      extraContext.chrome.composer.taggablePeopleByCircle?.[
+        extra.circleId
+      ]?.map((person) => person.id),
+    ).toEqual([extraCircle.personId]);
 
     await createLocalWrittenMoment(access, {
       journalPersonId: extraCircle.personId,

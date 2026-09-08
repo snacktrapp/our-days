@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   buildActivityNotifications,
   buildJournalPersonSurface,
+  buildTaggablePeopleByCircle,
   plainToday,
 } from "./journal-context.server";
 
@@ -202,6 +203,88 @@ describe("journal person surface", () => {
       "brian",
       "molly",
       "avery",
+    ]);
+  });
+});
+
+describe("taggable people by postable circle", () => {
+  it("keeps a per-circle roster so a thin Home circle does not hide family tags", () => {
+    const byCircle = buildTaggablePeopleByCircle(
+      ["grandparents", "family"],
+      [
+        {
+          id: "brian-gp",
+          display_name: "Brian",
+          profile_kind: "account",
+          accent_token: "sky",
+          circle_id: "grandparents",
+        },
+        {
+          id: "brian",
+          display_name: "Brian",
+          profile_kind: "account",
+          accent_token: "sky",
+          circle_id: "family",
+        },
+        {
+          id: "molly",
+          display_name: "Molly",
+          profile_kind: "account",
+          accent_token: "clay",
+          circle_id: "family",
+        },
+        {
+          id: "tars",
+          display_name: "TARS",
+          profile_kind: "account",
+          accent_token: "sage",
+          circle_id: "family",
+        },
+      ],
+      [
+        {
+          id: "m-gp",
+          person_id: "brian-gp",
+          role: "organizer",
+          directory_kind: "journal",
+          circle_id: "grandparents",
+        },
+        {
+          id: "m-brian",
+          person_id: "brian",
+          role: "organizer",
+          directory_kind: "journal",
+          circle_id: "family",
+        },
+        {
+          id: "m-molly",
+          person_id: "molly",
+          role: "organizer",
+          directory_kind: "journal",
+          circle_id: "family",
+        },
+        {
+          id: "m-tars",
+          person_id: "tars",
+          role: "organizer",
+          directory_kind: "operations",
+          circle_id: "family",
+        },
+      ],
+      new Map([
+        ["grandparents", { personId: "brian-gp", role: "organizer" }],
+        ["family", { personId: "brian", role: "organizer" }],
+      ]),
+      "grandparents",
+      { personId: "brian-gp", role: "organizer" },
+    );
+
+    expect(byCircle.grandparents.map((person) => person.id)).toEqual([
+      "brian-gp",
+    ]);
+    expect(byCircle.family.map((person) => person.id)).toEqual([
+      "brian",
+      "molly",
     ]);
   });
 });
