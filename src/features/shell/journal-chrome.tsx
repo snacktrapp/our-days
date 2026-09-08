@@ -136,11 +136,7 @@ function JournalStage({
           {pending ? <RoutePendingSkeleton kind={pending.kind} /> : children}
         </section>
       </main>
-      <PrimaryNavigation
-        section={section}
-        memoriesHref={model.memoriesHref}
-        settingsHref={model.settingsHref}
-      />
+      <PrimaryNavigation section={section} settingsHref={model.settingsHref} />
     </>
   );
 }

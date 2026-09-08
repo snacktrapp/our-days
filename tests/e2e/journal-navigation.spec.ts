@@ -122,7 +122,17 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.goForward();
   await expect(page).toHaveURL(/\/people\/molly$/);
 
-  await page.getByRole("link", { name: "Memories" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "Memories" }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
+  await page.goto("/memories");
   await expect(page.getByRole("heading", { name: "Memories" })).toBeVisible();
   await expect(page).toHaveTitle("Memories — Our Days");
   await expect(page.getByText("On this day")).toBeVisible();
@@ -153,7 +163,12 @@ test("route-based journal navigation preserves the approved views", async ({
     page
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "Memories" }),
-  ).toHaveAttribute("aria-current", "page");
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
 
   await page.reload();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);

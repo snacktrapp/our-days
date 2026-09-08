@@ -87,5 +87,16 @@ describe("post-to selection", () => {
       audience: "family",
       circleIds: ["family"],
     });
+    expect(
+      createPostToDefault(
+        circles,
+        { kind: "group", circleId: "cousins" },
+        "family",
+        { defaultAudience: "just_me" },
+      ),
+    ).toEqual({
+      audience: "just_me",
+      circleIds: [],
+    });
   });
 });

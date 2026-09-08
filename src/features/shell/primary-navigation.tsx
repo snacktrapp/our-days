@@ -2,16 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useComposerSession } from "@/features/composer/composer-session";
 import { sectionFromPathname } from "./journal-routes";
 import type { JournalSection } from "./shell-view-model";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
-type PrimarySection = Extract<
-  JournalSection,
-  "timeline" | "memories" | "settings"
->;
+type PrimarySection = Extract<JournalSection, "timeline" | "settings">;
 
 function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   return (
@@ -23,7 +21,7 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 
-function NavIcon({ name }: { name: "family" | "memories" | "account" }) {
+function NavIcon({ name }: { name: "family" | "add" | "account" }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -32,12 +30,10 @@ function NavIcon({ name }: { name: "family" | "memories" | "account" }) {
       </svg>
     );
   }
-  if (name === "memories") {
+  if (name === "add") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="4" y="5.5" width="16" height="14" rx="2" />
-        <path d="M8 3.5v4M16 3.5v4M4 10h16" />
-        <path d="m12 12.5.7 1.45 1.55.22-1.12 1.1.27 1.55-1.4-.74-1.4.74.27-1.55-1.12-1.1 1.55-.22Z" />
+        <path d="M12 5v14M5 12h14" />
       </svg>
     );
   }
@@ -50,7 +46,7 @@ function NavIcon({ name }: { name: "family" | "memories" | "account" }) {
   );
 }
 
-function NavSymbol({ name }: { name: "family" | "memories" | "account" }) {
+function NavSymbol({ name }: { name: "family" | "add" | "account" }) {
   return (
     <span className="nav-symbol" aria-hidden="true">
       <NavIcon name={name} />
@@ -60,16 +56,16 @@ function NavSymbol({ name }: { name: "family" | "memories" | "account" }) {
 
 export function PrimaryNavigation({
   section,
-  memoriesHref,
   settingsHref,
 }: {
   section: JournalSection;
-  memoriesHref?: string | null;
   settingsHref?: string | null;
 }) {
   const pathname = usePathname() ?? "";
   const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
+  const session = useComposerSession();
+  const addMomentRef = useRef<HTMLButtonElement>(null);
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;
     section: PrimarySection;
@@ -88,7 +84,7 @@ export function PrimaryNavigation({
         return;
       }
       const nextSection = sectionFromPathname(href);
-      if (!nextSection) return;
+      if (!nextSection || nextSection === "memories") return;
       setPendingSelection({ fromPathname: pathname, section: nextSection });
     };
     window.addEventListener("our-days:navigate-section", onNavigateSection);
@@ -127,20 +123,20 @@ export function PrimaryNavigation({
         <NavSymbol name="family" />
         <span>Home</span>
       </Link>
-      {memoriesHref === null ? (
-        <span className="nav-item nav-item-unavailable" aria-hidden="true" />
-      ) : (
-        <Link
-          className={`nav-item ${selectedSection === "memories" ? "active" : ""}`}
-          aria-current={selectedSection === "memories" ? "page" : undefined}
-          href={memoriesHref ?? "/memories"}
-          onClick={selectImmediately("memories")}
-          prefetch={false}
-        >
-          <NavSymbol name="memories" />
-          <span>Memories</span>
-        </Link>
-      )}
+      <button
+        ref={addMomentRef}
+        className="nav-item"
+        type="button"
+        aria-expanded={session?.isOpen ?? false}
+        onClick={() =>
+          session?.toggleCreate(addMomentRef.current, {
+            defaultAudience: "just_me",
+          })
+        }
+      >
+        <NavSymbol name="add" />
+        <span>Add</span>
+      </button>
       {settingsHref === null ? (
         <span className="nav-item nav-item-unavailable" aria-hidden="true" />
       ) : (

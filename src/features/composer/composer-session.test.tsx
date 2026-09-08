@@ -78,6 +78,52 @@ describe("ComposerSessionProvider", () => {
     ).toHaveClass("is-closing");
   });
 
+  it("defaults create Post to Just me from an explicit nav intent", async () => {
+    const user = userEvent.setup();
+    function NavAdd() {
+      const session = useComposerSession();
+      const triggerRef = useRef<HTMLButtonElement>(null);
+      if (!session) return null;
+      return (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() =>
+            session.toggleCreate(triggerRef.current, {
+              defaultAudience: "just_me",
+            })
+          }
+        >
+          Add
+        </button>
+      );
+    }
+
+    render(
+      <ComposerSessionProvider
+        model={{
+          ...model,
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          circleId: "family",
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "person" },
+          ],
+        }}
+        homeContext={{ kind: "group", circleId: "family" }}
+      >
+        <NavAdd />
+      </ComposerSessionProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+  });
+
   it("defaults create Post to Just me when Home is on YOU", async () => {
     const user = userEvent.setup();
     render(
