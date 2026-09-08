@@ -31,6 +31,7 @@ export function LocationFields({
   const localSearchRef = useRef<HTMLInputElement>(null);
   const inputRef = searchInputRef ?? localSearchRef;
   const searchRequestRef = useRef(0);
+  const skipSearchLabelRef = useRef<string | null>(null);
   const valueRef = useRef(value);
   const [search, setSearch] = useState(value.label);
   const [suggestions, setSuggestions] = useState<readonly GeocodedPlace[]>([]);
@@ -50,6 +51,8 @@ export function LocationFields({
       }
       const nextLabel =
         label || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+      skipSearchLabelRef.current = nextLabel;
+      searchRequestRef.current += 1;
       onChange({
         label: nextLabel,
         latitude,
@@ -57,6 +60,7 @@ export function LocationFields({
       });
       setSearch(nextLabel);
       setSuggestions([]);
+      setSearching(false);
       setLocationMessage(null);
     },
     [onChange],
@@ -83,6 +87,15 @@ export function LocationFields({
   }, [inputRef, invalid]);
 
   useEffect(() => {
+    if (skipSearchLabelRef.current !== null) {
+      const skippedLabel = skipSearchLabelRef.current;
+      skipSearchLabelRef.current = null;
+      if (skippedLabel === search) {
+        setSuggestions([]);
+        setSearching(false);
+        return;
+      }
+    }
     if (search.trim().length < 2) return;
     const requestId = searchRequestRef.current + 1;
     searchRequestRef.current = requestId;
@@ -113,6 +126,8 @@ export function LocationFields({
   }, [search]);
 
   const chooseSuggestion = (place: GeocodedPlace) => {
+    skipSearchLabelRef.current = place.label;
+    searchRequestRef.current += 1;
     onChange({
       label: place.label,
       latitude: place.latitude,
@@ -120,6 +135,7 @@ export function LocationFields({
     });
     setSearch(place.label);
     setSuggestions([]);
+    setSearching(false);
     setLocationMessage(null);
   };
 
@@ -211,9 +227,12 @@ export function LocationFields({
           type="button"
           className="composer-picker-secondary"
           onClick={() => {
+            skipSearchLabelRef.current = null;
+            searchRequestRef.current += 1;
             onChange(emptyPlaceSelection());
             setSearch("");
             setSuggestions([]);
+            setSearching(false);
           }}
         >
           Clear place

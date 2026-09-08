@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { MomentCard } from "./moment-card";
 import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import type { ThoughtMomentViewModel } from "./timeline-view-model";
@@ -22,10 +21,9 @@ const thought = {
 describe("timeline place meta", () => {
   afterEach(() => {
     resetOverlayChromeForTests();
-    vi.unstubAllGlobals();
   });
 
-  it("shows NOTE · pin and short name without a map mat", () => {
+  it("shows NOTE · pin and short name linking to system Maps", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -38,87 +36,46 @@ describe("timeline place meta", () => {
     );
 
     expect(screen.getByText("Note")).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Map of Sand Harbor" }),
-    ).toHaveTextContent("Sand Harbor");
+    const placeLink = screen.getByRole("link", {
+      name: "Open Sand Harbor in Maps",
+    });
+    expect(placeLink).toHaveTextContent("Sand Harbor");
+    expect(placeLink).toHaveAttribute(
+      "href",
+      "https://maps.apple.com/?ll=39.2,-119.93&q=Sand%20Harbor",
+    );
+    expect(placeLink).toHaveAttribute("target", "_blank");
     expect(screen.queryByText("NV, United States")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(container.querySelector(".memory-map")).toBeNull();
     expect(container.querySelector(".map-water")).toBeNull();
     expect(container.querySelector(".moment-place-pin")).not.toBeNull();
   });
 
-  it("opens a zoomable map and dismisses it from Close", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
-    );
-    const user = userEvent.setup();
+  it("does not open an in-app map sheet", () => {
     render(
       <MomentCard
         moment={{
           ...thought,
-          placeName: "Sand Harbor",
-          latitude: 39.2,
-          longitude: -119.93,
+          placeName: "Bass Lake",
+          latitude: 37.3247,
+          longitude: -119.5664,
         }}
       />,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Map of Sand Harbor" }),
-    );
-    const dialog = screen.getByRole("dialog", { name: "Sand Harbor" });
-    expect(dialog).toBeVisible();
-    expect(screen.getByTitle("Map of Sand Harbor")).toHaveAttribute(
-      "src",
-      "/internal/map-picker",
-    );
-    expect(dialog.querySelector(".memory-map")).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: "Sand Harbor" })).toBeNull(),
-    );
-  });
-
-  it("does not paint a map when the style proxy is missing a key", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-        text: async () => "maptiler_key_missing",
-      }),
-    );
-    const user = userEvent.setup();
-    render(
-      <MomentCard
-        moment={{
-          ...thought,
-          kind: "photo",
-          placeName: "The porch",
-          latitude: 35.28,
-          longitude: -120.66,
-          image: {
-            src: "/sample-family.jpg",
-            alt: "Evening on the porch",
-            badgeLabel: "AUG 28",
-            width: 1200,
-            height: 801,
-          },
-        }}
-      />,
-    );
-
-    expect(screen.getByText("Photo")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Map of The porch" }));
     expect(
-      await screen.findByText("Map isn’t available right now."),
-    ).toBeVisible();
-    expect(screen.queryByTitle("Map of The porch")).toBeNull();
+      screen.getByRole("link", { name: "Open Bass Lake in Maps" }),
+    ).toHaveAttribute(
+      "href",
+      "https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByTitle("Map of Bass Lake")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Map of/u })).toBeNull();
   });
 
-  it("leaves a typed place name visible without opening a map", () => {
+  it("leaves a typed place name visible without a Maps link", () => {
     render(
       <MomentCard
         moment={{
@@ -130,7 +87,7 @@ describe("timeline place meta", () => {
 
     expect(screen.getByText("Oak Street School")).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: /Map of Oak Street School/u }),
+      screen.queryByRole("link", { name: /Open Oak Street School in Maps/u }),
     ).toBeNull();
   });
 });

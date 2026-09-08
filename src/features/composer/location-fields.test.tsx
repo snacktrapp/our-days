@@ -103,6 +103,67 @@ describe("location fields", () => {
     expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor");
     expect(screen.queryByTitle("Map of Sand Harbor")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sand Harbor/u })).toBeNull();
+  });
+
+  it("clears suggestions immediately and does not search the chosen label again", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          label: "Bass Lake",
+          detail: "Bass Lake, CA, United States",
+          latitude: 37.3247,
+          longitude: -119.5664,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <LocationFields
+        optional
+        value={emptyPlaceSelection()}
+        onChange={onChange}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Place name"), "Bass");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Bass Lake/u })).toBeVisible(),
+    );
+    const callsAfterSearch = fetchMock.mock.calls.length;
+    expect(callsAfterSearch).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /Bass Lake/u }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "Bass Lake",
+      latitude: 37.3247,
+      longitude: -119.5664,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("Bass Lake");
+    expect(screen.queryByRole("button", { name: /Bass Lake/u })).toBeNull();
+    expect(screen.queryByText("Bass Lake, CA, United States")).toBeNull();
+
+    rerender(
+      <LocationFields
+        optional
+        value={{
+          label: "Bass Lake",
+          latitude: 37.3247,
+          longitude: -119.5664,
+        }}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Bass Lake/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 400);
+    });
+    expect(fetchMock.mock.calls.length).toBe(callsAfterSearch);
   });
 
   it("does not fold optional place behind a second search popup", () => {

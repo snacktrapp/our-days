@@ -1605,6 +1605,7 @@ button.audience-chip:focus-visible .audience-chip-face {
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 span.moment-place-line {
@@ -1640,88 +1641,12 @@ span.moment-place-line {
   color: inherit;
   font: inherit;
   text-align: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 .moment-place-title:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 3px;
-}
-.place-map-dialog {
-  width: 100%;
-  max-width: 100%;
-  height: 100dvh;
-  max-height: 100dvh;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: #101d17;
-  color: #f0f2ed;
-  z-index: 180;
-}
-.place-map-dialog::backdrop {
-  background: #000;
-}
-.place-map-sheet {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.place-map-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
-  flex: 0 0 auto;
-}
-.place-map-bar h2 {
-  margin: 0;
-  min-width: 0;
-  color: #f0f2ed;
-  font-family: var(--font-record);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-.place-map-close {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  color: #f0f2ed;
-  font-family: var(--font-record);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.place-map-close:focus-visible {
-  outline: 2px solid var(--teal);
-  outline-offset: 3px;
-}
-.place-map-frame {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  border: 0;
-  background: #101d17;
-}
-.place-map-unavailable {
-  flex: 1 1 auto;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  padding: 24px;
-  color: #c5cec8;
-  font-family: var(--font-record);
-  font-size: 13px;
-  text-align: center;
 }
 .elapsed-gap {
   height: 82px;
@@ -8341,6 +8266,14 @@ html[data-theme].overlay-open .app-shell::before,
 .composer-location-suggestions button:focus-visible {
   background: color-mix(in srgb, var(--teal) 14%, transparent);
   outline: none;
+}
+
+.composer-location-fields > .composer-picker-secondary {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  background: transparent;
+  color: var(--teal);
 }
 
 .composer-location-map {

@@ -1,11 +1,8 @@
-"use client";
-
-import { useState } from "react";
 import {
   parsePlaceCoordinates,
   shortPlaceLabel,
+  systemMapsHref,
 } from "@/lib/place-coordinates";
-import { PlaceMapOverlay } from "./place-map-overlay";
 import { PlacePin } from "./place-pin";
 
 export function MomentPlaceButton({
@@ -21,29 +18,19 @@ export function MomentPlaceButton({
   className?: string;
   children: React.ReactNode;
 }>) {
-  const [open, setOpen] = useState(false);
   const shortName = shortPlaceLabel(placeName);
-  const coordinates = parsePlaceCoordinates(latitude, longitude);
-  if (!coordinates || !shortName) return children;
+  const href = systemMapsHref(placeName, latitude, longitude);
+  if (!href || !shortName) return children;
   return (
-    <>
-      <button
-        type="button"
-        className={className}
-        onClick={() => setOpen(true)}
-        aria-label={`Map of ${shortName}`}
-      >
-        {children}
-      </button>
-      {open ? (
-        <PlaceMapOverlay
-          place={shortName}
-          latitude={coordinates.latitude}
-          longitude={coordinates.longitude}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </>
+    <a
+      className={className}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open ${shortName} in Maps`}
+    >
+      {children}
+    </a>
   );
 }
 
@@ -60,9 +47,9 @@ export function MomentPlaceMeta({
   longitude?: number | null;
   heading?: boolean;
 }>) {
-  const [open, setOpen] = useState(false);
   const shortName = placeName ? shortPlaceLabel(placeName) : "";
   const coordinates = parsePlaceCoordinates(latitude, longitude);
+  const href = systemMapsHref(placeName ?? "", latitude, longitude);
 
   if (!shortName) {
     return (
@@ -70,38 +57,30 @@ export function MomentPlaceMeta({
     );
   }
 
-  const placeLine = coordinates ? (
-    <button
-      type="button"
-      className="moment-place-line"
-      onClick={() => setOpen(true)}
-      aria-label={`Map of ${shortName}`}
-    >
-      <PlacePin />
-      <span>{shortName}</span>
-    </button>
-  ) : (
-    <span className="moment-place-line">
-      <PlacePin />
-      <span>{shortName}</span>
-    </span>
-  );
+  const placeLine =
+    href && coordinates ? (
+      <a
+        className="moment-place-line"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open ${shortName} in Maps`}
+      >
+        <PlacePin />
+        <span>{shortName}</span>
+      </a>
+    ) : (
+      <span className="moment-place-line">
+        <PlacePin />
+        <span>{shortName}</span>
+      </span>
+    );
 
   return (
-    <>
-      <p className={`moment-kind-meta${heading ? " moment-kicker" : ""}`}>
-        <span className="moment-kind-meta-type">{typeLabel}</span>
-        <span aria-hidden="true"> · </span>
-        {placeLine}
-      </p>
-      {open && coordinates ? (
-        <PlaceMapOverlay
-          place={shortName}
-          latitude={coordinates.latitude}
-          longitude={coordinates.longitude}
-          onClose={() => setOpen(false)}
-        />
-      ) : null}
-    </>
+    <p className={`moment-kind-meta${heading ? " moment-kicker" : ""}`}>
+      <span className="moment-kind-meta-type">{typeLabel}</span>
+      <span aria-hidden="true"> · </span>
+      {placeLine}
+    </p>
   );
 }

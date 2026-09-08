@@ -59,3 +59,17 @@ export function shortPlaceLabel(value: string) {
   const comma = trimmed.indexOf(",");
   return comma > 0 ? trimmed.slice(0, comma).trim() : trimmed;
 }
+
+/** Apple Maps https works on iOS, and falls back on Android/desktop. */
+export function systemMapsHref(
+  placeName: string,
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): string | null {
+  const coordinates = parsePlaceCoordinates(latitude, longitude);
+  if (!coordinates) return null;
+  const query =
+    shortPlaceLabel(placeName) ||
+    `${coordinates.latitude},${coordinates.longitude}`;
+  return `https://maps.apple.com/?ll=${coordinates.latitude},${coordinates.longitude}&q=${encodeURIComponent(query)}`;
+}
