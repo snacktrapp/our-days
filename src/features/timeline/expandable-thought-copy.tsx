@@ -45,6 +45,11 @@ export function ExpandableThoughtCopy({
         className={[className, clamp ? "thought-copy-clamped" : null]
           .filter(Boolean)
           .join(" ")}
+        expandable={overflows}
+        expanded={expanded}
+        onSingleTap={
+          overflows ? () => setExpanded((current) => !current) : undefined
+        }
       >
         {children}
       </DoubleTapHeartText>

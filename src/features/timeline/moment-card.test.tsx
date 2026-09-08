@@ -115,15 +115,22 @@ describe("MomentCard double-tap heart", () => {
 });
 
 describe("MomentCard long thought copy", () => {
-  it("leaves a short note unclamped", () => {
+  it("leaves a short note unclamped", async () => {
+    const user = userEvent.setup();
     render(<MomentCard moment={thought} />);
 
+    const quote = screen.getByText(/Worth keeping/u).closest("blockquote");
     expect(
       screen.queryByRole("button", { name: "See more" }),
     ).not.toBeInTheDocument();
+    expect(quote).not.toHaveClass("thought-copy-clamped");
+    expect(quote).not.toHaveAttribute("aria-expanded");
+
+    await user.click(quote!);
+    expect(quote).not.toHaveClass("thought-copy-clamped");
     expect(
-      screen.getByText(/Worth keeping/u).closest("blockquote"),
-    ).not.toHaveClass("thought-copy-clamped");
+      screen.queryByRole("button", { name: "See more" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows five lines then See more on a long note, and See less after expand", async () => {
@@ -157,6 +164,62 @@ describe("MomentCard long thought copy", () => {
     vi.mocked(thoughtCopyOverflows).mockReset();
   });
 
+  it("expands and collapses a long note when the body is tapped", async () => {
+    vi.mocked(thoughtCopyOverflows).mockReturnValue(true);
+    const user = userEvent.setup();
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          text: "Tonight the kitchen was loud enough to fill the whole screen.",
+        }}
+      />,
+    );
+
+    const quote = screen.getByText(/kitchen was loud/u).closest("blockquote");
+    expect(quote).toHaveClass("thought-copy-clamped");
+    expect(quote).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(quote!);
+    await waitFor(() => {
+      expect(quote).not.toHaveClass("thought-copy-clamped");
+    });
+    expect(quote).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "See less" })).toBeVisible();
+
+    await user.click(quote!);
+    await waitFor(() => {
+      expect(quote).toHaveClass("thought-copy-clamped");
+    });
+    expect(quote).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
+    vi.mocked(thoughtCopyOverflows).mockReset();
+  });
+
+  it("does not heart on a single tap of clamped copy", async () => {
+    vi.mocked(thoughtCopyOverflows).mockReturnValue(true);
+    const actions = conversationActions();
+    const user = userEvent.setup();
+    render(
+      <MomentCard
+        interaction={interaction}
+        conversationActions={actions}
+        moment={{
+          ...thought,
+          text: "Tonight the kitchen was loud enough to fill the whole screen.",
+        }}
+      />,
+    );
+
+    const quote = screen.getByText(/kitchen was loud/u).closest("blockquote")!;
+    await user.click(quote);
+    await waitFor(() => {
+      expect(quote).not.toHaveClass("thought-copy-clamped");
+    });
+    expect(actions.setReaction).not.toHaveBeenCalled();
+    vi.mocked(thoughtCopyOverflows).mockReset();
+  });
+
   it("keeps double-tap heart on a clamped Bible verse", async () => {
     vi.mocked(thoughtCopyOverflows).mockReturnValue(true);
     const actions = conversationActions();
@@ -174,8 +237,10 @@ describe("MomentCard long thought copy", () => {
       />,
     );
 
+    const quote = screen.getByText(/Leviticus/u).closest("blockquote");
     expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
-    doubleTap(screen.getByText(/Leviticus/u).closest("blockquote")!);
+    expect(quote).toHaveClass("thought-copy-clamped");
+    doubleTap(quote!);
 
     await waitFor(() =>
       expect(actions.setReaction).toHaveBeenCalledWith({
@@ -183,6 +248,7 @@ describe("MomentCard long thought copy", () => {
         reactionId: "held-close",
       }),
     );
+    expect(quote).toHaveClass("thought-copy-clamped");
     vi.mocked(thoughtCopyOverflows).mockReset();
   });
 });
