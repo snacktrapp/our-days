@@ -124,6 +124,12 @@ function extraCircleAccess(
   };
 }
 
+export async function readLocalJournalSessionEmail() {
+  const cookieStore = await cookies();
+  const payload = parseSession(cookieStore.get(cookieName)?.value);
+  return payload?.email ?? null;
+}
+
 export async function readLocalJournalMemberships(): Promise<
   | readonly {
       id: string;

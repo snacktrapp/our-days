@@ -79,6 +79,7 @@ export type ConnectedMomentActions = Readonly<{
   setAudience?: SetMomentAudienceAction;
   removePhoto?: RemoveMomentPhotoAction;
   reorderPhotos?: ReorderMomentPhotosAction;
+  shareInsight?: import("@/features/insights/insight-share").ShareInsightAction;
 }>;
 
 export type MomentConversationActions = Readonly<{

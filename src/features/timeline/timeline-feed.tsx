@@ -152,6 +152,7 @@ function TimelineEntry({
             conversationActions={conversationActions}
             connectedPosition={connectedPosition}
             connectedTotal={connectedTotal}
+            postableCircles={circles}
           />
           <time className="sr-only" dateTime={entry.moment.occurredOn}>
             {entry.moment.displayDate}

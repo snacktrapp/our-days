@@ -6,7 +6,10 @@ import type {
   MomentActionResult,
 } from "@/features/moments/moment-action-types";
 
-export type OptimisticMomentMode = EditableMomentKind | "bible-verse";
+export type OptimisticMomentMode =
+  | EditableMomentKind
+  | "bible-verse"
+  | "daily-prayer";
 
 export type OptimisticMomentSave = Readonly<{
   id: string;

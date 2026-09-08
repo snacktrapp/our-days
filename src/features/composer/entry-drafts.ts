@@ -9,6 +9,7 @@ export const entryDraftKinds = [
   "photo",
   "video",
   "bible-verse",
+  "daily-prayer",
   "milestone",
   "location",
 ] as const;
@@ -84,6 +85,7 @@ const kindLabels: Readonly<Record<EntryDraftKind, string>> = {
   photo: "Photo",
   video: "Video",
   "bible-verse": "Bible verse",
+  "daily-prayer": "Daily prayer",
   milestone: "Milestone",
   location: "Location",
 };

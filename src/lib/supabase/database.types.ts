@@ -850,6 +850,15 @@ export type Database = {
         Args: { request_id: string };
         Returns: string;
       };
+      find_daily_prayer_moment: {
+        Args: { occurred_on: string };
+        Returns: {
+          body: string;
+          moment_id: string;
+          occurred_on: string;
+          revision: number;
+        }[];
+      };
       get_entry_draft: {
         Args: { draft_id: string };
         Returns: {
@@ -1046,6 +1055,13 @@ export type Database = {
           kind: string;
           preview_text: string;
           updated_at: string;
+        }[];
+      };
+      list_just_me_catalog_preferences: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          enabled: boolean;
+          item_id: string;
         }[];
       };
       list_timeline_moments: {
@@ -1330,6 +1346,10 @@ export type Database = {
       save_web_push_subscription: {
         Args: { auth: string; endpoint: string; p256dh: string };
         Returns: string;
+      };
+      set_just_me_catalog_preference: {
+        Args: { enabled: boolean; item_id: string };
+        Returns: boolean;
       };
       set_moment_audience: {
         Args: {

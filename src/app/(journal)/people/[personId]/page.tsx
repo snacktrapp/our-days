@@ -7,6 +7,7 @@ import { previewGroupOptions } from "@/data/preview-groups.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import { loadConnectedTimeline } from "@/data/moments.server";
+import { shareInsightMomentAction } from "@/features/insights/insight-share-actions";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -75,6 +76,7 @@ export default async function PersonJournalPage({
           setAudience: setMomentAudienceAction,
           removePhoto: removeMomentPhotoAction,
           reorderPhotos: reorderMomentPhotosAction,
+          shareInsight: shareInsightMomentAction,
         }}
         conversationActions={{
           load: loadMomentConversationAction,

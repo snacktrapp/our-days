@@ -67,7 +67,7 @@ select ok(
     null,
     '2026-08-28'
   ) is not null,
-  'Operations can create a circle Insight'
+  'Operations can ingest an Insight source item'
 );
 
 select ok(
@@ -89,12 +89,11 @@ select lives_ok(
 );
 
 select is(
-  (select moment_kind || '|' || coalesce(journal_person_name, '')
-     from public.list_timeline_moments('20000000-0000-4000-8000-000000000001')
-    where moment_title = 'Our Days Operations'
-    limit 1),
-  'insight|',
-  'Operations Insights stay byline-less on the family timeline'
+  (select count(*)::bigint from public.list_timeline_moments(
+    '20000000-0000-4000-8000-000000000001'
+  ) where moment_title = 'Our Days Operations'),
+  0::bigint,
+  'Operations Insights no longer land on the family timeline'
 );
 
 set local role authenticated;

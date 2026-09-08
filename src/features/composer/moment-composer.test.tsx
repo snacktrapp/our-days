@@ -53,6 +53,12 @@ vi.mock("./video-upload", async (importOriginal) => ({
 vi.mock("@/features/video/inspect-video-file", () => ({
   inspectVideoFile: videoInspect.inspect,
 }));
+vi.mock("@/features/daily-prayer/daily-prayer-actions", () => ({
+  findTodaysDailyPrayerAction: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/features/moments/moment-actions", () => ({
+  updateFamilyMomentAction: vi.fn(),
+}));
 
 const people = [
   {
@@ -1598,6 +1604,36 @@ describe("MomentComposer", () => {
     expect(screen.queryByRole("button", { name: /Insight/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
     expect(screen.getByRole("button", { name: /Bible verse/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Daily prayer/ })).toBeNull();
+  });
+
+  it("offers Daily prayer only when the catalog add-on is unlocked", async () => {
+    const user = userEvent.setup();
+    const triggerRef = { current: null as HTMLButtonElement | null };
+    function PrayerHarness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button
+            ref={(node) => {
+              triggerRef.current = node;
+            }}
+            onClick={() => setOpen(true)}
+          >
+            Open composer
+          </button>
+          <MomentComposer
+            model={{ ...model, dailyPrayerEnabled: true }}
+            open={open}
+            returnFocusRef={triggerRef}
+            onRequestClose={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+    render(<PrayerHarness />);
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    expect(screen.getByRole("button", { name: /Daily prayer/ })).toBeVisible();
   });
 
   it("previews WEB text as soon as a starting verse is chosen and updates when the ending verse changes", async () => {

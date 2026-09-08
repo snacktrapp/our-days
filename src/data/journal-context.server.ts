@@ -19,6 +19,11 @@ import {
   journalContextLabel,
   journalDirectoryRoleLabel,
 } from "@/lib/circle-roles";
+import { dailyPrayerCatalogItemId } from "@/features/just-me-catalog/catalog-items";
+import {
+  dailyPrayerIsAllowedForEmail,
+  sessionEmailFromClaims,
+} from "@/features/just-me-catalog/daily-prayer-access";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import {
   activityMomentHref,
@@ -312,6 +317,8 @@ export async function loadConnectedJournalContext(
     familyMomentsResult,
     notesResult,
     reactionsResult,
+    claimsResult,
+    catalogResult,
   ] = await Promise.all([
     supabase
       .from("circles")
@@ -358,6 +365,8 @@ export async function loadConnectedJournalContext(
       .is("removed_at", null)
       .order("created_at", { ascending: false })
       .limit(40),
+    supabase.auth.getClaims(),
+    supabase.rpc("list_just_me_catalog_preferences"),
   ]);
 
   const error =
@@ -500,6 +509,13 @@ export async function loadConnectedJournalContext(
       [access.circleId]: surface.taggablePeople,
     },
     postableCircles,
+    dailyPrayerEnabled:
+      dailyPrayerIsAllowedForEmail(
+        sessionEmailFromClaims(claimsResult.data?.claims),
+      ) &&
+      (catalogResult.data ?? []).some(
+        (row) => row.item_id === dailyPrayerCatalogItemId && row.enabled,
+      ),
   };
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,

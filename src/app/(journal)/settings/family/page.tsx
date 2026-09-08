@@ -24,6 +24,11 @@ import {
 } from "@/features/family-settings/family-settings-actions";
 import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-environment";
 import { AccountTools } from "@/features/family-settings/account-tools";
+import { JustMeCatalog } from "@/features/just-me-catalog/just-me-catalog";
+import {
+  loadJustMeCatalogModel,
+  previewJustMeCatalogModel,
+} from "@/features/just-me-catalog/catalog.server";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 import { createGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
@@ -60,6 +65,7 @@ export default async function FamilySettingsPage({
           inviteCircleId={inviteGroup?.id}
           inviteCircleName={inviteGroup?.name}
         >
+          <JustMeCatalog model={previewJustMeCatalogModel()} />
           <AccountTools />
         </FamilySettingsPanel>
       </JournalChrome>
@@ -80,10 +86,12 @@ export default async function FamilySettingsPage({
   let familyAccess;
   let directory;
   let viewerMemberships;
+  let catalog;
   try {
-    [directory, viewerMemberships] = await Promise.all([
+    [directory, viewerMemberships, catalog] = await Promise.all([
       loadConnectedFamilyDirectory(access, groupIds),
       readJournalCircleMemberships(),
+      loadJustMeCatalogModel(),
     ]);
     familyAccess =
       directory.get(access.circleId) ??
@@ -100,6 +108,7 @@ export default async function FamilySettingsPage({
         createMomentAction={createFamilyMomentAction}
       >
         <AccountPanelInterrupted>
+          <JustMeCatalog model={await loadJustMeCatalogModel()} />
           <AccountTools />
         </AccountPanelInterrupted>
       </JournalChrome>
@@ -140,6 +149,7 @@ export default async function FamilySettingsPage({
           withdrawInvitation: withdrawFamilyInvitationEmailRequestAction,
         }}
       >
+        <JustMeCatalog model={catalog} />
         <AccountTools />
       </FamilySettingsPanel>
     </JournalChrome>

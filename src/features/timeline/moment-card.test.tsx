@@ -5,6 +5,10 @@ import {
   formatBibleVerseMoment,
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
+import {
+  dailyPrayerVerseForDate,
+  formatDailyPrayerMoment,
+} from "@/features/daily-prayer/daily-prayer";
 import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import { MomentCard } from "./moment-card";
 import { timelineCardOccurredLabel } from "./timeline-view-model";
@@ -717,6 +721,34 @@ describe("MomentCard date line", () => {
   });
 });
 
+describe("MomentCard daily prayer", () => {
+  it("collapses to scripture and expands the answers", async () => {
+    const user = userEvent.setup();
+    const verse = dailyPrayerVerseForDate("2026-09-08");
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "prayer-moment",
+          text: formatDailyPrayerMoment(verse, {
+            thanks: ["sunrise", "", ""],
+            showUp: "Listen first.",
+            prayers: ["peace", "", ""],
+            affirm: "Beloved.",
+          }),
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Daily prayer")).toBeVisible();
+    expect(screen.getByText(verse.reference, { exact: false })).toBeVisible();
+    expect(screen.queryByText("Listen first.")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /NLT/u }));
+    expect(screen.getByText("Listen first.")).toBeVisible();
+    expect(screen.getByText("sunrise")).toBeVisible();
+  });
+});
+
 describe("MomentCard insight treatment", () => {
   it("renders quote, attribution, and source without a person byline", () => {
     const { container } = render(<MomentCard moment={insight} />);
@@ -732,5 +764,43 @@ describe("MomentCard insight treatment", () => {
     );
     expect(container.querySelector(".avatar-node")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Share to…" })).toBeNull();
+  });
+
+  it("offers Share to on a Just me Insight", async () => {
+    const user = userEvent.setup();
+    const shareInsight = vi.fn().mockResolvedValue({
+      ok: true,
+      message: "Shared to your group.",
+    });
+    render(
+      <MomentCard
+        moment={{
+          ...insight,
+          audience: "just_me",
+          journalPersonId: "person-1",
+        }}
+        postableCircles={[
+          {
+            id: "20000000-0000-4000-8000-000000000001",
+            name: "Cedar",
+            personId: "person-1",
+          },
+        ]}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          shareInsight,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Share to…" }));
+    expect(screen.getByText("Cedar")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    expect(shareInsight).toHaveBeenCalledWith({
+      momentId: insight.id,
+      circleIds: ["20000000-0000-4000-8000-000000000001"],
+    });
   });
 });

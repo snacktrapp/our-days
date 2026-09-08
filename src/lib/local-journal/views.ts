@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
+import { dailyPrayerCatalogItemId } from "@/features/just-me-catalog/catalog-items";
+import { dailyPrayerIsAllowedForEmail } from "@/features/just-me-catalog/daily-prayer-access";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import {
   buildJournalSwitcher,
@@ -254,6 +256,24 @@ function localPostableCircles(
   ];
 }
 
+function localDailyPrayerEnabled(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const email = document.accounts.find(
+    (account) => account.personId === access.personId,
+  )?.email;
+  return (
+    dailyPrayerIsAllowedForEmail(email) &&
+    (document.catalogPreferences ?? []).some(
+      (row) =>
+        row.email === email &&
+        row.itemId === dailyPrayerCatalogItemId &&
+        row.enabled,
+    )
+  );
+}
+
 function localHomePersonOptions(
   document: LocalJournalDocument,
   viewerPersonId: string,
@@ -356,6 +376,7 @@ export async function loadLocalJournalContext(
       taggablePeople: surface.taggablePeople,
       taggablePeopleByCircle: localTaggablePeopleByCircle(document, access),
       postableCircles: localPostableCircles(document, access),
+      dailyPrayerEnabled: localDailyPrayerEnabled(document, access),
     };
     return {
       circleName: extra.name,
@@ -414,6 +435,7 @@ export async function loadLocalJournalContext(
     taggablePeople: surface.taggablePeople,
     taggablePeopleByCircle: localTaggablePeopleByCircle(document, access),
     postableCircles: localPostableCircles(document, access),
+    dailyPrayerEnabled: localDailyPrayerEnabled(document, access),
   };
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,

@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(14);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -24,39 +24,48 @@ select ok(
     '  https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120  ',
     '2026-08-28'
   ) is not null,
-  'an organizer can create a circle Insight'
+  'an organizer can ingest an Insight source item'
 );
 
 select is(
-  (select kind || '|' || title || '|' || body || '|' || coalesce(source_url, '')
-     || '|' || coalesce(journal_person_id::text, '')
-   from public.moments
-   where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
-   order by created_at desc
-   limit 1),
-  'insight|Huberman Lab — Circadian Toolkit|Morning sunlight is the most powerful stimulus for setting your circadian rhythm.|https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120|',
-  'Insight payload is normalized and has no journal person'
+  (select count(*)::bigint from public.moments
+    where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'),
+  0::bigint,
+  'Insight ingest no longer posts a group no-byline moment'
 );
 
 select is(
-  (select moment_kind || '|' || moment_title || '|' || coalesce(source_url, '')
-     || '|' || coalesce(moment_journal_person_id::text, '')
-     || '|' || coalesce(journal_person_name, '')
-   from public.list_timeline_moments('20000000-0000-4000-8000-000000000001')
-   where moment_kind = 'insight'
-     and moment_title = 'Huberman Lab — Circadian Toolkit'
-   limit 1),
-  'insight|Huberman Lab — Circadian Toolkit|https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120||',
-  'the family timeline returns Insights without a person byline'
+  (select count(*)::bigint from public.list_timeline_moments(
+    '20000000-0000-4000-8000-000000000001'
+  ) where moment_kind = 'insight'
+    and moment_title = 'Huberman Lab — Circadian Toolkit'),
+  0::bigint,
+  'new Insights do not appear on the family timeline'
+);
+
+select ok(
+  public.set_just_me_catalog_preference('insights.huberman_faith', true),
+  'an organizer can subscribe to the Huberman faith source'
 );
 
 select is(
   (select count(*)::bigint from public.list_timeline_moments(
     '20000000-0000-4000-8000-000000000001',
     '30000000-0000-4000-8000-000000000001'
-  ) where moment_kind = 'insight'),
-  0::bigint,
-  'Insights never appear on a personal journal'
+  ) where moment_kind = 'insight'
+    and moment_title = 'Huberman Lab — Circadian Toolkit'),
+  1::bigint,
+  'a subscribed Insight lands on the subscriber Just me journal'
+);
+
+select is(
+  (select audience || '|' || journal_person_id::text
+     from public.moments
+    where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
+    order by created_at desc
+    limit 1),
+  'just_me|30000000-0000-4000-8000-000000000001',
+  'delivered Insights are Just me personal journal rows'
 );
 
 select throws_ok(
@@ -106,7 +115,7 @@ select throws_ok(
     1, true
   )$$,
   '42501', 'Moment could not be changed',
-  'an ordinary member cannot trash an Insight'
+  'an ordinary member cannot trash someone else Just me Insight'
 );
 
 set local role authenticated;
@@ -126,47 +135,6 @@ select throws_ok(
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
-
-select id as insight_moment_id
-  from public.moments
- where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
- order by created_at desc
- limit 1 \gset
-
-select lives_ok(
-  format(
-    'select public.set_written_moment_trashed(%L, 1, true)',
-    :'insight_moment_id'
-  ),
-  'an organizer can trash an Insight'
-);
-
-select is(
-  (select count(*)::bigint from public.list_timeline_moments(
-    '20000000-0000-4000-8000-000000000001'
-  ) where moment_kind = 'insight'
-    and moment_title = 'Huberman Lab — Circadian Toolkit'),
-  0::bigint,
-  'a trashed Insight leaves the family timeline'
-);
-
-select ok(
-  exists (
-    select 1 from public.list_manageable_trashed_written_moments(
-      '20000000-0000-4000-8000-000000000001'
-    ) where moment_kind = 'insight'
-      and moment_title = 'Huberman Lab — Circadian Toolkit'
-  ),
-  'organizers can see trashed Insights'
-);
-
-select lives_ok(
-  format(
-    'select public.set_written_moment_trashed(%L, 2, false)',
-    :'insight_moment_id'
-  ),
-  'an organizer can restore an Insight'
-);
 
 select throws_ok(
   $$select public.create_insight_moment(
@@ -188,7 +156,7 @@ select ok(
     null,
     '2026-08-27'
   ) is not null,
-  'an Insight may omit a source URL'
+  'an Insight source item may omit a source URL'
 );
 
 select * from finish();

@@ -5,6 +5,7 @@ import type {
 } from "@/features/moments/moment-action-types";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import type { TimelineMomentViewModel } from "@/features/timeline/timeline-view-model";
+import { parseDailyPrayerMoment } from "@/features/daily-prayer/daily-prayer";
 import {
   emptyBibleVerseSelection,
   parseBibleVerseMoment,
@@ -44,13 +45,17 @@ export function buildComposerEditDraft(
   }>,
 ): ComposerEditDraft | null {
   if (!moment.revision || moment.kind === "insight") return null;
+  const prayer =
+    moment.kind === "thought" ? parseDailyPrayerMoment(moment.text) : null;
   const parsed =
-    moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
+    !prayer && moment.kind === "thought"
+      ? parseBibleVerseMoment(moment.text)
+      : null;
   const place = placeFromMoment(moment);
   return {
     momentId: moment.id,
     revision: moment.revision,
-    mode: parsed ? "bible-verse" : moment.kind,
+    mode: prayer ? "daily-prayer" : parsed ? "bible-verse" : moment.kind,
     journalPersonId: moment.journalPersonId,
     occurredOn: moment.occurredOn,
     maxOccurredOn: moment.maxOccurredOn ?? moment.occurredOn,
@@ -63,13 +68,15 @@ export function buildComposerEditDraft(
     taggedPersonIds: moment.taggedPeople?.map((person) => person.id) ?? [],
     place,
     verseSelection: parsed?.selection ?? emptyBibleVerseSelection,
-    title: parsed
-      ? parsed.reference
-      : moment.kind === "milestone"
-        ? moment.milestone
-        : moment.kind === "location"
-          ? place.label
-          : "",
+    title: prayer
+      ? prayer.reference
+      : parsed
+        ? parsed.reference
+        : moment.kind === "milestone"
+          ? moment.milestone
+          : moment.kind === "location"
+            ? place.label
+            : "",
     body: parsed ? parsed.text : moment.text,
     existingMedia:
       moment.kind === "photo"

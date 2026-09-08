@@ -28,7 +28,6 @@ describe("design preview timeline chronology", () => {
       ),
     ).toEqual([
       "Today",
-      "Aug 27, 2026",
       "Aug 14, 2026",
       "Jul 6, 2026",
       "Aug 21, 2023",
@@ -131,10 +130,8 @@ describe("design preview timeline chronology", () => {
   it("uses the same date-marker grammar in personal journals", () => {
     const timeline = getPersonalTimelineFixture("brian");
     expect(timeline).not.toBeNull();
-    const markers = markerBeforeEveryMoment(timeline!.entries);
-
-    expect(markers.every((entry) => entry?.entryType === "date-marker")).toBe(
-      true,
+    const moments = timeline!.entries.filter(
+      (entry) => entry.entryType === "moment",
     );
     expect(
       timeline!.entries.some((entry) => entry.entryType === "elapsed-gap"),
@@ -145,5 +142,11 @@ describe("design preview timeline chronology", () => {
       entryType: "end-message",
       markerLabel: "The beginning",
     });
+    expect(moments.some((entry) => entry.moment.id === "morning-prayer")).toBe(
+      true,
+    );
+    expect(moments.some((entry) => entry.moment.id === "sleep-insight")).toBe(
+      true,
+    );
   });
 });

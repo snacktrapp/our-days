@@ -55,6 +55,15 @@ import {
   type BibleVerseSelection,
 } from "./bible-verse-catalog";
 import { BibleVerseFields } from "./bible-verse-fields";
+import { DailyPrayerFields } from "@/features/daily-prayer/daily-prayer-fields";
+import {
+  dailyPrayerHasAnswers,
+  dailyPrayerVerseForDate,
+  emptyDailyPrayerAnswers,
+  formatDailyPrayerMoment,
+  parseDailyPrayerMoment,
+  type DailyPrayerAnswers,
+} from "@/features/daily-prayer/daily-prayer";
 import {
   startOptimisticPhotoUpload,
   startOptimisticVideoUpload,
@@ -89,7 +98,39 @@ import {
 } from "./entry-drafts";
 import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
-type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
+type ComposerMode =
+  Exclude<MomentKind, "insight"> | "bible-verse" | "daily-prayer";
+
+function composerWrittenPayload(
+  mode: ComposerMode,
+  title: string,
+  body: string,
+  answers: DailyPrayerAnswers,
+  occurredOn: string,
+) {
+  if (mode === "bible-verse") {
+    return {
+      kind: "thought" as const,
+      title: "",
+      body: formatBibleVerseMoment(title, body),
+    };
+  }
+  if (mode === "daily-prayer") {
+    return {
+      kind: "thought" as const,
+      title: "",
+      body: formatDailyPrayerMoment(
+        dailyPrayerVerseForDate(occurredOn),
+        answers,
+      ),
+    };
+  }
+  return {
+    kind: mode,
+    title,
+    body,
+  };
+}
 
 function defaultsCreateOccurredTime(mode: ComposerMode | null) {
   return mode === "photo" || mode === "video" || mode === "thought";
@@ -226,6 +267,13 @@ const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
     bodyPlaceholder: "Choose a passage to fill this entry…",
     bodyRequired: true,
   },
+  "daily-prayer": {
+    kindLabel: "Daily prayer",
+    title: "Daily prayer",
+    bodyLabel: "Prayer",
+    bodyPlaceholder: "Write this morning’s prayer…",
+    bodyRequired: true,
+  },
   location: {
     kindLabel: "Location",
     title: "New location entry",
@@ -357,6 +405,27 @@ export function MomentComposer({
   const [title, setTitle] = useState(editDraft?.title ?? "");
   const [verseSelection, setVerseSelection] = useState<BibleVerseSelection>(
     editDraft?.verseSelection ?? emptyBibleVerseSelection,
+  );
+  const initialPrayer = editDraft
+    ? parseDailyPrayerMoment(editDraft.body)
+    : null;
+  const [prayerAnswers, setPrayerAnswers] = useState<DailyPrayerAnswers>(
+    initialPrayer
+      ? {
+          thanks: initialPrayer.thanks,
+          showUp: initialPrayer.showUp,
+          prayers: initialPrayer.prayers,
+          affirm: initialPrayer.affirm,
+        }
+      : emptyDailyPrayerAnswers,
+  );
+  const [prayerEdit, setPrayerEdit] = useState<{
+    momentId: string;
+    revision: number;
+  } | null>(
+    editDraft?.mode === "daily-prayer"
+      ? { momentId: editDraft.momentId, revision: editDraft.revision }
+      : null,
   );
   const [occurredOn, setOccurredOn] = useState(
     editDraft?.occurredOn ?? model.previewToday,
@@ -578,8 +647,16 @@ export function MomentComposer({
       setOccurredTime(nextDefault);
       setJournalPersonId(model.recorderPersonId);
       setTaggedPersonIds([]);
-      setAudience(nextPostTo.audience);
-      setSelectedCircleIds(nextPostTo.circleIds);
+      setPrayerAnswers(emptyDailyPrayerAnswers);
+      setPrayerEdit(null);
+      if (nextMode === "daily-prayer") {
+        setAudience("just_me");
+        setSelectedCircleIds([]);
+        setTitle(dailyPrayerVerseForDate(model.previewToday).reference);
+      } else {
+        setAudience(nextPostTo.audience);
+        setSelectedCircleIds(nextPostTo.circleIds);
+      }
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
       setPhotoItems([]);
@@ -916,6 +993,27 @@ export function MomentComposer({
     }
   };
 
+  const hydrateTodaysPrayer = async (date: string) => {
+    const { findTodaysDailyPrayerAction } =
+      await import("@/features/daily-prayer/daily-prayer-actions");
+    const existing = await findTodaysDailyPrayerAction(date);
+    if (!existing) return;
+    const parsed = parseDailyPrayerMoment(existing.body);
+    if (!parsed) return;
+    setPrayerEdit({
+      momentId: existing.momentId,
+      revision: existing.revision,
+    });
+    setPrayerAnswers({
+      thanks: parsed.thanks,
+      showUp: parsed.showUp,
+      prayers: parsed.prayers,
+      affirm: parsed.affirm,
+    });
+    setTitle(parsed.reference);
+    setOccurredOn(existing.occurredOn);
+  };
+
   const chooseMode = (nextMode: ComposerMode) => {
     if (mode === nextMode) {
       setChoosingMode(false);
@@ -929,6 +1027,9 @@ export function MomentComposer({
       return;
     }
     resetDraft(nextMode);
+    if (nextMode === "daily-prayer") {
+      void hydrateTodaysPrayer(model.previewToday);
+    }
   };
 
   const toggleTaggedPerson = (personId: string) => {
@@ -1033,6 +1134,10 @@ export function MomentComposer({
       verseBookTriggerRef.current?.focus();
       return false;
     }
+    if (mode === "daily-prayer" && !dailyPrayerHasAnswers(prayerAnswers)) {
+      setContentError("Write this morning’s prayer before saving.");
+      return false;
+    }
     setContentError(null);
     setSaveError(null);
     return true;
@@ -1079,8 +1184,17 @@ export function MomentComposer({
       const result = await draftsApi.save({
         id,
         kind: mode,
-        title: title.trim().slice(0, 120),
-        body: body.trim().slice(0, 4000),
+        title:
+          mode === "daily-prayer"
+            ? dailyPrayerVerseForDate(occurredOn).reference.slice(0, 120)
+            : title.trim().slice(0, 120),
+        body:
+          mode === "daily-prayer"
+            ? formatDailyPrayerMoment(
+                dailyPrayerVerseForDate(occurredOn),
+                prayerAnswers,
+              )
+            : body.trim().slice(0, 4000),
         audience,
         circleIds: saveCircleIds,
         journalPersonId,
@@ -1140,6 +1254,18 @@ export function MomentComposer({
     setTitle(record.title);
     setBody(record.body);
     setVerseSelection(record.verse);
+    const restoredPrayer = parseDailyPrayerMoment(record.body);
+    setPrayerAnswers(
+      restoredPrayer
+        ? {
+            thanks: restoredPrayer.thanks,
+            showUp: restoredPrayer.showUp,
+            prayers: restoredPrayer.prayers,
+            affirm: restoredPrayer.affirm,
+          }
+        : emptyDailyPrayerAnswers,
+    );
+    setPrayerEdit(null);
     setOccurredOn(record.occurredOn ?? model.previewToday);
     setOccurredTime(record.occurredTime ?? "");
     setCleanOccurredTime(
@@ -1209,21 +1335,29 @@ export function MomentComposer({
     setSaveError(null);
     setPhotoRetryable(true);
 
-    if (editDraft) {
+    if (editDraft || (prayerEdit && mode === "daily-prayer")) {
       const savedMode = mode;
-      const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
+      const written = composerWrittenPayload(
+        savedMode,
+        title.trim(),
+        capturedBody,
+        prayerAnswers,
+        savedOccurredOn,
+      );
+      const savedKind = written.kind;
       const savedTitle = title.trim();
-      const savedBody =
-        savedMode === "bible-verse"
-          ? formatBibleVerseMoment(savedTitle, capturedBody)
-          : capturedBody;
+      const savedBody = written.body;
       const savedResolvedPlaceName =
         savedMode === "location" ? savedTitle : savedPlaceName.trim();
       setSavingEdit(true);
       try {
-        const result = await editDraft.save({
-          momentId: editDraft.momentId,
-          revision: editDraft.revision,
+        const saveEdit =
+          editDraft?.save ??
+          (await import("@/features/moments/moment-actions"))
+            .updateFamilyMomentAction;
+        const result = await saveEdit({
+          momentId: editDraft?.momentId ?? prayerEdit!.momentId,
+          revision: editDraft?.revision ?? prayerEdit!.revision,
           title: savedKind === "milestone" ? savedTitle : "",
           body: savedBody,
           placeName: savedResolvedPlaceName,
@@ -1241,6 +1375,7 @@ export function MomentComposer({
           return;
         }
         if (
+          editDraft &&
           savedMode === "photo" &&
           editDraft.existingMedia?.kind === "photo"
         ) {
@@ -1398,12 +1533,19 @@ export function MomentComposer({
     }
 
     const savedMode = mode;
-    const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
+    const written = composerWrittenPayload(
+      savedMode,
+      title.trim(),
+      capturedBody,
+      prayerAnswers,
+      savedOccurredOn,
+    );
+    const savedKind = written.kind;
+    if (savedKind === "photo" || savedKind === "video") {
+      return;
+    }
     const savedTitle = title.trim();
-    const savedBody =
-      savedMode === "bible-verse"
-        ? formatBibleVerseMoment(savedTitle, capturedBody)
-        : capturedBody;
+    const savedBody = written.body;
     const savedResolvedPlaceName =
       savedMode === "location" ? savedTitle : savedPlaceName.trim();
     const postedDraftId = savedDraftId;
@@ -1419,7 +1561,10 @@ export function MomentComposer({
       circleId: savePrimaryCircleId ?? model.circleId ?? null,
       mode: savedMode,
       title: savedTitle,
-      body: capturedBody,
+      body:
+        savedMode === "daily-prayer"
+          ? dailyPrayerVerseForDate(savedOccurredOn).text
+          : capturedBody,
       placeName: savedResolvedPlaceName,
       taggedPeopleLabel: taggedPeople.map((person) => person.name).join(", "),
       occurredOn: savedOccurredOn,
@@ -1621,6 +1766,18 @@ export function MomentComposer({
                     </span>
                     <strong>Bible verse</strong>
                     <small>Choose a passage</small>
+                  </button>
+                ) : null}
+                {model.dailyPrayerEnabled ? (
+                  <button onClick={() => chooseMode("daily-prayer")}>
+                    <span
+                      className="choice-icon prayer-choice"
+                      aria-hidden="true"
+                    >
+                      ✝
+                    </span>
+                    <strong>Daily prayer</strong>
+                    <small>Morning thanks, prayers, and scripture</small>
                   </button>
                 ) : null}
                 <button
@@ -2059,6 +2216,17 @@ export function MomentComposer({
                 </div>
               ) : null}
 
+              {mode === "daily-prayer" ? (
+                <DailyPrayerFields
+                  verse={dailyPrayerVerseForDate(occurredOn)}
+                  answers={prayerAnswers}
+                  onChange={(next) => {
+                    setPrayerAnswers(next);
+                    if (dailyPrayerHasAnswers(next)) setContentError(null);
+                  }}
+                />
+              ) : null}
+
               {mode === "bible-verse" ? (
                 <BibleVerseFields
                   value={verseSelection}
@@ -2112,7 +2280,7 @@ export function MomentComposer({
                 </label>
               ) : null}
 
-              {mode === "bible-verse" ? null : (
+              {mode === "bible-verse" || mode === "daily-prayer" ? null : (
                 <label className="composer-field">
                   <span>{copy.bodyLabel}</span>
                   <textarea
