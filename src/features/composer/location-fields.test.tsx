@@ -28,9 +28,10 @@ describe("location fields", () => {
     expect(screen.getByLabelText("Place name")).toBeVisible();
     expect(screen.getByLabelText("Place name")).toHaveAttribute(
       "placeholder",
-      "Search for a place",
+      "Search or locate",
     );
-    expect(screen.getByText("Search for a place")).toBeVisible();
+    expect(screen.getByText("Add a place")).toBeVisible();
+    expect(screen.getByText("Optional")).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
 
     expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
@@ -93,7 +94,7 @@ describe("location fields", () => {
       />,
     );
 
-    expect(screen.getByText("Search for a place")).toBeVisible();
+    expect(screen.getByText("Add a place")).toBeVisible();
     expect(screen.queryByText("Map unavailable")).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "Sand");

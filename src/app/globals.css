@@ -7438,8 +7438,8 @@ html[data-theme].overlay-open .app-shell::before,
   padding: 0 16px;
   border: 0;
   border-radius: 12px;
-  color: #fffaf0;
-  background: rgba(8, 10, 9, 0.62);
+  color: #161410;
+  background: rgba(255, 250, 240, 0.88);
   font: inherit;
   font-size: 16px;
   font-weight: 650;
