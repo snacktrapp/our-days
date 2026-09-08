@@ -139,6 +139,16 @@ export function LocationFields({
     setLocationMessage(null);
   };
 
+  const clearPlace = () => {
+    skipSearchLabelRef.current = null;
+    searchRequestRef.current += 1;
+    onChange(emptyPlaceSelection());
+    setSearch("");
+    setSuggestions([]);
+    setSearching(false);
+    inputRef.current?.focus();
+  };
+
   const useMyLocation = () => {
     if (!canGeolocate) return;
     setLocationMessage(null);
@@ -161,29 +171,41 @@ export function LocationFields({
             Search for a place
             {optional ? <small> Optional</small> : null}
           </span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={search}
-            maxLength={160}
-            autoFocus={required}
-            aria-required={required || undefined}
-            aria-invalid={invalid ? true : undefined}
-            aria-label="Place name"
-            placeholder="Search for a place"
-            onChange={(event) => {
-              const nextLabel = event.target.value;
-              setSearch(nextLabel);
-              setSuggestions([]);
-              setSearching(false);
-              setLocationMessage(null);
-              onChange({
-                ...value,
-                label: nextLabel,
-                ...(nextLabel.trim() ? {} : emptyPlaceSelection()),
-              });
-            }}
-          />
+          <span className="composer-location-input">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              maxLength={160}
+              autoFocus={required}
+              aria-required={required || undefined}
+              aria-invalid={invalid ? true : undefined}
+              aria-label="Place name"
+              placeholder="Search for a place"
+              onChange={(event) => {
+                const nextLabel = event.target.value;
+                setSearch(nextLabel);
+                setSuggestions([]);
+                setSearching(false);
+                setLocationMessage(null);
+                onChange({
+                  ...value,
+                  label: nextLabel,
+                  ...(nextLabel.trim() ? {} : emptyPlaceSelection()),
+                });
+              }}
+            />
+            {search.trim() ? (
+              <button
+                type="button"
+                className="composer-location-clear"
+                aria-label="Clear place"
+                onClick={clearPlace}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+          </span>
         </label>
       </div>
       {canGeolocate ? (
@@ -220,23 +242,6 @@ export function LocationFields({
             </li>
           ))}
         </ul>
-      ) : null}
-
-      {value.label.trim() ? (
-        <button
-          type="button"
-          className="composer-picker-secondary"
-          onClick={() => {
-            skipSearchLabelRef.current = null;
-            searchRequestRef.current += 1;
-            onChange(emptyPlaceSelection());
-            setSearch("");
-            setSuggestions([]);
-            setSearching(false);
-          }}
-        >
-          Clear place
-        </button>
       ) : null}
     </div>
   );

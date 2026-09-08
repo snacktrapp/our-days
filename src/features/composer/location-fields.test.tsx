@@ -33,12 +33,39 @@ describe("location fields", () => {
     expect(screen.getByText("Search for a place")).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
 
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
+
     await user.type(screen.getByLabelText("Place name"), "The porch");
     expect(onChange).toHaveBeenLastCalledWith({
       label: "The porch",
       latitude: null,
       longitude: null,
     });
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
+    expect(document.querySelector(".composer-picker-secondary")).toBeNull();
+  });
+
+  it("clears typed text from the inline control and focuses the field", async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <LocationFields
+        optional
+        value={emptyPlaceSelection()}
+        onChange={onChange}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Place name"), "The porch");
+    await user.click(screen.getByRole("button", { name: "Clear place" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "",
+      latitude: null,
+      longitude: null,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("");
+    expect(screen.getByLabelText("Place name")).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
   });
 
   it("keeps a typed label after choosing a searched place", async () => {
@@ -104,6 +131,7 @@ describe("location fields", () => {
     expect(screen.queryByTitle("Map of Sand Harbor")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Sand Harbor/u })).toBeNull();
+    expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
   });
 
   it("clears suggestions immediately and does not search the chosen label again", async () => {
@@ -159,6 +187,15 @@ describe("location fields", () => {
     );
     expect(screen.queryByRole("button", { name: /Bass Lake/u })).toBeNull();
     expect(screen.getByRole("button", { name: "Clear place" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Clear place" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      label: "",
+      latitude: null,
+      longitude: null,
+    });
+    expect(screen.getByLabelText("Place name")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Clear place" })).toBeNull();
 
     await new Promise((resolve) => {
       window.setTimeout(resolve, 400);

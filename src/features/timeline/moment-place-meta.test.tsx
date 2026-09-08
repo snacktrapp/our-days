@@ -42,7 +42,7 @@ describe("timeline place meta", () => {
     expect(placeLink).toHaveTextContent("Sand Harbor");
     expect(placeLink).toHaveAttribute(
       "href",
-      "https://maps.apple.com/?ll=39.2,-119.93&q=Sand%20Harbor&z=14",
+      "https://maps.apple.com/?ll=39.2,-119.93&q=Sand%20Harbor&z=12",
     );
     expect(placeLink).toHaveAttribute("target", "_blank");
     expect(screen.queryByText("NV, United States")).toBeNull();
@@ -68,7 +68,7 @@ describe("timeline place meta", () => {
       screen.getByRole("link", { name: "Open Bass Lake in Maps" }),
     ).toHaveAttribute(
       "href",
-      "https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake&z=14",
+      "https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake&z=12",
     );
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByTitle("Map of Bass Lake")).toBeNull();

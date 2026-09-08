@@ -73,5 +73,5 @@ export function buildAppleMapsUrl(
     `${coordinates.latitude},${coordinates.longitude}`;
   const lat = coordinates.latitude;
   const lng = coordinates.longitude;
-  return `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(query)}&z=14`;
+  return `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(query)}&z=12`;
 }
