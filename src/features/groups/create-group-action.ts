@@ -29,9 +29,9 @@ async function hasExpectedOrigin() {
 }
 
 function createdGroupHref(circleId: string, name?: string) {
-  const params = new URLSearchParams({ circle: circleId });
+  const params = new URLSearchParams({ inviteCircle: circleId });
   if (name) params.set("name", name);
-  return `/family?${params.toString()}`;
+  return `/settings/family?${params.toString()}#invite`;
 }
 
 function readName(input: unknown) {
