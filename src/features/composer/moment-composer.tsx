@@ -75,6 +75,19 @@ import {
   emptyPlaceSelection,
   type PlaceSelection,
 } from "@/lib/place-coordinates";
+import { DraftsList } from "./drafts-list";
+import {
+  entryDraftMediaKey,
+  loadEntryDraftMedia,
+  removeEntryDraftMedia,
+  saveEntryDraftMedia,
+} from "./entry-draft-media";
+import {
+  isEntryDraftKind,
+  type EntryDraftActions,
+  type EntryDraftListItem,
+} from "./entry-drafts";
+import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
 type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
 
@@ -131,8 +144,10 @@ type MomentComposerProps = Readonly<{
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
   editDraft?: ComposerEditDraft | null;
+  draftActions?: EntryDraftActions;
   homeContext?: CreatePostToHomeContext;
   registerDismiss?: (dismiss: (() => void) | null) => void;
+  registerDraftsLoad?: (load: (() => void) | null) => void;
 }>;
 
 export type { SaveFamilyMomentAction, SaveWrittenMomentAction };
@@ -287,9 +302,16 @@ export function MomentComposer({
   saveFamilyMoment,
   saveWrittenMoment,
   editDraft = null,
+  draftActions,
   homeContext,
   registerDismiss,
+  registerDraftsLoad,
 }: MomentComposerProps) {
+  const previewDraftActions = useMemo(
+    () => createPreviewEntryDraftActions(),
+    [],
+  );
+  const draftsApi = draftActions ?? previewDraftActions;
   const router = useRouter();
   const pathname = usePathname();
   const [savingEdit, setSavingEdit] = useState(false);
@@ -377,6 +399,10 @@ export function MomentComposer({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [listingDrafts, setListingDrafts] = useState(false);
+  const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<readonly EntryDraftListItem[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [photoRetryable, setPhotoRetryable] = useState(true);
   const [photoUploadStage, setPhotoUploadStage] = useState<
     PhotoUploadStage | VideoUploadStage | null
@@ -563,6 +589,9 @@ export function MomentComposer({
       setPhotoError(null);
       setContentError(null);
       setSaveError(null);
+      setListingDrafts(false);
+      setSavedDraftId(null);
+      setSavingDraft(false);
       setPhotoRetryable(true);
       photoUploadAbortRef.current?.abort();
       photoUploadAbortRef.current = null;
@@ -634,6 +663,15 @@ export function MomentComposer({
       saving,
     ],
   );
+
+  const refreshDrafts = useCallback(() => {
+    return draftsApi.list().then(setDrafts);
+  }, [draftsApi]);
+
+  useEffect(() => {
+    registerDraftsLoad?.(refreshDrafts);
+    return () => registerDraftsLoad?.(null);
+  }, [refreshDrafts, registerDraftsLoad]);
 
   useEffect(() => {
     registerDismiss?.(close);
@@ -1000,6 +1038,138 @@ export function MomentComposer({
     return true;
   };
 
+  const clearPersistedDraft = useCallback(
+    async (id: string | null) => {
+      if (!id) return;
+      await draftsApi.remove(id);
+      await removeEntryDraftMedia(id);
+      await refreshDrafts();
+    },
+    [draftsApi, refreshDrafts],
+  );
+
+  const persistComposerDraft = async () => {
+    if (!mode || editDraft || saving || savingDraft) return;
+    const id = savedDraftId ?? crypto.randomUUID();
+    const mediaFiles =
+      mode === "video" && photoFile
+        ? [{ file: photoFile, kind: "video" as const }]
+        : photoItems.flatMap((item) =>
+            item.file ? [{ file: item.file, kind: "photo" as const }] : [],
+          );
+    const media = mediaFiles.map((item, index) => ({
+      key: entryDraftMediaKey(id, index),
+      kind: item.kind,
+      name: item.file.name,
+      mimeType: item.file.type || "application/octet-stream",
+      size: item.file.size,
+    }));
+    setSavingDraft(true);
+    setSaveError(null);
+    try {
+      await saveEntryDraftMedia(
+        mediaFiles.map((item, index) => ({
+          key: media[index]!.key,
+          draftId: id,
+          name: item.file.name,
+          mimeType: item.file.type || "application/octet-stream",
+          blob: item.file,
+        })),
+      );
+      const result = await draftsApi.save({
+        id,
+        kind: mode,
+        title: title.trim().slice(0, 120),
+        body: body.trim().slice(0, 4000),
+        audience,
+        circleIds: saveCircleIds,
+        journalPersonId,
+        taggedPersonIds: [...taggedPersonIds],
+        place,
+        occurredOn,
+        occurredTime: occurredTime || null,
+        occurredTimezone: occurredTime
+          ? Intl.DateTimeFormat().resolvedOptions().timeZone
+          : null,
+        media,
+        verse: verseSelection,
+      });
+      if (!result.ok) {
+        setSaveError(result.message);
+        return;
+      }
+      setSavedDraftId(result.id ?? id);
+      await refreshDrafts();
+      close(true);
+    } catch {
+      setSaveError("That draft could not be saved.");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const openPersistedDraft = async (id: string) => {
+    const record = await draftsApi.load(id);
+    if (!record || !isEntryDraftKind(record.kind)) return;
+    const blobs = await loadEntryDraftMedia(id);
+    revokeCurrentPhotoUrl();
+    const nextItems: ComposerPhotoItem[] = [];
+    let nextVideo: File | null = null;
+    let nextVideoUrl: string | null = null;
+    for (const ref of record.media) {
+      const stored = blobs.find((blob) => blob.key === ref.key);
+      if (!stored) continue;
+      const file = new File([stored.blob], ref.name, { type: ref.mimeType });
+      const previewUrl = URL.createObjectURL(file);
+      if (ref.kind === "video" || record.kind === "video") {
+        nextVideo = file;
+        nextVideoUrl = previewUrl;
+        continue;
+      }
+      nextItems.push({
+        key: ref.key,
+        file,
+        previewUrl,
+        decodeState: "ready",
+      });
+    }
+    setSavedDraftId(record.id);
+    setMode(record.kind);
+    setChoosingMode(false);
+    setListingDrafts(false);
+    setTitle(record.title);
+    setBody(record.body);
+    setVerseSelection(record.verse);
+    setOccurredOn(record.occurredOn ?? model.previewToday);
+    setOccurredTime(record.occurredTime ?? "");
+    setCleanOccurredTime(
+      record.occurredTime ?? defaultOccurredTimeForCreate(record.kind),
+    );
+    setJournalPersonId(record.journalPersonId ?? model.recorderPersonId);
+    setTaggedPersonIds(record.taggedPersonIds);
+    setAudience(record.audience);
+    setSelectedCircleIds(
+      record.audience === "just_me"
+        ? []
+        : record.circleIds.length
+          ? record.circleIds
+          : createDefault.circleIds,
+    );
+    setPlace(record.place);
+    setPhotoFile(nextVideo);
+    setPhotoPreviewUrl(nextVideoUrl ?? nextItems[0]?.previewUrl ?? null);
+    setPhotoItems(nextItems);
+    setPhotoDecodeState(nextVideo || nextItems.length ? "ready" : "empty");
+    setPhotoError(null);
+    setContentError(null);
+    setSaveError(null);
+  };
+
+  const deletePersistedDraft = async (id: string) => {
+    await clearPersistedDraft(id);
+    if (savedDraftId === id) setSavedDraftId(null);
+  };
+
   const saveConnectedMoment = async () => {
     if (
       saving ||
@@ -1212,8 +1382,10 @@ export function MomentComposer({
           },
         });
       }
+      const postedDraftId = savedDraftId;
       resetDraft();
       onRequestClose();
+      if (postedDraftId) void clearPersistedDraft(postedDraftId);
       window.requestAnimationFrame(() =>
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
@@ -1234,10 +1406,12 @@ export function MomentComposer({
         : capturedBody;
     const savedResolvedPlaceName =
       savedMode === "location" ? savedTitle : savedPlaceName.trim();
+    const postedDraftId = savedDraftId;
     flushSync(() => {
       resetDraft();
       onRequestClose();
     });
+    if (postedDraftId) void clearPersistedDraft(postedDraftId);
     window.requestAnimationFrame(() =>
       returnFocusRef.current?.focus({ preventScroll: true }),
     );
@@ -1299,7 +1473,9 @@ export function MomentComposer({
 
     // The disconnected design-preview route has no persistence layer. Closing
     // after validation mirrors the production one-step save interaction.
+    const postedDraftId = savedDraftId;
     close(true);
+    if (postedDraftId) void clearPersistedDraft(postedDraftId);
   };
 
   const stopPhotoUpload = () => {
@@ -1349,11 +1525,13 @@ export function MomentComposer({
 
   const sheetTitle = reviewing
     ? "Review entry"
-    : !mode || choosingMode
-      ? mode
-        ? "Select entry type"
-        : "New moment"
-      : (copy?.title ?? "New moment");
+    : listingDrafts
+      ? "Drafts"
+      : !mode || choosingMode
+        ? mode
+          ? "Select entry type"
+          : "New moment"
+        : (copy?.title ?? "New moment");
 
   const sheet = (
     <section
@@ -1390,45 +1568,87 @@ export function MomentComposer({
         className="composer-sheet-body"
       >
         {!mode || choosingMode ? (
-          <>
-            {connectedExperience ? (
-              <span id="composer-privacy" className="private-label">
-                Family only
-              </span>
-            ) : null}
-            {mode && isDirty ? (
-              <p className="composer-draft-held">
-                Your current draft is still here.
-              </p>
-            ) : null}
-            <div className="moment-choices">
-              {!connectedExperience || connectedPhotoAvailable ? (
-                <button onClick={() => chooseMode("photo")}>
-                  <span className="choice-icon photo-choice" aria-hidden="true">
-                    ▣
-                  </span>
-                  <strong>Photo or video</strong>
-                  <small>Media with date and note</small>
-                </button>
-              ) : null}
-              <button onClick={() => chooseMode("thought")}>
-                <span className="choice-icon thought-choice" aria-hidden="true">
-                  “
-                </span>
-                <strong>Written entry</strong>
-                <small>Text, date, and details</small>
-              </button>
-              {!connectedExperience || connectedFamily ? (
-                <button onClick={() => chooseMode("bible-verse")}>
-                  <span className="choice-icon bible-choice" aria-hidden="true">
-                    †
-                  </span>
-                  <strong>Bible verse</strong>
-                  <small>Choose a passage</small>
-                </button>
-              ) : null}
+          listingDrafts ? (
+            <div className="composer-drafts-panel">
+              <DraftsList
+                drafts={drafts}
+                onOpen={(id) => void openPersistedDraft(id)}
+                onDelete={(id) => void deletePersistedDraft(id)}
+              />
             </div>
-          </>
+          ) : (
+            <>
+              {connectedExperience ? (
+                <span id="composer-privacy" className="private-label">
+                  Family only
+                </span>
+              ) : null}
+              {mode && isDirty ? (
+                <p className="composer-draft-held">
+                  Your current draft is still here.
+                </p>
+              ) : null}
+              <div className="moment-choices">
+                {!connectedExperience || connectedPhotoAvailable ? (
+                  <button onClick={() => chooseMode("photo")}>
+                    <span
+                      className="choice-icon photo-choice"
+                      aria-hidden="true"
+                    >
+                      ▣
+                    </span>
+                    <strong>Photo or video</strong>
+                    <small>Media with date and note</small>
+                  </button>
+                ) : null}
+                <button onClick={() => chooseMode("thought")}>
+                  <span
+                    className="choice-icon thought-choice"
+                    aria-hidden="true"
+                  >
+                    “
+                  </span>
+                  <strong>Written entry</strong>
+                  <small>Text, date, and details</small>
+                </button>
+                {!connectedExperience || connectedFamily ? (
+                  <button onClick={() => chooseMode("bible-verse")}>
+                    <span
+                      className="choice-icon bible-choice"
+                      aria-hidden="true"
+                    >
+                      †
+                    </span>
+                    <strong>Bible verse</strong>
+                    <small>Choose a passage</small>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setListingDrafts(true);
+                    void refreshDrafts();
+                  }}
+                >
+                  <span
+                    className="choice-icon drafts-choice"
+                    aria-hidden="true"
+                  >
+                    ≡
+                  </span>
+                  <span className="composer-drafts-choice-label">
+                    <strong>Drafts</strong>
+                    {drafts.length > 0 ? (
+                      <span className="composer-drafts-count">
+                        {drafts.length}
+                      </span>
+                    ) : null}
+                  </span>
+                  <small>Unfinished entries</small>
+                </button>
+              </div>
+            </>
+          )
         ) : reviewing && copy ? (
           <div className="composer-review">
             <span id="composer-privacy" className="private-label">
@@ -2020,25 +2240,43 @@ export function MomentComposer({
             </div>
 
             <footer className="composer-editor-footer">
-              <button
-                className="save-moment"
-                type="submit"
-                disabled={saving || photoRetryBlocked}
+              <div
+                className={`composer-editor-actions${
+                  editDraft ? "" : " is-split"
+                }`}
               >
-                {saving
-                  ? editDraft || (mode !== "photo" && mode !== "video")
-                    ? "Saving…"
-                    : photoUploadStage?.state === "finishing"
-                      ? `Finishing ${mode}…`
-                      : `Adding ${mode}…`
-                  : !editDraft && photoRetryBlocked
-                    ? "Upload unavailable"
-                    : !editDraft &&
-                        (mode === "photo" || mode === "video") &&
-                        saveError
-                      ? "Try upload again"
-                      : "Save"}
-              </button>
+                <button
+                  className="save-moment"
+                  type="submit"
+                  disabled={saving || savingDraft || photoRetryBlocked}
+                >
+                  {saving
+                    ? editDraft || (mode !== "photo" && mode !== "video")
+                      ? "Saving…"
+                      : photoUploadStage?.state === "finishing"
+                        ? `Finishing ${mode}…`
+                        : `Adding ${mode}…`
+                    : !editDraft && photoRetryBlocked
+                      ? "Upload unavailable"
+                      : !editDraft &&
+                          (mode === "photo" || mode === "video") &&
+                          saveError
+                        ? "Try upload again"
+                        : editDraft
+                          ? "Save"
+                          : "Post"}
+                </button>
+                {!editDraft ? (
+                  <button
+                    className="secondary-composer-action"
+                    type="button"
+                    disabled={saving || savingDraft || photoRetryBlocked}
+                    onClick={() => void persistComposerDraft()}
+                  >
+                    {savingDraft ? "Saving draft…" : "Save draft"}
+                  </button>
+                ) : null}
+              </div>
               {(mode === "photo" || mode === "video") &&
               saving &&
               (photoUploadStage?.state === "preparing" ||

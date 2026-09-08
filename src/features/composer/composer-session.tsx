@@ -10,12 +10,14 @@ import {
   type ReactNode,
 } from "react";
 import type { MomentComposerViewModel } from "./composer-view-model";
+import { createConnectedEntryDraftActions } from "./entry-draft-client";
 import {
   MomentComposer,
   type ComposerEditDraft,
   type SaveFamilyMomentAction,
 } from "./moment-composer";
 import type { CreatePostToHomeContext } from "./post-to";
+import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
 type ComposerSessionValue = Readonly<{
   openCreate: (trigger?: HTMLButtonElement | null) => void;
@@ -46,13 +48,23 @@ export function ComposerSessionProvider({
 }>) {
   const [open, setOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<ComposerEditDraft | null>(null);
+  const draftActions = useMemo(
+    () =>
+      model.experience === "connected-family" ||
+      model.experience === "connected-written"
+        ? createConnectedEntryDraftActions()
+        : createPreviewEntryDraftActions(),
+    [model.experience],
+  );
   const returnFocusRef = useRef<HTMLButtonElement | null>(null);
   const dismissRef = useRef<(() => void) | null>(null);
+  const loadDraftsRef = useRef<(() => void) | null>(null);
 
   const openCreate = useCallback((trigger?: HTMLButtonElement | null) => {
     setEditDraft(null);
     returnFocusRef.current = trigger ?? null;
     setOpen(true);
+    queueMicrotask(() => loadDraftsRef.current?.());
   }, []);
 
   const toggleCreate = useCallback(
@@ -79,6 +91,10 @@ export function ComposerSessionProvider({
     dismissRef.current = dismiss;
   }, []);
 
+  const registerDraftsLoad = useCallback((load: (() => void) | null) => {
+    loadDraftsRef.current = load;
+  }, []);
+
   const value = useMemo(
     () => ({ openCreate, toggleCreate, isOpen: open, openEdit }),
     [open, openCreate, openEdit, toggleCreate],
@@ -99,11 +115,13 @@ export function ComposerSessionProvider({
         editDraft={editDraft}
         returnFocusRef={returnFocusRef}
         registerDismiss={registerDismiss}
+        registerDraftsLoad={registerDraftsLoad}
         onRequestClose={() => {
           setOpen(false);
           setEditDraft(null);
         }}
         saveFamilyMoment={createMomentAction}
+        draftActions={draftActions}
       />
     </ComposerSessionContext.Provider>
   );

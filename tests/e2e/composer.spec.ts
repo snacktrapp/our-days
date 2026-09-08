@@ -486,7 +486,7 @@ test("required content rejects whitespace and future dates before review", async
     await dialog.getByRole("button", { name: testCase.choice }).click();
     const field = dialog.getByLabel(testCase.field);
     await field.fill(" \n ");
-    await dialog.getByRole("button", { name: "Save" }).click();
+    await dialog.getByRole("button", { name: "Post" }).click();
     await expect(dialog.getByRole("alert")).toContainText(testCase.error);
     await expect(field).toBeFocused();
     await expect(
@@ -506,7 +506,7 @@ test("required content rejects whitespace and future dates before review", async
       .getByRole("button", { name: "Aug 29, 2026", exact: true }),
   ).toBeDisabled();
   await dialog.getByRole("button", { name: /^Moment date,/u }).click();
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Post" }).click();
   await expect(
     dialog.getByRole("heading", { name: "Review entry" }),
   ).toHaveCount(0);
@@ -559,7 +559,7 @@ test("photo, written, and verse capture modes save directly without a confirmati
   ).toBeVisible();
   await expect(photoPreview).not.toHaveAttribute("style");
   await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: "Review entry" })).toHaveCount(
     0,
@@ -570,14 +570,14 @@ test("photo, written, and verse capture modes save directly without a confirmati
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("The kitchen was loud.");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(dialog).toBeHidden();
 
   dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /Bible verse/u }).click();
   await selectBiblePassage(dialog, { book: "John", chapter: 3, start: 16 });
   await expect(dialog.getByLabel("Verse text")).toHaveValue(/only born Son/u);
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(dialog).toBeHidden();
 });
 
@@ -730,7 +730,7 @@ test("design-mode save emits no mutation, persistence, history, or timeline chan
     ),
   ).toBeUndefined();
   await expect(page.locator("body")).not.toContainText(privateFilenameMarker);
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(dialog).toBeHidden();
 
   expect(
@@ -928,14 +928,14 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     page.getByRole("button", { name: /^Moment date,/u }),
     mollyTag,
     page.getByLabel("Place name"),
-    page.getByRole("button", { name: "Save" }),
+    page.getByRole("button", { name: "Post" }),
   ]) {
     await expectReachable(control);
   }
   await expectMinimumTargets(dialog);
   await expectReadableInputType(dialog);
 
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(dialog).toBeHidden();
   expect(await page.evaluate(() => window.scrollY)).toBe(backgroundScroll);
 });

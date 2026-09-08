@@ -822,6 +822,10 @@ export type Database = {
         };
         Returns: string;
       };
+      delete_entry_draft: {
+        Args: { draft_id: string };
+        Returns: boolean;
+      };
       delete_web_push_subscription: {
         Args: { endpoint: string };
         Returns: boolean;
@@ -845,6 +849,29 @@ export type Database = {
       finalize_video_moment: {
         Args: { request_id: string };
         Returns: string;
+      };
+      get_entry_draft: {
+        Args: { draft_id: string };
+        Returns: {
+          audience: string;
+          body: string;
+          circle_ids: string[];
+          created_at: string;
+          draft_id: string;
+          journal_person_id: string | null;
+          kind: string;
+          latitude: number | null;
+          longitude: number | null;
+          media: Json;
+          occurred_on: string | null;
+          occurred_time: string | null;
+          occurred_timezone: string | null;
+          place_name: string;
+          tagged_person_ids: string[];
+          title: string;
+          updated_at: string;
+          verse: Json | null;
+        }[];
       };
       get_moment_conversation: {
         Args: { moment_id: string };
@@ -1010,6 +1037,15 @@ export type Database = {
           display_name: string;
           expires_at: string;
           invitation_id: string;
+        }[];
+      };
+      list_entry_drafts: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          draft_id: string;
+          kind: string;
+          preview_text: string;
+          updated_at: string;
         }[];
       };
       list_timeline_moments: {
@@ -1269,6 +1305,27 @@ export type Database = {
       revoke_membership: {
         Args: { membership_id: string };
         Returns: undefined;
+      };
+      save_entry_draft: {
+        Args: {
+          audience?: string;
+          body?: string;
+          circle_ids?: string[];
+          draft_id?: string;
+          journal_person_id?: string;
+          kind?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          media?: Json;
+          occurred_on?: string;
+          occurred_time?: string;
+          occurred_timezone?: string;
+          place_name?: string;
+          tagged_person_ids?: string[];
+          title?: string;
+          verse?: Json;
+        };
+        Returns: string;
       };
       save_web_push_subscription: {
         Args: { auth: string; endpoint: string; p256dh: string };

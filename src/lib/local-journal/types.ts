@@ -100,6 +100,40 @@ export type LocalExtraCircle = Readonly<{
   role: LocalMembership["role"];
 }>;
 
+export type LocalEntryDraft = Readonly<{
+  id: string;
+  ownerPersonId: string;
+  kind:
+    "thought" | "photo" | "video" | "bible-verse" | "milestone" | "location";
+  title: string;
+  body: string;
+  audience: "family" | "just_me";
+  circleIds: readonly string[];
+  journalPersonId: string | null;
+  taggedPersonIds: readonly string[];
+  placeName: string;
+  latitude: number | null;
+  longitude: number | null;
+  occurredOn: string | null;
+  occurredTime: string | null;
+  occurredTimezone: string | null;
+  media: readonly Readonly<{
+    key: string;
+    kind: "photo" | "video";
+    name: string;
+    mimeType: string;
+    size: number;
+  }>[];
+  verse: Readonly<{
+    book: string | null;
+    chapter: number | null;
+    startVerse: number | null;
+    endVerse: number | null;
+  }> | null;
+  createdAt: string;
+  updatedAt: string;
+}>;
+
 export type LocalJournalDocument = Readonly<{
   version: 1;
   circle: Readonly<{
@@ -115,4 +149,5 @@ export type LocalJournalDocument = Readonly<{
   moments: readonly LocalMoment[];
   notes: readonly LocalNote[];
   reactions: readonly LocalReaction[];
+  drafts?: readonly LocalEntryDraft[];
 }>;

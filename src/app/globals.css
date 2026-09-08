@@ -6795,6 +6795,131 @@ html[data-theme].overlay-open .app-shell::before,
   line-height: 1.35;
 }
 
+.composer-drafts-choice-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-drafts-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 22%, var(--cream));
+  color: var(--teal);
+  font-family: var(--font-interface);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.drafts-choice {
+  background: color-mix(in srgb, var(--moss) 18%, var(--cream));
+  color: var(--moss);
+}
+
+.composer-drafts-panel {
+  padding: 0 4px 12px;
+}
+
+.composer-drafts-empty {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-size: 14px;
+}
+
+.composer-drafts-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-drafts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
+}
+
+.composer-drafts-open {
+  min-height: 56px;
+  padding: 14px 4px 14px 0;
+  display: grid;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-drafts-open strong {
+  font-family: var(--font-interface);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.composer-drafts-open small {
+  color: var(--muted);
+  font-family: var(--font-record), Georgia, serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.composer-drafts-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.composer-drafts-icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.composer-drafts-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.composer-drafts-trash {
+  color: var(--clay);
+}
+
+.composer-drafts-icon:hover,
+.composer-drafts-icon:focus-visible {
+  background: transparent;
+  color: var(--ink);
+}
+
+.composer-drafts-trash:hover,
+.composer-drafts-trash:focus-visible {
+  color: var(--clay);
+}
+
+:root[data-theme="light"] .composer-drafts-count {
+  background: color-mix(in srgb, var(--teal) 16%, #fff);
+}
+
 :root[data-theme="light"] .composer-field input::placeholder,
 :root[data-theme="light"] .composer-field textarea::placeholder,
 :root[data-theme="light"] .inline-note-form textarea::placeholder,
@@ -7724,12 +7849,24 @@ html[data-theme].overlay-open .app-shell::before,
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.18);
 }
 
-.composer-editor-footer .save-moment {
+.composer-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.composer-editor-actions.is-split {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+}
+
+.composer-editor-footer .save-moment,
+.composer-editor-footer .composer-editor-actions .secondary-composer-action {
   min-height: 48px;
+  width: 100%;
   margin: 0;
 }
 
-.composer-editor-footer .secondary-composer-action {
+.composer-editor-footer .stop-photo-upload.secondary-composer-action {
   width: 100%;
   margin-top: 8px;
 }

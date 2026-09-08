@@ -21,7 +21,17 @@ import {
   localRileyPersonId,
 } from "./ids";
 import { canCreateInsight, hasOrganizerPrivilege } from "@/lib/circle-roles";
+import {
+  entryDraftCapMessage,
+  entryDraftPreviewText,
+  isEntryDraftKind,
+  maximumEntryDrafts,
+  type EntryDraftListItem,
+  type EntryDraftRecord,
+  type SaveEntryDraftInput,
+} from "@/features/composer/entry-drafts";
 import type {
+  LocalEntryDraft,
   LocalJournalDocument,
   LocalMedia,
   LocalMoment,
@@ -137,6 +147,7 @@ function emptyDocument(): LocalJournalDocument {
     moments: [],
     notes: [],
     reactions: [],
+    drafts: [],
   };
 }
 
@@ -1075,6 +1086,150 @@ export async function removeLocalMomentPhoto(
       ),
     });
     return updated.revision;
+  });
+}
+
+function draftsFor(document: LocalJournalDocument) {
+  return document.drafts ?? [];
+}
+
+function toLocalDraft(
+  access: LocalAccess,
+  input: SaveEntryDraftInput,
+  existing?: LocalEntryDraft,
+): LocalEntryDraft {
+  const now = nowIso();
+  return {
+    id: existing?.id ?? input.id ?? randomUUID(),
+    ownerPersonId: access.personId,
+    kind: input.kind,
+    title: input.title.slice(0, 120),
+    body: input.body.slice(0, 4000),
+    audience: input.audience,
+    circleIds: [...input.circleIds],
+    journalPersonId: input.journalPersonId,
+    taggedPersonIds: [...input.taggedPersonIds],
+    placeName: input.place.label.slice(0, 200),
+    latitude: input.place.latitude,
+    longitude: input.place.longitude,
+    occurredOn: input.occurredOn,
+    occurredTime: input.occurredTime,
+    occurredTimezone: input.occurredTimezone,
+    media: input.media.map((item) => ({ ...item })),
+    verse: input.verse,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
+function toDraftRecord(draft: LocalEntryDraft): EntryDraftRecord {
+  return {
+    id: draft.id,
+    kind: draft.kind,
+    title: draft.title,
+    body: draft.body,
+    audience: draft.audience,
+    circleIds: draft.circleIds,
+    journalPersonId: draft.journalPersonId,
+    taggedPersonIds: draft.taggedPersonIds,
+    place: {
+      label: draft.placeName,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+    },
+    occurredOn: draft.occurredOn,
+    occurredTime: draft.occurredTime,
+    occurredTimezone: draft.occurredTimezone,
+    media: draft.media,
+    verse: draft.verse ?? {
+      book: null,
+      chapter: null,
+      startVerse: null,
+      endVerse: null,
+    },
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt,
+  };
+}
+
+export async function listLocalEntryDrafts(
+  access: LocalAccess,
+): Promise<readonly EntryDraftListItem[]> {
+  const document = await readLocalJournal();
+  requireMembership(document, access);
+  return draftsFor(document)
+    .filter((draft) => draft.ownerPersonId === access.personId)
+    .slice()
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .flatMap((draft) => {
+      if (!isEntryDraftKind(draft.kind)) return [];
+      return [
+        {
+          id: draft.id,
+          kind: draft.kind,
+          previewText: entryDraftPreviewText({
+            title: draft.title,
+            body: draft.body,
+            mediaCount: draft.media.length,
+          }),
+          updatedAt: draft.updatedAt,
+        },
+      ];
+    });
+}
+
+export async function loadLocalEntryDraft(
+  access: LocalAccess,
+  id: string,
+): Promise<EntryDraftRecord | null> {
+  const document = await readLocalJournal();
+  requireMembership(document, access);
+  const draft = draftsFor(document).find(
+    (item) => item.id === id && item.ownerPersonId === access.personId,
+  );
+  return draft ? toDraftRecord(draft) : null;
+}
+
+export async function saveLocalEntryDraft(
+  access: LocalAccess,
+  input: SaveEntryDraftInput,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = draftsFor(document);
+    const existing = input.id
+      ? current.find(
+          (draft) =>
+            draft.id === input.id && draft.ownerPersonId === access.personId,
+        )
+      : undefined;
+    const ownedCount = current.filter(
+      (draft) => draft.ownerPersonId === access.personId,
+    ).length;
+    if (!existing && ownedCount >= maximumEntryDrafts) {
+      throw new Error(entryDraftCapMessage);
+    }
+    const next = toLocalDraft(access, input, existing);
+    writeDocumentUnlocked({
+      ...document,
+      drafts: [next, ...current.filter((draft) => draft.id !== next.id)],
+    });
+    return next.id;
+  });
+}
+
+export async function deleteLocalEntryDraft(access: LocalAccess, id: string) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    writeDocumentUnlocked({
+      ...document,
+      drafts: draftsFor(document).filter(
+        (draft) =>
+          !(draft.id === id && draft.ownerPersonId === access.personId),
+      ),
+    });
   });
 }
 

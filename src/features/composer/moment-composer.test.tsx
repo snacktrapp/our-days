@@ -23,6 +23,7 @@ import {
   optimisticMomentSaveSnapshot,
   retryOptimisticMomentSave,
 } from "./optimistic-moment-save";
+import { resetPreviewEntryDrafts } from "./preview-entry-drafts";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -202,6 +203,7 @@ beforeEach(() => {
 afterEach(() => {
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
+  resetPreviewEntryDrafts();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -369,7 +371,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(optimisticMediaUploadSnapshot()).toEqual([
@@ -510,7 +512,7 @@ describe("MomentComposer", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Who else was part of this?")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -596,7 +598,7 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
     expect(screen.getByText("Who else was part of this?")).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -690,7 +692,7 @@ describe("MomentComposer", () => {
     ).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -815,7 +817,7 @@ describe("MomentComposer", () => {
     await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
     await setComposerPlace(user, "The porch");
     await setComposerTime(user, "2", "45", "PM");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(navigation.replace).toHaveBeenCalledWith(
@@ -891,7 +893,7 @@ describe("MomentComposer", () => {
     expect(
       screen.queryByText("Wait for this video to finish loading."),
     ).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(videoUpload.upload).toHaveBeenCalledWith(
@@ -941,7 +943,7 @@ describe("MomentComposer", () => {
       screen.queryByText("Wait for this photo to finish loading."),
     ).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() =>
@@ -1015,7 +1017,7 @@ describe("MomentComposer", () => {
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     await user.type(screen.getByLabelText("Note"), "Still in the post.");
     await setComposerTime(user, "2", "45", "PM");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() => {
@@ -1094,7 +1096,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     rendered.unmount();
 
     expect(uploadSignal?.aborted).toBe(false);
@@ -1136,7 +1138,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     window.dispatchEvent(new Event("our-days:clear-private-state"));
     expect(uploadSignal?.aborted).toBe(true);
@@ -1168,7 +1170,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await user.click(
       screen.getByRole("button", { name: "Open connected family composer" }),
@@ -1225,7 +1227,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
@@ -1260,7 +1262,7 @@ describe("MomentComposer", () => {
       }),
     );
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
@@ -1291,7 +1293,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "Kept draft");
     await setComposerDate(user, "2023-08-21");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     await waitFor(() =>
       expect(optimisticMomentSaveSnapshot()[0]).toEqual(
@@ -1333,7 +1335,7 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "Still saving");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(optimisticMomentSaveSnapshot()[0]).toEqual(
@@ -1362,7 +1364,7 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "Already safe");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(confirm).not.toHaveBeenCalled();
     expect(navigation.replace).toHaveBeenCalledWith("/family");
@@ -1581,7 +1583,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     await setComposerPlace(user, "Oak Street School");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open composer" }));
     expect(screen.getByRole("button", { name: /Written entry/ })).toBeVisible();
@@ -1683,7 +1685,7 @@ describe("MomentComposer", () => {
   it("requires a selected Bible verse before save", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Bible verse/ }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Select a verse before saving this entry.",
     );
@@ -1699,7 +1701,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
     await setComposerPlace(user, "Oak Street School");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
@@ -1736,7 +1738,7 @@ describe("MomentComposer", () => {
         (screen.getByLabelText("Verse text") as HTMLTextAreaElement).value,
       ).toContain("only born Son");
     });
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
@@ -2157,8 +2159,8 @@ describe("MomentComposer", () => {
     );
     const firstPreview = screen.getByAltText("Selected photo preview");
 
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Post" }));
+    expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Wait for this photo to finish loading.",
     );
@@ -2173,7 +2175,7 @@ describe("MomentComposer", () => {
     expect(screen.getByAltText("Selected photo preview")).toBeVisible();
 
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -2223,7 +2225,7 @@ describe("MomentComposer", () => {
     input = await picker();
     await user.upload(input, second);
     fireEvent.load(screen.getByAltText("Selected photo preview"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(revokeObjectURL).toHaveBeenNthCalledWith(
       4,
@@ -2270,14 +2272,14 @@ describe("MomentComposer", () => {
       );
       const field = screen.getByLabelText(label);
       fireEvent.change(field, { target: { value: " \n " } });
-      await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(screen.getByRole("button", { name: "Post" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent(error);
       expect(field).toHaveFocus();
       expect(
         screen.queryByRole("dialog", { name: "Choose a place" }),
       ).toBeNull();
-      expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+      expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
     },
   );
 
@@ -2326,5 +2328,94 @@ describe("MomentComposer", () => {
     swipeComposerClosed();
     expect(confirm).toHaveBeenCalledWith("Discard this unfinished moment?");
     expect(screen.getByRole("dialog")).toBeVisible();
+  });
+
+  it("offers Post and Save draft on create, then lists the draft", async () => {
+    const user = await openComposer();
+    expect(screen.getByRole("button", { name: /^Drafts/u })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+    await user.type(screen.getByLabelText("Entry"), "A porch morning.");
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    expect(screen.getByText("1")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^Drafts/u }));
+    expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
+    expect(screen.getByText(/Note · /u)).toBeVisible();
+    expect(screen.getByText("A porch morning.")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Draft options/u }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Edit Note · /u }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Delete Note · /u }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^Edit Note · /u }));
+    expect(screen.getByLabelText("Entry")).toHaveValue("A porch morning.");
+    expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+  });
+
+  it("deletes a draft from the drafts sheet without posting", async () => {
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Throw this away.");
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    await user.click(screen.getByRole("button", { name: /^Drafts/u }));
+    expect(screen.getByText("Throw this away.")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^Delete Note · /u }));
+    await waitFor(() => {
+      expect(screen.getByText("No drafts yet.")).toBeVisible();
+    });
+    expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
+    expect(screen.queryByLabelText("Entry")).not.toBeInTheDocument();
+  });
+
+  it("keeps Save on an existing published moment instead of Post", () => {
+    render(
+      <MomentComposer
+        model={model}
+        open
+        editDraft={{
+          momentId: "moment-note",
+          revision: 1,
+          mode: "thought",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "",
+          occurredAt: null,
+          occurredTimezone: null,
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "Already posted.",
+          save: vi.fn(),
+        }}
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Post" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save draft" }),
+    ).not.toBeInTheDocument();
   });
 });
