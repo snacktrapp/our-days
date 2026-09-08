@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   parsePlaceCoordinates,
+  shortPlaceLabel,
   validPlaceCoordinates,
 } from "./place-coordinates";
 
@@ -19,5 +20,13 @@ describe("place coordinates", () => {
     expect(validPlaceCoordinates(undefined, undefined)).toBe(true);
     expect(validPlaceCoordinates(39.2, -119.93)).toBe(true);
     expect(validPlaceCoordinates(39.2, undefined)).toBe(false);
+  });
+
+  it("keeps the short display name and drops the rest of an address", () => {
+    expect(shortPlaceLabel("Sand Harbor, NV, United States")).toBe(
+      "Sand Harbor",
+    );
+    expect(shortPlaceLabel("Oak Street School")).toBe("Oak Street School");
+    expect(shortPlaceLabel("  The porch  ")).toBe("The porch");
   });
 });

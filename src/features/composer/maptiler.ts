@@ -1,5 +1,6 @@
 import {
   parsePlaceCoordinates,
+  shortPlaceLabel,
   trimmedPlaceLabel,
   type PlaceSelection,
 } from "@/lib/place-coordinates";
@@ -14,6 +15,7 @@ export type GeocodedPlace = PlaceSelection &
   Readonly<{
     latitude: number;
     longitude: number;
+    detail?: string;
   }>;
 
 type MapTilerFeature = Readonly<{
@@ -281,17 +283,22 @@ function propertyString(properties: unknown, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function featureLabel(feature: MapTilerFeature) {
+function featureFullLabel(feature: MapTilerFeature) {
   if (typeof feature.place_name === "string" && feature.place_name.trim()) {
     return trimmedPlaceLabel(feature.place_name);
   }
+  const labeled = propertyString(feature.properties, "label");
+  return labeled ? trimmedPlaceLabel(labeled) : "";
+}
+
+function featureLabel(feature: MapTilerFeature) {
   if (typeof feature.text === "string" && feature.text.trim()) {
     return trimmedPlaceLabel(feature.text);
   }
   const named = propertyString(feature.properties, "name");
-  if (named) return trimmedPlaceLabel(named);
-  const labeled = propertyString(feature.properties, "label");
-  return labeled ? trimmedPlaceLabel(labeled) : "";
+  if (named) return shortPlaceLabel(named);
+  const full = featureFullLabel(feature);
+  return full ? shortPlaceLabel(full) : "";
 }
 
 function featureCoordinates(feature: MapTilerFeature) {
@@ -317,7 +324,12 @@ function featurePlace(feature: MapTilerFeature): GeocodedPlace | null {
   const coordinates = featureCoordinates(feature);
   const label = featureLabel(feature);
   if (!coordinates || !label) return null;
-  return { label, ...coordinates };
+  const detail = featureFullLabel(feature);
+  return {
+    label,
+    ...coordinates,
+    ...(detail && detail !== label ? { detail } : {}),
+  };
 }
 
 async function geocode(

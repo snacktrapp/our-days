@@ -442,9 +442,7 @@ describe("ConnectedMomentControl", () => {
       screen.getByRole("heading", { name: "New written entry" }),
     ).toBeVisible();
     expect(screen.getByLabelText("Entry")).toHaveValue("Worth keeping.");
-    expect(
-      screen.getByRole("button", { name: /^Place, Cedar Park/u }),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Cedar Park");
     expect(
       screen.queryByRole("button", { name: /Choose another/u }),
     ).toBeNull();

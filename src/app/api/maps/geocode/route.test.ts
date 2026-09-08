@@ -43,7 +43,12 @@ describe("map geocode proxy", () => {
     const response = await request("?q=Harbor");
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([
-      { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+      {
+        label: "Sand Harbor",
+        detail: "Sand Harbor, NV",
+        latitude: 39.2,
+        longitude: -119.93,
+      },
     ]);
     expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain(
       "api.maptiler.com/geocoding",

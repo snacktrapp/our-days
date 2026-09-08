@@ -304,12 +304,7 @@ export function MomentComposer({
   } = useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const chooserSurface = !mode || choosingMode || reviewing;
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
-    Boolean(
-      editDraft &&
-      (editDraft.taggedPersonIds.length > 0 ||
-        (editDraft.mode !== "location" &&
-          editDraft.place.label.trim().length > 0)),
-    ),
+    Boolean(editDraft && editDraft.taggedPersonIds.length > 0),
   );
   const postableCircles = useMemo(
     () => model.postableCircles ?? [],
@@ -1943,6 +1938,15 @@ export function MomentComposer({
                 )}
               </div>
 
+              {mode !== "location" ? (
+                <>
+                  <LocationFields optional value={place} onChange={setPlace} />
+                  <small className="composer-location-note">
+                    No location is read from your media.
+                  </small>
+                </>
+              ) : null}
+
               <div className="composer-optional">
                 <button
                   className="composer-optional-toggle"
@@ -2014,18 +2018,6 @@ export function MomentComposer({
                           })}
                       </div>
                     </fieldset>
-                    {mode !== "location" ? (
-                      <>
-                        <LocationFields
-                          optional
-                          value={place}
-                          onChange={setPlace}
-                        />
-                        <small className="composer-location-note">
-                          No location is read from your media.
-                        </small>
-                      </>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

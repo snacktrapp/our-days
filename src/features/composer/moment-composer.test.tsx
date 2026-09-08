@@ -742,7 +742,6 @@ describe("MomentComposer", () => {
     fireEvent.load(screen.getByAltText("Selected photo preview"));
     expect(screen.getByText("Photo ready to upload privately.")).toBeVisible();
     await user.type(screen.getByLabelText("Note"), "Kept exactly once.");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "The porch");
     await setComposerTime(user, "2", "45", "PM");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -1625,7 +1624,6 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "The kitchen was loud.");
-    await user.click(screen.getByRole("button", { name: /Details/ }));
     await setComposerPlace(user, "Oak Street School");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -1823,9 +1821,7 @@ describe("MomentComposer", () => {
     ).toBeNull();
     expect(screen.queryByLabelText("Your thought")).toBeNull();
     expect(screen.getByLabelText("Entry")).toHaveValue("Worth keeping.");
-    expect(
-      screen.getByRole("button", { name: /^Place, Cedar Park/u }),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Cedar Park");
 
     await user.type(screen.getByLabelText("Entry"), " Still.");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -2244,7 +2240,6 @@ describe("MomentComposer", () => {
     [
       "place",
       async (user: ReturnType<typeof userEvent.setup>) => {
-        await user.click(screen.getByRole("button", { name: /Details/ }));
         await setComposerPlace(user, "The porch");
       },
     ],

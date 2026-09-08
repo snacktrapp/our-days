@@ -10,12 +10,12 @@ describe("location fields", () => {
     vi.unstubAllGlobals();
   });
 
-  it("opens search in the location sheet without a nested tap", async () => {
+  it("shows one-step search without an Add a place trigger", async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(
       <LocationFields
-        required
+        optional
         value={emptyPlaceSelection()}
         onChange={onChange}
       />,
@@ -26,11 +26,11 @@ describe("location fields", () => {
     ).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
     expect(screen.getByLabelText("Place name")).toBeVisible();
-    expect(screen.getByLabelText("Place name")).toHaveFocus();
     expect(screen.getByLabelText("Place name")).toHaveAttribute(
       "placeholder",
       "Search for a place",
     );
+    expect(screen.getByText("Search for a place")).toBeVisible();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Place name"), "The porch");
@@ -39,9 +39,6 @@ describe("location fields", () => {
       latitude: null,
       longitude: null,
     });
-
-    await user.keyboard("{Escape}");
-    expect(screen.getByLabelText("Place name")).toBeVisible();
   });
 
   it("keeps a typed label after choosing a searched place", async () => {
@@ -50,7 +47,12 @@ describe("location fields", () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: async () => [
-          { label: "Sand Harbor, NV", latitude: 39.2, longitude: -119.93 },
+          {
+            label: "Sand Harbor",
+            detail: "Sand Harbor, NV, United States",
+            latitude: 39.2,
+            longitude: -119.93,
+          },
         ],
       }),
     );
@@ -64,7 +66,7 @@ describe("location fields", () => {
       />,
     );
 
-    expect(screen.getByText("Search")).toBeVisible();
+    expect(screen.getByText("Search for a place")).toBeVisible();
     expect(screen.queryByText("Map unavailable")).toBeNull();
 
     await user.type(screen.getByLabelText("Place name"), "Sand");
@@ -75,13 +77,14 @@ describe("location fields", () => {
     });
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Sand Harbor, NV" }),
+        screen.getByRole("button", { name: /Sand Harbor/u }),
       ).toBeVisible(),
     );
+    expect(screen.getByText("Sand Harbor, NV, United States")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Sand Harbor, NV" }));
+    await user.click(screen.getByRole("button", { name: /Sand Harbor/u }));
     expect(onChange).toHaveBeenLastCalledWith({
-      label: "Sand Harbor, NV",
+      label: "Sand Harbor",
       latitude: 39.2,
       longitude: -119.93,
     });
@@ -90,22 +93,19 @@ describe("location fields", () => {
       <LocationFields
         required
         value={{
-          label: "Sand Harbor, NV",
+          label: "Sand Harbor",
           latitude: 39.2,
           longitude: -119.93,
         }}
         onChange={onChange}
       />,
     );
-    expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor, NV");
-    expect(
-      screen.queryByTitle("Map of Sand Harbor, NV"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Place name")).toHaveValue("Sand Harbor");
+    expect(screen.queryByTitle("Map of Sand Harbor")).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
-  it("keeps optional Details place behind a compact trigger", async () => {
-    const user = userEvent.setup();
+  it("does not fold optional place behind a second search popup", () => {
     render(
       <LocationFields
         optional
@@ -114,18 +114,11 @@ describe("location fields", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    ).toBeVisible();
-    expect(screen.queryByLabelText("Place name")).toBeNull();
-
-    await user.click(
-      screen.getByRole("button", { name: /^Place, Add a place/u }),
-    );
-    expect(
-      screen.getByRole("dialog", { name: "Choose a place" }),
-    ).toBeVisible();
     expect(screen.getByLabelText("Place name")).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Choose a place" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Place, Add a place/u }),
+    ).toBeNull();
   });
 
   it("shows a visible error when place search is unavailable", async () => {

@@ -7,6 +7,8 @@ export const DEFAULT_MAP_CENTER = {
   zoom: 3,
 } as const;
 
+export const VIEW_MAP_ZOOM = 14;
+
 export type MapPickerToParent =
   | Readonly<{ source: typeof MAP_PICKER_SOURCE; type: "ready" }>
   | Readonly<{
@@ -23,6 +25,7 @@ export type ParentToMapPicker =
       type: "init";
       latitude: number | null;
       longitude: number | null;
+      interactive?: boolean;
     }>
   | Readonly<{
       source: typeof MAP_PICKER_SOURCE;
@@ -55,7 +58,9 @@ export function isParentToMapPicker(
   if (message.type === "init") {
     return (
       (message.latitude === null || typeof message.latitude === "number") &&
-      (message.longitude === null || typeof message.longitude === "number")
+      (message.longitude === null || typeof message.longitude === "number") &&
+      (message.interactive === undefined ||
+        typeof message.interactive === "boolean")
     );
   }
   return (

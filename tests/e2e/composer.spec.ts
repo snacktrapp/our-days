@@ -931,7 +931,7 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
     page.getByRole("button", { name: /^Moment date,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
-    page.getByRole("button", { name: /^Place,/u }),
+    page.getByLabel("Place name"),
     page.getByRole("button", { name: "Save" }),
   ]) {
     await expectReachable(control);
