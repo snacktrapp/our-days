@@ -22,6 +22,7 @@ export type SaveFamilyMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type SaveWrittenMomentAction = (input: {
@@ -31,6 +32,7 @@ export type SaveWrittenMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type UpdateFamilyMomentAction = (input: {
@@ -46,6 +48,14 @@ export type UpdateFamilyMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
+}) => Promise<MomentActionResult>;
+
+export type SetMomentAudienceAction = (input: {
+  momentId: string;
+  revision: number;
+  audience: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type ChangeTrashAction = (input: {
@@ -66,6 +76,7 @@ export type ReorderMomentPhotosAction = (input: {
 export type ConnectedMomentActions = Readonly<{
   update: UpdateFamilyMomentAction;
   trash: ChangeTrashAction;
+  setAudience?: SetMomentAudienceAction;
   removePhoto?: RemoveMomentPhotoAction;
   reorderPhotos?: ReorderMomentPhotosAction;
 }>;

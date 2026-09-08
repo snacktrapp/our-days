@@ -172,6 +172,8 @@ function momentToTimelineRow(
   );
   return {
     moment_id: moment.id,
+    moment_circle_id: momentCircleId(moment, document.circle.id),
+    linked_circle_ids: momentLinkedCircleIds(moment, document.circle.id),
     moment_journal_person_id: moment.journalPersonId,
     journal_person_name: journalPerson?.displayName ?? null,
     journal_person_accent: journalPerson?.accentToken ?? null,
@@ -217,6 +219,34 @@ function momentCircleId(moment: LocalMoment, defaultCircleId: string) {
   return moment.circleId ?? defaultCircleId;
 }
 
+function momentLinkedCircleIds(moment: LocalMoment, defaultCircleId: string) {
+  if (moment.audience === "just_me") return [];
+  if (moment.circleIds?.length) return moment.circleIds;
+  return [momentCircleId(moment, defaultCircleId)];
+}
+
+function localPostableCircles(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const homePersonId =
+    document.accounts[0]?.personId ??
+    document.memberships[0]?.personId ??
+    access.personId;
+  return [
+    {
+      id: document.circle.id,
+      name: document.circle.name,
+      personId: homePersonId,
+    },
+    ...(document.extraCircles ?? []).map((circle) => ({
+      id: circle.id,
+      name: circle.name,
+      personId: circle.personId,
+    })),
+  ];
+}
+
 export async function loadLocalJournalContext(
   access: LocalAccess,
 ): Promise<ConnectedJournalContext> {
@@ -248,6 +278,7 @@ export async function loadLocalJournalContext(
       recordedByName: extra.displayName,
       journalPeople: surface.journalPeople,
       taggablePeople: surface.taggablePeople,
+      postableCircles: localPostableCircles(document, access),
     };
     return {
       circleName: extra.name,
@@ -323,6 +354,7 @@ export async function loadLocalJournalContext(
     recordedByName: recorder.name,
     journalPeople: surface.journalPeople,
     taggablePeople: surface.taggablePeople,
+    postableCircles: localPostableCircles(document, access),
   };
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
@@ -367,7 +399,10 @@ export async function loadLocalJournalContext(
             moment.trashedAt === null &&
             moment.kind !== "insight" &&
             moment.audience !== "just_me" &&
-            moment.recordedByMembershipId !== access.membershipId,
+            moment.recordedByMembershipId !== access.membershipId &&
+            momentLinkedCircleIds(moment, document.circle.id).includes(
+              access.circleId,
+            ),
         )
         .map((moment) => ({
           id: moment.id,
@@ -469,10 +504,14 @@ function visibleMoments(
   return document.moments
     .filter((moment) => {
       if (moment.trashedAt !== null) return false;
+      if (!journalPersonId) {
+        return momentLinkedCircleIds(moment, document.circle.id).includes(
+          access.circleId,
+        );
+      }
       if (momentCircleId(moment, document.circle.id) !== access.circleId) {
         return false;
       }
-      if (!journalPersonId) return moment.audience !== "just_me";
       if (moment.journalPersonId !== journalPersonId) return false;
       if (moment.audience !== "just_me") return true;
       return (

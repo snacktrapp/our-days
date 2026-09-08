@@ -115,17 +115,16 @@ test("managed profiles preserve journal identity and honest empty states", async
   }
 });
 
-test("managed journal defaults retain adult recorder truth across client navigation", async ({
+test("composer posts onto the recorder journal and hides the Journal picker", async ({
   page,
 }) => {
   await page.goto("/people/avery");
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
+  await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
   await page.getByRole("button", { name: /Details/u }).click();
-  await expect(
-    page.getByRole("button", { name: /^Journal, Avery/u }),
-  ).toBeVisible();
-  await expect(page.getByText("Recorded by Brian")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Journal,/u })).toHaveCount(0);
+  await expect(page.getByText("Recorded by Brian")).toHaveCount(0);
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("Avery tried something new.");
@@ -139,11 +138,10 @@ test("managed journal defaults retain adult recorder truth across client navigat
     .click();
   await page.getByRole("button", { name: "Add moment" }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();
+  await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
   await page.getByRole("button", { name: /Details/u }).click();
-  await expect(
-    page.getByRole("button", { name: /^Journal, Sam/u }),
-  ).toBeVisible();
-  await expect(page.getByText("Recorded by Brian")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Journal,/u })).toHaveCount(0);
+  await expect(page.getByText("Recorded by Brian")).toHaveCount(0);
 });
 
 test("unknown people use a generic private soft-not-found without enumeration", async ({

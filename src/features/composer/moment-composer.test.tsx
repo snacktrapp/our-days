@@ -147,6 +147,13 @@ function ConnectedFamilyHarness({
           circleId: "20000000-0000-4000-8000-000000000001",
           experience: "connected-family",
           photoPostingEnabled: true,
+          postableCircles: [
+            {
+              id: "20000000-0000-4000-8000-000000000001",
+              name: "Trapp Family",
+              personId: "brian",
+            },
+          ],
         }}
         open={open}
         returnFocusRef={triggerRef}
@@ -314,21 +321,6 @@ async function selectComposerBiblePassage(
       screen.getByRole("button", { name: `Ending verse ${passage.end}` }),
     );
   }
-}
-
-async function selectComposerJournal(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-) {
-  let trigger = screen.queryByRole("button", { name: /Brian · You/u });
-  if (!trigger) {
-    await user.click(screen.getByRole("button", { name: /Details/u }));
-    trigger = screen.getByRole("button", { name: /Brian · You/u });
-  }
-  await user.click(trigger);
-  await user.click(
-    screen.getByRole("menuitemradio", { name: new RegExp(name) }),
-  );
 }
 
 describe("MomentComposer", () => {
@@ -506,11 +498,15 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "A private thought.");
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Just me" }));
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    expect(screen.getByRole("radio", { name: "Family" })).toBeChecked();
-    await user.click(screen.getByRole("radio", { name: "Just Me" }));
-    expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
-    expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
@@ -518,10 +514,179 @@ describe("MomentComposer", () => {
           journalPersonId: "brian",
           audience: "just_me",
           taggedPersonIds: [],
+          circleIds: [],
         }),
       ),
     );
     expect(navigation.replace).toHaveBeenCalledWith("/people/brian");
+  });
+
+  it("defaults create Post to Just me from the YOU Home context", async () => {
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        homeContext={{ kind: "you" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
+  });
+
+  it("keeps Who else tags when switching Post to Just me", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+        saveFamilyMoment={save}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Molly was there.");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Just me" }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "just_me",
+          taggedPersonIds: ["molly"],
+        }),
+      ),
+    );
+  });
+
+  it("defaults create Post to the filtered Home group only", async () => {
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        homeContext={{ kind: "group", circleId: "cousins" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
+  });
+
+  it("defaults create Post to Just me from a person Home context", async () => {
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          defaultJournalPersonId: "avery",
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+          ],
+        }}
+        homeContext={{ kind: "person" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+  });
+
+  it("posts one moment to two circles from the Post to checklist", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+        saveFamilyMoment={save}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "One porch, two circles.");
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "family",
+          circleIds: ["family", "cousins"],
+        }),
+      ),
+    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family?circle=family");
   });
 
   it("offers only the production-ready written path in a connected journal", async () => {
@@ -583,7 +748,9 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
@@ -664,7 +831,9 @@ describe("MomentComposer", () => {
       expect.any(AbortSignal),
       expect.any(Function),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -715,7 +884,9 @@ describe("MomentComposer", () => {
       ),
     );
     expect(videoInspect.inspect).toHaveBeenCalled();
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
   });
 
   it("rejects HEIC truthfully before a connected upload starts", async () => {
@@ -996,7 +1167,9 @@ describe("MomentComposer", () => {
         state: "processing",
       }),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family");
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -1328,7 +1501,10 @@ describe("MomentComposer", () => {
 
     await user.type(text, "A brave blue door.");
     await setComposerDate(user, "2023-08-21");
-    await selectComposerJournal(user, "Avery");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     await setComposerPlace(user, "Oak Street School");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
@@ -1666,6 +1842,72 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
+  it("prefills Post to chips on edit and saves circle ids", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        homeContext={{ kind: "you" }}
+        open
+        editDraft={{
+          momentId: "moment-note",
+          revision: 2,
+          mode: "thought",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "",
+          occurredAt: null,
+          occurredTimezone: null,
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "Worth keeping.",
+          audience: "family",
+          circleId: "family",
+          linkedCircleIds: ["family"],
+          save: update,
+        }}
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+    expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "family",
+          circleIds: ["family", "cousins"],
+        }),
+      ),
+    );
+  });
+
   it("edits a saved photo with the existing picture and no file picker", async () => {
     const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
     const create = vi.fn();
@@ -1969,17 +2211,14 @@ describe("MomentComposer", () => {
     },
   );
 
-  it("removes a stale self-tag when its person becomes the journal", async () => {
+  it("does not offer a Journal picker on create", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    const avery = screen.getByRole("checkbox", { name: /Avery/ });
-    await user.click(avery);
-    expect(avery).toBeChecked();
-
-    await selectComposerJournal(user, "Avery");
-    expect(avery).not.toBeChecked();
-    expect(avery).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeEnabled();
   });
 
   it.each([
@@ -1993,12 +2232,6 @@ describe("MomentComposer", () => {
       "date",
       async (user: ReturnType<typeof userEvent.setup>) => {
         await setComposerDate(user, "2020-01-01");
-      },
-    ],
-    [
-      "journal",
-      async (user: ReturnType<typeof userEvent.setup>) => {
-        await selectComposerJournal(user, "Avery");
       },
     ],
     [

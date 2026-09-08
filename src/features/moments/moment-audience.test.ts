@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatAudienceChipLabel,
   normalizeMomentAudience,
+  showAudienceChip,
   showJustMeAudienceBadge,
 } from "./moment-audience";
 
@@ -44,5 +46,53 @@ describe("moment audience mapping", () => {
         momentJournalPersonId: "me",
       }),
     ).toBe(false);
+  });
+
+  it("shows an audience chip on the author's own posts only", () => {
+    expect(
+      showAudienceChip({
+        viewerPersonId: "me",
+        viewingJournalPersonId: "me",
+        momentJournalPersonId: "me",
+      }),
+    ).toBe(true);
+    expect(
+      showAudienceChip({
+        viewerPersonId: "me",
+        viewingJournalPersonId: undefined,
+        momentJournalPersonId: "me",
+      }),
+    ).toBe(false);
+    expect(
+      showAudienceChip({
+        viewerPersonId: "me",
+        viewingJournalPersonId: "other",
+        momentJournalPersonId: "other",
+      }),
+    ).toBe(false);
+  });
+
+  it("labels Just me, one group, or N groups", () => {
+    expect(
+      formatAudienceChipLabel({ audience: "just_me", linkedCircleIds: [] }),
+    ).toBe("Just me");
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["family"],
+      }),
+    ).toBe("1 group");
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["family", "cousins"],
+      }),
+    ).toBe("2 groups");
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["a", "b", "c"],
+      }),
+    ).toBe("3 groups");
   });
 });

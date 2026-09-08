@@ -251,6 +251,44 @@ function extraCircleForAccess(
   );
 }
 
+function writeAccessForCircle(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  circleId: string,
+): LocalAccess {
+  if (circleId === access.circleId) {
+    requireMembership(document, access);
+    return access;
+  }
+  if (circleId === document.circle.id) {
+    const account = document.accounts[0];
+    const membership = account
+      ? document.memberships.find(
+          (candidate) => candidate.id === account.membershipId,
+        )
+      : undefined;
+    if (!account || !membership) {
+      throw new Error("That family is not available.");
+    }
+    return {
+      membershipId: membership.id,
+      circleId: document.circle.id,
+      personId: membership.personId,
+      role: membership.role,
+    };
+  }
+  const extra = (document.extraCircles ?? []).find(
+    (circle) => circle.id === circleId,
+  );
+  if (!extra) throw new Error("That family is not available.");
+  return {
+    membershipId: extra.membershipId,
+    circleId: extra.id,
+    personId: extra.personId,
+    role: extra.role,
+  };
+}
+
 function requireMembership(
   document: LocalJournalDocument,
   access: LocalAccess,
@@ -331,6 +369,7 @@ export async function createLocalWrittenMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
   }>,
 ) {
   return withStoreLock(() => {
@@ -343,28 +382,40 @@ export async function createLocalWrittenMoment(
       throw new Error("That moment type is not available.");
     }
     const document = readDocumentUnlocked();
-    requireMembership(document, access);
-    if (!canWriteJournal(document, access, input.journalPersonId)) {
+    const audience = resolvedAudience(
+      access,
+      input.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId =
+      audience === "just_me"
+        ? access.circleId
+        : (input.circleIds?.[0] ?? access.circleId);
+    const writeAccess = writeAccessForCircle(document, access, primaryCircleId);
+    if (!canWriteJournal(document, writeAccess, input.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
     const createdAt = nowIso();
     const moment: LocalMoment = {
       id: randomUUID(),
-      circleId: access.circleId,
+      circleId: writeAccess.circleId,
+      circleIds:
+        audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds ?? [writeAccess.circleId])],
       journalPersonId: input.journalPersonId,
-      recordedByMembershipId: access.membershipId,
+      recordedByMembershipId: writeAccess.membershipId,
       kind: input.kind,
       title: input.title,
       body: input.body,
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(access, input.journalPersonId, input.audience),
+      audience,
       revision: 1,
       createdAt,
       updatedAt: createdAt,
@@ -440,6 +491,7 @@ export async function updateLocalWrittenMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
   }>,
 ) {
   return withStoreLock(() => {
@@ -460,6 +512,28 @@ export async function updateLocalWrittenMoment(
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
+    const audience = resolvedAudience(
+      access,
+      current.journalPersonId,
+      input.audience ?? current.audience,
+    );
+    const primaryCircleId = current.circleId ?? document.circle.id;
+    const allowed = postableCircleIdsForAccess(document, access);
+    const nextCircleIds =
+      input.circleIds === undefined
+        ? current.circleIds
+        : audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds)];
+    if (audience === "family" && input.circleIds !== undefined) {
+      if (
+        !nextCircleIds?.length ||
+        !nextCircleIds.includes(primaryCircleId) ||
+        nextCircleIds.some((id) => !allowed.has(id))
+      ) {
+        throw new Error("That moment could not be changed.");
+      }
+    }
     const updated: LocalMoment = {
       ...current,
       title: input.title,
@@ -467,16 +541,102 @@ export async function updateLocalWrittenMoment(
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(
-        access,
-        current.journalPersonId,
-        input.audience ?? current.audience,
+      audience,
+      circleIds: nextCircleIds,
+      revision: nextRevision(current.revision),
+      updatedAt: nowIso(),
+    };
+    writeDocumentUnlocked({
+      ...document,
+      moments: document.moments.map((moment) =>
+        moment.id === current.id ? updated : moment,
       ),
+    });
+    return updated.revision;
+  });
+}
+
+function postableCircleIdsForAccess(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>();
+  if (
+    access.circleId === document.circle.id ||
+    document.memberships.some(
+      (membership) => membership.id === access.membershipId,
+    )
+  ) {
+    ids.add(document.circle.id);
+  }
+  for (const extra of document.extraCircles ?? []) {
+    if (
+      extra.id === access.circleId ||
+      extra.membershipId === access.membershipId ||
+      access.circleId === document.circle.id
+    ) {
+      ids.add(extra.id);
+    }
+  }
+  return ids;
+}
+
+export async function updateLocalMomentAudience(
+  access: LocalAccess,
+  input: Readonly<{
+    momentId: string;
+    revision: number;
+    audience: "family" | "just_me";
+    circleIds?: readonly string[];
+  }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = document.moments.find(
+      (moment) => moment.id === input.momentId && moment.trashedAt === null,
+    );
+    if (!current) throw new Error("That moment could not be changed.");
+    if (current.revision !== input.revision) {
+      const error = new Error("revision conflict");
+      (error as Error & { code?: string }).code = "40001";
+      throw error;
+    }
+    if (!canWriteJournal(document, access, current.journalPersonId)) {
+      throw new Error("That moment could not be changed.");
+    }
+    if (current.kind === "insight") {
+      throw new Error("That moment could not be changed.");
+    }
+    const audience = resolvedAudience(
+      access,
+      current.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId = current.circleId ?? document.circle.id;
+    const allowed = postableCircleIdsForAccess(document, access);
+    const nextCircleIds =
+      audience === "just_me"
+        ? undefined
+        : [...new Set(input.circleIds ?? [primaryCircleId])];
+    if (audience === "family") {
+      if (
+        !nextCircleIds?.length ||
+        !nextCircleIds.includes(primaryCircleId) ||
+        nextCircleIds.some((id) => !allowed.has(id))
+      ) {
+        throw new Error("That moment could not be changed.");
+      }
+    }
+    const updated: LocalMoment = {
+      ...current,
+      audience,
+      circleIds: nextCircleIds,
+      taggedPersonIds: current.taggedPersonIds,
       revision: nextRevision(current.revision),
       updatedAt: nowIso(),
     };
@@ -540,13 +700,23 @@ export async function publishLocalMediaMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
     media: LocalMedia;
   }>,
 ) {
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
-    requireMembership(document, access);
-    if (!canWriteJournal(document, access, input.journalPersonId)) {
+    const audience = resolvedAudience(
+      access,
+      input.journalPersonId,
+      input.audience,
+    );
+    const primaryCircleId =
+      audience === "just_me"
+        ? access.circleId
+        : (input.circleIds?.[0] ?? access.circleId);
+    const writeAccess = writeAccessForCircle(document, access, primaryCircleId);
+    if (!canWriteJournal(document, writeAccess, input.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
     const createdAt = nowIso();
@@ -554,20 +724,24 @@ export async function publishLocalMediaMoment(
       input.kind === "photo" ? { id: randomUUID(), ...input.media } : undefined;
     const moment: LocalMoment = {
       id: randomUUID(),
+      circleId: writeAccess.circleId,
+      circleIds:
+        audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds ?? [writeAccess.circleId])],
       journalPersonId: input.journalPersonId,
-      recordedByMembershipId: access.membershipId,
+      recordedByMembershipId: writeAccess.membershipId,
       kind: input.kind,
       title: "",
       body: input.body,
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(access, input.journalPersonId, input.audience),
+      audience,
       revision: 1,
       createdAt,
       updatedAt: createdAt,

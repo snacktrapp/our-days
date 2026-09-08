@@ -22,6 +22,7 @@ import {
 } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import { buildTimelineEntries } from "@/data/moments.server";
+import { formatAudienceChipLabel } from "@/features/moments/moment-audience";
 import {
   anniversaryKey,
   compareMemoryDatesDescending,
@@ -130,6 +131,10 @@ function chrome(
       recordedByName: "Brian",
       journalPeople: composerJournalPeople,
       taggablePeople: composerPeople,
+      circleId: "family",
+      postableCircles: [
+        { id: "family", name: "All our days", personId: "brian" },
+      ],
     },
   };
 }
@@ -448,8 +453,25 @@ export function getFamilyTimelineFixture(
   const switcher = previewSwitcher(currentHref, options);
   const title = extraSelected ? extraSelected.name : previewFamilyName;
 
+  const familyChrome = chrome(
+    "teal",
+    title,
+    "brian",
+    journalSwitcherEyebrow(switcher),
+  );
   return {
-    chrome: chrome("teal", title, "brian", journalSwitcherEyebrow(switcher)),
+    chrome: {
+      ...familyChrome,
+      composer: {
+        ...familyChrome.composer,
+        circleId: selectedGroupId,
+        postableCircles: previewGroups(options.extraGroup).map((group) => ({
+          id: group.id,
+          name: group.name,
+          personId: "brian",
+        })),
+      },
+    },
     interaction: timelineInteraction,
     switcher,
     entries: extraSelected
@@ -526,7 +548,20 @@ function personalTimelineEntries(
   }
 
   return buildTimelineEntries(
-    moments.map((entry) => entry.moment),
+    moments.map((entry) => ({
+      ...entry.moment,
+      showAudienceChip: true,
+      audienceChipLabel: formatAudienceChipLabel({
+        audience: entry.moment.audience,
+        linkedCircleIds:
+          entry.moment.linkedCircleIds ??
+          (entry.moment.audience === "just_me" ? [] : ["family"]),
+      }),
+      circleId: entry.moment.circleId ?? "family",
+      linkedCircleIds:
+        entry.moment.linkedCircleIds ??
+        (entry.moment.audience === "just_me" ? [] : ["family"]),
+    })),
     designPreviewToday,
     false,
     person.name,
@@ -779,6 +814,7 @@ function isMomentEntry(entry: TimelineEntryViewModel): entry is MomentEntry {
 
 const archiveMoments = (familyEntries as readonly TimelineEntryViewModel[])
   .filter(isMomentEntry)
+  .filter((entry) => entry.moment.kind !== "insight")
   .sort((left, right) =>
     compareMemoryDatesDescending(left.moment, right.moment),
   );

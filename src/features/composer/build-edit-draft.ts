@@ -58,6 +58,8 @@ export function buildComposerEditDraft(
     occurredAt: moment.editOccurrence?.occurredAt ?? null,
     occurredTimezone: moment.editOccurrence?.timeZone ?? null,
     audience: moment.audience === "just_me" ? "just_me" : "family",
+    circleId: moment.circleId,
+    linkedCircleIds: moment.linkedCircleIds,
     taggedPersonIds: moment.taggedPeople?.map((person) => person.id) ?? [],
     place,
     verseSelection: parsed?.selection ?? emptyBibleVerseSelection,

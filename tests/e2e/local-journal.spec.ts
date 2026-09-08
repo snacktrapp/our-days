@@ -171,8 +171,8 @@ test("Just Me stays on the author's journal and off Family", async ({
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("A porch thought just for me.");
+  await page.getByRole("checkbox", { name: "Just me" }).click();
   await page.getByRole("button", { name: /Details/u }).click();
-  await page.getByRole("radio", { name: "Just Me" }).click();
   await expect(
     page.getByRole("button", { name: /Alex · You/u }),
   ).toBeDisabled();
@@ -185,7 +185,7 @@ test("Just Me stays on the author's journal and off Family", async ({
       .getByLabel("Chronological moments for Alex")
       .getByText("A porch thought just for me."),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".just-me-pill")).toHaveText("Just Me");
+  await expect(page.locator(".just-me-pill")).toHaveText("Just me");
 
   await page.goto("/family");
   await expect(page.getByLabel("Chronological family moments")).toBeVisible({

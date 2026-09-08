@@ -255,13 +255,15 @@ async function selectBiblePassage(
   }
 }
 
-test("date, time, and journal stay separated inside every phone-width drawer", async ({
+test("date, time, and Post to stay separated inside every phone-width drawer", async ({
   page,
 }) => {
   await page.goto("/family");
   const dialog = await openComposer(page);
   await dialog.getByRole("button", { name: /^Photo/u }).click();
-  await dialog.getByRole("button", { name: /Details/u }).click();
+  await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
+    0,
+  );
 
   for (const viewport of [
     { width: 320, height: 568 },
@@ -278,11 +280,9 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
       const [date, time] = [
         ...element.querySelectorAll<HTMLElement>(".composer-picker-trigger"),
       ];
-      const journal = element.querySelector<HTMLElement>(
-        ".composer-journal-trigger",
-      )!;
+      const postTo = element.querySelector<HTMLElement>(".composer-post-to")!;
       const sheetRect = sheet.getBoundingClientRect();
-      const rectangles = [date, time, journal].map((control) =>
+      const rectangles = [date, time, postTo].map((control) =>
         control.getBoundingClientRect(),
       );
       return {
@@ -291,7 +291,7 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
             rect.left >= sheetRect.left && rect.right <= sheetRect.right,
         ),
         dateAndTimeSeparated: rectangles[0].right <= rectangles[1].left,
-        journalBelow:
+        postToBelow:
           Math.max(rectangles[0].bottom, rectangles[1].bottom) <=
           rectangles[2].top,
         noHorizontalOverflow:
@@ -305,7 +305,7 @@ test("date, time, and journal stay separated inside every phone-width drawer", a
     expect(geometry).toEqual({
       contained: true,
       dateAndTimeSeparated: true,
-      journalBelow: true,
+      postToBelow: true,
       noHorizontalOverflow: true,
     });
   }
@@ -437,20 +437,13 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
-  const journal = dialog.getByRole("button", { name: /^Journal,/u });
   await page.getByRole("button", { name: /Details/u }).click();
-  await journal.click();
-  await expect(
-    dialog.getByRole("menuitemradio", { name: /Molly/u }),
-  ).toHaveCount(0);
-  await journal.click();
+  await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
+    0,
+  );
   const averyTag = page.getByRole("checkbox", { name: /Avery/u });
   await averyTag.check();
   await expect(averyTag).toBeChecked();
-  await journal.click();
-  await dialog.getByRole("menuitemradio", { name: /Avery/u }).click();
-  await expect(averyTag).not.toBeChecked();
-  await expect(averyTag).toBeDisabled();
   await page.getByRole("checkbox", { name: /Molly/u }).check();
   await setComposerPlace(dialog, "Oak Street School");
   await expectMinimumTargets(dialog);
@@ -468,8 +461,11 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(
     dialog.getByRole("button", { name: "Moment date, Aug 21, 2026" }),
   ).toBeVisible();
-  await expect(journal).toHaveAccessibleName(/^Journal, Avery/u);
+  await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("checkbox", { name: /Molly/u })).toBeChecked();
+  await expect(averyTag).toBeChecked();
 
   page.once("dialog", async (confirmation) => confirmation.accept());
   await page.keyboard.press("Escape");
@@ -933,7 +929,6 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
   for (const control of [
     text,
     page.getByRole("button", { name: /^Moment date,/u }),
-    dialog.getByRole("button", { name: /^Journal,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
     page.getByRole("button", { name: /^Place,/u }),

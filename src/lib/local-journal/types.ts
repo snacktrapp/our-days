@@ -44,6 +44,7 @@ export type LocalMedia = Readonly<{
 export type LocalMoment = Readonly<{
   id: string;
   circleId?: string;
+  circleIds?: readonly string[];
   journalPersonId: string | null;
   recordedByMembershipId: string;
   audience?: "family" | "just_me";

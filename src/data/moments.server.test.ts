@@ -231,7 +231,40 @@ describe("connected timeline mapping", () => {
     );
     expect(ownJournal.audience).toBe("just_me");
     expect(ownJournal.showJustMeBadge).toBe(true);
+    expect(ownJournal.showAudienceChip).toBe(true);
+    expect(ownJournal.audienceChipLabel).toBe("Just me");
     expect(familyFeed.showJustMeBadge).toBe(false);
+    expect(familyFeed.showAudienceChip).toBe(false);
+  });
+
+  it("labels the author's own family posts by linked circle count", () => {
+    const oneGroup = mapTimelineRow(
+      row({
+        moment_audience: "family",
+        moment_journal_person_id: "parent",
+        linked_circle_ids: ["circle"],
+      }),
+      "2026-08-30",
+      {
+        viewerPersonId: "parent",
+        viewingJournalPersonId: "parent",
+      },
+    );
+    const twoGroups = mapTimelineRow(
+      row({
+        moment_audience: "family",
+        moment_journal_person_id: "parent",
+        linked_circle_ids: ["circle", "harbor"],
+      }),
+      "2026-08-30",
+      {
+        viewerPersonId: "parent",
+        viewingJournalPersonId: "parent",
+      },
+    );
+    expect(oneGroup.showAudienceChip).toBe(true);
+    expect(oneGroup.audienceChipLabel).toBe("1 group");
+    expect(twoGroups.audienceChipLabel).toBe("2 groups");
   });
 
   it("maps a connected photo to the same-origin private delivery route", () => {

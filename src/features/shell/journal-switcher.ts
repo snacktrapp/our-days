@@ -19,6 +19,22 @@ export function journalSwitcherTypeLabel(kind: JournalSwitcherKind) {
   return "Person";
 }
 
+export function currentHomeContext(
+  items: readonly FamilyTimelineSwitcherItem[] | undefined,
+):
+  | Readonly<{
+      kind: JournalSwitcherKind;
+      circleId?: string;
+    }>
+  | undefined {
+  const current = items?.find((item) => item.current);
+  if (!current) return undefined;
+  return {
+    kind: current.kind,
+    ...(current.circleId ? { circleId: current.circleId } : {}),
+  };
+}
+
 export function journalSwitcherEyebrow(
   items: readonly FamilyTimelineSwitcherItem[],
 ) {

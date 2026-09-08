@@ -11,14 +11,28 @@ import type {
   ConnectedMomentActions,
   MomentConversationActions,
 } from "@/features/moments/moment-action-types";
+import type { PostableCircle } from "@/features/composer/post-to";
+import { AudienceChip } from "./audience-chip";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
-function Connection({ moment }: { moment: TimelineMomentViewModel }) {
+function Connection({
+  moment,
+  circles,
+  connectedActions,
+}: {
+  moment: TimelineMomentViewModel;
+  circles: readonly PostableCircle[];
+  connectedActions?: ConnectedMomentActions;
+}) {
   const dateAndTime = timelineCardOccurredLabel(
     moment.occurredOn,
     moment.displayTime,
   );
+  const chipLabel =
+    moment.audienceChipLabel ??
+    (moment.showJustMeBadge ? "Just me" : undefined);
+  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
 
   if (moment.kind === "insight") {
     return (
@@ -33,8 +47,27 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
 
   return (
     <div className="connection">
-      {moment.showJustMeBadge ? (
-        <span className="just-me-pill">Just Me</span>
+      {showChip && chipLabel ? (
+        <AudienceChip
+          label={chipLabel}
+          momentId={moment.id}
+          revision={moment.revision}
+          audience={moment.audience}
+          circleId={moment.circleId}
+          linkedCircleIds={moment.linkedCircleIds}
+          circles={circles}
+          setAudience={connectedActions?.setAudience}
+          edit={
+            connectedActions?.update
+              ? {
+                  moment,
+                  update: connectedActions.update,
+                  removePhoto: connectedActions.removePhoto,
+                  reorderPhotos: connectedActions.reorderPhotos,
+                }
+              : undefined
+          }
+        />
       ) : null}
       <span
         className={`avatar-node dot-${moment.personAccent}`}
@@ -69,6 +102,7 @@ type TimelineEntryProps = Readonly<{
   entry: TimelineEntryViewModel;
   firstMomentId?: string;
   interaction: TimelineViewModel["interaction"];
+  circles: readonly PostableCircle[];
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
@@ -79,6 +113,7 @@ function TimelineEntry({
   entry,
   firstMomentId,
   interaction,
+  circles,
   connectedActions,
   conversationActions,
   connectedPosition,
@@ -104,7 +139,11 @@ function TimelineEntry({
           className={`moment moment-${entry.moment.kind}`}
           data-moment-kind={entry.moment.kind}
         >
-          <Connection moment={entry.moment} />
+          <Connection
+            moment={entry.moment}
+            circles={circles}
+            connectedActions={connectedActions}
+          />
           <MomentCard
             interaction={interaction}
             moment={entry.moment}
@@ -190,6 +229,7 @@ export function TimelineFeed({
               entry={entry}
               firstMomentId={firstMomentId}
               interaction={model.interaction}
+              circles={model.chrome.composer.postableCircles ?? []}
               connectedActions={connectedActions}
               conversationActions={conversationActions}
               connectedPosition={

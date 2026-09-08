@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -57,7 +58,15 @@ import {
 } from "./optimistic-media-upload";
 import { startOptimisticMomentSave } from "./optimistic-moment-save";
 import { currentPickerTimeValue, DateTimeFields } from "./date-time-fields";
-import { JournalPickerField } from "./journal-picker-field";
+import { PostToField } from "./post-to-field";
+import {
+  createPostToDefault,
+  familyFeedHref,
+  initialPostToCircleIds,
+  orderPostToCircleIds,
+  primaryPostToCircle,
+  type CreatePostToHomeContext,
+} from "./post-to";
 import { LocationFields } from "./location-fields";
 import {
   emptyPlaceSelection,
@@ -103,6 +112,8 @@ export type ComposerEditDraft = Readonly<{
   title: string;
   body: string;
   audience?: MomentAudience;
+  circleId?: string;
+  linkedCircleIds?: readonly string[];
   existingMedia?: ComposerExistingMedia;
   save: UpdateFamilyMomentAction;
   removePhoto?: RemoveMomentPhotoAction;
@@ -117,6 +128,7 @@ type MomentComposerProps = Readonly<{
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
   editDraft?: ComposerEditDraft | null;
+  homeContext?: CreatePostToHomeContext;
   registerDismiss?: (dismiss: (() => void) | null) => void;
 }>;
 
@@ -272,6 +284,7 @@ export function MomentComposer({
   saveFamilyMoment,
   saveWrittenMoment,
   editDraft = null,
+  homeContext,
   registerDismiss,
 }: MomentComposerProps) {
   const router = useRouter();
@@ -293,14 +306,35 @@ export function MomentComposer({
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
     Boolean(
       editDraft &&
-      (editDraft.audience === "just_me" ||
-        editDraft.taggedPersonIds.length > 0 ||
+      (editDraft.taggedPersonIds.length > 0 ||
         (editDraft.mode !== "location" &&
           editDraft.place.label.trim().length > 0)),
     ),
   );
+  const postableCircles = useMemo(
+    () => model.postableCircles ?? [],
+    [model.postableCircles],
+  );
+  const createDefault = createPostToDefault(
+    postableCircles,
+    homeContext,
+    model.circleId,
+  );
+  const createJournalPersonId = model.recorderPersonId;
   const [audience, setAudience] = useState<MomentAudience>(
-    normalizeMomentAudience(editDraft?.audience),
+    editDraft
+      ? normalizeMomentAudience(editDraft.audience)
+      : createDefault.audience,
+  );
+  const [selectedCircleIds, setSelectedCircleIds] = useState<readonly string[]>(
+    () =>
+      editDraft
+        ? initialPostToCircleIds(postableCircles, {
+            audience: normalizeMomentAudience(editDraft.audience),
+            circleId: editDraft.circleId ?? model.circleId,
+            linkedCircleIds: editDraft.linkedCircleIds,
+          })
+        : createDefault.circleIds,
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
   const [title, setTitle] = useState(editDraft?.title ?? "");
@@ -317,7 +351,7 @@ export function MomentComposer({
   );
   const [occurredTime, setOccurredTime] = useState(cleanOccurredTime);
   const [journalPersonId, setJournalPersonId] = useState(
-    editDraft?.journalPersonId ?? model.defaultJournalPersonId,
+    editDraft?.journalPersonId ?? createJournalPersonId,
   );
   const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
     editDraft?.taggedPersonIds ?? [],
@@ -411,6 +445,12 @@ export function MomentComposer({
       occurredOn !== editDraft.occurredOn ||
       occurredTime !== editDraft.occurredTime ||
       audience !== normalizeMomentAudience(editDraft.audience) ||
+      selectedCircleIds.join(",") !==
+        initialPostToCircleIds(postableCircles, {
+          audience: normalizeMomentAudience(editDraft.audience),
+          circleId: editDraft.circleId ?? model.circleId,
+          linkedCircleIds: editDraft.linkedCircleIds,
+        }).join(",") ||
       currentPhotoSignature !== existingPhotoSignature
     : Boolean(
         body.length ||
@@ -423,8 +463,9 @@ export function MomentComposer({
         taggedPersonIds.length ||
         occurredOn !== model.previewToday ||
         occurredTime !== cleanOccurredTime ||
-        journalPersonId !== model.defaultJournalPersonId ||
-        audience !== "family",
+        journalPersonId !== createJournalPersonId ||
+        audience !== createDefault.audience ||
+        selectedCircleIds.join(",") !== createDefault.circleIds.join(","),
       );
   const selectedPhoto = photoItems[0] ?? null;
   const photoReady =
@@ -475,8 +516,20 @@ export function MomentComposer({
     [clearPhotoPreview],
   );
 
+  const homeContextKind = homeContext?.kind;
+  const homeContextCircleId = homeContext?.circleId;
   const resetDraft = useCallback(
     (nextMode: ComposerMode | null = null) => {
+      const nextPostTo = createPostToDefault(
+        postableCircles,
+        homeContextKind
+          ? {
+              kind: homeContextKind,
+              ...(homeContextCircleId ? { circleId: homeContextCircleId } : {}),
+            }
+          : undefined,
+        model.circleId,
+      );
       clearPhotoPreview();
       if (photoInputRef.current) photoInputRef.current.value = "";
       setMode(nextMode);
@@ -490,9 +543,10 @@ export function MomentComposer({
       const nextDefault = defaultOccurredTimeForCreate(nextMode);
       setCleanOccurredTime(nextDefault);
       setOccurredTime(nextDefault);
-      setJournalPersonId(model.defaultJournalPersonId);
+      setJournalPersonId(model.recorderPersonId);
       setTaggedPersonIds([]);
-      setAudience("family");
+      setAudience(nextPostTo.audience);
+      setSelectedCircleIds(nextPostTo.circleIds);
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
       setPhotoItems([]);
@@ -510,7 +564,15 @@ export function MomentComposer({
       uploadInFlightRef.current = false;
       setPhotoUploadStage(null);
     },
-    [clearPhotoPreview, model.defaultJournalPersonId, model.previewToday],
+    [
+      clearPhotoPreview,
+      homeContextCircleId,
+      homeContextKind,
+      model.circleId,
+      model.previewToday,
+      model.recorderPersonId,
+      postableCircles,
+    ],
   );
 
   const clearSheetDrag = useCallback(() => {
@@ -832,27 +894,63 @@ export function MomentComposer({
     );
   };
 
-  const chooseJournalPerson = (personId: string) => {
-    if (audience === "just_me") return;
-    if (!journalPeople.some((person) => person.id === personId)) return;
-    setJournalPersonId(personId);
-    setTaggedPersonIds((current) =>
-      current.filter((taggedPersonId) => taggedPersonId !== personId),
-    );
-  };
-
   const justMeAllowed = editDraft
     ? editDraft.journalPersonId === model.recorderPersonId
     : true;
+
+  const keepValidTaggedPersonIds = (current: readonly string[]) =>
+    current.filter((id) => taggablePeople.some((person) => person.id === id));
 
   const chooseAudience = (next: MomentAudience) => {
     if (next === "just_me" && !justMeAllowed) return;
     setAudience(next);
     if (next === "just_me") {
       setJournalPersonId(model.recorderPersonId);
-      setTaggedPersonIds([]);
+      setSelectedCircleIds([]);
+      setTaggedPersonIds(keepValidTaggedPersonIds);
     }
   };
+
+  const orderedCircleIds = orderPostToCircleIds(
+    selectedCircleIds,
+    postableCircles,
+    model.circleId,
+  );
+  const primaryCircle = primaryPostToCircle(postableCircles, orderedCircleIds);
+
+  const choosePostTo = (next: {
+    selectedIds: readonly string[];
+    justMe: boolean;
+  }) => {
+    if (next.justMe) {
+      chooseAudience("just_me");
+      return;
+    }
+    const ordered = orderPostToCircleIds(
+      next.selectedIds,
+      postableCircles,
+      model.circleId,
+    );
+    if (ordered.length === 0) return;
+    setSelectedCircleIds(ordered);
+    setAudience("family");
+    const nextPrimary = primaryPostToCircle(postableCircles, ordered);
+    if (nextPrimary && model.circleId && nextPrimary.id !== model.circleId) {
+      setJournalPersonId(nextPrimary.personId);
+      setTaggedPersonIds(keepValidTaggedPersonIds);
+      return;
+    }
+    if (!journalPeople.some((person) => person.id === journalPersonId)) {
+      setJournalPersonId(model.defaultJournalPersonId);
+    }
+  };
+
+  const saveCircleIds = audience === "just_me" ? [] : orderedCircleIds;
+  const savePrimaryCircleId =
+    audience === "just_me"
+      ? model.circleId
+      : (primaryCircle?.id ?? model.circleId);
+  const familyRedirect = familyFeedHref(savePrimaryCircleId);
 
   const validateDraft = () => {
     if (mode === "video" && !editingExistingMedia && !photoFile) {
@@ -959,6 +1057,7 @@ export function MomentComposer({
           occurredAt,
           occurredTimezone,
           audience,
+          circleIds: postableCircles.length ? saveCircleIds : undefined,
         });
         if (!result.ok) {
           setSaveError(result.message);
@@ -994,6 +1093,7 @@ export function MomentComposer({
                   taggedPersonIds: savedTaggedPersonIds,
                   audience,
                   existingMomentId: editDraft.momentId,
+                  circleIds: saveCircleIds,
                 },
                 createPhotoUploadAttempt(),
                 new AbortController().signal,
@@ -1071,7 +1171,7 @@ export function MomentComposer({
           files,
           draft: {
             body: capturedBody,
-            circleId: model.circleId,
+            circleId: savePrimaryCircleId ?? model.circleId ?? "",
             journalPersonId: savedJournalPersonId,
             occurredAt,
             occurredOn: savedOccurredOn,
@@ -1081,6 +1181,7 @@ export function MomentComposer({
             longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
             audience,
+            circleIds: saveCircleIds,
           },
         });
       } else {
@@ -1089,7 +1190,7 @@ export function MomentComposer({
           posterDataUrl: videoPosterDataUrl ?? undefined,
           draft: {
             body: capturedBody,
-            circleId: model.circleId,
+            circleId: savePrimaryCircleId ?? model.circleId ?? "",
             durationMs: videoDurationMs ?? undefined,
             journalPersonId: savedJournalPersonId,
             occurredAt,
@@ -1100,6 +1201,7 @@ export function MomentComposer({
             longitude: savedLongitude,
             taggedPersonIds: savedTaggedPersonIds,
             audience,
+            circleIds: saveCircleIds,
           },
         });
       }
@@ -1109,7 +1211,9 @@ export function MomentComposer({
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
       router.replace(
-        audience === "just_me" ? `/people/${savedJournalPersonId}` : "/family",
+        audience === "just_me"
+          ? `/people/${savedJournalPersonId}`
+          : familyRedirect,
       );
       return;
     }
@@ -1131,7 +1235,7 @@ export function MomentComposer({
       returnFocusRef.current?.focus({ preventScroll: true }),
     );
     startOptimisticMomentSave({
-      circleId: model.circleId ?? null,
+      circleId: savePrimaryCircleId ?? model.circleId ?? null,
       mode: savedMode,
       title: savedTitle,
       body: capturedBody,
@@ -1159,6 +1263,7 @@ export function MomentComposer({
               occurredAt,
               occurredTimezone,
               audience,
+              circleIds: saveCircleIds,
             })
           : saveWrittenMoment!({
               journalPersonId: savedJournalPersonId,
@@ -1167,11 +1272,14 @@ export function MomentComposer({
               occurredAt,
               occurredTimezone,
               audience,
+              circleIds: saveCircleIds,
             }),
       onPublished: () => router.refresh(),
     });
     router.replace(
-      audience === "just_me" ? `/people/${savedJournalPersonId}` : "/family",
+      audience === "just_me"
+        ? `/people/${savedJournalPersonId}`
+        : familyRedirect,
     );
   };
 
@@ -1822,6 +1930,17 @@ export function MomentComposer({
                   onDateChange={setOccurredOn}
                   onTimeChange={setOccurredTime}
                 />
+                {postableCircles.length === 0 ? null : (
+                  <PostToField
+                    circles={postableCircles}
+                    selectedIds={orderedCircleIds}
+                    justMe={audience === "just_me"}
+                    justMeAllowed={justMeAllowed}
+                    currentCircleId={model.circleId}
+                    lockedCircleId={editDraft?.circleId}
+                    onChange={choosePostTo}
+                  />
+                )}
               </div>
 
               <div className="composer-optional">
@@ -1836,77 +1955,65 @@ export function MomentComposer({
                 </button>
                 {optionalDetailsOpen ? (
                   <div id="composer-optional-fields">
-                    {editDraft ? null : (
-                      <JournalPickerField
-                        options={journalPeople}
-                        value={journalPersonId}
-                        onChange={chooseJournalPerson}
-                        disabled={audience === "just_me"}
-                      />
-                    )}
-                    <fieldset className="people-tags audience-choice">
-                      <legend>Audience</legend>
-                      <div>
-                        <label>
-                          <input
-                            type="radio"
-                            name="moment-audience"
-                            checked={audience === "family"}
-                            onChange={() => chooseAudience("family")}
-                          />
-                          Family
-                        </label>
-                        <label>
-                          <input
-                            type="radio"
-                            name="moment-audience"
-                            checked={audience === "just_me"}
-                            disabled={!justMeAllowed}
-                            onChange={() => chooseAudience("just_me")}
-                          />
-                          Just Me
-                        </label>
-                      </div>
-                    </fieldset>
-                    {audience === "just_me" ? null : (
-                      <fieldset className="people-tags">
-                        <legend>Who else was part of this?</legend>
+                    {editDraft || postableCircles.length > 0 ? null : (
+                      <fieldset className="people-tags audience-choice">
+                        <legend>Audience</legend>
                         <div>
-                          {taggablePeople
-                            .filter(
-                              (person) =>
-                                !connectedExperience ||
-                                person.id !== journalPersonId,
-                            )
-                            .map((person) => {
-                              const isPreviewJournalPerson =
-                                !connectedExperience &&
-                                person.id === journalPersonId;
-                              return (
-                                <label key={person.id}>
-                                  <input
-                                    type="checkbox"
-                                    checked={taggedPersonIds.includes(
-                                      person.id,
-                                    )}
-                                    disabled={isPreviewJournalPerson}
-                                    onChange={() =>
-                                      toggleTaggedPerson(person.id)
-                                    }
-                                  />
-                                  <span
-                                    className={`tag-person-dot dot-${person.accent}`}
-                                    aria-hidden="true"
-                                  >
-                                    {person.initial}
-                                  </span>
-                                  {person.name}
-                                </label>
-                              );
-                            })}
+                          <label>
+                            <input
+                              type="radio"
+                              name="moment-audience"
+                              checked={audience === "family"}
+                              onChange={() => chooseAudience("family")}
+                            />
+                            Family
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name="moment-audience"
+                              checked={audience === "just_me"}
+                              disabled={!justMeAllowed}
+                              onChange={() => chooseAudience("just_me")}
+                            />
+                            Just Me
+                          </label>
                         </div>
                       </fieldset>
                     )}
+                    <fieldset className="people-tags">
+                      <legend>Who else was part of this?</legend>
+                      <div>
+                        {taggablePeople
+                          .filter(
+                            (person) =>
+                              !connectedExperience ||
+                              person.id !== journalPersonId,
+                          )
+                          .map((person) => {
+                            const isPreviewJournalPerson =
+                              !connectedExperience &&
+                              person.id === journalPersonId;
+                            return (
+                              <label key={person.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={taggedPersonIds.includes(person.id)}
+                                  disabled={isPreviewJournalPerson}
+                                  onChange={() => toggleTaggedPerson(person.id)}
+                                />
+                                <span
+                                  className={`tag-person-dot dot-${person.accent}`}
+                                  aria-hidden="true"
+                                >
+                                  {person.initial}
+                                </span>
+                                {person.name}
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </fieldset>
                     {mode !== "location" ? (
                       <>
                         <LocationFields

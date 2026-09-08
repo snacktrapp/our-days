@@ -1,4 +1,5 @@
 import type { AccentToken } from "@/features/accent-token";
+import type { PostableCircle } from "./post-to";
 
 export type ComposerPersonOption = Readonly<{
   id: string;
@@ -18,4 +19,5 @@ export type MomentComposerViewModel = Readonly<{
   recordedByName: string;
   journalPeople: readonly ComposerPersonOption[];
   taggablePeople: readonly ComposerPersonOption[];
+  postableCircles?: readonly PostableCircle[];
 }>;

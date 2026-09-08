@@ -1,6 +1,6 @@
 begin;
 
-select plan(15);
+select plan(18);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
@@ -200,6 +200,47 @@ select lives_ok(
     'remember-this'
   ),
   'the author can still react to their Just Me moment'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+
+select lives_ok(
+  $$select public.create_family_moment(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000003',
+    'thought', null, 'Just me with company.',
+    null, array['30000000-0000-4000-8000-000000000002'::uuid],
+    '2026-08-29', null, null, null, null, 'just_me'
+  )$$,
+  'Just Me can keep a same-circle Who else tag'
+);
+
+select is(
+  (
+    select count(*)::bigint
+      from public.moment_people
+     where moment_id = (
+       select id from public.moments where body = 'Just me with company.'
+     )
+       and person_id = '30000000-0000-4000-8000-000000000002'
+       and removed_at is null
+  ),
+  1::bigint,
+  'Just Me Who else tags are stored'
+);
+
+select is(
+  (
+    select tagged_people
+      from public.list_timeline_moments(
+        '20000000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000003'
+      )
+     where body = 'Just me with company.'
+  ),
+  '[{"id": "30000000-0000-4000-8000-000000000002", "name": "A Organizer Two"}]'::jsonb,
+  'the author journal lists Just Me tagged people'
 );
 
 select * from finish();

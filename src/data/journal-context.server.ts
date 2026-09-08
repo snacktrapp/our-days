@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
+import type { PostableCircle } from "@/features/composer/post-to";
 import {
   localJournalIsEnabled,
   photoPostingIsEnabled,
@@ -248,14 +249,9 @@ export async function loadConnectedJournalContext(
       .eq("recorded_by_membership_id", access.membershipId)
       .is("trashed_at", null),
     supabase
-      .from("moments")
-      .select("id, recorded_by_membership_id, kind, created_at, audience")
-      .eq("circle_id", access.circleId)
-      .eq("audience", "family")
-      .neq("recorded_by_membership_id", access.membershipId)
-      .is("trashed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(40),
+      .from("moment_circles")
+      .select("moment_id")
+      .eq("circle_id", access.circleId),
     supabase
       .from("moment_notes")
       .select("id, moment_id, author_membership_id, created_at")
@@ -359,6 +355,46 @@ export async function loadConnectedJournalContext(
     access,
     guardedPersonIds,
   );
+  const postableCircles: readonly PostableCircle[] = (
+    circleMemberships.length > 0
+      ? circleMemberships
+      : [{ circleId: access.circleId, personId: access.personId }]
+  ).map((membership) => ({
+    id: membership.circleId,
+    name:
+      groups.find((group) => group.id === membership.circleId)?.name ??
+      (membership.circleId === access.circleId
+        ? circleResult.data.name
+        : "Group"),
+    personId: membership.personId,
+  }));
+  const linkedMomentIds = [
+    ...new Set((familyMomentsResult.data ?? []).map((row) => row.moment_id)),
+  ];
+  const linkedMomentsResult =
+    linkedMomentIds.length === 0
+      ? {
+          data: [] as {
+            id: string;
+            recorded_by_membership_id: string;
+            kind: string;
+            created_at: string;
+            audience?: string;
+          }[],
+          error: null,
+        }
+      : await supabase
+          .from("moments")
+          .select("id, recorded_by_membership_id, kind, created_at, audience")
+          .in("id", linkedMomentIds)
+          .eq("audience", "family")
+          .is("trashed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(40);
+  if (linkedMomentsResult.error) throw linkedMomentsResult.error;
+  const myMembershipIds = new Set(
+    circleMemberships.map((membership) => membership.membershipId),
+  );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
     circleId: access.circleId,
@@ -369,6 +405,7 @@ export async function loadConnectedJournalContext(
     recordedByName: recorder.name,
     journalPeople: surface.journalPeople,
     taggablePeople: surface.taggablePeople,
+    postableCircles,
   };
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
@@ -382,10 +419,21 @@ export async function loadConnectedJournalContext(
     notifications: buildActivityNotifications(
       notesResult.data ?? [],
       reactionsResult.data ?? [],
-      new Set((momentsResult.data ?? []).map((moment) => moment.id)),
+      new Set([
+        ...(momentsResult.data ?? []).map((moment) => moment.id),
+        ...(linkedMomentsResult.data ?? [])
+          .filter((moment) =>
+            myMembershipIds.has(moment.recorded_by_membership_id),
+          )
+          .map((moment) => moment.id),
+      ]),
       memberNames,
-      (familyMomentsResult.data ?? [])
-        .filter((moment) => moment.kind !== "insight")
+      (linkedMomentsResult.data ?? [])
+        .filter(
+          (moment) =>
+            moment.kind !== "insight" &&
+            !myMembershipIds.has(moment.recorded_by_membership_id),
+        )
         .map((moment) => ({
           id: moment.id,
           author_membership_id: moment.recorded_by_membership_id,

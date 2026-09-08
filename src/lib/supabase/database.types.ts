@@ -108,6 +108,36 @@ export type Database = {
           },
         ];
       };
+      moment_circles: {
+        Row: {
+          circle_id: string;
+          moment_id: string;
+        };
+        Insert: {
+          circle_id: string;
+          moment_id: string;
+        };
+        Update: {
+          circle_id?: string;
+          moment_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_circles_circle_id_fkey";
+            columns: ["circle_id"];
+            isOneToOne: false;
+            referencedRelation: "circles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moment_circles_moment_id_fkey";
+            columns: ["moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       moment_notes: {
         Row: {
           author_membership_id: string;
@@ -738,6 +768,7 @@ export type Database = {
           longitude?: number | null;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: string;
       };
@@ -787,6 +818,7 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: string;
       };
@@ -1018,6 +1050,7 @@ export type Database = {
           time_precision: string;
           updated_at: string;
           moment_audience: string;
+          linked_circle_ids: string[];
         }[];
       };
       list_web_push_deliveries: {
@@ -1192,6 +1225,7 @@ export type Database = {
           request_key?: string;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1217,6 +1251,7 @@ export type Database = {
           request_key?: string;
           tagged_person_ids: string[];
           audience?: string;
+          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1238,6 +1273,15 @@ export type Database = {
       save_web_push_subscription: {
         Args: { auth: string; endpoint: string; p256dh: string };
         Returns: string;
+      };
+      set_moment_audience: {
+        Args: {
+          audience: string;
+          circle_ids?: string[];
+          expected_revision: number;
+          moment_id: string;
+        };
+        Returns: number;
       };
       set_membership_role: {
         Args: { membership_id: string; role: string };

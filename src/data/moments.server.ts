@@ -19,7 +19,9 @@ import type { ConnectedJournalContext } from "./journal-context.server";
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import { mapDatabaseAccent } from "./journal-context.server";
 import {
+  formatAudienceChipLabel,
   normalizeMomentAudience,
+  showAudienceChip,
   showJustMeAudienceBadge,
 } from "@/features/moments/moment-audience";
 import {
@@ -46,6 +48,7 @@ export type TimelineRow = Omit<
   | "journal_person_name"
   | "journal_person_accent"
   | "moment_audience"
+  | "linked_circle_ids"
 > & {
   occurred_at: string | null;
   occurred_timezone: string | null;
@@ -59,6 +62,7 @@ export type TimelineRow = Omit<
   journal_person_name: string | null;
   journal_person_accent: string | null;
   moment_audience?: string | null;
+  linked_circle_ids?: string[] | null;
   tagged_people?: unknown;
 };
 
@@ -247,6 +251,14 @@ export function mapTimelineRow(
   conversation: MomentConversationViewModel = emptyConversation,
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
+  const linkedCircleIds = Array.isArray(row.linked_circle_ids)
+    ? row.linked_circle_ids.filter((id): id is string => typeof id === "string")
+    : [];
+  const chipVisible = showAudienceChip({
+    viewerPersonId: visibility?.viewerPersonId,
+    viewingJournalPersonId: visibility?.viewingJournalPersonId,
+    momentJournalPersonId: row.moment_journal_person_id,
+  });
   const taggedPeople = Array.isArray(row.tagged_people)
     ? row.tagged_people.flatMap((tag): { id: string; name: string }[] => {
         if (
@@ -267,6 +279,12 @@ export function mapTimelineRow(
     id: row.moment_id,
     journalPersonId: row.moment_journal_person_id ?? "",
     audience,
+    circleId: row.moment_circle_id ?? undefined,
+    linkedCircleIds,
+    showAudienceChip: chipVisible,
+    audienceChipLabel: chipVisible
+      ? formatAudienceChipLabel({ audience, linkedCircleIds })
+      : undefined,
     showJustMeBadge: showJustMeAudienceBadge({
       audience,
       viewerPersonId: visibility?.viewerPersonId,
@@ -287,7 +305,8 @@ export function mapTimelineRow(
     kicker:
       row.moment_kind === "insight"
         ? "An insight"
-        : row.recorder_person_id === row.moment_journal_person_id
+        : row.recorder_person_id === row.moment_journal_person_id ||
+            !row.recorder_person_name
           ? row.moment_kind === "milestone"
             ? "A milestone"
             : row.moment_kind === "location"

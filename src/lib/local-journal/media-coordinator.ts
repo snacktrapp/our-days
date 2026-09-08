@@ -157,6 +157,7 @@ export async function publishVerifiedPhotoMoment(
     occurredTimezone: string | null;
     claimedSha256?: string;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
     existingMomentId?: string;
   }>,
 ) {
@@ -216,6 +217,7 @@ export async function publishVerifiedPhotoMoment(
     occurredAt: input.occurredAt,
     occurredTimezone: input.occurredTimezone,
     audience: input.audience,
+    circleIds: input.circleIds,
     media,
   });
 }
@@ -235,6 +237,7 @@ export async function publishVerifiedVideoMoment(
     occurredTimezone: string | null;
     durationMs: number;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
   }>,
 ) {
   requireUuid(input.journalPersonId, "journal");
@@ -276,6 +279,7 @@ export async function publishVerifiedVideoMoment(
     occurredAt: input.occurredAt,
     occurredTimezone: input.occurredTimezone,
     audience: input.audience,
+    circleIds: input.circleIds,
     media: { ...media, durationMs: input.durationMs },
   });
 }

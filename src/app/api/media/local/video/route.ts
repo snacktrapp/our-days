@@ -64,6 +64,21 @@ export async function POST(request: Request) {
       readString(form, "longitude"),
     );
     const audienceValue = readString(form, "audience");
+    let circleIds: string[] | undefined;
+    try {
+      const raw = readString(form, "circleIds");
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+          Array.isArray(parsed) &&
+          parsed.every((value) => typeof value === "string")
+        ) {
+          circleIds = parsed;
+        }
+      }
+    } catch {
+      circleIds = undefined;
+    }
     const moment = await publishVerifiedVideoMoment(access, {
       file,
       journalPersonId: readString(form, "journalPersonId"),
@@ -80,6 +95,7 @@ export async function POST(request: Request) {
         audienceValue === "just_me" || audienceValue === "family"
           ? audienceValue
           : undefined,
+      circleIds,
     });
     return json(200, {
       momentId: moment.id,

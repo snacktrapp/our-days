@@ -7,13 +7,16 @@ import {
   type SaveFamilyMomentAction,
 } from "@/features/composer/moment-composer";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
+import type { CreatePostToHomeContext } from "@/features/composer/post-to";
 
 export function TimelineHeaderComposer({
   composer,
   createMomentAction,
+  homeContext,
 }: Readonly<{
   composer: MomentComposerViewModel;
   createMomentAction?: SaveFamilyMomentAction;
+  homeContext?: CreatePostToHomeContext;
 }>) {
   const session = useComposerSession();
   const [composerOpen, setComposerOpen] = useState(false);
@@ -62,8 +65,9 @@ export function TimelineHeaderComposer({
         </svg>
       </button>
       <MomentComposer
-        key={`${composer.recorderPersonId}:${composer.defaultJournalPersonId}`}
+        key={`${composer.recorderPersonId}:${composer.defaultJournalPersonId}:${homeContext?.kind ?? "none"}:${homeContext?.circleId ?? composer.circleId ?? ""}`}
         model={composer}
+        homeContext={homeContext}
         open={composerOpen}
         returnFocusRef={addMomentRef}
         registerDismiss={(dismiss) => {
