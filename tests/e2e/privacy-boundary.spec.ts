@@ -148,7 +148,6 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
       "/settings/family",
       await captureNavigation("/family", "/settings/family"),
     ],
-    ["/memories", await captureNavigation("/family", "/memories")],
     [
       "/memories/on-this-day",
       await captureNavigation("/memories", "/memories/on-this-day"),
@@ -168,6 +167,9 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
     "/people/not-in-this-family",
     capturedRequests.get("/people/molly")!,
   );
+  // Memories is parked out of chrome. Reuse a sibling envelope for the
+  // landing route; nested Memories pages still have in-page links.
+  capturedRequests.set("/memories", capturedRequests.get("/family")!);
   // The retired Milestones collection has no visible entry point. Reuse a
   // genuine Memories navigation envelope to verify its guarded legacy route.
   capturedRequests.set(
