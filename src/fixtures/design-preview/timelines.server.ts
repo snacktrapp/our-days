@@ -216,6 +216,9 @@ const familyEntries = [
         },
       ],
       taggedPeopleLabel: "Molly + 3",
+      placeName: "Sand Harbor",
+      latitude: 39.2,
+      longitude: -119.93,
     },
   },
   {
@@ -267,6 +270,9 @@ const familyEntries = [
         ],
         reactions: [],
       }),
+      placeName: "The kitchen",
+      latitude: 35.2828,
+      longitude: -120.6596,
     },
   },
   {
