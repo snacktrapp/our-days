@@ -2,12 +2,14 @@
 
 import { useRef, useState } from "react";
 import { useComposerSession } from "@/features/composer/composer-session";
+import { createConnectedEntryDraftActions } from "@/features/composer/entry-draft-client";
 import {
   MomentComposer,
   type SaveFamilyMomentAction,
 } from "@/features/composer/moment-composer";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { CreatePostToHomeContext } from "@/features/composer/post-to";
+import { createPreviewEntryDraftActions } from "@/features/composer/preview-entry-drafts";
 
 export function TimelineHeaderComposer({
   composer,
@@ -75,6 +77,12 @@ export function TimelineHeaderComposer({
         }}
         onRequestClose={() => setComposerOpen(false)}
         saveFamilyMoment={createMomentAction}
+        draftActions={
+          composer.experience === "connected-family" ||
+          composer.experience === "connected-written"
+            ? createConnectedEntryDraftActions()
+            : createPreviewEntryDraftActions()
+        }
       />
     </>
   );

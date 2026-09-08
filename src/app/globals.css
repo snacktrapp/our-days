@@ -6795,6 +6795,160 @@ html[data-theme].overlay-open .app-shell::before,
   line-height: 1.35;
 }
 
+.composer-drafts-choice-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-drafts-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 22%, var(--cream));
+  color: var(--teal);
+  font-family: var(--font-interface);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.drafts-choice {
+  background: color-mix(in srgb, var(--moss) 18%, var(--cream));
+  color: var(--moss);
+}
+
+.composer-drafts-panel {
+  padding: 0 4px 12px;
+}
+
+.composer-drafts-back {
+  min-height: 44px;
+  margin-bottom: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.composer-drafts-empty {
+  margin: 18px 0 8px;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-size: 14px;
+}
+
+.composer-drafts-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-drafts-row {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--hairline);
+}
+
+.composer-drafts-row-swipe {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  background: var(--cream);
+}
+
+.composer-drafts-open {
+  min-height: 64px;
+  padding: 10px 0;
+  display: grid;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-drafts-open strong {
+  font-family: var(--font-interface);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.composer-drafts-open small {
+  color: var(--muted);
+  font-family: var(--font-record), Georgia, serif;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.composer-drafts-more {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composer-drafts-menu {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  top: 48px;
+  min-width: 120px;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--overlay-popover-fill, var(--cream));
+  box-shadow: var(--header-drawer-shadow);
+}
+
+.composer-drafts-menu button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-drafts-delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 72px;
+  border: 0;
+  background: color-mix(in srgb, var(--clay) 78%, #3a1f18);
+  color: #fffaf0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] .composer-drafts-count {
+  background: color-mix(in srgb, var(--teal) 16%, #fff);
+}
+
+:root[data-theme="light"] .composer-drafts-delete {
+  background: color-mix(in srgb, var(--clay) 72%, #5a2d24);
+}
+
 :root[data-theme="light"] .composer-field input::placeholder,
 :root[data-theme="light"] .composer-field textarea::placeholder,
 :root[data-theme="light"] .inline-note-form textarea::placeholder,

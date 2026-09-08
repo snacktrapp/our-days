@@ -51,7 +51,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("Casey left a pebble on the porch.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
     page
       .getByLabel("Chronological family moments")
@@ -69,7 +69,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.getByText("Photo ready to upload privately."),
   ).toBeVisible();
   await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
     page
       .getByLabel("Chronological family moments")
@@ -92,7 +92,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.getByText("Wait for this video to finish loading."),
   ).toHaveCount(0);
   await page.getByRole("textbox", { name: "Note" }).fill("A one-second wave.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
     page
       .getByLabel("Chronological family moments")
@@ -176,7 +176,7 @@ test("Just Me stays on the author's journal and off Family", async ({
     page.getByRole("button", { name: /Alex · You/u }),
   ).toBeDisabled();
   await expect(page.getByText("Who else was part of this?")).toBeVisible();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}`));
   await expect(

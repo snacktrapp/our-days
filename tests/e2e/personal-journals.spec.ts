@@ -127,7 +127,7 @@ test("composer posts onto the recorder journal and hides the Journal picker", as
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("Avery tried something new.");
-  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Post" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 
   await page.locator(".title-switcher summary").click();
