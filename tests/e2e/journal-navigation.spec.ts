@@ -415,9 +415,23 @@ test("members can create a second group from Account and filter Home without cos
   ).toBeVisible();
   await page.getByLabel("Group name").fill("Cousins");
   await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page).toHaveURL(/inviteCircle=created/);
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
+  const cousinsTrigger = page.getByRole("button", { name: /Cousins/u });
+  await expect(cousinsTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("TARS")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add your first members" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add your first members" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Invite into Cousins" }),
+  ).toBeVisible();
+  await expect(page.getByText("TARS")).toHaveCount(0);
+  await page.getByRole("link", { name: "Home" }).click();
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
   await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Group");
-  await expect(page).toHaveURL(/circle=created/);
   await page.locator(".title-switcher summary").click();
   await expect(page.getByRole("button", { name: "Create group" })).toHaveCount(
     0,
@@ -432,26 +446,6 @@ test("members can create a second group from Account and filter Home without cos
   await expect(
     page.getByRole("link", { name: "Molly", exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "Account" }).click();
-  await expect(
-    page.getByRole("button", { name: /All our days/u }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Cousins/u })).toBeVisible();
-  await expect(page.getByText("TARS")).toHaveCount(0);
-  await page.getByRole("button", { name: /Cousins/u }).click();
-  await expect(
-    page.getByRole("heading", { name: "Invite into Cousins" }),
-  ).toBeVisible();
-  await expect(page.getByText("TARS")).toHaveCount(0);
-  await page.getByRole("link", { name: "Home" }).click();
-  await expect(page.locator(".title-switcher")).toBeVisible();
-  await page.locator(".title-switcher summary").click();
-  const cousins = page.getByRole("link", { name: "Cousins", exact: true });
-  if (await cousins.isVisible()) {
-    await cousins.click();
-    await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
-    await page.locator(".title-switcher summary").click();
-  }
   await page.getByRole("link", { name: "All our days", exact: true }).click();
   await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
   await expect(page).toHaveURL(/circle=family/);
