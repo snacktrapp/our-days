@@ -225,6 +225,95 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("name")).toBe("Cousins");
   });
 
+  it("opens a newly created circle with an add-first-members prompt that surfaces invite", async () => {
+    const user = userEvent.setup();
+    const createdGroup = {
+      ...model,
+      groups: [
+        model.groups[0],
+        {
+          id: "created",
+          name: "Cousins",
+          memberCount: 1,
+          currentMemberId: "current",
+          canManageAccess: true,
+          members: [previewMembers[0]],
+          guardianOptions: [],
+          pendingInvitations: [],
+        },
+      ],
+    };
+    render(
+      <FamilySettingsPanel model={createdGroup} inviteCircleId="created" />,
+    );
+
+    const cousins = screen.getByRole("button", { name: /Cousins/u });
+    expect(cousins).toHaveAttribute("aria-expanded", "true");
+    const addMembers = screen.getByRole("button", {
+      name: "Add your first members",
+    });
+    expect(addMembers).toBeVisible();
+    expect(addMembers).toHaveFocus();
+    expect(
+      screen.queryByRole("heading", { name: "Invite into Cousins" }),
+    ).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Email address" })).toBeNull();
+
+    await user.click(addMembers);
+    expect(
+      screen.getByRole("heading", { name: "Invite into Cousins" }),
+    ).toBeVisible();
+    const email = screen.getByRole("textbox", { name: "Email address" });
+    expect(email).toBeVisible();
+    await waitFor(() => expect(email).toHaveFocus());
+    expect(
+      screen.queryByRole("button", { name: "Add your first members" }),
+    ).toBeNull();
+  });
+
+  it("surfaces the connected invite form from the first-members prompt", async () => {
+    const user = userEvent.setup();
+    const createdConnected = {
+      ...connectedInvitationModel,
+      groups: [
+        {
+          ...connectedInvitationModel.groups[0],
+          id: "created",
+          name: "Cousins",
+          memberCount: 1,
+          members: [connectedMembers[0]],
+          pendingInvitations: [],
+        },
+      ],
+    };
+    render(
+      <FamilySettingsPanel
+        model={createdConnected}
+        inviteCircleId="created"
+        actions={{
+          requestInvitation: vi.fn(),
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add your first members" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Invite into Cousins" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("textbox", { name: "Family member’s name" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("textbox", { name: "Email address" }),
+    ).toBeVisible();
+  });
+
   it("opens one circle at a time and keeps create separate from group names", async () => {
     const user = userEvent.setup();
     const twoCircles = {
@@ -289,7 +378,10 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getAllByText("Account · Can sign in")).toHaveLength(2);
     expect(screen.getByText("Managed profile · No sign-in")).toBeVisible();
-    expect(screen.getByText(/Child journals have no sign-in/u)).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "People and access" }),
+    ).toBeVisible();
+    expect(screen.queryByText(/Child journals have no sign-in/u)).toBeNull();
     expect(
       screen.getByText(/no accounts or permissions are active/u),
     ).toBeVisible();
