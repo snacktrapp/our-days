@@ -58,7 +58,6 @@ import {
 } from "./optimistic-media-upload";
 import { startOptimisticMomentSave } from "./optimistic-moment-save";
 import { currentPickerTimeValue, DateTimeFields } from "./date-time-fields";
-import { JournalPickerField } from "./journal-picker-field";
 import { PostToField } from "./post-to-field";
 import {
   createPostToDefault,
@@ -321,10 +320,7 @@ export function MomentComposer({
     homeContext,
     model.circleId,
   );
-  const createJournalPersonId =
-    createDefault.audience === "just_me"
-      ? model.recorderPersonId
-      : model.defaultJournalPersonId;
+  const createJournalPersonId = model.recorderPersonId;
   const [audience, setAudience] = useState<MomentAudience>(
     editDraft
       ? normalizeMomentAudience(editDraft.audience)
@@ -547,11 +543,7 @@ export function MomentComposer({
       const nextDefault = defaultOccurredTimeForCreate(nextMode);
       setCleanOccurredTime(nextDefault);
       setOccurredTime(nextDefault);
-      setJournalPersonId(
-        nextPostTo.audience === "just_me"
-          ? model.recorderPersonId
-          : model.defaultJournalPersonId,
-      );
+      setJournalPersonId(model.recorderPersonId);
       setTaggedPersonIds([]);
       setAudience(nextPostTo.audience);
       setSelectedCircleIds(nextPostTo.circleIds);
@@ -577,7 +569,6 @@ export function MomentComposer({
       homeContextCircleId,
       homeContextKind,
       model.circleId,
-      model.defaultJournalPersonId,
       model.previewToday,
       model.recorderPersonId,
       postableCircles,
@@ -903,15 +894,6 @@ export function MomentComposer({
     );
   };
 
-  const chooseJournalPerson = (personId: string) => {
-    if (audience === "just_me") return;
-    if (!journalPeople.some((person) => person.id === personId)) return;
-    setJournalPersonId(personId);
-    setTaggedPersonIds((current) =>
-      current.filter((taggedPersonId) => taggedPersonId !== personId),
-    );
-  };
-
   const justMeAllowed = editDraft
     ? editDraft.journalPersonId === model.recorderPersonId
     : true;
@@ -932,11 +914,6 @@ export function MomentComposer({
     model.circleId,
   );
   const primaryCircle = primaryPostToCircle(postableCircles, orderedCircleIds);
-  const journalLocked =
-    audience === "just_me" ||
-    Boolean(
-      primaryCircle && model.circleId && primaryCircle.id !== model.circleId,
-    );
 
   const choosePostTo = (next: {
     selectedIds: readonly string[];
@@ -1975,14 +1952,6 @@ export function MomentComposer({
                 </button>
                 {optionalDetailsOpen ? (
                   <div id="composer-optional-fields">
-                    {editDraft ? null : (
-                      <JournalPickerField
-                        options={journalPeople}
-                        value={journalPersonId}
-                        onChange={chooseJournalPerson}
-                        disabled={journalLocked}
-                      />
-                    )}
                     {editDraft || postableCircles.length > 0 ? null : (
                       <fieldset className="people-tags audience-choice">
                         <legend>Audience</legend>

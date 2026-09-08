@@ -437,20 +437,13 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   const text = page.getByRole("textbox", { name: "Entry" });
   await text.fill("A draft worth keeping");
   await selectMomentDate(dialog, "Aug 21, 2026");
-  const journal = dialog.getByRole("button", { name: /^Journal,/u });
   await page.getByRole("button", { name: /Details/u }).click();
-  await journal.click();
-  await expect(
-    dialog.getByRole("menuitemradio", { name: /Molly/u }),
-  ).toHaveCount(0);
-  await journal.click();
+  await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
+    0,
+  );
   const averyTag = page.getByRole("checkbox", { name: /Avery/u });
   await averyTag.check();
   await expect(averyTag).toBeChecked();
-  await journal.click();
-  await dialog.getByRole("menuitemradio", { name: /Avery/u }).click();
-  await expect(averyTag).not.toBeChecked();
-  await expect(averyTag).toBeDisabled();
   await page.getByRole("checkbox", { name: /Molly/u }).check();
   await setComposerPlace(dialog, "Oak Street School");
   await expectMinimumTargets(dialog);
@@ -468,8 +461,11 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await expect(
     dialog.getByRole("button", { name: "Moment date, Aug 21, 2026" }),
   ).toBeVisible();
-  await expect(journal).toHaveAccessibleName(/^Journal, Avery/u);
+  await expect(dialog.getByRole("button", { name: /^Journal,/u })).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("checkbox", { name: /Molly/u })).toBeChecked();
+  await expect(averyTag).toBeChecked();
 
   page.once("dialog", async (confirmation) => confirmation.accept());
   await page.keyboard.press("Escape");
@@ -933,7 +929,6 @@ test("keyboard-sized viewport keeps every capture and review control reachable",
   for (const control of [
     text,
     page.getByRole("button", { name: /^Moment date,/u }),
-    dialog.getByRole("button", { name: /^Journal,/u }),
     page.getByRole("button", { name: /Details/u }),
     mollyTag,
     page.getByRole("button", { name: /^Place,/u }),

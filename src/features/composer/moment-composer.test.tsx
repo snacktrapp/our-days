@@ -323,21 +323,6 @@ async function selectComposerBiblePassage(
   }
 }
 
-async function selectComposerJournal(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-) {
-  let trigger = screen.queryByRole("button", { name: /Brian · You/u });
-  if (!trigger) {
-    await user.click(screen.getByRole("button", { name: /Details/u }));
-    trigger = screen.getByRole("button", { name: /Brian · You/u });
-  }
-  await user.click(trigger);
-  await user.click(
-    screen.getByRole("menuitemradio", { name: new RegExp(name) }),
-  );
-}
-
 describe("MomentComposer", () => {
   it("defaults Photo and written Moment time to now without marking the draft dirty", async () => {
     const confirm = vi.spyOn(window, "confirm");
@@ -517,8 +502,10 @@ describe("MomentComposer", () => {
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "Just me" }));
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
     expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -1469,7 +1456,10 @@ describe("MomentComposer", () => {
 
     await user.type(text, "A brave blue door.");
     await setComposerDate(user, "2023-08-21");
-    await selectComposerJournal(user, "Avery");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
     await setComposerPlace(user, "Oak Street School");
     expect(screen.queryByRole("heading", { name: "Review entry" })).toBeNull();
@@ -1855,6 +1845,9 @@ describe("MomentComposer", () => {
     expect(
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
     expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
@@ -2173,17 +2166,14 @@ describe("MomentComposer", () => {
     },
   );
 
-  it("removes a stale self-tag when its person becomes the journal", async () => {
+  it("does not offer a Journal picker on create", async () => {
     const user = await openComposer();
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    const avery = screen.getByRole("checkbox", { name: /Avery/ });
-    await user.click(avery);
-    expect(avery).toBeChecked();
-
-    await selectComposerJournal(user, "Avery");
-    expect(avery).not.toBeChecked();
-    expect(avery).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^Journal,/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeEnabled();
   });
 
   it.each([
@@ -2197,12 +2187,6 @@ describe("MomentComposer", () => {
       "date",
       async (user: ReturnType<typeof userEvent.setup>) => {
         await setComposerDate(user, "2020-01-01");
-      },
-    ],
-    [
-      "journal",
-      async (user: ReturnType<typeof userEvent.setup>) => {
-        await selectComposerJournal(user, "Avery");
       },
     ],
     [
