@@ -172,11 +172,10 @@ test("Just Me stays on the author's journal and off Family", async ({
     .getByRole("textbox", { name: "Entry" })
     .fill("A porch thought just for me.");
   await page.getByRole("checkbox", { name: "Just me" }).click();
-  await page.getByRole("button", { name: /Details/u }).click();
   await expect(
     page.getByRole("button", { name: /Alex · You/u }),
   ).toBeDisabled();
-  await expect(page.getByText("Who else was part of this?")).toHaveCount(0);
+  await expect(page.getByText("Who else was part of this?")).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}`));

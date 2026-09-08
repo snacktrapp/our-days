@@ -4129,49 +4129,6 @@ span.moment-place-line {
   line-height: 1;
   pointer-events: none;
 }
-.composer-optional {
-  margin-top: 13px;
-  border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--hairline);
-}
-.composer-optional-toggle {
-  width: 100%;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
-}
-.composer-optional-toggle::after {
-  content: "";
-  width: 10px;
-  height: 10px;
-  flex: 0 0 10px;
-  margin-left: 9px;
-  background:
-    linear-gradient(var(--teal), var(--teal)) center / 10px 2px no-repeat,
-    linear-gradient(var(--teal), var(--teal)) center / 2px 10px no-repeat;
-}
-.composer-optional-toggle[aria-expanded="true"]::after {
-  background: linear-gradient(var(--teal), var(--teal)) center / 10px 2px
-    no-repeat;
-}
-.composer-optional-toggle span {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-#composer-optional-fields {
-  padding: 2px 0 13px;
-}
 .people-tags {
   margin: 10px 0 2px;
   padding: 0;
@@ -5941,26 +5898,6 @@ button.audience-chip .audience-chip-face {
   color: var(--muted);
 }
 
-.composer-optional {
-  border-color: var(--hairline);
-}
-
-.composer-optional-toggle {
-  color: var(--ink);
-  font-family: var(--font-interface);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.composer-optional-toggle span {
-  color: var(--muted);
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.12em;
-}
-
 .composer-review-details {
   border-color: var(--hairline);
 }
@@ -6759,8 +6696,7 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--muted);
 }
 
-:root[data-theme="light"] .composer-field > span small,
-:root[data-theme="light"] .composer-optional-toggle span {
+:root[data-theme="light"] .composer-field > span small {
   color: #59645e;
 }
 
@@ -7835,14 +7771,6 @@ html[data-theme].overlay-open .app-shell::before,
   margin: 0;
 }
 
-.composer-post-to .post-to-chips legend,
-.post-to-chips legend {
-  margin-bottom: 7px;
-  color: #60574e;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .people-tags.post-to-chips > div {
   display: flex;
   flex-wrap: wrap;
@@ -8252,8 +8180,7 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .composer-location-status,
-.composer-location-unavailable,
-.composer-location-note {
+.composer-location-unavailable {
   margin: 0;
   color: var(--muted);
   font-family: var(--font-record);

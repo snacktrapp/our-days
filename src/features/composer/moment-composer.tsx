@@ -303,9 +303,6 @@ export function MomentComposer({
     onAnimationEnd: onOverlayAnimationEnd,
   } = useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const chooserSurface = !mode || choosingMode || reviewing;
-  const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
-    Boolean(editDraft && editDraft.taggedPersonIds.length > 0),
-  );
   const postableCircles = useMemo(
     () => model.postableCircles ?? [],
     [model.postableCircles],
@@ -530,7 +527,6 @@ export function MomentComposer({
       setMode(nextMode);
       setChoosingMode(false);
       setReviewing(false);
-      setOptionalDetailsOpen(false);
       setBody("");
       setTitle("");
       setVerseSelection(emptyBibleVerseSelection);
@@ -1939,97 +1935,70 @@ export function MomentComposer({
               </div>
 
               {mode !== "location" ? (
-                <>
-                  <LocationFields optional value={place} onChange={setPlace} />
-                  <small className="composer-location-note">
-                    No location is read from your media.
-                  </small>
-                </>
+                <LocationFields optional value={place} onChange={setPlace} />
               ) : null}
 
-              <div className="composer-optional">
-                <button
-                  className="composer-optional-toggle"
-                  type="button"
-                  aria-expanded={optionalDetailsOpen}
-                  aria-controls="composer-optional-fields"
-                  onClick={() => setOptionalDetailsOpen((current) => !current)}
-                >
-                  Details <span>Optional</span>
-                </button>
-                {optionalDetailsOpen ? (
-                  <div id="composer-optional-fields">
-                    {editDraft || postableCircles.length > 0 ? null : (
-                      <fieldset className="people-tags audience-choice">
-                        <legend>Audience</legend>
-                        <div>
-                          <label>
-                            <input
-                              type="radio"
-                              name="moment-audience"
-                              checked={audience === "family"}
-                              onChange={() => chooseAudience("family")}
-                            />
-                            Family
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              name="moment-audience"
-                              checked={audience === "just_me"}
-                              disabled={!justMeAllowed}
-                              onChange={() => chooseAudience("just_me")}
-                            />
-                            Just Me
-                          </label>
-                        </div>
-                      </fieldset>
-                    )}
-                    <fieldset className="people-tags">
-                      <legend>Who else was part of this?</legend>
-                      <div>
-                        {taggablePeople
-                          .filter(
-                            (person) =>
-                              !connectedExperience ||
-                              person.id !== journalPersonId,
-                          )
-                          .map((person) => {
-                            const isPreviewJournalPerson =
-                              !connectedExperience &&
-                              person.id === journalPersonId;
-                            return (
-                              <label key={person.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={taggedPersonIds.includes(person.id)}
-                                  disabled={isPreviewJournalPerson}
-                                  onChange={() => toggleTaggedPerson(person.id)}
-                                />
-                                <span
-                                  className={`tag-person-dot dot-${person.accent}`}
-                                  aria-hidden="true"
-                                >
-                                  {person.initial}
-                                </span>
-                                {person.name}
-                              </label>
-                            );
-                          })}
-                      </div>
-                    </fieldset>
+              {editDraft || postableCircles.length > 0 ? null : (
+                <fieldset className="people-tags audience-choice">
+                  <legend>Audience</legend>
+                  <div>
+                    <label>
+                      <input
+                        type="radio"
+                        name="moment-audience"
+                        checked={audience === "family"}
+                        onChange={() => chooseAudience("family")}
+                      />
+                      Family
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="moment-audience"
+                        checked={audience === "just_me"}
+                        disabled={!justMeAllowed}
+                        onChange={() => chooseAudience("just_me")}
+                      />
+                      Just Me
+                    </label>
                   </div>
-                ) : null}
-              </div>
+                </fieldset>
+              )}
+              <fieldset className="people-tags">
+                <legend>Who else was part of this?</legend>
+                <div>
+                  {taggablePeople
+                    .filter(
+                      (person) =>
+                        !connectedExperience || person.id !== journalPersonId,
+                    )
+                    .map((person) => {
+                      const isPreviewJournalPerson =
+                        !connectedExperience && person.id === journalPersonId;
+                      return (
+                        <label key={person.id}>
+                          <input
+                            type="checkbox"
+                            checked={taggedPersonIds.includes(person.id)}
+                            disabled={isPreviewJournalPerson}
+                            onChange={() => toggleTaggedPerson(person.id)}
+                          />
+                          <span
+                            className={`tag-person-dot dot-${person.accent}`}
+                            aria-hidden="true"
+                          >
+                            {person.initial}
+                          </span>
+                          {person.name}
+                        </label>
+                      );
+                    })}
+                </div>
+              </fieldset>
 
               {journalPersonId !== model.recorderPersonId ? (
                 <p className="recorded-by">
                   Recorded by {model.recordedByName}
-                </p>
-              ) : null}
-              {connectedExperience ? (
-                <p className="composer-preview-note">
-                  This will appear in its true chronological place.
                 </p>
               ) : null}
             </div>

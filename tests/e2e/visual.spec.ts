@@ -130,7 +130,6 @@ test(
       .getByRole("dialog")
       .getByRole("combobox", { name: "Journal", exact: true })
       .selectOption("avery");
-    await page.getByRole("button", { name: /Details/u }).click();
     await page.getByRole("checkbox", { name: /Molly/u }).check();
     await page.getByLabel("Place name").fill("Oak Street School");
     await expect(page).toHaveScreenshot(

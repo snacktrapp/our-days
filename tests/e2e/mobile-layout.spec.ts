@@ -682,7 +682,6 @@ test("touch-focused composer textareas keep content spacing without a selection 
     };
   });
 
-  await composer.getByRole("button", { name: /Details/u }).click();
   const molly = composer.getByRole("checkbox", { name: "Molly" });
   await molly.tap();
   const touchTagFocus = await molly.evaluate((input) => {
