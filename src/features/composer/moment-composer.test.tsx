@@ -2348,9 +2348,17 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
     expect(screen.getByText(/Note · /u)).toBeVisible();
     expect(screen.getByText("A porch morning.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /^Open Note · /u }));
+    expect(
+      screen.queryByRole("button", { name: /Draft options/u }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Edit Note · /u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Delete Note · /u }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^Edit Note · /u }));
     expect(screen.getByLabelText("Entry")).toHaveValue("A porch morning.");
     expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
   });
 
   it("deletes a draft from the drafts sheet without posting", async () => {
@@ -2365,10 +2373,13 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Open composer" }));
     await user.click(screen.getByRole("button", { name: /^Drafts/u }));
     expect(screen.getByText("Throw this away.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /^Delete Note · /u }));
     await waitFor(() => {
       expect(screen.getByText("No drafts yet.")).toBeVisible();
     });
+    expect(screen.getByRole("heading", { name: "Drafts" })).toBeVisible();
+    expect(screen.queryByLabelText("Entry")).not.toBeInTheDocument();
   });
 
   it("keeps Save on an existing published moment instead of Post", () => {

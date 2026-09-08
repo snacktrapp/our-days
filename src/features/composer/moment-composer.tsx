@@ -2247,37 +2247,43 @@ export function MomentComposer({
             </div>
 
             <footer className="composer-editor-footer">
-              <button
-                className="save-moment"
-                type="submit"
-                disabled={saving || savingDraft || photoRetryBlocked}
+              <div
+                className={`composer-editor-actions${
+                  editDraft ? "" : " is-split"
+                }`}
               >
-                {saving
-                  ? editDraft || (mode !== "photo" && mode !== "video")
-                    ? "Saving…"
-                    : photoUploadStage?.state === "finishing"
-                      ? `Finishing ${mode}…`
-                      : `Adding ${mode}…`
-                  : !editDraft && photoRetryBlocked
-                    ? "Upload unavailable"
-                    : !editDraft &&
-                        (mode === "photo" || mode === "video") &&
-                        saveError
-                      ? "Try upload again"
-                      : editDraft
-                        ? "Save"
-                        : "Post"}
-              </button>
-              {!editDraft ? (
                 <button
-                  className="secondary-composer-action"
-                  type="button"
+                  className="save-moment"
+                  type="submit"
                   disabled={saving || savingDraft || photoRetryBlocked}
-                  onClick={() => void persistComposerDraft()}
                 >
-                  {savingDraft ? "Saving draft…" : "Save draft"}
+                  {saving
+                    ? editDraft || (mode !== "photo" && mode !== "video")
+                      ? "Saving…"
+                      : photoUploadStage?.state === "finishing"
+                        ? `Finishing ${mode}…`
+                        : `Adding ${mode}…`
+                    : !editDraft && photoRetryBlocked
+                      ? "Upload unavailable"
+                      : !editDraft &&
+                          (mode === "photo" || mode === "video") &&
+                          saveError
+                        ? "Try upload again"
+                        : editDraft
+                          ? "Save"
+                          : "Post"}
                 </button>
-              ) : null}
+                {!editDraft ? (
+                  <button
+                    className="secondary-composer-action"
+                    type="button"
+                    disabled={saving || savingDraft || photoRetryBlocked}
+                    onClick={() => void persistComposerDraft()}
+                  >
+                    {savingDraft ? "Saving draft…" : "Save draft"}
+                  </button>
+                ) : null}
+              </div>
               {(mode === "photo" || mode === "video") &&
               saving &&
               (photoUploadStage?.state === "preparing" ||

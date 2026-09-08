@@ -6851,25 +6851,19 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .composer-drafts-row {
-  position: relative;
-  overflow: hidden;
-  border-top: 1px solid var(--hairline);
-}
-
-.composer-drafts-row-swipe {
-  position: relative;
-  z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  background: var(--cream);
+  gap: 4px;
+  border-top: 1px solid var(--hairline);
+  background: transparent;
 }
 
 .composer-drafts-open {
-  min-height: 64px;
-  padding: 10px 0;
+  min-height: 56px;
+  padding: 14px 4px 14px 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -6887,66 +6881,55 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--muted);
   font-family: var(--font-record), Georgia, serif;
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
-.composer-drafts-more {
+.composer-drafts-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.composer-drafts-icon {
   width: 44px;
   height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   border: 0;
+  border-radius: 10px;
   background: transparent;
   color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
   cursor: pointer;
 }
 
-.composer-drafts-menu {
-  position: absolute;
-  z-index: 2;
-  right: 8px;
-  top: 48px;
-  min-width: 120px;
-  padding: 6px;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  background: var(--overlay-popover-fill, var(--cream));
-  box-shadow: var(--header-drawer-shadow);
+.composer-drafts-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.composer-drafts-menu button {
-  width: 100%;
-  min-height: 44px;
-  border: 0;
-  border-radius: 8px;
+.composer-drafts-trash {
+  color: var(--clay);
+}
+
+.composer-drafts-icon:hover,
+.composer-drafts-icon:focus-visible {
   background: transparent;
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
 }
 
-.composer-drafts-delete {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 72px;
-  border: 0;
-  background: color-mix(in srgb, var(--clay) 78%, #3a1f18);
-  color: #fffaf0;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+.composer-drafts-trash:hover,
+.composer-drafts-trash:focus-visible {
+  color: var(--clay);
 }
 
 :root[data-theme="light"] .composer-drafts-count {
   background: color-mix(in srgb, var(--teal) 16%, #fff);
-}
-
-:root[data-theme="light"] .composer-drafts-delete {
-  background: color-mix(in srgb, var(--clay) 72%, #5a2d24);
 }
 
 :root[data-theme="light"] .composer-field input::placeholder,
@@ -7878,12 +7861,24 @@ html[data-theme].overlay-open .app-shell::before,
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.18);
 }
 
-.composer-editor-footer .save-moment {
+.composer-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.composer-editor-actions.is-split {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+}
+
+.composer-editor-footer .save-moment,
+.composer-editor-footer .composer-editor-actions .secondary-composer-action {
   min-height: 48px;
+  width: 100%;
   margin: 0;
 }
 
-.composer-editor-footer .secondary-composer-action {
+.composer-editor-footer .stop-photo-upload.secondary-composer-action {
   width: 100%;
   margin-top: 8px;
 }
