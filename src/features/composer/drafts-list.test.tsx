@@ -16,9 +16,7 @@ describe("DraftsList", () => {
     const user = userEvent.setup();
     const onOpen = vi.fn();
     const onDelete = vi.fn();
-    render(
-      <DraftsList drafts={[draft]} onOpen={onOpen} onDelete={onDelete} />,
-    );
+    render(<DraftsList drafts={[draft]} onOpen={onOpen} onDelete={onDelete} />);
 
     expect(
       screen.queryByRole("button", { name: /Draft options/u }),

@@ -2351,7 +2351,9 @@ describe("MomentComposer", () => {
     expect(
       screen.queryByRole("button", { name: /Draft options/u }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Edit Note · /u })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /^Edit Note · /u }),
+    ).toBeVisible();
     expect(
       screen.getByRole("button", { name: /^Delete Note · /u }),
     ).toBeVisible();
