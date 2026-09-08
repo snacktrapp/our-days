@@ -169,17 +169,17 @@ export function LocationFields({
             }}
           />
         </label>
-        {canGeolocate ? (
-          <button
-            type="button"
-            className="composer-location-locate"
-            aria-label="Use my location"
-            onClick={useMyLocation}
-          >
-            <span aria-hidden="true">⌖</span>
-          </button>
-        ) : null}
       </div>
+      {canGeolocate ? (
+        <button
+          type="button"
+          className="composer-location-locate"
+          onClick={useMyLocation}
+        >
+          <span aria-hidden="true">⌖</span>
+          Use my location
+        </button>
+      ) : null}
 
       {locationMessage ? (
         <p className="composer-location-status" role="status">

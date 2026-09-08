@@ -89,7 +89,8 @@ export function PlaceMapOverlay({
           <p className="place-map-unavailable" role="status">
             Map isn’t available right now.
           </p>
-        ) : (
+        ) : null}
+        {mapStatus === "ready" ? (
           <MapPickerFrame
             className="place-map-frame"
             latitude={latitude}
@@ -98,7 +99,12 @@ export function PlaceMapOverlay({
             interactive={false}
             onEscape={onClose}
           />
-        )}
+        ) : null}
+        {mapStatus === "loading" ? (
+          <p className="place-map-unavailable" role="status">
+            Opening map…
+          </p>
+        ) : null}
       </div>
     </dialog>,
     document.body,

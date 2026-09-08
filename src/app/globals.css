@@ -1615,29 +1615,22 @@ span.moment-place-line {
   outline-offset: 3px;
 }
 .moment-place-pin {
-  width: 9px;
-  height: 9px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 9px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  background: currentColor;
+  width: 12px;
+  height: 16px;
+  flex: 0 0 12px;
+  display: block;
+  overflow: visible;
+  color: var(--clay);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.moment-place-pin i {
-  width: 3.5px;
-  height: 3.5px;
-  border-radius: 50%;
-  background: var(--paper);
+.moment-place-pin-hole {
+  fill: var(--cream);
 }
-.thought-card .moment-place-pin i,
-.milestone-card .moment-place-pin i {
-  background: var(--cream);
-}
-.photo-card .moment-place-pin i,
-.video-card .moment-place-pin i,
-.location-card .moment-place-pin i {
-  background: var(--paper);
+.photo-card .moment-place-pin-hole,
+.video-card .moment-place-pin-hole,
+.location-card .moment-place-pin-hole {
+  fill: var(--paper);
 }
 .moment-place-title {
   display: inline;
@@ -8278,23 +8271,22 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .composer-location-locate {
-  width: 44px;
-  height: 44px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  display: grid;
-  place-items: center;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
   padding: 0;
   border: 0;
-  border-radius: 0;
   background: transparent;
   color: var(--teal);
+  font-family: var(--font-record);
+  font-size: 13px;
   cursor: pointer;
 }
 
 .composer-location-search input {
-  padding-right: 44px;
+  padding-right: 13px;
 }
 
 .composer-location-status,
