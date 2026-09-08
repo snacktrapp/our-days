@@ -8,6 +8,7 @@ import {
   PHOTO_WORKER_VERSION,
 } from "@/lib/photo-worker.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -92,6 +93,9 @@ export async function POST(request: Request) {
   const before = beforeRows?.[0];
   if (beforeError || !before) return response({ ok: false }, 404);
   if (before.status === "published") {
+    if (before.moment_id) {
+      await deliverActivityWebPush(supabase, "moment", before.moment_id);
+    }
     return response({ ok: true, momentId: before.moment_id }, 200);
   }
   if (before.status === "needs_attention" || before.status === "cancelled") {

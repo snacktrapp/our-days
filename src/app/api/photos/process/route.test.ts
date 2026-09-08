@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  deliver: vi.fn(),
   getUser: vi.fn(),
   process: vi.fn(),
   rpc: vi.fn(),
@@ -11,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
+}));
+
+vi.mock("@/lib/web-push/deliver-activity", () => ({
+  deliverActivityWebPush: mocks.deliver,
 }));
 
 vi.mock("@/lib/photo-worker.server", () => ({
@@ -61,6 +66,8 @@ function request(
 describe("private photo processing route", () => {
   beforeEach(() => {
     mocks.createClient.mockReset();
+    mocks.deliver.mockReset();
+    mocks.deliver.mockResolvedValue(undefined);
     mocks.getUser.mockReset();
     mocks.process.mockReset();
     mocks.rpc.mockReset();
@@ -155,6 +162,7 @@ describe("private photo processing route", () => {
       intake_id: intakeId,
     });
     expect(mocks.process).toHaveBeenCalledWith(intakeId);
+    expect(mocks.deliver).not.toHaveBeenCalled();
     expect(response.headers.get("cache-control")).toBe(
       "private, no-store, max-age=0",
     );
@@ -170,6 +178,11 @@ describe("private photo processing route", () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ rpc: mocks.rpc }),
+      "moment",
+      momentId,
+    );
   });
 
   it("uses the same neutral response when the session lacks exact access", async () => {

@@ -36,18 +36,40 @@ function pushTitle(row: DeliveryRow) {
   );
 }
 
+function logPushSkip(
+  reason: "not_configured" | "rpc_error" | "empty_recipients",
+  details: Readonly<Record<string, unknown>>,
+) {
+  const log = reason === "rpc_error" ? console.warn : console.info;
+  log("[web-push] skipped", { reason, ...details });
+}
+
 export async function deliverActivityWebPush(
   client: ActivityPushClient,
   kind: ActivityPushKind,
   activityId: string,
 ) {
-  if (!webPushIsConfigured()) return;
+  if (!webPushIsConfigured()) {
+    logPushSkip("not_configured", { kind, activityId });
+    return;
+  }
   try {
     const { data, error } = await client.rpc("list_web_push_deliveries", {
       activity_kind: kind,
       activity_id: activityId,
     });
-    if (error || !Array.isArray(data) || data.length === 0) return;
+    if (error) {
+      logPushSkip("rpc_error", {
+        kind,
+        activityId,
+        message: error.message,
+      });
+      return;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      logPushSkip("empty_recipients", { kind, activityId });
+      return;
+    }
 
     await Promise.all(
       data.map(async (row) => {
@@ -70,14 +92,35 @@ export async function deliverActivityWebPush(
             tag: `our-days:${kind}:${row.moment_id}`,
           },
         );
+        console.info("[web-push] send", {
+          kind,
+          activityId,
+          momentId: row.moment_id,
+          ok: result.ok,
+          status: result.status,
+          stale: result.stale,
+        });
         if (result.stale) {
-          await client.rpc("delete_web_push_subscription", {
-            endpoint: row.endpoint,
+          const { error: deleteError } = await client.rpc(
+            "delete_web_push_subscription",
+            {
+              endpoint: row.endpoint,
+            },
+          );
+          console.info("[web-push] stale_endpoint_deleted", {
+            kind,
+            activityId,
+            momentId: row.moment_id,
+            deleted: !deleteError,
           });
         }
       }),
     );
-  } catch {
-    // Delivery must never block saving a family moment, note, or reaction.
+  } catch (error) {
+    console.error("[web-push] failed", {
+      kind,
+      activityId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
   }
 }

@@ -296,7 +296,7 @@ export async function createFamilyMomentAction(input: {
     };
   }
   if (audience === "family") {
-    void deliverActivityWebPush(supabase, "moment", data);
+    await deliverActivityWebPush(supabase, "moment", data);
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
@@ -791,7 +791,7 @@ export async function createMomentNoteAction(input: {
       ok: false,
       message: "That note could not be saved. Your words are still here.",
     };
-  void deliverActivityWebPush(supabase, "note", data);
+  await deliverActivityWebPush(supabase, "note", data);
   return { ok: true, message: "Note saved.", momentId: data };
 }
 
@@ -939,7 +939,7 @@ export async function setMomentReactionAction(input: {
   });
   if (error) return { ok: false, message: "That response could not be saved." };
   if (input.reactionId) {
-    void deliverActivityWebPush(supabase, "reaction", input.momentId);
+    await deliverActivityWebPush(supabase, "reaction", input.momentId);
   }
   return {
     ok: true,
@@ -1017,7 +1017,7 @@ export async function createWrittenMomentAction(input: {
       message: "That moment could not be saved. Your draft is still here.",
     };
   if (audience === "family") {
-    void deliverActivityWebPush(supabase, "moment", data);
+    await deliverActivityWebPush(supabase, "moment", data);
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };

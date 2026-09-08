@@ -109,6 +109,6 @@ export async function deliverPublishedMomentPushAction(input: {
   const supabase = await createOurDaysServerClient();
   const { deliverActivityWebPush } =
     await import("@/lib/web-push/deliver-activity");
-  void deliverActivityWebPush(supabase, "moment", input.momentId);
+  await deliverActivityWebPush(supabase, "moment", input.momentId);
   return { ok: true, message: "Saved." };
 }
