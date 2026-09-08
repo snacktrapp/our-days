@@ -61,7 +61,7 @@ export function shortPlaceLabel(value: string) {
 }
 
 /** Apple Maps https works on iOS, and falls back on Android/desktop. */
-export function systemMapsHref(
+export function buildAppleMapsUrl(
   placeName: string,
   latitude: number | null | undefined,
   longitude: number | null | undefined,
@@ -71,5 +71,7 @@ export function systemMapsHref(
   const query =
     shortPlaceLabel(placeName) ||
     `${coordinates.latitude},${coordinates.longitude}`;
-  return `https://maps.apple.com/?ll=${coordinates.latitude},${coordinates.longitude}&q=${encodeURIComponent(query)}`;
+  const lat = coordinates.latitude;
+  const lng = coordinates.longitude;
+  return `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(query)}&z=12`;
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parsePlaceCoordinates,
   shortPlaceLabel,
-  systemMapsHref,
+  buildAppleMapsUrl,
   validPlaceCoordinates,
 } from "./place-coordinates";
 
@@ -33,11 +33,11 @@ describe("place coordinates", () => {
 
   it("builds an Apple Maps link with coordinates and the short name", () => {
     expect(
-      systemMapsHref("Bass Lake, CA, United States", 37.3247, -119.5664),
-    ).toBe("https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake");
-    expect(systemMapsHref("The porch", 35.28, -120.66)).toBe(
-      "https://maps.apple.com/?ll=35.28,-120.66&q=The%20porch",
+      buildAppleMapsUrl("Bass Lake, CA, United States", 37.3247, -119.5664),
+    ).toBe("https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake&z=12");
+    expect(buildAppleMapsUrl("The porch", 35.28, -120.66)).toBe(
+      "https://maps.apple.com/?ll=35.28,-120.66&q=The%20porch&z=12",
     );
-    expect(systemMapsHref("Oak Street School", null, null)).toBeNull();
+    expect(buildAppleMapsUrl("Oak Street School", null, null)).toBeNull();
   });
 });

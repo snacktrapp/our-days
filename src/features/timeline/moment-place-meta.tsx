@@ -1,7 +1,7 @@
 import {
   parsePlaceCoordinates,
   shortPlaceLabel,
-  systemMapsHref,
+  buildAppleMapsUrl,
 } from "@/lib/place-coordinates";
 import { PlacePin } from "./place-pin";
 
@@ -19,7 +19,7 @@ export function MomentPlaceButton({
   children: React.ReactNode;
 }>) {
   const shortName = shortPlaceLabel(placeName);
-  const href = systemMapsHref(placeName, latitude, longitude);
+  const href = buildAppleMapsUrl(placeName, latitude, longitude);
   if (!href || !shortName) return children;
   return (
     <a
@@ -49,7 +49,7 @@ export function MomentPlaceMeta({
 }>) {
   const shortName = placeName ? shortPlaceLabel(placeName) : "";
   const coordinates = parsePlaceCoordinates(latitude, longitude);
-  const href = systemMapsHref(placeName ?? "", latitude, longitude);
+  const href = buildAppleMapsUrl(placeName ?? "", latitude, longitude);
 
   if (!shortName) {
     return (
