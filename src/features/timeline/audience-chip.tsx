@@ -9,8 +9,16 @@ import {
   initialPostToCircleIds,
   type PostableCircle,
 } from "@/features/composer/post-to";
-import type { SetMomentAudienceAction } from "@/features/moments/moment-action-types";
+import { useComposerSession } from "@/features/composer/composer-session";
+import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
+import type {
+  RemoveMomentPhotoAction,
+  ReorderMomentPhotosAction,
+  SetMomentAudienceAction,
+  UpdateFamilyMomentAction,
+} from "@/features/moments/moment-action-types";
 import type { MomentAudience } from "@/features/moments/moment-audience";
+import type { TimelineMomentViewModel } from "./timeline-view-model";
 
 type AudienceChipProps = Readonly<{
   label: string;
@@ -21,6 +29,12 @@ type AudienceChipProps = Readonly<{
   linkedCircleIds?: readonly string[];
   circles: readonly PostableCircle[];
   setAudience?: SetMomentAudienceAction;
+  edit?: Readonly<{
+    moment: TimelineMomentViewModel;
+    update: UpdateFamilyMomentAction;
+    removePhoto?: RemoveMomentPhotoAction;
+    reorderPhotos?: ReorderMomentPhotosAction;
+  }>;
 }>;
 
 export function AudienceChip({
@@ -32,10 +46,22 @@ export function AudienceChip({
   linkedCircleIds,
   circles,
   setAudience,
+  edit,
 }: AudienceChipProps) {
   const router = useRouter();
+  const composerSession = useComposerSession();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const openComposerEdit = () => {
+    if (!composerSession || !edit) return false;
+    const draft = buildComposerEditDraft(edit.moment, edit.update, {
+      removePhoto: edit.removePhoto,
+      reorderPhotos: edit.reorderPhotos,
+    });
+    if (!draft) return false;
+    composerSession.openEdit(draft, triggerRef.current);
+    return true;
+  };
   const [open, setOpen] = useState(false);
   const [justMe, setJustMe] = useState(audience === "just_me");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
@@ -103,9 +129,12 @@ export function AudienceChip({
         type="button"
         className="audience-chip"
         aria-haspopup="dialog"
-        aria-expanded={open}
+        aria-expanded={composerSession && edit ? undefined : open}
         aria-label={`Audience, ${label}`}
-        onClick={openSheet}
+        onClick={() => {
+          if (openComposerEdit()) return;
+          openSheet();
+        }}
       >
         <span
           className={
@@ -117,7 +146,7 @@ export function AudienceChip({
           {label}
         </span>
       </button>
-      {dialogMounted ? (
+      {composerSession && edit ? null : dialogMounted ? (
         <dialog
           ref={dialogRef}
           className="audience-edit-dialog"

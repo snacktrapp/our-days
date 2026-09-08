@@ -7774,6 +7774,20 @@ html[data-theme].overlay-open .app-shell::before,
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
+  background: transparent;
+  color: var(--ink);
+}
+.people-tags.post-to-chips label:has(input:checked) {
+  border-color: color-mix(in srgb, var(--moss) 52%, var(--hairline));
+  background: color-mix(in srgb, var(--moss) 34%, var(--cream));
+  color: var(--ink);
+}
+.people-tags.post-to-chips label:has(input:disabled) {
+  opacity: 1;
+}
+:root[data-theme="light"] .people-tags.post-to-chips label:has(input:checked) {
+  background: color-mix(in srgb, var(--moss) 24%, #fff);
+  border-color: color-mix(in srgb, var(--moss) 46%, var(--hairline));
 }
 
 .composer-journal-trigger {

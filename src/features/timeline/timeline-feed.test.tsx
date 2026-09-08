@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { TimelineFeed } from "./timeline-feed";
 import type { TimelineViewModel } from "./timeline-view-model";
 
@@ -345,6 +346,56 @@ describe("TimelineFeed", () => {
         circleIds: ["family"],
       }),
     );
+  });
+
+  it("opens the edit composer from the audience chip when a session exists", () => {
+    render(
+      <ComposerSessionProvider model={composer}>
+        <TimelineFeed
+          model={{
+            ...model,
+            switcher: [
+              {
+                kind: "person",
+                label: "Person",
+                href: "/people/person",
+                current: true,
+              },
+            ],
+            entries: [
+              {
+                id: "shared",
+                entryType: "moment",
+                moment: {
+                  ...shared,
+                  id: "two-groups-moment",
+                  kind: "thought",
+                  audience: "family",
+                  showAudienceChip: true,
+                  audienceChipLabel: "2 groups",
+                  circleId: "family",
+                  linkedCircleIds: ["family", "cousins"],
+                  revision: 2,
+                },
+              },
+            ],
+          }}
+          connectedActions={{
+            update: vi.fn(),
+            trash: vi.fn(),
+            setAudience: vi.fn(),
+          }}
+        />
+      </ComposerSessionProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 groups" }));
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "New written entry" }),
+    ).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
   });
 
   it("does not show an audience chip on another person's card", () => {

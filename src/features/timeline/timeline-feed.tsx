@@ -19,11 +19,11 @@ import { TimelineScrollMemory } from "./timeline-scroll-memory";
 function Connection({
   moment,
   circles,
-  setAudience,
+  connectedActions,
 }: {
   moment: TimelineMomentViewModel;
   circles: readonly PostableCircle[];
-  setAudience?: ConnectedMomentActions["setAudience"];
+  connectedActions?: ConnectedMomentActions;
 }) {
   const dateAndTime = timelineCardOccurredLabel(
     moment.occurredOn,
@@ -56,7 +56,17 @@ function Connection({
           circleId={moment.circleId}
           linkedCircleIds={moment.linkedCircleIds}
           circles={circles}
-          setAudience={setAudience}
+          setAudience={connectedActions?.setAudience}
+          edit={
+            connectedActions?.update
+              ? {
+                  moment,
+                  update: connectedActions.update,
+                  removePhoto: connectedActions.removePhoto,
+                  reorderPhotos: connectedActions.reorderPhotos,
+                }
+              : undefined
+          }
         />
       ) : null}
       <span
@@ -132,7 +142,7 @@ function TimelineEntry({
           <Connection
             moment={entry.moment}
             circles={circles}
-            setAudience={connectedActions?.setAudience}
+            connectedActions={connectedActions}
           />
           <MomentCard
             interaction={interaction}
