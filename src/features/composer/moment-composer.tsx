@@ -1570,13 +1570,6 @@ export function MomentComposer({
         {!mode || choosingMode ? (
           listingDrafts ? (
             <div className="composer-drafts-panel">
-              <button
-                type="button"
-                className="composer-drafts-back"
-                onClick={() => setListingDrafts(false)}
-              >
-                Back
-              </button>
               <DraftsList
                 drafts={drafts}
                 onOpen={(id) => void openPersistedDraft(id)}

@@ -6825,18 +6825,6 @@ html[data-theme].overlay-open .app-shell::before,
   padding: 0 4px 12px;
 }
 
-.composer-drafts-back {
-  min-height: 44px;
-  margin-bottom: 4px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--teal);
-  font-size: 13px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
 .composer-drafts-empty {
   margin: 18px 0 8px;
   color: var(--muted);
