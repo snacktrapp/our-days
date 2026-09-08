@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createPostToDefault,
   defaultPostToCircleIds,
   familyFeedHref,
   formatPostToTriggerLabel,
@@ -61,5 +62,30 @@ describe("post-to selection", () => {
     expect(primaryPostToCircle(circles, ["cousins", "family"])?.personId).toBe(
       "brian-cousins",
     );
+  });
+
+  it("defaults create Post to from Home switcher context", () => {
+    expect(createPostToDefault(circles, { kind: "you" }, "family")).toEqual({
+      audience: "just_me",
+      circleIds: [],
+    });
+    expect(createPostToDefault(circles, { kind: "person" }, "family")).toEqual({
+      audience: "just_me",
+      circleIds: [],
+    });
+    expect(
+      createPostToDefault(
+        circles,
+        { kind: "group", circleId: "cousins" },
+        "family",
+      ),
+    ).toEqual({
+      audience: "family",
+      circleIds: ["cousins"],
+    });
+    expect(createPostToDefault(circles, undefined, "family")).toEqual({
+      audience: "family",
+      circleIds: ["family"],
+    });
   });
 });

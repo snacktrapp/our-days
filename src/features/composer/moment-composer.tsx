@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -60,11 +61,12 @@ import { currentPickerTimeValue, DateTimeFields } from "./date-time-fields";
 import { JournalPickerField } from "./journal-picker-field";
 import { PostToField } from "./post-to-field";
 import {
-  defaultPostToCircleIds,
+  createPostToDefault,
   familyFeedHref,
   initialPostToCircleIds,
   orderPostToCircleIds,
   primaryPostToCircle,
+  type CreatePostToHomeContext,
 } from "./post-to";
 import { LocationFields } from "./location-fields";
 import {
@@ -127,6 +129,7 @@ type MomentComposerProps = Readonly<{
   saveFamilyMoment?: SaveFamilyMomentAction;
   saveWrittenMoment?: SaveWrittenMomentAction;
   editDraft?: ComposerEditDraft | null;
+  homeContext?: CreatePostToHomeContext;
   registerDismiss?: (dismiss: (() => void) | null) => void;
 }>;
 
@@ -282,6 +285,7 @@ export function MomentComposer({
   saveFamilyMoment,
   saveWrittenMoment,
   editDraft = null,
+  homeContext,
   registerDismiss,
 }: MomentComposerProps) {
   const router = useRouter();
@@ -308,17 +312,33 @@ export function MomentComposer({
           editDraft.place.label.trim().length > 0)),
     ),
   );
-  const [audience, setAudience] = useState<MomentAudience>(
-    normalizeMomentAudience(editDraft?.audience),
+  const postableCircles = useMemo(
+    () => model.postableCircles ?? [],
+    [model.postableCircles],
   );
-  const postableCircles = model.postableCircles ?? [];
+  const createDefault = createPostToDefault(
+    postableCircles,
+    homeContext,
+    model.circleId,
+  );
+  const createJournalPersonId =
+    createDefault.audience === "just_me"
+      ? model.recorderPersonId
+      : model.defaultJournalPersonId;
+  const [audience, setAudience] = useState<MomentAudience>(
+    editDraft
+      ? normalizeMomentAudience(editDraft.audience)
+      : createDefault.audience,
+  );
   const [selectedCircleIds, setSelectedCircleIds] = useState<readonly string[]>(
     () =>
-      initialPostToCircleIds(postableCircles, {
-        audience: normalizeMomentAudience(editDraft?.audience),
-        circleId: editDraft?.circleId ?? model.circleId,
-        linkedCircleIds: editDraft?.linkedCircleIds,
-      }),
+      editDraft
+        ? initialPostToCircleIds(postableCircles, {
+            audience: normalizeMomentAudience(editDraft.audience),
+            circleId: editDraft.circleId ?? model.circleId,
+            linkedCircleIds: editDraft.linkedCircleIds,
+          })
+        : createDefault.circleIds,
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
   const [title, setTitle] = useState(editDraft?.title ?? "");
@@ -335,7 +355,7 @@ export function MomentComposer({
   );
   const [occurredTime, setOccurredTime] = useState(cleanOccurredTime);
   const [journalPersonId, setJournalPersonId] = useState(
-    editDraft?.journalPersonId ?? model.defaultJournalPersonId,
+    editDraft?.journalPersonId ?? createJournalPersonId,
   );
   const [taggedPersonIds, setTaggedPersonIds] = useState<readonly string[]>(
     editDraft?.taggedPersonIds ?? [],
@@ -447,10 +467,9 @@ export function MomentComposer({
         taggedPersonIds.length ||
         occurredOn !== model.previewToday ||
         occurredTime !== cleanOccurredTime ||
-        journalPersonId !== model.defaultJournalPersonId ||
-        audience !== "family" ||
-        selectedCircleIds.join(",") !==
-          defaultPostToCircleIds(postableCircles, model.circleId).join(","),
+        journalPersonId !== createJournalPersonId ||
+        audience !== createDefault.audience ||
+        selectedCircleIds.join(",") !== createDefault.circleIds.join(","),
       );
   const selectedPhoto = photoItems[0] ?? null;
   const photoReady =
@@ -501,8 +520,20 @@ export function MomentComposer({
     [clearPhotoPreview],
   );
 
+  const homeContextKind = homeContext?.kind;
+  const homeContextCircleId = homeContext?.circleId;
   const resetDraft = useCallback(
     (nextMode: ComposerMode | null = null) => {
+      const nextPostTo = createPostToDefault(
+        postableCircles,
+        homeContextKind
+          ? {
+              kind: homeContextKind,
+              ...(homeContextCircleId ? { circleId: homeContextCircleId } : {}),
+            }
+          : undefined,
+        model.circleId,
+      );
       clearPhotoPreview();
       if (photoInputRef.current) photoInputRef.current.value = "";
       setMode(nextMode);
@@ -516,12 +547,14 @@ export function MomentComposer({
       const nextDefault = defaultOccurredTimeForCreate(nextMode);
       setCleanOccurredTime(nextDefault);
       setOccurredTime(nextDefault);
-      setJournalPersonId(model.defaultJournalPersonId);
-      setTaggedPersonIds([]);
-      setAudience("family");
-      setSelectedCircleIds(
-        defaultPostToCircleIds(model.postableCircles ?? [], model.circleId),
+      setJournalPersonId(
+        nextPostTo.audience === "just_me"
+          ? model.recorderPersonId
+          : model.defaultJournalPersonId,
       );
+      setTaggedPersonIds([]);
+      setAudience(nextPostTo.audience);
+      setSelectedCircleIds(nextPostTo.circleIds);
       setPlace(emptyPlaceSelection);
       setPhotoFile(null);
       setPhotoItems([]);
@@ -541,10 +574,13 @@ export function MomentComposer({
     },
     [
       clearPhotoPreview,
+      homeContextCircleId,
+      homeContextKind,
       model.circleId,
       model.defaultJournalPersonId,
       model.previewToday,
-      model.postableCircles,
+      model.recorderPersonId,
+      postableCircles,
     ],
   );
 

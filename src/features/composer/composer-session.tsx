@@ -15,6 +15,7 @@ import {
   type ComposerEditDraft,
   type SaveFamilyMomentAction,
 } from "./moment-composer";
+import type { CreatePostToHomeContext } from "./post-to";
 
 type ComposerSessionValue = Readonly<{
   openCreate: (trigger?: HTMLButtonElement | null) => void;
@@ -35,10 +36,12 @@ export function useComposerSession() {
 export function ComposerSessionProvider({
   model,
   createMomentAction,
+  homeContext,
   children,
 }: Readonly<{
   model: MomentComposerViewModel;
   createMomentAction?: SaveFamilyMomentAction;
+  homeContext?: CreatePostToHomeContext;
   children: ReactNode;
 }>) {
   const [open, setOpen] = useState(false);
@@ -85,8 +88,13 @@ export function ComposerSessionProvider({
     <ComposerSessionContext.Provider value={value}>
       {children}
       <MomentComposer
-        key={editDraft ? `edit:${editDraft.momentId}` : "create"}
+        key={
+          editDraft
+            ? `edit:${editDraft.momentId}`
+            : `create:${homeContext?.kind ?? "none"}:${homeContext?.circleId ?? model.circleId ?? ""}`
+        }
         model={model}
+        homeContext={homeContext}
         open={open}
         editDraft={editDraft}
         returnFocusRef={returnFocusRef}

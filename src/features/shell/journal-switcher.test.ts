@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildJournalSwitcher,
+  currentHomeContext,
   journalSwitcherEyebrow,
   journalSwitcherTypeLabel,
 } from "./journal-switcher";
@@ -108,6 +109,44 @@ describe("journal switcher grammar", () => {
         current: true,
       },
     ]);
+  });
+
+  it("reads the active Home switcher row as composer context", () => {
+    const items = buildJournalSwitcher({
+      groups: [
+        { id: "family", name: "Trapp Family" },
+        { id: "cousins", name: "Cousins" },
+      ],
+      people,
+      viewerPersonId: "brian",
+      currentHref: "/people/brian",
+    });
+    expect(currentHomeContext(items)).toEqual({ kind: "you" });
+    expect(
+      currentHomeContext(
+        buildJournalSwitcher({
+          groups: [
+            { id: "family", name: "Trapp Family" },
+            { id: "cousins", name: "Cousins" },
+          ],
+          people,
+          viewerPersonId: "brian",
+          currentHref: "/family?circle=cousins",
+          activeGroupId: "cousins",
+        }),
+      ),
+    ).toEqual({ kind: "group", circleId: "cousins" });
+    expect(
+      currentHomeContext(
+        buildJournalSwitcher({
+          groupLabel: "Trapp Family",
+          people,
+          viewerPersonId: "brian",
+          currentHref: "/people/molly",
+        }),
+      ),
+    ).toEqual({ kind: "person" });
+    expect(currentHomeContext(undefined)).toBeUndefined();
   });
 
   it("labels the selected type for the header eyebrow", () => {

@@ -25,6 +25,7 @@ import type {
   JournalSection,
   JournalChromeViewModel,
 } from "./shell-view-model";
+import { currentHomeContext } from "./journal-switcher";
 
 export type { FamilyTimelineSwitcherItem };
 
@@ -65,6 +66,7 @@ function PrimaryJournalHeader({
       <TimelineHeaderComposer
         composer={model.composer}
         createMomentAction={createMomentAction}
+        homeContext={currentHomeContext(switcher)}
       />
       {title}
       <div className="topbar-actions">
@@ -155,6 +157,7 @@ export function JournalChrome({
     <ComposerSessionProvider
       model={model.composer}
       createMomentAction={createMomentAction}
+      homeContext={currentHomeContext(switcher)}
     >
       <PhotoLightboxRoot>
         <JournalPendingRouteProvider>

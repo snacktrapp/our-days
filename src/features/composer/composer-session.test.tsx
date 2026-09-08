@@ -77,6 +77,33 @@ describe("ComposerSessionProvider", () => {
     ).toHaveClass("is-closing");
   });
 
+  it("defaults create Post to Just me when Home is on YOU", async () => {
+    const user = userEvent.setup();
+    render(
+      <ComposerSessionProvider
+        model={{
+          ...model,
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          circleId: "family",
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "person" },
+          ],
+        }}
+        homeContext={{ kind: "you" }}
+      >
+        <AddMoment />
+      </ComposerSessionProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add moment" }));
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+  });
+
   it("opens a create Photo draft with the current local time", async () => {
     const user = userEvent.setup();
     render(

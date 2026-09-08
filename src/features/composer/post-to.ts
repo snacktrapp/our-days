@@ -4,6 +4,11 @@ export type PostableCircle = Readonly<{
   personId: string;
 }>;
 
+export type CreatePostToHomeContext = Readonly<{
+  kind: "you" | "group" | "person";
+  circleId?: string;
+}>;
+
 export function defaultPostToCircleIds(
   circles: readonly PostableCircle[],
   currentCircleId?: string,
@@ -87,4 +92,22 @@ export function initialPostToCircleIds(
       : defaultPostToCircleIds(circles, options.circleId);
   }
   return defaultPostToCircleIds(circles, options.circleId);
+}
+
+export function createPostToDefault(
+  circles: readonly PostableCircle[],
+  context?: CreatePostToHomeContext | null,
+  fallbackCircleId?: string,
+) {
+  if (context?.kind === "you" || context?.kind === "person") {
+    return { audience: "just_me" as const, circleIds: [] as const };
+  }
+  const circleId =
+    context?.kind === "group"
+      ? (context.circleId ?? fallbackCircleId)
+      : fallbackCircleId;
+  return {
+    audience: "family" as const,
+    circleIds: defaultPostToCircleIds(circles, circleId),
+  };
 }
