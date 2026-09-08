@@ -168,7 +168,7 @@ export function LocationFields({
       <div className="composer-location-search">
         <label className="composer-field">
           <span>
-            Search for a place
+            Add a place
             {optional ? <small> Optional</small> : null}
           </span>
           <span className="composer-location-input">
@@ -181,7 +181,7 @@ export function LocationFields({
               aria-required={required || undefined}
               aria-invalid={invalid ? true : undefined}
               aria-label="Place name"
-              placeholder="Search for a place"
+              placeholder="Search or locate"
               onChange={(event) => {
                 const nextLabel = event.target.value;
                 setSearch(nextLabel);
