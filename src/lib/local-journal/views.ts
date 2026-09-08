@@ -225,19 +225,26 @@ function momentLinkedCircleIds(moment: LocalMoment, defaultCircleId: string) {
   return [momentCircleId(moment, defaultCircleId)];
 }
 
+function localHomePersonId(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  return (
+    document.accounts[0]?.personId ??
+    document.memberships[0]?.personId ??
+    access.personId
+  );
+}
+
 function localPostableCircles(
   document: LocalJournalDocument,
   access: LocalAccess,
 ) {
-  const homePersonId =
-    document.accounts[0]?.personId ??
-    document.memberships[0]?.personId ??
-    access.personId;
   return [
     {
       id: document.circle.id,
       name: document.circle.name,
-      personId: homePersonId,
+      personId: localHomePersonId(document, access),
     },
     ...(document.extraCircles ?? []).map((circle) => ({
       id: circle.id,
@@ -245,6 +252,75 @@ function localPostableCircles(
       personId: circle.personId,
     })),
   ];
+}
+
+function localHomePersonOptions(
+  document: LocalJournalDocument,
+  viewerPersonId: string,
+) {
+  return document.people.map((person) => {
+    const membership = document.memberships.find(
+      (candidate) => candidate.personId === person.id,
+    );
+    return {
+      id: person.id,
+      name: person.displayName,
+      initial: initialFor(person.displayName),
+      accent: mapDatabaseAccent(person.accentToken),
+      contextLabel: journalContextLabel(
+        person.id === viewerPersonId,
+        person.profileKind,
+        membership?.role,
+      ),
+      profileKind: person.profileKind,
+      role: membership?.role,
+      directoryKind: membership?.directoryKind,
+    };
+  });
+}
+
+function localExtraPersonOption(
+  extra: NonNullable<LocalJournalDocument["extraCircles"]>[number],
+) {
+  return {
+    id: extra.personId,
+    name: extra.displayName,
+    initial: initialFor(extra.displayName),
+    accent: mapDatabaseAccent(extra.accentToken),
+    contextLabel: "You",
+    profileKind: "account",
+    role: extra.role,
+    directoryKind: "journal" as const,
+  };
+}
+
+function localTaggablePeopleByCircle(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const homePersonId = localHomePersonId(document, access);
+  const homeRole =
+    document.memberships.find(
+      (membership) => membership.personId === homePersonId,
+    )?.role ?? access.role;
+  const byCircle: Record<
+    string,
+    ReturnType<typeof buildJournalPersonSurface>["taggablePeople"]
+  > = {
+    [document.circle.id]: buildJournalPersonSurface(
+      localHomePersonOptions(document, homePersonId),
+      { personId: homePersonId, role: homeRole },
+      new Set(),
+    ).taggablePeople,
+  };
+  for (const extra of document.extraCircles ?? []) {
+    byCircle[extra.id] = buildJournalPersonSurface(
+      [localExtraPersonOption(extra)],
+      { personId: extra.personId, role: extra.role },
+      new Set(),
+    ).taggablePeople;
+  }
+  return byCircle;
 }
 
 export async function loadLocalJournalContext(
@@ -278,6 +354,7 @@ export async function loadLocalJournalContext(
       recordedByName: extra.displayName,
       journalPeople: surface.journalPeople,
       taggablePeople: surface.taggablePeople,
+      taggablePeopleByCircle: localTaggablePeopleByCircle(document, access),
       postableCircles: localPostableCircles(document, access),
     };
     return {
@@ -315,26 +392,7 @@ export async function loadLocalJournalContext(
       )
       .map((guardian) => guardian.managedPersonId),
   );
-  const personOptions = document.people.map((person) => {
-    const membership = document.memberships.find(
-      (candidate) => candidate.personId === person.id,
-    );
-    const accent = mapDatabaseAccent(person.accentToken);
-    return {
-      id: person.id,
-      name: person.displayName,
-      initial: initialFor(person.displayName),
-      accent,
-      contextLabel: journalContextLabel(
-        person.id === access.personId,
-        person.profileKind,
-        membership?.role,
-      ),
-      profileKind: person.profileKind,
-      role: membership?.role,
-      directoryKind: membership?.directoryKind,
-    };
-  });
+  const personOptions = localHomePersonOptions(document, access.personId);
   const recorder = personOptions.find(
     (person) => person.id === access.personId,
   );
@@ -354,6 +412,7 @@ export async function loadLocalJournalContext(
     recordedByName: recorder.name,
     journalPeople: surface.journalPeople,
     taggablePeople: surface.taggablePeople,
+    taggablePeopleByCircle: localTaggablePeopleByCircle(document, access),
     postableCircles: localPostableCircles(document, access),
   };
   const chrome: JournalChromeViewModel = {

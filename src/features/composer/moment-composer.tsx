@@ -22,7 +22,10 @@ import {
 } from "@/features/shell/use-overlay-popover-close";
 import { useSheetDismiss } from "@/features/shell/use-sheet-dismiss";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
-import type { MomentComposerViewModel } from "./composer-view-model";
+import {
+  taggablePeopleForSelectedCircles,
+  type MomentComposerViewModel,
+} from "./composer-view-model";
 import type {
   RemoveMomentPhotoAction,
   ReorderMomentPhotosAction,
@@ -396,7 +399,20 @@ export function MomentComposer({
   const uploadInFlightRef = useRef(false);
 
   const journalPeople = model.journalPeople ?? [];
-  const taggablePeople = model.taggablePeople ?? [];
+  const taggablePeople = taggablePeopleForSelectedCircles(
+    model.taggablePeople ?? [],
+    model.taggablePeopleByCircle,
+    selectedCircleIds,
+    audience === "just_me",
+  );
+  const selfPersonIds = new Set<string>([journalPersonId]);
+  if (audience !== "just_me") {
+    for (const circle of postableCircles) {
+      if (selectedCircleIds.includes(circle.id)) {
+        selfPersonIds.add(circle.personId);
+      }
+    }
+  }
   const journalPerson =
     journalPeople.find((person) => person.id === journalPersonId) ??
     journalPeople[0];
@@ -1970,7 +1986,7 @@ export function MomentComposer({
                   {taggablePeople
                     .filter(
                       (person) =>
-                        !connectedExperience || person.id !== journalPersonId,
+                        !connectedExperience || !selfPersonIds.has(person.id),
                     )
                     .map((person) => {
                       const isPreviewJournalPerson =

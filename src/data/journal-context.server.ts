@@ -47,6 +47,92 @@ function initialFor(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
 }
 
+type PersonRow = Readonly<{
+  id: string;
+  display_name: string;
+  profile_kind: string;
+  accent_token: string;
+  circle_id?: string | null;
+}>;
+
+type MembershipRow = Readonly<{
+  id: string;
+  person_id: string;
+  role: string | null;
+  directory_kind?: string | null;
+  circle_id?: string | null;
+}>;
+
+function circleIdOf(
+  row: Readonly<{ circle_id?: string | null }>,
+  fallbackCircleId: string,
+) {
+  return row.circle_id ?? fallbackCircleId;
+}
+
+function journalPersonOptionsForCircle(
+  people: readonly PersonRow[],
+  memberships: readonly MembershipRow[],
+  viewerPersonId: string,
+): JournalPersonOption[] {
+  const membershipByPerson = new Map(
+    memberships.map((membership) => [membership.person_id, membership]),
+  );
+  return people.map((person) => {
+    const membership = membershipByPerson.get(person.id);
+    return {
+      id: person.id,
+      name: person.display_name,
+      initial: initialFor(person.display_name),
+      accent: mapDatabaseAccent(person.accent_token),
+      contextLabel: journalContextLabel(
+        person.id === viewerPersonId,
+        person.profile_kind,
+        membership?.role,
+      ),
+      profileKind: person.profile_kind,
+      role: membership?.role,
+      directoryKind: membership?.directory_kind,
+    };
+  });
+}
+
+export function buildTaggablePeopleByCircle(
+  rosterCircleIds: readonly string[],
+  people: readonly PersonRow[],
+  memberships: readonly MembershipRow[],
+  viewerByCircle: ReadonlyMap<
+    string,
+    Readonly<{ personId: string; role: string }>
+  >,
+  fallbackCircleId: string,
+  fallbackViewer: Readonly<{ personId: string; role: string }>,
+) {
+  const byCircle: Record<
+    string,
+    ReturnType<typeof buildJournalPersonSurface>["taggablePeople"]
+  > = {};
+  for (const circleId of rosterCircleIds) {
+    const viewer = viewerByCircle.get(circleId) ?? fallbackViewer;
+    const circlePeople = people.filter(
+      (person) => circleIdOf(person, fallbackCircleId) === circleId,
+    );
+    const circleMemberships = memberships.filter(
+      (membership) => circleIdOf(membership, fallbackCircleId) === circleId,
+    );
+    byCircle[circleId] = buildJournalPersonSurface(
+      journalPersonOptionsForCircle(
+        circlePeople,
+        circleMemberships,
+        viewer.personId,
+      ),
+      viewer,
+      new Set(),
+    ).taggablePeople;
+  }
+  return byCircle;
+}
+
 export function plainToday(timeZone: string, instant = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
@@ -213,6 +299,10 @@ export async function loadConnectedJournalContext(
   }
   const supabase = await createOurDaysServerClient();
   const circleMemberships = await readJournalCircleMemberships();
+  const rosterCircleIds =
+    circleMemberships.length > 0
+      ? [...new Set(circleMemberships.map((membership) => membership.circleId))]
+      : [access.circleId];
   const [
     circleResult,
     peopleResult,
@@ -230,13 +320,13 @@ export async function loadConnectedJournalContext(
       .single(),
     supabase
       .from("people")
-      .select("id, display_name, profile_kind, accent_token")
-      .eq("circle_id", access.circleId)
+      .select("id, display_name, profile_kind, accent_token, circle_id")
+      .in("circle_id", rosterCircleIds)
       .order("created_at", { ascending: true }),
     supabase
       .from("circle_memberships")
-      .select("id, person_id, role, status, directory_kind")
-      .eq("circle_id", access.circleId),
+      .select("id, person_id, role, status, directory_kind, circle_id")
+      .in("circle_id", rosterCircleIds),
     supabase
       .from("person_guardians")
       .select("managed_person_id, guardian_membership_id")
@@ -282,9 +372,7 @@ export async function loadConnectedJournalContext(
   if (error) throw error;
   if (!circleResult.data) throw new Error("Circle is unavailable");
 
-  const groupIds = [
-    ...new Set(circleMemberships.map((membership) => membership.circleId)),
-  ];
+  const groupIds = rosterCircleIds;
   const groupsResult =
     groupIds.length === 0
       ? { data: [] as { id: string; name: string }[], error: null }
@@ -306,10 +394,13 @@ export async function loadConnectedJournalContext(
         : "Group"),
   }));
 
-  const memberships = membershipsResult.data ?? [];
-  const people = peopleResult.data ?? [];
-  const accountMembershipByPerson = new Map(
-    memberships.map((membership) => [membership.person_id, membership]),
+  const allPeople = peopleResult.data ?? [];
+  const allMemberships = membershipsResult.data ?? [];
+  const people = allPeople.filter(
+    (person) => circleIdOf(person, access.circleId) === access.circleId,
+  );
+  const memberships = allMemberships.filter(
+    (membership) => circleIdOf(membership, access.circleId) === access.circleId,
   );
   const personNameById = new Map(
     people.map((person) => [person.id, person.display_name]),
@@ -327,24 +418,11 @@ export async function loadConnectedJournalContext(
       )
       .map((guardian) => guardian.managed_person_id),
   );
-  const personOptions = people.map((person) => {
-    const membership = accountMembershipByPerson.get(person.id);
-    const accent = mapDatabaseAccent(person.accent_token);
-    return {
-      id: person.id,
-      name: person.display_name,
-      initial: initialFor(person.display_name),
-      accent,
-      contextLabel: journalContextLabel(
-        person.id === access.personId,
-        person.profile_kind,
-        membership?.role,
-      ),
-      profileKind: person.profile_kind,
-      role: membership?.role,
-      directoryKind: membership?.directory_kind,
-    };
-  });
+  const personOptions = journalPersonOptionsForCircle(
+    people,
+    memberships,
+    access.personId,
+  );
   const recorder = personOptions.find(
     (person) => person.id === access.personId,
   );
@@ -405,6 +483,22 @@ export async function loadConnectedJournalContext(
     recordedByName: recorder.name,
     journalPeople: surface.journalPeople,
     taggablePeople: surface.taggablePeople,
+    taggablePeopleByCircle: {
+      ...buildTaggablePeopleByCircle(
+        rosterCircleIds,
+        allPeople,
+        allMemberships,
+        new Map(
+          circleMemberships.map((membership) => [
+            membership.circleId,
+            { personId: membership.personId, role: membership.role },
+          ]),
+        ),
+        access.circleId,
+        access,
+      ),
+      [access.circleId]: surface.taggablePeople,
+    },
     postableCircles,
   };
   const chrome: JournalChromeViewModel = {

@@ -702,6 +702,64 @@ describe("MomentComposer", () => {
     expect(navigation.replace).toHaveBeenCalledWith("/family?circle=family");
   });
 
+  it("shows Who else from the selected Post to circle, not the Home roster", async () => {
+    const user = userEvent.setup();
+    const grandparentsBrian = {
+      id: "brian-gp",
+      name: "Brian",
+      initial: "B",
+      accent: "teal" as const,
+      contextLabel: "You",
+    };
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          defaultJournalPersonId: "brian-gp",
+          recorderPersonId: "brian-gp",
+          journalPeople: [grandparentsBrian],
+          taggablePeople: [grandparentsBrian],
+          taggablePeopleByCircle: {
+            grandparents: [grandparentsBrian],
+            family: people,
+          },
+          circleId: "grandparents",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "grandparents", name: "Grandparents", personId: "brian-gp" },
+          ],
+        }}
+        homeContext={{ kind: "group", circleId: "grandparents" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(
+      screen.getByRole("checkbox", { name: "Grandparents" }),
+    ).toBeChecked();
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
+
+    await user.click(screen.getByRole("checkbox", { name: "Trapp Family" }));
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
+
+    await user.click(screen.getByRole("checkbox", { name: "Grandparents" }));
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Grandparents" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
+    expect(screen.queryByRole("checkbox", { name: /Brian/ })).toBeNull();
+  });
+
   it("offers only the production-ready written path in a connected journal", async () => {
     const user = userEvent.setup();
     render(
