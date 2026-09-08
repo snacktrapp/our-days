@@ -4,8 +4,9 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
+import { PostToChoices } from "@/features/composer/post-to-field";
 import {
-  defaultPostToCircleIds,
+  initialPostToCircleIds,
   type PostableCircle,
 } from "@/features/composer/post-to";
 import type { SetMomentAudienceAction } from "@/features/moments/moment-action-types";
@@ -38,7 +39,11 @@ export function AudienceChip({
   const [open, setOpen] = useState(false);
   const [justMe, setJustMe] = useState(audience === "just_me");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
-    initialSelectedIds(circles, circleId, linkedCircleIds, audience),
+    initialPostToCircleIds(circles, {
+      audience,
+      circleId,
+      linkedCircleIds,
+    }),
   );
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -56,25 +61,14 @@ export function AudienceChip({
   const openSheet = () => {
     setJustMe(audience === "just_me");
     setSelectedIds(
-      initialSelectedIds(circles, circleId, linkedCircleIds, audience),
+      initialPostToCircleIds(circles, {
+        audience,
+        circleId,
+        linkedCircleIds,
+      }),
     );
     setMessage(null);
     setOpen(true);
-  };
-
-  const chooseCircle = (nextCircleId: string, checked: boolean) => {
-    if (checked) {
-      setJustMe(false);
-      setSelectedIds((current) =>
-        current.includes(nextCircleId) ? current : [...current, nextCircleId],
-      );
-      return;
-    }
-    if (nextCircleId === lockedCircleId) return;
-    const remaining = selectedIds.filter((id) => id !== nextCircleId);
-    if (remaining.length === 0) return;
-    setJustMe(false);
-    setSelectedIds(remaining);
   };
 
   const save = () => {
@@ -144,45 +138,18 @@ export function AudienceChip({
                 Close
               </button>
             </header>
-            <fieldset className="people-tags post-to-circles">
-              <legend className="sr-only">Circles</legend>
-              <div>
-                {circles.map((circle) => {
-                  const locked = !justMe && circle.id === lockedCircleId;
-                  return (
-                    <label key={circle.id}>
-                      <input
-                        type="checkbox"
-                        checked={!justMe && selectedIds.includes(circle.id)}
-                        disabled={locked}
-                        onChange={(event) =>
-                          chooseCircle(circle.id, event.target.checked)
-                        }
-                      />
-                      {circle.name}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <label className="post-to-just-me">
-              <input
-                type="checkbox"
-                checked={justMe}
-                onChange={(event) => {
-                  if (event.target.checked) {
-                    setJustMe(true);
-                    setSelectedIds([]);
-                    return;
-                  }
-                  setJustMe(false);
-                  setSelectedIds(
-                    defaultPostToCircleIds(circles, lockedCircleId),
-                  );
-                }}
-              />
-              Just me
-            </label>
+            <PostToChoices
+              circles={circles}
+              selectedIds={selectedIds}
+              justMe={justMe}
+              currentCircleId={lockedCircleId}
+              lockedCircleId={lockedCircleId}
+              legend="Post to"
+              onChange={(next) => {
+                setJustMe(next.justMe);
+                setSelectedIds(next.selectedIds);
+              }}
+            />
             {message ? (
               <p className="audience-edit-message" role="alert">
                 {message}
@@ -201,24 +168,4 @@ export function AudienceChip({
       ) : null}
     </>
   );
-}
-
-function initialSelectedIds(
-  circles: readonly PostableCircle[],
-  circleId: string | undefined,
-  linkedCircleIds: readonly string[] | undefined,
-  audience: MomentAudience,
-) {
-  if (audience === "just_me") return [];
-  if (linkedCircleIds?.length) {
-    const known = new Set(circles.map((circle) => circle.id));
-    const selected = linkedCircleIds.filter((id) => known.has(id));
-    if (circleId && known.has(circleId) && !selected.includes(circleId)) {
-      return [circleId, ...selected];
-    }
-    return selected.length > 0
-      ? selected
-      : defaultPostToCircleIds(circles, circleId);
-  }
-  return defaultPostToCircleIds(circles, circleId);
 }

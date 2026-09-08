@@ -48,6 +48,7 @@ export type UpdateFamilyMomentAction = (input: {
   occurredAt: string | null;
   occurredTimezone: string | null;
   audience?: MomentAudience;
+  circleIds?: readonly string[];
 }) => Promise<MomentActionResult>;
 
 export type SetMomentAudienceAction = (input: {

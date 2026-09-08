@@ -62,3 +62,29 @@ export function primaryPostToCircle(
   const primaryId = selectedIds[0];
   return circles.find((circle) => circle.id === primaryId) ?? circles[0];
 }
+
+export function initialPostToCircleIds(
+  circles: readonly PostableCircle[],
+  options: Readonly<{
+    audience?: "family" | "just_me";
+    circleId?: string;
+    linkedCircleIds?: readonly string[];
+  }> = {},
+) {
+  if (options.audience === "just_me") return [];
+  if (options.linkedCircleIds?.length) {
+    const known = new Set(circles.map((circle) => circle.id));
+    const selected = options.linkedCircleIds.filter((id) => known.has(id));
+    if (
+      options.circleId &&
+      known.has(options.circleId) &&
+      !selected.includes(options.circleId)
+    ) {
+      selected.unshift(options.circleId);
+    }
+    return selected.length > 0
+      ? orderPostToCircleIds(selected, circles, options.circleId)
+      : defaultPostToCircleIds(circles, options.circleId);
+  }
+  return defaultPostToCircleIds(circles, options.circleId);
+}

@@ -985,38 +985,15 @@ button.audience-chip:focus-visible .audience-chip-face {
   font-size: 13px;
   cursor: pointer;
 }
-.audience-edit-sheet .post-to-circles {
+.audience-edit-sheet .post-to-chips {
   margin: 0;
 }
-.audience-edit-sheet .post-to-circles > div {
-  grid-template-columns: 1fr;
-}
-.audience-edit-sheet .post-to-circles label,
-.audience-edit-sheet .post-to-just-me {
+.audience-edit-sheet .post-to-chips label {
   font-family: var(--font-interface);
   font-size: 14px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-}
-.audience-edit-sheet .post-to-just-me {
-  min-height: 44px;
-  position: relative;
-  margin-top: 10px;
-  padding: 10px 9px 6px;
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--hairline);
-  cursor: pointer;
-}
-.audience-edit-sheet .post-to-just-me input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: inherit;
 }
 .audience-edit-message {
   margin: 10px 0 0;
@@ -7765,58 +7742,38 @@ html[data-theme].overlay-open .app-shell::before,
   position: relative;
 }
 
-.composer-post-to-picker {
-  position: relative;
-  width: min(100%, 280px);
+.composer-post-to {
+  width: min(100%, 360px);
   margin-top: 0;
   justify-self: start;
 }
 
-.composer-post-to-menu {
-  position: absolute;
-  z-index: 4;
-  top: 100%;
-  left: 0;
-  width: min(calc(100vw - 48px), 280px);
-  margin-top: 6px;
-}
-
-.composer-post-to-menu .post-to-circles {
+.composer-post-to .post-to-chips {
   margin: 0;
 }
 
-.composer-post-to-menu .post-to-circles > div {
-  grid-template-columns: 1fr;
+.composer-post-to .post-to-chips legend,
+.post-to-chips legend {
+  margin-bottom: 7px;
+  color: #60574e;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.composer-post-to-menu .post-to-circles label,
-.composer-post-to-menu .post-to-just-me {
+.people-tags.post-to-chips > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.post-to-chips label {
+  min-height: 44px;
+  width: auto;
   font-family: var(--font-record), Georgia, serif;
   font-size: 14px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-}
-
-.composer-post-to-menu .post-to-just-me {
-  min-height: 44px;
-  position: relative;
-  margin-top: 10px;
-  padding: 10px 9px 6px;
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--hairline);
-  cursor: pointer;
-}
-
-.composer-post-to-menu .post-to-just-me input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: inherit;
 }
 
 .composer-journal-trigger {

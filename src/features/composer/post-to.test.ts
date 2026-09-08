@@ -3,6 +3,7 @@ import {
   defaultPostToCircleIds,
   familyFeedHref,
   formatPostToTriggerLabel,
+  initialPostToCircleIds,
   orderPostToCircleIds,
   primaryPostToCircle,
 } from "./post-to";
@@ -37,6 +38,23 @@ describe("post-to selection", () => {
   it("sends Home back to the primary circle after save", () => {
     expect(familyFeedHref("family")).toBe("/family?circle=family");
     expect(familyFeedHref()).toBe("/family");
+  });
+
+  it("prefills linked circles and keeps the primary first", () => {
+    expect(
+      initialPostToCircleIds(circles, {
+        audience: "family",
+        circleId: "family",
+        linkedCircleIds: ["cousins", "family"],
+      }),
+    ).toEqual(["family", "cousins"]);
+    expect(
+      initialPostToCircleIds(circles, {
+        audience: "just_me",
+        circleId: "family",
+        linkedCircleIds: ["family"],
+      }),
+    ).toEqual([]);
   });
 
   it("uses the first selected circle as primary", () => {

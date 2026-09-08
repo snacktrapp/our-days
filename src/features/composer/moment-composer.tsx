@@ -62,6 +62,7 @@ import { PostToField } from "./post-to-field";
 import {
   defaultPostToCircleIds,
   familyFeedHref,
+  initialPostToCircleIds,
   orderPostToCircleIds,
   primaryPostToCircle,
 } from "./post-to";
@@ -110,6 +111,8 @@ export type ComposerEditDraft = Readonly<{
   title: string;
   body: string;
   audience?: MomentAudience;
+  circleId?: string;
+  linkedCircleIds?: readonly string[];
   existingMedia?: ComposerExistingMedia;
   save: UpdateFamilyMomentAction;
   removePhoto?: RemoveMomentPhotoAction;
@@ -300,8 +303,7 @@ export function MomentComposer({
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(
     Boolean(
       editDraft &&
-      (editDraft.audience === "just_me" ||
-        editDraft.taggedPersonIds.length > 0 ||
+      (editDraft.taggedPersonIds.length > 0 ||
         (editDraft.mode !== "location" &&
           editDraft.place.label.trim().length > 0)),
     ),
@@ -312,7 +314,11 @@ export function MomentComposer({
   const postableCircles = model.postableCircles ?? [];
   const [selectedCircleIds, setSelectedCircleIds] = useState<readonly string[]>(
     () =>
-      editDraft ? [] : defaultPostToCircleIds(postableCircles, model.circleId),
+      initialPostToCircleIds(postableCircles, {
+        audience: normalizeMomentAudience(editDraft?.audience),
+        circleId: editDraft?.circleId ?? model.circleId,
+        linkedCircleIds: editDraft?.linkedCircleIds,
+      }),
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
   const [title, setTitle] = useState(editDraft?.title ?? "");
@@ -423,6 +429,12 @@ export function MomentComposer({
       occurredOn !== editDraft.occurredOn ||
       occurredTime !== editDraft.occurredTime ||
       audience !== normalizeMomentAudience(editDraft.audience) ||
+      selectedCircleIds.join(",") !==
+        initialPostToCircleIds(postableCircles, {
+          audience: normalizeMomentAudience(editDraft.audience),
+          circleId: editDraft.circleId ?? model.circleId,
+          linkedCircleIds: editDraft.linkedCircleIds,
+        }).join(",") ||
       currentPhotoSignature !== existingPhotoSignature
     : Boolean(
         body.length ||
@@ -1029,6 +1041,7 @@ export function MomentComposer({
           occurredAt,
           occurredTimezone,
           audience,
+          circleIds: postableCircles.length ? saveCircleIds : undefined,
         });
         if (!result.ok) {
           setSaveError(result.message);
@@ -1901,13 +1914,14 @@ export function MomentComposer({
                   onDateChange={setOccurredOn}
                   onTimeChange={setOccurredTime}
                 />
-                {editDraft || postableCircles.length === 0 ? null : (
+                {postableCircles.length === 0 ? null : (
                   <PostToField
                     circles={postableCircles}
                     selectedIds={orderedCircleIds}
                     justMe={audience === "just_me"}
                     justMeAllowed={justMeAllowed}
                     currentCircleId={model.circleId}
+                    lockedCircleId={editDraft?.circleId}
                     onChange={choosePostTo}
                   />
                 )}
@@ -1959,32 +1973,6 @@ export function MomentComposer({
                         </div>
                       </fieldset>
                     )}
-                    {editDraft ? (
-                      <fieldset className="people-tags audience-choice">
-                        <legend>Audience</legend>
-                        <div>
-                          <label>
-                            <input
-                              type="radio"
-                              name="moment-audience"
-                              checked={audience === "family"}
-                              onChange={() => chooseAudience("family")}
-                            />
-                            Family
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              name="moment-audience"
-                              checked={audience === "just_me"}
-                              disabled={!justMeAllowed}
-                              onChange={() => chooseAudience("just_me")}
-                            />
-                            Just Me
-                          </label>
-                        </div>
-                      </fieldset>
-                    ) : null}
                     {audience === "just_me" ? null : (
                       <fieldset className="people-tags">
                         <legend>Who else was part of this?</legend>

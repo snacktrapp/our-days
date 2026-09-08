@@ -514,11 +514,8 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "A private thought.");
     expect(
-      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
-    ).toBeVisible();
-    await user.click(
-      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
-    );
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
     await user.click(screen.getByRole("checkbox", { name: "Just me" }));
     await user.click(screen.getByRole("button", { name: /Details/ }));
     expect(screen.getByRole("button", { name: /Brian · You/u })).toBeDisabled();
@@ -560,13 +557,11 @@ describe("MomentComposer", () => {
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
     await user.type(screen.getByLabelText("Entry"), "One porch, two circles.");
-    await user.click(
-      screen.getByRole("button", { name: /Post to, Trapp Family/u }),
-    );
-    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
     expect(
-      screen.getByRole("button", { name: /Post to, Trapp Family \+ Cousins/u }),
-    ).toBeVisible();
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
@@ -1727,6 +1722,67 @@ describe("MomentComposer", () => {
       }),
     );
     expect(onRequestClose).toHaveBeenCalledOnce();
+  });
+
+  it("prefills Post to chips on edit and saves circle ids", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        open
+        editDraft={{
+          momentId: "moment-note",
+          revision: 2,
+          mode: "thought",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "",
+          occurredAt: null,
+          occurredTimezone: null,
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "Worth keeping.",
+          audience: "family",
+          circleId: "family",
+          linkedCircleIds: ["family"],
+          save: update,
+        }}
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+    expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
+    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "family",
+          circleIds: ["family", "cousins"],
+        }),
+      ),
+    );
   });
 
   it("edits a saved photo with the existing picture and no file picker", async () => {

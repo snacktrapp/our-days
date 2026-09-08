@@ -491,6 +491,7 @@ export async function updateLocalWrittenMoment(
     occurredAt: string | null;
     occurredTimezone: string | null;
     audience?: "family" | "just_me";
+    circleIds?: readonly string[];
   }>,
 ) {
   return withStoreLock(() => {
@@ -511,6 +512,28 @@ export async function updateLocalWrittenMoment(
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
+    const audience = resolvedAudience(
+      access,
+      current.journalPersonId,
+      input.audience ?? current.audience,
+    );
+    const primaryCircleId = current.circleId ?? document.circle.id;
+    const allowed = postableCircleIdsForAccess(document, access);
+    const nextCircleIds =
+      input.circleIds === undefined
+        ? current.circleIds
+        : audience === "just_me"
+          ? undefined
+          : [...new Set(input.circleIds)];
+    if (audience === "family" && input.circleIds !== undefined) {
+      if (
+        !nextCircleIds?.length ||
+        !nextCircleIds.includes(primaryCircleId) ||
+        nextCircleIds.some((id) => !allowed.has(id))
+      ) {
+        throw new Error("That moment could not be changed.");
+      }
+    }
     const updated: LocalMoment = {
       ...current,
       title: input.title,
@@ -518,16 +541,12 @@ export async function updateLocalWrittenMoment(
       placeName: input.placeName,
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
-      taggedPersonIds:
-        input.audience === "just_me" ? [] : [...input.taggedPersonIds],
+      taggedPersonIds: audience === "just_me" ? [] : [...input.taggedPersonIds],
       occurredOn: input.occurredOn,
       occurredAt: input.occurredAt,
       occurredTimezone: input.occurredTimezone,
-      audience: resolvedAudience(
-        access,
-        current.journalPersonId,
-        input.audience ?? current.audience,
-      ),
+      audience,
+      circleIds: nextCircleIds,
       revision: nextRevision(current.revision),
       updatedAt: nowIso(),
     };

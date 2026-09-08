@@ -171,7 +171,6 @@ test("Just Me stays on the author's journal and off Family", async ({
   await page
     .getByRole("textbox", { name: "Entry" })
     .fill("A porch thought just for me.");
-  await page.getByRole("button", { name: /Post to,/u }).click();
   await page.getByRole("checkbox", { name: "Just me" }).click();
   await page.getByRole("button", { name: /Details/u }).click();
   await expect(
