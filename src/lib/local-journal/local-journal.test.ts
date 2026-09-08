@@ -255,6 +255,42 @@ describe("local journal happy path", () => {
     ).rejects.toThrow("That response could not be saved.");
   });
 
+  it("keeps Who else tags on a Just Me moment in the YOU feed", async () => {
+    await createLocalWrittenMoment(access, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "A porch thought with Jordan.",
+      placeName: "",
+      taggedPersonIds: [localJordanPersonId],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      audience: "just_me",
+    });
+    const context = await loadLocalJournalContext(access);
+    const ownJournal = await loadLocalTimeline(access, context, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const ownMoment = ownJournal.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.text === "A porch thought with Jordan.",
+    );
+    expect(ownMoment?.entryType).toBe("moment");
+    if (ownMoment?.entryType !== "moment") {
+      throw new Error(
+        "Just Me tagged moment missing from the author's journal",
+      );
+    }
+    expect(ownMoment.moment.audienceChipLabel).toBe("Just me");
+    expect(ownMoment.moment.taggedPeople).toEqual([
+      { id: localJordanPersonId, name: "Jordan" },
+    ]);
+    expect(ownMoment.moment.taggedPeopleLabel).toBe("Jordan");
+  });
+
   it("keeps a Just Me video on the author's journal only", async () => {
     const jordanAccess: LocalAccess = {
       membershipId: localJordanMembershipId,
