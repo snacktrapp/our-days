@@ -1710,6 +1710,80 @@ span.moment-place-line {
 .thought-card:has(.connected-moment-actions) blockquote {
   margin-top: 20px;
 }
+
+.daily-prayer-copy {
+  margin: 11px 0 0;
+}
+
+.daily-prayer-toggle {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.daily-prayer-toggle span,
+.daily-prayer-toggle q {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  line-height: 1.38;
+  letter-spacing: -0.015em;
+}
+
+.daily-prayer-toggle cite,
+.daily-prayer-answers dt {
+  display: block;
+  margin-top: 10px;
+  color: var(--clay);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.daily-prayer-answers {
+  margin: 16px 0 0;
+}
+
+.daily-prayer-answers dd {
+  margin: 6px 0 0;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.insight-share {
+  margin-top: 16px;
+}
+
+.insight-share-toggle,
+.insight-share-submit {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--clay);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.insight-share-panel {
+  margin-top: 8px;
+}
+
+.insight-share-message {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 .year-marker {
   height: 40px;
   align-items: center;
@@ -5309,6 +5383,12 @@ button.audience-chip .audience-chip-face {
   gap: 12px;
 }
 
+.daily-prayer-toggle span,
+.daily-prayer-toggle q {
+  font-size: 18px;
+  line-height: 1.5;
+}
+
 .thought-card .bible-verse-copy.thought-copy-clamped {
   display: -webkit-box;
 }
@@ -6513,6 +6593,32 @@ button.audience-chip .audience-chip-face {
 .notification-preference-message {
   padding-top: 0;
   color: var(--ink);
+}
+
+.just-me-catalog {
+  margin: 0 18px 24px;
+}
+
+.family-settings-panel .just-me-catalog {
+  margin: 0;
+}
+
+.just-me-catalog-row {
+  align-items: start;
+}
+
+.just-me-catalog-row span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.just-me-catalog-row small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
 }
 
 .account-tool-link,
@@ -8073,6 +8179,49 @@ html[data-theme].overlay-open .app-shell::before,
   width: 100%;
   margin-top: 0;
   padding: 0;
+}
+
+.composer-daily-prayer-fields {
+  display: grid;
+  gap: 16px;
+}
+
+.composer-daily-prayer-verse {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.composer-daily-prayer-verse span {
+  color: var(--clay);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.composer-daily-prayer-verse q {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.composer-daily-prayer-verse cite {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+}
+
+.composer-daily-prayer-fields fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.composer-daily-prayer-fields legend {
+  margin-bottom: 4px;
 }
 
 .composer-picker-trigger > span:last-child {

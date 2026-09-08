@@ -23,6 +23,7 @@ export type MomentComposerViewModel = Readonly<{
     Record<string, readonly ComposerPersonOption[]>
   >;
   postableCircles?: readonly PostableCircle[];
+  dailyPrayerEnabled?: boolean;
 }>;
 
 export function taggablePeopleForSelectedCircles(

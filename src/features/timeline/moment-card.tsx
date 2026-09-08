@@ -5,7 +5,12 @@ import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { parseDailyPrayerMoment } from "@/features/daily-prayer/daily-prayer";
+import { InsightShareControl } from "@/features/insights/insight-share-control";
 import { insightSourceLabel } from "@/features/insights/insight-source";
+import { parseSharedInsightMoment } from "@/features/insights/insight-share";
+import type { PostableCircle } from "@/features/composer/post-to";
+import { ExpandableDailyPrayerCopy } from "./expandable-daily-prayer";
 import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import type {
   ConnectedMomentActions,
@@ -77,6 +82,7 @@ type MomentCardProps = Readonly<{
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
   connectedTotal?: number;
+  postableCircles?: readonly PostableCircle[];
 }>;
 
 export function MomentCard({
@@ -87,24 +93,36 @@ export function MomentCard({
   conversationActions,
   connectedPosition,
   connectedTotal,
+  postableCircles = [],
 }: MomentCardProps) {
+  const prayer =
+    moment.kind === "thought" ? parseDailyPrayerMoment(moment.text) : null;
+  const sharedInsight =
+    !prayer && moment.kind === "thought"
+      ? parseSharedInsightMoment(moment.text)
+      : null;
   const bibleVerseMatch =
-    moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
+    !prayer && !sharedInsight && moment.kind === "thought"
+      ? parseBibleVerseMoment(moment.text)
+      : null;
   const bibleVerse = bibleVerseMatch
     ? { verse: bibleVerseMatch.text, reference: bibleVerseMatch.reference }
     : null;
-  const typeLabel =
-    moment.kind === "thought"
-      ? "Note"
-      : moment.kind === "video"
-        ? "Video"
-        : moment.kind === "location"
-          ? "Location"
-          : moment.kind === "milestone"
-            ? "Milestone"
-            : moment.kind === "insight"
-              ? "Insight"
-              : "Photo";
+  const typeLabel = prayer
+    ? "Daily prayer"
+    : sharedInsight
+      ? "Insight"
+      : moment.kind === "thought"
+        ? "Note"
+        : moment.kind === "video"
+          ? "Video"
+          : moment.kind === "location"
+            ? "Location"
+            : moment.kind === "milestone"
+              ? "Milestone"
+              : moment.kind === "insight"
+                ? "Insight"
+                : "Photo";
 
   if (moment.kind === "photo" || moment.kind === "video") {
     const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
@@ -191,21 +209,31 @@ export function MomentCard({
   if (moment.kind === "thought") {
     return (
       <div
-        className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
+        className={`moment-card thought-card ${bibleVerse || prayer || sharedInsight ? "bible-verse-card" : ""} ${prayer ? "daily-prayer-card" : ""} ${sharedInsight ? "insight-card" : ""}`}
       >
         <MomentPlaceMeta
-          typeLabel={bibleVerse ? "Verse" : typeLabel}
+          typeLabel={prayer ? "Daily prayer" : bibleVerse ? "Verse" : typeLabel}
           placeName={moment.placeName}
           latitude={moment.latitude}
           longitude={moment.longitude}
         />
-        {bibleVerse ? (
+        {prayer ? (
+          <ExpandableDailyPrayerCopy prayer={prayer} />
+        ) : bibleVerse ? (
           <ExpandableThoughtCopy
             momentId={moment.id}
             className="bible-verse-copy"
           >
             <span>“{bibleVerse.verse}”</span>
             <cite>{bibleVerse.reference} · World English Bible</cite>
+          </ExpandableThoughtCopy>
+        ) : sharedInsight ? (
+          <ExpandableThoughtCopy
+            momentId={moment.id}
+            className="bible-verse-copy"
+          >
+            <span>“{sharedInsight.quote}”</span>
+            <cite>{sharedInsight.attribution}</cite>
           </ExpandableThoughtCopy>
         ) : (
           <ExpandableThoughtCopy momentId={moment.id}>
@@ -264,6 +292,16 @@ export function MomentCard({
             ) : null}
           </cite>
         </ExpandableThoughtCopy>
+        {moment.audience === "just_me" &&
+        connectedActions?.shareInsight &&
+        postableCircles.length > 0 ? (
+          <InsightShareControl
+            momentId={moment.id}
+            circles={postableCircles}
+            currentCircleId={moment.circleId}
+            shareInsight={connectedActions.shareInsight}
+          />
+        ) : null}
         {interaction ? (
           <MomentConversationControl
             interaction={interaction}

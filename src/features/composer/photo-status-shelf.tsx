@@ -190,6 +190,7 @@ function optimisticUploadChipProgress(
 function optimisticMomentChipLabel(save: OptimisticMomentSave) {
   if (save.stage.state === "failed") return "Couldn’t add";
   if (save.mode === "bible-verse") return "Adding verse…";
+  if (save.mode === "daily-prayer") return "Adding prayer…";
   if (save.mode === "thought") return "Adding note…";
   if (save.mode === "location") return "Adding place…";
   return "Adding milestone…";

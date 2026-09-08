@@ -23,6 +23,7 @@ import {
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import { buildTimelineEntries } from "@/data/moments.server";
 import { formatAudienceChipLabel } from "@/features/moments/moment-audience";
+import { formatDailyPrayerMoment } from "@/features/daily-prayer/daily-prayer";
 import {
   anniversaryKey,
   compareMemoryDatesDescending,
@@ -135,6 +136,7 @@ function chrome(
       postableCircles: [
         { id: "family", name: "All our days", personId: "brian" },
       ],
+      dailyPrayerEnabled: true,
     },
   };
 }
@@ -226,11 +228,12 @@ const familyEntries = [
     entryType: "moment",
     moment: {
       id: "sleep-insight",
-      journalPersonId: "",
+      journalPersonId: "brian",
       kind: "insight",
-      personName: "",
-      personInitial: "",
-      personAccent: "slate",
+      personName: "Brian",
+      personInitial: "B",
+      personAccent: "teal",
+      audience: "just_me",
       displayTime: undefined,
       displayDate: "Aug 27, 2026",
       occurredOn: "2026-08-27",
@@ -239,6 +242,44 @@ const familyEntries = [
       attribution: "Huberman Lab — Master Your Sleep",
       sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
       sourceLabel: "Listen",
+      conversation: momentDetail({ notes: [], reactions: [] }),
+    },
+  },
+  {
+    id: "morning-prayer",
+    entryType: "moment",
+    moment: {
+      id: "morning-prayer",
+      journalPersonId: "brian",
+      kind: "thought",
+      personName: "Brian",
+      personInitial: "B",
+      personAccent: "teal",
+      audience: "just_me",
+      displayTime: "7:05 am",
+      displayDate: "Aug 28, 2026",
+      occurredOn: "2026-08-28",
+      kicker: "Daily prayer",
+      text: formatDailyPrayerMoment(
+        {
+          reference: "Ezekiel 36:26",
+          text: "And I will give you a new heart, and I will put a new spirit in you. I will take out your stony, stubborn heart and give you a tender, responsive heart.",
+        },
+        {
+          thanks: [
+            "A quiet kitchen this morning",
+            "Health for another day",
+            "This family",
+          ],
+          showUp: "Speak gently and leave room for other people first.",
+          prayers: [
+            "For patience at home",
+            "For friends who are hurting",
+            "For wisdom in the work ahead",
+          ],
+          affirm: "I am loved, and I am being made new.",
+        },
+      ),
       conversation: momentDetail({ notes: [], reactions: [] }),
     },
   },
@@ -451,6 +492,7 @@ export function getFamilyTimelineFixture(
     ? []
     : (familyEntries as readonly TimelineEntryViewModel[])
         .filter(isMomentEntry)
+        .filter((entry) => entry.moment.audience !== "just_me")
         .map((entry) => entry.moment);
   const currentHref =
     extraSelected && options.extraGroup

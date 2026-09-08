@@ -1,27 +1,30 @@
 # Insight ingest contract
 
-Daily curated Insights (quotes and tidbits from podcasts or essays) are
-circle-level cards. They are **not** personal journal entries and must not
-show a family-member byline.
+Daily curated Insights (quotes and tidbits from podcasts or essays) are stored
+as **source items** and delivered only to members who turned that source on in
+**Account → Timeline add-ons**. They land on the subscriber’s **Just me**
+journal. They are not group cards and must not appear on the family feed as
+anonymous Operations posts.
 
-Ordinary members never see Insight in **+ New moment**. Humans post thoughts,
-verses, photos, and the rest through the existing composer. Insights are
-created only by an organizer — including the **Operations** organizer
-membership (TARS) that authenticates as itself.
+Ordinary members never see Insight in **+ New moment**. Sharing an Insight from
+Just me creates a normal user-authored thought (with that member’s byline) on
+the chosen circles.
 
 ## Authorization
 
-| Gate | Rule |
-| --- | --- |
-| Who | Active **organizer** of the target circle, including an Operations organizer |
-| Circle | Server-derived from that session. A client `circleId` is accepted only when it matches the active circle. |
-| Browser writes | Cookie session + same-origin `Origin` matching `NEXT_PUBLIC_SITE_URL` |
-| Agent writes | Organizer or Operations access token (`Authorization: Bearer …`) **or** the same RPC against Supabase with that JWT |
-| Database | `create_insight_moment` independently rechecks `auth.uid()` and `is_circle_organizer` |
+| Gate           | Rule                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Who            | Active **organizer** of the target circle, including an Operations organizer                                        |
+| Circle         | Server-derived from that session. A client `circleId` is accepted only when it matches the active circle.           |
+| Browser writes | Cookie session + same-origin `Origin` matching `NEXT_PUBLIC_SITE_URL`                                               |
+| Agent writes   | Organizer or Operations access token (`Authorization: Bearer …`) **or** the same RPC against Supabase with that JWT |
+| Database       | `create_insight_moment` independently rechecks `auth.uid()` and `is_circle_organizer`                               |
 
 Public signup stays disabled. This path does not provision accounts, use a
-service-role key, or impersonate another adult's journal. `recorded_by_membership_id`
-is stored for audit only and is not rendered as an author.
+service-role key, or impersonate another adult's journal.
+
+Do **not** resume a paused Huberman cloud routine from this contract. Cadence
+stays operator-driven ingest plus per-user catalog delivery.
 
 ## Payload
 
@@ -35,20 +38,24 @@ is stored for audit only and is not rendered as an author.
 }
 ```
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `quote` | yes | 1–4000 characters after trim. Stored as `moments.body`. |
-| `attribution` | yes | 1–160 characters after trim. Stored as `moments.title`. Example: `Huberman Lab — episode name`. |
-| `sourceUrl` | no | `https://` only, 12–2000 characters. Timestamped YouTube `?t=` links are allowed. |
-| `occurredOn` | no | `YYYY-MM-DD`. Defaults to today in the circle timezone. Cannot be in the future. |
-| `occurredAt` / `occurredTimezone` | no | Both present or both omitted. Same pairing rule as written moments. |
-| `circleId` | no | Must equal the organizer's active circle when supplied. |
+| Field                             | Required | Notes                                                                                                               |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `quote`                           | yes      | 1–4000 characters after trim. Stored on the source item and copied to Just me `moments.body`.                       |
+| `attribution`                     | yes      | 1–160 characters after trim. Stored as source attribution / `moments.title`.                                        |
+| `sourceUrl`                       | no       | `https://` only, 12–2000 characters. Timestamped YouTube `?t=` links are allowed.                                   |
+| `occurredOn`                      | no       | `YYYY-MM-DD`. Defaults to today in the circle timezone. Cannot be in the future. Used as the source published date. |
+| `occurredAt` / `occurredTimezone` | no       | Both present or both omitted. Same pairing rule as written moments.                                                 |
+| `circleId`                        | no       | Must equal the organizer's active circle when supplied.                                                             |
 
 ## HTTP
 
 `POST /api/insights`
 
-Success: `201 { "ok": true, "momentId": "<uuid>" }`
+Success: `201 { "ok": true, "momentId": "<source-item-uuid>" }`
+
+The returned id is the **source item** id. Just me copies are created for
+members who already have `insights.huberman_faith` enabled. Members who enable
+the source later receive pending items at toggle time.
 
 Failures: `400` invalid payload, `401` unsigned, `403` not an organizer /
 wrong circle / failed same-origin check.
@@ -75,12 +82,16 @@ Content-Type: application/json
 A later worker should authenticate as the circle’s Operations membership
 (`tars-trapp@agentmail.to`). That membership stays a full organizer; the
 Operations label only hides it from Family and People. Do not put a
-service-role key in the web deployment.
+service-role key in the web deployment. Do not use this path to post
+no-byline family Insights.
 
 ## Timeline behavior
 
-- Family feed includes Insights. Personal journals do not.
-- Cards reuse the Bible-verse treatment: quote, small attribution, optional
+- New Insights appear only on subscribed Just me journals.
+- Cards keep the Insight treatment: quote, small attribution, optional
   Listen / Read the source link. No avatar or person name.
+- **Share to…** uses the existing Post to chips and creates a user-authored
+  thought with that member’s byline.
 - Existing note and reaction chrome still works.
-- Organizers can trash/restore Insights. There is no composer edit path.
+- The journal owner can trash their delivered Just me Insight. There is no
+  composer edit path for Insights.

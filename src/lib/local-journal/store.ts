@@ -30,8 +30,18 @@ import {
   type EntryDraftRecord,
   type SaveEntryDraftInput,
 } from "@/features/composer/entry-drafts";
+import { dailyPrayerBodyPrefix } from "@/features/daily-prayer/daily-prayer";
+import {
+  dailyPrayerCatalogItemId,
+  hubermanFaithCatalogItemId,
+  isJustMeCatalogItemId,
+} from "@/features/just-me-catalog/catalog-items";
+import { dailyPrayerIsAllowedForEmail } from "@/features/just-me-catalog/daily-prayer-access";
 import type {
+  LocalCatalogPreference,
   LocalEntryDraft,
+  LocalInsightDelivery,
+  LocalInsightSourceItem,
   LocalJournalDocument,
   LocalMedia,
   LocalMoment,
@@ -441,6 +451,90 @@ export async function createLocalWrittenMoment(
   });
 }
 
+const seededHubermanFaithItems: readonly LocalInsightSourceItem[] = [
+  {
+    id: "70000000-0000-4000-8000-000000000001",
+    sourceId: hubermanFaithCatalogItemId,
+    quote:
+      "Prayer and gratitude are not only spiritual practices. They are also ways of repeatedly placing your mind on what is good, which changes the state of your nervous system.",
+    attribution: "Huberman Lab — Faith, Gratitude, and the Brain",
+    sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ",
+    publishedOn: "2026-09-01",
+  },
+  {
+    id: "70000000-0000-4000-8000-000000000002",
+    sourceId: hubermanFaithCatalogItemId,
+    quote:
+      "A short morning prayer can become a deliberate sunrise ritual: still the body, name what you are thankful for, and set one intention for how you will treat other people.",
+    attribution: "Huberman Lab — Morning Light and Spiritual Practice",
+    sourceUrl: null,
+    publishedOn: "2026-09-04",
+  },
+  {
+    id: "70000000-0000-4000-8000-000000000003",
+    sourceId: hubermanFaithCatalogItemId,
+    quote:
+      "Love, generosity, and a feeling of being safe with others are not soft extras. They are biological conditions that help the brain recover and stay open.",
+    attribution: "Huberman Lab — Social Bonding and the Spirit",
+    sourceUrl: null,
+    publishedOn: "2026-09-07",
+  },
+];
+
+function deliverLocalInsightItem(
+  document: LocalJournalDocument,
+  item: LocalInsightSourceItem,
+  email: string,
+): {
+  document: LocalJournalDocument;
+  momentId: string | null;
+} {
+  const deliveries = document.insightDeliveries ?? [];
+  const existing = deliveries.find(
+    (delivery) => delivery.sourceItemId === item.id && delivery.email === email,
+  );
+  if (existing) {
+    return { document, momentId: existing.momentId };
+  }
+  const account = document.accounts.find((row) => row.email === email);
+  if (!account) return { document, momentId: null };
+  const createdAt = nowIso();
+  const moment: LocalMoment = {
+    id: randomUUID(),
+    circleId: localCircleId,
+    journalPersonId: account.personId,
+    recordedByMembershipId: account.membershipId,
+    audience: "just_me",
+    kind: "insight",
+    title: item.attribution,
+    body: item.quote,
+    sourceUrl: item.sourceUrl,
+    placeName: "",
+    taggedPersonIds: [],
+    occurredOn: item.publishedOn,
+    occurredAt: null,
+    occurredTimezone: null,
+    revision: 1,
+    createdAt,
+    updatedAt: createdAt,
+    trashedAt: null,
+    trashedByMembershipId: null,
+  };
+  const delivery: LocalInsightDelivery = {
+    sourceItemId: item.id,
+    email,
+    momentId: moment.id,
+  };
+  return {
+    momentId: moment.id,
+    document: {
+      ...document,
+      moments: [moment, ...document.moments],
+      insightDeliveries: [...deliveries, delivery],
+    },
+  };
+}
+
 export async function createLocalInsightMoment(
   access: LocalAccess,
   input: Readonly<{
@@ -458,32 +552,27 @@ export async function createLocalInsightMoment(
     if (!canCreateInsight(access.role)) {
       throw new Error("Only an organizer or Operations can create an Insight.");
     }
-    const createdAt = nowIso();
-    const moment: LocalMoment = {
+    const item: LocalInsightSourceItem = {
       id: randomUUID(),
-      circleId: access.circleId,
-      journalPersonId: null,
-      recordedByMembershipId: access.membershipId,
-      kind: "insight",
-      title: input.attribution,
-      body: input.quote,
+      sourceId: hubermanFaithCatalogItemId,
+      quote: input.quote,
+      attribution: input.attribution,
       sourceUrl: input.sourceUrl ?? null,
-      placeName: "",
-      taggedPersonIds: [],
-      occurredOn: input.occurredOn,
-      occurredAt: input.occurredAt,
-      occurredTimezone: input.occurredTimezone,
-      revision: 1,
-      createdAt,
-      updatedAt: createdAt,
-      trashedAt: null,
-      trashedByMembershipId: null,
+      publishedOn: input.occurredOn,
     };
-    writeDocumentUnlocked({
+    let next: LocalJournalDocument = {
       ...document,
-      moments: [moment, ...document.moments],
-    });
-    return moment.id;
+      insightSourceItems: [...(document.insightSourceItems ?? []), item],
+    };
+    const subscribers = (document.catalogPreferences ?? []).filter(
+      (preference) =>
+        preference.itemId === hubermanFaithCatalogItemId && preference.enabled,
+    );
+    for (const subscriber of subscribers) {
+      next = deliverLocalInsightItem(next, item, subscriber.email).document;
+    }
+    writeDocumentUnlocked(next);
+    return item.id;
   });
 }
 
@@ -1235,4 +1324,134 @@ export async function deleteLocalEntryDraft(access: LocalAccess, id: string) {
 
 export function resetLocalJournalForTests() {
   rmSync(dataRoot(), { recursive: true, force: true });
+}
+
+export async function listLocalJustMeCatalogPreferences() {
+  return withStoreLock(async () => {
+    const document = readDocumentUnlocked();
+    const { readLocalJournalSessionEmail } = await import("./auth");
+    const email = await readLocalJournalSessionEmail();
+    if (!email) return [];
+    const saved = document.catalogPreferences ?? [];
+    const rows: Array<{ item_id: string; enabled: boolean }> = [
+      {
+        item_id: hubermanFaithCatalogItemId,
+        enabled: saved.some(
+          (row) =>
+            row.email === email &&
+            row.itemId === hubermanFaithCatalogItemId &&
+            row.enabled,
+        ),
+      },
+    ];
+    if (dailyPrayerIsAllowedForEmail(email)) {
+      rows.push({
+        item_id: dailyPrayerCatalogItemId,
+        enabled: saved.some(
+          (row) =>
+            row.email === email &&
+            row.itemId === dailyPrayerCatalogItemId &&
+            row.enabled,
+        ),
+      });
+    }
+    return rows;
+  });
+}
+
+export async function setLocalJustMeCatalogPreference(
+  itemId: string,
+  enabled: boolean,
+) {
+  return withStoreLock(async () => {
+    if (!isJustMeCatalogItemId(itemId)) {
+      throw new Error("Unknown catalog item");
+    }
+    const { readLocalJournalSessionEmail } = await import("./auth");
+    const email = await readLocalJournalSessionEmail();
+    if (!email) throw new Error("Sign in to continue.");
+    if (
+      itemId === dailyPrayerCatalogItemId &&
+      !dailyPrayerIsAllowedForEmail(email)
+    ) {
+      throw new Error("That add-on is not available.");
+    }
+    const document = readDocumentUnlocked();
+    const current = document.catalogPreferences ?? [];
+    const nextPrefs: LocalCatalogPreference[] = [
+      ...current.filter(
+        (row) => !(row.email === email && row.itemId === itemId),
+      ),
+      { email, itemId, enabled },
+    ];
+    let next: LocalJournalDocument = {
+      ...document,
+      catalogPreferences: nextPrefs,
+    };
+    if (itemId === hubermanFaithCatalogItemId && enabled) {
+      const items = [
+        ...seededHubermanFaithItems,
+        ...(document.insightSourceItems ?? []),
+      ];
+      const seen = new Set<string>();
+      for (const item of items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        next = deliverLocalInsightItem(next, item, email).document;
+      }
+      next = {
+        ...next,
+        insightSourceItems: [
+          ...seededHubermanFaithItems,
+          ...(document.insightSourceItems ?? []).filter(
+            (item) =>
+              !seededHubermanFaithItems.some((seed) => seed.id === item.id),
+          ),
+        ],
+      };
+    }
+    writeDocumentUnlocked(next);
+  });
+}
+
+export async function findLocalDailyPrayerMoment(occurredOn: string) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    const found = document.moments.find(
+      (moment) =>
+        moment.occurredOn === occurredOn &&
+        moment.trashedAt === null &&
+        moment.body.startsWith(dailyPrayerBodyPrefix),
+    );
+    if (!found) return null;
+    return {
+      momentId: found.id,
+      revision: found.revision,
+      body: found.body,
+      occurredOn: found.occurredOn,
+    };
+  });
+}
+
+export async function readLocalInsightForShare(
+  access: LocalAccess,
+  momentId: string,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const moment = document.moments.find((row) => row.id === momentId);
+    if (
+      !moment ||
+      moment.kind !== "insight" ||
+      moment.audience !== "just_me" ||
+      moment.journalPersonId !== access.personId
+    ) {
+      return null;
+    }
+    return {
+      quote: moment.body,
+      attribution: moment.title,
+    };
+  });
 }

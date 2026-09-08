@@ -104,7 +104,13 @@ export type LocalEntryDraft = Readonly<{
   id: string;
   ownerPersonId: string;
   kind:
-    "thought" | "photo" | "video" | "bible-verse" | "milestone" | "location";
+    | "thought"
+    | "photo"
+    | "video"
+    | "bible-verse"
+    | "daily-prayer"
+    | "milestone"
+    | "location";
   title: string;
   body: string;
   audience: "family" | "just_me";
@@ -150,4 +156,28 @@ export type LocalJournalDocument = Readonly<{
   notes: readonly LocalNote[];
   reactions: readonly LocalReaction[];
   drafts?: readonly LocalEntryDraft[];
+  catalogPreferences?: readonly LocalCatalogPreference[];
+  insightSourceItems?: readonly LocalInsightSourceItem[];
+  insightDeliveries?: readonly LocalInsightDelivery[];
+}>;
+
+export type LocalCatalogPreference = Readonly<{
+  email: string;
+  itemId: string;
+  enabled: boolean;
+}>;
+
+export type LocalInsightSourceItem = Readonly<{
+  id: string;
+  sourceId: string;
+  quote: string;
+  attribution: string;
+  sourceUrl: string | null;
+  publishedOn: string;
+}>;
+
+export type LocalInsightDelivery = Readonly<{
+  sourceItemId: string;
+  email: string;
+  momentId: string;
 }>;

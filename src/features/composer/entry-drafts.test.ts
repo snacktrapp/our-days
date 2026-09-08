@@ -20,6 +20,7 @@ describe("entry drafts helpers", () => {
     );
     expect(entryDraftPreviewText({ mediaCount: 1 })).toBe("Media attached");
     expect(isEntryDraftKind("bible-verse")).toBe(true);
+    expect(isEntryDraftKind("daily-prayer")).toBe(true);
     expect(isEntryDraftKind("insight")).toBe(false);
   });
 
