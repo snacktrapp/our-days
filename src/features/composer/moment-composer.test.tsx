@@ -506,7 +506,7 @@ describe("MomentComposer", () => {
       screen.queryByRole("button", { name: /^Journal,/u }),
     ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Details/ }));
-    expect(screen.queryByRole("checkbox", { name: /Molly/ })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith(
@@ -547,6 +547,51 @@ describe("MomentComposer", () => {
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
+  });
+
+  it("keeps Who else tags when switching Post to Just me", async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+        saveFamilyMoment={save}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    await user.type(screen.getByLabelText("Entry"), "Molly was there.");
+    await user.click(screen.getByRole("button", { name: /Details/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Molly/ }));
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Just me" }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(screen.getByText("Who else was part of this?")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: "just_me",
+          taggedPersonIds: ["molly"],
+        }),
+      ),
+    );
   });
 
   it("defaults create Post to the filtered Home group only", async () => {
