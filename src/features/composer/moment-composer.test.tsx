@@ -609,6 +609,35 @@ describe("MomentComposer", () => {
     );
   });
 
+  it("defaults create Post to Just me from a nav create intent", async () => {
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          photoPostingEnabled: true,
+          postableCircles: [
+            { id: "family", name: "Trapp Family", personId: "brian" },
+            { id: "cousins", name: "Cousins", personId: "brian-cousins" },
+          ],
+        }}
+        homeContext={{ kind: "group", circleId: "cousins" }}
+        createIntent={{ defaultAudience: "just_me" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Trapp Family" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+  });
+
   it("defaults create Post to the filtered Home group only", async () => {
     const user = userEvent.setup();
     render(

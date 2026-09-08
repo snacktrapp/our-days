@@ -4,21 +4,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PrimaryNavigation } from "./primary-navigation";
 
 const navigation = vi.hoisted(() => ({ pathname: "/family" }));
+const composerSession = vi.hoisted(() => ({
+  toggleCreate: vi.fn(),
+  openCreate: vi.fn(),
+  isOpen: false,
+  openEdit: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
 }));
 
+vi.mock("@/features/composer/composer-session", () => ({
+  useComposerSession: () => composerSession,
+}));
+
 describe("PrimaryNavigation", () => {
   beforeEach(() => {
     navigation.pathname = "/family";
+    composerSession.isOpen = false;
+    composerSession.toggleCreate.mockReset();
   });
 
   afterEach(() => {
     document.querySelector("style#our-days-dynamic-css")?.remove();
   });
 
-  it("contains destinations only", () => {
+  it("contains Home, Add, and Account", () => {
     render(<PrimaryNavigation section="timeline" />);
 
     const navigation = screen.getByRole("navigation", {
@@ -26,10 +38,24 @@ describe("PrimaryNavigation", () => {
     });
     expect(navigation).toHaveTextContent("Home");
     expect(navigation).not.toHaveTextContent("People");
-    expect(navigation).toHaveTextContent("Memories");
+    expect(navigation).not.toHaveTextContent("Memories");
+    expect(navigation).toHaveTextContent("Add");
     expect(navigation).toHaveTextContent("Account");
-    expect(navigation).not.toHaveTextContent("Add");
+    expect(screen.getByRole("button", { name: "Add" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Add moment" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Memories" })).toBeNull();
+  });
+
+  it("opens the existing add picker with a Just me Post-to default", async () => {
+    const user = userEvent.setup();
+    render(<PrimaryNavigation section="timeline" />);
+
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(composerSession.toggleCreate).toHaveBeenCalledWith(
+      expect.any(HTMLButtonElement),
+      { defaultAudience: "just_me" },
+    );
   });
 
   it("marks Account current in family settings", () => {

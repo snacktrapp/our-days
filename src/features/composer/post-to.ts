@@ -9,6 +9,10 @@ export type CreatePostToHomeContext = Readonly<{
   circleId?: string;
 }>;
 
+export type CreatePostToIntent = Readonly<{
+  defaultAudience?: "just_me";
+}>;
+
 export function defaultPostToCircleIds(
   circles: readonly PostableCircle[],
   currentCircleId?: string,
@@ -98,7 +102,11 @@ export function createPostToDefault(
   circles: readonly PostableCircle[],
   context?: CreatePostToHomeContext | null,
   fallbackCircleId?: string,
+  intent?: CreatePostToIntent | null,
 ) {
+  if (intent?.defaultAudience === "just_me") {
+    return { audience: "just_me" as const, circleIds: [] as const };
+  }
   if (context?.kind === "you" || context?.kind === "person") {
     return { audience: "just_me" as const, circleIds: [] as const };
   }

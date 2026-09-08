@@ -69,6 +69,7 @@ import {
   orderPostToCircleIds,
   primaryPostToCircle,
   type CreatePostToHomeContext,
+  type CreatePostToIntent,
 } from "./post-to";
 import { LocationFields } from "./location-fields";
 import {
@@ -146,6 +147,7 @@ type MomentComposerProps = Readonly<{
   editDraft?: ComposerEditDraft | null;
   draftActions?: EntryDraftActions;
   homeContext?: CreatePostToHomeContext;
+  createIntent?: CreatePostToIntent | null;
   registerDismiss?: (dismiss: (() => void) | null) => void;
   registerDraftsLoad?: (load: (() => void) | null) => void;
 }>;
@@ -304,6 +306,7 @@ export function MomentComposer({
   editDraft = null,
   draftActions,
   homeContext,
+  createIntent = null,
   registerDismiss,
   registerDraftsLoad,
 }: MomentComposerProps) {
@@ -336,6 +339,7 @@ export function MomentComposer({
     postableCircles,
     homeContext,
     model.circleId,
+    createIntent,
   );
   const createJournalPersonId = model.recorderPersonId;
   const [audience, setAudience] = useState<MomentAudience>(
@@ -552,6 +556,7 @@ export function MomentComposer({
 
   const homeContextKind = homeContext?.kind;
   const homeContextCircleId = homeContext?.circleId;
+  const createIntentAudience = createIntent?.defaultAudience;
   const resetDraft = useCallback(
     (nextMode: ComposerMode | null = null) => {
       const nextPostTo = createPostToDefault(
@@ -563,6 +568,7 @@ export function MomentComposer({
             }
           : undefined,
         model.circleId,
+        createIntentAudience ? { defaultAudience: createIntentAudience } : null,
       );
       clearPhotoPreview();
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -602,6 +608,7 @@ export function MomentComposer({
     },
     [
       clearPhotoPreview,
+      createIntentAudience,
       homeContextCircleId,
       homeContextKind,
       model.circleId,
