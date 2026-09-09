@@ -1,11 +1,9 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  invitationDeliveryIsEnabled,
   localJournalIsEnabled,
   resolvedSiteOrigin,
 } from "../../../config/our-days-environment";
@@ -20,8 +18,7 @@ import {
 } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { requestFamilyInvitationAction } from "@/features/family-settings/family-settings-actions";
-import { readWiderCircleForm, type WiderCirclePerson } from "./wider-circle";
+import { readWiderCircleForm } from "./wider-circle";
 
 export type CreateGroupActionResult = Readonly<
   { ok: true; href: string } | { ok: false; message: string }
@@ -35,13 +32,10 @@ async function hasExpectedOrigin() {
   );
 }
 
-function createdGroupHref(circleId: string, name?: string, added?: boolean) {
+function createdGroupHref(circleId: string, name?: string) {
   const params = new URLSearchParams({ inviteCircle: circleId });
   if (name) params.set("name", name);
-  if (added) params.set("added", "1");
-  return added
-    ? `/settings/family?${params.toString()}`
-    : `/settings/family?${params.toString()}#invite`;
+  return `/settings/family?${params.toString()}#invite`;
 }
 
 async function actorBelongsToCircle(
@@ -66,21 +60,6 @@ async function actorBelongsToCircle(
   );
 }
 
-async function inviteWhoElse(
-  circleId: string,
-  whoElse: readonly WiderCirclePerson[],
-) {
-  if (!invitationDeliveryIsEnabled() || whoElse.length === 0) return;
-  for (const person of whoElse) {
-    await requestFamilyInvitationAction({
-      circleId,
-      displayName: person.displayName,
-      email: person.email,
-      requestKey: randomUUID(),
-    });
-  }
-}
-
 export async function createGroupAction(
   input: unknown,
 ): Promise<CreateGroupActionResult> {
@@ -89,46 +68,47 @@ export async function createGroupAction(
   }
   const form = readWiderCircleForm(input);
   const name = normalizeGroupName(form.name);
+  const sourceCircleId = form.sourceCircleId;
   if (!name) {
     return { ok: false, message: "A circle name is required." };
+  }
+  if (!sourceCircleId || !isActiveCircleToken(sourceCircleId)) {
+    return { ok: false, message: "That circle could not be created." };
   }
 
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
     await writeActiveCircleCookie("created", name);
-    redirect(createdGroupHref("created", name, form.whoElse.length > 0));
+    redirect(createdGroupHref("created", name));
   }
 
-  const sourceCircleId = form.sourceCircleId || access.circleId;
   if (!(await actorBelongsToCircle(access, sourceCircleId))) {
     return { ok: false, message: "That circle could not be created." };
   }
 
   if (localJournalIsEnabled()) {
     const { createLocalCircle } = await import("@/lib/local-journal/store");
-    const created = await createLocalCircle(access, name);
+    const created = await createLocalCircle(access, name, sourceCircleId);
     await writeActiveCircleCookie(created.circleId);
     revalidatePath("/family");
     revalidatePath("/people");
     revalidatePath("/settings/family");
-    redirect(
-      createdGroupHref(created.circleId, undefined, form.whoElse.length > 0),
-    );
+    redirect(createdGroupHref(created.circleId));
   }
 
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("create_circle", {
     circle_name: name,
+    source_circle_id: sourceCircleId,
   });
   if (error || typeof data !== "string") {
     return { ok: false, message: "That circle could not be created." };
   }
   await writeActiveCircleCookie(data);
-  await inviteWhoElse(data, form.whoElse);
   revalidatePath("/family");
   revalidatePath("/people");
   revalidatePath("/settings/family");
-  redirect(createdGroupHref(data, undefined, form.whoElse.length > 0));
+  redirect(createdGroupHref(data));
 }
 
 export async function selectActiveGroupAction(circleId: string) {

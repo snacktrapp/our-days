@@ -1,13 +1,16 @@
 begin;
 
-select plan(8);
+select plan(11);
 
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 set local role authenticated;
 
 select lives_ok(
-  $$select public.create_circle('  Cousins  ')$$,
-  'an ordinary member can create an additional circle'
+  $$select public.create_circle(
+    '  Cousins  ',
+    '20000000-0000-4000-8000-000000000001'
+  )$$,
+  'an ordinary member can create an additional circle from their source circle'
 );
 
 select is(
@@ -43,10 +46,20 @@ select is(
 );
 
 select throws_ok(
-  $$select public.create_circle('')$$,
+  $$select public.create_circle('', '20000000-0000-4000-8000-000000000001')$$,
   '22023',
   'Group could not be created',
   'a blank name is rejected'
+);
+
+select throws_ok(
+  $$select public.create_circle(
+    'Stolen Harbor',
+    '20000000-0000-4000-8000-000000000002'
+  )$$,
+  '42501',
+  'Group could not be created',
+  'a Cedar member cannot start from Harbor'
 );
 
 reset role;
@@ -55,7 +68,10 @@ select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000007
 set local role authenticated;
 
 select throws_ok(
-  $$select public.create_circle('No Home')$$,
+  $$select public.create_circle(
+    'No Home',
+    '20000000-0000-4000-8000-000000000001'
+  )$$,
   '42501',
   'Group could not be created',
   'a person with no membership cannot create a circle'
@@ -67,8 +83,11 @@ select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005
 set local role authenticated;
 
 select lives_ok(
-  $$select public.create_circle('Harbor Friends')$$,
-  'a dual-circle member can create another circle'
+  $$select public.create_circle(
+    'Harbor Friends',
+    '20000000-0000-4000-8000-000000000002'
+  )$$,
+  'a dual-circle member can create from the Harbor source they pick'
 );
 
 select is(
@@ -78,6 +97,27 @@ select is(
   ),
   3::bigint,
   'dual-circle member now sees original two circles plus the new one'
+);
+
+select is(
+  (
+    select circle.time_zone
+      from public.circles as circle
+     where circle.name = 'Harbor Friends'
+  ),
+  'UTC',
+  'Harbor source copies Harbor timezone, not Cedar earliest membership'
+);
+
+select is(
+  (
+    select person.display_name
+      from public.people as person
+      join public.circles as circle on circle.id = person.circle_id
+     where circle.name = 'Harbor Friends'
+  ),
+  'B Dual Organizer',
+  'Harbor source copies the Harbor person, not the Cedar person'
 );
 
 reset role;

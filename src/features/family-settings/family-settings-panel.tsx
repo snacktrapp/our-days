@@ -13,7 +13,6 @@ import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import {
   isWiderCircleNameSuggestion,
-  normalizeWiderCirclePerson,
   suggestWiderCircleName,
 } from "@/features/groups/wider-circle";
 import type {
@@ -68,7 +67,6 @@ export function FamilySettingsPanel({
   inviteCircleId,
   inviteCircleName,
   defaultCircleId,
-  skipFirstMembers,
   children,
 }: {
   model: FamilySettingsPanelViewModel;
@@ -77,7 +75,6 @@ export function FamilySettingsPanel({
   inviteCircleId?: string;
   inviteCircleName?: string;
   defaultCircleId?: string;
-  skipFirstMembers?: boolean;
   children?: ReactNode;
 }) {
   void inviteCircleName;
@@ -88,7 +85,6 @@ export function FamilySettingsPanel({
         createGroupAction={createGroupAction}
         inviteCircleId={inviteCircleId}
         defaultCircleId={defaultCircleId}
-        skipFirstMembers={skipFirstMembers}
       >
         {children}
       </PreviewFamilySettingsPanel>
@@ -107,7 +103,6 @@ export function FamilySettingsPanel({
       createGroupAction={createGroupAction}
       inviteCircleId={inviteCircleId}
       defaultCircleId={defaultCircleId}
-      skipFirstMembers={skipFirstMembers}
     >
       {children}
     </ConnectedFamilySettingsPanel>
@@ -131,10 +126,8 @@ function isFirstMembersEmptyCircle(circle: FamilyCircleViewModel) {
 function shouldPromptFirstMembers(
   circle: FamilyCircleViewModel | null,
   inviteCircleId?: string,
-  skipFirstMembers?: boolean,
 ) {
   return Boolean(
-    !skipFirstMembers &&
     inviteCircleId &&
     circle &&
     circle.id === inviteCircleId &&
@@ -293,62 +286,14 @@ function CreateGroupCard({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [sourceCircleId, setSourceCircleId] = useState(initialSourceId);
-  const [whoElse, setWhoElse] = useState<
-    readonly Readonly<{ displayName: string; email: string }>[]
-  >([]);
-  const [draftName, setDraftName] = useState("");
-  const [draftEmail, setDraftEmail] = useState("");
-  const [whoElseError, setWhoElseError] = useState("");
   const sourceCircle =
     groups.find((group) => group.id === sourceCircleId) ?? groups[0] ?? null;
-  const includedMembers = (sourceCircle?.members ?? []).filter(
+  const inviteCandidates = (sourceCircle?.members ?? []).filter(
     (member) => member.role !== "operations",
   );
-  const suggestedName = suggestWiderCircleName(
-    sourceCircle?.name ?? "",
-    whoElse.map((person) => person.displayName),
-  );
+  const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
   const [name, setName] = useState(suggestedName);
   if (!createGroupAction) return null;
-
-  function addWhoElse() {
-    const person = normalizeWiderCirclePerson({
-      displayName: draftName,
-      email: draftEmail,
-    });
-    if (!person) {
-      setWhoElseError("Enter a name and a complete email address.");
-      return;
-    }
-    if (
-      whoElse.some((existing) => existing.email === person.email) ||
-      includedMembers.some(
-        (member) =>
-          member.name.trim().toLowerCase() === person.displayName.toLowerCase(),
-      )
-    ) {
-      setWhoElseError("That person is already included.");
-      return;
-    }
-    const next = [...whoElse, person];
-    setWhoElse(next);
-    setDraftName("");
-    setDraftEmail("");
-    setWhoElseError("");
-    setName((current) =>
-      current.trim() === "" ||
-      isWiderCircleNameSuggestion(
-        current,
-        sourceCircle?.name ?? "",
-        whoElse.map((item) => item.displayName),
-      )
-        ? suggestWiderCircleName(
-            sourceCircle?.name ?? "",
-            next.map((item) => item.displayName),
-          )
-        : current,
-    );
-  }
 
   return (
     <section
@@ -358,19 +303,13 @@ function CreateGroupCard({
       <div className="settings-heading">
         <span>Wider ring</span>
         <h2 id="create-group-heading">Make a wider circle</h2>
-        <p>Everyone in the circle you start from, plus people you add.</p>
+        <p>
+          Everyone in the circle you start from, plus people you invite next.
+        </p>
       </div>
       <form
         className="wider-circle-form"
         action={(formData) => {
-          const pendingPerson = normalizeWiderCirclePerson({
-            displayName: draftName,
-            email: draftEmail,
-          });
-          if (pendingPerson) {
-            formData.append("whoElseName", pendingPerson.displayName);
-            formData.append("whoElseEmail", pendingPerson.email);
-          }
           startTransition(async () => {
             const result = await createGroupAction(formData);
             if (result && !result.ok) setError(result.message);
@@ -378,16 +317,6 @@ function CreateGroupCard({
         }}
       >
         <input type="hidden" name="sourceCircleId" value={sourceCircleId} />
-        {whoElse.map((person) => (
-          <span key={person.email}>
-            <input
-              type="hidden"
-              name="whoElseName"
-              value={person.displayName}
-            />
-            <input type="hidden" name="whoElseEmail" value={person.email} />
-          </span>
-        ))}
 
         <fieldset className="wider-circle-step">
           <legend>Start from</legend>
@@ -401,11 +330,9 @@ function CreateGroupCard({
               const nextCircle = groups.find((group) => group.id === nextId);
               setSourceCircleId(nextId);
               setName((current) =>
-                current.trim() === "" || current.trim() === suggestedName
-                  ? suggestWiderCircleName(
-                      nextCircle?.name ?? "",
-                      whoElse.map((person) => person.displayName),
-                    )
+                current.trim() === "" ||
+                isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
+                  ? suggestWiderCircleName(nextCircle?.name ?? "")
                   : current,
               );
             }}
@@ -416,88 +343,21 @@ function CreateGroupCard({
               </option>
             ))}
           </select>
-          <p>
-            {includedMembers.length === 1
-              ? "You are already in this circle."
-              : `Everyone in ${sourceCircle?.name ?? "this circle"} is included.`}
-          </p>
-          {includedMembers.length > 0 ? (
-            <ul className="wider-circle-included">
-              {includedMembers.map((member) => (
-                <li key={member.id}>{member.name}</li>
-              ))}
-            </ul>
-          ) : null}
         </fieldset>
 
         <fieldset className="wider-circle-step">
           <legend>Who else?</legend>
-          {whoElse.length > 0 ? (
-            <ul className="wider-circle-added">
-              {whoElse.map((person) => (
-                <li key={person.email}>
-                  <span>
-                    <strong>{person.displayName}</strong>
-                    <small>{person.email}</small>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${person.displayName}`}
-                    onClick={() => {
-                      const next = whoElse.filter(
-                        (item) => item.email !== person.email,
-                      );
-                      setWhoElse(next);
-                      setName((current) =>
-                        current.trim() === suggestedName
-                          ? suggestWiderCircleName(
-                              sourceCircle?.name ?? "",
-                              next.map((item) => item.displayName),
-                            )
-                          : current,
-                      );
-                    }}
-                  >
-                    Remove
-                  </button>
-                </li>
+          <p>
+            People already in {sourceCircle?.name ?? "this circle"}. Invite
+            anyone else from Account after you make this circle.
+          </p>
+          {inviteCandidates.length > 0 ? (
+            <ul className="wider-circle-included">
+              {inviteCandidates.map((member) => (
+                <li key={member.id}>{member.name}</li>
               ))}
             </ul>
           ) : null}
-          <label htmlFor="wider-circle-who-else-name">Person’s name</label>
-          <input
-            id="wider-circle-who-else-name"
-            value={draftName}
-            autoComplete="off"
-            maxLength={80}
-            onChange={(event) => {
-              setDraftName(event.target.value);
-              if (whoElseError) setWhoElseError("");
-            }}
-          />
-          <label htmlFor="wider-circle-who-else-email">Email address</label>
-          <input
-            id="wider-circle-who-else-email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            maxLength={254}
-            value={draftEmail}
-            onChange={(event) => {
-              setDraftEmail(event.target.value);
-              if (whoElseError) setWhoElseError("");
-            }}
-          />
-          {whoElseError ? (
-            <p className="field-error" role="alert">
-              {whoElseError}
-            </p>
-          ) : (
-            <p>Optional. They’ll be invited into the new circle.</p>
-          )}
-          <button type="button" onClick={addWhoElse}>
-            Add person
-          </button>
         </fieldset>
 
         <label htmlFor="create-group-name">Name the ring</label>
@@ -515,7 +375,7 @@ function CreateGroupCard({
             {error}
           </p>
         ) : (
-          <p>Suggested from the circle you start from and who you add.</p>
+          <p>Suggested from the circle you start from.</p>
         )}
         <button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Make this circle"}
@@ -589,14 +449,12 @@ function PreviewFamilySettingsPanel({
   createGroupAction,
   inviteCircleId,
   defaultCircleId,
-  skipFirstMembers,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
   defaultCircleId?: string;
-  skipFirstMembers?: boolean;
   children?: ReactNode;
 }) {
   const [openCircleId, setOpenCircleId] = useState<string | null>(
@@ -621,7 +479,6 @@ function PreviewFamilySettingsPanel({
   const promptFirstMembers = shouldPromptFirstMembers(
     openCircle,
     inviteCircleId,
-    skipFirstMembers,
   );
   const showInviteComposer = !promptFirstMembers || inviteComposerOpen;
 
@@ -844,7 +701,6 @@ function ConnectedFamilySettingsPanel({
   createGroupAction,
   inviteCircleId,
   defaultCircleId,
-  skipFirstMembers,
   children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
@@ -852,7 +708,6 @@ function ConnectedFamilySettingsPanel({
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
   defaultCircleId?: string;
-  skipFirstMembers?: boolean;
   children?: ReactNode;
 }) {
   const [openCircleId, setOpenCircleId] = useState<string | null>(
@@ -913,7 +768,6 @@ function ConnectedFamilySettingsPanel({
   const promptFirstMembers = shouldPromptFirstMembers(
     openCircle,
     inviteCircleId,
-    skipFirstMembers,
   );
   const showInviteComposer = !promptFirstMembers || inviteComposerOpen;
 

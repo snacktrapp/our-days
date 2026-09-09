@@ -35,10 +35,9 @@ export default async function FamilySettingsPage({
     inviteCircle?: string;
     previewLoading?: string;
     name?: string;
-    added?: string;
   }>;
 }>) {
-  const { inviteCircle, previewLoading, name, added } = await searchParams;
+  const { inviteCircle, previewLoading, name } = await searchParams;
   const access = await requireJournalAccess();
   if (access.mode === "preview") {
     if (previewLoading === "navigation") {
@@ -61,7 +60,6 @@ export default async function FamilySettingsPage({
           inviteCircleId={inviteGroup?.id}
           inviteCircleName={inviteGroup?.name}
           defaultCircleId={model.panel.groups[0]?.id}
-          skipFirstMembers={added === "1"}
         >
           <AccountTools />
         </FamilySettingsPanel>
@@ -136,7 +134,6 @@ export default async function FamilySettingsPage({
         inviteCircleId={inviteGroup?.id}
         inviteCircleName={inviteGroup?.name}
         defaultCircleId={access.circleId}
-        skipFirstMembers={added === "1"}
         actions={{
           requestInvitation: requestFamilyInvitationAction,
           revokeMembership: revokeFamilyMembershipAction,

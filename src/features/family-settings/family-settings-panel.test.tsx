@@ -212,7 +212,7 @@ describe("FamilySettingsPanel", () => {
     ).toBeVisible();
     expect(
       screen.getByText(
-        "Everyone in the circle you start from, plus people you add.",
+        "Everyone in the circle you start from, plus people you invite next.",
       ),
     ).toBeVisible();
     expect(screen.getByLabelText("Existing circle")).toHaveValue("family");
@@ -236,19 +236,22 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("sourceCircleId")).toBe("family");
   });
 
-  it("suggests a ring name from the start-from circle and who else was added", async () => {
-    const user = userEvent.setup();
+  it("lists who-else invite candidates from the start-from circle", () => {
     render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
 
-    await user.type(screen.getByLabelText("Person’s name"), "Jordan");
-    await user.type(
-      screen.getByLabelText("Email address"),
-      "jordan@example.com",
-    );
-    await user.click(screen.getByRole("button", { name: "Add person" }));
-    expect(screen.getByLabelText("Name the ring")).toHaveValue(
-      "All our days + Jordan",
-    );
+    expect(screen.getByRole("group", { name: "Who else?" })).toBeVisible();
+    expect(
+      screen.getByText(
+        "People already in All our days. Invite anyone else from Account after you make this circle.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("Current person")).toBeVisible();
+    expect(screen.getByText("Other organizer")).toBeVisible();
+    expect(screen.getByText("Child profile")).toBeVisible();
+    expect(screen.queryByLabelText("Person’s name")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add person" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a newly created circle with an add-first-members prompt that surfaces invite", async () => {

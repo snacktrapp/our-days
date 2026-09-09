@@ -344,7 +344,7 @@ describe("local journal happy path", () => {
   });
 
   it("shows a multi-circle moment in each selected Home group", async () => {
-    const extra = await createLocalCircle(access, "Cousins");
+    const extra = await createLocalCircle(access, "Cousins", access.circleId);
     const extraCircle = (await readLocalJournal()).extraCircles?.find(
       (circle) => circle.id === extra.circleId,
     );
@@ -422,7 +422,7 @@ describe("local journal happy path", () => {
   });
 
   it("edits audience from the author's journal and updates both group feeds", async () => {
-    const extra = await createLocalCircle(access, "Cousins");
+    const extra = await createLocalCircle(access, "Cousins", access.circleId);
     const extraCircle = (await readLocalJournal()).extraCircles?.find(
       (circle) => circle.id === extra.circleId,
     );
