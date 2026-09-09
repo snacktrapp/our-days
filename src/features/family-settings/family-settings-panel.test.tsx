@@ -244,6 +244,12 @@ describe("FamilySettingsPanel", () => {
       <FamilySettingsPanel
         model={connectedOperationsModel}
         createGroupAction={vi.fn()}
+        actions={{
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
       />,
     );
 
