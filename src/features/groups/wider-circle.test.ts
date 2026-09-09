@@ -43,6 +43,32 @@ describe("wider circle default source", () => {
     ).toBe("family");
   });
 
+  it("ignores Operations members when picking the largest circle", () => {
+    expect(
+      defaultWiderCircleSourceId([
+        {
+          id: "ops-heavy",
+          memberCount: 8,
+          members: [
+            { role: "organizer" },
+            { role: "operations" },
+            { role: "operations" },
+          ],
+        },
+        {
+          id: "family",
+          memberCount: 4,
+          members: [
+            { role: "organizer" },
+            { role: "member" },
+            { role: "member" },
+            { role: null },
+          ],
+        },
+      ]),
+    ).toBe("family");
+  });
+
   it("keeps a preferred circle only when it is already the largest", () => {
     expect(
       defaultWiderCircleSourceId(

@@ -27,6 +27,7 @@ import { AccountTools } from "@/features/family-settings/account-tools";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 import { createGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
+import { countFamilyFacingPeople } from "@/lib/circle-roles";
 
 export default async function FamilySettingsPage({
   searchParams,
@@ -113,7 +114,10 @@ export default async function FamilySettingsPage({
     familyAccess,
     invitationDeliveryIsEnabled(),
     new Map(
-      [...directory.entries()].map(([id, data]) => [id, data.people.length]),
+      [...directory.entries()].map(([id, data]) => [
+        id,
+        countFamilyFacingPeople(data.people, data.memberships),
+      ]),
     ),
     directory,
     viewerMemberships,

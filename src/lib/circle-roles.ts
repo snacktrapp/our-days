@@ -20,12 +20,65 @@ export function isOperationsMembership(
   membership: Readonly<{
     role?: string | null;
     directoryKind?: string | null;
+    directory_kind?: string | null;
   }>,
 ) {
   return (
-    isOperationsDirectory(membership.directoryKind) ||
-    isOperationsRole(membership.role)
+    isOperationsDirectory(
+      membership.directoryKind ?? membership.directory_kind,
+    ) || isOperationsRole(membership.role)
   );
+}
+
+/** Family-facing lists and counts omit Operations (TARS). Auth stays. */
+export function isFamilyFacingMembership(
+  membership:
+    | Readonly<{
+        role?: string | null;
+        directoryKind?: string | null;
+        directory_kind?: string | null;
+      }>
+    | null
+    | undefined,
+) {
+  return !membership || !isOperationsMembership(membership);
+}
+
+export function countFamilyFacingMembers(
+  members: readonly Readonly<{
+    role?: string | null;
+    directoryKind?: string | null;
+  }>[],
+) {
+  return members.filter((member) => isFamilyFacingMembership(member)).length;
+}
+
+export function countFamilyFacingPeople(
+  people: readonly Readonly<{ id: string }>[],
+  memberships: readonly Readonly<{
+    personId?: string;
+    person_id?: string;
+    role?: string | null;
+    directoryKind?: string | null;
+    directory_kind?: string | null;
+  }>[],
+) {
+  const membershipByPerson = new Map<
+    string,
+    Readonly<{
+      role?: string | null;
+      directoryKind?: string | null;
+      directory_kind?: string | null;
+    }>
+  >();
+  for (const membership of memberships) {
+    const personId = membership.personId ?? membership.person_id;
+    if (!personId) continue;
+    membershipByPerson.set(personId, membership);
+  }
+  return people.filter((person) =>
+    isFamilyFacingMembership(membershipByPerson.get(person.id)),
+  ).length;
 }
 
 export function hasOrganizerPrivilege(role: string | null | undefined) {

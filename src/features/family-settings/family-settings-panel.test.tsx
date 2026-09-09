@@ -239,6 +239,27 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("sourceCircleId")).toBe("family");
   });
 
+  it("hides Operations from family-facing counts and Includes", () => {
+    render(
+      <FamilySettingsPanel
+        model={connectedOperationsModel}
+        createGroupAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("3 people")).toBeVisible();
+    expect(screen.queryByText("4 people")).toBeNull();
+    expect(
+      screen.getByText(
+        "Includes Current person, Other organizer, Child profile…",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/Includes.*TARS/u)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Add a wider circle" }),
+    ).toBeVisible();
+  });
+
   it("defaults Starts with to the circle with the most members", () => {
     render(
       <FamilySettingsPanel

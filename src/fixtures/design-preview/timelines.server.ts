@@ -814,7 +814,8 @@ export function getFamilySettingsFixture(
         return {
           id: group.id,
           name: group.name,
-          memberCount: members.length,
+          memberCount: members.filter((member) => member.role !== "operations")
+            .length,
           currentMemberId: "brian",
           canManageAccess: true,
           members,

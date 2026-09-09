@@ -16,6 +16,8 @@ import type {
   PendingFamilyInvitationViewModel,
 } from "@/features/family-settings/family-settings-view-model";
 import {
+  countFamilyFacingMembers,
+  countFamilyFacingPeople,
   familyMembershipRoleLabel,
   hasOrganizerPrivilege,
   isOperationsMembership,
@@ -289,20 +291,46 @@ export async function loadGroupMemberCounts(
   if (localJournalIsEnabled()) {
     const { readLocalJournal } = await import("@/lib/local-journal/store");
     const document = await readLocalJournal();
-    counts.set(document.circle.id, document.people.length);
+    counts.set(
+      document.circle.id,
+      countFamilyFacingPeople(document.people, document.memberships),
+    );
     for (const extra of document.extraCircles ?? []) {
-      counts.set(extra.id, 1);
+      counts.set(extra.id, isOperationsMembership(extra) ? 0 : 1);
     }
     return counts;
   }
 
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase
-    .from("people")
-    .select("circle_id")
-    .in("circle_id", ids);
+  const [peopleResult, membershipsResult] = await Promise.all([
+    supabase.from("people").select("id, circle_id").in("circle_id", ids),
+    supabase
+      .from("circle_memberships")
+      .select("person_id, role, directory_kind, circle_id, status")
+      .in("circle_id", ids)
+      .eq("status", "active"),
+  ]);
+  const error = peopleResult.error ?? membershipsResult.error;
   if (error) throw error;
-  for (const person of data ?? []) {
+  const membershipsByCirclePerson = new Map(
+    (membershipsResult.data ?? []).map((membership) => [
+      `${membership.circle_id}:${membership.person_id}`,
+      membership,
+    ]),
+  );
+  for (const person of peopleResult.data ?? []) {
+    const membership = membershipsByCirclePerson.get(
+      `${person.circle_id}:${person.id}`,
+    );
+    if (
+      membership &&
+      isOperationsMembership({
+        role: membership.role,
+        directoryKind: membership.directory_kind,
+      })
+    ) {
+      continue;
+    }
     counts.set(person.circle_id, (counts.get(person.circle_id) ?? 0) + 1);
   }
   return counts;
@@ -469,10 +497,7 @@ export function buildConnectedFamilySettingsModel(
       id: group.id,
       name: group.name,
       memberCount:
-        memberCounts.get(group.id) ??
-        (circleData.people.length > 0
-          ? circleData.people.length
-          : members.length),
+        memberCounts.get(group.id) ?? countFamilyFacingMembers(members),
       currentMemberId: viewer?.personId ?? access.personId,
       canManageAccess,
       members,

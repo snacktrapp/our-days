@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
+import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
 import {
   defaultWiderCircleSourceId,
   formatWiderCircleIncludes,
@@ -121,7 +122,8 @@ function peopleCountLabel(count: number) {
 
 function isFirstMembersEmptyCircle(circle: FamilyCircleViewModel) {
   return (
-    circle.memberCount <= 1 && (circle.pendingInvitations?.length ?? 0) === 0
+    countFamilyFacingMembers(circle.members) <= 1 &&
+    (circle.pendingInvitations?.length ?? 0) === 0
   );
 }
 
@@ -288,7 +290,7 @@ function CreateGroupCard({
   const sourceCircle =
     groups.find((group) => group.id === sourceCircleId) ?? groups[0] ?? null;
   const inviteCandidates = (sourceCircle?.members ?? []).filter(
-    (member) => member.role !== "operations",
+    (member) => !isOperationsRole(member.role),
   );
   const sourceName = sourceCircle?.name.trim() || "this family";
   const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
@@ -408,7 +410,9 @@ function CirclesAccordion({
               >
                 <span className="access-member-copy">
                   <strong>{group.name}</strong>
-                  <small>{peopleCountLabel(group.memberCount)}</small>
+                  <small>
+                    {peopleCountLabel(countFamilyFacingMembers(group.members))}
+                  </small>
                 </span>
                 <span className="circle-accordion-chevron" aria-hidden="true">
                   <svg viewBox="0 0 16 16">

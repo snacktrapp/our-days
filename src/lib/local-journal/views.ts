@@ -30,6 +30,7 @@ import {
   plainToday,
 } from "@/data/journal-context.server";
 import {
+  countFamilyFacingPeople,
   hasOrganizerPrivilege,
   isOperationsMembership,
   journalContextLabel,
@@ -245,7 +246,10 @@ function localPostableCircles(
       id: document.circle.id,
       name: document.circle.name,
       personId: localHomePersonId(document, access),
-      memberCount: document.people.length,
+      memberCount: countFamilyFacingPeople(
+        document.people,
+        document.memberships,
+      ),
     },
     ...(document.extraCircles ?? []).map((circle) => ({
       id: circle.id,

@@ -1,14 +1,37 @@
+import { countFamilyFacingMembers } from "@/lib/circle-roles";
+
+export function widerCircleFamilyMemberCount(
+  group: Readonly<{
+    memberCount: number;
+    members?: readonly Readonly<{ role?: string | null }>[];
+  }>,
+) {
+  return group.members
+    ? countFamilyFacingMembers(group.members)
+    : group.memberCount;
+}
+
 export function defaultWiderCircleSourceId(
-  groups: readonly Readonly<{ id: string; memberCount: number }>[],
+  groups: readonly Readonly<{
+    id: string;
+    memberCount: number;
+    members?: readonly Readonly<{ role?: string | null }>[];
+  }>[],
   preferredId?: string,
 ) {
   if (groups.length === 0) return "";
   let largest = groups[0]!;
   for (const group of groups) {
-    if (group.memberCount > largest.memberCount) largest = group;
+    if (
+      widerCircleFamilyMemberCount(group) >
+      widerCircleFamilyMemberCount(largest)
+    ) {
+      largest = group;
+    }
   }
+  const largestCount = widerCircleFamilyMemberCount(largest);
   const tied = groups.filter(
-    (group) => group.memberCount === largest.memberCount,
+    (group) => widerCircleFamilyMemberCount(group) === largestCount,
   );
   if (preferredId && tied.some((group) => group.id === preferredId)) {
     return preferredId;

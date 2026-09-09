@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  getFamilySettingsFixture,
   getFamilyTimelineFixture,
   getPeopleFixture,
   getPersonalTimelineFixture,
@@ -101,6 +102,17 @@ describe("design preview timeline chronology", () => {
       ),
     ).toBe(false);
     expect(people.groups[1]?.inviteHref).toContain("inviteCircle=created");
+  });
+
+  it("keeps Operations on Account tools but omits them from family counts", () => {
+    const settings = getFamilySettingsFixture();
+    const family = settings.panel.groups[0];
+    expect(family?.members.some((member) => member.name === "TARS")).toBe(true);
+    expect(family?.memberCount).toBe(
+      family?.members.filter((member) => member.role !== "operations").length ??
+        0,
+    );
+    expect(family?.memberCount).toBeLessThan(family?.members.length ?? 0);
   });
 
   it("adds a created group as another GROUP row and scopes its people", () => {

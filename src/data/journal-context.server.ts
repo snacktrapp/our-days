@@ -436,6 +436,20 @@ export async function loadConnectedJournalContext(
   const memberCountByCircle = new Map<string, number>();
   for (const person of allPeople) {
     const personCircleId = circleIdOf(person, access.circleId);
+    const membership = allMemberships.find(
+      (candidate) =>
+        candidate.person_id === person.id &&
+        circleIdOf(candidate, access.circleId) === personCircleId,
+    );
+    if (
+      membership &&
+      isOperationsMembership({
+        role: membership.role,
+        directoryKind: membership.directory_kind,
+      })
+    ) {
+      continue;
+    }
     memberCountByCircle.set(
       personCircleId,
       (memberCountByCircle.get(personCircleId) ?? 0) + 1,
