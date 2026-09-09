@@ -25,20 +25,16 @@ function TitleCopy({
   return (
     <>
       <span className="eyebrow">{model.eyebrow}</span>
-      {chevron ? (
-        <span className="title-switcher-heading">
-          <h1 id="journal-focus-target" tabIndex={-1}>
-            {model.title}
-          </h1>
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="m4.5 6 3.5 3.5L11.5 6" />
-          </svg>
-        </span>
-      ) : (
+      <span className="title-switcher-heading">
         <h1 id="journal-focus-target" tabIndex={-1}>
           {model.title}
         </h1>
-      )}
+        {chevron ? (
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="m4.5 6 3.5 3.5L11.5 6" />
+          </svg>
+        ) : null}
+      </span>
     </>
   );
 }

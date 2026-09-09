@@ -186,6 +186,10 @@ describe("JournalChrome", () => {
       screen.queryByRole("navigation", { name: "Choose a family timeline" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
+    expect(
+      container.querySelector(".title-lockup .title-switcher-heading h1"),
+    ).toHaveTextContent("Account");
+    expect(container.querySelector(".title-switcher-heading svg")).toBeNull();
   });
 
   it("replaces page content with a destination skeleton as soon as a journal is chosen", () => {

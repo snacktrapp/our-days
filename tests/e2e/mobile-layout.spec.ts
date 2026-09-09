@@ -680,7 +680,6 @@ test("long journal titles wrap at phone width without crowding header actions", 
       if (
         !bar ||
         !title ||
-        !chevron ||
         !add ||
         !activity ||
         !theme ||
@@ -699,7 +698,7 @@ test("long journal titles wrap at phone width without crowding header actions", 
       );
       const barRect = bar.getBoundingClientRect();
       const titleRect = title.getBoundingClientRect();
-      const chevronRect = chevron.getBoundingClientRect();
+      const chevronRect = chevron?.getBoundingClientRect();
       const addRect = add.getBoundingClientRect();
       const activityRect = activity.getBoundingClientRect();
       const themeRect = theme.getBoundingClientRect();
@@ -717,7 +716,7 @@ test("long journal titles wrap at phone width without crowding header actions", 
         insideBar:
           titleRect.left >= barRect.left - 1 &&
           titleRect.right <= barRect.right + 1 &&
-          chevronRect.right <= barRect.right + 1,
+          (chevronRect ? chevronRect.right <= barRect.right + 1 : true),
         actionsUsable:
           addRect.width >= 44 &&
           addRect.height >= 44 &&
@@ -729,39 +728,46 @@ test("long journal titles wrap at phone width without crowding header actions", 
           overlaps(titleRect, addIcon.getBoundingClientRect()) ||
           overlaps(titleRect, heartIcon.getBoundingClientRect()) ||
           overlaps(titleRect, themeIcon.getBoundingClientRect()) ||
-          overlaps(chevronRect, addIcon.getBoundingClientRect()) ||
-          overlaps(chevronRect, heartIcon.getBoundingClientRect()) ||
-          overlaps(chevronRect, themeIcon.getBoundingClientRect()),
+          Boolean(
+            chevronRect &&
+            (overlaps(chevronRect, addIcon.getBoundingClientRect()) ||
+              overlaps(chevronRect, heartIcon.getBoundingClientRect()) ||
+              overlaps(chevronRect, themeIcon.getBoundingClientRect())),
+          ),
       };
     }, name);
   }
 
-  for (const theme of ["dark", "light"] as const) {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.emulateMedia({ colorScheme: theme });
-    await page.addInitScript((nextTheme) => {
-      window.localStorage.setItem("our-days-theme", nextTheme);
-    }, theme);
-    await page.goto("/family");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  for (const path of ["/family", "/settings/family"] as const) {
+    for (const theme of ["dark", "light"] as const) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ colorScheme: theme });
+      await page.addInitScript((nextTheme) => {
+        window.localStorage.setItem("our-days-theme", nextTheme);
+      }, theme);
+      await page.goto(path);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 
-    const longTitle = await measureTitle(longCircleName);
-    expect(longTitle.fontSize).toBeLessThanOrEqual(16);
-    expect(longTitle.whiteSpace).toBe("normal");
-    expect(longTitle.overflowWrap).toBe("anywhere");
-    expect(longTitle.lineCount).toBeGreaterThan(1);
-    expect(longTitle.lineCount).toBeLessThanOrEqual(2);
-    expect(longTitle.textFits).toBe(true);
-    expect(longTitle.insideBar).toBe(true);
-    expect(longTitle.actionsUsable).toBe(true);
-    expect(longTitle.cramped).toBe(false);
+      const longTitle = await measureTitle(longCircleName);
+      expect(longTitle.fontSize).toBeLessThanOrEqual(16);
+      expect(longTitle.whiteSpace).toBe("normal");
+      expect(longTitle.overflowWrap).toBe("anywhere");
+      expect(longTitle.lineCount).toBeGreaterThan(1);
+      expect(longTitle.lineCount).toBeLessThanOrEqual(2);
+      expect(longTitle.textFits).toBe(true);
+      expect(longTitle.insideBar).toBe(true);
+      expect(longTitle.actionsUsable).toBe(true);
+      expect(longTitle.cramped).toBe(false);
 
-    const shortTitle = await measureTitle("All our days");
-    expect(shortTitle.lineCount).toBe(1);
-    expect(shortTitle.cramped).toBe(false);
-    expect(shortTitle.insideBar).toBe(true);
-    expect(shortTitle.actionsUsable).toBe(true);
-    expect(shortTitle.textFits).toBe(true);
+      const shortTitle = await measureTitle(
+        path === "/settings/family" ? "Account" : "All our days",
+      );
+      expect(shortTitle.lineCount).toBe(1);
+      expect(shortTitle.cramped).toBe(false);
+      expect(shortTitle.insideBar).toBe(true);
+      expect(shortTitle.actionsUsable).toBe(true);
+      expect(shortTitle.textFits).toBe(true);
+    }
   }
 });
 

@@ -666,8 +666,9 @@ button:focus-visible,
   align-self: center;
   z-index: 1;
   width: max-content;
-  /* Centered title: leave equal room for the 88px trailing actions, the
-     hanging chevron, and a few pixels of air so the heart glyph stays clear. */
+  /* Journal switcher and static Account/Memories titles share this cap.
+     Leave equal room for the 88px trailing actions, the hanging chevron
+     when present, and a few pixels of air so the heart glyph stays clear. */
   max-width: calc(100% - 192px);
   pointer-events: none;
 }
