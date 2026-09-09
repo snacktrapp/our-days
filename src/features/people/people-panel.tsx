@@ -12,7 +12,7 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
           aria-labelledby={`people-group-${group.id}`}
         >
           <div className="settings-heading">
-            <span>Group</span>
+            <span>Circle</span>
             <h2 id={`people-group-${group.id}`}>{group.name}</h2>
             <p>{peopleCountLabel(group.members.length)}</p>
           </div>

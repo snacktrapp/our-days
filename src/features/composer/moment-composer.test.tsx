@@ -719,6 +719,9 @@ describe("MomentComposer", () => {
     expect(
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeChecked();
+    await user.click(
+      screen.getByRole("button", { name: "Share to more than one ring" }),
+    );
     await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Post" }));
@@ -779,13 +782,16 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
 
+    await user.click(
+      screen.getByRole("button", { name: "Share to more than one ring" }),
+    );
     await user.click(screen.getByRole("checkbox", { name: "Grandparents" }));
     expect(
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeChecked();
     expect(
       screen.getByRole("checkbox", { name: "Grandparents" }),
-    ).not.toBeChecked();
+    ).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
     expect(screen.queryByRole("checkbox", { name: /Brian/ })).toBeNull();
@@ -1997,6 +2003,9 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
     expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
+    await user.click(
+      screen.getByRole("button", { name: "Share to more than one ring" }),
+    );
     await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>

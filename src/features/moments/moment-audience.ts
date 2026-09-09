@@ -43,5 +43,5 @@ export function formatAudienceChipLabel(input: {
 }) {
   if (normalizeMomentAudience(input.audience) === "just_me") return "Just me";
   const count = audienceCircleCount(input);
-  return count === 1 ? "1 group" : `${count} groups`;
+  return count === 1 ? "1 circle" : `${count} circles`;
 }

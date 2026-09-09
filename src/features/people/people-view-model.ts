@@ -24,7 +24,7 @@ export type PeopleViewModel = Readonly<{
 }>;
 
 export const peopleIntro =
-  "Everyone in your circles, organized by group — not by the Home switcher.";
+  "Everyone in your circles, organized by circle — not by the Home switcher.";
 
 export function peopleInviteHref(circleId: string) {
   const params = new URLSearchParams({ inviteCircle: circleId });

@@ -203,7 +203,7 @@ export async function readLocalJournal() {
 export async function createLocalCircle(access: LocalAccess, name: string) {
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > 80) {
-    throw new Error("A group name is required.");
+    throw new Error("A circle name is required.");
   }
   return withStoreLock(() => {
     const document = readDocumentUnlocked();

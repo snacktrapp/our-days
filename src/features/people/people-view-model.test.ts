@@ -8,7 +8,7 @@ import {
 const chrome = {
   accent: "teal" as const,
   title: "All our days",
-  eyebrow: "Group",
+  eyebrow: "Circle",
   familyMark: [],
   settingsHref: "/settings/family",
   memoriesHref: "/memories",

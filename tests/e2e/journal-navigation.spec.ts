@@ -9,7 +9,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Group");
+  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
@@ -27,7 +27,7 @@ test("route-based journal navigation preserves the approved views", async ({
   );
   await expect(
     page.locator(".title-switcher nav a .title-switcher-type-pill"),
-  ).toHaveText(["You", "Group", "Person", "Person", "Person", "Person"]);
+  ).toHaveText(["You", "Circle", "Person", "Person", "Person", "Person"]);
   await expect(page.locator(".title-switcher nav a").first()).toHaveText(
     /Brian/u,
   );
@@ -413,23 +413,23 @@ test("the family feed scrolls beneath the sticky title selector", async ({
   await context.close();
 });
 
-test("members can create a second group from Account and filter Home without costume family rows", async ({
+test("members can create a wider circle from Account and filter Home without costume family rows", async ({
   page,
 }) => {
   await page.goto("/settings/family");
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Your groups" }),
+    page.getByRole("heading", { name: "Your circles" }),
   ).toBeVisible();
   await expect(
     page.locator(".groups-section").getByText("All our days"),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Create a new group" }),
+    page.getByRole("heading", { name: "Make a wider circle" }),
   ).toBeVisible();
-  await page.getByLabel("Group name").fill("Cousins");
-  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByLabel("Name the ring").fill("Cousins");
+  await page.getByRole("button", { name: "Make this circle" }).click();
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page).toHaveURL(/inviteCircle=created/);
   await expect(page.locator(".title-switcher")).toHaveCount(0);
@@ -446,15 +446,15 @@ test("members can create a second group from Account and filter Home without cos
   await expect(page.getByText("TARS")).toHaveCount(0);
   await page.getByRole("link", { name: "Home" }).click();
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Group");
+  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
   await page.locator(".title-switcher summary").click();
   await expect(page.getByRole("button", { name: "Create group" })).toHaveCount(
     0,
   );
-  await expect(page.getByLabel("Group name")).toHaveCount(0);
+  await expect(page.getByLabel("Name the ring")).toHaveCount(0);
   await expect(
     page.locator(".title-switcher nav a .title-switcher-type-pill"),
-  ).toHaveText(["You", "Group", "Group"]);
+  ).toHaveText(["You", "Circle", "Circle"]);
   await expect(
     page.getByRole("link", { name: "Cousins", exact: true }),
   ).toHaveAttribute("aria-current", "page");
@@ -472,8 +472,8 @@ test("members can create a second group from Account and filter Home without cos
     page.locator(".title-switcher nav a .title-switcher-type-pill"),
   ).toHaveText([
     "You",
-    "Group",
-    "Group",
+    "Circle",
+    "Circle",
     "Person",
     "Person",
     "Person",

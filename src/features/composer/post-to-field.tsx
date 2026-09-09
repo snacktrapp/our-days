@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { peopleCountLabel } from "@/features/people/people-view-model";
 import { defaultPostToCircleIds, type PostableCircle } from "./post-to";
 
 type PostToChange = Readonly<{
@@ -28,10 +30,16 @@ export function PostToChoices({
   legend = "Post to",
   onChange,
 }: PostToChoicesProps) {
+  const [advanced, setAdvanced] = useState(selectedIds.length > 1);
   if (circles.length === 0) return null;
 
   const chooseCircle = (circleId: string, checked: boolean) => {
     if (checked) {
+      if (!advanced) {
+        if (lockedCircleId && circleId !== lockedCircleId) return;
+        onChange({ justMe: false, selectedIds: [circleId] });
+        return;
+      }
       onChange({
         justMe: false,
         selectedIds: selectedIds.includes(circleId)
@@ -41,6 +49,7 @@ export function PostToChoices({
       return;
     }
     if (circleId === lockedCircleId) return;
+    if (!advanced) return;
     const remaining = selectedIds.filter((id) => id !== circleId);
     if (remaining.length === 0) return;
     onChange({ justMe: false, selectedIds: remaining });
@@ -50,6 +59,7 @@ export function PostToChoices({
     circles,
     lockedCircleId ?? currentCircleId,
   );
+  const showAdvancedControl = circles.length > 1;
 
   return (
     <fieldset className="people-tags post-to-chips">
@@ -57,17 +67,27 @@ export function PostToChoices({
       <div>
         {circles.map((circle) => {
           const locked = !justMe && circle.id === lockedCircleId;
+          const selected = !justMe && selectedIds.includes(circle.id);
+          const singleLockedOut =
+            !advanced &&
+            Boolean(lockedCircleId) &&
+            circle.id !== lockedCircleId;
           return (
             <label key={circle.id}>
               <input
                 type="checkbox"
-                checked={!justMe && selectedIds.includes(circle.id)}
-                disabled={locked}
+                checked={selected}
+                disabled={locked || singleLockedOut}
                 onChange={(event) =>
                   chooseCircle(circle.id, event.target.checked)
                 }
               />
-              {circle.name}
+              <span>
+                {circle.name}
+                {typeof circle.memberCount === "number" ? (
+                  <small>{peopleCountLabel(circle.memberCount)}</small>
+                ) : null}
+              </span>
             </label>
           );
         })}
@@ -88,6 +108,20 @@ export function PostToChoices({
           </label>
         ) : null}
       </div>
+      {showAdvancedControl && !advanced ? (
+        <button
+          type="button"
+          className="post-to-advanced"
+          onClick={() => setAdvanced(true)}
+        >
+          Share to more than one ring
+        </button>
+      ) : null}
+      {advanced && showAdvancedControl ? (
+        <p className="post-to-advanced-help">
+          This moment will appear in each selected ring.
+        </p>
+      ) : null}
     </fieldset>
   );
 }

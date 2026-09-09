@@ -151,7 +151,7 @@ describe("journal switcher grammar", () => {
 
   it("labels the selected type for the header eyebrow", () => {
     expect(journalSwitcherTypeLabel("you")).toBe("You");
-    expect(journalSwitcherTypeLabel("group")).toBe("Group");
+    expect(journalSwitcherTypeLabel("group")).toBe("Circle");
     expect(journalSwitcherTypeLabel("person")).toBe("Person");
     expect(
       journalSwitcherEyebrow([

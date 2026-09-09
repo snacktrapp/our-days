@@ -465,7 +465,7 @@ describe("local journal happy path", () => {
       throw new Error("Author moment missing from the YOU feed");
     }
     expect(ownCard.moment.showAudienceChip).toBe(true);
-    expect(ownCard.moment.audienceChipLabel).toBe("1 group");
+    expect(ownCard.moment.audienceChipLabel).toBe("1 circle");
 
     await updateLocalMomentAudience(access, {
       momentId,
@@ -490,7 +490,7 @@ describe("local journal happy path", () => {
     if (edited?.entryType !== "moment") {
       throw new Error("Edited moment missing from the YOU feed");
     }
-    expect(edited.moment.audienceChipLabel).toBe("2 groups");
+    expect(edited.moment.audienceChipLabel).toBe("2 circles");
     expect(texts(home)).toContain("Posted once, edited later.");
     expect(texts(cousins)).toContain("Posted once, edited later.");
 

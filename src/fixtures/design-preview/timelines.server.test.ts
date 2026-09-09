@@ -52,7 +52,7 @@ describe("design preview timeline chronology", () => {
 
   it("teaches the family switcher the group / person / you grammar", () => {
     const family = getFamilyTimelineFixture();
-    expect(family.chrome.eyebrow).toBe("Group");
+    expect(family.chrome.eyebrow).toBe("Circle");
     expect(family.chrome.title).toBe("All our days");
     expect(family.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
@@ -109,7 +109,7 @@ describe("design preview timeline chronology", () => {
       selectedGroupId: "created",
     });
     expect(cousins.chrome.title).toBe("Cousins");
-    expect(cousins.chrome.eyebrow).toBe("Group");
+    expect(cousins.chrome.eyebrow).toBe("Circle");
     expect(cousins.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
       ["group", "All our days"],

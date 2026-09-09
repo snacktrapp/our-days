@@ -2793,6 +2793,79 @@ span.moment-place-line {
 .groups-create-section .settings-heading h2 {
   font: var(--chrome-title);
 }
+.wider-circle-form {
+  gap: 4px;
+}
+.wider-circle-step {
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+.wider-circle-step legend {
+  margin-bottom: 8px;
+  color: #60574e;
+  font: var(--chrome-meta);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wider-circle-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 13px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  outline: none;
+  background: var(--cream);
+  color: var(--ink);
+  font-size: 16px;
+}
+.wider-circle-form select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(46, 111, 105, 0.12);
+}
+.wider-circle-included,
+.wider-circle-added {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.wider-circle-included li,
+.wider-circle-added li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--moss) 16%, var(--cream));
+  color: var(--ink);
+  font-size: 13px;
+}
+.wider-circle-added li {
+  width: 100%;
+  justify-content: space-between;
+  border-radius: 14px;
+}
+.wider-circle-added small {
+  display: block;
+  color: var(--muted);
+}
+.wider-circle-added button,
+.wider-circle-step > button {
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.wider-circle-step > button {
+  justify-self: start;
+  margin-bottom: 6px;
+}
 .invite-section form,
 .groups-section form {
   padding: 0 16px 17px;
@@ -7940,6 +8013,29 @@ html[data-theme].overlay-open .app-shell::before,
   border-color: color-mix(in srgb, var(--moss) 52%, var(--hairline));
   background: color-mix(in srgb, var(--moss) 34%, var(--cream));
   color: var(--ink);
+}
+.post-to-chips label small {
+  display: block;
+  color: var(--muted);
+  font-family: var(--font-ui), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.post-to-advanced,
+.post-to-advanced-help {
+  margin: 8px 1px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: var(--chrome-body);
+  text-align: left;
+}
+.post-to-advanced {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 .people-tags.post-to-chips label:has(input:disabled) {
   opacity: 1;

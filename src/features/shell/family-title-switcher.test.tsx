@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
 
 const model = {
   accent: "teal",
-  eyebrow: "Group",
+  eyebrow: "Circle",
   title: "All our days",
 } as JournalChromeViewModel;
 
@@ -136,7 +136,7 @@ describe("FamilyTitleSwitcher", () => {
     ] as HTMLAnchorElement[];
     expect(links.map((link) => link.textContent)).toEqual([
       "BrianYou",
-      "All our daysGroup",
+      "All our daysCircle",
       "MollyPerson",
     ]);
     expect(links[0].querySelector(".title-switcher-check")).toBeNull();
@@ -146,7 +146,7 @@ describe("FamilyTitleSwitcher", () => {
       container.querySelector(".title-lockup .title-switcher-type-pill"),
     ).toBeNull();
     expect(container.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Group",
+      "Circle",
     );
   });
 
@@ -161,7 +161,11 @@ describe("FamilyTitleSwitcher", () => {
     expect(
       screen.queryByRole("button", { name: "Create group" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Create circle" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Group name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Name the ring")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Create" }),
     ).not.toBeInTheDocument();

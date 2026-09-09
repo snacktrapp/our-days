@@ -72,7 +72,7 @@ describe("moment audience mapping", () => {
     ).toBe(false);
   });
 
-  it("labels Just me, one group, or N groups", () => {
+  it("labels Just me, one circle, or N circles", () => {
     expect(
       formatAudienceChipLabel({ audience: "just_me", linkedCircleIds: [] }),
     ).toBe("Just me");
@@ -81,18 +81,18 @@ describe("moment audience mapping", () => {
         audience: "family",
         linkedCircleIds: ["family"],
       }),
-    ).toBe("1 group");
+    ).toBe("1 circle");
     expect(
       formatAudienceChipLabel({
         audience: "family",
         linkedCircleIds: ["family", "cousins"],
       }),
-    ).toBe("2 groups");
+    ).toBe("2 circles");
     expect(
       formatAudienceChipLabel({
         audience: "family",
         linkedCircleIds: ["a", "b", "c"],
       }),
-    ).toBe("3 groups");
+    ).toBe("3 circles");
   });
 });

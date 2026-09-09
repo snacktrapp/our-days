@@ -204,25 +204,51 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Your groups" })).toBeVisible();
-    expect(screen.getByText("All our days")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Your circles" })).toBeVisible();
+    expect(screen.getAllByText("All our days").length).toBeGreaterThan(0);
     expect(screen.getByText("3 people")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Create a new group" }),
+      screen.getByRole("heading", { name: "Make a wider circle" }),
     ).toBeVisible();
     expect(
-      screen.getByText("Starts a separate circle. You’re the organizer."),
+      screen.getByText(
+        "Everyone in the circle you start from, plus people you add.",
+      ),
     ).toBeVisible();
-    expect(screen.getByLabelText("Group name")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Create" })).toBeVisible();
+    expect(screen.getByLabelText("Existing circle")).toHaveValue("family");
+    expect(screen.getByText("Current person")).toBeVisible();
+    expect(screen.getByLabelText("Name the ring")).toBeRequired();
+    expect(screen.getByLabelText("Name the ring")).toHaveValue(
+      "All our days + …",
+    );
+    expect(
+      screen.getByRole("button", { name: "Make this circle" }),
+    ).toBeVisible();
 
-    await user.type(screen.getByLabelText("Group name"), "Cousins");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.clear(screen.getByLabelText("Name the ring"));
+    await user.type(screen.getByLabelText("Name the ring"), "Cousins");
+    await user.click(screen.getByRole("button", { name: "Make this circle" }));
     await waitFor(() => {
       expect(createGroupAction).toHaveBeenCalled();
     });
     const formData = createGroupAction.mock.calls[0]?.[0] as FormData;
     expect(formData.get("name")).toBe("Cousins");
+    expect(formData.get("sourceCircleId")).toBe("family");
+  });
+
+  it("suggests a ring name from the start-from circle and who else was added", async () => {
+    const user = userEvent.setup();
+    render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
+
+    await user.type(screen.getByLabelText("Person’s name"), "Jordan");
+    await user.type(
+      screen.getByLabelText("Email address"),
+      "jordan@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Add person" }));
+    expect(screen.getByLabelText("Name the ring")).toHaveValue(
+      "All our days + Jordan",
+    );
   });
 
   it("opens a newly created circle with an add-first-members prompt that surfaces invite", async () => {

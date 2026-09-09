@@ -2,6 +2,7 @@ export type PostableCircle = Readonly<{
   id: string;
   name: string;
   personId: string;
+  memberCount?: number;
 }>;
 
 export type CreatePostToHomeContext = Readonly<{

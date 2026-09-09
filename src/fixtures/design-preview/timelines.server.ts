@@ -133,7 +133,12 @@ function chrome(
       taggablePeople: composerPeople,
       circleId: "family",
       postableCircles: [
-        { id: "family", name: "All our days", personId: "brian" },
+        {
+          id: "family",
+          name: "All our days",
+          personId: "brian",
+          memberCount: composerPeople.length,
+        },
       ],
     },
   };
@@ -486,6 +491,7 @@ export function getFamilyTimelineFixture(
           id: group.id,
           name: group.name,
           personId: "brian",
+          memberCount: group.id === previewFamilyId ? composerPeople.length : 1,
         })),
       },
     },
