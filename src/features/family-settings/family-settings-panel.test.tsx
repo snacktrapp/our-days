@@ -239,6 +239,33 @@ describe("FamilySettingsPanel", () => {
     expect(formData.get("sourceCircleId")).toBe("family");
   });
 
+  it("defaults Starts with to the circle with the most members", () => {
+    render(
+      <FamilySettingsPanel
+        model={{
+          ...model,
+          groups: [
+            {
+              ...model.groups[0],
+              id: "cousins",
+              name: "Cousins",
+              memberCount: 1,
+              members: [previewMembers[0]],
+            },
+            model.groups[0],
+          ],
+        }}
+        createGroupAction={vi.fn()}
+        defaultCircleId="cousins"
+      />,
+    );
+
+    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
+    expect(
+      screen.getByRole("heading", { name: "Add a wider circle" }),
+    ).toBeVisible();
+  });
+
   it("lists included people from the start-from circle as read-only text", () => {
     render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
 

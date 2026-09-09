@@ -12,6 +12,7 @@ import {
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import {
+  defaultWiderCircleSourceId,
   formatWiderCircleIncludes,
   isWiderCircleNameSuggestion,
   suggestWiderCircleName,
@@ -280,10 +281,7 @@ function CreateGroupCard({
   groups: readonly FamilyCircleViewModel[];
   defaultCircleId?: string;
 }) {
-  const initialSourceId =
-    (defaultCircleId && groups.some((group) => group.id === defaultCircleId)
-      ? defaultCircleId
-      : groups[0]?.id) ?? "";
+  const initialSourceId = defaultWiderCircleSourceId(groups, defaultCircleId);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [sourceCircleId, setSourceCircleId] = useState(initialSourceId);

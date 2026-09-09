@@ -1,3 +1,21 @@
+export function defaultWiderCircleSourceId(
+  groups: readonly Readonly<{ id: string; memberCount: number }>[],
+  preferredId?: string,
+) {
+  if (groups.length === 0) return "";
+  let largest = groups[0]!;
+  for (const group of groups) {
+    if (group.memberCount > largest.memberCount) largest = group;
+  }
+  const tied = groups.filter(
+    (group) => group.memberCount === largest.memberCount,
+  );
+  if (preferredId && tied.some((group) => group.id === preferredId)) {
+    return preferredId;
+  }
+  return largest.id;
+}
+
 export function suggestWiderCircleName(baseName: string) {
   const inner = baseName.trim() || "Family";
   return `${inner} + grandparents`;
