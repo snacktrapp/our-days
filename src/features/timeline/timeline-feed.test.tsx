@@ -331,7 +331,9 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 circles" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Audience, 2 circles" }),
+    );
     expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
@@ -389,7 +391,9 @@ describe("TimelineFeed", () => {
       </ComposerSessionProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 circles" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Audience, 2 circles" }),
+    );
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     expect(
       screen.getByRole("heading", { name: "New written entry" }),
