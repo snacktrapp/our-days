@@ -750,7 +750,7 @@ export type Database = {
         Returns: string;
       };
       create_circle: {
-        Args: { circle_name: string };
+        Args: { circle_name: string; source_circle_id: string };
         Returns: string;
       };
       create_family_moment: {

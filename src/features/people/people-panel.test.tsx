@@ -7,7 +7,7 @@ const model = buildPeopleViewModel({
   chrome: {
     accent: "teal",
     title: "Our people",
-    eyebrow: "Group",
+    eyebrow: "Circle",
     familyMark: [],
     settingsHref: "/settings/family",
     memoriesHref: "/memories",

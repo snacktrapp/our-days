@@ -20,7 +20,7 @@ export async function previewGroupOptions(
   const extraGroup = createdName
     ? { id: "created", name: createdName }
     : circle && circle !== "family"
-      ? { id: circle, name: "New group" }
+      ? { id: circle, name: "New circle" }
       : undefined;
   const selectedGroupId =
     circle && extraGroup && circle === extraGroup.id ? extraGroup.id : "family";

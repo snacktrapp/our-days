@@ -263,8 +263,8 @@ describe("connected timeline mapping", () => {
       },
     );
     expect(oneGroup.showAudienceChip).toBe(true);
-    expect(oneGroup.audienceChipLabel).toBe("1 group");
-    expect(twoGroups.audienceChipLabel).toBe("2 groups");
+    expect(oneGroup.audienceChipLabel).toBe("1 circle");
+    expect(twoGroups.audienceChipLabel).toBe("2 circles");
   });
 
   it("maps a connected photo to the same-origin private delivery route", () => {

@@ -344,7 +344,7 @@ describe("local journal happy path", () => {
   });
 
   it("shows a multi-circle moment in each selected Home group", async () => {
-    const extra = await createLocalCircle(access, "Cousins");
+    const extra = await createLocalCircle(access, "Cousins", access.circleId);
     const extraCircle = (await readLocalJournal()).extraCircles?.find(
       (circle) => circle.id === extra.circleId,
     );
@@ -422,7 +422,7 @@ describe("local journal happy path", () => {
   });
 
   it("edits audience from the author's journal and updates both group feeds", async () => {
-    const extra = await createLocalCircle(access, "Cousins");
+    const extra = await createLocalCircle(access, "Cousins", access.circleId);
     const extraCircle = (await readLocalJournal()).extraCircles?.find(
       (circle) => circle.id === extra.circleId,
     );
@@ -465,7 +465,7 @@ describe("local journal happy path", () => {
       throw new Error("Author moment missing from the YOU feed");
     }
     expect(ownCard.moment.showAudienceChip).toBe(true);
-    expect(ownCard.moment.audienceChipLabel).toBe("1 group");
+    expect(ownCard.moment.audienceChipLabel).toBe("1 circle");
 
     await updateLocalMomentAudience(access, {
       momentId,
@@ -490,7 +490,7 @@ describe("local journal happy path", () => {
     if (edited?.entryType !== "moment") {
       throw new Error("Edited moment missing from the YOU feed");
     }
-    expect(edited.moment.audienceChipLabel).toBe("2 groups");
+    expect(edited.moment.audienceChipLabel).toBe("2 circles");
     expect(texts(home)).toContain("Posted once, edited later.");
     expect(texts(cousins)).toContain("Posted once, edited later.");
 

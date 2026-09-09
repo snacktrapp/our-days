@@ -315,7 +315,7 @@ describe("TimelineFeed", () => {
                 kind: "thought",
                 audience: "family",
                 showAudienceChip: true,
-                audienceChipLabel: "2 groups",
+                audienceChipLabel: "2 circles",
                 circleId: "family",
                 linkedCircleIds: ["family", "cousins"],
                 revision: 2,
@@ -331,7 +331,9 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 groups" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Audience, 2 circles" }),
+    );
     expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
@@ -372,7 +374,7 @@ describe("TimelineFeed", () => {
                   kind: "thought",
                   audience: "family",
                   showAudienceChip: true,
-                  audienceChipLabel: "2 groups",
+                  audienceChipLabel: "2 circles",
                   circleId: "family",
                   linkedCircleIds: ["family", "cousins"],
                   revision: 2,
@@ -389,7 +391,9 @@ describe("TimelineFeed", () => {
       </ComposerSessionProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Audience, 2 groups" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Audience, 2 circles" }),
+    );
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     expect(
       screen.getByRole("heading", { name: "New written entry" }),
@@ -421,7 +425,7 @@ describe("TimelineFeed", () => {
     );
 
     expect(screen.queryByRole("button", { name: /Audience,/u })).toBeNull();
-    expect(screen.queryByText("1 group")).toBeNull();
+    expect(screen.queryByText("1 circle")).toBeNull();
     expect(screen.queryByText("Just me")).toBeNull();
   });
 

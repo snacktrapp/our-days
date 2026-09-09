@@ -30,13 +30,14 @@ describe("PrimaryNavigation", () => {
     document.querySelector("style#our-days-dynamic-css")?.remove();
   });
 
-  it("contains Home, Add, and Account", () => {
+  it("contains Journal, Add, and Account", () => {
     render(<PrimaryNavigation section="timeline" />);
 
     const navigation = screen.getByRole("navigation", {
       name: "Primary navigation",
     });
-    expect(navigation).toHaveTextContent("Home");
+    expect(navigation).toHaveTextContent("Journal");
+    expect(navigation).not.toHaveTextContent("Home");
     expect(navigation).not.toHaveTextContent("People");
     expect(navigation).not.toHaveTextContent("Memories");
     expect(navigation).toHaveTextContent("Add");
@@ -70,7 +71,7 @@ describe("PrimaryNavigation", () => {
   it("keeps the tab bar from crashing while the route pathname is still warming", () => {
     navigation.pathname = null as unknown as string;
     render(<PrimaryNavigation section="timeline" />);
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Journal" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -85,20 +86,20 @@ describe("PrimaryNavigation", () => {
 
     expect(account).toHaveClass("active");
     expect(account).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Home" })).not.toHaveClass(
+    expect(screen.getByRole("link", { name: "Journal" })).not.toHaveClass(
       "active",
     );
     expect(account.querySelector(".nav-symbol-pending")).toBeNull();
     expect(
       screen
-        .getByRole("link", { name: "Home" })
+        .getByRole("link", { name: "Journal" })
         .querySelector(".nav-symbol-pending"),
     ).toBeNull();
   });
 
   it("moves the current tab when a family-dropdown journal is chosen", () => {
     render(<PrimaryNavigation section="timeline" />);
-    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("active");
+    expect(screen.getByRole("link", { name: "Journal" })).toHaveClass("active");
 
     act(() => {
       window.dispatchEvent(
@@ -108,7 +109,7 @@ describe("PrimaryNavigation", () => {
       );
     });
 
-    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("active");
+    expect(screen.getByRole("link", { name: "Journal" })).toHaveClass("active");
     expect(screen.getByRole("link", { name: "Account" })).not.toHaveClass(
       "active",
     );
@@ -117,10 +118,10 @@ describe("PrimaryNavigation", () => {
   it("does not pulse the current tab when it is tapped again", async () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);
-    await user.click(screen.getByRole("link", { name: "Home" }));
+    await user.click(screen.getByRole("link", { name: "Journal" }));
     expect(
       screen
-        .getByRole("link", { name: "Home" })
+        .getByRole("link", { name: "Journal" })
         .querySelector(".nav-symbol-pending"),
     ).toBeNull();
   });

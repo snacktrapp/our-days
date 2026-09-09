@@ -11,6 +11,13 @@ import {
 } from "react";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
+import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
+import {
+  defaultWiderCircleSourceId,
+  formatWiderCircleIncludes,
+  isWiderCircleNameSuggestion,
+  suggestWiderCircleName,
+} from "@/features/groups/wider-circle";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
@@ -62,6 +69,7 @@ export function FamilySettingsPanel({
   createGroupAction,
   inviteCircleId,
   inviteCircleName,
+  defaultCircleId,
   children,
 }: {
   model: FamilySettingsPanelViewModel;
@@ -69,6 +77,7 @@ export function FamilySettingsPanel({
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
   inviteCircleName?: string;
+  defaultCircleId?: string;
   children?: ReactNode;
 }) {
   void inviteCircleName;
@@ -78,6 +87,7 @@ export function FamilySettingsPanel({
         model={model}
         createGroupAction={createGroupAction}
         inviteCircleId={inviteCircleId}
+        defaultCircleId={defaultCircleId}
       >
         {children}
       </PreviewFamilySettingsPanel>
@@ -95,6 +105,7 @@ export function FamilySettingsPanel({
       actions={actions}
       createGroupAction={createGroupAction}
       inviteCircleId={inviteCircleId}
+      defaultCircleId={defaultCircleId}
     >
       {children}
     </ConnectedFamilySettingsPanel>
@@ -111,7 +122,8 @@ function peopleCountLabel(count: number) {
 
 function isFirstMembersEmptyCircle(circle: FamilyCircleViewModel) {
   return (
-    circle.memberCount <= 1 && (circle.pendingInvitations?.length ?? 0) === 0
+    countFamilyFacingMembers(circle.members) <= 1 &&
+    (circle.pendingInvitations?.length ?? 0) === 0
   );
 }
 
@@ -139,7 +151,7 @@ function FirstMembersInvitePrompt({
   return (
     <div className="first-members-prompt">
       <div className="settings-heading">
-        <span>New group</span>
+        <span>New circle</span>
         <h3 id="invite-heading">Add your first members</h3>
         <p>Invite someone into {circleName}.</p>
       </div>
@@ -264,23 +276,41 @@ function MemberList({
 
 function CreateGroupCard({
   createGroupAction,
+  groups,
+  defaultCircleId,
 }: {
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  groups: readonly FamilyCircleViewModel[];
+  defaultCircleId?: string;
 }) {
+  const initialSourceId = defaultWiderCircleSourceId(groups, defaultCircleId);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [sourceCircleId, setSourceCircleId] = useState(initialSourceId);
+  const sourceCircle =
+    groups.find((group) => group.id === sourceCircleId) ?? groups[0] ?? null;
+  const inviteCandidates = (sourceCircle?.members ?? []).filter(
+    (member) => !isOperationsRole(member.role),
+  );
+  const sourceName = sourceCircle?.name.trim() || "this family";
+  const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
+  const includesLine = formatWiderCircleIncludes(
+    inviteCandidates.map((member) => member.name),
+  );
+  const [name, setName] = useState(suggestedName);
   if (!createGroupAction) return null;
 
   return (
     <section
-      className="settings-section groups-section groups-create-section"
+      className="settings-section circles-create-section"
       aria-labelledby="create-group-heading"
     >
       <div className="settings-heading">
-        <h2 id="create-group-heading">Create a new group</h2>
-        <p>Starts a separate circle. You’re the organizer.</p>
+        <h2 id="create-group-heading">Add a wider circle</h2>
+        <p>Everyone in {sourceName}, plus a few more people you invite next.</p>
       </div>
       <form
+        className="wider-circle-form"
         action={(formData) => {
           startTransition(async () => {
             const result = await createGroupAction(formData);
@@ -288,23 +318,54 @@ function CreateGroupCard({
           });
         }}
       >
-        <label htmlFor="create-group-name">Group name</label>
+        <input type="hidden" name="sourceCircleId" value={sourceCircleId} />
+
+        <label htmlFor="wider-circle-source">Starts with</label>
+        <select
+          id="wider-circle-source"
+          value={sourceCircleId}
+          required
+          onChange={(event) => {
+            const nextId = event.target.value;
+            const nextCircle = groups.find((group) => group.id === nextId);
+            setSourceCircleId(nextId);
+            setName((current) =>
+              current.trim() === "" ||
+              isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
+                ? suggestWiderCircleName(nextCircle?.name ?? "")
+                : current,
+            );
+          }}
+        >
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+        {includesLine ? (
+          <p className="wider-circle-includes">{includesLine}</p>
+        ) : null}
+
+        <label htmlFor="create-group-name">Name</label>
         <input
           id="create-group-name"
           name="name"
           required
           maxLength={80}
           autoComplete="off"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
         />
         {error ? (
           <p className="field-error" role="alert">
             {error}
           </p>
         ) : (
-          <p>A name is required.</p>
+          <p>Name it for who can see it.</p>
         )}
         <button type="submit" disabled={pending}>
-          {pending ? "Creating…" : "Create"}
+          {pending ? "Saving…" : "Save"}
         </button>
       </form>
     </section>
@@ -324,12 +385,12 @@ function CirclesAccordion({
 }) {
   return (
     <section
-      className="settings-section groups-section"
+      className="settings-section circles-section"
       aria-labelledby="your-groups-heading"
     >
       <div className="settings-heading">
-        <span>Your circles</span>
-        <h2 id="your-groups-heading">Your groups</h2>
+        <span>Membership</span>
+        <h2 id="your-groups-heading">Your circles</h2>
       </div>
       <ul className="circle-accordion">
         {groups.map((group) => {
@@ -349,7 +410,9 @@ function CirclesAccordion({
               >
                 <span className="access-member-copy">
                   <strong>{group.name}</strong>
-                  <small>{peopleCountLabel(group.memberCount)}</small>
+                  <small>
+                    {peopleCountLabel(countFamilyFacingMembers(group.members))}
+                  </small>
                 </span>
                 <span className="circle-accordion-chevron" aria-hidden="true">
                   <svg viewBox="0 0 16 16">
@@ -374,11 +437,13 @@ function PreviewFamilySettingsPanel({
   model,
   createGroupAction,
   inviteCircleId,
+  defaultCircleId,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
+  defaultCircleId?: string;
   children?: ReactNode;
 }) {
   const [openCircleId, setOpenCircleId] = useState<string | null>(
@@ -609,7 +674,11 @@ function PreviewFamilySettingsPanel({
         )}
       />
 
-      <CreateGroupCard createGroupAction={createGroupAction} />
+      <CreateGroupCard
+        createGroupAction={createGroupAction}
+        groups={model.groups}
+        defaultCircleId={defaultCircleId}
+      />
       {children}
     </section>
   );
@@ -620,12 +689,14 @@ function ConnectedFamilySettingsPanel({
   actions,
   createGroupAction,
   inviteCircleId,
+  defaultCircleId,
   children,
 }: {
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
   inviteCircleId?: string;
+  defaultCircleId?: string;
   children?: ReactNode;
 }) {
   const [openCircleId, setOpenCircleId] = useState<string | null>(
@@ -1348,7 +1419,11 @@ function ConnectedFamilySettingsPanel({
         )}
       />
 
-      <CreateGroupCard createGroupAction={createGroupAction} />
+      <CreateGroupCard
+        createGroupAction={createGroupAction}
+        groups={model.groups}
+        defaultCircleId={defaultCircleId}
+      />
       {children}
     </section>
   );

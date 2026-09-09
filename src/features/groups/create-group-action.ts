@@ -12,9 +12,13 @@ import {
   normalizeGroupName,
   writeActiveCircleCookie,
 } from "@/lib/auth/active-circle";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import {
+  readJournalCircleMemberships,
+  requireJournalAccess,
+} from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { readWiderCircleForm } from "./wider-circle";
 
 export type CreateGroupActionResult = Readonly<
   { ok: true; href: string } | { ok: false; message: string }
@@ -34,31 +38,42 @@ function createdGroupHref(circleId: string, name?: string) {
   return `/settings/family?${params.toString()}#invite`;
 }
 
-function readName(input: unknown) {
-  if (typeof FormData !== "undefined" && input instanceof FormData) {
-    const value = input.get("name");
-    return typeof value === "string" ? value : "";
+async function actorBelongsToCircle(
+  access: Extract<
+    Awaited<ReturnType<typeof requireJournalAccess>>,
+    { mode: "authenticated" }
+  >,
+  circleId: string,
+) {
+  if (circleId === access.circleId) return true;
+  if (!isActiveCircleToken(circleId)) return false;
+  const memberships = await readJournalCircleMemberships();
+  if (memberships.some((membership) => membership.circleId === circleId)) {
+    return true;
   }
-  if (
-    typeof input === "object" &&
-    input !== null &&
-    "name" in input &&
-    typeof input.name === "string"
-  ) {
-    return input.name;
-  }
-  return "";
+  if (!localJournalIsEnabled()) return false;
+  const { readLocalJournal } = await import("@/lib/local-journal/store");
+  const document = await readLocalJournal();
+  return (
+    document.circle.id === circleId ||
+    (document.extraCircles ?? []).some((circle) => circle.id === circleId)
+  );
 }
 
 export async function createGroupAction(
   input: unknown,
 ): Promise<CreateGroupActionResult> {
   if (!(await hasExpectedOrigin())) {
-    return { ok: false, message: "That group could not be created." };
+    return { ok: false, message: "That circle could not be created." };
   }
-  const name = normalizeGroupName(readName(input));
+  const form = readWiderCircleForm(input);
+  const name = normalizeGroupName(form.name);
+  const sourceCircleId = form.sourceCircleId;
   if (!name) {
-    return { ok: false, message: "A group name is required." };
+    return { ok: false, message: "A circle name is required." };
+  }
+  if (!sourceCircleId || !isActiveCircleToken(sourceCircleId)) {
+    return { ok: false, message: "That circle could not be created." };
   }
 
   const access = await requireJournalAccess();
@@ -67,9 +82,13 @@ export async function createGroupAction(
     redirect(createdGroupHref("created", name));
   }
 
+  if (!(await actorBelongsToCircle(access, sourceCircleId))) {
+    return { ok: false, message: "That circle could not be created." };
+  }
+
   if (localJournalIsEnabled()) {
     const { createLocalCircle } = await import("@/lib/local-journal/store");
-    const created = await createLocalCircle(access, name);
+    const created = await createLocalCircle(access, name, sourceCircleId);
     await writeActiveCircleCookie(created.circleId);
     revalidatePath("/family");
     revalidatePath("/people");
@@ -80,9 +99,10 @@ export async function createGroupAction(
   const supabase = await createOurDaysServerClient();
   const { data, error } = await supabase.rpc("create_circle", {
     circle_name: name,
+    source_circle_id: sourceCircleId,
   });
   if (error || typeof data !== "string") {
-    return { ok: false, message: "That group could not be created." };
+    return { ok: false, message: "That circle could not be created." };
   }
   await writeActiveCircleCookie(data);
   revalidatePath("/family");

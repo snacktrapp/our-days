@@ -30,6 +30,7 @@ import {
   plainToday,
 } from "@/data/journal-context.server";
 import {
+  countFamilyFacingPeople,
   hasOrganizerPrivilege,
   isOperationsMembership,
   journalContextLabel,
@@ -245,11 +246,16 @@ function localPostableCircles(
       id: document.circle.id,
       name: document.circle.name,
       personId: localHomePersonId(document, access),
+      memberCount: countFamilyFacingPeople(
+        document.people,
+        document.memberships,
+      ),
     },
     ...(document.extraCircles ?? []).map((circle) => ({
       id: circle.id,
       name: circle.name,
       personId: circle.personId,
+      memberCount: 1,
     })),
   ];
 }
@@ -365,7 +371,7 @@ export async function loadLocalJournalContext(
       chrome: {
         accent: recorder.accent,
         title: extra.name,
-        eyebrow: "Group",
+        eyebrow: "Circle",
         familyMark: surface.familyMark,
         composer,
         timelineOptionsHref: "/trash",

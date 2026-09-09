@@ -173,7 +173,7 @@ export function AudienceChip({
               justMe={justMe}
               currentCircleId={lockedCircleId}
               lockedCircleId={lockedCircleId}
-              legend="Post to"
+              legend="Who can see this?"
               onChange={(next) => {
                 setJustMe(next.justMe);
                 setSelectedIds(next.selectedIds);

@@ -391,7 +391,7 @@ export async function loadConnectedJournalContext(
       groupNameById.get(membership.circleId) ??
       (membership.circleId === access.circleId
         ? circleResult.data.name
-        : "Group"),
+        : "Circle"),
   }));
 
   const allPeople = peopleResult.data ?? [];
@@ -433,6 +433,28 @@ export async function loadConnectedJournalContext(
     access,
     guardedPersonIds,
   );
+  const memberCountByCircle = new Map<string, number>();
+  for (const person of allPeople) {
+    const personCircleId = circleIdOf(person, access.circleId);
+    const membership = allMemberships.find(
+      (candidate) =>
+        candidate.person_id === person.id &&
+        circleIdOf(candidate, access.circleId) === personCircleId,
+    );
+    if (
+      membership &&
+      isOperationsMembership({
+        role: membership.role,
+        directoryKind: membership.directory_kind,
+      })
+    ) {
+      continue;
+    }
+    memberCountByCircle.set(
+      personCircleId,
+      (memberCountByCircle.get(personCircleId) ?? 0) + 1,
+    );
+  }
   const postableCircles: readonly PostableCircle[] = (
     circleMemberships.length > 0
       ? circleMemberships
@@ -443,8 +465,9 @@ export async function loadConnectedJournalContext(
       groups.find((group) => group.id === membership.circleId)?.name ??
       (membership.circleId === access.circleId
         ? circleResult.data.name
-        : "Group"),
+        : "Circle"),
     personId: membership.personId,
+    memberCount: memberCountByCircle.get(membership.circleId),
   }));
   const linkedMomentIds = [
     ...new Set((familyMomentsResult.data ?? []).map((row) => row.moment_id)),

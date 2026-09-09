@@ -403,6 +403,7 @@ describe("connected family settings data", () => {
         (member) => member.relationshipLabel === "Operations",
       ),
     ).toBe(true);
+    expect(model.panel.groups[0]?.memberCount).toBe(people.length);
   });
 
   it("does not turn a pending-invitation RPC failure into an empty list", async () => {

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canCreateInsight,
+  countFamilyFacingMembers,
+  countFamilyFacingPeople,
   familyMembershipRoleLabel,
   hasOrganizerPrivilege,
+  isFamilyFacingMembership,
   isOperationsMembership,
   isOperationsRole,
   journalContextLabel,
@@ -52,5 +55,37 @@ describe("circle membership roles", () => {
         directoryKind: "operations",
       }),
     ).toBe("operations");
+  });
+
+  it("omits Operations from family-facing member counts", () => {
+    expect(isFamilyFacingMembership({ role: "organizer" })).toBe(true);
+    expect(isFamilyFacingMembership({ role: "operations" })).toBe(false);
+    expect(
+      isFamilyFacingMembership({
+        role: "organizer",
+        directory_kind: "operations",
+      }),
+    ).toBe(false);
+    expect(
+      countFamilyFacingMembers([
+        { role: "organizer" },
+        { role: "operations" },
+        { role: "member" },
+        { role: null },
+      ]),
+    ).toBe(3);
+    expect(
+      countFamilyFacingPeople(
+        [{ id: "brian" }, { id: "tars" }, { id: "avery" }],
+        [
+          { personId: "brian", role: "organizer" },
+          {
+            person_id: "tars",
+            role: "organizer",
+            directory_kind: "operations",
+          },
+        ],
+      ),
+    ).toBe(2);
   });
 });

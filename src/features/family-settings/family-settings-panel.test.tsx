@@ -204,25 +204,108 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Your groups" })).toBeVisible();
-    expect(screen.getByText("All our days")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Your circles" })).toBeVisible();
+    expect(screen.getAllByText("All our days").length).toBeGreaterThan(0);
     expect(screen.getByText("3 people")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Create a new group" }),
+      screen.getByRole("heading", { name: "Add a wider circle" }),
     ).toBeVisible();
     expect(
-      screen.getByText("Starts a separate circle. You’re the organizer."),
+      screen.getByText(
+        "Everyone in All our days, plus a few more people you invite next.",
+      ),
     ).toBeVisible();
-    expect(screen.getByLabelText("Group name")).toBeRequired();
-    expect(screen.getByRole("button", { name: "Create" })).toBeVisible();
+    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
+    expect(
+      screen.getByText(
+        "Includes Current person, Other organizer, Child profile…",
+      ),
+    ).toBeVisible();
+    expect(screen.getByLabelText("Name")).toBeRequired();
+    expect(screen.getByLabelText("Name")).toHaveValue(
+      "All our days + grandparents",
+    );
+    expect(screen.getByText("Name it for who can see it.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
 
-    await user.type(screen.getByLabelText("Group name"), "Cousins");
-    await user.click(screen.getByRole("button", { name: "Create" }));
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Cousins");
+    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(createGroupAction).toHaveBeenCalled();
     });
     const formData = createGroupAction.mock.calls[0]?.[0] as FormData;
     expect(formData.get("name")).toBe("Cousins");
+    expect(formData.get("sourceCircleId")).toBe("family");
+  });
+
+  it("hides Operations from family-facing counts and Includes", () => {
+    render(
+      <FamilySettingsPanel
+        model={connectedOperationsModel}
+        createGroupAction={vi.fn()}
+        actions={{
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.getByText("3 people")).toBeVisible();
+    expect(screen.queryByText("4 people")).toBeNull();
+    expect(
+      screen.getByText(
+        "Includes Current person, Other organizer, Child profile…",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/Includes.*TARS/u)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Add a wider circle" }),
+    ).toBeVisible();
+  });
+
+  it("defaults Starts with to the circle with the most members", () => {
+    render(
+      <FamilySettingsPanel
+        model={{
+          ...model,
+          groups: [
+            {
+              ...model.groups[0],
+              id: "cousins",
+              name: "Cousins",
+              memberCount: 1,
+              members: [previewMembers[0]],
+            },
+            model.groups[0],
+          ],
+        }}
+        createGroupAction={vi.fn()}
+        defaultCircleId="cousins"
+      />,
+    );
+
+    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
+    expect(
+      screen.getByRole("heading", { name: "Add a wider circle" }),
+    ).toBeVisible();
+  });
+
+  it("lists included people from the start-from circle as read-only text", () => {
+    render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
+
+    expect(screen.queryByRole("group", { name: "Who else?" })).toBeNull();
+    expect(
+      screen.getByText(
+        "Includes Current person, Other organizer, Child profile…",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByLabelText("Person’s name")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Add person" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a newly created circle with an add-first-members prompt that surfaces invite", async () => {

@@ -15,7 +15,7 @@ export type JournalSwitcherGroup = Readonly<{
 
 export function journalSwitcherTypeLabel(kind: JournalSwitcherKind) {
   if (kind === "you") return "You";
-  if (kind === "group") return "Group";
+  if (kind === "group") return "Circle";
   return "Person";
 }
 

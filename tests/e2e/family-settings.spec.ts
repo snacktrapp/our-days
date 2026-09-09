@@ -221,6 +221,6 @@ test("the shared Account navigation opens settings and returns through the prima
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "People" }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "Home" }).click();
+  await page.getByRole("link", { name: "Journal" }).click();
   await expect(page).toHaveURL(/\/family$/u);
 });

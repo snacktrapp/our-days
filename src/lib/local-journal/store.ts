@@ -200,27 +200,41 @@ export async function readLocalJournal() {
   return withStoreLock(() => readDocumentUnlocked());
 }
 
-export async function createLocalCircle(access: LocalAccess, name: string) {
+export async function createLocalCircle(
+  access: LocalAccess,
+  name: string,
+  sourceCircleId: string,
+) {
   const trimmed = name.trim();
   if (!trimmed || trimmed.length > 80) {
-    throw new Error("A group name is required.");
+    throw new Error("A circle name is required.");
   }
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
     requireMembership(document, access);
-    const currentExtra = extraCircleForAccess(document, access);
-    const sourcePerson = currentExtra
+    const sourceExtra = (document.extraCircles ?? []).find(
+      (circle) => circle.id === sourceCircleId,
+    );
+    const sourceHome = sourceCircleId === document.circle.id;
+    if (!sourceHome && !sourceExtra) {
+      throw new Error("That circle could not be created.");
+    }
+    const homePersonId =
+      document.accounts[0]?.personId ??
+      document.memberships[0]?.personId ??
+      access.personId;
+    const sourcePerson = sourceExtra
       ? {
-          displayName: currentExtra.displayName,
-          accentToken: currentExtra.accentToken,
+          displayName: sourceExtra.displayName,
+          accentToken: sourceExtra.accentToken,
         }
-      : document.people.find((person) => person.id === access.personId);
+      : document.people.find((person) => person.id === homePersonId);
     if (!sourcePerson) throw new Error("Member profile is unavailable");
     const createdAt = nowIso();
     const extra = {
       id: randomUUID(),
       name: trimmed,
-      timeZone: document.circle.timeZone,
+      timeZone: sourceExtra?.timeZone ?? document.circle.timeZone,
       createdAt,
       membershipId: randomUUID(),
       personId: randomUUID(),
