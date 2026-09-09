@@ -426,7 +426,7 @@ test("members can create a wider circle from Account and filter Home without cos
     page.locator(".circles-section").getByText("All our days", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Include more people" }),
+    page.getByRole("heading", { name: "Add a wider circle" }),
   ).toBeVisible();
   await page.getByLabel("Name").fill("Cousins");
   await page.getByRole("button", { name: "Save" }).click();

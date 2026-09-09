@@ -171,7 +171,6 @@ describe("security proxy", () => {
     ["/sw.js", false],
     ["/manifest.webmanifest", true],
     ["/robots.txt", true],
-    ["/quiet-rings.jpg", false],
     ["/sample-family.jpg", false],
     ["/favicon.ico", true],
     ["/_next/static", true],
@@ -198,7 +197,6 @@ describe("security proxy", () => {
     "icon-512.png",
     "icon-1024.png",
     "og.png",
-    "quiet-rings.jpg",
     "sample-family.jpg",
     "sw.js",
   ])("excludes only a present inert public asset: %s", async (filename) => {

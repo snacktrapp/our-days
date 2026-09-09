@@ -2794,15 +2794,6 @@ span.moment-place-line {
 .circles-create-section .settings-heading h2 {
   font: var(--chrome-title);
 }
-.circles-create-rings {
-  display: block;
-  width: 72px;
-  height: 72px;
-  margin: 0 auto 10px;
-  object-fit: cover;
-  pointer-events: none;
-  user-select: none;
-}
 .wider-circle-form {
   gap: 4px;
 }
