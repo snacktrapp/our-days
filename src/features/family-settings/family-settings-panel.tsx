@@ -12,6 +12,7 @@ import {
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import {
+  formatWiderCircleIncludes,
   isWiderCircleNameSuggestion,
   suggestWiderCircleName,
 } from "@/features/groups/wider-circle";
@@ -291,7 +292,11 @@ function CreateGroupCard({
   const inviteCandidates = (sourceCircle?.members ?? []).filter(
     (member) => member.role !== "operations",
   );
+  const sourceName = sourceCircle?.name.trim() || "this family";
   const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
+  const includesLine = formatWiderCircleIncludes(
+    inviteCandidates.map((member) => member.name),
+  );
   const [name, setName] = useState(suggestedName);
   if (!createGroupAction) return null;
 
@@ -301,11 +306,8 @@ function CreateGroupCard({
       aria-labelledby="create-group-heading"
     >
       <div className="settings-heading">
-        <span>Wider ring</span>
-        <h2 id="create-group-heading">Make a wider circle</h2>
-        <p>
-          Everyone in the circle you start from, plus people you invite next.
-        </p>
+        <h2 id="create-group-heading">Bigger than {sourceName}</h2>
+        <p>Everyone in {sourceName}, plus a few more people you invite next.</p>
       </div>
       <form
         className="wider-circle-form"
@@ -318,49 +320,34 @@ function CreateGroupCard({
       >
         <input type="hidden" name="sourceCircleId" value={sourceCircleId} />
 
-        <fieldset className="wider-circle-step">
-          <legend>Start from</legend>
-          <label htmlFor="wider-circle-source">Existing circle</label>
-          <select
-            id="wider-circle-source"
-            value={sourceCircleId}
-            required
-            onChange={(event) => {
-              const nextId = event.target.value;
-              const nextCircle = groups.find((group) => group.id === nextId);
-              setSourceCircleId(nextId);
-              setName((current) =>
-                current.trim() === "" ||
-                isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
-                  ? suggestWiderCircleName(nextCircle?.name ?? "")
-                  : current,
-              );
-            }}
-          >
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </fieldset>
+        <label htmlFor="wider-circle-source">Starts with</label>
+        <select
+          id="wider-circle-source"
+          value={sourceCircleId}
+          required
+          onChange={(event) => {
+            const nextId = event.target.value;
+            const nextCircle = groups.find((group) => group.id === nextId);
+            setSourceCircleId(nextId);
+            setName((current) =>
+              current.trim() === "" ||
+              isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
+                ? suggestWiderCircleName(nextCircle?.name ?? "")
+                : current,
+            );
+          }}
+        >
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+        {includesLine ? (
+          <p className="wider-circle-includes">{includesLine}</p>
+        ) : null}
 
-        <fieldset className="wider-circle-step">
-          <legend>Who else?</legend>
-          <p>
-            People already in {sourceCircle?.name ?? "this circle"}. Invite
-            anyone else from Account after you make this circle.
-          </p>
-          {inviteCandidates.length > 0 ? (
-            <ul className="wider-circle-included">
-              {inviteCandidates.map((member) => (
-                <li key={member.id}>{member.name}</li>
-              ))}
-            </ul>
-          ) : null}
-        </fieldset>
-
-        <label htmlFor="create-group-name">Name the ring</label>
+        <label htmlFor="create-group-name">Name</label>
         <input
           id="create-group-name"
           name="name"
@@ -375,10 +362,10 @@ function CreateGroupCard({
             {error}
           </p>
         ) : (
-          <p>Suggested from the circle you start from.</p>
+          <p>Name it for who can see it.</p>
         )}
         <button type="submit" disabled={pending}>
-          {pending ? "Creating…" : "Make this circle"}
+          {pending ? "Saving…" : "Save"}
         </button>
       </form>
     </section>

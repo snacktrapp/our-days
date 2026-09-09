@@ -2827,6 +2827,9 @@ span.moment-place-line {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(46, 111, 105, 0.12);
 }
+.wider-circle-includes {
+  margin: 8px 1px 10px;
+}
 .wider-circle-included,
 .wider-circle-added {
   display: flex;

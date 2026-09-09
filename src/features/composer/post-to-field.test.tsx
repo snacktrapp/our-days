@@ -8,11 +8,11 @@ const circles = [
   { id: "cousins", name: "Cousins", personId: "brian-cousins", memberCount: 2 },
 ] as const;
 
-describe("Post to choices", () => {
-  it("selects one ring at a time until advanced multi-share is opened", async () => {
+describe("Who can see this?", () => {
+  it("selects one audience at a time without offering multi-share on the default screen", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const { rerender } = render(
+    render(
       <PostToChoices
         circles={circles}
         selectedIds={["family"]}
@@ -21,39 +21,23 @@ describe("Post to choices", () => {
       />,
     );
 
+    expect(screen.getByText("Who can see this?")).toBeVisible();
     expect(
       screen.getByRole("checkbox", { name: /Trapp Family/ }),
     ).toBeChecked();
     expect(screen.getByText("5 people")).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Share to more than one ring" }),
-    ).toBeVisible();
+      screen.queryByRole("button", { name: /Share to more than one/u }),
+    ).toBeNull();
 
     await user.click(screen.getByRole("checkbox", { name: /Cousins/ }));
     expect(onChange).toHaveBeenCalledWith({
       justMe: false,
       selectedIds: ["cousins"],
     });
-
-    rerender(
-      <PostToChoices
-        circles={circles}
-        selectedIds={["cousins"]}
-        justMe={false}
-        onChange={onChange}
-      />,
-    );
-    await user.click(
-      screen.getByRole("button", { name: "Share to more than one ring" }),
-    );
-    await user.click(screen.getByRole("checkbox", { name: /Trapp Family/ }));
-    expect(onChange).toHaveBeenLastCalledWith({
-      justMe: false,
-      selectedIds: ["cousins", "family"],
-    });
   });
 
-  it("opens advanced when a moment is already shared to more than one ring", () => {
+  it("keeps multi-select only when a moment is already shared to more than one family", () => {
     render(
       <PostToChoices
         circles={circles}
@@ -64,10 +48,10 @@ describe("Post to choices", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "Share to more than one ring" }),
+      screen.queryByRole("button", { name: /Share to more than one/u }),
     ).toBeNull();
     expect(
-      screen.getByText("This moment will appear in each selected ring."),
+      screen.getByText("This moment will appear in each selected family."),
     ).toBeVisible();
     expect(
       screen.getByRole("checkbox", { name: /Trapp Family/ }),

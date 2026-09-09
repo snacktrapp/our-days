@@ -27,10 +27,10 @@ export function PostToChoices({
   justMeAllowed = true,
   currentCircleId,
   lockedCircleId,
-  legend = "Post to",
+  legend = "Who can see this?",
   onChange,
 }: PostToChoicesProps) {
-  const [advanced, setAdvanced] = useState(selectedIds.length > 1);
+  const [advanced] = useState(selectedIds.length > 1);
   if (circles.length === 0) return null;
 
   const chooseCircle = (circleId: string, checked: boolean) => {
@@ -108,18 +108,9 @@ export function PostToChoices({
           </label>
         ) : null}
       </div>
-      {showAdvancedControl && !advanced ? (
-        <button
-          type="button"
-          className="post-to-advanced"
-          onClick={() => setAdvanced(true)}
-        >
-          Share to more than one ring
-        </button>
-      ) : null}
       {advanced && showAdvancedControl ? (
         <p className="post-to-advanced-help">
-          This moment will appear in each selected ring.
+          This moment will appear in each selected family.
         </p>
       ) : null}
     </fieldset>

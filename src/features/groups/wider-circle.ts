@@ -1,6 +1,11 @@
 export function suggestWiderCircleName(baseName: string) {
-  const inner = baseName.trim() || "Circle";
-  return `${inner} + …`;
+  const inner = baseName.trim() || "Family";
+  return `${inner} + grandparents`;
+}
+
+export function formatWiderCircleIncludes(names: readonly string[]) {
+  if (names.length === 0) return "";
+  return `Includes ${names.join(", ")}…`;
 }
 
 export function isWiderCircleNameSuggestion(value: string, baseName: string) {

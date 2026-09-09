@@ -559,7 +559,7 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
     expect(screen.getByLabelText("Place name")).toBeVisible();
-    expect(screen.getByText("Post to")).toBeVisible();
+    expect(screen.getByText("Who can see this?")).toBeVisible();
     expect(
       screen.queryByText("No location is read from your media."),
     ).toBeNull();
@@ -693,7 +693,7 @@ describe("MomentComposer", () => {
     ).not.toBeChecked();
   });
 
-  it("posts one moment to two circles from the Post to checklist", async () => {
+  it("posts one moment to a single audience from Who can see this?", async () => {
     const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
     const user = userEvent.setup();
     render(
@@ -715,13 +715,13 @@ describe("MomentComposer", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: /Written entry/ }));
-    await user.type(screen.getByLabelText("Entry"), "One porch, two circles.");
+    await user.type(screen.getByLabelText("Entry"), "One porch, one family.");
     expect(
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeChecked();
-    await user.click(
-      screen.getByRole("button", { name: "Share to more than one ring" }),
-    );
+    expect(
+      screen.queryByRole("button", { name: /Share to more than one/u }),
+    ).toBeNull();
     await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
     await user.click(screen.getByRole("button", { name: "Post" }));
@@ -729,11 +729,11 @@ describe("MomentComposer", () => {
       expect(save).toHaveBeenCalledWith(
         expect.objectContaining({
           audience: "family",
-          circleIds: ["family", "cousins"],
+          circleIds: ["cousins"],
         }),
       ),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family?circle=family");
+    expect(navigation.replace).toHaveBeenCalledWith("/family?circle=cousins");
   });
 
   it("shows Who else from the selected Post to circle, not the Home roster", async () => {
@@ -781,20 +781,15 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("checkbox", { name: "Trapp Family" }));
     expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
-
-    await user.click(
-      screen.getByRole("button", { name: "Share to more than one ring" }),
-    );
-    await user.click(screen.getByRole("checkbox", { name: "Grandparents" }));
     expect(
       screen.getByRole("checkbox", { name: "Trapp Family" }),
     ).toBeChecked();
     expect(
       screen.getByRole("checkbox", { name: "Grandparents" }),
-    ).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Molly/ })).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: /Avery/ })).toBeVisible();
-    expect(screen.queryByRole("checkbox", { name: /Brian/ })).toBeNull();
+    ).not.toBeChecked();
+    expect(
+      screen.queryByRole("button", { name: /Share to more than one/u }),
+    ).toBeNull();
   });
 
   it("offers only the production-ready written path in a connected journal", async () => {
@@ -2003,16 +1998,16 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
     expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
-    await user.click(
-      screen.getByRole("button", { name: "Share to more than one ring" }),
-    );
-    await user.click(screen.getByRole("checkbox", { name: "Cousins" }));
+    expect(
+      screen.queryByRole("button", { name: /Share to more than one/u }),
+    ).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         expect.objectContaining({
           audience: "family",
-          circleIds: ["family", "cousins"],
+          circleIds: ["family"],
         }),
       ),
     );
