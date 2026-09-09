@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/features/family-settings/web-push-actions", () => ({
+  deliverPublishedMomentPushAction: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+import { deliverPublishedMomentPushAction } from "@/features/family-settings/web-push-actions";
 import type { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import type { PhotoUploadResumeRecord } from "./photo-upload-resume-store";
 import {
@@ -151,6 +157,7 @@ describe("connected private photo upload", () => {
   });
 
   afterEach(() => {
+    vi.mocked(deliverPublishedMomentPushAction).mockClear();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -220,6 +227,11 @@ describe("connected private photo upload", () => {
     );
 
     expect(result).toEqual({ state: "published", intakeId, momentId });
+    await vi.waitFor(() => {
+      expect(deliverPublishedMomentPushAction).toHaveBeenCalledWith({
+        momentId,
+      });
+    });
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "/api/photos/process",
       expect.objectContaining({
@@ -858,6 +870,7 @@ describe("connected private photo upload", () => {
       },
     );
     expect(result.state).toBe("processing");
+    expect(deliverPublishedMomentPushAction).not.toHaveBeenCalled();
   });
 
   it("retires an acknowledged needs-attention record so a retry starts fresh", async () => {
@@ -961,6 +974,11 @@ describe("connected private photo upload", () => {
     );
 
     expect(result.state).toBe("published");
+    await vi.waitFor(() => {
+      expect(deliverPublishedMomentPushAction).toHaveBeenCalledWith({
+        momentId,
+      });
+    });
     expect(resumeStore.remove).toHaveBeenCalledWith(staleResume.id);
     expect(attempt.requestKey).not.toBe(staleResume.requestKey);
     expect(rpc).not.toHaveBeenCalledWith(
@@ -1044,6 +1062,47 @@ describe("connected private photo upload", () => {
     expect(
       fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH"),
     ).toHaveLength(1);
+  });
+
+  it("re-delivers family photo push when a resumed intake is already published", async () => {
+    const publishedResume: PhotoUploadResumeRecord = {
+      id: "published-resume",
+      accountId: "10000000-0000-4000-8000-000000000001",
+      acknowledged: true,
+      circleId: draft.circleId,
+      draftHash: "ignored-by-test-store",
+      fileSha256: "a".repeat(64),
+      fileSize: 12,
+      mimeType: "image/jpeg",
+      requestKey: "d7000000-0000-4000-8000-000000000007",
+      uploadRequestKey: "d7000000-0000-4000-8000-000000000008",
+      intakeId,
+      momentId,
+      uploadUrl,
+    };
+    const resumeStore = memoryResumeStore(publishedResume);
+    const { client } = clientWithStatus("published");
+
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          hash: vi.fn(async () => "a".repeat(64)),
+          resumeStore,
+        },
+      ),
+    ).resolves.toEqual({ state: "published", intakeId, momentId });
+    await vi.waitFor(() => {
+      expect(deliverPublishedMomentPushAction).toHaveBeenCalledWith({
+        momentId,
+      });
+    });
+    expect(resumeStore.remove).toHaveBeenCalledWith(publishedResume.id);
   });
 });
 

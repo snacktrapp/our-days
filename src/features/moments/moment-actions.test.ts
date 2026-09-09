@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
+  deliver: vi.fn(),
   getHeaders: vi.fn(),
   revalidatePath: vi.fn(),
   requireAccess: vi.fn(),
@@ -32,6 +33,9 @@ vi.mock("@/lib/auth/journal-access", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
+}));
+vi.mock("@/lib/web-push/deliver-activity", () => ({
+  deliverActivityWebPush: mocks.deliver,
 }));
 
 import {
@@ -66,6 +70,7 @@ describe("written moment actions", () => {
       role: "member",
     });
     mocks.rpc.mockResolvedValue({ data: momentId, error: null });
+    mocks.deliver.mockResolvedValue(undefined);
     mocks.createClient.mockResolvedValue({ rpc: mocks.rpc });
   });
 
@@ -345,6 +350,25 @@ describe("written moment actions", () => {
     });
   });
 
+  it("delivers comment push with the parent moment id, not the note id", async () => {
+    const noteId = "70000000-0000-4000-8000-000000000009";
+    mocks.rpc.mockResolvedValueOnce({ data: noteId, error: null });
+
+    await expect(
+      createMomentNoteAction({ momentId, body: "One more detail." }),
+    ).resolves.toMatchObject({ ok: true, momentId });
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      { rpc: mocks.rpc },
+      "note",
+      momentId,
+    );
+    expect(mocks.deliver).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "note",
+      noteId,
+    );
+  });
+
   it("keeps note edit and removal behind author revision RPCs", async () => {
     const noteId = "70000000-0000-4000-8000-000000000001";
     mocks.rpc
@@ -369,5 +393,6 @@ describe("written moment actions", () => {
       note_id: noteId,
       expected_revision: 3,
     });
+    expect(mocks.deliver).not.toHaveBeenCalled();
   });
 });
