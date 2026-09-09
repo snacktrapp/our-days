@@ -818,6 +818,7 @@ export function getFamilySettingsFixture(
             .length,
           currentMemberId: "brian",
           canManageAccess: true,
+          canRename: true,
           members,
           guardianOptions: [],
           pendingInvitations: [],

@@ -35,6 +35,10 @@ type CreateGroupActionResult = Readonly<
   { ok: true; href: string } | { ok: false; message: string }
 >;
 
+type RenameCircleActionResult = Readonly<
+  { ok: true; message: string } | { ok: false; message: string }
+>;
+
 type ConnectedActions = Readonly<{
   requestInvitation?: (input: {
     displayName: string;
@@ -67,6 +71,7 @@ export function FamilySettingsPanel({
   model,
   actions,
   createGroupAction,
+  renameCircleAction,
   inviteCircleId,
   inviteCircleName,
   defaultCircleId,
@@ -75,6 +80,7 @@ export function FamilySettingsPanel({
   model: FamilySettingsPanelViewModel;
   actions?: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  renameCircleAction?: (input: FormData) => Promise<RenameCircleActionResult>;
   inviteCircleId?: string;
   inviteCircleName?: string;
   defaultCircleId?: string;
@@ -86,6 +92,7 @@ export function FamilySettingsPanel({
       <PreviewFamilySettingsPanel
         model={model}
         createGroupAction={createGroupAction}
+        renameCircleAction={renameCircleAction}
         inviteCircleId={inviteCircleId}
         defaultCircleId={defaultCircleId}
       >
@@ -104,6 +111,7 @@ export function FamilySettingsPanel({
       model={model}
       actions={actions}
       createGroupAction={createGroupAction}
+      renameCircleAction={renameCircleAction}
       inviteCircleId={inviteCircleId}
       defaultCircleId={defaultCircleId}
     >
@@ -274,6 +282,68 @@ function MemberList({
   );
 }
 
+function RenameCircleForm({
+  circle,
+  renameCircleAction,
+  disabled,
+  onResult,
+}: {
+  circle: FamilyCircleViewModel;
+  renameCircleAction?: (input: FormData) => Promise<RenameCircleActionResult>;
+  disabled?: boolean;
+  onResult?: (result: RenameCircleActionResult) => void;
+}) {
+  const [name, setName] = useState(circle.name);
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const nameId = `rename-circle-name-${circle.id}`;
+
+  if (!circle.canRename || !renameCircleAction) return null;
+
+  return (
+    <section className="circle-rename-section" aria-label="Rename circle">
+      <form
+        action={(formData) => {
+          startTransition(async () => {
+            const result = await renameCircleAction(formData);
+            if (!result.ok) {
+              setError(result.message);
+              onResult?.(result);
+              return;
+            }
+            setError("");
+            onResult?.(result);
+          });
+        }}
+      >
+        <input type="hidden" name="circleId" value={circle.id} />
+        <label htmlFor={nameId}>Circle name</label>
+        <input
+          id={nameId}
+          name="name"
+          required
+          maxLength={80}
+          autoComplete="off"
+          value={name}
+          disabled={disabled || pending}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (error) setError("");
+          }}
+        />
+        {error ? (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <button type="submit" disabled={disabled || pending}>
+          {pending ? "Saving…" : "Save name"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function CreateGroupCard({
   createGroupAction,
   groups,
@@ -436,12 +506,14 @@ function CirclesAccordion({
 function PreviewFamilySettingsPanel({
   model,
   createGroupAction,
+  renameCircleAction,
   inviteCircleId,
   defaultCircleId,
   children,
 }: {
   model: PreviewFamilySettingsPanelViewModel;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  renameCircleAction?: (input: FormData) => Promise<RenameCircleActionResult>;
   inviteCircleId?: string;
   defaultCircleId?: string;
   children?: ReactNode;
@@ -542,6 +614,11 @@ function PreviewFamilySettingsPanel({
         onToggle={toggleCircle}
         renderOpenCircle={(circle) => (
           <>
+            <RenameCircleForm
+              key={circle.id}
+              circle={circle}
+              renameCircleAction={renameCircleAction}
+            />
             <div className="settings-heading circle-access-heading">
               <span>Private circle</span>
               <h3 id="access-heading">People and access</h3>
@@ -688,6 +765,7 @@ function ConnectedFamilySettingsPanel({
   model,
   actions,
   createGroupAction,
+  renameCircleAction,
   inviteCircleId,
   defaultCircleId,
   children,
@@ -695,6 +773,7 @@ function ConnectedFamilySettingsPanel({
   model: ConnectedFamilySettingsPanelViewModel;
   actions: ConnectedActions;
   createGroupAction?: (input: FormData) => Promise<CreateGroupActionResult>;
+  renameCircleAction?: (input: FormData) => Promise<RenameCircleActionResult>;
   inviteCircleId?: string;
   defaultCircleId?: string;
   children?: ReactNode;
@@ -1073,6 +1152,13 @@ function ConnectedFamilySettingsPanel({
         onToggle={toggleCircle}
         renderOpenCircle={(circle) => (
           <>
+            <RenameCircleForm
+              key={circle.id}
+              circle={circle}
+              renameCircleAction={renameCircleAction}
+              disabled={isPending}
+              onResult={setResult}
+            />
             <div className="settings-heading circle-access-heading">
               <span>Private circle</span>
               <h3 id="access-heading">People and access</h3>

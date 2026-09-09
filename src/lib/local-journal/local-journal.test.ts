@@ -23,6 +23,7 @@ import {
   createLocalWrittenMoment,
   findLocalAccount,
   readLocalJournal,
+  renameLocalCircle,
   resetLocalJournalForTests,
   setLocalReaction,
   updateLocalMomentAudience,
@@ -419,6 +420,41 @@ describe("local journal happy path", () => {
     });
     expect(texts(homeAfter)).not.toContain("Cousins only.");
     expect(texts(cousinsAfter)).toContain("Cousins only.");
+
+    const homeYou = await loadLocalTimeline(access, homeContext, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const cousinsYou = await loadLocalTimeline(extraAccess, extraContext, {
+      journalPersonId: extraCircle.personId,
+      pages: 1,
+    });
+    expect(texts(homeYou)).toContain("One porch, two circles.");
+    expect(texts(homeYou)).toContain("Cousins only.");
+    expect(texts(cousinsYou)).toContain("One porch, two circles.");
+    expect(texts(cousinsYou)).toContain("Cousins only.");
+  });
+
+  it("lets the starter rename a circle and updates local switcher labels", async () => {
+    const extra = await createLocalCircle(access, "Cousins", access.circleId);
+    await renameLocalCircle(access, extra.circleId, "Grandparents");
+    await renameLocalCircle(access, localCircleId, "Trapp Family");
+    const context = await loadLocalJournalContext(access);
+    expect(context.circleName).toBe("Trapp Family");
+    expect(context.groups?.map((group) => group.name)).toEqual([
+      "Trapp Family",
+      "Grandparents",
+    ]);
+
+    const jordanAccess: LocalAccess = {
+      membershipId: localJordanMembershipId,
+      circleId: localCircleId,
+      personId: localJordanPersonId,
+      role: "organizer",
+    };
+    await expect(
+      renameLocalCircle(jordanAccess, localCircleId, "Stolen"),
+    ).rejects.toThrow("That circle could not be renamed.");
   });
 
   it("edits audience from the author's journal and updates both group feeds", async () => {
