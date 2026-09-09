@@ -661,6 +661,116 @@ test("family title is tappable and optically centered in the top pill", async ({
   }
 });
 
+test("long journal titles wrap at phone width without crowding header actions", async ({
+  page,
+}) => {
+  const longCircleName = "Trapp Family + grandparents";
+
+  async function measureTitle(name: string) {
+    return page.evaluate((titleText) => {
+      const bar = document.querySelector(".topbar");
+      const title = document.querySelector(".title-switcher-heading h1");
+      const chevron = document.querySelector(".title-switcher-heading svg");
+      const add = document.querySelector(".header-add-moment");
+      const activity = document.querySelector(".notification-trigger");
+      const theme = document.querySelector(".theme-toggle");
+      const addIcon = add?.querySelector("svg");
+      const heartIcon = activity?.querySelector("svg");
+      const themeIcon = theme?.querySelector("svg");
+      if (
+        !bar ||
+        !title ||
+        !add ||
+        !activity ||
+        !theme ||
+        !addIcon ||
+        !heartIcon ||
+        !themeIcon
+      ) {
+        throw new Error("Journal header chrome is missing");
+      }
+      title.textContent = titleText;
+      const style = getComputedStyle(title);
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const lineRects = [...range.getClientRects()].filter(
+        (rect) => rect.width > 0 && rect.height > 0,
+      );
+      const barRect = bar.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      const chevronRect = chevron?.getBoundingClientRect();
+      const addRect = add.getBoundingClientRect();
+      const activityRect = activity.getBoundingClientRect();
+      const themeRect = theme.getBoundingClientRect();
+      const overlaps = (left: DOMRect, right: DOMRect) =>
+        left.right > right.left + 1 &&
+        left.left < right.right - 1 &&
+        left.bottom > right.top + 1 &&
+        left.top < right.bottom - 1;
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        lineCount: lineRects.length,
+        overflowWrap: style.overflowWrap,
+        textFits: title.scrollHeight <= title.clientHeight + 1,
+        whiteSpace: style.whiteSpace,
+        insideBar:
+          titleRect.left >= barRect.left - 1 &&
+          titleRect.right <= barRect.right + 1 &&
+          (chevronRect ? chevronRect.right <= barRect.right + 1 : true),
+        actionsUsable:
+          addRect.width >= 44 &&
+          addRect.height >= 44 &&
+          activityRect.width >= 44 &&
+          activityRect.height >= 44 &&
+          themeRect.width >= 44 &&
+          themeRect.height >= 44,
+        cramped:
+          overlaps(titleRect, addIcon.getBoundingClientRect()) ||
+          overlaps(titleRect, heartIcon.getBoundingClientRect()) ||
+          overlaps(titleRect, themeIcon.getBoundingClientRect()) ||
+          Boolean(
+            chevronRect &&
+            (overlaps(chevronRect, addIcon.getBoundingClientRect()) ||
+              overlaps(chevronRect, heartIcon.getBoundingClientRect()) ||
+              overlaps(chevronRect, themeIcon.getBoundingClientRect())),
+          ),
+      };
+    }, name);
+  }
+
+  for (const path of ["/family", "/settings/family"] as const) {
+    for (const theme of ["dark", "light"] as const) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ colorScheme: theme });
+      await page.addInitScript((nextTheme) => {
+        window.localStorage.setItem("our-days-theme", nextTheme);
+      }, theme);
+      await page.goto(path);
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+
+      const longTitle = await measureTitle(longCircleName);
+      expect(longTitle.fontSize).toBeLessThanOrEqual(16);
+      expect(longTitle.whiteSpace).toBe("normal");
+      expect(longTitle.overflowWrap).toBe("anywhere");
+      expect(longTitle.lineCount).toBeGreaterThan(1);
+      expect(longTitle.lineCount).toBeLessThanOrEqual(2);
+      expect(longTitle.textFits).toBe(true);
+      expect(longTitle.insideBar).toBe(true);
+      expect(longTitle.actionsUsable).toBe(true);
+      expect(longTitle.cramped).toBe(false);
+
+      const shortTitle = await measureTitle(
+        path === "/settings/family" ? "Account" : "All our days",
+      );
+      expect(shortTitle.lineCount).toBe(1);
+      expect(shortTitle.cramped).toBe(false);
+      expect(shortTitle.insideBar).toBe(true);
+      expect(shortTitle.actionsUsable).toBe(true);
+      expect(shortTitle.textFits).toBe(true);
+    }
+  }
+});
+
 test("touch-focused composer textareas keep content spacing without a selection ring", async ({
   page,
 }) => {

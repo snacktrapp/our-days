@@ -638,14 +638,21 @@ button:focus-visible,
   text-transform: uppercase;
 }
 .title-lockup h1 {
+  display: -webkit-box;
   margin: 0;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.025em;
+  line-clamp: 2;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  text-wrap: balance;
+  white-space: normal;
 }
 .title-switcher {
   overflow: visible;
@@ -659,7 +666,10 @@ button:focus-visible,
   align-self: center;
   z-index: 1;
   width: max-content;
-  max-width: calc(100% - 88px);
+  /* Journal switcher and static Account/Memories titles share this cap.
+     Leave equal room for the 88px trailing actions, the hanging chevron
+     when present, and a few pixels of air so the heart glyph stays clear. */
+  max-width: calc(100% - 192px);
   pointer-events: none;
 }
 .title-switcher > summary {
@@ -680,12 +690,15 @@ button:focus-visible,
 .title-switcher-heading {
   position: relative;
   min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .title-switcher-heading h1 {
   min-width: 0;
+  max-width: 100%;
+  width: fit-content;
 }
 .title-switcher-heading svg {
   width: 14px;
@@ -703,6 +716,14 @@ button:focus-visible,
 }
 .title-switcher[open] .title-switcher-heading svg {
   transform: rotate(180deg);
+}
+.title-switcher-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: auto;
+  background: transparent;
+  touch-action: none;
 }
 .title-switcher nav {
   position: absolute;
@@ -5204,8 +5225,9 @@ span.moment-place-line {
 }
 
 .title-lockup h1 {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 670;
+  line-height: 1.2;
 }
 
 .quiet-button,

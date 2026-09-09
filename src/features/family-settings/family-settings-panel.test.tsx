@@ -1244,6 +1244,57 @@ describe("FamilySettingsPanel", () => {
       ok: true,
       message: "Circle renamed.",
     });
+    const actions = {
+      revokeMembership: vi.fn(),
+      withdrawInvitation: vi.fn(),
+      setMembershipRole: vi.fn(),
+      setGuardian: vi.fn(),
+    };
+    const { rerender } = render(
+      <FamilySettingsPanel
+        model={connectedOrganizerModel}
+        renameCircleAction={renameCircleAction}
+        actions={actions}
+      />,
+    );
+
+    await openFamilyCircle(user);
+    expect(screen.getByRole("region", { name: "Rename circle" })).toBeVisible();
+    const field = screen.getByLabelText("Circle name");
+    await user.clear(field);
+    await user.type(field, "Home");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+    await waitFor(() => {
+      expect(renameCircleAction).toHaveBeenCalled();
+    });
+    const formData = renameCircleAction.mock.calls[0]?.[0] as FormData;
+    expect(formData.get("name")).toBe("Home");
+    expect(formData.get("circleId")).toBe("family");
+    expect(refresh).toHaveBeenCalledOnce();
+
+    rerender(
+      <FamilySettingsPanel
+        model={{
+          ...connectedOrganizerModel,
+          groups: [{ ...connectedOrganizerModel.groups[0], name: "Home" }],
+        }}
+        renameCircleAction={renameCircleAction}
+        actions={actions}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Home/u })).toBeVisible();
+    expect(screen.getByLabelText("Circle name")).toHaveValue("Home");
+    expect(
+      screen.queryByRole("button", { name: /All our days/u }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not refresh Account after a failed circle rename", async () => {
+    const user = userEvent.setup();
+    const renameCircleAction = vi.fn().mockResolvedValue({
+      ok: false,
+      message: "That circle could not be renamed.",
+    });
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
@@ -1258,17 +1309,17 @@ describe("FamilySettingsPanel", () => {
     );
 
     await openFamilyCircle(user);
-    expect(screen.getByRole("region", { name: "Rename circle" })).toBeVisible();
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
-    await user.type(field, "Trapp Family");
+    await user.type(field, "Home");
     await user.click(screen.getByRole("button", { name: "Save name" }));
     await waitFor(() => {
-      expect(renameCircleAction).toHaveBeenCalled();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "That circle could not be renamed.",
+      );
     });
-    const formData = renameCircleAction.mock.calls[0]?.[0] as FormData;
-    expect(formData.get("name")).toBe("Trapp Family");
-    expect(formData.get("circleId")).toBe("family");
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /All our days/u })).toBeVisible();
   });
 
   it("hides rename when the viewer did not start the circle", () => {

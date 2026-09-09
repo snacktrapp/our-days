@@ -9,6 +9,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { useRouter } from "next/navigation";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
@@ -293,6 +294,7 @@ function RenameCircleForm({
   disabled?: boolean;
   onResult?: (result: RenameCircleActionResult) => void;
 }) {
+  const router = useRouter();
   const [name, setName] = useState(circle.name);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -313,6 +315,7 @@ function RenameCircleForm({
             }
             setError("");
             onResult?.(result);
+            router.refresh();
           });
         }}
       >
@@ -615,7 +618,7 @@ function PreviewFamilySettingsPanel({
         renderOpenCircle={(circle) => (
           <>
             <RenameCircleForm
-              key={circle.id}
+              key={`${circle.id}:${circle.name}`}
               circle={circle}
               renameCircleAction={renameCircleAction}
             />
@@ -1153,7 +1156,7 @@ function ConnectedFamilySettingsPanel({
         renderOpenCircle={(circle) => (
           <>
             <RenameCircleForm
-              key={circle.id}
+              key={`${circle.id}:${circle.name}`}
               circle={circle}
               renameCircleAction={renameCircleAction}
               disabled={isPending}
