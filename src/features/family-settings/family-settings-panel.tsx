@@ -297,7 +297,7 @@ function CreateGroupCard({
 
   return (
     <section
-      className="settings-section groups-section groups-create-section"
+      className="settings-section circles-create-section"
       aria-labelledby="create-group-heading"
     >
       <div className="settings-heading">
@@ -398,7 +398,7 @@ function CirclesAccordion({
 }) {
   return (
     <section
-      className="settings-section groups-section"
+      className="settings-section circles-section"
       aria-labelledby="your-groups-heading"
     >
       <div className="settings-heading">

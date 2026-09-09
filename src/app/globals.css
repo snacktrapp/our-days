@@ -2630,7 +2630,7 @@ span.moment-place-line {
 .access-review > button,
 .invite-review button,
 .invite-section form > button,
-.groups-section form > button {
+.circles-create-section form > button {
   min-height: 46px;
   border-radius: 14px;
   cursor: pointer;
@@ -2787,10 +2787,11 @@ span.moment-place-line {
   font-weight: 700;
 }
 .invite-section,
-.groups-section {
+.circles-section,
+.circles-create-section {
   scroll-margin-top: 16px;
 }
-.groups-create-section .settings-heading h2 {
+.circles-create-section .settings-heading h2 {
   font: var(--chrome-title);
 }
 .wider-circle-form {
@@ -2807,6 +2808,9 @@ span.moment-place-line {
   font: var(--chrome-meta);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+:root:not([data-theme="light"]) .wider-circle-step legend {
+  color: var(--muted);
 }
 .wider-circle-form select {
   width: 100%;
@@ -2867,12 +2871,12 @@ span.moment-place-line {
   margin-bottom: 6px;
 }
 .invite-section form,
-.groups-section form {
+.circles-create-section form {
   padding: 0 16px 17px;
   display: grid;
 }
 .invite-section form label,
-.groups-section form label {
+.circles-create-section form label {
   margin-bottom: 6px;
   color: #60574e;
   font: var(--chrome-meta);
@@ -2880,7 +2884,7 @@ span.moment-place-line {
   text-transform: uppercase;
 }
 .invite-section form input,
-.groups-section form input {
+.circles-create-section form input {
   width: 100%;
   min-height: 48px;
   padding: 12px 13px;
@@ -2892,25 +2896,25 @@ span.moment-place-line {
   font-size: 16px;
 }
 .invite-section form input:focus,
-.groups-section form input:focus {
+.circles-create-section form input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(46, 111, 105, 0.12);
 }
 .invite-section form > p,
-.groups-section form > p {
+.circles-create-section form > p {
   min-height: 32px;
   margin: 6px 1px 7px;
   color: var(--muted);
   font: var(--chrome-body);
 }
 .invite-section form > .field-error,
-.groups-section form > .field-error {
+.circles-create-section form > .field-error {
   color: #844740;
   font-weight: 700;
 }
 .invite-section form > button,
 .invite-section .first-members-prompt > button,
-.groups-section form > button {
+.circles-create-section form > button {
   border: 0;
   background: var(--ink);
   color: #fffaf0;
@@ -6699,7 +6703,7 @@ html[data-theme].overlay-open .app-shell::before,
 
 :root[data-theme="light"] .invite-section form > button,
 :root[data-theme="light"] .invite-section .first-members-prompt > button,
-:root[data-theme="light"] .groups-section form > button {
+:root[data-theme="light"] .circles-create-section form > button {
   border-color: #b8893f;
   background: #b8893f;
 }
@@ -6743,7 +6747,7 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .guardian-options li,
 :root[data-theme="light"] .settings-delivery-boundary,
 :root[data-theme="light"] .invite-section form input,
-:root[data-theme="light"] .groups-section form input,
+:root[data-theme="light"] .circles-create-section form input,
 :root[data-theme="light"] .access-review > button,
 :root[data-theme="light"] .invite-review button,
 :root[data-theme="light"] .settings-review-actions button,
@@ -7079,8 +7083,8 @@ html[data-theme].overlay-open .app-shell::before,
 .invite-section form label,
 .invite-section form > p,
 .invite-section form > small,
-.groups-section form label,
-.groups-section form > p,
+.circles-create-section form label,
+.circles-create-section form > p,
 .invite-review-email,
 .invitation-status,
 .pending-invitation-list small,
@@ -7106,7 +7110,7 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .invite-section form input,
-.groups-section form input {
+.circles-create-section form input {
   border-color: var(--hairline);
   border-radius: 7px;
   background: #13211b;
@@ -7127,7 +7131,7 @@ html[data-theme].overlay-open .app-shell::before,
 
 .invite-section form > button,
 .invite-section .first-members-prompt > button,
-.groups-section form > button {
+.circles-create-section form > button {
   border: 1px solid color-mix(in srgb, var(--ochre) 72%, transparent);
   border-radius: 7px;
   background: var(--ochre);
@@ -7149,7 +7153,7 @@ html[data-theme].overlay-open .app-shell::before,
 
 :root[data-theme="light"] .invite-section form > button,
 :root[data-theme="light"] .invite-section .first-members-prompt > button,
-:root[data-theme="light"] .groups-section form > button {
+:root[data-theme="light"] .circles-create-section form > button {
   border-color: #b8893f;
   background: #b8893f;
   color: #101711;

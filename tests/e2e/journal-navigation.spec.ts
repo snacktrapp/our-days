@@ -423,7 +423,7 @@ test("members can create a wider circle from Account and filter Home without cos
     page.getByRole("heading", { name: "Your circles" }),
   ).toBeVisible();
   await expect(
-    page.locator(".groups-section").getByText("All our days"),
+    page.locator(".circles-section").getByText("All our days", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Make a wider circle" }),
