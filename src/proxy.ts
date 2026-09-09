@@ -67,6 +67,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!(?:apple-touch-icon\\.png|icon-192\\.png|icon-512\\.png|icon-1024\\.png|og\\.png|sample-family\\.jpg|sw\\.js)$).*)",
+    "/((?!(?:apple-touch-icon\\.png|icon-192\\.png|icon-512\\.png|icon-1024\\.png|og\\.png|quiet-rings\\.jpg|sample-family\\.jpg|sw\\.js)$).*)",
   ],
 };

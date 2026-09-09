@@ -208,8 +208,12 @@ describe("FamilySettingsPanel", () => {
     expect(screen.getAllByText("All our days").length).toBeGreaterThan(0);
     expect(screen.getByText("3 people")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Bigger than All our days" }),
+      screen.getByRole("heading", { name: "Include more people" }),
     ).toBeVisible();
+    expect(document.querySelector(".circles-create-rings")).toHaveAttribute(
+      "src",
+      "/quiet-rings.jpg",
+    );
     expect(
       screen.getByText(
         "Everyone in All our days, plus a few more people you invite next.",

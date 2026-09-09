@@ -306,7 +306,16 @@ function CreateGroupCard({
       aria-labelledby="create-group-heading"
     >
       <div className="settings-heading">
-        <h2 id="create-group-heading">Bigger than {sourceName}</h2>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className="circles-create-rings"
+          src="/quiet-rings.jpg"
+          alt=""
+          width={1280}
+          height={720}
+          aria-hidden="true"
+        />
+        <h2 id="create-group-heading">Include more people</h2>
         <p>Everyone in {sourceName}, plus a few more people you invite next.</p>
       </div>
       <form
