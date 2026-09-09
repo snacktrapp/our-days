@@ -25,8 +25,8 @@ function NavIcon({ name }: { name: "family" | "add" | "account" }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3.5 10.5 12 3.75l8.5 6.75" />
-        <path d="M5.75 9.25v10h12.5v-10M9.5 19.25v-5.5h5v5.5" />
+        <rect x="7" y="3.4" width="10" height="8" rx="2.4" />
+        <rect x="7" y="12.6" width="10" height="8" rx="2.4" />
       </svg>
     );
   }
@@ -121,7 +121,7 @@ export function PrimaryNavigation({
         prefetch={false}
       >
         <NavSymbol name="family" />
-        <span>Home</span>
+        <span>Journal</span>
       </Link>
       <button
         ref={addMomentRef}

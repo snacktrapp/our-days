@@ -13,7 +13,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Home", exact: true }),
+      .getByRole("link", { name: "Journal", exact: true }),
   ).toBeVisible();
   await page.locator(".title-switcher summary").click();
   await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
@@ -55,7 +55,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
   await page
     .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Home", exact: true })
+    .getByRole("link", { name: "Journal", exact: true })
     .click();
   await expect(page).toHaveURL(/\/family$/);
   await expect(
@@ -444,7 +444,7 @@ test("members can create a wider circle from Account and filter Home without cos
     page.getByRole("heading", { name: "Invite into Cousins" }),
   ).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
-  await page.getByRole("link", { name: "Home" }).click();
+  await page.getByRole("link", { name: "Journal" }).click();
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
   await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
   await page.locator(".title-switcher summary").click();
