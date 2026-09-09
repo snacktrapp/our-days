@@ -666,8 +666,9 @@ button:focus-visible,
   align-self: center;
   z-index: 1;
   width: max-content;
-  /* 44px add + 88px activity/theme; keep the chevron inside this box. */
-  max-width: calc(100% - 44px - 88px);
+  /* Centered title: leave equal room for the 88px trailing actions, the
+     hanging chevron, and a few pixels of air so the heart glyph stays clear. */
+  max-width: calc(100% - 192px);
   pointer-events: none;
 }
 .title-switcher > summary {
@@ -692,20 +693,18 @@ button:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Equal inset so the title stays optically centered while the
-     chevron sits in the trailing slot instead of overlapping actions. */
-  padding-inline: 18px;
 }
 .title-switcher-heading h1 {
   min-width: 0;
   max-width: 100%;
+  width: fit-content;
 }
 .title-switcher-heading svg {
   width: 14px;
   height: 14px;
   position: absolute;
   top: 50%;
-  right: 0;
+  left: calc(100% + 4px);
   margin-top: -7px;
   fill: none;
   stroke: currentColor;

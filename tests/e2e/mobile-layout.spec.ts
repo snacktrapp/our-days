@@ -668,12 +668,26 @@ test("long journal titles wrap at phone width without crowding header actions", 
 
   async function measureTitle(name: string) {
     return page.evaluate((titleText) => {
+      const bar = document.querySelector(".topbar");
       const title = document.querySelector(".title-switcher-heading h1");
       const chevron = document.querySelector(".title-switcher-heading svg");
       const add = document.querySelector(".header-add-moment");
       const activity = document.querySelector(".notification-trigger");
       const theme = document.querySelector(".theme-toggle");
-      if (!title || !chevron || !add || !activity || !theme) {
+      const addIcon = add?.querySelector("svg");
+      const heartIcon = activity?.querySelector("svg");
+      const themeIcon = theme?.querySelector("svg");
+      if (
+        !bar ||
+        !title ||
+        !chevron ||
+        !add ||
+        !activity ||
+        !theme ||
+        !addIcon ||
+        !heartIcon ||
+        !themeIcon
+      ) {
         throw new Error("Journal header chrome is missing");
       }
       title.textContent = titleText;
@@ -683,6 +697,7 @@ test("long journal titles wrap at phone width without crowding header actions", 
       const lineRects = [...range.getClientRects()].filter(
         (rect) => rect.width > 0 && rect.height > 0,
       );
+      const barRect = bar.getBoundingClientRect();
       const titleRect = title.getBoundingClientRect();
       const chevronRect = chevron.getBoundingClientRect();
       const addRect = add.getBoundingClientRect();
@@ -699,13 +714,24 @@ test("long journal titles wrap at phone width without crowding header actions", 
         overflowWrap: style.overflowWrap,
         textFits: title.scrollHeight <= title.clientHeight + 1,
         whiteSpace: style.whiteSpace,
+        insideBar:
+          titleRect.left >= barRect.left - 1 &&
+          titleRect.right <= barRect.right + 1 &&
+          chevronRect.right <= barRect.right + 1,
+        actionsUsable:
+          addRect.width >= 44 &&
+          addRect.height >= 44 &&
+          activityRect.width >= 44 &&
+          activityRect.height >= 44 &&
+          themeRect.width >= 44 &&
+          themeRect.height >= 44,
         cramped:
-          overlaps(titleRect, addRect) ||
-          overlaps(titleRect, activityRect) ||
-          overlaps(titleRect, themeRect) ||
-          overlaps(chevronRect, addRect) ||
-          overlaps(chevronRect, activityRect) ||
-          overlaps(chevronRect, themeRect),
+          overlaps(titleRect, addIcon.getBoundingClientRect()) ||
+          overlaps(titleRect, heartIcon.getBoundingClientRect()) ||
+          overlaps(titleRect, themeIcon.getBoundingClientRect()) ||
+          overlaps(chevronRect, addIcon.getBoundingClientRect()) ||
+          overlaps(chevronRect, heartIcon.getBoundingClientRect()) ||
+          overlaps(chevronRect, themeIcon.getBoundingClientRect()),
       };
     }, name);
   }
@@ -726,11 +752,15 @@ test("long journal titles wrap at phone width without crowding header actions", 
     expect(longTitle.lineCount).toBeGreaterThan(1);
     expect(longTitle.lineCount).toBeLessThanOrEqual(2);
     expect(longTitle.textFits).toBe(true);
+    expect(longTitle.insideBar).toBe(true);
+    expect(longTitle.actionsUsable).toBe(true);
     expect(longTitle.cramped).toBe(false);
 
     const shortTitle = await measureTitle("All our days");
     expect(shortTitle.lineCount).toBe(1);
     expect(shortTitle.cramped).toBe(false);
+    expect(shortTitle.insideBar).toBe(true);
+    expect(shortTitle.actionsUsable).toBe(true);
     expect(shortTitle.textFits).toBe(true);
   }
 });
