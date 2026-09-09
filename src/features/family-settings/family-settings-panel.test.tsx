@@ -104,6 +104,7 @@ const model = {
       memberCount: previewMembers.length,
       currentMemberId: "current",
       canManageAccess: true,
+      canRename: true,
       members: previewMembers,
       guardianOptions: [],
       pendingInvitations: [],
@@ -124,6 +125,7 @@ const connectedOrganizerModel = {
       memberCount: connectedMembers.length,
       currentMemberId: "current",
       canManageAccess: true,
+      canRename: true,
       members: connectedMembers,
       guardianOptions,
       pendingInvitations,
@@ -136,13 +138,15 @@ const connectedInvitationModel = {
   invitationDelivery: "enabled" as const,
 };
 
+const familyGroup = connectedOrganizerModel.groups[0];
 const connectedMemberModel = {
   ...connectedOrganizerModel,
   canManageAccess: false,
   groups: [
     {
-      ...connectedOrganizerModel.groups[0],
+      ...familyGroup,
       canManageAccess: false,
+      canRename: false,
       members: connectedMembers.map((member) => ({
         ...member,
         canManageRole: false,
@@ -320,6 +324,7 @@ describe("FamilySettingsPanel", () => {
           memberCount: 1,
           currentMemberId: "current",
           canManageAccess: true,
+          canRename: true,
           members: [previewMembers[0]],
           guardianOptions: [],
           pendingInvitations: [],
@@ -409,6 +414,7 @@ describe("FamilySettingsPanel", () => {
           memberCount: 1,
           currentMemberId: "current",
           canManageAccess: true,
+          canRename: false,
           members: [previewMembers[0]],
           guardianOptions: [],
           pendingInvitations: [],
@@ -1230,5 +1236,59 @@ describe("FamilySettingsPanel", () => {
 
     screen.getByRole("button", { name: "Try again" }).click();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("lets the circle starter rename from Account", async () => {
+    const user = userEvent.setup();
+    const renameCircleAction = vi.fn().mockResolvedValue({
+      ok: true,
+      message: "Circle renamed.",
+    });
+    render(
+      <FamilySettingsPanel
+        model={connectedOrganizerModel}
+        renameCircleAction={renameCircleAction}
+        actions={{
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    await openFamilyCircle(user);
+    expect(
+      screen.getByRole("heading", { name: "Rename circle" }),
+    ).toBeVisible();
+    const field = screen.getByLabelText("Circle name");
+    await user.clear(field);
+    await user.type(field, "Trapp Family");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+    await waitFor(() => {
+      expect(renameCircleAction).toHaveBeenCalled();
+    });
+    const formData = renameCircleAction.mock.calls[0]?.[0] as FormData;
+    expect(formData.get("name")).toBe("Trapp Family");
+    expect(formData.get("circleId")).toBe("family");
+  });
+
+  it("hides rename when the viewer did not start the circle", () => {
+    render(
+      <FamilySettingsPanel
+        model={connectedMemberModel}
+        inviteCircleId="family"
+        renameCircleAction={vi.fn()}
+        actions={{
+          revokeMembership: vi.fn(),
+          withdrawInvitation: vi.fn(),
+          setMembershipRole: vi.fn(),
+          setGuardian: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Rename circle" })).toBeNull();
+    expect(screen.queryByLabelText("Circle name")).toBeNull();
   });
 });

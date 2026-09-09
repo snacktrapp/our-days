@@ -55,7 +55,11 @@ const context: ConnectedJournalContext = {
   },
   people: [],
   groups: [
-    { id: organizerAccess.circleId, name: "Cedar Circle" },
+    {
+      id: organizerAccess.circleId,
+      name: "Cedar Circle",
+      createdByMembershipId: organizerAccess.membershipId,
+    },
     { id: "20000000-0000-4000-8000-000000000099", name: "Cousins" },
   ],
 };
@@ -301,6 +305,8 @@ describe("connected family settings data", () => {
         role: "member",
       }),
     ]);
+    expect(model.panel.groups[0]?.canRename).toBe(true);
+    expect(model.panel.groups[1]?.canRename).toBe(false);
   });
 
   it("builds a read-only member model", () => {
@@ -337,6 +343,7 @@ describe("connected family settings data", () => {
       ),
     ).toBe(true);
     expect(model.panel.groups[0]?.guardianOptions).toEqual([]);
+    expect(model.panel.groups[0]?.canRename).toBe(false);
   });
 
   it("keeps Operations visible on Account without journal-role controls", () => {

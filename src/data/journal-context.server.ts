@@ -155,7 +155,11 @@ export type ConnectedJournalContext = Readonly<{
   today: string;
   chrome: JournalChromeViewModel;
   people: readonly PersonSummaryViewModel[];
-  groups?: readonly Readonly<{ id: string; name: string }>[];
+  groups?: readonly Readonly<{
+    id: string;
+    name: string;
+    createdByMembershipId?: string;
+  }>[];
 }>;
 
 export type JournalPersonOption = Readonly<{
@@ -375,11 +379,27 @@ export async function loadConnectedJournalContext(
   const groupIds = rosterCircleIds;
   const groupsResult =
     groupIds.length === 0
-      ? { data: [] as { id: string; name: string }[], error: null }
-      : await supabase.from("circles").select("id, name").in("id", groupIds);
+      ? {
+          data: [] as {
+            id: string;
+            name: string;
+            created_by_membership_id?: string;
+          }[],
+          error: null,
+        }
+      : await supabase
+          .from("circles")
+          .select("id, name, created_by_membership_id")
+          .in("id", groupIds);
   if (groupsResult.error) throw groupsResult.error;
   const groupNameById = new Map(
     (groupsResult.data ?? []).map((circle) => [circle.id, circle.name]),
+  );
+  const createdByById = new Map(
+    (groupsResult.data ?? []).map((circle) => [
+      circle.id,
+      circle.created_by_membership_id,
+    ]),
   );
   const groups = (
     circleMemberships.length > 0
@@ -392,6 +412,7 @@ export async function loadConnectedJournalContext(
       (membership.circleId === access.circleId
         ? circleResult.data.name
         : "Circle"),
+    createdByMembershipId: createdByById.get(membership.circleId),
   }));
 
   const allPeople = peopleResult.data ?? [];

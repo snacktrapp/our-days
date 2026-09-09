@@ -204,14 +204,22 @@ function momentToTimelineRow(
   } as TimelineRow;
 }
 
-function localGroups(
-  document: LocalJournalDocument,
-): readonly { id: string; name: string }[] {
+function localGroups(document: LocalJournalDocument): readonly {
+  id: string;
+  name: string;
+  createdByMembershipId: string;
+}[] {
   return [
-    { id: document.circle.id, name: document.circle.name },
+    {
+      id: document.circle.id,
+      name: document.circle.name,
+      createdByMembershipId:
+        document.accounts[0]?.membershipId ?? document.memberships[0]?.id ?? "",
+    },
     ...(document.extraCircles ?? []).map((circle) => ({
       id: circle.id,
       name: circle.name,
+      createdByMembershipId: circle.membershipId,
     })),
   ];
 }
@@ -561,17 +569,41 @@ export async function loadLocalPeopleDirectory(
   });
 }
 
+function localViewerPersonIds(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>([access.personId]);
+  const homePersonId = localHomePersonId(document, access);
+  if (homePersonId) ids.add(homePersonId);
+  for (const extra of document.extraCircles ?? []) {
+    ids.add(extra.personId);
+  }
+  return ids;
+}
+
 function visibleMoments(
   document: Awaited<ReturnType<typeof readLocalJournal>>,
   access: LocalAccess,
   journalPersonId?: string,
 ) {
+  const viewingOwnJournal = Boolean(
+    journalPersonId && journalPersonId === access.personId,
+  );
+  const ownPersonIds = viewingOwnJournal
+    ? localViewerPersonIds(document, access)
+    : null;
   return document.moments
     .filter((moment) => {
       if (moment.trashedAt !== null) return false;
       if (!journalPersonId) {
         return momentLinkedCircleIds(moment, document.circle.id).includes(
           access.circleId,
+        );
+      }
+      if (viewingOwnJournal && ownPersonIds) {
+        return Boolean(
+          moment.journalPersonId && ownPersonIds.has(moment.journalPersonId),
         );
       }
       if (momentCircleId(moment, document.circle.id) !== access.circleId) {

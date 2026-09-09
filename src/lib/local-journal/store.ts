@@ -250,6 +250,59 @@ export async function createLocalCircle(
   });
 }
 
+export async function renameLocalCircle(
+  access: LocalAccess,
+  circleId: string,
+  name: string,
+) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 80) {
+    throw new Error("A circle name is required.");
+  }
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const homeStarterMembershipId =
+      document.accounts[0]?.membershipId ?? document.memberships[0]?.id;
+    const homeStarterPersonId =
+      document.accounts[0]?.personId ?? document.memberships[0]?.personId;
+    const actorStartedHome =
+      access.membershipId === homeStarterMembershipId ||
+      access.personId === homeStarterPersonId ||
+      (document.extraCircles ?? []).some(
+        (circle) => circle.membershipId === access.membershipId,
+      );
+    if (circleId === document.circle.id) {
+      if (!actorStartedHome || !hasOrganizerPrivilege(access.role)) {
+        throw new Error("That circle could not be renamed.");
+      }
+      writeDocumentUnlocked({
+        ...document,
+        circle: { ...document.circle, name: trimmed },
+      });
+      return { circleId };
+    }
+    const extra = (document.extraCircles ?? []).find(
+      (circle) => circle.id === circleId,
+    );
+    const actorStartedExtra =
+      extra &&
+      (access.membershipId === extra.membershipId ||
+        access.membershipId === homeStarterMembershipId ||
+        access.personId === homeStarterPersonId);
+    if (!extra || !actorStartedExtra) {
+      throw new Error("That circle could not be renamed.");
+    }
+    writeDocumentUnlocked({
+      ...document,
+      extraCircles: (document.extraCircles ?? []).map((circle) =>
+        circle.id === circleId ? { ...circle, name: trimmed } : circle,
+      ),
+    });
+    return { circleId };
+  });
+}
+
 export async function findLocalAccount(email: string) {
   const document = await readLocalJournal();
   return (

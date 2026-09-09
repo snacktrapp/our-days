@@ -39,6 +39,7 @@ export type FamilyCircleViewModel = Readonly<{
   memberCount: number;
   currentMemberId: string;
   canManageAccess: boolean;
+  canRename: boolean;
   members: readonly FamilyAccessMemberViewModel[];
   guardianOptions: readonly GuardianOptionViewModel[];
   pendingInvitations: readonly PendingFamilyInvitationViewModel[];

@@ -2633,6 +2633,10 @@ span.moment-place-line {
 .circle-invite-section {
   scroll-margin-top: 16px;
 }
+.circle-rename-section {
+  border-bottom: 1px solid var(--hairline);
+}
+.circle-rename-section .settings-heading h3,
 .circle-invite-section .settings-heading h3,
 .circle-access-heading h3 {
   margin: 5px 0 7px;

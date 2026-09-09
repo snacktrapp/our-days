@@ -26,6 +26,7 @@ import { invitationDeliveryIsEnabled } from "../../../../../config/our-days-envi
 import { AccountTools } from "@/features/family-settings/account-tools";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 import { createGroupAction } from "@/features/groups/create-group-action";
+import { renameCircleAction } from "@/features/groups/rename-circle-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { countFamilyFacingPeople } from "@/lib/circle-roles";
 
@@ -58,6 +59,7 @@ export default async function FamilySettingsPage({
         <FamilySettingsPanel
           model={model.panel}
           createGroupAction={createGroupAction}
+          renameCircleAction={renameCircleAction}
           inviteCircleId={inviteGroup?.id}
           inviteCircleName={inviteGroup?.name}
           defaultCircleId={model.panel.groups[0]?.id}
@@ -135,6 +137,7 @@ export default async function FamilySettingsPage({
       <FamilySettingsPanel
         model={model.panel}
         createGroupAction={createGroupAction}
+        renameCircleAction={renameCircleAction}
         inviteCircleId={inviteGroup?.id}
         inviteCircleName={inviteGroup?.name}
         defaultCircleId={access.circleId}

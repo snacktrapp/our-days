@@ -500,6 +500,11 @@ export function buildConnectedFamilySettingsModel(
         memberCounts.get(group.id) ?? countFamilyFacingMembers(members),
       currentMemberId: viewer?.personId ?? access.personId,
       canManageAccess,
+      canRename:
+        Boolean(viewer) &&
+        canManageAccess &&
+        Boolean(group.createdByMembershipId) &&
+        viewer?.membershipId === group.createdByMembershipId,
       members,
       guardianOptions: buildGuardianOptions(circleData, canManageAccess),
       pendingInvitations: buildPendingInvitations(

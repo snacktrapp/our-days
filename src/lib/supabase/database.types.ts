@@ -1372,6 +1372,10 @@ export type Database = {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
       };
+      update_circle: {
+        Args: { circle_id: string; circle_name: string };
+        Returns: string;
+      };
       update_family_moment: {
         Args: {
           expected_revision: number;
