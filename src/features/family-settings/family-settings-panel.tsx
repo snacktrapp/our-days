@@ -300,10 +300,6 @@ function RenameCircleForm({
   const [pending, startTransition] = useTransition();
   const nameId = `rename-circle-name-${circle.id}`;
 
-  useEffect(() => {
-    setName(circle.name);
-  }, [circle.name]);
-
   if (!circle.canRename || !renameCircleAction) return null;
 
   return (
@@ -622,7 +618,7 @@ function PreviewFamilySettingsPanel({
         renderOpenCircle={(circle) => (
           <>
             <RenameCircleForm
-              key={circle.id}
+              key={`${circle.id}:${circle.name}`}
               circle={circle}
               renameCircleAction={renameCircleAction}
             />
@@ -1160,7 +1156,7 @@ function ConnectedFamilySettingsPanel({
         renderOpenCircle={(circle) => (
           <>
             <RenameCircleForm
-              key={circle.id}
+              key={`${circle.id}:${circle.name}`}
               circle={circle}
               renameCircleAction={renameCircleAction}
               disabled={isPending}
