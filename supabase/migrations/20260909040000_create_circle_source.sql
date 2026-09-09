@@ -30,7 +30,7 @@ begin
     or char_length(normalized_name) not between 1 and 80 then
     raise exception using
       errcode = '22023',
-      message = 'Group could not be created';
+      message = 'Circle could not be created';
   end if;
 
   select membership.*
@@ -44,7 +44,7 @@ begin
   if source_membership.id is null then
     raise exception using
       errcode = '42501',
-      message = 'Group could not be created';
+      message = 'Circle could not be created';
   end if;
 
   select person.*
@@ -61,7 +61,7 @@ begin
   if source_person.id is null or source_time_zone is null then
     raise exception using
       errcode = '42501',
-      message = 'Group could not be created';
+      message = 'Circle could not be created';
   end if;
 
   insert into public.circles (

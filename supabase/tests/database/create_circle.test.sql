@@ -48,7 +48,7 @@ select is(
 select throws_ok(
   $$select public.create_circle('', '20000000-0000-4000-8000-000000000001')$$,
   '22023',
-  'Group could not be created',
+  'Circle could not be created',
   'a blank name is rejected'
 );
 
@@ -58,7 +58,7 @@ select throws_ok(
     '20000000-0000-4000-8000-000000000002'
   )$$,
   '42501',
-  'Group could not be created',
+  'Circle could not be created',
   'a Cedar member cannot start from Harbor'
 );
 
@@ -73,7 +73,7 @@ select throws_ok(
     '20000000-0000-4000-8000-000000000001'
   )$$,
   '42501',
-  'Group could not be created',
+  'Circle could not be created',
   'a person with no membership cannot create a circle'
 );
 
