@@ -193,4 +193,55 @@ describe("FamilyTitleSwitcher", () => {
       "Person",
     );
   });
+
+  it("does not let a row press click through to timeline media", () => {
+    const openPhoto = vi.fn();
+    render(
+      <>
+        <FamilyTitleSwitcher model={model} switcher={switcher} />
+        <button
+          type="button"
+          className="photo-viewer-trigger"
+          onClick={openPhoto}
+        >
+          Open photo
+        </button>
+      </>,
+    );
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    expect(document.querySelector(".title-switcher-scrim")).not.toBeNull();
+    fireEvent.pointerDown(screen.getByRole("link", { name: "Molly" }), {
+      button: 0,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Open photo" }));
+    expect(openPhoto).not.toHaveBeenCalled();
+    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
+  });
+
+  it("blocks timeline media while the switcher is open", () => {
+    const openPhoto = vi.fn();
+    render(
+      <>
+        <FamilyTitleSwitcher model={model} switcher={switcher} />
+        <button
+          type="button"
+          className="photo-viewer-trigger"
+          onClick={openPhoto}
+        >
+          Open photo
+        </button>
+      </>,
+    );
+    fireEvent.click(
+      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open photo" }));
+    expect(openPhoto).not.toHaveBeenCalled();
+    expect(document.querySelector(".title-switcher nav")).toHaveClass(
+      "is-closing",
+    );
+  });
 });

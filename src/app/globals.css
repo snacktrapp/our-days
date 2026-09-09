@@ -717,6 +717,14 @@ button:focus-visible,
 .title-switcher[open] .title-switcher-heading svg {
   transform: rotate(180deg);
 }
+.title-switcher-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: auto;
+  background: transparent;
+  touch-action: none;
+}
 .title-switcher nav {
   position: absolute;
   z-index: 110;

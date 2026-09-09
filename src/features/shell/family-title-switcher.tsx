@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
+import { createPortal } from "react-dom";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useOverlayPopoverClose } from "./use-overlay-popover-close";
 import {
@@ -82,6 +89,7 @@ function SwitcherLink({
 }>) {
   function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
     if (!isUnmodifiedPrimaryClick(event)) return;
+    event.preventDefault();
     onChoose(item);
   }
 
@@ -117,8 +125,29 @@ export function FamilyTitleSwitcher({
   const router = useRouter();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [chosenHref, setChosenHref] = useState<string | null>(null);
+  const [shield, setShield] = useState(false);
+  const shieldRef = useRef(false);
+  const shieldTimerRef = useRef<number | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
     useOverlayPopoverClose();
+  const clearShieldTimer = useCallback(() => {
+    if (shieldTimerRef.current == null) return;
+    window.clearTimeout(shieldTimerRef.current);
+    shieldTimerRef.current = null;
+  }, []);
+  const holdShield = useCallback(() => {
+    clearShieldTimer();
+    shieldRef.current = true;
+    setShield(true);
+  }, [clearShieldTimer]);
+  const releaseShieldSoon = useCallback(() => {
+    clearShieldTimer();
+    shieldTimerRef.current = window.setTimeout(() => {
+      shieldTimerRef.current = null;
+      shieldRef.current = false;
+      setShield(false);
+    }, 360);
+  }, [clearShieldTimer]);
   const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
   const currentHref = chosenHref ?? serverCurrentHref;
   const chosenItem = switcher.find((item) => item.href === currentHref);
@@ -151,6 +180,19 @@ export function FamilyTitleSwitcher({
     );
   }
 
+  useEffect(() => () => clearShieldTimer(), [clearShieldTimer]);
+
+  useEffect(() => {
+    const details = detailsRef.current;
+    if (!details) return;
+    const syncShield = () => {
+      if (details.open) holdShield();
+      else releaseShieldSoon();
+    };
+    details.addEventListener("toggle", syncShield);
+    return () => details.removeEventListener("toggle", syncShield);
+  }, [holdShield, releaseShieldSoon]);
+
   useEffect(() => {
     const closeIfOpen = () => {
       const details = detailsRef.current;
@@ -165,19 +207,50 @@ export function FamilyTitleSwitcher({
       event.preventDefault();
       closeIfOpen();
     };
-    const onPointer = (event: PointerEvent) => {
+    const isSwitcherChrome = (target: EventTarget | null) => {
       const details = detailsRef.current;
-      if (!details?.open) return;
-      if (event.target instanceof Node && details.contains(event.target)) {
+      if (target instanceof Node && details?.contains(target)) return true;
+      return (
+        target instanceof Element &&
+        Boolean(target.closest(".topbar, .bottom-nav"))
+      );
+    };
+    const blockFeed = (event: Event) => {
+      const details = detailsRef.current;
+      if (!details?.open && !shieldRef.current) return;
+      if (isSwitcherChrome(event.target)) {
+        if (
+          event.type === "pointerdown" &&
+          event.target instanceof Node &&
+          details?.open &&
+          !details.contains(event.target) &&
+          !closingRef.current
+        ) {
+          requestClose(() => {
+            details.open = false;
+          });
+        }
         return;
       }
-      closeIfOpen();
+      event.preventDefault();
+      event.stopPropagation();
+      if (
+        event.type === "pointerdown" &&
+        details?.open &&
+        !closingRef.current
+      ) {
+        requestClose(() => {
+          details.open = false;
+        });
+      }
     };
     window.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("pointerdown", blockFeed, true);
+    document.addEventListener("click", blockFeed, true);
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("pointerdown", blockFeed, true);
+      document.removeEventListener("click", blockFeed, true);
     };
   }, [closingRef, requestClose]);
 
@@ -186,14 +259,22 @@ export function FamilyTitleSwitcher({
       ref={detailsRef}
       className="title-switcher"
       onToggle={(event) => {
-        if ((event.currentTarget as HTMLDetailsElement).open) cancel();
+        if ((event.currentTarget as HTMLDetailsElement).open) {
+          cancel();
+          holdShield();
+          return;
+        }
+        releaseShieldSoon();
       }}
     >
       <summary
         className="title-lockup"
         onClick={(event) => {
           const details = detailsRef.current;
-          if (!details?.open) return;
+          if (!details?.open) {
+            holdShield();
+            return;
+          }
           event.preventDefault();
           if (closing) return;
           requestClose(() => {
@@ -218,6 +299,12 @@ export function FamilyTitleSwitcher({
           />
         ))}
       </nav>
+      {shield
+        ? createPortal(
+            <div className="title-switcher-scrim" aria-hidden="true" />,
+            document.body,
+          )
+        : null}
     </details>
   );
 }
