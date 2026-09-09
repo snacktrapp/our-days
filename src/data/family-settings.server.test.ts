@@ -254,7 +254,8 @@ describe("connected family settings data", () => {
       canManageAccess: true,
       invitationDelivery: "disabled",
       groups: (context.groups ?? []).map((group) => ({
-        ...group,
+        id: group.id,
+        name: group.name,
         memberCount: group.id === organizerAccess.circleId ? 3 : 0,
       })),
     });
