@@ -25,8 +25,8 @@ function NavIcon({ name }: { name: "family" | "add" | "account" }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="7" y="3.4" width="10" height="8" rx="2.4" />
-        <rect x="7" y="12.6" width="10" height="8" rx="2.4" />
+        <rect x="7" y="3.5" width="10" height="7.2" rx="2" />
+        <rect x="7" y="13.3" width="10" height="7.2" rx="2" />
       </svg>
     );
   }
