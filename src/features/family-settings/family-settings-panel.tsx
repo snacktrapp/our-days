@@ -297,19 +297,12 @@ function RenameCircleForm({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const nameId = `rename-circle-name-${circle.id}`;
-  const headingId = `rename-circle-heading-${circle.id}`;
 
   if (!circle.canRename || !renameCircleAction) return null;
 
   return (
-    <section className="circle-rename-section" aria-labelledby={headingId}>
-      <div className="settings-heading">
-        <span>Display name</span>
-        <h3 id={headingId}>Rename circle</h3>
-        <p>This name appears in the switcher and on Post to chips.</p>
-      </div>
+    <section className="circle-rename-section" aria-label="Rename circle">
       <form
-        className="wider-circle-form"
         action={(formData) => {
           startTransition(async () => {
             const result = await renameCircleAction(formData);

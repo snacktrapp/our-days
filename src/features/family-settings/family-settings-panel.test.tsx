@@ -1258,9 +1258,7 @@ describe("FamilySettingsPanel", () => {
     );
 
     await openFamilyCircle(user);
-    expect(
-      screen.getByRole("heading", { name: "Rename circle" }),
-    ).toBeVisible();
+    expect(screen.getByRole("region", { name: "Rename circle" })).toBeVisible();
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Trapp Family");
@@ -1288,7 +1286,7 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.queryByRole("heading", { name: "Rename circle" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Rename circle" })).toBeNull();
     expect(screen.queryByLabelText("Circle name")).toBeNull();
   });
 });
