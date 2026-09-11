@@ -7936,6 +7936,11 @@ html[data-theme].overlay-open .app-shell::before,
   font-size: 12px;
 }
 
+.private-video-unavailable-hint {
+  max-width: 18rem;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
 .private-video-unavailable button {
   min-height: 40px;
   padding: 0 14px;

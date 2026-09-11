@@ -103,6 +103,7 @@ describe("deliverActivityWebPush", () => {
           moment_id: "moment-1",
           moment_kind: "photo",
           reaction_type: null,
+          visible_circle_id: "circle-1",
         },
       ],
       error: null,
@@ -138,6 +139,7 @@ describe("deliverActivityWebPush", () => {
               moment_id: "moment-1",
               moment_kind: "photo",
               reaction_type: null,
+              visible_circle_id: "circle-home-gparents",
             },
           ],
           error: null,
@@ -164,7 +166,7 @@ describe("deliverActivityWebPush", () => {
       },
       {
         title: "Molly posted a photo.",
-        url: "/family#moment-moment-1",
+        url: "/family?circle=circle-home-gparents#moment-moment-1",
         tag: "our-days:moment:moment-1",
       },
     );

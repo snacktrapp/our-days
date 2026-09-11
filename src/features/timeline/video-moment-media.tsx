@@ -4,6 +4,7 @@ import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
 import {
   rememberVideoFrame,
+  rememberVideoPoster,
   useVideoFrame,
   useVideoPoster,
 } from "@/features/video/video-poster-store";
@@ -85,6 +86,10 @@ export function VideoMomentMedia({
             autoPlay
             width={width}
             height={height}
+            onReadyFrame={({ posterDataUrl, width: frameWidth, height: frameHeight }) => {
+              rememberVideoPoster(moment.id, posterDataUrl);
+              rememberVideoFrame(moment.id, frameWidth, frameHeight);
+            }}
           />
         }
       />

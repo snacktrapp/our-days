@@ -1099,6 +1099,7 @@ export type Database = {
           moment_kind: string;
           p256dh: string;
           reaction_type: string | null;
+          visible_circle_id: string;
         }[];
       };
       load_invitation_delivery_job: {

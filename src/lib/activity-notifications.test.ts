@@ -20,6 +20,9 @@ describe("family activity notification copy", () => {
       "Calvin commented on your entry.",
     );
     expect(activityMomentHref("abc")).toBe("/family#moment-abc");
+    expect(activityMomentHref("abc", "circle-home")).toBe(
+      "/family?circle=circle-home#moment-abc",
+    );
   });
 
   it("does not notify the actor, Insights, or Just Me posts", () => {
