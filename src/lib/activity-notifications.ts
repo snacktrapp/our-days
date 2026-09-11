@@ -48,10 +48,7 @@ export function activityNotificationTitle(actorName: string, message: string) {
   return `${actorName} ${message}`;
 }
 
-export function activityMomentHref(
-  momentId: string,
-  circleId?: string | null,
-) {
+export function activityMomentHref(momentId: string, circleId?: string | null) {
   if (circleId) {
     return `/family?circle=${encodeURIComponent(circleId)}#moment-${momentId}`;
   }

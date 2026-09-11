@@ -86,7 +86,11 @@ export function VideoMomentMedia({
             autoPlay
             width={width}
             height={height}
-            onReadyFrame={({ posterDataUrl, width: frameWidth, height: frameHeight }) => {
+            onReadyFrame={({
+              posterDataUrl,
+              width: frameWidth,
+              height: frameHeight,
+            }) => {
               rememberVideoPoster(moment.id, posterDataUrl);
               rememberVideoFrame(moment.id, frameWidth, frameHeight);
             }}
