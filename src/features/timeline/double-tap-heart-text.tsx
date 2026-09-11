@@ -10,10 +10,9 @@ export const DoubleTapHeartText = forwardRef<
     className?: string;
     children: ReactNode;
     onSingleTap?: () => void;
-    "aria-expanded"?: boolean;
   }>
 >(function DoubleTapHeartText(
-  { momentId, className, children, onSingleTap, "aria-expanded": ariaExpanded },
+  { momentId, className, children, onSingleTap },
   ref,
 ) {
   const onTap = usePairedTap({
@@ -25,7 +24,6 @@ export const DoubleTapHeartText = forwardRef<
     <blockquote
       ref={ref}
       className={className}
-      aria-expanded={ariaExpanded}
       onClick={(event) => onTap(event.detail)}
     >
       {children}

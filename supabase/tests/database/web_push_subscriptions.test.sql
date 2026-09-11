@@ -1,6 +1,6 @@
 begin;
 
-select plan(23);
+select plan(24);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -321,6 +321,29 @@ select is(
   ),
   'https://push.example.test/harbor-organizer,https://push.example.test/member-two',
   'a linked Harbor audience notifies Harbor and Cedar members and never the actor'
+);
+
+select ok(
+  (
+    select coalesce(bool_and(link_exists), false)
+      from (
+        select exists (
+          select 1
+            from public.moment_circles as link
+           where link.moment_id = delivery.moment_id
+             and link.circle_id = delivery.visible_circle_id
+        ) as link_exists
+          from public.list_web_push_deliveries(
+            'moment',
+            (
+              select id
+                from public.moments
+               where body = 'A porch thought for both circles.'
+            )
+          ) as delivery
+      ) as checked
+  ),
+  'each push deep-links to a circle where the moment is linked'
 );
 
 select ok(

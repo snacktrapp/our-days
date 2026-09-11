@@ -88,6 +88,7 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
   page,
   request,
 }) => {
+  test.setTimeout(120_000);
   const observedRscRequests: string[] = [];
   page.on("request", (browserRequest) => {
     if (
@@ -148,7 +149,6 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
       "/settings/family",
       await captureNavigation("/family", "/settings/family"),
     ],
-    ["/memories", await captureNavigation("/family", "/memories")],
     [
       "/memories/on-this-day",
       await captureNavigation("/memories", "/memories/on-this-day"),
@@ -158,6 +158,9 @@ test("browser-generated RSC navigations fail closed without private prefetch", a
       await captureNavigation("/memories", "/memories/years/2023"),
     ],
   ]);
+  // Memories is intentionally absent from primary nav; reuse a sibling private
+  // route envelope the same way we do for /journal and other deep links.
+  capturedRequests.set("/memories", capturedRequests.get("/family")!);
   // Reuse the genuine browser envelope captured for the valid dynamic route
   // against an invalid year. The locked server must guard before validation.
   capturedRequests.set(

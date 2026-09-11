@@ -166,11 +166,16 @@ export function FamilyTitleSwitcher({
     details.open = false;
   }
 
-  function chooseItem(item: FamilyTimelineSwitcherItem) {
+  async function chooseItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);
     dismissSwitcherImmediately();
-    if (item.kind === "group" && item.circleId) {
-      onSelectGroup?.(item.circleId);
+    if (item.kind === "group" && item.circleId && onSelectGroup) {
+      try {
+        await onSelectGroup(item.circleId);
+      } catch {
+        // Navigation still opens the circle via ?circle=; cookie write can
+        // catch up on the next request if this action fails.
+      }
     }
     router.push(item.href);
     window.dispatchEvent(

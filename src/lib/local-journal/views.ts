@@ -53,6 +53,19 @@ import {
 import type { LocalJournalDocument, LocalMoment, LocalPerson } from "./types";
 import type { MomentPhotoDescriptor } from "@/features/moments/moment-photos";
 
+function localVideoMeta(moment: LocalMoment) {
+  if (moment.kind !== "video" || !moment.media) return undefined;
+  return {
+    mimeType: moment.media.mimeType,
+    durationMs: moment.media.durationMs ?? 0,
+    poster: moment.media.posterRelativePath
+      ? `/api/media/videos/${moment.id}/poster`
+      : undefined,
+    width: moment.media.widthPx,
+    height: moment.media.heightPx,
+  };
+}
+
 function localMomentPhotoDescriptors(
   moment: LocalMoment,
 ): MomentPhotoDescriptor[] | undefined {
@@ -429,6 +442,10 @@ export async function loadLocalJournalContext(
     taggablePeopleByCircle: localTaggablePeopleByCircle(document, access),
     postableCircles: localPostableCircles(document, access),
   };
+  const viewerCircleIds = new Set([
+    document.circle.id,
+    ...(document.extraCircles ?? []).map((circle) => circle.id),
+  ]);
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: document.circle.name,
@@ -473,16 +490,23 @@ export async function loadLocalJournalContext(
             moment.kind !== "insight" &&
             moment.audience !== "just_me" &&
             moment.recordedByMembershipId !== access.membershipId &&
-            momentLinkedCircleIds(moment, document.circle.id).includes(
-              access.circleId,
+            momentLinkedCircleIds(moment, document.circle.id).some((circleId) =>
+              viewerCircleIds.has(circleId),
             ),
         )
-        .map((moment) => ({
-          id: moment.id,
-          author_membership_id: moment.recordedByMembershipId,
-          moment_kind: moment.kind,
-          created_at: moment.createdAt,
-        })),
+        .map((moment) => {
+          const linked = momentLinkedCircleIds(moment, document.circle.id);
+          const circleId =
+            linked.find((id) => id === access.circleId) ??
+            linked.find((id) => viewerCircleIds.has(id));
+          return {
+            id: moment.id,
+            author_membership_id: moment.recordedByMembershipId,
+            moment_kind: moment.kind,
+            created_at: moment.createdAt,
+            circle_id: circleId,
+          };
+        }),
       access.membershipId,
     ),
   };
@@ -651,6 +675,7 @@ export async function loadLocalTimeline(
       },
       localMomentPhotoDescriptors(moment),
       conversationFromLocalDocument(document, access, moment.id),
+      localVideoMeta(moment),
     ),
   );
   const personalJournalIsWritable = Boolean(

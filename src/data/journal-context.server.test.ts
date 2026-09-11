@@ -69,6 +69,35 @@ describe("family activity notifications", () => {
     ]);
   });
 
+  it("links family posts to the circle where they are visible", () => {
+    const notifications = buildActivityNotifications(
+      [],
+      [],
+      new Set(),
+      new Map([["calvin", "Calvin"]]),
+      [
+        {
+          id: "italy-video",
+          author_membership_id: "calvin",
+          moment_kind: "video",
+          created_at: "2026-09-11T18:00:00.000Z",
+          audience: "family",
+          circle_id: "home-gparents",
+        },
+      ],
+      "brian",
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        id: "moment:italy-video",
+        actorName: "Calvin",
+        message: "posted a video.",
+        href: "/family?circle=home-gparents#moment-italy-video",
+      }),
+    ]);
+  });
+
   it("notifies other members when someone posts a moment, but not the author", () => {
     const notifications = buildActivityNotifications(
       [],

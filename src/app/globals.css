@@ -255,12 +255,6 @@ button:focus-visible,
     outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
     outline-offset: 2px;
   }
-  .composer-sheet .people-tags label:has(input:focus-visible),
-  .audience-edit-dialog .people-tags label:has(input:focus-visible) {
-    outline: none;
-    border-color: var(--teal);
-    box-shadow: inset 0 0 0 1px var(--teal);
-  }
   .composer-sheet .composer-picker-trigger:focus-visible {
     border-color: var(--teal);
     outline: none;
@@ -1294,10 +1288,12 @@ button.audience-chip:focus-visible .audience-chip-face {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  flex: 0 0 var(--photo-card-slide-width, 100%);
-  width: var(--photo-card-slide-width, 100%);
-  min-width: var(--photo-card-slide-width, 100%);
-  max-width: var(--photo-card-slide-width, 100%);
+  /* Stage is width:100%; paired slides must each match that box without
+     inline --photo-card-slide-width (blocked by style-src-attr 'none'). */
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
   height: 100%;
 }
 .photo-card-pager-frame img {
@@ -1731,7 +1727,10 @@ span.moment-place-line {
   fill: var(--paper);
 }
 .moment-place-title {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -12px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -4359,8 +4358,12 @@ span.moment-place-line {
   border-color: color-mix(in srgb, var(--teal) 46%, var(--hairline));
   background: color-mix(in srgb, var(--teal) 7%, var(--cream));
 }
-.people-tags label:has(input:focus-visible) {
+.people-tags label:has(input:focus-visible),
+.composer-sheet .people-tags label:has(input:focus-visible),
+.audience-edit-dialog .people-tags label:has(input:focus-visible) {
   outline: none;
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
 }
 .people-tags label:has(input:disabled) {
   cursor: default;
@@ -4610,16 +4613,25 @@ span.moment-place-line {
   background: color-mix(in srgb, var(--ink) 18%, transparent);
   box-shadow: none;
 }
-.photo-status-chip-bar > span {
+.photo-status-chip-bar > span,
+.photo-status-chip-bar-fill {
   display: block;
   height: 100%;
-  width: 0;
+  width: 100%;
   border: 0;
   border-radius: inherit;
+  background: transparent;
+}
+.photo-status-chip-bar > span {
+  width: 0;
   background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
+}
+.photo-status-chip-bar-fill rect {
+  fill: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
 }
 .photo-status-chip-indeterminate > span {
   width: 36%;
+  background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
 }
 .photo-status-confirmation {
   margin: 0;
@@ -7500,13 +7512,23 @@ html[data-theme].overlay-open .app-shell::before,
 .media-viewer-trigger > img,
 .media-viewer-trigger > video,
 .media-viewer-trigger > .video-card-poster,
-.media-viewer-trigger > .video-card-mat,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
   width: 100%;
   height: auto;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* Keep empty video mats at 16/9. `aspect-ratio: auto` here used to
+   collapse posterless clips to zero height on the timeline. */
+.media-viewer-trigger > .video-card-mat {
+  width: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: 16 / 9;
   object-fit: contain;
   object-position: center;
 }
@@ -7532,9 +7554,28 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .video-card-mat {
-  min-height: 0;
+  min-height: 12rem;
   aspect-ratio: 16 / 9;
-  background: color-mix(in srgb, var(--cream) 28%, transparent);
+  display: grid;
+  place-items: end center;
+  padding-block-end: 1rem;
+  background: #0b1410;
+}
+
+.video-card-mat-label {
+  z-index: 1;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  color: #f4f7f5;
+  background: rgba(3, 8, 6, 0.55);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.video-card-mat.is-quicktime .video-card-mat-label {
+  border-color: rgba(255, 214, 160, 0.45);
+  color: #ffe7c2;
 }
 
 .photo-frame.has-known-ratio.has-reserved-frame .video-card-poster,
@@ -7544,12 +7585,21 @@ html[data-theme].overlay-open .app-shell::before,
   > .video-card-poster,
 .photo-frame.has-known-ratio.has-reserved-frame
   .media-viewer-trigger
+  > .video-card-mat,
+.photo-frame.has-default-video-ratio.has-reserved-frame .video-card-mat,
+.photo-frame.has-default-video-ratio.has-reserved-frame
+  .media-viewer-trigger
   > .video-card-mat {
   height: 100%;
   max-height: none;
   min-height: 0;
   aspect-ratio: auto;
   object-fit: contain;
+}
+
+/* Posterless clips with no stored frame still need a visible plane. */
+.photo-frame.has-default-video-ratio.has-reserved-frame .video-card-mat {
+  background: #0b1410;
 }
 
 .video-viewer-play {
@@ -7934,6 +7984,11 @@ html[data-theme].overlay-open .app-shell::before,
 .private-video-unavailable p {
   margin: 0;
   font-size: 12px;
+}
+
+.private-video-unavailable-hint {
+  max-width: 18rem;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
 }
 
 .private-video-unavailable button {

@@ -161,10 +161,7 @@ export function PhotoCardPager({
     if (!stage) return;
     const update = () => {
       const width = albumSlideWidth(stage);
-      if (width > 0) {
-        slideWidthRef.current = width;
-        stage.style.setProperty("--photo-card-slide-width", `${width}px`);
-      }
+      if (width > 0) slideWidthRef.current = width;
     };
     update();
     if (typeof ResizeObserver === "undefined") {

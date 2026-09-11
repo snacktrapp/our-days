@@ -96,6 +96,9 @@ export async function POST(request: Request) {
           ? audienceValue
           : undefined,
       circleIds,
+      posterDataUrl: readString(form, "posterDataUrl") || undefined,
+      widthPx: Number(readString(form, "posterWidth")) || undefined,
+      heightPx: Number(readString(form, "posterHeight")) || undefined,
     });
     return json(200, {
       momentId: moment.id,

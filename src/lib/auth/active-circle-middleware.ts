@@ -14,6 +14,9 @@ export function applyActiveCircleCookie(
   if (!circle || !isActiveCircleToken(circle)) return response;
   if (request.nextUrl.pathname !== "/family") return response;
 
+  // Set on the request too so this same pass of RSC/page code sees the
+  // newly chosen circle instead of the previous cookie value.
+  request.cookies.set(ACTIVE_CIRCLE_COOKIE, circle);
   response.cookies.set({
     name: ACTIVE_CIRCLE_COOKIE,
     value: circle,
@@ -26,6 +29,7 @@ export function applyActiveCircleCookie(
   const name = request.nextUrl.searchParams.get("name");
   const normalized = name ? normalizeGroupName(name) : null;
   if (normalized) {
+    request.cookies.set(PREVIEW_CREATED_GROUP_NAME_COOKIE, normalized);
     response.cookies.set({
       name: PREVIEW_CREATED_GROUP_NAME_COOKIE,
       value: normalized,

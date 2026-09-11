@@ -23,6 +23,9 @@ describe("PrivateVideoPlayer", () => {
     );
     fireEvent.error(screen.getByLabelText("Family video"));
     expect(screen.getByText("This video couldn’t be opened.")).toBeVisible();
+    expect(
+      screen.getByText("iPhone clips often need Safari, or an MP4 copy."),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(screen.getByLabelText("Family video")).toBeVisible();
   });

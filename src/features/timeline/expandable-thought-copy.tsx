@@ -48,7 +48,6 @@ export function ExpandableThoughtCopy({
         onSingleTap={
           overflows ? () => setExpanded((current) => !current) : undefined
         }
-        aria-expanded={overflows ? expanded : undefined}
       >
         {children}
       </DoubleTapHeartText>

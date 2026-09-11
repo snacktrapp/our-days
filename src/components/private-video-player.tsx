@@ -11,6 +11,7 @@ export function PrivateVideoPlayer({
   poster,
   width,
   height,
+  onReadyFrame,
 }: Readonly<{
   src: string;
   label: string;
@@ -20,6 +21,11 @@ export function PrivateVideoPlayer({
   poster?: string;
   width?: number;
   height?: number;
+  onReadyFrame?: (frame: {
+    posterDataUrl: string;
+    width: number;
+    height: number;
+  }) => void;
 }>) {
   const [unavailable, setUnavailable] = useState(false);
 
@@ -31,6 +37,9 @@ export function PrivateVideoPlayer({
         aria-label={label}
       >
         <p>This video couldn’t be opened.</p>
+        <p className="private-video-unavailable-hint">
+          iPhone clips often need Safari, or an MP4 copy.
+        </p>
         <button type="button" onClick={() => setUnavailable(false)}>
           Try again
         </button>
@@ -53,6 +62,28 @@ export function PrivateVideoPlayer({
       preload={preload}
       autoPlay={autoPlay}
       onError={() => setUnavailable(true)}
+      onLoadedData={(event) => {
+        if (!onReadyFrame) return;
+        const video = event.currentTarget;
+        if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        try {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const posterDataUrl = canvas.toDataURL("image/jpeg", 0.72);
+          if (!posterDataUrl.startsWith("data:image/jpeg")) return;
+          onReadyFrame({
+            posterDataUrl,
+            width: video.videoWidth,
+            height: video.videoHeight,
+          });
+        } catch {
+          // Cross-origin or decode failures leave the dark mat in place.
+        }
+      }}
     />
   );
 }

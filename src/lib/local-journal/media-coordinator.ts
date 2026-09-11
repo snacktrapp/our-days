@@ -238,6 +238,9 @@ export async function publishVerifiedVideoMoment(
     durationMs: number;
     audience?: "family" | "just_me";
     circleIds?: readonly string[];
+    posterDataUrl?: string;
+    widthPx?: number;
+    heightPx?: number;
   }>,
 ) {
   requireUuid(input.journalPersonId, "journal");
@@ -267,6 +270,12 @@ export async function publishVerifiedVideoMoment(
     mimeType,
     sha256Hex(bytes),
   );
+  const poster = await writeOptionalVideoPoster(
+    media.originalRelativePath,
+    input.posterDataUrl,
+    input.widthPx,
+    input.heightPx,
+  );
   return publishLocalMediaMoment(access, {
     kind: "video",
     journalPersonId: input.journalPersonId,
@@ -280,8 +289,33 @@ export async function publishVerifiedVideoMoment(
     occurredTimezone: input.occurredTimezone,
     audience: input.audience,
     circleIds: input.circleIds,
-    media: { ...media, durationMs: input.durationMs },
+    media: { ...media, durationMs: input.durationMs, ...poster },
   });
+}
+
+async function writeOptionalVideoPoster(
+  originalRelativePath: string,
+  posterDataUrl?: string,
+  widthPx?: number,
+  heightPx?: number,
+) {
+  if (!posterDataUrl?.startsWith("data:image/jpeg")) return {};
+  const comma = posterDataUrl.indexOf(",");
+  if (comma < 0) return {};
+  const bytes = Buffer.from(posterDataUrl.slice(comma + 1), "base64");
+  if (bytes.byteLength < 1 || bytes.byteLength > 2 * 1024 * 1024) return {};
+  const folder = originalRelativePath.split("/")[0];
+  if (!folder) return {};
+  const posterRelativePath = `${folder}/poster.jpg`;
+  writeFileSync(join(localJournalMediaDirectory(), posterRelativePath), bytes);
+  return {
+    posterRelativePath,
+    posterMimeType: "image/jpeg" as const,
+    posterSha256: sha256Hex(bytes),
+    posterByteLength: bytes.byteLength,
+    widthPx: widthPx && widthPx > 0 ? widthPx : undefined,
+    heightPx: heightPx && heightPx > 0 ? heightPx : undefined,
+  };
 }
 
 export function readLocalMediaFile(relativePath: string) {
