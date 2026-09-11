@@ -195,8 +195,14 @@ describe("connected private video upload", () => {
 });
 
 describe("local private video upload", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", "");
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -235,6 +241,8 @@ describe("hosted Vercel video upload", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("does not fall through to the local file journal on Vercel", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
     vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", "preview");
     const createClient = vi.fn();
     await expect(

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
 import {
@@ -8,6 +10,10 @@ import {
   useVideoFrame,
   useVideoPoster,
 } from "@/features/video/video-poster-store";
+import {
+  markVideoPosterPersisted,
+  persistVideoPoster,
+} from "@/features/video/persist-video-poster";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
 function VideoFrameSizer({
@@ -36,6 +42,11 @@ export function VideoMomentMedia({
   const poster = moment.video.poster ?? storedPoster ?? undefined;
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
+  useEffect(() => {
+    if (moment.video.poster?.startsWith("/api/media/videos/")) {
+      markVideoPosterPersisted(moment.id);
+    }
+  }, [moment.id, moment.video.poster]);
   const knownRatio = Boolean(
     (moment.video.width ?? storedFrame?.width) &&
     (moment.video.height ?? storedFrame?.height),
@@ -54,7 +65,7 @@ export function VideoMomentMedia({
         reactionTargetId={moment.id}
         preview={
           poster ? (
-            // Poster is a local data URL captured during prep; it must not
+            // Poster may be a private API URL or a local data URL; it must not
             // enter the public image optimizer.
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -105,6 +116,12 @@ export function VideoMomentMedia({
             }) => {
               rememberVideoPoster(moment.id, posterDataUrl);
               rememberVideoFrame(moment.id, frameWidth, frameHeight);
+              void persistVideoPoster({
+                momentId: moment.id,
+                posterDataUrl,
+                width: frameWidth,
+                height: frameHeight,
+              });
             }}
           />
         }

@@ -42,6 +42,12 @@ export type VideoUploadAttempt = {
   uploadUrl?: string;
 };
 
+export type VideoPosterUpload = Readonly<{
+  dataUrl: string;
+  width: number;
+  height: number;
+}>;
+
 export type VideoMomentDraft = Readonly<{
   body: string;
   circleId: string;
@@ -283,6 +289,7 @@ async function uploadLocalVideoMoment(
   attempt: VideoUploadAttempt,
   signal: AbortSignal,
   onStage: (stage: VideoUploadStage) => void,
+  poster?: VideoPosterUpload,
 ) {
   throwIfAborted(signal);
   onStage({ state: "uploading", progress: 0.2 });
@@ -302,6 +309,11 @@ async function uploadLocalVideoMoment(
   body.set("audience", draft.audience ?? "family");
   if (draft.circleIds?.length) {
     body.set("circleIds", JSON.stringify([...draft.circleIds]));
+  }
+  if (poster?.dataUrl) {
+    body.set("posterDataUrl", poster.dataUrl);
+    body.set("posterWidth", String(poster.width));
+    body.set("posterHeight", String(poster.height));
   }
   const response = await fetch("/api/media/local/video", {
     body,
@@ -338,6 +350,7 @@ export async function uploadVideoMoment(
   signal: AbortSignal,
   onStage: (stage: VideoUploadStage) => void,
   dependencies: UploadDependencies = {},
+  poster?: VideoPosterUpload,
 ) {
   throwIfAborted(signal);
   onStage({ state: "preparing" });
@@ -349,7 +362,14 @@ export async function uploadVideoMoment(
         false,
       );
     }
-    return uploadLocalVideoMoment(file, draft, attempt, signal, onStage);
+    return uploadLocalVideoMoment(
+      file,
+      draft,
+      attempt,
+      signal,
+      onStage,
+      poster,
+    );
   }
   const createClient = dependencies.createClient ?? createOurDaysBrowserClient;
   const supabase = createClient();

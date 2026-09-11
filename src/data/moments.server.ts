@@ -249,7 +249,13 @@ export function mapTimelineRow(
   }>,
   photos?: readonly MomentPhotoDescriptor[],
   conversation: MomentConversationViewModel = emptyConversation,
-  videoMeta?: Readonly<{ mimeType: string; durationMs: number }>,
+  videoMeta?: Readonly<{
+    mimeType: string;
+    durationMs: number;
+    poster?: string;
+    width?: number;
+    height?: number;
+  }>,
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
   const linkedCircleIds = Array.isArray(row.linked_circle_ids)
@@ -373,8 +379,11 @@ export function mapTimelineRow(
       kind: "video",
       video: {
         src: `/api/media/videos/${row.moment_id}`,
+        poster: videoMeta?.poster,
         mimeType: videoMeta?.mimeType,
         durationMs: videoMeta?.durationMs,
+        width: videoMeta?.width,
+        height: videoMeta?.height,
       },
     };
   }
@@ -498,7 +507,13 @@ export async function loadVideoMetaByMomentId(
   const uniqueIds = [...new Set(momentIds.filter(Boolean))];
   const metaByMoment = new Map<
     string,
-    Readonly<{ mimeType: string; durationMs: number }>
+    Readonly<{
+      mimeType: string;
+      durationMs: number;
+      poster?: string;
+      width?: number;
+      height?: number;
+    }>
   >();
   if (uniqueIds.length === 0) return metaByMoment;
   if (typeof supabase.from !== "function") return metaByMoment;
@@ -518,6 +533,29 @@ export async function loadVideoMetaByMomentId(
     metaByMoment.set(row.moment_id, {
       mimeType: row.mime_type,
       durationMs: row.duration_ms,
+    });
+  }
+
+  const { data: posters, error: posterError } = await supabase
+    .from("moment_video_posters")
+    .select("moment_id, width_px, height_px")
+    .in("moment_id", uniqueIds);
+  if (posterError || !posters) return metaByMoment;
+  for (const row of posters) {
+    if (typeof row.moment_id !== "string") continue;
+    const current = metaByMoment.get(row.moment_id);
+    if (!current) continue;
+    metaByMoment.set(row.moment_id, {
+      ...current,
+      poster: `/api/media/videos/${row.moment_id}/poster`,
+      width:
+        typeof row.width_px === "number" && row.width_px > 0
+          ? row.width_px
+          : undefined,
+      height:
+        typeof row.height_px === "number" && row.height_px > 0
+          ? row.height_px
+          : undefined,
     });
   }
   return metaByMoment;

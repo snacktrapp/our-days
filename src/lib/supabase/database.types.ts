@@ -282,6 +282,59 @@ export type Database = {
           },
         ];
       };
+      moment_video_posters: {
+        Row: {
+          bucket_id: string;
+          circle_id: string;
+          created_at: string;
+          created_by_membership_id: string;
+          height_px: number;
+          mime_type: string;
+          moment_id: string;
+          object_path: string;
+          size_bytes: number;
+          storage_object_id: string;
+          storage_object_version: string;
+          width_px: number;
+        };
+        Insert: {
+          bucket_id?: string;
+          circle_id: string;
+          created_at?: string;
+          created_by_membership_id: string;
+          height_px: number;
+          mime_type?: string;
+          moment_id: string;
+          object_path: string;
+          size_bytes: number;
+          storage_object_id: string;
+          storage_object_version: string;
+          width_px: number;
+        };
+        Update: {
+          bucket_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          created_by_membership_id?: string;
+          height_px?: number;
+          mime_type?: string;
+          moment_id?: string;
+          object_path?: string;
+          size_bytes?: number;
+          storage_object_id?: string;
+          storage_object_version?: string;
+          width_px?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_video_posters_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: true;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_videos: {
         Row: {
           bucket_id: string;
@@ -899,6 +952,25 @@ export type Database = {
         Returns: {
           moment_id: string;
           status: string;
+        }[];
+      };
+      attach_video_moment_poster: {
+        Args: {
+          height_px: number;
+          moment_id: string;
+          width_px: number;
+        };
+        Returns: boolean;
+      };
+      get_video_moment_poster_delivery: {
+        Args: { moment_id: string };
+        Returns: {
+          bucket_id: string;
+          height_px: number;
+          mime_type: string;
+          object_path: string;
+          size_bytes: number;
+          width_px: number;
         }[];
       };
       get_video_moment_delivery: {

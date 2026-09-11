@@ -39,6 +39,12 @@ export type LocalMedia = Readonly<{
   displayByteLength?: number;
   displaySha256?: string;
   durationMs?: number;
+  posterRelativePath?: string;
+  posterMimeType?: string;
+  posterSha256?: string;
+  posterByteLength?: number;
+  widthPx?: number;
+  heightPx?: number;
 }>;
 
 export type LocalMoment = Readonly<{

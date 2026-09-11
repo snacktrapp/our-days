@@ -185,6 +185,12 @@ describe("optimistic media upload queue", () => {
       expect.any(Object),
       expect.any(AbortSignal),
       expect.any(Function),
+      expect.any(Object),
+      expect.objectContaining({
+        dataUrl: expect.stringContaining("data:image/jpeg"),
+        width: expect.any(Number),
+        height: expect.any(Number),
+      }),
     );
   });
 });

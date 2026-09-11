@@ -53,6 +53,19 @@ import {
 import type { LocalJournalDocument, LocalMoment, LocalPerson } from "./types";
 import type { MomentPhotoDescriptor } from "@/features/moments/moment-photos";
 
+function localVideoMeta(moment: LocalMoment) {
+  if (moment.kind !== "video" || !moment.media) return undefined;
+  return {
+    mimeType: moment.media.mimeType,
+    durationMs: moment.media.durationMs ?? 0,
+    poster: moment.media.posterRelativePath
+      ? `/api/media/videos/${moment.id}/poster`
+      : undefined,
+    width: moment.media.widthPx,
+    height: moment.media.heightPx,
+  };
+}
+
 function localMomentPhotoDescriptors(
   moment: LocalMoment,
 ): MomentPhotoDescriptor[] | undefined {
@@ -662,6 +675,7 @@ export async function loadLocalTimeline(
       },
       localMomentPhotoDescriptors(moment),
       conversationFromLocalDocument(document, access, moment.id),
+      localVideoMeta(moment),
     ),
   );
   const personalJournalIsWritable = Boolean(
