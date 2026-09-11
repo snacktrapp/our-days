@@ -38,7 +38,7 @@ export function VideoMomentMedia({
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const knownRatio = Boolean(
     (moment.video.width ?? storedFrame?.width) &&
-      (moment.video.height ?? storedFrame?.height),
+    (moment.video.height ?? storedFrame?.height),
   );
 
   return (
