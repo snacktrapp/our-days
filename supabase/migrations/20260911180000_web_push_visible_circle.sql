@@ -256,9 +256,9 @@ end;
 $$;
 
 revoke all on function private.list_web_push_deliveries(text, uuid)
-  from public, anon, authenticated;
+  from public, anon;
 grant execute on function private.list_web_push_deliveries(text, uuid)
-  to service_role;
+  to authenticated, service_role;
 
 create function public.list_web_push_deliveries(
   activity_kind text,
