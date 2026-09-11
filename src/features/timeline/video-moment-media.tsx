@@ -132,9 +132,6 @@ export function VideoMomentMedia({
                   ? " is-quicktime"
                   : ""
               }`}
-              style={
-                knownRatio ? { aspectRatio: `${width} / ${height}` } : undefined
-              }
             >
               <span className="video-card-mat-label">
                 {moment.video.mimeType === "video/quicktime"

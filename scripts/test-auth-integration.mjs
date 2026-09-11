@@ -1069,16 +1069,24 @@ try {
 
   const userEmails = [];
   for (let page = 1; page <= 20; page += 1) {
-    const users = await jsonRequest(
-      `${apiUrl}/auth/v1/admin/users?page=${page}&per_page=50`,
-      serviceKey,
-      { headers: adminHeaders },
-    );
-    if (!users.response.ok) {
-      throw new Error(
+    let users;
+    let lastError = null;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      users = await jsonRequest(
+        `${apiUrl}/auth/v1/admin/users?page=${page}&per_page=50`,
+        serviceKey,
+        { headers: adminHeaders },
+      );
+      if (users.response.ok) {
+        lastError = null;
+        break;
+      }
+      lastError = new Error(
         `Auth admin user list failed on page ${page} with ${users.response.status}: ${JSON.stringify(users.body)}`,
       );
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
     }
+    if (lastError) throw lastError;
     const pageEmails = (users.body?.users ?? []).map((user) => user.email);
     userEmails.push(...pageEmails);
     if (pageEmails.length < 50) break;
