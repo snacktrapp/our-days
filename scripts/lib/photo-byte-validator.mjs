@@ -8,6 +8,11 @@ import sharp from "sharp";
 export const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_MAX_PHOTO_PIXELS = 50_000_000;
 const MAX_GAIN_MAP_PIXELS = 12_500_000;
+// iPhone Ultra HDR / MPF stills can append a gain map plus several small
+// preview streams after the primary JPEG. Calvin's rejected family photo had
+// 8 exact codestreams; keep full-size second photos rejected by auxiliary
+// dimension checks, not by an artificially low stream count.
+export const MAX_JPEG_CODESTREAMS = 8;
 
 const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const sharpFormatByMimeType = new Map([
@@ -388,13 +393,13 @@ async function validateExactJpegCodestream(
         phase = "complete";
         return;
       }
-      // Family camera JPEGs can carry one or two complete auxiliary streams
-      // after the primary still: an HDR gain map and/or a small MPF preview.
+      // Family camera JPEGs can carry several complete auxiliary streams after
+      // the primary still: an HDR gain map plus multiple small MPF previews.
       // The caller still has to prove each extra stream is a bounded still.
       if (
         !allowAuxiliaryCodestream ||
         codestreamCount < 1 ||
-        codestreamCount > 2
+        codestreamCount >= MAX_JPEG_CODESTREAMS
       ) {
         jpegStructureFailure();
       }
@@ -895,7 +900,7 @@ export async function withValidatedPhotoSpool(source, rawOptions, callback) {
     }
 
     const decoded = await decodeCompletely(path, detectedMimeType, options);
-    if (jpegCodestreams.length > 3) jpegStructureFailure();
+    if (jpegCodestreams.length > MAX_JPEG_CODESTREAMS) jpegStructureFailure();
     if (jpegCodestreams.length > 1) {
       for (const auxiliaryRange of jpegCodestreams.slice(1)) {
         const auxiliaryBytes = await readExactAt(

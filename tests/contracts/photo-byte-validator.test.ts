@@ -223,6 +223,112 @@ describe("photo byte validator", () => {
     });
   });
 
+  it("accepts an iPhone Ultra HDR-style JPEG with a gain map and several MPF previews", async () => {
+    // Mirrors the rejected family camera still: primary + half-res gain map +
+    // one tiny preview + five medium single-channel MPF streams (8 total).
+    const primary = await sharp({
+      create: {
+        background: "#c2a46a",
+        channels: 3,
+        height: 128,
+        width: 192,
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    const gainMap = await sharp({
+      create: {
+        background: "#808080",
+        channels: 3,
+        height: 64,
+        width: 96,
+      },
+    })
+      .toColourspace("b-w")
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    const tinyPreview = await sharp({
+      create: {
+        background: "#404040",
+        channels: 3,
+        height: 24,
+        width: 32,
+      },
+    })
+      .toColourspace("b-w")
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    const mediumPreviews = await Promise.all(
+      Array.from({ length: 5 }, async (_, index) =>
+        sharp({
+          create: {
+            background: `#${(50 + index * 20).toString(16).padStart(2, "0")}5555`,
+            channels: 3,
+            height: 48,
+            width: 64,
+          },
+        })
+          .toColourspace("b-w")
+          .jpeg({ quality: 70 })
+          .toBuffer(),
+      ),
+    );
+    const bytes = Buffer.concat([
+      primary,
+      gainMap,
+      tinyPreview,
+      ...mediumPreviews,
+    ]);
+
+    await expect(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/jpeg"),
+      ),
+    ).resolves.toMatchObject({
+      height: 128,
+      mimeType: "image/jpeg",
+      pages: 1,
+      width: 192,
+    });
+  });
+
+  it("still rejects more than eight JPEG codestreams", async () => {
+    const primary = await sharp({
+      create: {
+        background: "#6a8ac2",
+        channels: 3,
+        height: 128,
+        width: 192,
+      },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    const extras = await Promise.all(
+      Array.from({ length: 8 }, async (_, index) =>
+        sharp({
+          create: {
+            background: `#${(40 + index * 10).toString(16).padStart(2, "0")}6666`,
+            channels: 3,
+            height: 24,
+            width: 32,
+          },
+        })
+          .jpeg({ quality: 70 })
+          .toBuffer(),
+      ),
+    );
+    const bytes = Buffer.concat([primary, ...extras]);
+
+    await expectCode(
+      validatePhotoByteStream(
+        byteStream(bytes),
+        validationOptions(bytes, "image/jpeg"),
+      ),
+      "PHOTO_FORMAT_UNSUPPORTED",
+    );
+  });
+
   it("still rejects a second JPEG that is large enough to be another photo", async () => {
     const primary = await sharp({
       create: {
