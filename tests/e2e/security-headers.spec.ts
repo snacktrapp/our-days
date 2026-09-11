@@ -143,7 +143,12 @@ test("timeline, memories, and composer render without application style attribut
           width: rect.width,
         };
       });
-      expect(timelineFrame.aspectRatio).toBe("auto");
+      // Chromium reports preferred HTML width/height as `auto W / H`.
+      expect(timelineFrame.aspectRatio === "auto" ||
+        /^auto\s+\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?$/u.test(
+          timelineFrame.aspectRatio,
+        ),
+      ).toBe(true);
       expect(timelineFrame.height).toBeLessThan(timelineFrame.width);
       expect(timelineFrame.height).toBeLessThanOrEqual(
         timelineFrame.maxHeightPx + 1,

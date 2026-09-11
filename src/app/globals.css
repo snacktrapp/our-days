@@ -1731,7 +1731,10 @@ span.moment-place-line {
   fill: var(--paper);
 }
 .moment-place-title {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -12px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -4610,16 +4613,25 @@ span.moment-place-line {
   background: color-mix(in srgb, var(--ink) 18%, transparent);
   box-shadow: none;
 }
-.photo-status-chip-bar > span {
+.photo-status-chip-bar > span,
+.photo-status-chip-bar-fill {
   display: block;
   height: 100%;
-  width: 0;
+  width: 100%;
   border: 0;
   border-radius: inherit;
+  background: transparent;
+}
+.photo-status-chip-bar > span {
+  width: 0;
   background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
+}
+.photo-status-chip-bar-fill rect {
+  fill: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
 }
 .photo-status-chip-indeterminate > span {
   width: 36%;
+  background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
 }
 .photo-status-confirmation {
   margin: 0;

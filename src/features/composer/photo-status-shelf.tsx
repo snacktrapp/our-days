@@ -197,6 +197,9 @@ function optimisticMomentChipLabel(save: OptimisticMomentSave) {
 
 function ChipProgressBar({ value }: Readonly<{ value?: number }>) {
   const determinate = typeof value === "number";
+  const percent = determinate
+    ? Math.min(100, Math.max(0, Math.round(value * 100)))
+    : 0;
   return (
     <div
       className={
@@ -205,17 +208,24 @@ function ChipProgressBar({ value }: Readonly<{ value?: number }>) {
           : "photo-status-chip-bar photo-status-chip-indeterminate"
       }
       role="progressbar"
+      aria-label="Upload progress"
       aria-valuemin={0}
       aria-valuemax={1}
       aria-valuenow={determinate ? value : undefined}
     >
-      <span
-        style={
-          determinate
-            ? { width: `${Math.min(100, Math.max(0, value * 100))}%` }
-            : undefined
-        }
-      />
+      {determinate ? (
+        <svg
+          className="photo-status-chip-bar-fill"
+          viewBox="0 0 100 6"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect x="0" y="0" width={percent} height="6" rx="3" />
+        </svg>
+      ) : (
+        <span />
+      )}
     </div>
   );
 }

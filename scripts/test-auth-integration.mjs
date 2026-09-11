@@ -205,8 +205,9 @@ function resetDatabase() {
 
 function runDatabaseQuery(sql) {
   try {
-    execFileSync(supabaseBinary, ["db", "query", "--local", sql], {
+    return execFileSync(supabaseBinary, ["db", "query", "--local", sql], {
       cwd: projectRoot,
+      encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
@@ -1067,42 +1068,30 @@ try {
     );
   }
 
-  const userEmails = [];
-  for (let page = 1; page <= 20; page += 1) {
-    let users;
-    let lastError = null;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      users = await jsonRequest(
-        `${apiUrl}/auth/v1/admin/users?page=${page}&per_page=50`,
-        serviceKey,
-        { headers: adminHeaders },
-      );
-      if (users.response.ok) {
-        lastError = null;
-        break;
-      }
-      lastError = new Error(
-        `Auth admin user list failed on page ${page} with ${users.response.status}: ${JSON.stringify(users.body)}`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-    }
-    if (lastError) throw lastError;
-    const pageEmails = (users.body?.users ?? []).map((user) => user.email);
-    userEmails.push(...pageEmails);
-    if (pageEmails.length < 50) break;
-  }
+  // Prefer a direct auth.users query over Auth admin pagination — local
+  // GoTrue often returns 500 "Database error finding users" under CI load.
   const deniedAuthEmails = [
     rawSignupEmail,
     ...unknownOtpAttempts.map((attempt) => attempt.body.email),
   ];
-  const persistedDeniedEmails = deniedAuthEmails.filter((email) =>
-    userEmails.includes(email),
-  );
-  if (persistedDeniedEmails.length > 0) {
-    throw new Error(
-      `A denied public Auth path still persisted an account: ${persistedDeniedEmails.join(", ")}`,
-    );
-  }
+  const deniedEmailSql = deniedAuthEmails
+    .map((email) => `'${String(email).replaceAll("'", "''")}'`)
+    .join(", ");
+  runDatabaseQuery(`
+do $assert_denied_auth$
+declare
+  persisted text;
+begin
+  select string_agg(email, ', ' order by email)
+    into persisted
+  from auth.users
+  where email in (${deniedEmailSql});
+  if persisted is not null then
+    raise exception 'A denied public Auth path still persisted an account: %', persisted;
+  end if;
+end
+$assert_denied_auth$;
+`);
 
   process.stdout.write(
     "Local Auth signup variants, OTP, invite acceptance, membership and prepared-closure stale-token denial, and closed Storage HTTP paths passed.\n",
