@@ -187,6 +187,51 @@ describe("deliverActivityWebPush", () => {
     });
   });
 
+  it("sends one push when the RPC returns the same endpoint twice", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "Bpublic");
+    vi.stubEnv("OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY", "privatekeyvalue");
+    const logged = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    const rpc = vi.fn(async () => ({
+      data: [
+        {
+          endpoint: "https://push.example.test/dual",
+          p256dh: "p256",
+          auth: "auth",
+          actor_name: "Molly",
+          moment_id: "moment-3",
+          moment_kind: "thought",
+          reaction_type: null,
+        },
+        {
+          endpoint: "https://push.example.test/dual",
+          p256dh: "p256",
+          auth: "auth",
+          actor_name: "Molly",
+          moment_id: "moment-3",
+          moment_kind: "thought",
+          reaction_type: null,
+        },
+      ],
+      error: null,
+    }));
+    sendWebPush.mockResolvedValue({ ok: true, status: 201 });
+
+    await deliverActivityWebPush(
+      { rpc } as unknown as ActivityPushClient,
+      "moment",
+      "moment-3",
+    );
+
+    expect(sendWebPush).toHaveBeenCalledTimes(1);
+    expect(logged).toHaveBeenCalledWith("[web-push] recipients", {
+      kind: "moment",
+      activityId: "moment-3",
+      count: 1,
+    });
+  });
+
   it("uses comment copy even when the parent moment kind is present", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "Bpublic");
     vi.stubEnv("OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY", "privatekeyvalue");

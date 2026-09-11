@@ -71,8 +71,17 @@ export async function deliverActivityWebPush(
       return;
     }
 
+    const deliveries = [
+      ...new Map(data.map((row) => [row.endpoint, row])).values(),
+    ];
+    console.info("[web-push] recipients", {
+      kind,
+      activityId,
+      count: deliveries.length,
+    });
+
     await Promise.all(
-      data.map(async (row) => {
+      deliveries.map(async (row) => {
         const title =
           kind === "note"
             ? activityNotificationTitle(

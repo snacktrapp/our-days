@@ -1,6 +1,6 @@
 begin;
 
-select plan(14);
+select plan(23);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -191,6 +191,152 @@ select is(
   ),
   0::bigint,
   'subscription rows do not store journal body text'
+);
+
+reset role;
+insert into private.web_push_subscriptions (
+  circle_id, membership_id, endpoint, p256dh, auth
+) values (
+  '20000000-0000-4000-8000-000000000002',
+  '40000000-0000-4000-8000-000000000007',
+  'https://push.example.test/dual-legacy-harbor',
+  repeat('E', 87),
+  repeat('F', 22)
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+
+select is(
+  (
+    select endpoint
+      from public.list_web_push_deliveries(
+        'moment',
+        '60000000-0000-4000-8000-000000000003'
+      )
+     where endpoint = 'https://push.example.test/dual-legacy-harbor'
+  ),
+  'https://push.example.test/dual-legacy-harbor',
+  'a Cedar family post notifies a dual member whose only saved row is Harbor'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true);
+
+select is(
+  (
+    select endpoint
+      from public.list_web_push_deliveries(
+        'moment',
+        '60000000-0000-4000-8000-000000000006'
+      )
+  ),
+  'https://push.example.test/dual-legacy-harbor',
+  'a Harbor family post still notifies when the saved row is on that same circle'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
+
+select ok(
+  public.save_web_push_subscription(
+    'https://push.example.test/dual-legacy-harbor',
+    repeat('E', 87),
+    repeat('F', 22)
+  ) is not null,
+  'Notifications On refreshes coverage for every active membership'
+);
+
+reset role;
+select is(
+  (
+    select count(*)::bigint
+      from private.web_push_subscriptions
+     where endpoint = 'https://push.example.test/dual-legacy-harbor'
+       and membership_id in (
+         '40000000-0000-4000-8000-000000000005',
+         '40000000-0000-4000-8000-000000000007'
+       )
+  ),
+  2::bigint,
+  'saving a dual-circle subscription stores one row per active membership'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
+
+select is(
+  (
+    select count(*)::bigint
+      from public.list_web_push_deliveries(
+        'moment',
+        '60000000-0000-4000-8000-000000000003'
+      )
+     where endpoint = 'https://push.example.test/dual-legacy-harbor'
+  ),
+  1::bigint,
+  'one endpoint is not notified twice for the same moment across memberships'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true);
+
+select public.save_web_push_subscription(
+  'https://push.example.test/harbor-organizer',
+  repeat('G', 87),
+  repeat('H', 22)
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
+
+select lives_ok(
+  $$select public.create_written_moment(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000005',
+    'A porch thought for both circles.',
+    '2026-09-11',
+    null,
+    null,
+    'family',
+    array[
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '20000000-0000-4000-8000-000000000002'::uuid
+    ]
+  )$$,
+  'a dual member can post one family thought to Cedar and Harbor'
+);
+
+select is(
+  (
+    select string_agg(endpoint, ',' order by endpoint)
+      from public.list_web_push_deliveries(
+        'moment',
+        (
+          select id
+            from public.moments
+           where body = 'A porch thought for both circles.'
+        )
+      )
+  ),
+  'https://push.example.test/harbor-organizer,https://push.example.test/member-two',
+  'a linked Harbor audience notifies Harbor and Cedar members and never the actor'
+);
+
+select ok(
+  public.delete_web_push_subscription('https://push.example.test/dual-legacy-harbor'),
+  'a dual member can mute the device once for every membership row'
+);
+
+reset role;
+select is(
+  (
+    select count(*)::bigint
+      from private.web_push_subscriptions
+     where endpoint = 'https://push.example.test/dual-legacy-harbor'
+  ),
+  0::bigint,
+  'deleting a dual-circle endpoint removes every membership row for that device'
 );
 
 select * from finish();
