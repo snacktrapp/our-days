@@ -122,9 +122,10 @@ export async function GET(
 
   const contentType = upstream.headers.get("content-type");
   const contentLength = Number(upstream.headers.get("content-length"));
+  const normalizedContentType = contentType?.split(";")[0]?.trim() ?? "";
   if (
     !upstream.body ||
-    contentType !== descriptor.mime_type ||
+    normalizedContentType !== descriptor.mime_type ||
     (range
       ? upstream.status !== 206 ||
         !validPartialResponse(upstream, descriptor.size_bytes)

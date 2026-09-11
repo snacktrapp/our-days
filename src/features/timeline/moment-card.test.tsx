@@ -498,6 +498,9 @@ describe("MomentCard timeline media", () => {
     );
 
     expect(container.querySelector(".video-card-mat")).not.toBeNull();
+    expect(container.querySelector(".video-card-mat-label")).toHaveTextContent(
+      "Video",
+    );
     expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
     expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
       "▶",

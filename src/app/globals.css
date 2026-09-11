@@ -7534,7 +7534,24 @@ html[data-theme].overlay-open .app-shell::before,
 .video-card-mat {
   min-height: 0;
   aspect-ratio: 16 / 9;
-  background: color-mix(in srgb, var(--cream) 28%, transparent);
+  display: grid;
+  place-items: center;
+  background: #122018;
+}
+
+.video-card-mat-label {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(3, 8, 6, 0.45);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.video-card-mat.is-quicktime .video-card-mat-label {
+  border-color: rgba(255, 214, 160, 0.45);
+  color: #ffe7c2;
 }
 
 .photo-frame.has-known-ratio.has-reserved-frame .video-card-poster,

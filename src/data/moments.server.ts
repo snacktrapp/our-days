@@ -249,6 +249,7 @@ export function mapTimelineRow(
   }>,
   photos?: readonly MomentPhotoDescriptor[],
   conversation: MomentConversationViewModel = emptyConversation,
+  videoMeta?: Readonly<{ mimeType: string; durationMs: number }>,
 ): TimelineMomentViewModel {
   const audience = normalizeMomentAudience(row.moment_audience);
   const linkedCircleIds = Array.isArray(row.linked_circle_ids)
@@ -372,6 +373,8 @@ export function mapTimelineRow(
       kind: "video",
       video: {
         src: `/api/media/videos/${row.moment_id}`,
+        mimeType: videoMeta?.mimeType,
+        durationMs: videoMeta?.durationMs,
       },
     };
   }
@@ -488,6 +491,38 @@ export async function loadMomentPhotosByMomentId(
   return photosByMoment;
 }
 
+export async function loadVideoMetaByMomentId(
+  supabase: MomentPhotoClient,
+  momentIds: readonly string[],
+) {
+  const uniqueIds = [...new Set(momentIds.filter(Boolean))];
+  const metaByMoment = new Map<
+    string,
+    Readonly<{ mimeType: string; durationMs: number }>
+  >();
+  if (uniqueIds.length === 0) return metaByMoment;
+  if (typeof supabase.from !== "function") return metaByMoment;
+  const { data, error } = await supabase
+    .from("moment_videos")
+    .select("moment_id, mime_type, duration_ms")
+    .in("moment_id", uniqueIds);
+  if (error || !data) return metaByMoment;
+  for (const row of data) {
+    if (
+      typeof row.moment_id !== "string" ||
+      typeof row.mime_type !== "string" ||
+      typeof row.duration_ms !== "number"
+    ) {
+      continue;
+    }
+    metaByMoment.set(row.moment_id, {
+      mimeType: row.mime_type,
+      durationMs: row.duration_ms,
+    });
+  }
+  return metaByMoment;
+}
+
 export function connectedTimelineInteraction(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -570,9 +605,16 @@ export async function loadConnectedTimeline(
   const photoMomentIds = rows
     .filter((row) => row.moment_kind === "photo")
     .map((row) => row.moment_id);
+  const videoMomentIds = rows
+    .filter((row) => row.moment_kind === "video")
+    .map((row) => row.moment_id);
   const photosByMoment = await loadMomentPhotosByMomentId(
     supabase,
     photoMomentIds,
+  );
+  const videoMetaByMoment = await loadVideoMetaByMomentId(
+    supabase,
+    videoMomentIds,
   );
   const conversationsByMoment = await loadMomentConversationsByMomentId(
     supabase,
@@ -589,6 +631,7 @@ export async function loadConnectedTimeline(
       },
       photosByMoment.get(row.moment_id),
       conversationsByMoment.get(row.moment_id) ?? emptyConversation,
+      videoMetaByMoment.get(row.moment_id),
     ),
   );
   const personalJournalIsWritable = Boolean(

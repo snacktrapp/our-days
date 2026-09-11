@@ -69,12 +69,21 @@ export function VideoMomentMedia({
             />
           ) : (
             <div
-              className="video-card-mat"
-              aria-hidden="true"
+              className={`video-card-mat${
+                moment.video.mimeType === "video/quicktime"
+                  ? " is-quicktime"
+                  : ""
+              }`}
               style={
                 knownRatio ? { aspectRatio: `${width} / ${height}` } : undefined
               }
-            />
+            >
+              <span className="video-card-mat-label">
+                {moment.video.mimeType === "video/quicktime"
+                  ? "iPhone video"
+                  : "Video"}
+              </span>
+            </div>
           )
         }
         fullscreenMedia={
