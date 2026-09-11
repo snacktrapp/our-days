@@ -7545,7 +7545,8 @@ html[data-theme].overlay-open .app-shell::before,
   min-height: 12rem;
   aspect-ratio: 16 / 9;
   display: grid;
-  place-items: center;
+  place-items: end center;
+  padding-block-end: 1rem;
   background: #0b1410;
 }
 
