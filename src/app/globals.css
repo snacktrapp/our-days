@@ -255,12 +255,6 @@ button:focus-visible,
     outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
     outline-offset: 2px;
   }
-  .composer-sheet .people-tags label:has(input:focus-visible),
-  .audience-edit-dialog .people-tags label:has(input:focus-visible) {
-    outline: none;
-    border-color: var(--teal);
-    box-shadow: inset 0 0 0 1px var(--teal);
-  }
   .composer-sheet .composer-picker-trigger:focus-visible {
     border-color: var(--teal);
     outline: none;
@@ -4362,8 +4356,12 @@ span.moment-place-line {
   border-color: color-mix(in srgb, var(--teal) 46%, var(--hairline));
   background: color-mix(in srgb, var(--teal) 7%, var(--cream));
 }
-.people-tags label:has(input:focus-visible) {
+.people-tags label:has(input:focus-visible),
+.composer-sheet .people-tags label:has(input:focus-visible),
+.audience-edit-dialog .people-tags label:has(input:focus-visible) {
   outline: none;
+  border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
 }
 .people-tags label:has(input:disabled) {
   cursor: default;

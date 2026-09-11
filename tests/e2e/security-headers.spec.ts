@@ -136,10 +136,13 @@ test("timeline, memories, and composer render without application style attribut
       const timelineFrame = await image.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
+        // Reserved-frame photos set max-height on the frame, not the img.
+        const frame = element.closest(".photo-frame");
+        const frameStyle = frame ? getComputedStyle(frame) : style;
         return {
           aspectRatio: style.aspectRatio,
           height: rect.height,
-          maxHeightPx: Number.parseFloat(style.maxHeight),
+          maxHeightPx: Number.parseFloat(frameStyle.maxHeight),
           width: rect.width,
         };
       });
@@ -151,6 +154,7 @@ test("timeline, memories, and composer render without application style attribut
           ),
       ).toBe(true);
       expect(timelineFrame.height).toBeLessThan(timelineFrame.width);
+      expect(Number.isFinite(timelineFrame.maxHeightPx)).toBe(true);
       expect(timelineFrame.height).toBeLessThanOrEqual(
         timelineFrame.maxHeightPx + 1,
       );
