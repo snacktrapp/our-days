@@ -47,8 +47,22 @@ describe("PrimaryNavigation", () => {
     expect(screen.queryByRole("link", { name: "Memories" })).toBeNull();
   });
 
-  it("opens the existing add picker with a Just me Post-to default", async () => {
+  it("opens Add from Family without forcing Just me", async () => {
     const user = userEvent.setup();
+    navigation.pathname = "/family";
+    render(<PrimaryNavigation section="timeline" />);
+
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(composerSession.toggleCreate).toHaveBeenCalledWith(
+      expect.any(HTMLButtonElement),
+      undefined,
+    );
+  });
+
+  it("opens Add from a personal journal with Just me", async () => {
+    const user = userEvent.setup();
+    navigation.pathname = "/people/person-1";
     render(<PrimaryNavigation section="timeline" />);
 
     await user.click(screen.getByRole("button", { name: "Add" }));

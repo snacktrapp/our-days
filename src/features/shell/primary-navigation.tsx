@@ -129,11 +129,15 @@ export function PrimaryNavigation({
         className="nav-item"
         type="button"
         aria-expanded={session?.isOpen ?? false}
-        onClick={() =>
-          session?.toggleCreate(addMomentRef.current, {
-            defaultAudience: "just_me",
-          })
-        }
+        onClick={() => {
+          // Match Post-to to the journal you're looking at. Forcing Just me from
+          // Family made videos appear briefly, then vanish after refresh.
+          const onPersonalJournal = pathname.startsWith("/people/");
+          session?.toggleCreate(
+            addMomentRef.current,
+            onPersonalJournal ? { defaultAudience: "just_me" } : undefined,
+          );
+        }}
       >
         <NavSymbol name="add" />
         <span>Add</span>
