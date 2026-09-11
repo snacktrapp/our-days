@@ -932,6 +932,12 @@ describe("MomentComposer", () => {
       expect.objectContaining({ requestKey: expect.any(String) }),
       expect.any(AbortSignal),
       expect.any(Function),
+      expect.any(Object),
+      expect.objectContaining({
+        dataUrl: expect.stringContaining("data:image/jpeg"),
+        width: expect.any(Number),
+        height: expect.any(Number),
+      }),
     );
     expect(navigation.replace).toHaveBeenCalledWith(
       "/family?circle=20000000-0000-4000-8000-000000000001",
@@ -983,6 +989,12 @@ describe("MomentComposer", () => {
         expect.objectContaining({ requestKey: expect.any(String) }),
         expect.any(AbortSignal),
         expect.any(Function),
+        expect.any(Object),
+        expect.objectContaining({
+          dataUrl: expect.stringContaining("data:image/jpeg"),
+          width: expect.any(Number),
+          height: expect.any(Number),
+        }),
       ),
     );
     expect(videoInspect.inspect).toHaveBeenCalled();
