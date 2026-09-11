@@ -31,7 +31,7 @@ const uuidPattern =
 
 export type VideoUploadStage =
   | Readonly<{ state: "preparing" }>
-  | Readonly<{ state: "uploading"; progress: number }>
+  | Readonly<{ state: "uploading"; progress: number; retrying?: boolean }>
   | Readonly<{ state: "stopping" }>
   | Readonly<{ state: "finishing" }>;
 
@@ -175,6 +175,11 @@ function tusResponseStatus(error: Error | DetailedError) {
   return error.originalResponse.getStatus();
 }
 
+/** Prefer smaller video chunks so a flaky mobile hop retries less work. */
+const tusChunkBytes = 2 * 1024 * 1024;
+/** Keep auth lookups off the hot path between adjacent chunks. */
+const sessionCacheMs = 45_000;
+
 async function uploadWithTusClient(input: {
   endpoint: string;
   file: File;
@@ -189,6 +194,9 @@ async function uploadWithTusClient(input: {
   const { Upload } = await import("tus-js-client");
   let sessionError: VideoUploadError | null = null;
   let upload: TusUpload;
+  let cachedAccessToken: string | null = null;
+  let cachedAccessTokenAt = 0;
+  let lastProgress = 0;
 
   await new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -210,15 +218,25 @@ async function uploadWithTusClient(input: {
     };
 
     upload = new Upload(input.file, {
-      chunkSize: 6 * 1024 * 1024,
+      chunkSize: tusChunkBytes,
       endpoint: input.endpoint,
       headers: { apikey: input.publishableKey, "x-upsert": "false" },
       metadata: { ...input.metadata },
       onBeforeRequest: async (request: HttpRequest) => {
         try {
-          const session = await input.session();
-          request.setHeader("authorization", `Bearer ${session.accessToken}`);
+          const now = Date.now();
+          if (
+            !cachedAccessToken ||
+            now - cachedAccessTokenAt > sessionCacheMs
+          ) {
+            const session = await input.session();
+            cachedAccessToken = session.accessToken;
+            cachedAccessTokenAt = now;
+          }
+          request.setHeader("authorization", `Bearer ${cachedAccessToken}`);
         } catch (error) {
+          cachedAccessToken = null;
+          cachedAccessTokenAt = 0;
           sessionError =
             error instanceof VideoUploadError
               ? error
@@ -251,10 +269,26 @@ async function uploadWithTusClient(input: {
         });
       },
       onProgress: (bytesUploaded, bytesTotal) => {
+        lastProgress = bytesTotal === 0 ? 0 : bytesUploaded / bytesTotal;
         input.onStage({
           state: "uploading",
-          progress: bytesTotal === 0 ? 0 : bytesUploaded / bytesTotal,
+          progress: lastProgress,
         });
+      },
+      onShouldRetry: (error, retryAttempt) => {
+        // Surface the pause while tus backs off so progress does not look frozen.
+        input.onStage({
+          state: "uploading",
+          progress: lastProgress,
+          retrying: true,
+        });
+        const status = tusResponseStatus(error);
+        if (status === 401 || status === 403) {
+          cachedAccessToken = null;
+          cachedAccessTokenAt = 0;
+        }
+        if (status === 404 || status === 409 || status === 410) return false;
+        return retryAttempt < 5;
       },
       onSuccess: () => finish(resolve),
       onUploadUrlAvailable: () => {
@@ -266,7 +300,8 @@ async function uploadWithTusClient(input: {
         }
       },
       removeFingerprintOnSuccess: true,
-      retryDelays: [0, 3_000, 5_000, 10_000, 20_000],
+      // Shorter early retries; long 20s gaps feel like a stuck 10% bar.
+      retryDelays: [0, 1_000, 3_000, 5_000, 10_000],
       storeFingerprintForResuming: false,
       uploadDataDuringCreation: true,
       uploadUrl: input.uploadUrl,
