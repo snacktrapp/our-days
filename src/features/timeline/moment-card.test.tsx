@@ -511,6 +511,38 @@ describe("MomentCard timeline media", () => {
     );
   });
 
+  it("reserves a 16:9 mat for posterless videos with unknown dimensions", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "la-marina-style-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/la-marina-style-video",
+            mimeType: "video/quicktime",
+          },
+        }}
+      />,
+    );
+
+    const frame = container.querySelector(".photo-frame.video-frame");
+    expect(frame?.className).toContain("has-reserved-frame");
+    expect(frame?.className).toContain("has-default-video-ratio");
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 16 9",
+    );
+    expect(container.querySelector(".video-card-mat")).not.toBeNull();
+    expect(container.querySelector(".video-card-mat-label")).toHaveTextContent(
+      "iPhone video",
+    );
+    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
+      "▶",
+    );
+  });
+
   it("sizes a portrait video to a tall native frame instead of a 4:3 mat", () => {
     const { container } = render(
       <MomentCard
@@ -537,7 +569,7 @@ describe("MomentCard timeline media", () => {
     );
   });
 
-  it("does not reserve a 4:3 video frame when the clip size is unknown", () => {
+  it("reserves a 16:9 frame instead of collapsing when clip size is unknown", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -552,9 +584,16 @@ describe("MomentCard timeline media", () => {
       />,
     );
 
-    expect(container.querySelector(".photo-frame-sizer")).toBeNull();
-    expect(container.querySelector(".video-frame")).not.toHaveClass(
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 16 9",
+    );
+    expect(container.querySelector(".video-frame")).toHaveClass(
       "has-reserved-frame",
+      "has-default-video-ratio",
+    );
+    expect(container.querySelector(".video-frame")).not.toHaveClass(
+      "has-known-ratio",
     );
   });
 

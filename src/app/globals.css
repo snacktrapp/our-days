@@ -7500,13 +7500,23 @@ html[data-theme].overlay-open .app-shell::before,
 .media-viewer-trigger > img,
 .media-viewer-trigger > video,
 .media-viewer-trigger > .video-card-poster,
-.media-viewer-trigger > .video-card-mat,
 .media-viewer-trigger > .private-photo-unavailable,
 .media-viewer-trigger > .private-video-unavailable {
   width: 100%;
   height: auto;
   max-height: var(--timeline-media-max-height);
   aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* Keep empty video mats at 16/9. `aspect-ratio: auto` here used to
+   collapse posterless clips to zero height on the timeline. */
+.media-viewer-trigger > .video-card-mat {
+  width: 100%;
+  height: auto;
+  max-height: var(--timeline-media-max-height);
+  aspect-ratio: 16 / 9;
   object-fit: contain;
   object-position: center;
 }
@@ -7532,20 +7542,21 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .video-card-mat {
-  min-height: 0;
+  min-height: 12rem;
   aspect-ratio: 16 / 9;
   display: grid;
   place-items: center;
-  background: #122018;
+  background: #0b1410;
 }
 
 .video-card-mat-label {
-  padding: 0.35rem 0.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  z-index: 1;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(3, 8, 6, 0.45);
-  font-size: 0.75rem;
+  color: #f4f7f5;
+  background: rgba(3, 8, 6, 0.55);
+  font-size: 0.8rem;
   letter-spacing: 0.02em;
 }
 
@@ -7561,12 +7572,21 @@ html[data-theme].overlay-open .app-shell::before,
   > .video-card-poster,
 .photo-frame.has-known-ratio.has-reserved-frame
   .media-viewer-trigger
+  > .video-card-mat,
+.photo-frame.has-default-video-ratio.has-reserved-frame .video-card-mat,
+.photo-frame.has-default-video-ratio.has-reserved-frame
+  .media-viewer-trigger
   > .video-card-mat {
   height: 100%;
   max-height: none;
   min-height: 0;
   aspect-ratio: auto;
   object-fit: contain;
+}
+
+/* Posterless clips with no stored frame still need a visible plane. */
+.photo-frame.has-default-video-ratio.has-reserved-frame .video-card-mat {
+  background: #0b1410;
 }
 
 .video-viewer-play {

@@ -34,17 +34,20 @@ export function VideoMomentMedia({
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
   const poster = moment.video.poster ?? storedPoster ?? undefined;
-  const width = moment.video.width ?? storedFrame?.width;
-  const height = moment.video.height ?? storedFrame?.height;
-  const knownRatio = Boolean(width && height && width > 0 && height > 0);
+  const width = moment.video.width ?? storedFrame?.width ?? 16;
+  const height = moment.video.height ?? storedFrame?.height ?? 9;
+  const knownRatio = Boolean(
+    (moment.video.width ?? storedFrame?.width) &&
+      (moment.video.height ?? storedFrame?.height),
+  );
 
   return (
     <div
-      className={`photo-frame video-frame${
-        knownRatio ? " has-reserved-frame has-known-ratio" : ""
+      className={`photo-frame video-frame has-reserved-frame${
+        knownRatio ? " has-known-ratio" : " has-default-video-ratio"
       }`}
     >
-      {knownRatio ? <VideoFrameSizer width={width!} height={height!} /> : null}
+      <VideoFrameSizer width={width} height={height} />
       <FullscreenMediaViewer
         kind="video"
         label={label}
