@@ -143,14 +143,14 @@ describe("MomentCard long thought copy", () => {
 
     const quote = screen.getByText(/kitchen was loud/u).closest("blockquote");
     expect(quote).toHaveClass("thought-copy-clamped");
-    expect(quote).toHaveAttribute("aria-expanded", "false");
+    expect(quote).not.toHaveAttribute("aria-expanded");
     const more = screen.getByRole("button", { name: "See more" });
     expect(more).toHaveClass("thought-more");
     expect(more).toHaveAttribute("aria-expanded", "false");
 
     await user.click(more);
     expect(quote).not.toHaveClass("thought-copy-clamped");
-    expect(quote).toHaveAttribute("aria-expanded", "true");
+    expect(quote).not.toHaveAttribute("aria-expanded");
     expect(screen.getByRole("button", { name: "See less" })).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -176,14 +176,14 @@ describe("MomentCard long thought copy", () => {
 
     const quote = screen.getByText(/kitchen was loud/u).closest("blockquote");
     expect(quote).toHaveClass("thought-copy-clamped");
-    expect(quote).toHaveAttribute("aria-expanded", "false");
+    expect(quote).not.toHaveAttribute("aria-expanded");
     expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
 
     await user.click(quote!);
     await waitFor(() => {
       expect(quote).not.toHaveClass("thought-copy-clamped");
     });
-    expect(quote).toHaveAttribute("aria-expanded", "true");
+    expect(quote).not.toHaveAttribute("aria-expanded");
     expect(screen.getByRole("button", { name: "See less" })).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -193,7 +193,7 @@ describe("MomentCard long thought copy", () => {
     await waitFor(() => {
       expect(quote).toHaveClass("thought-copy-clamped");
     });
-    expect(quote).toHaveAttribute("aria-expanded", "false");
+    expect(quote).not.toHaveAttribute("aria-expanded");
     expect(screen.getByRole("button", { name: "See more" })).toBeVisible();
     vi.mocked(thoughtCopyOverflows).mockReset();
   });

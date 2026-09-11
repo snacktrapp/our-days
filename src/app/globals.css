@@ -1288,10 +1288,12 @@ button.audience-chip:focus-visible .audience-chip-face {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  flex: 0 0 var(--photo-card-slide-width, 100%);
-  width: var(--photo-card-slide-width, 100%);
-  min-width: var(--photo-card-slide-width, 100%);
-  max-width: var(--photo-card-slide-width, 100%);
+  /* Stage is width:100%; paired slides must each match that box without
+     inline --photo-card-slide-width (blocked by style-src-attr 'none'). */
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
   height: 100%;
 }
 .photo-card-pager-frame img {

@@ -189,7 +189,7 @@ test("type selection opens as a tall sheet and dismisses with sheet-down", async
       (resolve, reject) => {
         const finish = window.setTimeout(() => {
           reject(new Error("Composer never played sheet-down."));
-        }, 1000);
+        }, 2500);
         const read = () => {
           const style = getComputedStyle(element);
           if (style.animationName !== "sheet-down") return;

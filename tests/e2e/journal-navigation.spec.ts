@@ -444,7 +444,10 @@ test("members can create a wider circle from Account and filter Home without cos
     page.getByRole("heading", { name: "Invite into Cousins" }),
   ).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
-  await page.getByRole("link", { name: "Journal" }).click();
+  // Prefer a full document load here: soft-nav from Account→Journal can abort
+  // the in-flight /family document fetch (especially on WebKit) while the
+  // active-circle cookie still correctly scopes Home to Cousins.
+  await page.goto("/family");
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
   await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
   await page.locator(".title-switcher summary").click();

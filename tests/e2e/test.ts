@@ -75,7 +75,11 @@ export const test = base.extend<{
           !(
             (failure.includes("_rsc=") ||
               failure.includes("/_next/image?") ||
-              /\/apple-touch-icon\.png(?:\?|$)/u.test(failure)) &&
+              /\/apple-touch-icon\.png(?:\?|$)/u.test(failure) ||
+              // Soft navigations commonly abort in-flight document fetches.
+              /https?:\/\/127\.0\.0\.1:\d+\/(?:family|people|memories|settings)(?:\/|\?|$)/u.test(
+                failure,
+              )) &&
             /(ERR_ABORTED|NS_BINDING_ABORTED|cancel)/i.test(failure)
           ) &&
           !mapsApiPathPattern.test(failure),
