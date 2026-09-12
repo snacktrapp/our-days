@@ -11,6 +11,8 @@ export function PhotoStatusQualityPreview() {
       <h1>Private photo status</h1>
       <p>Mobile layout and accessibility fixture</p>
       <PhotoStatusChipView busy label="Uploading 1 of 2…" progress={0.45} />
+      <PhotoStatusChipView busy label="Uploading… 10%" progress={0.1} />
+      <PhotoStatusChipView busy label="Retrying upload…" progress={0.1} />
       <PhotoStatusShelfView
         cancellationResult={null}
         cancellingIds={new Set()}

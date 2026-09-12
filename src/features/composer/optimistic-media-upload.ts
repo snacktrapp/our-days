@@ -22,7 +22,7 @@ import { persistVideoPoster } from "@/features/video/persist-video-poster";
 
 export type OptimisticMediaUploadStage =
   | Readonly<{ state: "preparing" }>
-  | Readonly<{ state: "uploading"; progress: number }>
+  | Readonly<{ state: "uploading"; progress: number; retrying?: boolean }>
   | Readonly<{ state: "stopping" }>
   | Readonly<{ state: "finishing" }>
   | Readonly<{ state: "processing" }>

@@ -1524,7 +1524,9 @@ export function MomentComposer({
     photoUploadStage?.state === "preparing"
       ? `Preparing your ${mode === "video" ? "video" : "photo"} privately…`
       : photoUploadStage?.state === "uploading"
-        ? `Uploading… ${Math.round(photoUploadStage.progress * 100)}%`
+        ? "retrying" in photoUploadStage && photoUploadStage.retrying
+          ? `Retrying ${mode === "video" ? "video" : "photo"} upload… ${Math.round(photoUploadStage.progress * 100)}%`
+          : `Uploading… ${Math.round(photoUploadStage.progress * 100)}%`
         : photoUploadStage?.state === "stopping"
           ? "Stopping transfer and confirming cancellation…"
           : photoUploadStage?.state === "finishing"

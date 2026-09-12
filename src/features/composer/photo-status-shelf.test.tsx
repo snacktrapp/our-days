@@ -219,7 +219,7 @@ describe("PhotoStatusShelf", () => {
     render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
 
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
-    expect(screen.getByText("Uploading…")).toBeVisible();
+    expect(screen.getByText("Uploading… 50%")).toBeVisible();
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.queryByText("Will land on its date.")).toBeNull();
   });
@@ -404,6 +404,46 @@ describe("PhotoStatusShelf", () => {
       "aria-valuenow",
       "1",
     );
+  });
+
+  it("shows percent progress and retry copy for a single media upload", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    addOptimisticMediaUpload({
+      id: "video-progress-upload",
+      circleId,
+      kind: "video",
+      body: "Somebody missed Calvin",
+      occurredOn: "2026-09-11",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:video",
+      stage: { state: "uploading", progress: 0.1 },
+    });
+
+    const { rerender } = render(
+      <PhotoStatusShelf circleId={circleId} today="2026-09-11" />,
+    );
+    expect(screen.getByText("Uploading… 10%")).toBeVisible();
+
+    addOptimisticMediaUpload({
+      id: "video-progress-upload",
+      circleId,
+      kind: "video",
+      body: "Somebody missed Calvin",
+      occurredOn: "2026-09-11",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:video",
+      stage: { state: "uploading", progress: 0.1, retrying: true },
+    });
+    rerender(<PhotoStatusShelf circleId={circleId} today="2026-09-11" />);
+    expect(screen.getByText("Retrying upload…")).toBeVisible();
   });
 
   it.each([
@@ -876,13 +916,13 @@ describe("PhotoStatusShelf", () => {
     fireEvent(window, new Event("online"));
     expect(mocks.rpc).toHaveBeenCalledOnce();
     resolveList({ data: [serverRow], error: null });
-    expect(await screen.findByText("Uploading…")).toBeVisible();
+    expect(await screen.findByText("Uploading… 20%")).toBeVisible();
     expect(screen.queryByText("Private draft text")).toBeNull();
 
     fireEvent(window, new Event("our-days:clear-private-state"));
     expect(
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();
-    expect(screen.queryByText("Uploading…")).toBeNull();
+    expect(screen.queryByText("Uploading… 20%")).toBeNull();
   });
 });

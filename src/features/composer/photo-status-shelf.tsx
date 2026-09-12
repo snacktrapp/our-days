@@ -154,6 +154,14 @@ function optimisticUploadFractionLabel(upload: OptimisticMediaUpload) {
   if (upload.totalFiles > 1) {
     return `Uploading ${Math.min(upload.totalFiles, Math.max(1, upload.completedFiles + 1))} of ${upload.totalFiles}…`;
   }
+  if (upload.stage.state === "uploading") {
+    if (upload.stage.retrying) return "Retrying upload…";
+    const percent = Math.max(
+      0,
+      Math.min(99, Math.round(upload.stage.progress * 100)),
+    );
+    if (percent > 0) return `Uploading… ${percent}%`;
+  }
   return "Uploading…";
 }
 
