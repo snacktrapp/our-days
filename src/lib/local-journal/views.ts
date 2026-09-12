@@ -113,10 +113,7 @@ function conversationFromLocalDocument(
     notes: document.notes
       .filter((note) => note.momentId === momentId && note.trashedAt === null)
       .slice()
-      .sort((left, right) => {
-        const byTime = left.createdAt.localeCompare(right.createdAt);
-        return byTime !== 0 ? byTime : left.id.localeCompare(right.id);
-      })
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .map((note) => {
         const authorName = membershipPersonName(
           document,
