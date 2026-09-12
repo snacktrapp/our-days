@@ -54,10 +54,10 @@ describe("design preview timeline chronology", () => {
   it("teaches the family switcher All, Just me, Circles, and Person", () => {
     const family = getFamilyTimelineFixture();
     expect(family.chrome.eyebrow).toBe("Circles");
-    expect(family.chrome.title).toBe("All");
+    expect(family.chrome.title).toBe("All circles");
     expect(family.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
-      ["all", "All"],
+      ["all", "All circles"],
       ["group", "All our days"],
       ["person", "Molly"],
       ["person", "Avery"],
@@ -125,7 +125,7 @@ describe("design preview timeline chronology", () => {
     expect(cousins.chrome.eyebrow).toBe("Circles");
     expect(cousins.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
-      ["all", "All"],
+      ["all", "All circles"],
       ["group", "All our days"],
       ["group", "Cousins"],
       ["person", "Molly"],

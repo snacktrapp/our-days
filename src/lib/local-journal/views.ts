@@ -3,6 +3,7 @@ import "server-only";
 import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import {
+  allHomeLabel,
   buildJournalSwitcher,
   groupHomeHref,
   journalSwitcherEyebrow,
@@ -843,7 +844,7 @@ export async function loadLocalTimeline(
       : allCircles
         ? {
             ...context.chrome,
-            title: "All",
+            title: allHomeLabel,
           }
         : context.chrome),
     eyebrow: journalSwitcherEyebrow(switcher),

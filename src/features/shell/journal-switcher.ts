@@ -16,6 +16,7 @@ export type JournalSwitcherGroup = Readonly<{
 }>;
 
 export const allHomeHref = "/family";
+export const allHomeLabel = "All circles";
 
 export function journalSwitcherTypeLabel(kind: JournalSwitcherKind) {
   if (kind === "you") return "Just me";
@@ -135,7 +136,7 @@ export function buildJournalSwitcher(input: {
       : []),
     {
       kind: "all" as const,
-      label: "All",
+      label: allHomeLabel,
       href: allHomeHref,
       current: onFamilyPath && !selectedCircleId,
     },

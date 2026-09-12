@@ -32,7 +32,7 @@ describe("journal switcher grammar", () => {
       },
       {
         kind: "all",
-        label: "All",
+        label: "All circles",
         href: "/family",
         current: true,
       },
@@ -79,7 +79,7 @@ describe("journal switcher grammar", () => {
       },
       {
         kind: "all",
-        label: "All",
+        label: "All circles",
         href: "/family",
         current: false,
       },
@@ -111,7 +111,7 @@ describe("journal switcher grammar", () => {
     ).toEqual([
       {
         kind: "all",
-        label: "All",
+        label: "All circles",
         href: "/family",
         current: false,
       },
@@ -213,7 +213,7 @@ describe("journal switcher grammar", () => {
     );
     expect(sections.justMe.map((item) => item.label)).toEqual(["Brian"]);
     expect(sections.circles.map((item) => item.label)).toEqual([
-      "All",
+      "All circles",
       "Trapp Family",
       "Cousins",
     ]);

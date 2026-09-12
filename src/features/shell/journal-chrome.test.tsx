@@ -124,12 +124,12 @@ describe("JournalChrome", () => {
   it("opens the family switcher from the middle title", () => {
     const { container } = render(
       <JournalChrome
-        model={{ ...model, title: "All" }}
+        model={{ ...model, title: "All circles" }}
         section="timeline"
         switcher={[
           {
             kind: "all",
-            label: "All",
+            label: "All circles",
             href: "/family",
             current: true,
           },
@@ -154,7 +154,7 @@ describe("JournalChrome", () => {
     expect(
       screen.getByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "All" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "All circles" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -195,12 +195,12 @@ describe("JournalChrome", () => {
   it("replaces page content with a destination skeleton as soon as a journal is chosen", () => {
     render(
       <JournalChrome
-        model={{ ...model, title: "All" }}
+        model={{ ...model, title: "All circles" }}
         section="timeline"
         switcher={[
           {
             kind: "all",
-            label: "All",
+            label: "All circles",
             href: "/family",
             current: true,
           },

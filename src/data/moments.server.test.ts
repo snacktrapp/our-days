@@ -736,7 +736,7 @@ describe("connected timeline mapping", () => {
     expect(timeline.switcher).toEqual([
       {
         kind: "all",
-        label: "All",
+        label: "All circles",
         href: "/family",
         current: false,
       },
@@ -888,7 +888,7 @@ describe("connected timeline mapping", () => {
       "list_all_timeline_moments",
       expect.objectContaining({ page_size: 21 }),
     );
-    expect(timeline.chrome.title).toBe("All");
+    expect(timeline.chrome.title).toBe("All circles");
     expect(timeline.chrome.eyebrow).toBe("Circles");
     expect(timeline.switcher.find((item) => item.kind === "all")?.current).toBe(
       true,

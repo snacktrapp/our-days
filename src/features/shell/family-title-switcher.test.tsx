@@ -16,12 +16,12 @@ vi.mock("next/navigation", () => ({
 const model = {
   accent: "teal",
   eyebrow: "Circles",
-  title: "All",
+  title: "All circles",
 } as JournalChromeViewModel;
 
 const switcher = [
   { kind: "you", label: "Brian", href: "/people/brian", current: false },
-  { kind: "all", label: "All", href: "/family", current: true },
+  { kind: "all", label: "All circles", href: "/family", current: true },
   {
     kind: "group",
     label: "Trapp Family",
@@ -145,7 +145,7 @@ describe("FamilyTitleSwitcher", () => {
 
   it("moves the current highlight to the pressed journal immediately", async () => {
     await openSwitcher();
-    const all = screen.getByRole("link", { name: "All" });
+    const all = screen.getByRole("link", { name: "All circles" });
     const molly = screen.getByRole("link", { name: "Molly" });
     expect(all).toHaveClass("active");
     expect(all).toHaveAttribute("aria-current", "page");
@@ -166,7 +166,7 @@ describe("FamilyTitleSwitcher", () => {
     ] as HTMLAnchorElement[];
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       "Brian",
-      "All",
+      "All circles",
       "Trapp Family",
       "Molly",
     ]);
@@ -201,11 +201,11 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.getByRole("heading", { name: "Trapp Family" })).toBeVisible();
     rerender(
       <FamilyTitleSwitcher
-        model={{ ...model, title: "All", eyebrow: "Circles" }}
+        model={{ ...model, title: "All circles", eyebrow: "Circles" }}
         switcher={allCurrent}
       />,
     );
-    expect(screen.getByRole("heading", { name: "All" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
     expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
       "Circles",
     );
@@ -248,7 +248,7 @@ describe("FamilyTitleSwitcher", () => {
         }),
       );
     });
-    expect(screen.getByRole("heading", { name: "All" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
     expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
       "Circles",
     );
@@ -265,7 +265,7 @@ describe("FamilyTitleSwitcher", () => {
     expect(family.querySelector("small")).toHaveTextContent("3 people");
     expect(family.querySelector(".title-switcher-member-count")).toBeNull();
     expect(
-      screen.getByRole("link", { name: "All" }).querySelector("small"),
+      screen.getByRole("link", { name: "All circles" }).querySelector("small"),
     ).toBeNull();
     expect(screen.queryByText("Brian, Molly")).toBeNull();
   });

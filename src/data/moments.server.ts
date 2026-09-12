@@ -15,6 +15,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import {
+  allHomeLabel,
   buildJournalSwitcher,
   groupHomeHref,
   journalSwitcherEyebrow,
@@ -762,7 +763,7 @@ export async function loadConnectedTimeline(
       : allCircles
         ? {
             ...context.chrome,
-            title: "All",
+            title: allHomeLabel,
           }
         : context.chrome),
     eyebrow: journalSwitcherEyebrow(switcher),

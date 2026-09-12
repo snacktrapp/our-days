@@ -17,6 +17,7 @@ import {
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import {
+  allHomeLabel,
   buildJournalSwitcher,
   groupHomeHref,
   journalSwitcherEyebrow,
@@ -489,7 +490,7 @@ export function getFamilyTimelineFixture(
   const title = extraSelected
     ? extraSelected.name
     : allFeed
-      ? "All"
+      ? allHomeLabel
       : previewFamilyName;
 
   const familyChrome = chrome(
