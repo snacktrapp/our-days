@@ -201,9 +201,14 @@ describe("TimelineFeed", () => {
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
     expect(
       container.querySelector(
-        '[data-moment-kind="location"] .location-card-heading .connected-moment-menu-trigger',
+        '[data-moment-kind="location"] .soft-actions .connected-moment-menu-trigger',
       ),
     ).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        '[data-moment-kind="location"] .card-top-chrome .connected-moment-menu-trigger',
+      ),
+    ).toBeNull();
   });
 
   it("renders an Insight without a person byline", () => {
@@ -278,11 +283,69 @@ describe("TimelineFeed", () => {
     );
 
     const card = container.querySelector(".moment-card");
+    const chrome = card?.querySelector(".card-top-chrome");
     const pill = screen.getByRole("button", { name: "Audience, Just me" });
     expect(pill).toBeVisible();
     expect(pill).toHaveTextContent("Just me");
     expect(card?.contains(pill)).toBe(true);
+    expect(chrome?.contains(pill)).toBe(true);
     expect(container.querySelector(".connection")?.contains(pill)).toBe(false);
+    expect(container.querySelector(".soft-actions")?.contains(pill)).toBe(
+      false,
+    );
+  });
+
+  it("puts audience chips in the top chrome and options in the action row", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={{
+          ...model,
+          switcher: [
+            {
+              kind: "person",
+              label: "Person",
+              href: "/people/person",
+              current: true,
+            },
+          ],
+          entries: [
+            {
+              id: "shared",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "chrome-moment",
+                kind: "thought",
+                audience: "family",
+                showAudienceChip: true,
+                audienceChipLabel: "Our Days +1",
+                audienceCircleNames: ["Our Days", "Cousins"],
+                canChange: true,
+                revision: 1,
+              },
+            },
+          ],
+        }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience: vi.fn(),
+        }}
+      />,
+    );
+
+    const card = container.querySelector(".moment-card");
+    const chrome = card?.querySelector(".card-top-chrome");
+    const actions = card?.querySelector(".soft-actions");
+    const pill = screen.getByRole("button", { name: "Audience, Our Days +1" });
+    const options = screen.getByRole("button", {
+      name: /Moment options —/u,
+    });
+    expect(chrome?.contains(pill)).toBe(true);
+    expect(actions?.contains(options)).toBe(true);
+    expect(chrome?.contains(options)).toBe(false);
+    expect(actions?.contains(pill)).toBe(false);
+    expect(actions?.lastElementChild?.contains(options)).toBe(true);
   });
 
   it("expands the audience chip inline and edits from the expanded sheet", async () => {
