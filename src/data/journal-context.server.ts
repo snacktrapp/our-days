@@ -11,6 +11,7 @@ import type { PersonSummaryViewModel } from "@/features/people/people-view-model
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import {
   readJournalCircleMemberships,
+  retryTransientFamilySessionQuery,
   type JournalAccess,
 } from "@/lib/auth/journal-access";
 import {
@@ -294,6 +295,133 @@ export function buildActivityNotifications(
     }));
 }
 
+type JournalClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
+
+/** Active-circle Activity scan — never dump every linked id across the roster. */
+const activityLinkScanLimit = 80;
+
+const emptyOptionalActivity = {
+  notes: [] as ActivityNote[],
+  reactions: [] as ActivityReaction[],
+  ownedMomentIds: new Set<string>(),
+  familyMoments: [] as ActivityMoment[],
+};
+
+async function loadOptionalJournalActivity(
+  supabase: JournalClient,
+  access: AuthenticatedAccess,
+  myMembershipIds: ReadonlySet<string>,
+) {
+  try {
+    const [
+      ownedMomentsResult,
+      familyLinksResult,
+      notesResult,
+      reactionsResult,
+    ] = await Promise.all([
+      supabase
+        .from("moments")
+        .select("id")
+        .eq("circle_id", access.circleId)
+        .eq("recorded_by_membership_id", access.membershipId)
+        .is("trashed_at", null),
+      supabase
+        .from("moment_circles")
+        .select("moment_id, circle_id")
+        .eq("circle_id", access.circleId)
+        .limit(activityLinkScanLimit),
+      supabase
+        .from("moment_notes")
+        .select("id, moment_id, author_membership_id, created_at")
+        .eq("circle_id", access.circleId)
+        .neq("author_membership_id", access.membershipId)
+        .is("trashed_at", null)
+        .order("created_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("moment_reactions")
+        .select(
+          "id, moment_id, author_membership_id, reaction_type, created_at",
+        )
+        .eq("circle_id", access.circleId)
+        .neq("author_membership_id", access.membershipId)
+        .is("removed_at", null)
+        .order("created_at", { ascending: false })
+        .limit(40),
+    ]);
+
+    const notes = notesResult.error ? [] : (notesResult.data ?? []);
+    const reactions = reactionsResult.error ? [] : (reactionsResult.data ?? []);
+    const ownedFromCircle = ownedMomentsResult.error
+      ? []
+      : (ownedMomentsResult.data ?? []);
+    const familyLinks = familyLinksResult.error
+      ? []
+      : (familyLinksResult.data ?? []);
+
+    const visibleCircleByMomentId = new Map<string, string>();
+    for (const row of familyLinks) {
+      const existing = visibleCircleByMomentId.get(row.moment_id);
+      if (!existing || row.circle_id === access.circleId) {
+        visibleCircleByMomentId.set(row.moment_id, row.circle_id);
+      }
+    }
+    const linkedMomentIds = [...visibleCircleByMomentId.keys()];
+    const linkedMomentsResult =
+      linkedMomentIds.length === 0
+        ? {
+            data: [] as {
+              id: string;
+              recorded_by_membership_id: string;
+              kind: string;
+              created_at: string;
+              audience?: string;
+            }[],
+            error: null,
+          }
+        : await supabase
+            .from("moments")
+            .select("id, recorded_by_membership_id, kind, created_at, audience")
+            .in("id", linkedMomentIds)
+            .eq("audience", "family")
+            .is("trashed_at", null)
+            .order("created_at", { ascending: false })
+            .limit(40);
+    const linkedMoments = linkedMomentsResult.error
+      ? []
+      : (linkedMomentsResult.data ?? []);
+
+    return {
+      notes,
+      reactions,
+      ownedMomentIds: new Set([
+        ...ownedFromCircle.map((moment) => moment.id),
+        ...linkedMoments
+          .filter((moment) =>
+            myMembershipIds.has(moment.recorded_by_membership_id),
+          )
+          .map((moment) => moment.id),
+      ]),
+      familyMoments: linkedMoments
+        .filter(
+          (moment) =>
+            moment.kind !== "insight" &&
+            !myMembershipIds.has(moment.recorded_by_membership_id),
+        )
+        .map((moment) => ({
+          id: moment.id,
+          author_membership_id: moment.recorded_by_membership_id,
+          moment_kind: moment.kind,
+          created_at: moment.created_at,
+          audience: moment.audience,
+          circle_id: visibleCircleByMomentId.get(moment.id),
+        })),
+    };
+  } catch {
+    return emptyOptionalActivity;
+  }
+}
+
 export async function loadConnectedJournalContext(
   access: AuthenticatedAccess,
 ): Promise<ConnectedJournalContext> {
@@ -308,72 +436,51 @@ export async function loadConnectedJournalContext(
     circleMemberships.length > 0
       ? [...new Set(circleMemberships.map((membership) => membership.circleId))]
       : [access.circleId];
+  const myMembershipIds = new Set(
+    circleMemberships.map((membership) => membership.membershipId),
+  );
   const [
     circleResult,
     peopleResult,
     membershipsResult,
     guardiansResult,
-    momentsResult,
-    familyMomentsResult,
-    notesResult,
-    reactionsResult,
+    activity,
   ] = await Promise.all([
-    supabase
-      .from("circles")
-      .select("id, name, time_zone")
-      .eq("id", access.circleId)
-      .single(),
-    supabase
-      .from("people")
-      .select("id, display_name, profile_kind, accent_token, circle_id")
-      .in("circle_id", rosterCircleIds)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("circle_memberships")
-      .select("id, person_id, role, status, directory_kind, circle_id")
-      .in("circle_id", rosterCircleIds),
-    supabase
-      .from("person_guardians")
-      .select("managed_person_id, guardian_membership_id")
-      .eq("circle_id", access.circleId)
-      .is("revoked_at", null),
-    supabase
-      .from("moments")
-      .select("id")
-      .eq("circle_id", access.circleId)
-      .eq("recorded_by_membership_id", access.membershipId)
-      .is("trashed_at", null),
-    supabase
-      .from("moment_circles")
-      .select("moment_id, circle_id")
-      .in("circle_id", rosterCircleIds),
-    supabase
-      .from("moment_notes")
-      .select("id, moment_id, author_membership_id, created_at")
-      .eq("circle_id", access.circleId)
-      .neq("author_membership_id", access.membershipId)
-      .is("trashed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(40),
-    supabase
-      .from("moment_reactions")
-      .select("id, moment_id, author_membership_id, reaction_type, created_at")
-      .eq("circle_id", access.circleId)
-      .neq("author_membership_id", access.membershipId)
-      .is("removed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(40),
+    retryTransientFamilySessionQuery(() =>
+      supabase
+        .from("circles")
+        .select("id, name, time_zone")
+        .eq("id", access.circleId)
+        .single(),
+    ),
+    retryTransientFamilySessionQuery(() =>
+      supabase
+        .from("people")
+        .select("id, display_name, profile_kind, accent_token, circle_id")
+        .in("circle_id", rosterCircleIds)
+        .order("created_at", { ascending: true }),
+    ),
+    retryTransientFamilySessionQuery(() =>
+      supabase
+        .from("circle_memberships")
+        .select("id, person_id, role, status, directory_kind, circle_id")
+        .in("circle_id", rosterCircleIds),
+    ),
+    retryTransientFamilySessionQuery(() =>
+      supabase
+        .from("person_guardians")
+        .select("managed_person_id, guardian_membership_id")
+        .eq("circle_id", access.circleId)
+        .is("revoked_at", null),
+    ),
+    loadOptionalJournalActivity(supabase, access, myMembershipIds),
   ]);
 
   const error =
     circleResult.error ??
     peopleResult.error ??
     membershipsResult.error ??
-    guardiansResult.error ??
-    momentsResult.error ??
-    familyMomentsResult.error ??
-    notesResult.error ??
-    reactionsResult.error;
+    guardiansResult.error;
   if (error) throw error;
   if (!circleResult.data) throw new Error("Circle is unavailable");
 
@@ -388,10 +495,12 @@ export async function loadConnectedJournalContext(
           }[],
           error: null,
         }
-      : await supabase
-          .from("circles")
-          .select("id, name, created_by_membership_id")
-          .in("id", groupIds);
+      : await retryTransientFamilySessionQuery(() =>
+          supabase
+            .from("circles")
+            .select("id, name, created_by_membership_id")
+            .in("id", groupIds),
+        );
   if (groupsResult.error) throw groupsResult.error;
   const groupNameById = new Map(
     (groupsResult.data ?? []).map((circle) => [circle.id, circle.name]),
@@ -491,38 +600,6 @@ export async function loadConnectedJournalContext(
     personId: membership.personId,
     memberCount: memberCountByCircle.get(membership.circleId),
   }));
-  const visibleCircleByMomentId = new Map<string, string>();
-  for (const row of familyMomentsResult.data ?? []) {
-    const existing = visibleCircleByMomentId.get(row.moment_id);
-    if (!existing || row.circle_id === access.circleId) {
-      visibleCircleByMomentId.set(row.moment_id, row.circle_id);
-    }
-  }
-  const linkedMomentIds = [...visibleCircleByMomentId.keys()];
-  const linkedMomentsResult =
-    linkedMomentIds.length === 0
-      ? {
-          data: [] as {
-            id: string;
-            recorded_by_membership_id: string;
-            kind: string;
-            created_at: string;
-            audience?: string;
-          }[],
-          error: null,
-        }
-      : await supabase
-          .from("moments")
-          .select("id, recorded_by_membership_id, kind, created_at, audience")
-          .in("id", linkedMomentIds)
-          .eq("audience", "family")
-          .is("trashed_at", null)
-          .order("created_at", { ascending: false })
-          .limit(40);
-  if (linkedMomentsResult.error) throw linkedMomentsResult.error;
-  const myMembershipIds = new Set(
-    circleMemberships.map((membership) => membership.membershipId),
-  );
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
     circleId: access.circleId,
@@ -561,31 +638,11 @@ export async function loadConnectedJournalContext(
     settingsHref: "/settings/family",
     memoriesHref: "/memories",
     notifications: buildActivityNotifications(
-      notesResult.data ?? [],
-      reactionsResult.data ?? [],
-      new Set([
-        ...(momentsResult.data ?? []).map((moment) => moment.id),
-        ...(linkedMomentsResult.data ?? [])
-          .filter((moment) =>
-            myMembershipIds.has(moment.recorded_by_membership_id),
-          )
-          .map((moment) => moment.id),
-      ]),
+      activity.notes,
+      activity.reactions,
+      activity.ownedMomentIds,
       memberNames,
-      (linkedMomentsResult.data ?? [])
-        .filter(
-          (moment) =>
-            moment.kind !== "insight" &&
-            !myMembershipIds.has(moment.recorded_by_membership_id),
-        )
-        .map((moment) => ({
-          id: moment.id,
-          author_membership_id: moment.recorded_by_membership_id,
-          moment_kind: moment.kind,
-          created_at: moment.created_at,
-          audience: moment.audience,
-          circle_id: visibleCircleByMomentId.get(moment.id),
-        })),
+      activity.familyMoments,
       access.membershipId,
     ),
   };

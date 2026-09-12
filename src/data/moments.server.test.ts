@@ -616,4 +616,76 @@ describe("connected timeline mapping", () => {
       "/family?pages=22&snapshot=2026-08-30T10%3A00%3A01Z",
     );
   });
+
+  const familyContext = {
+    circleName: "Our family",
+    circleTimeZone: "America/Los_Angeles",
+    today: "2026-08-30",
+    chrome: {
+      accent: "teal" as const,
+      title: "Our family",
+      eyebrow: "Our family",
+      familyMark: [],
+      composer: {
+        experience: "connected-written" as const,
+        previewToday: "2026-08-30",
+        defaultJournalPersonId: "parent",
+        recorderPersonId: "parent",
+        recordedByName: "Parent",
+        journalPeople: [],
+        taggablePeople: [],
+      },
+    },
+    people: [],
+  };
+
+  const familyAccess = {
+    mode: "authenticated" as const,
+    membershipId: "membership",
+    circleId: "circle",
+    personId: "parent",
+    role: "organizer",
+  };
+
+  it("retries the first timeline page once on a transient RPC error", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST301", message: "JWT expired" },
+      })
+      .mockResolvedValueOnce({ data: [row()], error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+    });
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(
+      timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(1);
+  });
+
+  it("throws when the first timeline page stays down after a transient retry", async () => {
+    const expired = { code: "PGRST301", message: "JWT expired" };
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: expired });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    await expect(
+      loadConnectedTimeline(familyAccess, familyContext, { pages: 1 }),
+    ).rejects.toBe(expired);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a non-transient first-page RPC error", async () => {
+    const error = new Error("private detail");
+    const rpc = vi.fn().mockResolvedValue({ data: null, error });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    await expect(
+      loadConnectedTimeline(familyAccess, familyContext, { pages: 1 }),
+    ).rejects.toBe(error);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
 });
