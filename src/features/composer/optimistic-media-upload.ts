@@ -18,6 +18,7 @@ import {
   rememberVideoFrame,
   rememberVideoPoster,
 } from "@/features/video/video-poster-store";
+import { persistVideoPoster } from "@/features/video/persist-video-poster";
 
 export type OptimisticMediaUploadStage =
   | Readonly<{ state: "preparing" }>
@@ -343,6 +344,14 @@ function beginVideoUpload(input: StartVideoUploadInput) {
             stage,
           });
         },
+        {},
+        prepared.posterDataUrl && prepared.width && prepared.height
+          ? {
+              dataUrl: prepared.posterDataUrl,
+              width: prepared.width,
+              height: prepared.height,
+            }
+          : undefined,
       );
       if (!uploadStillExists(id)) return;
       rememberPoster(
@@ -351,6 +360,14 @@ function beginVideoUpload(input: StartVideoUploadInput) {
         prepared.width,
         prepared.height,
       );
+      if (prepared.posterDataUrl && prepared.width && prepared.height) {
+        void persistVideoPoster({
+          momentId: result.momentId,
+          posterDataUrl: prepared.posterDataUrl,
+          width: prepared.width,
+          height: prepared.height,
+        });
+      }
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,
@@ -513,6 +530,14 @@ export function retryOptimisticMediaUpload(id: string) {
             stage,
           });
         },
+        {},
+        prepared.posterDataUrl && prepared.width && prepared.height
+          ? {
+              dataUrl: prepared.posterDataUrl,
+              width: prepared.width,
+              height: prepared.height,
+            }
+          : undefined,
       );
       if (!uploadStillExists(id)) return;
       rememberPoster(
@@ -521,6 +546,14 @@ export function retryOptimisticMediaUpload(id: string) {
         prepared.width,
         prepared.height,
       );
+      if (prepared.posterDataUrl && prepared.width && prepared.height) {
+        void persistVideoPoster({
+          momentId: result.momentId,
+          posterDataUrl: prepared.posterDataUrl,
+          width: prepared.width,
+          height: prepared.height,
+        });
+      }
       updateOptimisticMediaUpload(id, {
         momentId: result.momentId,
         completedFiles: 1,

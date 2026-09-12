@@ -357,9 +357,8 @@ describe("PhotoCardPager", () => {
     try {
       renderPager(porchAlbum(4));
       const node = stage();
-      expect(node?.style.getPropertyValue("--photo-card-slide-width")).toBe(
-        "390px",
-      );
+      expect(node?.style.getPropertyValue("--photo-card-slide-width")).toBe("");
+      expect(node?.clientWidth).toBe(390);
       expect(
         document.querySelectorAll(".photo-card-pager-frame.is-outgoing"),
       ).toHaveLength(1);

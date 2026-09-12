@@ -227,6 +227,7 @@ type ActivityMoment = Readonly<{
   moment_kind: string;
   created_at: string;
   audience?: string;
+  circle_id?: string;
 }>;
 
 export function buildActivityNotifications(
@@ -258,7 +259,7 @@ export function buildActivityNotifications(
         actorName: memberNames.get(moment.author_membership_id) ?? "Family",
         message: familyMomentPostedMessage(moment.moment_kind),
         displayDate: displayDate(moment.created_at),
-        href: activityMomentHref(moment.id),
+        href: activityMomentHref(moment.id, moment.circle_id),
         createdAt: moment.created_at,
       })),
     ...notes
@@ -344,8 +345,8 @@ export async function loadConnectedJournalContext(
       .is("trashed_at", null),
     supabase
       .from("moment_circles")
-      .select("moment_id")
-      .eq("circle_id", access.circleId),
+      .select("moment_id, circle_id")
+      .in("circle_id", rosterCircleIds),
     supabase
       .from("moment_notes")
       .select("id, moment_id, author_membership_id, created_at")
@@ -423,13 +424,13 @@ export async function loadConnectedJournalContext(
   const memberships = allMemberships.filter(
     (membership) => circleIdOf(membership, access.circleId) === access.circleId,
   );
-  const personNameById = new Map(
-    people.map((person) => [person.id, person.display_name]),
+  const allPersonNameById = new Map(
+    allPeople.map((person) => [person.id, person.display_name]),
   );
   const memberNames = new Map(
-    memberships.map((membership) => [
+    allMemberships.map((membership) => [
       membership.id,
-      personNameById.get(membership.person_id) ?? "Family",
+      allPersonNameById.get(membership.person_id) ?? "Family",
     ]),
   );
   const guardedPersonIds = new Set(
@@ -490,9 +491,14 @@ export async function loadConnectedJournalContext(
     personId: membership.personId,
     memberCount: memberCountByCircle.get(membership.circleId),
   }));
-  const linkedMomentIds = [
-    ...new Set((familyMomentsResult.data ?? []).map((row) => row.moment_id)),
-  ];
+  const visibleCircleByMomentId = new Map<string, string>();
+  for (const row of familyMomentsResult.data ?? []) {
+    const existing = visibleCircleByMomentId.get(row.moment_id);
+    if (!existing || row.circle_id === access.circleId) {
+      visibleCircleByMomentId.set(row.moment_id, row.circle_id);
+    }
+  }
+  const linkedMomentIds = [...visibleCircleByMomentId.keys()];
   const linkedMomentsResult =
     linkedMomentIds.length === 0
       ? {
@@ -578,6 +584,7 @@ export async function loadConnectedJournalContext(
           moment_kind: moment.kind,
           created_at: moment.created_at,
           audience: moment.audience,
+          circle_id: visibleCircleByMomentId.get(moment.id),
         })),
       access.membershipId,
     ),

@@ -97,7 +97,7 @@ export async function deliverActivityWebPush(
           },
           {
             title,
-            url: activityMomentHref(row.moment_id),
+            url: activityMomentHref(row.moment_id, row.visible_circle_id),
             tag: `our-days:${kind}:${row.moment_id}`,
           },
         );

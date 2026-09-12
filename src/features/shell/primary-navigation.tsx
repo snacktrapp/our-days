@@ -25,7 +25,7 @@ function NavIcon({ name }: { name: "family" | "add" | "account" }) {
   if (name === "family") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 11.2v1.6" style={{ strokeWidth: 2.15 }} />
+        <path d="M12 11.2v1.6" strokeWidth={2.15} />
         <rect x="5.5" y="5" width="13" height="5.2" rx="1.6" />
         <rect x="5.5" y="13.8" width="13" height="5.2" rx="1.6" />
       </svg>
@@ -129,11 +129,15 @@ export function PrimaryNavigation({
         className="nav-item"
         type="button"
         aria-expanded={session?.isOpen ?? false}
-        onClick={() =>
-          session?.toggleCreate(addMomentRef.current, {
-            defaultAudience: "just_me",
-          })
-        }
+        onClick={() => {
+          // Match Post-to to the journal you're looking at. Forcing Just me from
+          // Family made videos appear briefly, then vanish after refresh.
+          const onPersonalJournal = pathname.startsWith("/people/");
+          session?.toggleCreate(
+            addMomentRef.current,
+            onPersonalJournal ? { defaultAudience: "just_me" } : undefined,
+          );
+        }}
       >
         <NavSymbol name="add" />
         <span>Add</span>

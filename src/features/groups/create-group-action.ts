@@ -115,4 +115,5 @@ export async function selectActiveGroupAction(circleId: string) {
   if (!(await hasExpectedOrigin()) || !isActiveCircleToken(circleId)) return;
   await requireJournalAccess();
   await writeActiveCircleCookie(circleId);
+  revalidatePath("/family");
 }

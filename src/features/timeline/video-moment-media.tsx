@@ -1,12 +1,20 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
 import {
   rememberVideoFrame,
+  rememberVideoPoster,
   useVideoFrame,
   useVideoPoster,
 } from "@/features/video/video-poster-store";
+import {
+  markVideoPosterPersisted,
+  persistVideoPoster,
+} from "@/features/video/persist-video-poster";
+import { warmVideoPoster } from "@/features/video/warm-video-poster";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
 function VideoFrameSizer({
@@ -23,6 +31,24 @@ function VideoFrameSizer({
   );
 }
 
+function handleCapturedFrame(
+  momentId: string,
+  frame: Readonly<{
+    posterDataUrl: string;
+    width: number;
+    height: number;
+  }>,
+) {
+  rememberVideoPoster(momentId, frame.posterDataUrl);
+  rememberVideoFrame(momentId, frame.width, frame.height);
+  void persistVideoPoster({
+    momentId,
+    posterDataUrl: frame.posterDataUrl,
+    width: frame.width,
+    height: frame.height,
+  });
+}
+
 export function VideoMomentMedia({
   moment,
   label,
@@ -33,24 +59,57 @@ export function VideoMomentMedia({
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
   const poster = moment.video.poster ?? storedPoster ?? undefined;
-  const width = moment.video.width ?? storedFrame?.width;
-  const height = moment.video.height ?? storedFrame?.height;
-  const knownRatio = Boolean(width && height && width > 0 && height > 0);
+  const width = moment.video.width ?? storedFrame?.width ?? 16;
+  const height = moment.video.height ?? storedFrame?.height ?? 9;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (moment.video.poster?.startsWith("/api/media/videos/")) {
+      markVideoPosterPersisted(moment.id);
+    }
+  }, [moment.id, moment.video.poster]);
+  useEffect(() => {
+    if (poster) return;
+    const root = rootRef.current;
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    let cancelled = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (cancelled) return;
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        void warmVideoPoster({
+          momentId: moment.id,
+          src: moment.video.src,
+        });
+      },
+      { rootMargin: "200px 0px", threshold: 0.01 },
+    );
+    observer.observe(root);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [moment.id, moment.video.src, poster]);
+  const knownRatio = Boolean(
+    (moment.video.width ?? storedFrame?.width) &&
+    (moment.video.height ?? storedFrame?.height),
+  );
 
   return (
     <div
-      className={`photo-frame video-frame${
-        knownRatio ? " has-reserved-frame has-known-ratio" : ""
+      ref={rootRef}
+      className={`photo-frame video-frame has-reserved-frame${
+        knownRatio ? " has-known-ratio" : " has-default-video-ratio"
       }`}
     >
-      {knownRatio ? <VideoFrameSizer width={width!} height={height!} /> : null}
+      <VideoFrameSizer width={width} height={height} />
       <FullscreenMediaViewer
         kind="video"
         label={label}
         reactionTargetId={moment.id}
         preview={
           poster ? (
-            // Poster is a local data URL captured during prep; it must not
+            // Poster may be a private API URL or a local data URL; it must not
             // enter the public image optimizer.
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -68,12 +127,18 @@ export function VideoMomentMedia({
             />
           ) : (
             <div
-              className="video-card-mat"
-              aria-hidden="true"
-              style={
-                knownRatio ? { aspectRatio: `${width} / ${height}` } : undefined
-              }
-            />
+              className={`video-card-mat${
+                moment.video.mimeType === "video/quicktime"
+                  ? " is-quicktime"
+                  : ""
+              }`}
+            >
+              <span className="video-card-mat-label">
+                {moment.video.mimeType === "video/quicktime"
+                  ? "iPhone video"
+                  : "Video"}
+              </span>
+            </div>
           )
         }
         fullscreenMedia={
@@ -85,6 +150,7 @@ export function VideoMomentMedia({
             autoPlay
             width={width}
             height={height}
+            onReadyFrame={(frame) => handleCapturedFrame(moment.id, frame)}
           />
         }
       />
