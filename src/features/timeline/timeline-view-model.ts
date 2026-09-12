@@ -60,6 +60,7 @@ export type MomentConversationViewModel = Readonly<{
     authorInitial: string;
     authorAccent: AccentToken;
     body: string;
+    createdAt?: string;
     displayDate: string;
     revision?: number;
     canChange?: boolean;

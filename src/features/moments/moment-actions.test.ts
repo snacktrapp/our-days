@@ -38,6 +38,7 @@ vi.mock("@/lib/web-push/deliver-activity", () => ({
   deliverActivityWebPush: mocks.deliver,
 }));
 
+import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -321,6 +322,8 @@ describe("written moment actions", () => {
             authorName: "Molly",
             authorAccent: "moss",
             body: "A detail remembered later.",
+            createdAt: "2026-08-30T12:00:00Z",
+            displayDate: displayConversationDate("2026-08-30T12:00:00Z"),
           }),
         ],
       },

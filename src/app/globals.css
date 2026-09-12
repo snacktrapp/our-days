@@ -1470,7 +1470,17 @@ button.audience-chip:focus-visible .audience-chip-face {
 }
 
 .inline-note-author strong {
+  display: inline;
   color: var(--ink);
+}
+
+.inline-note-when {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .inline-note-summary li p {
@@ -1491,12 +1501,12 @@ button.audience-chip:focus-visible .audience-chip-face {
 .inline-note-author {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 .inline-note-author > span {
   display: flex;
   gap: 2px;
+  margin-left: auto;
 }
 .inline-note-author button,
 .inline-notes-more {

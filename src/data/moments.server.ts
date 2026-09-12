@@ -32,6 +32,7 @@ import {
   timelinePhotosFor,
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
+import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
@@ -105,15 +106,6 @@ const knownReactionIds = new Set<MomentReactionId>([
   "made-me-smile",
   "remember-this",
 ]);
-
-function displayConversationDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
-}
 
 function conversationAuthorInitial(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
@@ -210,6 +202,7 @@ export async function loadMomentConversationsByMomentId(
       authorInitial: conversationAuthorInitial(authorName),
       authorAccent: author?.accent ?? "slate",
       body: note.body,
+      createdAt: note.created_at,
       displayDate: displayConversationDate(note.created_at),
       revision: note.revision,
       canChange: viewerMembershipIds.has(note.author_membership_id),

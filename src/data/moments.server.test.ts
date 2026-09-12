@@ -8,6 +8,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 import {
   buildTimelineEntries,
   loadConnectedTimeline,
@@ -199,6 +200,8 @@ describe("connected timeline mapping", () => {
           authorName: "Molly",
           authorAccent: "moss",
           body: "The quiet ride home.",
+          createdAt: "2026-08-29T12:00:00Z",
+          displayDate: displayConversationDate("2026-08-29T12:00:00Z"),
           canChange: false,
         }),
         expect.objectContaining({
