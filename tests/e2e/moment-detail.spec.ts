@@ -102,8 +102,18 @@ test("inline note drafts save safely and remain reversible", async ({
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form).toBeHidden();
   await expect(trigger).toBeFocused();
-  await card.getByRole("button", { name: /Show 1 more/u }).click();
   await expect(card.getByText(hostileNote, { exact: true })).toBeVisible();
+  await expect(
+    card.getByText("The quiet ride home was my favorite part.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await card.getByRole("button", { name: /Show 1 more/u }).click();
+  await expect(
+    card.getByText("The quiet ride home was my favorite part.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(card.locator("[data-detail-injection]")).toHaveCount(0);
   expect(
     await page.evaluate(

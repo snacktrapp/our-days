@@ -14,6 +14,10 @@ import {
   useOverlayPopoverClose,
 } from "@/features/shell/use-overlay-popover-close";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
+import {
+  hiddenConversationNoteCount,
+  visibleConversationNotes,
+} from "./moment-conversation-notes";
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -483,9 +487,11 @@ export function MomentConversationControl({
   };
 
   const noteLabel = conversation.notes.length > 0 ? "Notes" : "Note";
-  const visibleNotes = showAllNotes
-    ? conversation.notes
-    : conversation.notes.slice(0, 2);
+  const visibleNotes = visibleConversationNotes(
+    conversation.notes,
+    showAllNotes,
+  );
+  const olderNoteCount = hiddenConversationNoteCount(conversation.notes.length);
 
   return (
     <div id={conversationId} className="inline-conversation">
@@ -621,7 +627,7 @@ export function MomentConversationControl({
                   </li>
                 ))}
               </ol>
-              {conversation.notes.length > 2 ? (
+              {olderNoteCount > 0 ? (
                 <button
                   className="inline-notes-more"
                   type="button"
@@ -629,7 +635,7 @@ export function MomentConversationControl({
                 >
                   {showAllNotes
                     ? "Show fewer notes"
-                    : `Show ${conversation.notes.length - 2} more`}
+                    : `Show ${olderNoteCount} more`}
                 </button>
               ) : null}
             </>

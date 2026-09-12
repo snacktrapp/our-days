@@ -20,6 +20,7 @@ import {
 import {
   createLocalCircle,
   createLocalInsightMoment,
+  createLocalNote,
   createLocalWrittenMoment,
   findLocalAccount,
   readLocalJournal,
@@ -33,7 +34,11 @@ import {
   publishVerifiedPhotoMoment,
   publishVerifiedVideoMoment,
 } from "./media-coordinator";
-import { loadLocalJournalContext, loadLocalTimeline } from "./views";
+import {
+  loadLocalConversation,
+  loadLocalJournalContext,
+  loadLocalTimeline,
+} from "./views";
 
 const access: LocalAccess = {
   membershipId: localAlexMembershipId,
@@ -76,6 +81,34 @@ describe("local journal happy path", () => {
     expect(momentId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu,
     );
+  });
+
+  it("loads local notes oldest-first to match the connected conversation RPC", async () => {
+    const momentId = await createLocalWrittenMoment(access, {
+      journalPersonId: localAlexPersonId,
+      kind: "thought",
+      title: "",
+      body: "A shared porch note.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+    });
+    await createLocalNote(access, {
+      momentId,
+      body: "Oldest family note.",
+    });
+    await createLocalNote(access, {
+      momentId,
+      body: "Nana just replied.",
+    });
+
+    const conversation = await loadLocalConversation(access, momentId);
+    expect(conversation.notes.map((note) => note.body)).toEqual([
+      "Oldest family note.",
+      "Nana just replied.",
+    ]);
   });
 
   it("rejects photo creation on the generic written path", async () => {
