@@ -7,7 +7,10 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
-import type { JournalAccess } from "@/lib/auth/journal-access";
+import {
+  retryTransientFamilySessionQuery,
+  type JournalAccess,
+} from "@/lib/auth/journal-access";
 import type { Database } from "@/lib/supabase/database.types";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -615,16 +618,23 @@ export async function loadConnectedTimeline(
   let paginationFailed = false;
 
   for (let page = 0; page < pageCount; page += 1) {
-    const { data, error } = await supabase.rpc("list_timeline_moments", {
-      circle_id: access.circleId,
-      journal_person_id: options.journalPersonId,
-      cursor_occurred_on: cursor?.occurred_on,
-      cursor_has_precise_time: cursor ? cursor.occurred_at !== null : undefined,
-      cursor_occurred_at: cursor?.occurred_at ?? undefined,
-      cursor_moment_id: cursor?.moment_id,
-      page_size: pageSize + 1,
-      snapshot_at: snapshotAt,
-    });
+    const runPage = () =>
+      supabase.rpc("list_timeline_moments", {
+        circle_id: access.circleId,
+        journal_person_id: options.journalPersonId,
+        cursor_occurred_on: cursor?.occurred_on,
+        cursor_has_precise_time: cursor
+          ? cursor.occurred_at !== null
+          : undefined,
+        cursor_occurred_at: cursor?.occurred_at ?? undefined,
+        cursor_moment_id: cursor?.moment_id,
+        page_size: pageSize + 1,
+        snapshot_at: snapshotAt,
+      });
+    const { data, error } =
+      page === 0
+        ? await retryTransientFamilySessionQuery(runPage)
+        : await runPage();
     if (error) {
       if (page === 0) throw error;
       hasMore = true;
