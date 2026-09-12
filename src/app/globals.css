@@ -1503,7 +1503,7 @@ button.audience-chip:focus-visible .audience-chip-face {
   align-items: center;
   gap: 8px;
 }
-.inline-note-author > span {
+.inline-note-author .inline-note-actions {
   display: flex;
   gap: 2px;
   margin-left: auto;

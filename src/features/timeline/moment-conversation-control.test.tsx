@@ -143,7 +143,7 @@ describe("MomentConversationControl", () => {
 
     const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(within(notes).getByText("Brian")).toBeVisible();
-    expect(notes.querySelector("time.inline-note-when")).toHaveTextContent(
+    expect(notes.querySelector(".inline-note-when")).toHaveTextContent(
       "Just now",
     );
     expect(within(notes).getByText("A fresh detail.")).toBeVisible();

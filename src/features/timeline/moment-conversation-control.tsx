@@ -573,17 +573,21 @@ export function MomentConversationControl({
                     <div>
                       <span className="inline-note-author">
                         <strong>{note.authorName}</strong>
-                        <time
-                          className="inline-note-when"
-                          dateTime={note.createdAt}
-                          suppressHydrationWarning
-                        >
-                          {note.createdAt
-                            ? displayConversationDate(note.createdAt)
-                            : note.displayDate}
-                        </time>
+                        {note.createdAt ? (
+                          <time
+                            className="inline-note-when"
+                            dateTime={note.createdAt}
+                            suppressHydrationWarning
+                          >
+                            {displayConversationDate(note.createdAt)}
+                          </time>
+                        ) : (
+                          <span className="inline-note-when">
+                            {note.displayDate}
+                          </span>
+                        )}
                         {actions && note.canChange && note.revision ? (
-                          <span>
+                          <span className="inline-note-actions">
                             <button
                               type="button"
                               disabled={pending}
