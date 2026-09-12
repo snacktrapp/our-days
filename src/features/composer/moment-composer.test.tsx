@@ -2094,6 +2094,169 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
+  it("dismisses after adding photos to a saved moment and attaches them in the Home chip", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const onRequestClose = vi.fn();
+    photoUpload.upload.mockResolvedValue({
+      state: "processing",
+      intakeId: "d6000000-0000-4000-8000-000000000031",
+      momentId: "moment-photo",
+    });
+    const user = userEvent.setup({ applyAccept: false });
+    function PhotoEditHarness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open={open}
+          editDraft={{
+            momentId: "moment-photo",
+            revision: 4,
+            mode: "photo",
+            journalPersonId: "brian",
+            occurredOn: "2026-08-28",
+            maxOccurredOn: "2026-08-30",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: [],
+            place: emptyPlaceSelection(),
+            verseSelection: emptyBibleVerseSelection,
+            title: "",
+            body: "At the lake",
+            existingMedia: {
+              kind: "photo",
+              src: "/api/media/moments/moment-photo",
+              alt: "Lake photo",
+            },
+            save: update,
+          }}
+          returnFocusRef={{ current: null }}
+          onRequestClose={() => {
+            onRequestClose();
+            setOpen(false);
+          }}
+        />
+      );
+    }
+    render(<PhotoEditHarness />);
+
+    await user.upload(
+      screen.getByLabelText("Add photo"),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "tour.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Photo 2 of 2"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onRequestClose).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByText("That moment could not be changed. Try again."),
+    ).toBeNull();
+    expect(update).toHaveBeenCalledOnce();
+    expect(photoUpload.upload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        existingMomentId: "moment-photo",
+        body: "At the lake",
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+    expect(optimisticMediaUploadSnapshot()).toEqual([
+      expect.objectContaining({
+        body: "At the lake",
+        momentId: "moment-photo",
+        stage: { state: "processing" },
+      }),
+    ]);
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/family?circle=20000000-0000-4000-8000-000000000001",
+    );
+    expect(navigation.refresh).not.toHaveBeenCalled();
+  });
+
+  it("does not show a false change error when added photos attach after Save", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    const onRequestClose = vi.fn();
+    photoUpload.upload.mockRejectedValue(
+      new PhotoUploadError("The photo’s private status was unavailable.", true),
+    );
+    const user = userEvent.setup({ applyAccept: false });
+    function PhotoEditHarness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open={open}
+          editDraft={{
+            momentId: "moment-photo",
+            revision: 4,
+            mode: "photo",
+            journalPersonId: "brian",
+            occurredOn: "2026-08-28",
+            maxOccurredOn: "2026-08-30",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: [],
+            place: emptyPlaceSelection(),
+            verseSelection: emptyBibleVerseSelection,
+            title: "",
+            body: "Heidi UCSD college tour",
+            existingMedia: {
+              kind: "photo",
+              src: "/api/media/moments/moment-photo",
+              alt: "Campus tour",
+            },
+            save: update,
+          }}
+          returnFocusRef={{ current: null }}
+          onRequestClose={() => {
+            onRequestClose();
+            setOpen(false);
+          }}
+        />
+      );
+    }
+    render(<PhotoEditHarness />);
+
+    await user.upload(
+      screen.getByLabelText("Add photo"),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x01])], "more.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(onRequestClose).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByText("That moment could not be changed. Try again."),
+    ).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(update).toHaveBeenCalledOnce();
+    await waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message: "The photo’s private status was unavailable.",
+      }),
+    );
+  });
+
   it("has no in-sheet type switcher; wrong type is swipe dismiss then + again", async () => {
     const user = await openComposer();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

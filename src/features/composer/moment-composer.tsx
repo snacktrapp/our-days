@@ -36,12 +36,7 @@ import type {
 import { maximumMomentPhotos } from "@/features/moments/moment-photos";
 import type { MomentAudience } from "@/features/moments/moment-audience";
 import { normalizeMomentAudience } from "@/features/moments/moment-audience";
-import {
-  createPhotoUploadAttempt,
-  uploadPhotoMoment,
-  type PhotoUploadAttempt,
-  type PhotoUploadStage,
-} from "./photo-upload";
+import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
   acceptedVideoMime,
   maximumVideoBytes,
@@ -1227,6 +1222,7 @@ export function MomentComposer({
       const savedResolvedPlaceName =
         savedMode === "location" ? savedTitle : savedPlaceName.trim();
       setSavingEdit(true);
+      let momentUpdated = false;
       try {
         const result = await editDraft.save({
           momentId: editDraft.momentId,
@@ -1247,6 +1243,11 @@ export function MomentComposer({
           setSaveError(result.message);
           return;
         }
+        momentUpdated = true;
+        const newFiles =
+          savedMode === "photo" && editDraft.existingMedia?.kind === "photo"
+            ? photoItems.flatMap((item) => (item.file ? [item.file] : []))
+            : [];
         if (
           savedMode === "photo" &&
           editDraft.existingMedia?.kind === "photo"
@@ -1257,34 +1258,6 @@ export function MomentComposer({
           const remainingExistingIds = photoItems.flatMap((item) =>
             item.existingPhotoId ? [item.existingPhotoId] : [],
           );
-          const newFiles = photoItems.flatMap((item) =>
-            item.file ? [item.file] : [],
-          );
-          if (newFiles.length > 0 && model.circleId) {
-            for (const file of newFiles) {
-              await uploadPhotoMoment(
-                file,
-                {
-                  body: savedBody,
-                  circleId: model.circleId,
-                  journalPersonId: savedJournalPersonId,
-                  occurredAt,
-                  occurredOn: savedOccurredOn,
-                  occurredTimezone,
-                  placeName: savedPlaceName,
-                  latitude: savedLatitude,
-                  longitude: savedLongitude,
-                  taggedPersonIds: savedTaggedPersonIds,
-                  audience,
-                  existingMomentId: editDraft.momentId,
-                  circleIds: saveCircleIds,
-                },
-                createPhotoUploadAttempt(),
-                new AbortController().signal,
-                () => undefined,
-              );
-            }
-          }
           const removedIds = originalIds.filter(
             (photoId) => !remainingExistingIds.includes(photoId),
           );
@@ -1309,6 +1282,45 @@ export function MomentComposer({
             }
           }
         }
+        if (newFiles.length > 0 && model.circleId) {
+          startOptimisticPhotoUpload({
+            file: newFiles[0],
+            files: newFiles,
+            occurredTime: savedOccurredTime,
+            person: {
+              id: savedJournalPersonId,
+              name: savedJournalPerson.name,
+              initial: savedJournalPerson.initial,
+              accent: savedJournalPerson.accent,
+            },
+            draft: {
+              body: savedBody,
+              circleId: savePrimaryCircleId ?? model.circleId,
+              journalPersonId: savedJournalPersonId,
+              occurredAt,
+              occurredOn: savedOccurredOn,
+              occurredTimezone,
+              placeName: savedPlaceName,
+              latitude: savedLatitude,
+              longitude: savedLongitude,
+              taggedPersonIds: savedTaggedPersonIds,
+              audience,
+              existingMomentId: editDraft.momentId,
+              circleIds: saveCircleIds,
+            },
+          });
+          resetDraft();
+          onRequestClose();
+          window.requestAnimationFrame(() =>
+            returnFocusRef.current?.focus({ preventScroll: true }),
+          );
+          router.replace(
+            audience === "just_me"
+              ? `/people/${savedJournalPersonId}`
+              : familyRedirect,
+          );
+          return;
+        }
         const region = document.getElementById("journal-live-region");
         if (region) region.textContent = "Changes to this moment were saved.";
         resetDraft();
@@ -1317,7 +1329,11 @@ export function MomentComposer({
         router.replace(pathname);
         router.refresh();
       } catch {
-        setSaveError("That moment could not be changed. Try again.");
+        setSaveError(
+          momentUpdated
+            ? "The moment was saved, but photos still need attention. Try again."
+            : "That moment could not be changed. Try again.",
+        );
       } finally {
         setSavingEdit(false);
       }
