@@ -48,7 +48,7 @@ function isUnavailableFamilySession(error: unknown) {
   );
 }
 
-function isTransientFamilySessionError(error: unknown) {
+export function isTransientFamilySessionError(error: unknown) {
   if (!error || typeof error !== "object") return false;
   const candidate = error as {
     code?: unknown;
@@ -67,6 +67,16 @@ function isTransientFamilySessionError(error: unknown) {
     candidate.status === 503 ||
     /jwt expired|fetch failed|failed to fetch|network|timeout/iu.test(message)
   );
+}
+
+export async function retryTransientFamilySessionQuery<
+  T extends { error: unknown },
+>(run: () => PromiseLike<T>): Promise<T> {
+  const first = await run();
+  if (!first.error || !isTransientFamilySessionError(first.error)) {
+    return first;
+  }
+  return run();
 }
 
 type MembershipRow = Readonly<{
@@ -155,10 +165,9 @@ async function readIdentityUncached(): Promise<Identity> {
   const userId = claimsData?.claims?.sub;
   if (claimsError || typeof userId !== "string") return { mode: "anonymous" };
 
-  let { data, error } = await readActiveMemberships(supabase, userId);
-  if (error && isTransientFamilySessionError(error)) {
-    ({ data, error } = await readActiveMemberships(supabase, userId));
-  }
+  const { data, error } = await retryTransientFamilySessionQuery(() =>
+    readActiveMemberships(supabase, userId),
+  );
 
   if (error) {
     if (isUnavailableFamilySession(error)) return { mode: "anonymous" };
