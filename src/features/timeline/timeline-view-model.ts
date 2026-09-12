@@ -85,6 +85,7 @@ type TimelineMomentBase = Readonly<{
   showJustMeBadge?: boolean;
   showAudienceChip?: boolean;
   audienceChipLabel?: string;
+  audienceCircleNames?: readonly string[];
   circleId?: string;
   linkedCircleIds?: readonly string[];
   displayTime?: string;

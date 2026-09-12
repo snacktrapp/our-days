@@ -18,6 +18,7 @@ import {
   trashMomentNoteAction,
   updateFamilyMomentAction,
   updateMomentNoteAction,
+  setMomentAudienceAction,
 } from "@/features/moments/moment-actions";
 
 export default async function FamilyPage({
@@ -51,6 +52,7 @@ export default async function FamilyPage({
   const model = await loadConnectedTimeline(access, context, {
     pages: Number(pages ?? "1"),
     snapshotAt: snapshot,
+    allCircles: !params.circle,
   });
   return (
     <JournalChrome
@@ -66,6 +68,7 @@ export default async function FamilyPage({
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,
+          setAudience: setMomentAudienceAction,
           removePhoto: removeMomentPhotoAction,
           reorderPhotos: reorderMomentPhotosAction,
         }}

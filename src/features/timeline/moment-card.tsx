@@ -18,6 +18,8 @@ import type {
 } from "./timeline-view-model";
 import { VideoMomentMedia } from "./video-moment-media";
 import { MomentPlaceButton, MomentPlaceMeta } from "./moment-place-meta";
+import { AudienceChip } from "./audience-chip";
+import type { PostableCircle } from "@/features/composer/post-to";
 
 function PhotoFrameSizer({
   width,
@@ -69,10 +71,50 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   return { ...base, kind: moment.kind };
 }
 
+function CardAudience({
+  moment,
+  circles,
+  connectedActions,
+}: Readonly<{
+  moment: TimelineMomentViewModel;
+  circles: readonly PostableCircle[];
+  connectedActions?: ConnectedMomentActions;
+}>) {
+  const chipLabel =
+    moment.audienceChipLabel ??
+    (moment.showJustMeBadge ? "Just me" : undefined);
+  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
+  if (moment.kind === "insight" || !showChip || !chipLabel) return null;
+  return (
+    <AudienceChip
+      label={chipLabel}
+      names={moment.audienceCircleNames}
+      momentId={moment.id}
+      revision={moment.revision}
+      audience={moment.audience}
+      circleId={moment.circleId}
+      linkedCircleIds={moment.linkedCircleIds}
+      circles={circles}
+      setAudience={connectedActions?.setAudience}
+      edit={
+        connectedActions?.update
+          ? {
+              moment,
+              update: connectedActions.update,
+              removePhoto: connectedActions.removePhoto,
+              reorderPhotos: connectedActions.reorderPhotos,
+            }
+          : undefined
+      }
+    />
+  );
+}
+
 type MomentCardProps = Readonly<{
   interaction?: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   preload?: boolean;
+  circles?: readonly PostableCircle[];
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
@@ -83,6 +125,7 @@ export function MomentCard({
   interaction,
   moment,
   preload = false,
+  circles = [],
   connectedActions,
   conversationActions,
   connectedPosition,
@@ -173,6 +216,11 @@ export function MomentCard({
               />
             ) : null}
           </div>
+          <CardAudience
+            moment={moment}
+            circles={circles}
+            connectedActions={connectedActions}
+          />
           <p>{moment.text}</p>
           {interaction ? (
             <MomentConversationControl
@@ -198,6 +246,11 @@ export function MomentCard({
           placeName={moment.placeName}
           latitude={moment.latitude}
           longitude={moment.longitude}
+        />
+        <CardAudience
+          moment={moment}
+          circles={circles}
+          connectedActions={connectedActions}
         />
         {bibleVerse ? (
           <ExpandableThoughtCopy
@@ -302,6 +355,11 @@ export function MomentCard({
               />
             ) : null}
           </div>
+          <CardAudience
+            moment={moment}
+            circles={circles}
+            connectedActions={connectedActions}
+          />
           <h3>
             <MomentPlaceButton
               placeName={moment.place}
@@ -340,6 +398,11 @@ export function MomentCard({
           placeName={moment.placeName}
           latitude={moment.latitude}
           longitude={moment.longitude}
+        />
+        <CardAudience
+          moment={moment}
+          circles={circles}
+          connectedActions={connectedActions}
         />
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>

@@ -16,13 +16,22 @@ export async function previewGroupOptions(
   const createdName =
     (search?.name ? search.name : null) ??
     (await readPreviewCreatedGroupName());
-  const circle = search?.circle ?? (await readActiveCircleCookie());
+  const cookieCircle = await readActiveCircleCookie();
+  const requestedCircle = search?.circle;
+  const extraSource = requestedCircle ?? cookieCircle;
   const extraGroup = createdName
     ? { id: "created", name: createdName }
-    : circle && circle !== "family"
-      ? { id: circle, name: "New circle" }
+    : extraSource && extraSource !== "family"
+      ? { id: extraSource, name: "New circle" }
       : undefined;
-  const selectedGroupId =
-    circle && extraGroup && circle === extraGroup.id ? extraGroup.id : "family";
-  return extraGroup ? { extraGroup, selectedGroupId } : {};
+  const selectedGroupId = requestedCircle
+    ? extraGroup && requestedCircle === extraGroup.id
+      ? extraGroup.id
+      : requestedCircle
+    : null;
+  return extraGroup
+    ? { extraGroup, selectedGroupId }
+    : selectedGroupId
+      ? { selectedGroupId }
+      : {};
 }

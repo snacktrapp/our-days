@@ -51,12 +51,13 @@ describe("design preview timeline chronology", () => {
     });
   });
 
-  it("teaches the family switcher the group / person / you grammar", () => {
+  it("teaches the family switcher All, Just me, Circles, and Person", () => {
     const family = getFamilyTimelineFixture();
-    expect(family.chrome.eyebrow).toBe("Circle");
-    expect(family.chrome.title).toBe("All our days");
+    expect(family.chrome.eyebrow).toBe("All");
+    expect(family.chrome.title).toBe("All");
     expect(family.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
+      ["all", "All"],
       ["group", "All our days"],
       ["person", "Molly"],
       ["person", "Avery"],
@@ -73,7 +74,7 @@ describe("design preview timeline chronology", () => {
     });
 
     const brian = getPersonalTimelineFixture("brian");
-    expect(brian?.chrome.eyebrow).toBe("You");
+    expect(brian?.chrome.eyebrow).toBe("Just me");
     expect(brian?.chrome.title).toBe("Brian");
   });
 
@@ -124,6 +125,7 @@ describe("design preview timeline chronology", () => {
     expect(cousins.chrome.eyebrow).toBe("Circle");
     expect(cousins.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
+      ["all", "All"],
       ["group", "All our days"],
       ["group", "Cousins"],
     ]);

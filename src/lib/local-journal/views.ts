@@ -4,7 +4,9 @@ import type { AccentToken } from "@/features/accent-token";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import {
   buildJournalSwitcher,
+  groupHomeHref,
   journalSwitcherEyebrow,
+  journalTimelineHref,
 } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 import type {
@@ -603,21 +605,46 @@ function localViewerPersonIds(
   return ids;
 }
 
+function localViewerCircleIds(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  return [
+    document.circle.id,
+    ...(document.extraCircles ?? []).map((circle) => circle.id),
+    access.circleId,
+  ];
+}
+
 function visibleMoments(
   document: Awaited<ReturnType<typeof readLocalJournal>>,
   access: LocalAccess,
   journalPersonId?: string,
+  allCircles = false,
 ) {
   const viewingOwnJournal = Boolean(
     journalPersonId && journalPersonId === access.personId,
   );
-  const ownPersonIds = viewingOwnJournal
-    ? localViewerPersonIds(document, access)
-    : null;
+  const ownPersonIds =
+    viewingOwnJournal || allCircles
+      ? localViewerPersonIds(document, access)
+      : null;
+  const viewerCircleIds = new Set(localViewerCircleIds(document, access));
   return document.moments
     .filter((moment) => {
       if (moment.trashedAt !== null) return false;
       if (!journalPersonId) {
+        if (allCircles) {
+          if (moment.audience === "just_me") {
+            return Boolean(
+              moment.journalPersonId &&
+              ownPersonIds?.has(moment.journalPersonId),
+            );
+          }
+          return momentLinkedCircleIds(moment, document.circle.id).some(
+            (circleId) => viewerCircleIds.has(circleId),
+          );
+        }
         return momentLinkedCircleIds(moment, document.circle.id).includes(
           access.circleId,
         );
@@ -648,6 +675,7 @@ export async function loadLocalTimeline(
     journalPersonId?: string;
     pages: number;
     snapshotAt?: string;
+    allCircles?: boolean;
   }>,
 ): Promise<TimelineViewModel> {
   const document = await readLocalJournal();
@@ -657,7 +685,16 @@ export async function loadLocalTimeline(
   const personal = options.journalPersonId
     ? context.people.find((person) => person.id === options.journalPersonId)
     : undefined;
-  const all = visibleMoments(document, access, options.journalPersonId);
+  const allCircles = Boolean(options.allCircles) && !personal;
+  const all = visibleMoments(
+    document,
+    access,
+    options.journalPersonId,
+    allCircles,
+  );
+  const circleNames = Object.fromEntries(
+    (context.groups ?? []).map((group) => [group.id, group.name]),
+  );
   const pageSize = 20;
   const limit = pageCount * pageSize;
   const page = all.slice(0, limit);
@@ -669,6 +706,8 @@ export async function loadLocalTimeline(
       {
         viewerPersonId: access.personId,
         viewingJournalPersonId: options.journalPersonId,
+        feedCircleId: allCircles || personal ? null : access.circleId,
+        circleNames,
       },
       localMomentPhotoDescriptors(moment),
       conversationFromLocalDocument(document, access, moment.id),
@@ -686,8 +725,12 @@ export async function loadLocalTimeline(
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
-    currentHref: personal ? `/people/${personal.id}` : "/family",
-    activeGroupId: access.circleId,
+    currentHref: personal
+      ? `/people/${personal.id}`
+      : allCircles
+        ? "/family"
+        : groupHomeHref(access.circleId),
+    activeGroupId: allCircles ? null : access.circleId,
   });
   const chrome = {
     ...(personal
@@ -702,10 +745,19 @@ export async function loadLocalTimeline(
               }
             : context.chrome.composer,
         }
-      : context.chrome),
+      : allCircles
+        ? {
+            ...context.chrome,
+            title: "All",
+          }
+        : context.chrome),
     eyebrow: journalSwitcherEyebrow(switcher),
   };
-  const queryPrefix = personal ? `/people/${personal.id}` : "/family";
+  const queryPrefix = personal
+    ? `/people/${personal.id}`
+    : allCircles
+      ? "/family"
+      : groupHomeHref(access.circleId);
   return {
     chrome,
     switcher,
@@ -732,7 +784,7 @@ export async function loadLocalTimeline(
     ),
     pagination: hasMore
       ? {
-          nextHref: `${queryPrefix}?pages=${pageCount + 1}&snapshot=${encodeURIComponent(snapshotAt)}`,
+          nextHref: journalTimelineHref(queryPrefix, pageCount + 1, snapshotAt),
           label: "Show earlier days",
         }
       : undefined,

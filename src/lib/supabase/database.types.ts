@@ -1120,6 +1120,45 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_all_timeline_moments: {
+        Args: {
+          cursor_has_precise_time?: boolean;
+          cursor_moment_id?: string;
+          cursor_occurred_at?: string;
+          cursor_occurred_on?: string;
+          page_size?: number;
+          snapshot_at?: string;
+        };
+        Returns: {
+          body: string;
+          can_change: boolean;
+          created_at: string;
+          feed_snapshot_at: string;
+          journal_person_accent: string | null;
+          journal_person_kind: string | null;
+          journal_person_name: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          moment_circle_id: string;
+          moment_id: string;
+          moment_journal_person_id: string | null;
+          moment_kind: string;
+          moment_title: string;
+          occurred_at: string;
+          occurred_on: string;
+          occurred_timezone: string;
+          place_name: string;
+          recorder_person_id: string;
+          recorder_person_name: string;
+          revision: number;
+          source_url: string | null;
+          tagged_people: Json;
+          time_precision: string;
+          updated_at: string;
+          moment_audience: string;
+          linked_circle_ids: string[];
+        }[];
+      };
       list_timeline_moments: {
         Args: {
           circle_id: string;
