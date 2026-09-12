@@ -83,7 +83,7 @@ describe("local journal happy path", () => {
     );
   });
 
-  it("loads local notes oldest-first to match the connected conversation RPC", async () => {
+  it("loads local notes newest-first for the visible conversation window", async () => {
     const momentId = await createLocalWrittenMoment(access, {
       journalPersonId: localAlexPersonId,
       kind: "thought",
@@ -106,8 +106,8 @@ describe("local journal happy path", () => {
 
     const conversation = await loadLocalConversation(access, momentId);
     expect(conversation.notes.map((note) => note.body)).toEqual([
-      "Oldest family note.",
       "Nana just replied.",
+      "Oldest family note.",
     ]);
   });
 

@@ -20,6 +20,7 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
+import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import { buildPeopleViewModel } from "@/features/people/people-view-model";
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
@@ -108,21 +109,11 @@ function conversationFromLocalDocument(
   access: LocalAccess,
   momentId: string,
 ): MomentConversationViewModel {
-  const displayDate = (value: string) =>
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(new Date(value));
   return {
     notes: document.notes
       .filter((note) => note.momentId === momentId && note.trashedAt === null)
       .slice()
-      .sort((left, right) => {
-        const byTime = left.createdAt.localeCompare(right.createdAt);
-        return byTime !== 0 ? byTime : left.id.localeCompare(right.id);
-      })
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .map((note) => {
         const authorName = membershipPersonName(
           document,
@@ -141,7 +132,8 @@ function conversationFromLocalDocument(
           authorInitial: initialFor(authorName),
           authorAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
           body: note.body,
-          displayDate: displayDate(note.createdAt),
+          createdAt: note.createdAt,
+          displayDate: displayConversationDate(note.createdAt),
           revision: note.revision,
           canChange: note.authorMembershipId === access.membershipId,
         };

@@ -191,9 +191,11 @@ describe("TimelineFeed", () => {
       ),
     ).toEqual(["photo", "thought", "location", "milestone"]);
     expect(screen.getAllByText("one week earlier")).toHaveLength(1);
-    expect(container.querySelector("time")?.getAttribute("datetime")).toBe(
-      "2026-08-01",
-    );
+    expect(
+      container
+        .querySelector("article > time.sr-only")
+        ?.getAttribute("datetime"),
+    ).toBe("2026-08-01");
     expect(screen.getByAltText("Family outside")).toBeInTheDocument();
     expect(screen.getAllByText("Aug. 1, 2026 · 8:00 pm")).toHaveLength(4);
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();

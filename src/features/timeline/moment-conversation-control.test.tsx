@@ -8,6 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
+import { displayConversationDate } from "./display-conversation-date";
 import { MomentConversationControl } from "./moment-conversation-control";
 import type {
   MomentConversationViewModel,
@@ -98,7 +99,54 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("❤️Molly");
     expect(
       screen.getByRole("list", { name: "Notes from family" }),
-    ).toHaveTextContent("MollyThe quiet ride home was my favorite part.");
+    ).toHaveTextContent(
+      "MollyAug 2, 2026The quiet ride home was my favorite part.",
+    );
+  });
+
+  it("shows a local date and time immediately after the author name", () => {
+    const createdAt = "2026-08-02T14:55:00.000Z";
+    const stamp = displayConversationDate(createdAt);
+    renderControl(undefined, {
+      notes: [
+        {
+          ...initialConversation.notes[0],
+          createdAt,
+          displayDate: stamp,
+        },
+      ],
+      reactions: [],
+    });
+
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    const when = notes.querySelector("time.inline-note-when");
+    expect(when).toHaveAttribute("dateTime", createdAt);
+    expect(when).toHaveTextContent(stamp);
+    expect(notes).toHaveTextContent(
+      `Molly${stamp}The quiet ride home was my favorite part.`,
+    );
+    expect(stamp).not.toMatch(/ago/iu);
+  });
+
+  it("keeps an optimistic note as Just now until a refresh replaces it", async () => {
+    const user = userEvent.setup();
+    renderControl(undefined, { notes: [], reactions: [] });
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Add a family note" }),
+      "A fresh detail.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    expect(within(notes).getByText("Brian")).toBeVisible();
+    expect(notes.querySelector(".inline-note-when")).toHaveTextContent(
+      "Just now",
+    );
+    expect(within(notes).getByText("A fresh detail.")).toBeVisible();
   });
 
   it("shows newest notes first and keeps older notes behind Show more", async () => {

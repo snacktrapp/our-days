@@ -24,6 +24,7 @@ import type {
   MomentConversationViewModel,
   MomentReactionId,
 } from "@/features/timeline/timeline-view-model";
+import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 
 async function localStore() {
   return import("@/lib/local-journal/store");
@@ -620,15 +621,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function displayConversationDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 function mapConversation(value: {
   notes: unknown;
   reactions: unknown;
@@ -657,6 +649,7 @@ function mapConversation(value: {
               ) ?? "•",
             authorAccent: mapDatabaseAccent(note.authorAccent),
             body: note.body,
+            createdAt: note.createdAt,
             displayDate: displayConversationDate(note.createdAt),
             revision: note.revision,
             canChange: note.canChange,

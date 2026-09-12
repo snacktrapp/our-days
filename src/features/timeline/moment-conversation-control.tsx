@@ -18,6 +18,7 @@ import {
   hiddenConversationNoteCount,
   visibleConversationNotes,
 } from "./moment-conversation-notes";
+import { displayConversationDate } from "./display-conversation-date";
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -572,8 +573,21 @@ export function MomentConversationControl({
                     <div>
                       <span className="inline-note-author">
                         <strong>{note.authorName}</strong>
+                        {note.createdAt ? (
+                          <time
+                            className="inline-note-when"
+                            dateTime={note.createdAt}
+                            suppressHydrationWarning
+                          >
+                            {displayConversationDate(note.createdAt)}
+                          </time>
+                        ) : (
+                          <span className="inline-note-when">
+                            {note.displayDate}
+                          </span>
+                        )}
                         {actions && note.canChange && note.revision ? (
-                          <span>
+                          <span className="inline-note-actions">
                             <button
                               type="button"
                               disabled={pending}
