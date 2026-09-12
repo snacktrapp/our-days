@@ -255,21 +255,19 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
   });
 
-  it("shows member counts on circle rows only", async () => {
+  it("shows a people-count line on circle rows only", async () => {
     const counted = switcher.map((item) =>
       item.kind === "group" ? { ...item, memberCount: 3 } : item,
     );
     render(<FamilyTitleSwitcher model={model} switcher={counted} />);
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    const family = screen.getByRole("link", { name: "Trapp Family" });
+    const family = screen.getByRole("link", { name: /Trapp Family/u });
+    expect(family.querySelector("small")).toHaveTextContent("3 people");
+    expect(family.querySelector(".title-switcher-member-count")).toBeNull();
     expect(
-      family.querySelector(".title-switcher-member-count"),
-    ).toHaveTextContent("3");
-    expect(
-      screen
-        .getByRole("link", { name: "All" })
-        .querySelector(".title-switcher-member-count"),
+      screen.getByRole("link", { name: "All" }).querySelector("small"),
     ).toBeNull();
+    expect(screen.queryByText("Brian, Molly")).toBeNull();
   });
 
   it("is a feed filter only and does not offer create or admin actions", async () => {

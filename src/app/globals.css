@@ -6727,31 +6727,29 @@ button.audience-chip .audience-chip-face {
   padding-bottom: 8px;
 }
 
-.title-switcher-section h3 {
+.title-switcher-section .private-label {
   margin: 0 0 4px;
-  color: var(--muted);
-  font-family: var(--font-interface);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .title-switcher-sheet a {
   min-height: 44px;
-  padding: 8px 0;
-  display: flex;
-  align-items: center;
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
   color: var(--muted);
-  font-size: 15px;
-  font-weight: 500;
   text-decoration: none;
+}
+
+.title-switcher-link-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .title-switcher-sheet a.active {
   color: var(--ink);
-  font-weight: 650;
 }
 
 .title-switcher-sheet .title-switcher-section + .title-switcher-section {
@@ -7142,15 +7140,18 @@ html[data-theme].overlay-open .app-shell::before,
   display: none;
 }
 
-.new-moment-composer-dialog .moment-choices strong {
+.new-moment-composer-dialog .moment-choices strong,
+.title-switcher-sheet strong {
   font-family: var(--font-interface);
   font-size: 13px;
   font-weight: 650;
   line-height: 1.35;
 }
 
-.new-moment-composer-dialog .moment-choices small {
+.new-moment-composer-dialog .moment-choices small,
+.title-switcher-sheet small {
   margin: 0;
+  color: var(--muted);
   font-family: var(--font-record);
   font-size: 9px;
   line-height: 1.35;
@@ -9004,7 +9005,8 @@ iframe.composer-location-map {
   color: #285f5b;
 }
 
-:root[data-theme="light"] .moment-choices small {
+:root[data-theme="light"] .moment-choices small,
+:root[data-theme="light"] .title-switcher-sheet small {
   color: #4f5d56;
 }
 

@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
+import { peopleCountLabel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { lockOverlayChrome, unlockOverlayChrome } from "./overlay-chrome";
 import {
@@ -138,12 +139,12 @@ function SwitcherLink({
       <span className="title-switcher-check-slot" aria-hidden="true">
         {current ? <SwitcherCheck /> : null}
       </span>
-      <span className="title-switcher-link-label">{item.label}</span>
-      {item.kind === "group" && item.memberCount != null ? (
-        <span className="title-switcher-member-count" aria-hidden="true">
-          {item.memberCount}
-        </span>
-      ) : null}
+      <span className="title-switcher-link-copy">
+        <strong>{item.label}</strong>
+        {item.kind === "group" && item.memberCount != null ? (
+          <small>{peopleCountLabel(item.memberCount)}</small>
+        ) : null}
+      </span>
     </Link>
   );
 }
@@ -164,7 +165,7 @@ function SwitcherSection({
   if (items.length === 0) return null;
   return (
     <section className="title-switcher-section">
-      <h3>{title}</h3>
+      <h3 className="private-label">{title}</h3>
       {items.map((item) => (
         <SwitcherLink
           key={item.href}
