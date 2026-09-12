@@ -22,6 +22,8 @@ import {
 } from "./use-overlay-popover-close";
 import { useSheetDismiss } from "./use-sheet-dismiss";
 import {
+  groupHomeHref,
+  isFamilyHomePath,
   journalSwitcherSections,
   journalSwitcherTypeLabel,
   type FamilyTimelineSwitcherItem,
@@ -116,6 +118,11 @@ function SwitcherLink({
         {current ? <SwitcherCheck /> : null}
       </span>
       <span className="title-switcher-link-label">{item.label}</span>
+      {item.kind === "group" && item.memberCount != null ? (
+        <span className="title-switcher-member-count" aria-hidden="true">
+          {item.memberCount}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -208,6 +215,50 @@ export function FamilyTitleSwitcher({
     );
     return () => window.cancelAnimationFrame(focusFrame);
   }, [open]);
+
+  useEffect(() => {
+    setChosenHref(null);
+    setOpen(false);
+    cancel();
+  }, [serverCurrentHref, cancel]);
+
+  useEffect(() => {
+    const onNavigateSection = (event: Event) => {
+      const href =
+        event && typeof event === "object" && "detail" in event
+          ? (event as { detail?: { href?: unknown } }).detail?.href
+          : undefined;
+      if (typeof href !== "string") return;
+      const path = href.split("?")[0] ?? href;
+      if (path !== "/family" && !path.startsWith("/people/")) return;
+      const match = switcher.find((item) => item.href === href);
+      setChosenHref(match?.href ?? (path === "/family" ? "/family" : href));
+      setOpen(false);
+      cancel();
+    };
+    const onPopState = () => {
+      const path = window.location.pathname;
+      const circle = new URLSearchParams(window.location.search).get("circle");
+      setChosenHref(
+        isFamilyHomePath(path)
+          ? circle
+            ? groupHomeHref(circle)
+            : "/family"
+          : path,
+      );
+      setOpen(false);
+      cancel();
+    };
+    window.addEventListener("our-days:navigate-section", onNavigateSection);
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener(
+        "our-days:navigate-section",
+        onNavigateSection,
+      );
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [cancel, switcher]);
 
   function chooseItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);

@@ -96,16 +96,6 @@ function CardAudience({
       linkedCircleIds={moment.linkedCircleIds}
       circles={circles}
       setAudience={connectedActions?.setAudience}
-      edit={
-        connectedActions?.update
-          ? {
-              moment,
-              update: connectedActions.update,
-              removePhoto: connectedActions.removePhoto,
-              reorderPhotos: connectedActions.reorderPhotos,
-            }
-          : undefined
-      }
     />
   );
 }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilyTitleSwitcher } from "./family-title-switcher";
@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 const model = {
   accent: "teal",
-  eyebrow: "All",
+  eyebrow: "Circles",
   title: "All",
 } as JournalChromeViewModel;
 
@@ -152,8 +152,99 @@ describe("FamilyTitleSwitcher", () => {
       document.querySelector(".title-lockup .title-switcher-type-pill"),
     ).toBeNull();
     expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "All",
+      "Circles",
     );
+  });
+
+  it("syncs the header to All when the server current href becomes /family", async () => {
+    const circleCurrent = switcher.map((item) =>
+      item.kind === "group"
+        ? { ...item, current: true }
+        : { ...item, current: false },
+    );
+    const allCurrent = switcher.map((item) =>
+      item.kind === "all"
+        ? { ...item, current: true }
+        : { ...item, current: false },
+    );
+    const { rerender } = render(
+      <FamilyTitleSwitcher
+        model={{ ...model, title: "Trapp Family", eyebrow: "Circles" }}
+        switcher={circleCurrent}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Trapp Family" })).toBeVisible();
+    rerender(
+      <FamilyTitleSwitcher
+        model={{ ...model, title: "All", eyebrow: "Circles" }}
+        switcher={allCurrent}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "All" })).toBeVisible();
+    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
+      "Circles",
+    );
+  });
+
+  it("closes the sheet when the family current href changes", async () => {
+    const { rerender } = render(
+      <FamilyTitleSwitcher model={model} switcher={switcher} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
+    const circleCurrent = switcher.map((item) =>
+      item.kind === "group"
+        ? { ...item, current: true }
+        : { ...item, current: false },
+    );
+    rerender(<FamilyTitleSwitcher model={model} switcher={circleCurrent} />);
+    expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
+  });
+
+  it("treats a Journal bottom-nav to /family as All", async () => {
+    const circleCurrent = switcher.map((item) =>
+      item.kind === "group"
+        ? { ...item, current: true }
+        : { ...item, current: false },
+    );
+    render(
+      <FamilyTitleSwitcher
+        model={{ ...model, title: "Trapp Family", eyebrow: "Circles" }}
+        switcher={circleCurrent}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Trapp Family" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("our-days:navigate-section", {
+          detail: { href: "/family" },
+        }),
+      );
+    });
+    expect(screen.getByRole("heading", { name: "All" })).toBeVisible();
+    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
+      "Circles",
+    );
+    expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
+  });
+
+  it("shows member counts on circle rows only", async () => {
+    const counted = switcher.map((item) =>
+      item.kind === "group" ? { ...item, memberCount: 3 } : item,
+    );
+    render(<FamilyTitleSwitcher model={model} switcher={counted} />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    const family = screen.getByRole("link", { name: "Trapp Family" });
+    expect(
+      family.querySelector(".title-switcher-member-count"),
+    ).toHaveTextContent("3");
+    expect(
+      screen
+        .getByRole("link", { name: "All" })
+        .querySelector(".title-switcher-member-count"),
+    ).toBeNull();
   });
 
   it("is a feed filter only and does not offer create or admin actions", async () => {

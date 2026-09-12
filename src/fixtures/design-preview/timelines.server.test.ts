@@ -53,7 +53,7 @@ describe("design preview timeline chronology", () => {
 
   it("teaches the family switcher All, Just me, Circles, and Person", () => {
     const family = getFamilyTimelineFixture();
-    expect(family.chrome.eyebrow).toBe("All");
+    expect(family.chrome.eyebrow).toBe("Circles");
     expect(family.chrome.title).toBe("All");
     expect(family.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
@@ -122,12 +122,16 @@ describe("design preview timeline chronology", () => {
       selectedGroupId: "created",
     });
     expect(cousins.chrome.title).toBe("Cousins");
-    expect(cousins.chrome.eyebrow).toBe("Circle");
+    expect(cousins.chrome.eyebrow).toBe("Circles");
     expect(cousins.switcher.map((item) => [item.kind, item.label])).toEqual([
       ["you", "Brian"],
       ["all", "All"],
       ["group", "All our days"],
       ["group", "Cousins"],
+      ["person", "Molly"],
+      ["person", "Avery"],
+      ["person", "Sam"],
+      ["person", "June"],
     ]);
     expect(
       cousins.entries.filter((entry) => entry.entryType === "moment"),

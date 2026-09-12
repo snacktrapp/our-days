@@ -9,16 +9,8 @@ import {
   initialPostToCircleIds,
   type PostableCircle,
 } from "@/features/composer/post-to";
-import { useComposerSession } from "@/features/composer/composer-session";
-import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
-import type {
-  RemoveMomentPhotoAction,
-  ReorderMomentPhotosAction,
-  SetMomentAudienceAction,
-  UpdateFamilyMomentAction,
-} from "@/features/moments/moment-action-types";
+import type { SetMomentAudienceAction } from "@/features/moments/moment-action-types";
 import type { MomentAudience } from "@/features/moments/moment-audience";
-import type { TimelineMomentViewModel } from "./timeline-view-model";
 
 type AudienceChipProps = Readonly<{
   label: string;
@@ -30,12 +22,6 @@ type AudienceChipProps = Readonly<{
   linkedCircleIds?: readonly string[];
   circles: readonly PostableCircle[];
   setAudience?: SetMomentAudienceAction;
-  edit?: Readonly<{
-    moment: TimelineMomentViewModel;
-    update: UpdateFamilyMomentAction;
-    removePhoto?: RemoveMomentPhotoAction;
-    reorderPhotos?: ReorderMomentPhotosAction;
-  }>;
 }>;
 
 export function AudienceChip({
@@ -48,10 +34,8 @@ export function AudienceChip({
   linkedCircleIds,
   circles,
   setAudience,
-  edit,
 }: AudienceChipProps) {
   const router = useRouter();
-  const composerSession = useComposerSession();
   const rootRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -75,18 +59,7 @@ export function AudienceChip({
       : audience === "just_me"
         ? ["Just me"]
         : [];
-  const canEdit = Boolean(setAudience || (composerSession && edit));
-
-  const openComposerEdit = () => {
-    if (!composerSession || !edit) return false;
-    const draft = buildComposerEditDraft(edit.moment, edit.update, {
-      removePhoto: edit.removePhoto,
-      reorderPhotos: edit.reorderPhotos,
-    });
-    if (!draft) return false;
-    composerSession.openEdit(draft, triggerRef.current);
-    return true;
-  };
+  const canEdit = Boolean(setAudience);
 
   const close = () => {
     setOpen(false);
@@ -111,7 +84,6 @@ export function AudienceChip({
 
   const openEdit = () => {
     setExpanded(false);
-    if (openComposerEdit()) return;
     openSheet();
   };
 

@@ -322,7 +322,12 @@ export async function loadConnectedMemoryJourney(
   );
   const conversationsByMoment = await loadMomentConversationsByMomentId(
     supabase,
-    access,
+    {
+      ...access,
+      membershipIds: context.viewerMembershipIds?.length
+        ? context.viewerMembershipIds
+        : [access.membershipId],
+    },
     rows.map((row) => row.moment_id),
   );
   const moments = rows.map((row) =>

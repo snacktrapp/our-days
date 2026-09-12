@@ -106,11 +106,68 @@ function membershipPersonName(
     : "Family";
 }
 
+function viewerLocalMembershipIds(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>([access.membershipId]);
+  const homeMembership = document.memberships.find(
+    (membership) => membership.personId === access.personId,
+  );
+  if (homeMembership) ids.add(homeMembership.id);
+  const starter = document.accounts[0];
+  const ownsExtra = (document.extraCircles ?? []).some(
+    (extra) =>
+      extra.membershipId === access.membershipId ||
+      extra.personId === access.personId,
+  );
+  if (
+    (starter &&
+      (starter.membershipId === access.membershipId ||
+        starter.personId === access.personId)) ||
+    ownsExtra
+  ) {
+    if (starter?.membershipId) ids.add(starter.membershipId);
+    for (const extra of document.extraCircles ?? []) {
+      ids.add(extra.membershipId);
+    }
+  }
+  return ids;
+}
+
+function viewerLocalPersonIds(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>([
+    access.personId,
+    localHomePersonId(document, access),
+  ]);
+  const ownsExtra = (document.extraCircles ?? []).some(
+    (extra) =>
+      extra.membershipId === access.membershipId ||
+      extra.personId === access.personId,
+  );
+  const starter = document.accounts[0];
+  if (
+    (starter &&
+      (starter.membershipId === access.membershipId ||
+        starter.personId === access.personId)) ||
+    ownsExtra
+  ) {
+    for (const extra of document.extraCircles ?? []) {
+      ids.add(extra.personId);
+    }
+  }
+  return [...ids];
+}
+
 function conversationFromLocalDocument(
   document: LocalJournalDocument,
   access: LocalAccess,
   momentId: string,
 ): MomentConversationViewModel {
+  const mine = viewerLocalMembershipIds(document, access);
   return {
     notes: document.notes
       .filter((note) => note.momentId === momentId && note.trashedAt === null)
@@ -137,7 +194,7 @@ function conversationFromLocalDocument(
           createdAt: note.createdAt,
           displayDate: displayConversationDate(note.createdAt),
           revision: note.revision,
-          canChange: note.authorMembershipId === access.membershipId,
+          canChange: mine.has(note.authorMembershipId),
         };
       }),
     reactions: document.reactions
@@ -163,7 +220,7 @@ function conversationFromLocalDocument(
           personInitial: initialFor(personNameValue),
           personAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
           reactionId: reaction.reactionType,
-          isCurrentMember: reaction.authorMembershipId === access.membershipId,
+          isCurrentMember: mine.has(reaction.authorMembershipId),
         };
       }),
   };
@@ -216,22 +273,34 @@ function momentToTimelineRow(
   } as TimelineRow;
 }
 
-function localGroups(document: LocalJournalDocument): readonly {
+function localGroups(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+): readonly {
   id: string;
   name: string;
   createdByMembershipId: string;
+  memberCount?: number;
 }[] {
+  const counts = new Map(
+    localPostableCircles(document, access).map((circle) => [
+      circle.id,
+      circle.memberCount,
+    ]),
+  );
   return [
     {
       id: document.circle.id,
       name: document.circle.name,
       createdByMembershipId:
         document.accounts[0]?.membershipId ?? document.memberships[0]?.id ?? "",
+      memberCount: counts.get(document.circle.id),
     },
     ...(document.extraCircles ?? []).map((circle) => ({
       id: circle.id,
       name: circle.name,
       createdByMembershipId: circle.membershipId,
+      memberCount: counts.get(circle.id),
     })),
   ];
 }
@@ -357,7 +426,28 @@ export async function loadLocalJournalContext(
     (circle) => circle.id === access.circleId,
   );
   const today = plainToday(extra?.timeZone ?? document.circle.timeZone);
-  const groups = localGroups(document);
+  const groups = localGroups(document, access);
+  const homePeople = buildJournalPersonSurface(
+    localHomePersonOptions(document, localHomePersonId(document, access)),
+    { personId: localHomePersonId(document, access), role: access.role },
+    new Set(),
+  ).people;
+  const extraPeople = (document.extraCircles ?? []).flatMap((circle) => {
+    if (homePeople.some((person) => person.id === circle.personId)) return [];
+    return [
+      {
+        id: circle.personId,
+        name: circle.displayName,
+        initial: initialFor(circle.displayName),
+        accent: mapDatabaseAccent(circle.accentToken),
+        roleLabel: journalDirectoryRoleLabel("account", circle.role),
+        journalHref: `/people/${circle.personId}`,
+      },
+    ];
+  });
+  const switcherPeople = [...homePeople, ...extraPeople];
+  const viewerPersonIds = viewerLocalPersonIds(document, access);
+  const viewerMembershipIds = [...viewerLocalMembershipIds(document, access)];
   if (extra) {
     const recorder = {
       id: extra.personId,
@@ -399,7 +489,9 @@ export async function loadLocalJournalContext(
         memoriesHref: "/memories",
         notifications: [],
       },
-      people: surface.people,
+      people: switcherPeople,
+      viewerPersonIds,
+      viewerMembershipIds,
     };
   }
   const personNameById = new Map(
@@ -515,7 +607,9 @@ export async function loadLocalJournalContext(
     today,
     groups,
     chrome,
-    people: surface.people,
+    people: switcherPeople,
+    viewerPersonIds,
+    viewerMembershipIds,
   };
 }
 
@@ -524,7 +618,7 @@ export async function loadLocalPeopleDirectory(
   context: ConnectedJournalContext,
 ): Promise<PeopleViewModel> {
   const document = await readLocalJournal();
-  const groups = localGroups(document);
+  const groups = localGroups(document, access);
   return buildPeopleViewModel({
     chrome: context.chrome,
     groups: groups.map((group) => {
@@ -725,6 +819,7 @@ export async function loadLocalTimeline(
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
+    viewerPersonIds: context.viewerPersonIds,
     currentHref: personal
       ? `/people/${personal.id}`
       : allCircles

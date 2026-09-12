@@ -6,20 +6,21 @@ export type FamilyTimelineSwitcherItem = Readonly<{
   href: string;
   current: boolean;
   circleId?: string;
+  memberCount?: number;
 }>;
 
 export type JournalSwitcherGroup = Readonly<{
   id: string;
   name: string;
+  memberCount?: number;
 }>;
 
 export const allHomeHref = "/family";
 
 export function journalSwitcherTypeLabel(kind: JournalSwitcherKind) {
-  if (kind === "all") return "All";
   if (kind === "you") return "Just me";
-  if (kind === "group") return "Circle";
-  return "Person";
+  if (kind === "person") return "Person";
+  return "Circles";
 }
 
 export function currentHomeContext(
@@ -144,6 +145,7 @@ export function buildJournalSwitcher(input: {
       href: groupHomeHref(group.id),
       current: onFamilyPath && selectedCircleId === group.id,
       circleId: group.id,
+      ...(group.memberCount != null ? { memberCount: group.memberCount } : {}),
     })),
     ...others.map((person) => ({
       kind: "person" as const,

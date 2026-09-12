@@ -2,7 +2,7 @@
 -- posts. One row per moment (moment_circles can name several audiences).
 -- Conversations stay gated by private.can_read_live_moment.
 
-create function public.list_all_timeline_moments(
+create or replace function public.list_all_timeline_moments(
   cursor_occurred_on date default null,
   cursor_has_precise_time boolean default null,
   cursor_occurred_at timestamptz default null,

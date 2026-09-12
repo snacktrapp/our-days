@@ -704,7 +704,12 @@ export async function loadConnectedTimeline(
   );
   const conversationsByMoment = await loadMomentConversationsByMomentId(
     supabase,
-    access,
+    {
+      ...access,
+      membershipIds: context.viewerMembershipIds?.length
+        ? context.viewerMembershipIds
+        : [access.membershipId],
+    },
     rows.map((row) => row.moment_id),
   );
   const moments = rows.map((row) =>
@@ -733,6 +738,7 @@ export async function loadConnectedTimeline(
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
+    viewerPersonIds: context.viewerPersonIds,
     currentHref: personal
       ? `/people/${personal.id}`
       : allCircles

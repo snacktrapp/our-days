@@ -183,9 +183,9 @@ describe("journal switcher grammar", () => {
   });
 
   it("labels the selected type for the header eyebrow", () => {
-    expect(journalSwitcherTypeLabel("all")).toBe("All");
+    expect(journalSwitcherTypeLabel("all")).toBe("Circles");
     expect(journalSwitcherTypeLabel("you")).toBe("Just me");
-    expect(journalSwitcherTypeLabel("group")).toBe("Circle");
+    expect(journalSwitcherTypeLabel("group")).toBe("Circles");
     expect(journalSwitcherTypeLabel("person")).toBe("Person");
     expect(
       journalSwitcherEyebrow([
@@ -220,6 +220,29 @@ describe("journal switcher grammar", () => {
     expect(sections.people.map((item) => item.label)).toEqual([
       "Molly",
       "Calvin",
+    ]);
+  });
+
+  it("keeps member counts on circle rows and omits them on All", () => {
+    const items = buildJournalSwitcher({
+      groups: [
+        { id: "family", name: "Trapp Family", memberCount: 3 },
+        { id: "cousins", name: "Cousins", memberCount: 2 },
+      ],
+      people,
+      viewerPersonId: "brian",
+      currentHref: "/family",
+    });
+    expect(
+      items.find((item) => item.kind === "all")?.memberCount,
+    ).toBeUndefined();
+    expect(
+      items
+        .filter((item) => item.kind === "group")
+        .map((item) => [item.label, item.memberCount]),
+    ).toEqual([
+      ["Trapp Family", 3],
+      ["Cousins", 2],
     ]);
   });
 

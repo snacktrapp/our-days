@@ -352,7 +352,7 @@ describe("TimelineFeed", () => {
     );
   });
 
-  it("opens the edit composer from the audience chip when a session exists", () => {
+  it("opens the Posted to sheet from the audience chip when a composer session exists", () => {
     render(
       <ComposerSessionProvider model={composer}>
         <TimelineFeed
@@ -398,10 +398,10 @@ describe("TimelineFeed", () => {
       screen.getByRole("button", { name: "Audience, Our Days +1" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "New written entry" }),
-    ).toBeVisible();
+      screen.queryByRole("heading", { name: "New written entry" }),
+    ).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
   });

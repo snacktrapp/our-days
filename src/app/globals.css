@@ -782,6 +782,13 @@ button:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.title-switcher-member-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
 .title-switcher-type-pill {
   margin-left: auto;
   padding: 2px 7px;

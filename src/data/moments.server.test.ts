@@ -303,6 +303,74 @@ describe("connected timeline mapping", () => {
     });
   });
 
+  it("marks the viewer's notes and reactions as theirs across circle memberships", async () => {
+    const tables: Record<string, unknown[]> = {
+      moment_notes: [
+        {
+          id: "note-brian",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-brian-gparents",
+          body: "Saved from Home.",
+          revision: 1,
+          created_at: "2026-09-12T12:00:00Z",
+        },
+      ],
+      moment_reactions: [
+        {
+          id: "reaction-brian",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-brian-gparents",
+          reaction_type: "made-me-smile",
+          created_at: "2026-09-12T12:01:00Z",
+        },
+      ],
+      circle_memberships: [
+        { id: "membership-brian-gparents", person_id: "brian-gparents" },
+      ],
+      people: [
+        { id: "brian-gparents", display_name: "Brian", accent_token: "sky" },
+      ],
+    };
+    const from = vi.fn((table: string) => {
+      const rows = tables[table] ?? [];
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        is: () => query,
+        order: () => query,
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          resolve({ data: rows, error: null }),
+      };
+      return query;
+    });
+
+    const conversations = await loadMomentConversationsByMomentId(
+      { from } as never,
+      {
+        circleId: "home",
+        membershipId: "membership-brian-home",
+        membershipIds: ["membership-brian-home", "membership-brian-gparents"],
+      },
+      ["calvin-gparents"],
+    );
+
+    expect(conversations.get("calvin-gparents")).toEqual({
+      notes: [
+        expect.objectContaining({
+          authorName: "Brian",
+          canChange: true,
+        }),
+      ],
+      reactions: [
+        expect.objectContaining({
+          personName: "Brian",
+          isCurrentMember: true,
+        }),
+      ],
+    });
+  });
+
   it("maps Just Me only when the viewer is looking at their own journal", () => {
     const ownJournal = mapTimelineRow(
       row({
@@ -821,7 +889,7 @@ describe("connected timeline mapping", () => {
       expect.objectContaining({ page_size: 21 }),
     );
     expect(timeline.chrome.title).toBe("All");
-    expect(timeline.chrome.eyebrow).toBe("All");
+    expect(timeline.chrome.eyebrow).toBe("Circles");
     expect(timeline.switcher.find((item) => item.kind === "all")?.current).toBe(
       true,
     );

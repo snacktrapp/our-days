@@ -426,19 +426,18 @@ function previewSwitcher(
   options: PreviewTimelineOptions = {},
   people = personalJournals,
 ) {
-  const groups = previewGroups(options.extraGroup);
+  const groups = previewGroups(options.extraGroup).map((group) => ({
+    ...group,
+    memberCount: group.id === previewFamilyId ? composerPeople.length : 1,
+  }));
   const selectedGroupId =
     options.selectedGroupId &&
     groups.some((group) => group.id === options.selectedGroupId)
       ? options.selectedGroupId
       : null;
-  const switcherPeople =
-    !selectedGroupId || selectedGroupId === previewFamilyId
-      ? people
-      : people.filter((person) => person.id === "brian");
   return buildJournalSwitcher({
     groups,
-    people: switcherPeople,
+    people,
     viewerPersonId: "brian",
     currentHref,
     activeGroupId: selectedGroupId,
