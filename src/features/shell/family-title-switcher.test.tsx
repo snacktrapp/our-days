@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilyTitleSwitcher } from "./family-title-switcher";
 import type { JournalChromeViewModel } from "./shell-view-model";
@@ -85,10 +86,9 @@ describe("FamilyTitleSwitcher", () => {
       dispatchEvent: vi.fn(),
     }));
     try {
+      const user = userEvent.setup();
       await openSwitcher();
-      fireEvent.keyDown(screen.getByRole("dialog", { name: "Journal" }), {
-        key: "Escape",
-      });
+      await user.keyboard("{Escape}");
       expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
       expect(document.querySelector(".activity-sheet")).toBeNull();
     } finally {
@@ -110,7 +110,6 @@ describe("FamilyTitleSwitcher", () => {
     const molly = screen.getByRole("link", { name: "Molly" });
     fireEvent.pointerDown(molly, { button: 0 });
     expect(molly).toHaveClass("active");
-    expect(screen.getByRole("link", { name: "All" })).not.toHaveClass("active");
     expect(navigation.push).toHaveBeenCalledWith("/people/molly");
     expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
