@@ -101,31 +101,58 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("MollyThe quiet ride home was my favorite part.");
   });
 
-  it("keeps long conversations compact and expands older notes inline", async () => {
+  it("shows newest notes first and keeps older notes behind Show more", async () => {
     const user = userEvent.setup();
     renderControl(undefined, {
       notes: [
-        ...initialConversation.notes,
         {
           ...initialConversation.notes[0],
-          id: "note-two",
-          body: "A second detail.",
+          id: "note-oldest",
+          body: "Oldest family note.",
         },
         {
           ...initialConversation.notes[0],
-          id: "note-three",
-          body: "An older detail.",
+          id: "note-middle",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "A middle note.",
+        },
+        {
+          ...initialConversation.notes[0],
+          id: "note-newest",
+          authorName: "Nana",
+          authorInitial: "N",
+          authorAccent: "clay",
+          body: "Nana just replied.",
         },
       ],
       reactions: [],
     });
 
     const notes = screen.getByRole("list", { name: "Notes from family" });
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    const collapsed = within(notes).getAllByRole("listitem");
+    expect(collapsed).toHaveLength(2);
+    expect(collapsed[0]).toHaveTextContent("Nana");
+    expect(collapsed[0]).toHaveTextContent("Nana just replied.");
+    expect(collapsed[0].querySelector(".note-avatar")).toHaveClass("dot-clay");
+    expect(collapsed[1]).toHaveTextContent("Brian");
+    expect(collapsed[1]).toHaveTextContent("A middle note.");
+    expect(collapsed[1].querySelector(".note-avatar")).toHaveClass("dot-teal");
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
+
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
+    const expanded = within(notes).getAllByRole("listitem");
+    expect(expanded.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Nana just replied."),
+      expect.stringContaining("A middle note."),
+      expect.stringContaining("Oldest family note."),
+    ]);
+    expect(expanded[2].querySelector(".note-avatar")).toHaveClass("dot-ochre");
+
     await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
     expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
   });
 
   it("opens emoji choices on one tap and saves only the chosen response", async () => {
@@ -622,6 +649,140 @@ describe("MomentConversationControl", () => {
     expect(
       within(notes).getByText("The sky was even better in person."),
     ).toBeVisible();
+  });
+
+  it("shows a newly saved note without expanding older notes", async () => {
+    const existing = {
+      notes: [
+        {
+          id: "note-oldest",
+          authorName: "Molly",
+          authorInitial: "M",
+          authorAccent: "ochre",
+          body: "Oldest family note.",
+          displayDate: "Aug 2, 2026",
+        },
+        {
+          id: "note-middle",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "A middle note.",
+          displayDate: "Aug 3, 2026",
+          canChange: true,
+          revision: 1,
+        },
+      ],
+      reactions: [],
+    } as const satisfies MomentConversationViewModel;
+    const saved = {
+      notes: [
+        ...existing.notes,
+        {
+          id: "note-nana",
+          authorName: "Nana",
+          authorInitial: "N",
+          authorAccent: "clay",
+          body: "Nana just replied.",
+          displayDate: "Today",
+          canChange: false,
+          revision: 1,
+        },
+      ],
+      reactions: [],
+    } as const satisfies MomentConversationViewModel;
+    const actions = connectedActions(existing);
+    actions.load.mockResolvedValue({ ok: true, conversation: saved });
+    const user = userEvent.setup();
+    renderControl(actions, existing);
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Add a family note" }),
+      "Nana just replied.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(actions.createNote).toHaveBeenCalledWith({
+        momentId: "moment-one",
+        body: "Nana just replied.",
+      }),
+    );
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    const items = within(notes).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent("Nana just replied.");
+    expect(items[1]).toHaveTextContent("A middle note.");
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show 1 more" })).toBeVisible();
+  });
+
+  it("edits the newest owned note by revision without expanding older notes", async () => {
+    const thread = {
+      notes: [
+        {
+          id: "note-oldest",
+          authorName: "Molly",
+          authorInitial: "M",
+          authorAccent: "ochre",
+          body: "Oldest family note.",
+          displayDate: "Aug 2, 2026",
+        },
+        {
+          id: "note-middle",
+          authorName: "Sam",
+          authorInitial: "S",
+          authorAccent: "slate",
+          body: "A middle note.",
+          displayDate: "Aug 3, 2026",
+        },
+        {
+          id: "note-owned",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "Original newest note.",
+          displayDate: "Today",
+          canChange: true,
+          revision: 3,
+        },
+      ],
+      reactions: [],
+    } as const satisfies MomentConversationViewModel;
+    const updated = {
+      ...thread,
+      notes: [
+        thread.notes[0],
+        thread.notes[1],
+        { ...thread.notes[2], body: "Updated newest note.", revision: 4 },
+      ],
+    } as const satisfies MomentConversationViewModel;
+    const actions = connectedActions(thread);
+    actions.load.mockResolvedValue({ ok: true, conversation: updated });
+    const user = userEvent.setup();
+    renderControl(actions, thread);
+
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const editor = screen.getByRole("textbox", { name: "Edit your note" });
+    expect(editor).toHaveValue("Original newest note.");
+    await user.clear(editor);
+    await user.type(editor, "Updated newest note.");
+    await user.click(
+      within(editor.closest("form")!).getByRole("button", { name: "Save" }),
+    );
+    await waitFor(() =>
+      expect(actions.updateNote).toHaveBeenCalledWith({
+        noteId: "note-owned",
+        revision: 3,
+        body: "Updated newest note.",
+      }),
+    );
+    expect(screen.getByText("Updated newest note.")).toBeVisible();
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
   });
 
   it("retains the note and shows an actionable error when saving fails", async () => {

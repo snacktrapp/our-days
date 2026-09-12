@@ -152,6 +152,14 @@ describe("connected timeline mapping", () => {
           revision: 1,
           created_at: "2026-08-29T12:00:00Z",
         },
+        {
+          id: "note-2",
+          moment_id: "moment-2",
+          author_membership_id: "membership-molly",
+          body: "Nana just replied.",
+          revision: 1,
+          created_at: "2026-08-29T12:05:00Z",
+        },
       ],
       moment_reactions: [
         {
@@ -191,6 +199,12 @@ describe("connected timeline mapping", () => {
           authorName: "Molly",
           authorAccent: "moss",
           body: "The quiet ride home.",
+          canChange: false,
+        }),
+        expect.objectContaining({
+          authorName: "Molly",
+          authorAccent: "moss",
+          body: "Nana just replied.",
           canChange: false,
         }),
       ],
