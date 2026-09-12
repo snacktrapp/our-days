@@ -12,8 +12,8 @@ const migration = readFileSync(
 
 describe("All timeline moments database contract", () => {
   it("adds a merged All feed RPC without changing per-circle listing", () => {
-    expect(migration).toContain(
-      "create function public.list_all_timeline_moments",
+    expect(migration.replace(/\s+/g, " ").toLowerCase()).toContain(
+      "create or replace function public.list_all_timeline_moments",
     );
     expect(migration).toContain("moment.audience = 'family'");
     expect(migration).toContain("moment.audience = 'just_me'");
