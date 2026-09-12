@@ -121,7 +121,11 @@ function conversationAuthorInitial(name: string) {
 
 export async function loadMomentConversationsByMomentId(
   supabase: MomentPhotoClient,
-  access: Readonly<{ circleId: string; membershipId: string }>,
+  access: Readonly<{
+    circleId: string;
+    membershipId: string;
+    membershipIds?: readonly string[];
+  }>,
   momentIds: readonly string[],
 ): Promise<Map<string, MomentConversationViewModel>> {
   const conversations = new Map<string, MomentConversationViewModel>();
@@ -154,10 +158,12 @@ export async function loadMomentConversationsByMomentId(
   ];
   if (membershipIds.length === 0) return conversations;
 
+  const viewerMembershipIds = new Set(
+    access.membershipIds?.length ? access.membershipIds : [access.membershipId],
+  );
   const membershipsResult = await supabase
     .from("circle_memberships")
     .select("id, person_id")
-    .eq("circle_id", access.circleId)
     .in("id", membershipIds);
   const memberships = membershipsResult.data ?? [];
   const personIds = [...new Set(memberships.map((row) => row.person_id))];
@@ -173,7 +179,6 @@ export async function loadMomentConversationsByMomentId(
       : await supabase
           .from("people")
           .select("id, display_name, accent_token")
-          .eq("circle_id", access.circleId)
           .in("id", personIds);
   const personById = new Map(
     (peopleResult.data ?? []).map((person) => [person.id, person]),
@@ -207,7 +212,7 @@ export async function loadMomentConversationsByMomentId(
       body: note.body,
       displayDate: displayConversationDate(note.created_at),
       revision: note.revision,
-      canChange: note.author_membership_id === access.membershipId,
+      canChange: viewerMembershipIds.has(note.author_membership_id),
     });
     notesByMoment.set(note.moment_id, list);
   }
@@ -229,7 +234,7 @@ export async function loadMomentConversationsByMomentId(
       personInitial: conversationAuthorInitial(personName),
       personAccent: author?.accent ?? "slate",
       reactionId: reaction.reaction_type as MomentReactionId,
-      isCurrentMember: reaction.author_membership_id === access.membershipId,
+      isCurrentMember: viewerMembershipIds.has(reaction.author_membership_id),
     });
     reactionsByMoment.set(reaction.moment_id, list);
   }

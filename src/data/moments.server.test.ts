@@ -222,6 +222,84 @@ describe("connected timeline mapping", () => {
     });
   });
 
+  it("resolves note authors from another roster circle on a linked moment", async () => {
+    const membershipEqs: [string, unknown][] = [];
+    const peopleEqs: [string, unknown][] = [];
+    const tables: Record<string, unknown[]> = {
+      moment_notes: [
+        {
+          id: "note-nana",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-nana-gparents",
+          body: "What a grin.",
+          revision: 1,
+          created_at: "2026-09-12T12:00:00Z",
+        },
+      ],
+      moment_reactions: [
+        {
+          id: "reaction-nana",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-nana-gparents",
+          reaction_type: "held-close",
+          created_at: "2026-09-12T12:01:00Z",
+        },
+      ],
+      circle_memberships: [
+        { id: "membership-nana-gparents", person_id: "nana-gparents" },
+        { id: "membership-brian-gparents", person_id: "brian-gparents" },
+      ],
+      people: [
+        { id: "nana-gparents", display_name: "Nana", accent_token: "gold" },
+      ],
+    };
+    const from = vi.fn((table: string) => {
+      const rows = tables[table] ?? [];
+      const eqs = table === "people" ? peopleEqs : membershipEqs;
+      const query = {
+        select: () => query,
+        eq: (column: string, value: unknown) => {
+          eqs.push([column, value]);
+          return query;
+        },
+        in: () => query,
+        is: () => query,
+        order: () => query,
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          resolve({ data: rows, error: null }),
+      };
+      return query;
+    });
+
+    const conversations = await loadMomentConversationsByMomentId(
+      { from } as never,
+      {
+        circleId: "home",
+        membershipId: "membership-brian-home",
+        membershipIds: ["membership-brian-home", "membership-brian-gparents"],
+      },
+      ["calvin-gparents"],
+    );
+
+    expect(membershipEqs).not.toContainEqual(["circle_id", "home"]);
+    expect(peopleEqs).not.toContainEqual(["circle_id", "home"]);
+    expect(conversations.get("calvin-gparents")).toEqual({
+      notes: [
+        expect.objectContaining({
+          authorName: "Nana",
+          body: "What a grin.",
+          canChange: false,
+        }),
+      ],
+      reactions: [
+        expect.objectContaining({
+          personName: "Nana",
+          isCurrentMember: false,
+        }),
+      ],
+    });
+  });
+
   it("maps Just Me only when the viewer is looking at their own journal", () => {
     const ownJournal = mapTimelineRow(
       row({
