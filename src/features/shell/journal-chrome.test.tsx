@@ -217,9 +217,7 @@ describe("JournalChrome", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    fireEvent.pointerDown(screen.getByRole("link", { name: "Molly" }), {
-      button: 0,
-    });
+    fireEvent.click(screen.getByRole("link", { name: "Molly" }));
 
     expect(screen.queryByText("Moments")).toBeNull();
     expect(

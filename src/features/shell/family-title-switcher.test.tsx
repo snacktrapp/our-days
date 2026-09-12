@@ -105,17 +105,42 @@ describe("FamilyTitleSwitcher", () => {
     }
   });
 
-  it("selects a journal row as soon as it is pressed and closes the sheet", async () => {
+  it("highlights a journal row on press and chooses it on click", async () => {
     await openSwitcher();
     const molly = screen.getByRole("link", { name: "Molly" });
     fireEvent.pointerDown(molly, { button: 0 });
     expect(molly).toHaveClass("active");
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
+    fireEvent.click(molly);
     expect(navigation.push).toHaveBeenCalledWith("/people/molly");
     expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
     expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
       "Person",
     );
+  });
+
+  it("does not let choosing a journal click through to the timeline", async () => {
+    const openPhoto = vi.fn();
+    render(
+      <div>
+        <button type="button" onClick={openPhoto}>
+          Open photo
+        </button>
+        <FamilyTitleSwitcher model={model} switcher={switcher} />
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    const molly = screen.getByRole("link", { name: "Molly" });
+    fireEvent.pointerDown(molly, { button: 0 });
+    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
+    fireEvent.pointerUp(molly, { button: 0 });
+    fireEvent.click(molly);
+    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
+    expect(openPhoto).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Open photo" }));
+    expect(openPhoto).toHaveBeenCalledTimes(1);
   });
 
   it("moves the current highlight to the pressed journal immediately", async () => {

@@ -90,16 +90,37 @@ function SwitcherCheck() {
   );
 }
 
+function swallowNextClick() {
+  const onClick = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    teardown();
+  };
+  const teardown = () => {
+    document.removeEventListener("click", onClick, true);
+    window.clearTimeout(timer);
+  };
+  document.addEventListener("click", onClick, true);
+  const timer = window.setTimeout(teardown, 400);
+}
+
 function SwitcherLink({
   item,
   current,
+  onPreview,
   onChoose,
 }: Readonly<{
   item: FamilyTimelineSwitcherItem;
   current: boolean;
+  onPreview: (item: FamilyTimelineSwitcherItem) => void;
   onChoose: (item: FamilyTimelineSwitcherItem) => void;
 }>) {
-  function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
+  function preview(event: MouseEvent<HTMLAnchorElement>) {
+    if (!isUnmodifiedPrimaryClick(event)) return;
+    onPreview(item);
+  }
+
+  function choose(event: MouseEvent<HTMLAnchorElement>) {
     if (!isUnmodifiedPrimaryClick(event)) return;
     event.preventDefault();
     onChoose(item);
@@ -111,8 +132,8 @@ function SwitcherLink({
       prefetch={false}
       aria-current={current ? "page" : undefined}
       className={current ? "active" : undefined}
-      onPointerDown={acknowledge}
-      onClick={acknowledge}
+      onPointerDown={preview}
+      onClick={choose}
     >
       <span className="title-switcher-check-slot" aria-hidden="true">
         {current ? <SwitcherCheck /> : null}
@@ -131,11 +152,13 @@ function SwitcherSection({
   title,
   items,
   currentHref,
+  onPreview,
   onChoose,
 }: Readonly<{
   title: string;
   items: readonly FamilyTimelineSwitcherItem[];
   currentHref: string | null;
+  onPreview: (item: FamilyTimelineSwitcherItem) => void;
   onChoose: (item: FamilyTimelineSwitcherItem) => void;
 }>) {
   if (items.length === 0) return null;
@@ -147,6 +170,7 @@ function SwitcherSection({
           key={item.href}
           item={item}
           current={item.href === currentHref}
+          onPreview={onPreview}
           onChoose={onChoose}
         />
       ))}
@@ -203,8 +227,13 @@ export function FamilyTitleSwitcher({
     });
   }, [requestClose]);
 
+  const dismissFromPointer = useCallback(() => {
+    swallowNextClick();
+    closePanel();
+  }, [closePanel]);
+
   const dismissGesture = useSheetDismiss({
-    onDismiss: closePanel,
+    onDismiss: dismissFromPointer,
     scrollerRef,
     sheetRef,
   });
@@ -265,9 +294,13 @@ export function FamilyTitleSwitcher({
     };
   }, [cancel, serverCurrentHref, switcher]);
 
-  function chooseItem(item: FamilyTimelineSwitcherItem) {
+  function previewItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);
     setChosenFrom(serverCurrentHref);
+  }
+
+  function chooseItem(item: FamilyTimelineSwitcherItem) {
+    previewItem(item);
     cancel();
     setOpen(false);
     if (item.kind === "group" && item.circleId && onSelectGroup) {
@@ -341,18 +374,21 @@ export function FamilyTitleSwitcher({
               title="Just me"
               items={sections.justMe}
               currentHref={currentHref}
+              onPreview={previewItem}
               onChoose={chooseItem}
             />
             <SwitcherSection
               title="Circles"
               items={sections.circles}
               currentHref={currentHref}
+              onPreview={previewItem}
               onChoose={chooseItem}
             />
             <SwitcherSection
               title="Person"
               items={sections.people}
               currentHref={currentHref}
+              onPreview={previewItem}
               onChoose={chooseItem}
             />
           </nav>
