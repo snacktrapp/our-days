@@ -321,6 +321,7 @@ select is(
     'flag_photo_display_derivative_for_review(requested_derivative_job_id uuid, requested_lease_key uuid, requested_review_reason text)',
     'flag_photo_validation_for_review(requested_validation_job_id uuid, requested_lease_key uuid, requested_review_reason text)',
     'get_entry_draft(requested_id uuid)',
+    'get_moment_conversation(requested_moment_id uuid)',
     'get_photo_moment_delivery(requested_moment_id uuid)',
     'get_photo_moment_status(requested_intake_id uuid)',
     'get_video_moment_delivery(requested_moment_id uuid)',

@@ -112,6 +112,7 @@ function connectedClient(
     momentCircles?: { data: unknown; error: unknown };
     ownedMoments?: { data: unknown; error: unknown };
     linkedMoments?: { data: unknown; error: unknown };
+    memberships?: { data: unknown; error: unknown };
     throwOn?: string;
   } = {},
 ) {
@@ -119,6 +120,10 @@ function connectedClient(
   let momentsCalls = 0;
   const momentCircles = thenableQuery(
     overrides.momentCircles ?? { data: [], error: null },
+  );
+  const notes = thenableQuery(overrides.notes ?? { data: [], error: null });
+  const reactions = thenableQuery(
+    overrides.reactions ?? { data: [], error: null },
   );
   const from = vi.fn((table: string) => {
     if (overrides.throwOn === table) {
@@ -139,7 +144,9 @@ function connectedClient(
       return thenableQuery(peopleResult ?? { data: rows.people, error: null });
     }
     if (table === "circle_memberships") {
-      return thenableQuery({ data: rows.memberships, error: null });
+      return thenableQuery(
+        overrides.memberships ?? { data: rows.memberships, error: null },
+      );
     }
     if (table === "person_guardians") {
       return thenableQuery({ data: [], error: null });
@@ -156,16 +163,12 @@ function connectedClient(
       );
     }
     if (table === "moment_circles") return momentCircles;
-    if (table === "moment_notes") {
-      return thenableQuery(overrides.notes ?? { data: [], error: null });
-    }
-    if (table === "moment_reactions") {
-      return thenableQuery(overrides.reactions ?? { data: [], error: null });
-    }
+    if (table === "moment_notes") return notes;
+    if (table === "moment_reactions") return reactions;
     throw new Error(`Unexpected table: ${table}`);
   });
   vi.mocked(createOurDaysServerClient).mockResolvedValue({ from } as never);
-  return { from, momentCircles };
+  return { from, momentCircles, notes, reactions };
 }
 
 describe("circle calendar date", () => {
@@ -248,6 +251,45 @@ describe("family activity notifications", () => {
         actorName: "Calvin",
         message: "posted a video.",
         href: "/family?circle=home-gparents#moment-italy-video",
+      }),
+    ]);
+  });
+
+  it("links notes and reactions to the circle where the moment is visible", () => {
+    const notifications = buildActivityNotifications(
+      [
+        {
+          id: "nana-note",
+          moment_id: "calvin-post",
+          author_membership_id: "nana-gparents",
+          created_at: "2026-09-12T18:00:00.000Z",
+          circle_id: "home",
+        },
+      ],
+      [
+        {
+          id: "nana-reaction",
+          moment_id: "calvin-post",
+          author_membership_id: "nana-gparents",
+          reaction_type: "held-close",
+          created_at: "2026-09-12T18:01:00.000Z",
+          circle_id: "home",
+        },
+      ],
+      new Set(["calvin-post"]),
+      new Map([["nana-gparents", "Nana"]]),
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        id: "reaction:nana-reaction:held-close",
+        actorName: "Nana",
+        href: "/family?circle=home#moment-calvin-post",
+      }),
+      expect.objectContaining({
+        id: "note:nana-note",
+        actorName: "Nana",
+        href: "/family?circle=home#moment-calvin-post",
       }),
     ]);
   });
@@ -589,6 +631,106 @@ describe("connected journal context load", () => {
       expect.objectContaining({
         id: "moment:italy-video",
         message: "posted a video.",
+      }),
+    ]);
+  });
+
+  it("reads linked-circle notes by moment id and keeps visible-circle hrefs", async () => {
+    readMemberships.mockResolvedValue([
+      {
+        membershipId: access.membershipId,
+        circleId: access.circleId,
+        personId: access.personId,
+        role: access.role,
+      },
+      {
+        membershipId: "membership-brian-gparents",
+        circleId: "gparents",
+        personId: "brian-gparents",
+        role: "member",
+      },
+    ]);
+    const { notes } = connectedClient({
+      people: {
+        data: [
+          {
+            id: "brian",
+            display_name: "Brian",
+            profile_kind: "account",
+            accent_token: "sky",
+            circle_id: "family",
+          },
+          {
+            id: "nana",
+            display_name: "Nana",
+            profile_kind: "account",
+            accent_token: "gold",
+            circle_id: "gparents",
+          },
+        ],
+        error: null,
+      },
+      memberships: {
+        data: [
+          {
+            id: "membership-brian",
+            person_id: "brian",
+            role: "organizer",
+            status: "active",
+            directory_kind: "journal",
+            circle_id: "family",
+          },
+          {
+            id: "membership-nana",
+            person_id: "nana",
+            role: "member",
+            status: "active",
+            directory_kind: "journal",
+            circle_id: "gparents",
+          },
+        ],
+        error: null,
+      },
+      notes: {
+        data: [
+          {
+            id: "nana-note",
+            moment_id: "calvin-post",
+            author_membership_id: "membership-nana",
+            created_at: "2026-09-12T18:00:00.000Z",
+            circle_id: "gparents",
+          },
+        ],
+        error: null,
+      },
+      momentCircles: {
+        data: [{ moment_id: "calvin-post", circle_id: "family" }],
+        error: null,
+      },
+      linkedMoments: {
+        data: [
+          {
+            id: "calvin-post",
+            recorded_by_membership_id: "membership-brian-gparents",
+            kind: "photo",
+            created_at: "2026-09-11T18:00:00.000Z",
+            audience: "family",
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const context = await loadConnectedJournalContext(access);
+
+    expect(notes.eq).not.toHaveBeenCalledWith("circle_id", "family");
+    expect(notes.in).toHaveBeenCalledWith("moment_id", ["calvin-post"]);
+    expect(context.chrome.notifications).toEqual([
+      expect.objectContaining({
+        id: "note:nana-note",
+        actorName: "Nana",
+        message: "commented on your entry.",
+        href: "/family?circle=family#moment-calvin-post",
       }),
     ]);
   });
