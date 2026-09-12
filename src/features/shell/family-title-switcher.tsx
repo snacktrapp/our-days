@@ -173,10 +173,19 @@ export function FamilyTitleSwitcher({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [chosenHref, setChosenHref] = useState<string | null>(null);
+  const [chosenFrom, setChosenFrom] = useState<string | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
     useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
-  const currentHref = chosenHref ?? serverCurrentHref;
+  const [observedHref, setObservedHref] = useState(serverCurrentHref);
+  if (observedHref !== serverCurrentHref) {
+    setObservedHref(serverCurrentHref);
+    setOpen(false);
+  }
+  const currentHref =
+    chosenHref && chosenFrom === serverCurrentHref
+      ? chosenHref
+      : serverCurrentHref;
   const chosenItem = switcher.find((item) => item.href === currentHref);
   const displayModel = chosenItem
     ? {
@@ -217,12 +226,12 @@ export function FamilyTitleSwitcher({
   }, [open]);
 
   useEffect(() => {
-    setChosenHref(null);
-    setOpen(false);
-    cancel();
-  }, [serverCurrentHref, cancel]);
-
-  useEffect(() => {
+    const remember = (href: string) => {
+      setChosenHref(href);
+      setChosenFrom(serverCurrentHref);
+      setOpen(false);
+      cancel();
+    };
     const onNavigateSection = (event: Event) => {
       const href =
         event && typeof event === "object" && "detail" in event
@@ -232,22 +241,18 @@ export function FamilyTitleSwitcher({
       const path = href.split("?")[0] ?? href;
       if (path !== "/family" && !path.startsWith("/people/")) return;
       const match = switcher.find((item) => item.href === href);
-      setChosenHref(match?.href ?? (path === "/family" ? "/family" : href));
-      setOpen(false);
-      cancel();
+      remember(match?.href ?? (path === "/family" ? "/family" : href));
     };
     const onPopState = () => {
       const path = window.location.pathname;
       const circle = new URLSearchParams(window.location.search).get("circle");
-      setChosenHref(
+      remember(
         isFamilyHomePath(path)
           ? circle
             ? groupHomeHref(circle)
             : "/family"
           : path,
       );
-      setOpen(false);
-      cancel();
     };
     window.addEventListener("our-days:navigate-section", onNavigateSection);
     window.addEventListener("popstate", onPopState);
@@ -258,10 +263,11 @@ export function FamilyTitleSwitcher({
       );
       window.removeEventListener("popstate", onPopState);
     };
-  }, [cancel, switcher]);
+  }, [cancel, serverCurrentHref, switcher]);
 
   function chooseItem(item: FamilyTimelineSwitcherItem) {
     setChosenHref(item.href);
+    setChosenFrom(serverCurrentHref);
     cancel();
     setOpen(false);
     if (item.kind === "group" && item.circleId && onSelectGroup) {
