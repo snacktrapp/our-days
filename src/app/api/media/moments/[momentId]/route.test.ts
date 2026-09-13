@@ -152,4 +152,41 @@ describe("private photo delivery route", () => {
     const sameShapeCorruption = await request();
     expect(sameShapeCorruption.status).toBe(404);
   });
+
+  it("returns a neutral 404 when get_photo_moment_delivery has no live session or capability", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "Family session is unavailable" },
+    });
+    const response = await request();
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+    expect(mocks.download).not.toHaveBeenCalled();
+  });
+
+  it("M-open broken path: empty Storage MIME or stringified size 404s matching SHA bytes on main", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, output_size_bytes: "5" as unknown as number }],
+      error: null,
+    });
+    mocks.download.mockResolvedValue({
+      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "" }),
+      error: null,
+    });
+    const stringSizeStatus = (await request()).status;
+
+    mocks.rpc.mockResolvedValue({ data: [descriptor], error: null });
+    mocks.download.mockResolvedValue({
+      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], {
+        type: "application/octet-stream",
+      }),
+      error: null,
+    });
+    const octetStatus = (await request()).status;
+
+    // Code-path proof of the burning M-open 404. #61 flips both to 200 —
+    // drop or invert this assertion when that PR merges.
+    expect(stringSizeStatus).toBe(404);
+    expect(octetStatus).toBe(404);
+  });
 });
