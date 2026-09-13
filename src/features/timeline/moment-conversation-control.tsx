@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
   overlayMotionReduced,
@@ -42,6 +43,7 @@ type MomentConversationControlProps = Readonly<{
   actions?: MomentConversationActions;
   position?: number;
   total?: number;
+  trailing?: ReactNode;
 }>;
 
 function momentKindLabel(model: MomentDetailViewModel) {
@@ -127,6 +129,7 @@ export function MomentConversationControl({
   actions,
   position = 1,
   total = 1,
+  trailing,
 }: MomentConversationControlProps) {
   const panelId = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
@@ -741,6 +744,7 @@ export function MomentConversationControl({
         {model.taggedPeopleLabel ? (
           <span className="tagged">with {model.taggedPeopleLabel}</span>
         ) : null}
+        {trailing}
       </div>
 
       {panel === "note" ? (

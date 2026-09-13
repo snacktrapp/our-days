@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
@@ -9,19 +9,12 @@ import {
   initialPostToCircleIds,
   type PostableCircle,
 } from "@/features/composer/post-to";
-import { useComposerSession } from "@/features/composer/composer-session";
-import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
-import type {
-  RemoveMomentPhotoAction,
-  ReorderMomentPhotosAction,
-  SetMomentAudienceAction,
-  UpdateFamilyMomentAction,
-} from "@/features/moments/moment-action-types";
+import type { SetMomentAudienceAction } from "@/features/moments/moment-action-types";
 import type { MomentAudience } from "@/features/moments/moment-audience";
-import type { TimelineMomentViewModel } from "./timeline-view-model";
 
 type AudienceChipProps = Readonly<{
   label: string;
+  names?: readonly string[];
   momentId: string;
   revision?: number;
   audience?: MomentAudience;
@@ -29,16 +22,11 @@ type AudienceChipProps = Readonly<{
   linkedCircleIds?: readonly string[];
   circles: readonly PostableCircle[];
   setAudience?: SetMomentAudienceAction;
-  edit?: Readonly<{
-    moment: TimelineMomentViewModel;
-    update: UpdateFamilyMomentAction;
-    removePhoto?: RemoveMomentPhotoAction;
-    reorderPhotos?: ReorderMomentPhotosAction;
-  }>;
 }>;
 
 export function AudienceChip({
   label,
+  names,
   momentId,
   revision,
   audience = "family",
@@ -46,22 +34,12 @@ export function AudienceChip({
   linkedCircleIds,
   circles,
   setAudience,
-  edit,
 }: AudienceChipProps) {
   const router = useRouter();
-  const composerSession = useComposerSession();
+  const rootRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const openComposerEdit = () => {
-    if (!composerSession || !edit) return false;
-    const draft = buildComposerEditDraft(edit.moment, edit.update, {
-      removePhoto: edit.removePhoto,
-      reorderPhotos: edit.reorderPhotos,
-    });
-    if (!draft) return false;
-    composerSession.openEdit(draft, triggerRef.current);
-    return true;
-  };
+  const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState(false);
   const [justMe, setJustMe] = useState(audience === "just_me");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
@@ -75,6 +53,13 @@ export function AudienceChip({
   const [isPending, startTransition] = useTransition();
   const dialogMounted = useModalDialog(open, dialogRef);
   const lockedCircleId = circleId;
+  const detailNames =
+    names && names.length > 0
+      ? names
+      : audience === "just_me"
+        ? ["Just me"]
+        : [];
+  const canEdit = Boolean(setAudience);
 
   const close = () => {
     setOpen(false);
@@ -95,6 +80,11 @@ export function AudienceChip({
     );
     setMessage(null);
     setOpen(true);
+  };
+
+  const openEdit = () => {
+    setExpanded(false);
+    openSheet();
   };
 
   const save = () => {
@@ -122,19 +112,27 @@ export function AudienceChip({
     });
   };
 
+  useEffect(() => {
+    if (!expanded) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      setExpanded(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [expanded]);
+
   return (
-    <>
+    <div ref={rootRef} className="card-audience">
       <button
         ref={triggerRef}
         type="button"
         className="audience-chip"
-        aria-haspopup="dialog"
-        aria-expanded={composerSession && edit ? undefined : open}
+        aria-expanded={expanded}
         aria-label={`Audience, ${label}`}
-        onClick={() => {
-          if (openComposerEdit()) return;
-          openSheet();
-        }}
+        onClick={() => setExpanded((value) => !value)}
       >
         <span
           className={
@@ -146,7 +144,27 @@ export function AudienceChip({
           {label}
         </span>
       </button>
-      {composerSession && edit ? null : dialogMounted ? (
+      {expanded ? (
+        <div className="audience-chip-detail">
+          {detailNames.length > 0 ? (
+            <ul>
+              {detailNames.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              className="audience-chip-edit"
+              onClick={openEdit}
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {dialogMounted ? (
         <dialog
           ref={dialogRef}
           className="audience-edit-dialog"
@@ -195,6 +213,6 @@ export function AudienceChip({
           </section>
         </dialog>
       ) : null}
-    </>
+    </div>
   );
 }

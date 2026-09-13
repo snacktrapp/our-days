@@ -62,6 +62,7 @@ type MembershipRow = Readonly<{
   role: string | null;
   directory_kind?: string | null;
   circle_id?: string | null;
+  user_id?: string | null;
 }>;
 
 function circleIdOf(
@@ -160,7 +161,10 @@ export type ConnectedJournalContext = Readonly<{
     id: string;
     name: string;
     createdByMembershipId?: string;
+    memberCount?: number;
   }>[];
+  viewerMembershipIds?: readonly string[];
+  viewerPersonIds?: readonly string[];
 }>;
 
 export type JournalPersonOption = Readonly<{
@@ -211,6 +215,59 @@ export function buildJournalPersonSurface(
       contextLabel: person.contextLabel,
     })),
   };
+}
+
+export function switcherPeopleFromRosters(
+  allPeople: readonly PersonRow[],
+  allMemberships: readonly MembershipRow[],
+  access: Readonly<{ circleId: string; personId: string }>,
+  viewerPersonIds: ReadonlySet<string>,
+): PersonSummaryViewModel[] {
+  const membershipByPerson = new Map(
+    allMemberships.map((membership) => [membership.person_id, membership]),
+  );
+  const visible = allPeople.filter((person) => {
+    const membership = membershipByPerson.get(person.id);
+    return !isOperationsMembership({
+      role: membership?.role,
+      directoryKind: membership?.directory_kind,
+    });
+  });
+  const ranked = [...visible].sort((left, right) => {
+    const leftHome =
+      circleIdOf(left, access.circleId) === access.circleId ? 0 : 1;
+    const rightHome =
+      circleIdOf(right, access.circleId) === access.circleId ? 0 : 1;
+    if (leftHome !== rightHome) return leftHome - rightHome;
+    return (
+      left.display_name.localeCompare(right.display_name) ||
+      left.id.localeCompare(right.id)
+    );
+  });
+  const seenUserIds = new Set<string>();
+  const people: PersonSummaryViewModel[] = [];
+  for (const person of ranked) {
+    const membership = membershipByPerson.get(person.id);
+    if (!viewerPersonIds.has(person.id)) {
+      const userId = membership?.user_id;
+      if (userId) {
+        if (seenUserIds.has(userId)) continue;
+        seenUserIds.add(userId);
+      }
+    }
+    people.push({
+      id: person.id,
+      name: person.display_name,
+      initial: initialFor(person.display_name),
+      accent: mapDatabaseAccent(person.accent_token),
+      roleLabel: journalDirectoryRoleLabel(
+        person.profile_kind,
+        membership?.role,
+      ),
+      journalHref: `/people/${person.id}`,
+    });
+  }
+  return people;
 }
 
 type ActivityNote = Readonly<{
@@ -483,7 +540,9 @@ export async function loadConnectedJournalContext(
     retryTransientFamilySessionQuery(() =>
       supabase
         .from("circle_memberships")
-        .select("id, person_id, role, status, directory_kind, circle_id")
+        .select(
+          "id, person_id, role, status, directory_kind, circle_id, user_id",
+        )
         .in("circle_id", rosterCircleIds),
     ),
     retryTransientFamilySessionQuery(() =>
@@ -648,6 +707,24 @@ export async function loadConnectedJournalContext(
     },
     postableCircles,
   };
+  const viewerPersonIds = [
+    ...new Set(
+      [
+        access.personId,
+        ...circleMemberships.map((membership) => membership.personId),
+      ].filter(Boolean),
+    ),
+  ];
+  const switcherPeople = switcherPeopleFromRosters(
+    allPeople,
+    allMemberships,
+    access,
+    new Set(viewerPersonIds),
+  );
+  const groupsWithCounts = groups.map((group) => ({
+    ...group,
+    memberCount: memberCountByCircle.get(group.id),
+  }));
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: circleResult.data.name,
@@ -671,8 +748,10 @@ export async function loadConnectedJournalContext(
     circleName: circleResult.data.name,
     circleTimeZone: circleResult.data.time_zone,
     today: composer.previewToday,
-    groups,
+    groups: groupsWithCounts,
     chrome,
-    people: surface.people,
+    people: switcherPeople,
+    viewerMembershipIds: [...myMembershipIds],
+    viewerPersonIds,
   };
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import { photoAlbum } from "@/features/moments/moment-photos";
@@ -18,6 +19,8 @@ import type {
 } from "./timeline-view-model";
 import { VideoMomentMedia } from "./video-moment-media";
 import { MomentPlaceButton, MomentPlaceMeta } from "./moment-place-meta";
+import { AudienceChip } from "./audience-chip";
+import type { PostableCircle } from "@/features/composer/post-to";
 
 function PhotoFrameSizer({
   width,
@@ -69,10 +72,105 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   return { ...base, kind: moment.kind };
 }
 
+function CardAudience({
+  moment,
+  circles,
+  connectedActions,
+}: Readonly<{
+  moment: TimelineMomentViewModel;
+  circles: readonly PostableCircle[];
+  connectedActions?: ConnectedMomentActions;
+}>) {
+  const chipLabel =
+    moment.audienceChipLabel ??
+    (moment.showJustMeBadge ? "Just me" : undefined);
+  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
+  if (moment.kind === "insight" || !showChip || !chipLabel) return null;
+  return (
+    <AudienceChip
+      label={chipLabel}
+      names={moment.audienceCircleNames}
+      momentId={moment.id}
+      revision={moment.revision}
+      audience={moment.audience}
+      circleId={moment.circleId}
+      linkedCircleIds={moment.linkedCircleIds}
+      circles={circles}
+      setAudience={connectedActions?.setAudience}
+    />
+  );
+}
+
+function CardTopChrome({
+  children,
+  audience,
+}: Readonly<{
+  children: ReactNode;
+  audience: ReactNode;
+}>) {
+  return (
+    <div className="card-top-chrome">
+      {children}
+      {audience}
+    </div>
+  );
+}
+
+function cardOptions(
+  moment: TimelineMomentViewModel,
+  interaction: MomentInteractionViewModel | undefined,
+  connectedActions: ConnectedMomentActions | undefined,
+  connectedPosition?: number,
+  connectedTotal?: number,
+) {
+  if (!connectedActions || !moment.canChange) return null;
+  return (
+    <ConnectedMomentControl
+      moment={moment}
+      actions={connectedActions}
+      position={connectedPosition}
+      total={connectedTotal}
+      taggablePeople={interaction?.taggablePeople ?? []}
+    />
+  );
+}
+
+function CardActions({
+  interaction,
+  moment,
+  conversationActions,
+  connectedPosition,
+  connectedTotal,
+  options,
+}: Readonly<{
+  interaction?: MomentInteractionViewModel;
+  moment: TimelineMomentViewModel;
+  conversationActions?: MomentConversationActions;
+  connectedPosition?: number;
+  connectedTotal?: number;
+  options: ReactNode;
+}>) {
+  if (interaction) {
+    return (
+      <MomentConversationControl
+        interaction={interaction}
+        model={detailModel(moment)}
+        actions={conversationActions}
+        position={connectedPosition}
+        total={connectedTotal}
+        trailing={options}
+      />
+    );
+  }
+  if (!options) return null;
+  return <div className="soft-actions">{options}</div>;
+}
+
 type MomentCardProps = Readonly<{
   interaction?: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   preload?: boolean;
+  circles?: readonly PostableCircle[];
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
@@ -83,6 +181,7 @@ export function MomentCard({
   interaction,
   moment,
   preload = false,
+  circles = [],
   connectedActions,
   conversationActions,
   connectedPosition,
@@ -155,7 +254,15 @@ export function MomentCard({
           </div>
         )}
         <div className="card-copy">
-          <div className="photo-card-heading">
+          <CardTopChrome
+            audience={
+              <CardAudience
+                moment={moment}
+                circles={circles}
+                connectedActions={connectedActions}
+              />
+            }
+          >
             <MomentPlaceMeta
               heading
               typeLabel={typeLabel}
@@ -163,26 +270,22 @@ export function MomentCard({
               latitude={moment.latitude}
               longitude={moment.longitude}
             />
-            {connectedActions && moment.canChange ? (
-              <ConnectedMomentControl
-                moment={moment}
-                actions={connectedActions}
-                position={connectedPosition}
-                total={connectedTotal}
-                taggablePeople={interaction?.taggablePeople ?? []}
-              />
-            ) : null}
-          </div>
+          </CardTopChrome>
           <p>{moment.text}</p>
-          {interaction ? (
-            <MomentConversationControl
-              interaction={interaction}
-              model={detailModel(moment)}
-              actions={conversationActions}
-              position={connectedPosition}
-              total={connectedTotal}
-            />
-          ) : null}
+          <CardActions
+            interaction={interaction}
+            moment={moment}
+            conversationActions={conversationActions}
+            connectedPosition={connectedPosition}
+            connectedTotal={connectedTotal}
+            options={cardOptions(
+              moment,
+              interaction,
+              connectedActions,
+              connectedPosition,
+              connectedTotal,
+            )}
+          />
         </div>
       </div>
     );
@@ -193,12 +296,22 @@ export function MomentCard({
       <div
         className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
       >
-        <MomentPlaceMeta
-          typeLabel={bibleVerse ? "Verse" : typeLabel}
-          placeName={moment.placeName}
-          latitude={moment.latitude}
-          longitude={moment.longitude}
-        />
+        <CardTopChrome
+          audience={
+            <CardAudience
+              moment={moment}
+              circles={circles}
+              connectedActions={connectedActions}
+            />
+          }
+        >
+          <MomentPlaceMeta
+            typeLabel={bibleVerse ? "Verse" : typeLabel}
+            placeName={moment.placeName}
+            latitude={moment.latitude}
+            longitude={moment.longitude}
+          />
+        </CardTopChrome>
         {bibleVerse ? (
           <ExpandableThoughtCopy
             momentId={moment.id}
@@ -212,24 +325,20 @@ export function MomentCard({
             “{moment.text}”
           </ExpandableThoughtCopy>
         )}
-        {interaction ? (
-          <MomentConversationControl
-            interaction={interaction}
-            model={detailModel(moment)}
-            actions={conversationActions}
-            position={connectedPosition}
-            total={connectedTotal}
-          />
-        ) : null}
-        {connectedActions && moment.canChange ? (
-          <ConnectedMomentControl
-            moment={moment}
-            actions={connectedActions}
-            position={connectedPosition}
-            total={connectedTotal}
-            taggablePeople={interaction?.taggablePeople ?? []}
-          />
-        ) : null}
+        <CardActions
+          interaction={interaction}
+          moment={moment}
+          conversationActions={conversationActions}
+          connectedPosition={connectedPosition}
+          connectedTotal={connectedTotal}
+          options={cardOptions(
+            moment,
+            interaction,
+            connectedActions,
+            connectedPosition,
+            connectedTotal,
+          )}
+        />
       </div>
     );
   }
@@ -241,7 +350,9 @@ export function MomentCard({
       (sourceHref ? insightSourceLabel(sourceHref) : undefined);
     return (
       <div className="moment-card thought-card bible-verse-card insight-card">
-        <span className="thought-label">Insight</span>
+        <CardTopChrome audience={null}>
+          <span className="thought-label">Insight</span>
+        </CardTopChrome>
         <ExpandableThoughtCopy
           momentId={moment.id}
           className="bible-verse-copy"
@@ -264,24 +375,20 @@ export function MomentCard({
             ) : null}
           </cite>
         </ExpandableThoughtCopy>
-        {interaction ? (
-          <MomentConversationControl
-            interaction={interaction}
-            model={detailModel(moment)}
-            actions={conversationActions}
-            position={connectedPosition}
-            total={connectedTotal}
-          />
-        ) : null}
-        {connectedActions && moment.canChange ? (
-          <ConnectedMomentControl
-            moment={moment}
-            actions={connectedActions}
-            position={connectedPosition}
-            total={connectedTotal}
-            taggablePeople={interaction?.taggablePeople ?? []}
-          />
-        ) : null}
+        <CardActions
+          interaction={interaction}
+          moment={moment}
+          conversationActions={conversationActions}
+          connectedPosition={connectedPosition}
+          connectedTotal={connectedTotal}
+          options={cardOptions(
+            moment,
+            interaction,
+            connectedActions,
+            connectedPosition,
+            connectedTotal,
+          )}
+        />
       </div>
     );
   }
@@ -290,18 +397,17 @@ export function MomentCard({
     return (
       <div className="moment-card location-card">
         <div className="card-copy">
-          <div className="location-card-heading">
-            <p className="moment-kicker">{typeLabel}</p>
-            {connectedActions && moment.canChange ? (
-              <ConnectedMomentControl
+          <CardTopChrome
+            audience={
+              <CardAudience
                 moment={moment}
-                actions={connectedActions}
-                position={connectedPosition}
-                total={connectedTotal}
-                taggablePeople={interaction?.taggablePeople ?? []}
+                circles={circles}
+                connectedActions={connectedActions}
               />
-            ) : null}
-          </div>
+            }
+          >
+            <p className="moment-kicker">{typeLabel}</p>
+          </CardTopChrome>
           <h3>
             <MomentPlaceButton
               placeName={moment.place}
@@ -313,15 +419,20 @@ export function MomentCard({
             </MomentPlaceButton>
           </h3>
           <p>{moment.text}</p>
-          {interaction ? (
-            <MomentConversationControl
-              interaction={interaction}
-              model={detailModel(moment)}
-              actions={conversationActions}
-              position={connectedPosition}
-              total={connectedTotal}
-            />
-          ) : null}
+          <CardActions
+            interaction={interaction}
+            moment={moment}
+            conversationActions={conversationActions}
+            connectedPosition={connectedPosition}
+            connectedTotal={connectedTotal}
+            options={cardOptions(
+              moment,
+              interaction,
+              connectedActions,
+              connectedPosition,
+              connectedTotal,
+            )}
+          />
         </div>
       </div>
     );
@@ -335,33 +446,39 @@ export function MomentCard({
         {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
-        <MomentPlaceMeta
-          typeLabel={typeLabel}
-          placeName={moment.placeName}
-          latitude={moment.latitude}
-          longitude={moment.longitude}
-        />
+        <CardTopChrome
+          audience={
+            <CardAudience
+              moment={moment}
+              circles={circles}
+              connectedActions={connectedActions}
+            />
+          }
+        >
+          <MomentPlaceMeta
+            typeLabel={typeLabel}
+            placeName={moment.placeName}
+            latitude={moment.latitude}
+            longitude={moment.longitude}
+          />
+        </CardTopChrome>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>
       </div>
-      {interaction ? (
-        <MomentConversationControl
-          interaction={interaction}
-          model={detailModel(moment)}
-          actions={conversationActions}
-          position={connectedPosition}
-          total={connectedTotal}
-        />
-      ) : null}
-      {connectedActions && moment.canChange ? (
-        <ConnectedMomentControl
-          moment={moment}
-          actions={connectedActions}
-          position={connectedPosition}
-          total={connectedTotal}
-          taggablePeople={interaction?.taggablePeople ?? []}
-        />
-      ) : null}
+      <CardActions
+        interaction={interaction}
+        moment={moment}
+        conversationActions={conversationActions}
+        connectedPosition={connectedPosition}
+        connectedTotal={connectedTotal}
+        options={cardOptions(
+          moment,
+          interaction,
+          connectedActions,
+          connectedPosition,
+          connectedTotal,
+        )}
+      />
     </div>
   );
 }

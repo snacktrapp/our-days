@@ -17,7 +17,9 @@ import {
 import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 import type { AccentToken } from "@/features/accent-token";
 import {
+  allHomeLabel,
   buildJournalSwitcher,
+  groupHomeHref,
   journalSwitcherEyebrow,
 } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
@@ -425,19 +427,18 @@ function previewSwitcher(
   options: PreviewTimelineOptions = {},
   people = personalJournals,
 ) {
-  const groups = previewGroups(options.extraGroup);
+  const groups = previewGroups(options.extraGroup).map((group) => ({
+    ...group,
+    memberCount: group.id === previewFamilyId ? composerPeople.length : 1,
+  }));
   const selectedGroupId =
     options.selectedGroupId &&
     groups.some((group) => group.id === options.selectedGroupId)
       ? options.selectedGroupId
-      : previewFamilyId;
-  const switcherPeople =
-    selectedGroupId === previewFamilyId
-      ? people
-      : people.filter((person) => person.id === "brian");
+      : null;
   return buildJournalSwitcher({
     groups,
-    people: switcherPeople,
+    people,
     viewerPersonId: "brian",
     currentHref,
     activeGroupId: selectedGroupId,
@@ -447,22 +448,50 @@ function previewSwitcher(
 export function getFamilyTimelineFixture(
   options: PreviewTimelineOptions = {},
 ): TimelineViewModel {
-  const selectedGroupId = options.selectedGroupId ?? previewFamilyId;
+  const selectedGroupId = options.selectedGroupId ?? null;
   const extraSelected =
-    selectedGroupId !== previewFamilyId && options.extraGroup
+    selectedGroupId && selectedGroupId !== previewFamilyId && options.extraGroup
       ? options.extraGroup
       : null;
+  const allFeed = !selectedGroupId;
+  const previewCircleNames = Object.fromEntries(
+    previewGroups(options.extraGroup).map((group) => [group.id, group.name]),
+  );
   const moments = extraSelected
     ? []
     : (familyEntries as readonly TimelineEntryViewModel[])
         .filter(isMomentEntry)
-        .map((entry) => entry.moment);
-  const currentHref =
-    extraSelected && options.extraGroup
-      ? `/family?circle=${options.extraGroup.id}`
+        .map((entry) => ({
+          ...entry.moment,
+          showAudienceChip: entry.moment.kind !== "insight",
+          audienceChipLabel: formatAudienceChipLabel({
+            audience: entry.moment.audience ?? "family",
+            linkedCircleIds:
+              entry.moment.linkedCircleIds ??
+              (entry.moment.audience === "just_me" ? [] : ["family"]),
+            circleNames: previewCircleNames,
+            feedCircleId: allFeed ? null : selectedGroupId,
+          }),
+          audienceCircleNames:
+            entry.moment.audience === "just_me"
+              ? ["Just me"]
+              : [previewFamilyName],
+          circleId: entry.moment.circleId ?? "family",
+          linkedCircleIds:
+            entry.moment.linkedCircleIds ??
+            (entry.moment.audience === "just_me" ? [] : ["family"]),
+        }));
+  const currentHref = extraSelected
+    ? groupHomeHref(extraSelected.id)
+    : selectedGroupId === previewFamilyId
+      ? groupHomeHref(previewFamilyId)
       : "/family";
   const switcher = previewSwitcher(currentHref, options);
-  const title = extraSelected ? extraSelected.name : previewFamilyName;
+  const title = extraSelected
+    ? extraSelected.name
+    : allFeed
+      ? allHomeLabel
+      : previewFamilyName;
 
   const familyChrome = chrome(
     "teal",
@@ -475,7 +504,7 @@ export function getFamilyTimelineFixture(
       ...familyChrome,
       composer: {
         ...familyChrome.composer,
-        circleId: selectedGroupId,
+        circleId: selectedGroupId ?? previewFamilyId,
         taggablePeople: extraSelected
           ? composerPeople.filter((person) => person.id === "brian")
           : familyChrome.composer.taggablePeople,
@@ -579,7 +608,10 @@ function personalTimelineEntries(
         linkedCircleIds:
           entry.moment.linkedCircleIds ??
           (entry.moment.audience === "just_me" ? [] : ["family"]),
+        circleNames: { family: previewFamilyName },
       }),
+      audienceCircleNames:
+        entry.moment.audience === "just_me" ? ["Just me"] : [previewFamilyName],
       circleId: entry.moment.circleId ?? "family",
       linkedCircleIds:
         entry.moment.linkedCircleIds ??

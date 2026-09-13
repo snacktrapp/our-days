@@ -303,6 +303,74 @@ describe("connected timeline mapping", () => {
     });
   });
 
+  it("marks the viewer's notes and reactions as theirs across circle memberships", async () => {
+    const tables: Record<string, unknown[]> = {
+      moment_notes: [
+        {
+          id: "note-brian",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-brian-gparents",
+          body: "Saved from Home.",
+          revision: 1,
+          created_at: "2026-09-12T12:00:00Z",
+        },
+      ],
+      moment_reactions: [
+        {
+          id: "reaction-brian",
+          moment_id: "calvin-gparents",
+          author_membership_id: "membership-brian-gparents",
+          reaction_type: "made-me-smile",
+          created_at: "2026-09-12T12:01:00Z",
+        },
+      ],
+      circle_memberships: [
+        { id: "membership-brian-gparents", person_id: "brian-gparents" },
+      ],
+      people: [
+        { id: "brian-gparents", display_name: "Brian", accent_token: "sky" },
+      ],
+    };
+    const from = vi.fn((table: string) => {
+      const rows = tables[table] ?? [];
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        is: () => query,
+        order: () => query,
+        then: (resolve: (value: { data: unknown[]; error: null }) => unknown) =>
+          resolve({ data: rows, error: null }),
+      };
+      return query;
+    });
+
+    const conversations = await loadMomentConversationsByMomentId(
+      { from } as never,
+      {
+        circleId: "home",
+        membershipId: "membership-brian-home",
+        membershipIds: ["membership-brian-home", "membership-brian-gparents"],
+      },
+      ["calvin-gparents"],
+    );
+
+    expect(conversations.get("calvin-gparents")).toEqual({
+      notes: [
+        expect.objectContaining({
+          authorName: "Brian",
+          canChange: true,
+        }),
+      ],
+      reactions: [
+        expect.objectContaining({
+          personName: "Brian",
+          isCurrentMember: true,
+        }),
+      ],
+    });
+  });
+
   it("maps Just Me only when the viewer is looking at their own journal", () => {
     const ownJournal = mapTimelineRow(
       row({
@@ -328,11 +396,12 @@ describe("connected timeline mapping", () => {
     expect(ownJournal.showJustMeBadge).toBe(true);
     expect(ownJournal.showAudienceChip).toBe(true);
     expect(ownJournal.audienceChipLabel).toBe("Just me");
-    expect(familyFeed.showJustMeBadge).toBe(false);
-    expect(familyFeed.showAudienceChip).toBe(false);
+    expect(familyFeed.showJustMeBadge).toBe(true);
+    expect(familyFeed.showAudienceChip).toBe(true);
+    expect(familyFeed.audienceChipLabel).toBe("Just me");
   });
 
-  it("labels the author's own family posts by linked circle count", () => {
+  it("labels All-feed and single-circle chips with circle names", () => {
     const oneGroup = mapTimelineRow(
       row({
         moment_audience: "family",
@@ -343,6 +412,7 @@ describe("connected timeline mapping", () => {
       {
         viewerPersonId: "parent",
         viewingJournalPersonId: "parent",
+        circleNames: { circle: "Our family" },
       },
     );
     const twoGroups = mapTimelineRow(
@@ -354,12 +424,26 @@ describe("connected timeline mapping", () => {
       "2026-08-30",
       {
         viewerPersonId: "parent",
-        viewingJournalPersonId: "parent",
+        circleNames: { circle: "Our family", harbor: "Harbor" },
+      },
+    );
+    const alsoShared = mapTimelineRow(
+      row({
+        moment_audience: "family",
+        moment_journal_person_id: "parent",
+        linked_circle_ids: ["circle", "harbor"],
+      }),
+      "2026-08-30",
+      {
+        viewerPersonId: "parent",
+        feedCircleId: "circle",
+        circleNames: { circle: "Our family", harbor: "Harbor" },
       },
     );
     expect(oneGroup.showAudienceChip).toBe(true);
-    expect(oneGroup.audienceChipLabel).toBe("1 circle");
-    expect(twoGroups.audienceChipLabel).toBe("2 circles");
+    expect(oneGroup.audienceChipLabel).toBe("Our family");
+    expect(twoGroups.audienceChipLabel).toBe("Our family +1");
+    expect(alsoShared.audienceChipLabel).toBe("Also · Harbor");
   });
 
   it("maps a connected photo to the same-origin private delivery route", () => {
@@ -571,7 +655,8 @@ describe("connected timeline mapping", () => {
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(timeline.pagination).toBeUndefined();
     expect(timeline.paginationError).toEqual({
-      retryHref: "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+      retryHref:
+        "/family?circle=circle&pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
       message:
         "Earlier days couldn’t be opened. The moments already here are still safe.",
       label: "Try opening earlier days again",
@@ -650,6 +735,12 @@ describe("connected timeline mapping", () => {
     expect(timeline.chrome.composer.recorderPersonId).toBe("parent");
     expect(timeline.switcher).toEqual([
       {
+        kind: "all",
+        label: "All circles",
+        href: "/family",
+        current: false,
+      },
+      {
         kind: "group",
         label: "Our family",
         href: "/family?circle=circle",
@@ -708,7 +799,7 @@ describe("connected timeline mapping", () => {
 
     expect(rpc).toHaveBeenCalledTimes(21);
     expect(timeline.pagination?.nextHref).toBe(
-      "/family?pages=22&snapshot=2026-08-30T10%3A00%3A01Z",
+      "/family?circle=circle&pages=22&snapshot=2026-08-30T10%3A00%3A01Z",
     );
   });
 
@@ -782,5 +873,25 @@ describe("connected timeline mapping", () => {
       loadConnectedTimeline(familyAccess, familyContext, { pages: 1 }),
     ).rejects.toBe(error);
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads the All feed from list_all_timeline_moments", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [row()], error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      "list_all_timeline_moments",
+      expect.objectContaining({ page_size: 21 }),
+    );
+    expect(timeline.chrome.title).toBe("All circles");
+    expect(timeline.chrome.eyebrow).toBe("Circles");
+    expect(timeline.switcher.find((item) => item.kind === "all")?.current).toBe(
+      true,
+    );
   });
 });

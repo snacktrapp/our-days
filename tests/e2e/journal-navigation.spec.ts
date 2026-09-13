@@ -9,7 +9,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
+  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circles");
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
@@ -449,7 +449,7 @@ test("members can create a wider circle from Account and filter Home without cos
   // active-circle cookie still correctly scopes Home to Cousins.
   await page.goto("/family");
   await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circle");
+  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circles");
   await page.locator(".title-switcher summary").click();
   await expect(page.getByRole("button", { name: "Create group" })).toHaveCount(
     0,

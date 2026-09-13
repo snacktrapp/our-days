@@ -3,7 +3,9 @@ import {
   buildJournalSwitcher,
   currentHomeContext,
   journalSwitcherEyebrow,
+  journalSwitcherSections,
   journalSwitcherTypeLabel,
+  journalTimelineHref,
 } from "./journal-switcher";
 
 const people = [
@@ -13,7 +15,7 @@ const people = [
 ] as const;
 
 describe("journal switcher grammar", () => {
-  it("puts You first, then the group, then other people", () => {
+  it("puts Just me first, then All and circles, then other people", () => {
     expect(
       buildJournalSwitcher({
         groupLabel: "Trapp Family",
@@ -29,10 +31,16 @@ describe("journal switcher grammar", () => {
         current: false,
       },
       {
+        kind: "all",
+        label: "All circles",
+        href: "/family",
+        current: true,
+      },
+      {
         kind: "group",
         label: "Trapp Family",
         href: "/family?circle=family",
-        current: true,
+        current: false,
         circleId: "family",
       },
       {
@@ -50,7 +58,7 @@ describe("journal switcher grammar", () => {
     ]);
   });
 
-  it("lists every group the member is in after You and before people", () => {
+  it("lists every group after All and keeps ?circle= as a single-circle feed", () => {
     expect(
       buildJournalSwitcher({
         groups: [
@@ -70,6 +78,12 @@ describe("journal switcher grammar", () => {
         current: false,
       },
       {
+        kind: "all",
+        label: "All circles",
+        href: "/family",
+        current: false,
+      },
+      {
         kind: "group",
         label: "Trapp Family",
         href: "/family?circle=family",
@@ -86,7 +100,7 @@ describe("journal switcher grammar", () => {
     ]);
   });
 
-  it("does not invent a You row when the viewer is not in the list", () => {
+  it("does not invent a Just me row when the viewer is not in the list", () => {
     expect(
       buildJournalSwitcher({
         groupLabel: "Our family",
@@ -95,6 +109,12 @@ describe("journal switcher grammar", () => {
         currentHref: "/people/child",
       }),
     ).toEqual([
+      {
+        kind: "all",
+        label: "All circles",
+        href: "/family",
+        current: false,
+      },
       {
         kind: "group",
         label: "Our family",
@@ -131,6 +151,19 @@ describe("journal switcher grammar", () => {
           ],
           people,
           viewerPersonId: "brian",
+          currentHref: "/family",
+        }),
+      ),
+    ).toEqual({ kind: "all" });
+    expect(
+      currentHomeContext(
+        buildJournalSwitcher({
+          groups: [
+            { id: "family", name: "Trapp Family" },
+            { id: "cousins", name: "Cousins" },
+          ],
+          people,
+          viewerPersonId: "brian",
           currentHref: "/family?circle=cousins",
           activeGroupId: "cousins",
         }),
@@ -150,8 +183,9 @@ describe("journal switcher grammar", () => {
   });
 
   it("labels the selected type for the header eyebrow", () => {
-    expect(journalSwitcherTypeLabel("you")).toBe("You");
-    expect(journalSwitcherTypeLabel("group")).toBe("Circle");
+    expect(journalSwitcherTypeLabel("all")).toBe("Circles");
+    expect(journalSwitcherTypeLabel("you")).toBe("Just me");
+    expect(journalSwitcherTypeLabel("group")).toBe("Circles");
     expect(journalSwitcherTypeLabel("person")).toBe("Person");
     expect(
       journalSwitcherEyebrow([
@@ -162,6 +196,62 @@ describe("journal switcher grammar", () => {
           current: true,
         },
       ]),
-    ).toBe("You");
+    ).toBe("Just me");
+  });
+
+  it("groups rows into Just me, Circles, and Person sections", () => {
+    const sections = journalSwitcherSections(
+      buildJournalSwitcher({
+        groups: [
+          { id: "family", name: "Trapp Family" },
+          { id: "cousins", name: "Cousins" },
+        ],
+        people,
+        viewerPersonId: "brian",
+        currentHref: "/family",
+      }),
+    );
+    expect(sections.justMe.map((item) => item.label)).toEqual(["Brian"]);
+    expect(sections.circles.map((item) => item.label)).toEqual([
+      "All circles",
+      "Trapp Family",
+      "Cousins",
+    ]);
+    expect(sections.people.map((item) => item.label)).toEqual([
+      "Molly",
+      "Calvin",
+    ]);
+  });
+
+  it("keeps member counts on circle rows and omits them on All", () => {
+    const items = buildJournalSwitcher({
+      groups: [
+        { id: "family", name: "Trapp Family", memberCount: 3 },
+        { id: "cousins", name: "Cousins", memberCount: 2 },
+      ],
+      people,
+      viewerPersonId: "brian",
+      currentHref: "/family",
+    });
+    expect(
+      items.find((item) => item.kind === "all")?.memberCount,
+    ).toBeUndefined();
+    expect(
+      items
+        .filter((item) => item.kind === "group")
+        .map((item) => [item.label, item.memberCount]),
+    ).toEqual([
+      ["Trapp Family", 3],
+      ["Cousins", 2],
+    ]);
+  });
+
+  it("keeps All pagination on the bare family path", () => {
+    expect(journalTimelineHref("/family", 2, "2026-08-30T10:00:01Z")).toBe(
+      "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+    );
+    expect(
+      journalTimelineHref("/family?circle=cousins", 2, "2026-08-30T10:00:01Z"),
+    ).toBe("/family?circle=cousins&pages=2&snapshot=2026-08-30T10%3A00%3A01Z");
   });
 });

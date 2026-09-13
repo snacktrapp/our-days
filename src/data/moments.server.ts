@@ -15,18 +15,22 @@ import type { Database } from "@/lib/supabase/database.types";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 import {
+  allHomeLabel,
   buildJournalSwitcher,
+  groupHomeHref,
   journalSwitcherEyebrow,
+  journalTimelineHref,
 } from "@/features/shell/journal-switcher";
-import type { ConnectedJournalContext } from "./journal-context.server";
-import { insightSourceLabel } from "@/features/insights/insight-source";
-import { mapDatabaseAccent } from "./journal-context.server";
 import {
+  audienceCircleNames,
   formatAudienceChipLabel,
   normalizeMomentAudience,
   showAudienceChip,
   showJustMeAudienceBadge,
 } from "@/features/moments/moment-audience";
+import type { ConnectedJournalContext } from "./journal-context.server";
+import { insightSourceLabel } from "@/features/insights/insight-source";
+import { mapDatabaseAccent } from "./journal-context.server";
 import {
   parseMomentPhotoRows,
   timelinePhotosFor,
@@ -247,6 +251,8 @@ export function mapTimelineRow(
   visibility?: Readonly<{
     viewerPersonId?: string;
     viewingJournalPersonId?: string;
+    feedCircleId?: string | null;
+    circleNames?: Readonly<Record<string, string>>;
   }>,
   photos?: readonly MomentPhotoDescriptor[],
   conversation: MomentConversationViewModel = emptyConversation,
@@ -266,7 +272,15 @@ export function mapTimelineRow(
     viewerPersonId: visibility?.viewerPersonId,
     viewingJournalPersonId: visibility?.viewingJournalPersonId,
     momentJournalPersonId: row.moment_journal_person_id,
+    momentKind: row.moment_kind,
   });
+  const chipInput = {
+    audience,
+    linkedCircleIds,
+    circleId: row.moment_circle_id,
+    circleNames: visibility?.circleNames,
+    feedCircleId: visibility?.feedCircleId,
+  };
   const taggedPeople = Array.isArray(row.tagged_people)
     ? row.tagged_people.flatMap((tag): { id: string; name: string }[] => {
         if (
@@ -291,7 +305,10 @@ export function mapTimelineRow(
     linkedCircleIds,
     showAudienceChip: chipVisible,
     audienceChipLabel: chipVisible
-      ? formatAudienceChipLabel({ audience, linkedCircleIds })
+      ? formatAudienceChipLabel(chipInput)
+      : undefined,
+    audienceCircleNames: chipVisible
+      ? audienceCircleNames(chipInput)
       : undefined,
     showJustMeBadge: showJustMeAudienceBadge({
       audience,
@@ -590,6 +607,12 @@ export function connectedTimelineInteraction(
   };
 }
 
+function circleNamesFromContext(context: ConnectedJournalContext) {
+  return Object.fromEntries(
+    (context.groups ?? []).map((group) => [group.id, group.name]),
+  );
+}
+
 export async function loadConnectedTimeline(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -597,6 +620,7 @@ export async function loadConnectedTimeline(
     journalPersonId?: string;
     pages: number;
     snapshotAt?: string;
+    allCircles?: boolean;
   }>,
 ): Promise<TimelineViewModel> {
   if (localJournalIsEnabled()) {
@@ -609,7 +633,13 @@ export async function loadConnectedTimeline(
   const personal = options.journalPersonId
     ? context.people.find((person) => person.id === options.journalPersonId)
     : undefined;
-  const queryPrefix = personal ? `/people/${personal.id}` : "/family";
+  const allCircles = Boolean(options.allCircles) && !personal;
+  const queryPrefix = personal
+    ? `/people/${personal.id}`
+    : allCircles
+      ? "/family"
+      : groupHomeHref(access.circleId);
+  const circleNames = circleNamesFromContext(context);
   let cursor: TimelineRow | undefined;
   let snapshotAt = requestedSnapshot(options.snapshotAt);
   let hasMore = false;
@@ -617,18 +647,29 @@ export async function loadConnectedTimeline(
 
   for (let page = 0; page < pageCount; page += 1) {
     const runPage = () =>
-      supabase.rpc("list_timeline_moments", {
-        circle_id: access.circleId,
-        journal_person_id: options.journalPersonId,
-        cursor_occurred_on: cursor?.occurred_on,
-        cursor_has_precise_time: cursor
-          ? cursor.occurred_at !== null
-          : undefined,
-        cursor_occurred_at: cursor?.occurred_at ?? undefined,
-        cursor_moment_id: cursor?.moment_id,
-        page_size: pageSize + 1,
-        snapshot_at: snapshotAt,
-      });
+      allCircles
+        ? supabase.rpc("list_all_timeline_moments", {
+            cursor_occurred_on: cursor?.occurred_on,
+            cursor_has_precise_time: cursor
+              ? cursor.occurred_at !== null
+              : undefined,
+            cursor_occurred_at: cursor?.occurred_at ?? undefined,
+            cursor_moment_id: cursor?.moment_id,
+            page_size: pageSize + 1,
+            snapshot_at: snapshotAt,
+          })
+        : supabase.rpc("list_timeline_moments", {
+            circle_id: access.circleId,
+            journal_person_id: options.journalPersonId,
+            cursor_occurred_on: cursor?.occurred_on,
+            cursor_has_precise_time: cursor
+              ? cursor.occurred_at !== null
+              : undefined,
+            cursor_occurred_at: cursor?.occurred_at ?? undefined,
+            cursor_moment_id: cursor?.moment_id,
+            page_size: pageSize + 1,
+            snapshot_at: snapshotAt,
+          });
     const { data, error } =
       page === 0
         ? await retryTransientFamilySessionQuery(runPage)
@@ -664,7 +705,12 @@ export async function loadConnectedTimeline(
   );
   const conversationsByMoment = await loadMomentConversationsByMomentId(
     supabase,
-    access,
+    {
+      ...access,
+      membershipIds: context.viewerMembershipIds?.length
+        ? context.viewerMembershipIds
+        : [access.membershipId],
+    },
     rows.map((row) => row.moment_id),
   );
   const moments = rows.map((row) =>
@@ -674,6 +720,8 @@ export async function loadConnectedTimeline(
       {
         viewerPersonId: access.personId,
         viewingJournalPersonId: options.journalPersonId,
+        feedCircleId: allCircles || personal ? null : access.circleId,
+        circleNames,
       },
       photosByMoment.get(row.moment_id),
       conversationsByMoment.get(row.moment_id) ?? emptyConversation,
@@ -691,8 +739,13 @@ export async function loadConnectedTimeline(
     groupLabel: context.circleName,
     people: context.people,
     viewerPersonId: access.personId,
-    currentHref: personal ? `/people/${personal.id}` : "/family",
-    activeGroupId: access.circleId,
+    viewerPersonIds: context.viewerPersonIds,
+    currentHref: personal
+      ? `/people/${personal.id}`
+      : allCircles
+        ? "/family"
+        : groupHomeHref(access.circleId),
+    activeGroupId: allCircles ? null : access.circleId,
   });
   const chrome = {
     ...(personal
@@ -707,7 +760,12 @@ export async function loadConnectedTimeline(
               }
             : context.chrome.composer,
         }
-      : context.chrome),
+      : allCircles
+        ? {
+            ...context.chrome,
+            title: allHomeLabel,
+          }
+        : context.chrome),
     eyebrow: journalSwitcherEyebrow(switcher),
   };
   return {
@@ -734,13 +792,17 @@ export async function loadConnectedTimeline(
     pagination:
       hasMore && !paginationFailed
         ? {
-            nextHref: `${queryPrefix}?pages=${pageCount + 1}&snapshot=${encodeURIComponent(snapshotAt!)}`,
+            nextHref: journalTimelineHref(
+              queryPrefix,
+              pageCount + 1,
+              snapshotAt!,
+            ),
             label: "Show earlier days",
           }
         : undefined,
     paginationError: paginationFailed
       ? {
-          retryHref: `${queryPrefix}?pages=${pageCount}&snapshot=${encodeURIComponent(snapshotAt!)}`,
+          retryHref: journalTimelineHref(queryPrefix, pageCount, snapshotAt!),
           message:
             "Earlier days couldn’t be opened. The moments already here are still safe.",
           label: "Try opening earlier days again",

@@ -5,14 +5,27 @@ import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useModalDialog } from "@/features/dialog/lock-background-scroll";
+import { peopleCountLabel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "./shell-view-model";
-import { useOverlayPopoverClose } from "./use-overlay-popover-close";
+import { lockOverlayChrome, unlockOverlayChrome } from "./overlay-chrome";
 import {
+  sheetCloseMs,
+  useOverlayPopoverClose,
+} from "./use-overlay-popover-close";
+import { useSheetDismiss } from "./use-sheet-dismiss";
+import {
+  groupHomeHref,
+  isFamilyHomePath,
+  journalSwitcherSections,
   journalSwitcherTypeLabel,
   type FamilyTimelineSwitcherItem,
 } from "./journal-switcher";
@@ -78,16 +91,37 @@ function SwitcherCheck() {
   );
 }
 
+function swallowNextClick() {
+  const onClick = (event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    teardown();
+  };
+  const teardown = () => {
+    document.removeEventListener("click", onClick, true);
+    window.clearTimeout(timer);
+  };
+  document.addEventListener("click", onClick, true);
+  const timer = window.setTimeout(teardown, 400);
+}
+
 function SwitcherLink({
   item,
   current,
+  onPreview,
   onChoose,
 }: Readonly<{
   item: FamilyTimelineSwitcherItem;
   current: boolean;
+  onPreview: (item: FamilyTimelineSwitcherItem) => void;
   onChoose: (item: FamilyTimelineSwitcherItem) => void;
 }>) {
-  function acknowledge(event: MouseEvent<HTMLAnchorElement>) {
+  function preview(event: MouseEvent<HTMLAnchorElement>) {
+    if (!isUnmodifiedPrimaryClick(event)) return;
+    onPreview(item);
+  }
+
+  function choose(event: MouseEvent<HTMLAnchorElement>) {
     if (!isUnmodifiedPrimaryClick(event)) return;
     event.preventDefault();
     onChoose(item);
@@ -99,17 +133,49 @@ function SwitcherLink({
       prefetch={false}
       aria-current={current ? "page" : undefined}
       className={current ? "active" : undefined}
-      onPointerDown={acknowledge}
-      onClick={acknowledge}
+      onPointerDown={preview}
+      onClick={choose}
     >
       <span className="title-switcher-check-slot" aria-hidden="true">
         {current ? <SwitcherCheck /> : null}
       </span>
-      <span className="title-switcher-link-label">{item.label}</span>
-      <span className="title-switcher-type-pill" aria-hidden="true">
-        {journalSwitcherTypeLabel(item.kind)}
+      <span className="title-switcher-link-copy">
+        <strong>{item.label}</strong>
+        {item.kind === "group" && item.memberCount != null ? (
+          <small>{peopleCountLabel(item.memberCount)}</small>
+        ) : null}
       </span>
     </Link>
+  );
+}
+
+function SwitcherSection({
+  title,
+  items,
+  currentHref,
+  onPreview,
+  onChoose,
+}: Readonly<{
+  title: string;
+  items: readonly FamilyTimelineSwitcherItem[];
+  currentHref: string | null;
+  onPreview: (item: FamilyTimelineSwitcherItem) => void;
+  onChoose: (item: FamilyTimelineSwitcherItem) => void;
+}>) {
+  if (items.length === 0) return null;
+  return (
+    <section className="title-switcher-section">
+      <h3 className="private-label">{title}</h3>
+      {items.map((item) => (
+        <SwitcherLink
+          key={item.href}
+          item={item}
+          current={item.href === currentHref}
+          onPreview={onPreview}
+          onChoose={onChoose}
+        />
+      ))}
+    </section>
   );
 }
 
@@ -123,33 +189,28 @@ export function FamilyTitleSwitcher({
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const router = useRouter();
-  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const panelId = useId();
+  const titleId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   const [chosenHref, setChosenHref] = useState<string | null>(null);
-  const [shield, setShield] = useState(false);
-  const shieldRef = useRef(false);
-  const shieldTimerRef = useRef<number | null>(null);
+  const [chosenFrom, setChosenFrom] = useState<string | null>(null);
   const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
-    useOverlayPopoverClose();
-  const clearShieldTimer = useCallback(() => {
-    if (shieldTimerRef.current == null) return;
-    window.clearTimeout(shieldTimerRef.current);
-    shieldTimerRef.current = null;
-  }, []);
-  const holdShield = useCallback(() => {
-    clearShieldTimer();
-    shieldRef.current = true;
-    setShield(true);
-  }, [clearShieldTimer]);
-  const releaseShieldSoon = useCallback(() => {
-    clearShieldTimer();
-    shieldTimerRef.current = window.setTimeout(() => {
-      shieldTimerRef.current = null;
-      shieldRef.current = false;
-      setShield(false);
-    }, 360);
-  }, [clearShieldTimer]);
+    useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
-  const currentHref = chosenHref ?? serverCurrentHref;
+  const [observedHref, setObservedHref] = useState(serverCurrentHref);
+  if (observedHref !== serverCurrentHref) {
+    setObservedHref(serverCurrentHref);
+    setOpen(false);
+  }
+  const currentHref =
+    chosenHref && chosenFrom === serverCurrentHref
+      ? chosenHref
+      : serverCurrentHref;
   const chosenItem = switcher.find((item) => item.href === currentHref);
   const displayModel = chosenItem
     ? {
@@ -158,24 +219,96 @@ export function FamilyTitleSwitcher({
         eyebrow: journalSwitcherTypeLabel(chosenItem.kind),
       }
     : model;
+  const sections = journalSwitcherSections(switcher);
 
-  function dismissSwitcherImmediately() {
-    const details = detailsRef.current;
-    if (!details?.open) return;
-    cancel();
-    details.open = false;
+  const closePanel = useCallback(() => {
+    requestClose(() => {
+      setOpen(false);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    });
+  }, [requestClose]);
+
+  const dismissFromPointer = useCallback(() => {
+    swallowNextClick();
+    closePanel();
+  }, [closePanel]);
+
+  const dismissGesture = useSheetDismiss({
+    onDismiss: dismissFromPointer,
+    scrollerRef,
+    sheetRef,
+  });
+
+  const dialogMounted = useModalDialog(open, dialogRef);
+
+  useLayoutEffect(() => {
+    if (!dialogMounted) return;
+    lockOverlayChrome();
+    return () => unlockOverlayChrome();
+  }, [dialogMounted]);
+
+  useEffect(() => {
+    if (!open) return;
+    const focusFrame = window.requestAnimationFrame(() =>
+      headingRef.current?.focus({ preventScroll: true }),
+    );
+    return () => window.cancelAnimationFrame(focusFrame);
+  }, [open]);
+
+  useEffect(() => {
+    const remember = (href: string) => {
+      setChosenHref(href);
+      setChosenFrom(serverCurrentHref);
+      setOpen(false);
+      cancel();
+    };
+    const onNavigateSection = (event: Event) => {
+      const href =
+        event && typeof event === "object" && "detail" in event
+          ? (event as { detail?: { href?: unknown } }).detail?.href
+          : undefined;
+      if (typeof href !== "string") return;
+      const path = href.split("?")[0] ?? href;
+      if (path !== "/family" && !path.startsWith("/people/")) return;
+      const match = switcher.find((item) => item.href === href);
+      remember(match?.href ?? (path === "/family" ? "/family" : href));
+    };
+    const onPopState = () => {
+      const path = window.location.pathname;
+      const circle = new URLSearchParams(window.location.search).get("circle");
+      remember(
+        isFamilyHomePath(path)
+          ? circle
+            ? groupHomeHref(circle)
+            : "/family"
+          : path,
+      );
+    };
+    window.addEventListener("our-days:navigate-section", onNavigateSection);
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener(
+        "our-days:navigate-section",
+        onNavigateSection,
+      );
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [cancel, serverCurrentHref, switcher]);
+
+  function previewItem(item: FamilyTimelineSwitcherItem) {
+    setChosenHref(item.href);
+    setChosenFrom(serverCurrentHref);
   }
 
-  async function chooseItem(item: FamilyTimelineSwitcherItem) {
-    setChosenHref(item.href);
-    dismissSwitcherImmediately();
+  function chooseItem(item: FamilyTimelineSwitcherItem) {
+    previewItem(item);
+    cancel();
+    setOpen(false);
     if (item.kind === "group" && item.circleId && onSelectGroup) {
-      try {
-        await onSelectGroup(item.circleId);
-      } catch {
+      void Promise.resolve(onSelectGroup(item.circleId)).catch(() => {
         // Navigation still opens the circle via ?circle=; cookie write can
         // catch up on the next request if this action fails.
-      }
+      });
     }
     router.push(item.href);
     window.dispatchEvent(
@@ -185,131 +318,102 @@ export function FamilyTitleSwitcher({
     );
   }
 
-  useEffect(() => () => clearShieldTimer(), [clearShieldTimer]);
+  const toggle = () => {
+    if (open) {
+      if (closingRef.current) return;
+      closePanel();
+      return;
+    }
+    cancel();
+    setOpen(true);
+  };
 
-  useEffect(() => {
-    const details = detailsRef.current;
-    if (!details) return;
-    const syncShield = () => {
-      if (details.open) holdShield();
-      else releaseShieldSoon();
-    };
-    details.addEventListener("toggle", syncShield);
-    return () => details.removeEventListener("toggle", syncShield);
-  }, [holdShield, releaseShieldSoon]);
-
-  useEffect(() => {
-    const closeIfOpen = () => {
-      const details = detailsRef.current;
-      if (!details?.open || closingRef.current) return;
-      requestClose(() => {
-        details.open = false;
-      });
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (!detailsRef.current?.open) return;
-      event.preventDefault();
-      closeIfOpen();
-    };
-    const isSwitcherChrome = (target: EventTarget | null) => {
-      const details = detailsRef.current;
-      if (target instanceof Node && details?.contains(target)) return true;
-      return (
-        target instanceof Element &&
-        Boolean(target.closest(".topbar, .bottom-nav"))
-      );
-    };
-    const blockFeed = (event: Event) => {
-      const details = detailsRef.current;
-      if (!details?.open && !shieldRef.current) return;
-      if (isSwitcherChrome(event.target)) {
-        if (
-          event.type === "pointerdown" &&
-          event.target instanceof Node &&
-          details?.open &&
-          !details.contains(event.target) &&
-          !closingRef.current
-        ) {
-          requestClose(() => {
-            details.open = false;
-          });
-        }
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (
-        event.type === "pointerdown" &&
-        details?.open &&
-        !closingRef.current
-      ) {
-        requestClose(() => {
-          details.open = false;
-        });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", blockFeed, true);
-    document.addEventListener("click", blockFeed, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", blockFeed, true);
-      document.removeEventListener("click", blockFeed, true);
-    };
-  }, [closingRef, requestClose]);
-
-  return (
-    <details
-      ref={detailsRef}
-      className="title-switcher"
-      onToggle={(event) => {
-        if ((event.currentTarget as HTMLDetailsElement).open) {
-          cancel();
-          holdShield();
+  const sheet = (
+    <dialog
+      ref={dialogRef}
+      id={panelId}
+      className="composer-dialog activity-dialog"
+      aria-labelledby={titleId}
+      aria-modal="true"
+      aria-hidden={closing ? true : undefined}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closePanel();
           return;
         }
-        releaseShieldSoon();
+        containDialogFocus(event);
+      }}
+      onCancel={(event) => {
+        event.preventDefault();
+        closePanel();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) closePanel();
       }}
     >
-      <summary
+      <section
+        ref={sheetRef}
+        className={`composer-sheet activity-sheet title-switcher-sheet${closing ? " is-closing" : ""}`}
+        onAnimationEnd={onAnimationEnd}
+        onPointerDown={dismissGesture.onPointerDown}
+        onPointerMove={dismissGesture.onPointerMove}
+        onPointerUp={dismissGesture.onPointerUp}
+        onPointerCancel={dismissGesture.onPointerCancel}
+      >
+        <div className="activity-sheet-chrome">
+          <span className="sheet-handle" aria-hidden="true" />
+          <header className="activity-sheet-bar">
+            <h2 ref={headingRef} id={titleId} tabIndex={-1}>
+              Journal
+            </h2>
+          </header>
+        </div>
+        <div ref={scrollerRef} className="activity-sheet-list">
+          <nav aria-label="Choose a family timeline">
+            <SwitcherSection
+              title="Just me"
+              items={sections.justMe}
+              currentHref={currentHref}
+              onPreview={previewItem}
+              onChoose={chooseItem}
+            />
+            <SwitcherSection
+              title="Circles"
+              items={sections.circles}
+              currentHref={currentHref}
+              onPreview={previewItem}
+              onChoose={chooseItem}
+            />
+            <SwitcherSection
+              title="Person"
+              items={sections.people}
+              currentHref={currentHref}
+              onPreview={previewItem}
+              onChoose={chooseItem}
+            />
+          </nav>
+        </div>
+      </section>
+    </dialog>
+  );
+
+  return (
+    <div className={`title-switcher${open && !closing ? " is-open" : ""}`}>
+      <button
+        ref={triggerRef}
+        type="button"
         className="title-lockup"
-        onClick={(event) => {
-          const details = detailsRef.current;
-          if (!details?.open) {
-            holdShield();
-            return;
-          }
-          event.preventDefault();
-          if (closing) return;
-          requestClose(() => {
-            details.open = false;
-          });
-        }}
+        aria-label="Choose a journal"
+        aria-expanded={open && !closing}
+        aria-controls={panelId}
+        onClick={toggle}
       >
         <TitleCopy model={displayModel} chevron />
-      </summary>
-      <nav
-        className={closing ? "is-closing" : undefined}
-        aria-label="Choose a family timeline"
-        aria-hidden={closing ? true : undefined}
-        onAnimationEnd={onAnimationEnd}
-      >
-        {switcher.map((item) => (
-          <SwitcherLink
-            key={item.href}
-            item={item}
-            current={item.href === currentHref}
-            onChoose={chooseItem}
-          />
-        ))}
-      </nav>
-      {shield
-        ? createPortal(
-            <div className="title-switcher-scrim" aria-hidden="true" />,
-            document.body,
-          )
+      </button>
+      {dialogMounted && typeof document !== "undefined"
+        ? createPortal(sheet, document.body)
         : null}
-    </details>
+    </div>
   );
 }

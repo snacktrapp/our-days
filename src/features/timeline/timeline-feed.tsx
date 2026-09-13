@@ -12,27 +12,14 @@ import type {
   MomentConversationActions,
 } from "@/features/moments/moment-action-types";
 import type { PostableCircle } from "@/features/composer/post-to";
-import { AudienceChip } from "./audience-chip";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
-function Connection({
-  moment,
-  circles,
-  connectedActions,
-}: {
-  moment: TimelineMomentViewModel;
-  circles: readonly PostableCircle[];
-  connectedActions?: ConnectedMomentActions;
-}) {
+function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   const dateAndTime = timelineCardOccurredLabel(
     moment.occurredOn,
     moment.displayTime,
   );
-  const chipLabel =
-    moment.audienceChipLabel ??
-    (moment.showJustMeBadge ? "Just me" : undefined);
-  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
 
   if (moment.kind === "insight") {
     return (
@@ -47,28 +34,6 @@ function Connection({
 
   return (
     <div className="connection">
-      {showChip && chipLabel ? (
-        <AudienceChip
-          label={chipLabel}
-          momentId={moment.id}
-          revision={moment.revision}
-          audience={moment.audience}
-          circleId={moment.circleId}
-          linkedCircleIds={moment.linkedCircleIds}
-          circles={circles}
-          setAudience={connectedActions?.setAudience}
-          edit={
-            connectedActions?.update
-              ? {
-                  moment,
-                  update: connectedActions.update,
-                  removePhoto: connectedActions.removePhoto,
-                  reorderPhotos: connectedActions.reorderPhotos,
-                }
-              : undefined
-          }
-        />
-      ) : null}
       <span
         className={`avatar-node dot-${moment.personAccent}`}
         aria-hidden="true"
@@ -139,15 +104,12 @@ function TimelineEntry({
           className={`moment moment-${entry.moment.kind}`}
           data-moment-kind={entry.moment.kind}
         >
-          <Connection
-            moment={entry.moment}
-            circles={circles}
-            connectedActions={connectedActions}
-          />
+          <Connection moment={entry.moment} />
           <MomentCard
             interaction={interaction}
             moment={entry.moment}
             preload={entry.moment.id === firstMomentId}
+            circles={circles}
             connectedActions={connectedActions}
             conversationActions={conversationActions}
             connectedPosition={connectedPosition}

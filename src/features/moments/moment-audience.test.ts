@@ -13,7 +13,7 @@ describe("moment audience mapping", () => {
     expect(normalizeMomentAudience("just_me")).toBe("just_me");
   });
 
-  it("shows the Just Me pill only on the author's own journal", () => {
+  it("marks Just me posts for the Just me pill", () => {
     expect(
       showJustMeAudienceBadge({
         audience: "just_me",
@@ -29,15 +29,7 @@ describe("moment audience mapping", () => {
         viewingJournalPersonId: undefined,
         momentJournalPersonId: "me",
       }),
-    ).toBe(false);
-    expect(
-      showJustMeAudienceBadge({
-        audience: "just_me",
-        viewerPersonId: "me",
-        viewingJournalPersonId: "other",
-        momentJournalPersonId: "other",
-      }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       showJustMeAudienceBadge({
         audience: "family",
@@ -48,31 +40,18 @@ describe("moment audience mapping", () => {
     ).toBe(false);
   });
 
-  it("shows an audience chip on the author's own posts only", () => {
-    expect(
-      showAudienceChip({
-        viewerPersonId: "me",
-        viewingJournalPersonId: "me",
-        momentJournalPersonId: "me",
-      }),
-    ).toBe(true);
+  it("shows an audience chip on every post except insights", () => {
     expect(
       showAudienceChip({
         viewerPersonId: "me",
         viewingJournalPersonId: undefined,
-        momentJournalPersonId: "me",
-      }),
-    ).toBe(false);
-    expect(
-      showAudienceChip({
-        viewerPersonId: "me",
-        viewingJournalPersonId: "other",
         momentJournalPersonId: "other",
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(showAudienceChip({ momentKind: "insight" })).toBe(false);
   });
 
-  it("labels Just me, one circle, or N circles", () => {
+  it("labels All-feed chips with a name, Name +1, or N circles", () => {
     expect(
       formatAudienceChipLabel({ audience: "just_me", linkedCircleIds: [] }),
     ).toBe("Just me");
@@ -80,19 +59,52 @@ describe("moment audience mapping", () => {
       formatAudienceChipLabel({
         audience: "family",
         linkedCircleIds: ["family"],
+        circleNames: { family: "Trapp Family" },
       }),
-    ).toBe("1 circle");
+    ).toBe("Trapp Family");
     expect(
       formatAudienceChipLabel({
         audience: "family",
         linkedCircleIds: ["family", "cousins"],
+        circleNames: { family: "Trapp Family", cousins: "Cousins" },
       }),
-    ).toBe("2 circles");
+    ).toBe("Trapp Family +1");
     expect(
       formatAudienceChipLabel({
         audience: "family",
         linkedCircleIds: ["a", "b", "c"],
       }),
     ).toBe("3 circles");
+  });
+
+  it("uses a quiet Also label when a single-circle feed is also shared elsewhere", () => {
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["family"],
+        circleNames: { family: "Trapp Family" },
+        feedCircleId: "family",
+      }),
+    ).toBe("Trapp Family");
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["family", "cousins"],
+        circleNames: { family: "Trapp Family", cousins: "Cousins" },
+        feedCircleId: "family",
+      }),
+    ).toBe("Also · Cousins");
+    expect(
+      formatAudienceChipLabel({
+        audience: "family",
+        linkedCircleIds: ["family", "cousins", "harbor"],
+        circleNames: {
+          family: "Trapp Family",
+          cousins: "Cousins",
+          harbor: "Harbor",
+        },
+        feedCircleId: "family",
+      }),
+    ).toBe("Also · Cousins +1");
   });
 });

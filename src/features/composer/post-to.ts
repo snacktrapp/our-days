@@ -6,7 +6,7 @@ export type PostableCircle = Readonly<{
 }>;
 
 export type CreatePostToHomeContext = Readonly<{
-  kind: "you" | "group" | "person";
+  kind: "all" | "you" | "group" | "person";
   circleId?: string;
 }>;
 

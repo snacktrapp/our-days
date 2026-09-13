@@ -124,12 +124,12 @@ describe("JournalChrome", () => {
   it("opens the family switcher from the middle title", () => {
     const { container } = render(
       <JournalChrome
-        model={{ ...model, title: "All our days" }}
+        model={{ ...model, title: "All circles" }}
         section="timeline"
         switcher={[
           {
-            kind: "group",
-            label: "All our days",
+            kind: "all",
+            label: "All circles",
             href: "/family",
             current: true,
           },
@@ -146,17 +146,15 @@ describe("JournalChrome", () => {
     );
 
     const switcher = container.querySelector(".title-switcher");
-    expect(switcher).not.toHaveAttribute("open");
+    expect(switcher).not.toHaveClass("is-open");
 
-    fireEvent.click(
-      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
 
-    expect(switcher).toHaveAttribute("open");
+    expect(switcher).toHaveClass("is-open");
     expect(
       screen.getByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeVisible();
-    expect(screen.getByRole("link", { name: "All our days" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "All circles" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -165,8 +163,10 @@ describe("JournalChrome", () => {
       "/people/molly",
     );
 
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(container.querySelector(".title-switcher nav")).toHaveClass(
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Journal" }), {
+      key: "Escape",
+    });
+    expect(document.querySelector(".title-switcher-sheet")).toHaveClass(
       "is-closing",
     );
     expect(
@@ -195,12 +195,12 @@ describe("JournalChrome", () => {
   it("replaces page content with a destination skeleton as soon as a journal is chosen", () => {
     render(
       <JournalChrome
-        model={{ ...model, title: "All our days" }}
+        model={{ ...model, title: "All circles" }}
         section="timeline"
         switcher={[
           {
-            kind: "group",
-            label: "All our days",
+            kind: "all",
+            label: "All circles",
             href: "/family",
             current: true,
           },
@@ -216,20 +216,16 @@ describe("JournalChrome", () => {
       </JournalChrome>,
     );
 
-    fireEvent.click(
-      screen.getByRole("heading", { name: "All our days" }).closest("summary")!,
-    );
-    fireEvent.pointerDown(screen.getByRole("link", { name: "Molly" }), {
-      button: 0,
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    fireEvent.click(screen.getByRole("link", { name: "Molly" }));
 
     expect(screen.queryByText("Moments")).toBeNull();
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),
     ).toHaveClass("route-pending-skeleton");
     expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
-    expect(document.querySelector(".title-switcher")).not.toHaveAttribute(
-      "open",
+    expect(document.querySelector(".title-switcher")).not.toHaveClass(
+      "is-open",
     );
     expect(document.querySelector(".timeline-empty-state")).toBeNull();
   });

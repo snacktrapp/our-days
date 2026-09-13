@@ -733,5 +733,20 @@ describe("connected journal context load", () => {
         href: "/family?circle=family#moment-calvin-post",
       }),
     ]);
+    expect(context.people.map((person) => person.id)).toEqual([
+      "brian",
+      "nana",
+    ]);
+    expect(context.viewerPersonIds).toEqual(["brian", "brian-gparents"]);
+    expect(context.viewerMembershipIds).toEqual([
+      "membership-brian",
+      "membership-brian-gparents",
+    ]);
+    expect(
+      context.groups?.map((group) => [group.id, group.memberCount]),
+    ).toEqual([
+      ["family", 1],
+      ["gparents", 1],
+    ]);
   });
 });

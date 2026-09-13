@@ -201,9 +201,14 @@ describe("TimelineFeed", () => {
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
     expect(
       container.querySelector(
-        '[data-moment-kind="location"] .location-card-heading .connected-moment-menu-trigger',
+        '[data-moment-kind="location"] .soft-actions .connected-moment-menu-trigger',
       ),
     ).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        '[data-moment-kind="location"] .card-top-chrome .connected-moment-menu-trigger',
+      ),
+    ).toBeNull();
   });
 
   it("renders an Insight without a person byline", () => {
@@ -245,7 +250,7 @@ describe("TimelineFeed", () => {
     expect(screen.getByRole("link", { name: "Listen" })).toBeVisible();
   });
 
-  it("shows a Just me chip to the left of the avatar on the author's journal", () => {
+  it("shows a Just me chip in the card body", () => {
     const { container } = render(
       <TimelineFeed
         model={{
@@ -277,20 +282,76 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    const connection = container.querySelector(".connection");
+    const card = container.querySelector(".moment-card");
+    const chrome = card?.querySelector(".card-top-chrome");
     const pill = screen.getByRole("button", { name: "Audience, Just me" });
-    const avatar = container.querySelector(".avatar-node");
     expect(pill).toBeVisible();
     expect(pill).toHaveTextContent("Just me");
-    expect(pill.compareDocumentPosition(avatar!)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-    expect(connection?.querySelector(".moment-meta")).toHaveTextContent(
-      "Person",
+    expect(card?.contains(pill)).toBe(true);
+    expect(chrome?.contains(pill)).toBe(true);
+    expect(container.querySelector(".connection")?.contains(pill)).toBe(false);
+    expect(container.querySelector(".soft-actions")?.contains(pill)).toBe(
+      false,
     );
   });
 
-  it("opens an edit sheet from the group-count chip", async () => {
+  it("puts audience chips in the top chrome and options in the action row", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={{
+          ...model,
+          switcher: [
+            {
+              kind: "person",
+              label: "Person",
+              href: "/people/person",
+              current: true,
+            },
+          ],
+          entries: [
+            {
+              id: "shared",
+              entryType: "moment",
+              moment: {
+                ...shared,
+                id: "chrome-moment",
+                kind: "thought",
+                audience: "family",
+                showAudienceChip: true,
+                audienceChipLabel: "Our Days +1",
+                audienceCircleNames: ["Our Days", "Cousins"],
+                canChange: true,
+                revision: 1,
+              },
+            },
+          ],
+        }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience: vi.fn(),
+        }}
+      />,
+    );
+
+    const card = container.querySelector(".moment-card");
+    const chrome = card?.querySelector(".card-top-chrome");
+    const actions = card?.querySelector(".soft-actions");
+    const pill = screen.getByRole("button", { name: "Audience, Our Days +1" });
+    const options = screen.getByRole("button", {
+      name: /Moment options —/u,
+    });
+    expect(chrome?.contains(pill)).toBe(true);
+    expect(
+      chrome?.querySelector(".thought-label, .moment-kicker"),
+    ).not.toBeNull();
+    expect(actions?.contains(options)).toBe(true);
+    expect(chrome?.contains(options)).toBe(false);
+    expect(actions?.contains(pill)).toBe(false);
+    expect(actions?.lastElementChild?.contains(options)).toBe(true);
+  });
+
+  it("expands the audience chip inline and edits from the expanded sheet", async () => {
     const setAudience = vi.fn().mockResolvedValue({
       ok: true,
       message: "Audience updated.",
@@ -317,7 +378,8 @@ describe("TimelineFeed", () => {
                 kind: "thought",
                 audience: "family",
                 showAudienceChip: true,
-                audienceChipLabel: "2 circles",
+                audienceChipLabel: "Our Days +1",
+                audienceCircleNames: ["Our Days", "Cousins"],
                 circleId: "family",
                 linkedCircleIds: ["family", "cousins"],
                 revision: 2,
@@ -334,8 +396,12 @@ describe("TimelineFeed", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Audience, 2 circles" }),
+      screen.getByRole("button", { name: "Audience, Our Days +1" }),
     );
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.getByText("Cousins")).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
@@ -352,7 +418,7 @@ describe("TimelineFeed", () => {
     );
   });
 
-  it("opens the edit composer from the audience chip when a session exists", () => {
+  it("opens the Posted to sheet from the audience chip when a composer session exists", () => {
     render(
       <ComposerSessionProvider model={composer}>
         <TimelineFeed
@@ -376,7 +442,8 @@ describe("TimelineFeed", () => {
                   kind: "thought",
                   audience: "family",
                   showAudienceChip: true,
-                  audienceChipLabel: "2 circles",
+                  audienceChipLabel: "Our Days +1",
+                  audienceCircleNames: ["Our Days", "Cousins"],
                   circleId: "family",
                   linkedCircleIds: ["family", "cousins"],
                   revision: 2,
@@ -394,17 +461,18 @@ describe("TimelineFeed", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Audience, 2 circles" }),
+      screen.getByRole("button", { name: "Audience, Our Days +1" }),
     );
-    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "New written entry" }),
-    ).toBeVisible();
+      screen.queryByRole("heading", { name: "New written entry" }),
+    ).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
   });
 
-  it("does not show an audience chip on another person's card", () => {
+  it("shows an audience chip on another person's card", () => {
     render(
       <TimelineFeed
         model={{
@@ -419,6 +487,9 @@ describe("TimelineFeed", () => {
                 kind: "thought",
                 audience: "family",
                 personName: "Jordan",
+                showAudienceChip: true,
+                audienceChipLabel: "Our Days",
+                audienceCircleNames: ["Our Days"],
               },
             },
           ],
@@ -426,9 +497,9 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: /Audience,/u })).toBeNull();
-    expect(screen.queryByText("1 circle")).toBeNull();
-    expect(screen.queryByText("Just me")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Audience, Our Days" }),
+    ).toBeVisible();
   });
 
   it("keeps the date but omits a timestamp when no time was recorded", () => {
