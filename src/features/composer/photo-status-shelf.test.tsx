@@ -40,6 +40,7 @@ import { PhotoStatusShelf } from "./photo-status-shelf";
 import {
   addOptimisticMediaUpload,
   clearOptimisticMediaUploads,
+  removeOptimisticMediaUpload,
   updateOptimisticMediaUpload,
 } from "./optimistic-media-upload";
 import {
@@ -924,5 +925,181 @@ describe("PhotoStatusShelf", () => {
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();
     expect(screen.queryByText("Uploading… 20%")).toBeNull();
+  });
+
+  it("clears a paused chip when that moment already has photos on the timeline", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "list_my_photo_intakes") {
+        return { data: [serverRow], error: null };
+      }
+      if (name === "get_photo_moment_status") {
+        return {
+          data: [{ moment_id: serverRow.moment_id, status: "uploading" }],
+          error: null,
+        };
+      }
+      if (name === "get_photo_moment_delivery") {
+        return {
+          data: [
+            {
+              photo_id: "d6000000-0000-4000-8000-000000000099",
+              sort_order: 0,
+            },
+          ],
+          error: null,
+        };
+      }
+      if (name === "cancel_photo_intake") {
+        return {
+          data: [
+            {
+              cleanup_state: "queued",
+              intake_id: intakeId,
+              state: "invalidated",
+            },
+          ],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await waitFor(() =>
+      expect(mocks.rpc).toHaveBeenCalledWith("cancel_photo_intake", {
+        intake_id: intakeId,
+      }),
+    );
+    expect(screen.queryByText("Photo upload paused")).toBeNull();
+    expect(mocks.remove).toHaveBeenCalledWith(localRecord.id);
+  });
+
+  it("clears a leftover reserved intake after another photo that day already landed", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "list_my_photo_intakes") {
+        return { data: [serverRow], error: null };
+      }
+      if (name === "list_timeline_moments") {
+        return {
+          data: [
+            {
+              moment_id: "d6000000-0000-4000-8000-000000000099",
+              moment_journal_person_id: serverRow.journal_person_id,
+              moment_kind: "photo",
+              occurred_on: serverRow.occurred_on,
+            },
+          ],
+          error: null,
+        };
+      }
+      if (name === "cancel_photo_intake") {
+        return {
+          data: [
+            {
+              cleanup_state: "queued",
+              intake_id: intakeId,
+              state: "invalidated",
+            },
+          ],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} />);
+
+    await waitFor(() =>
+      expect(mocks.rpc).toHaveBeenCalledWith("cancel_photo_intake", {
+        intake_id: intakeId,
+      }),
+    );
+    expect(screen.queryByText("Photo upload paused")).toBeNull();
+  });
+
+  it("does not fall back to a paused chip after the optimistic upload publishes", async () => {
+    mocks.rpc.mockResolvedValue({ data: [serverRow], error: null });
+    addOptimisticMediaUpload({
+      id: "published-local-upload",
+      circleId,
+      kind: "photo",
+      body: "College tours",
+      occurredOn: "2026-09-12",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Molly",
+      journalPersonInitial: "M",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:published-local",
+      intakeId,
+      stage: { state: "uploading", progress: 0.9 },
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} />);
+    expect(screen.getByText("Uploading… 90%")).toBeVisible();
+
+    act(() => {
+      updateOptimisticMediaUpload("published-local-upload", {
+        stage: { state: "published" },
+      });
+    });
+    expect(screen.getByText("Added to timeline")).toBeVisible();
+
+    act(() => {
+      removeOptimisticMediaUpload("published-local-upload");
+    });
+    expect(screen.queryByText("Photo upload paused")).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Private photo status" }),
+    ).toBeNull();
+  });
+
+  it("cancels the leftover intake when a failed chip is dismissed", async () => {
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "cancel_photo_intake") {
+        return {
+          data: [
+            {
+              cleanup_state: "queued",
+              intake_id: intakeId,
+              state: "invalidated",
+            },
+          ],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+    addOptimisticMediaUpload({
+      id: "failed-dismiss",
+      circleId,
+      kind: "photo",
+      body: "Should not become a paused chip.",
+      occurredOn: "2026-09-12",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Molly",
+      journalPersonInitial: "M",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:failed-dismiss",
+      intakeId,
+      retryable: false,
+      stage: { state: "failed", message: "That photo could not be uploaded." },
+    });
+
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-12" />);
+    expect(screen.getByText("Upload failed")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    await waitFor(() =>
+      expect(mocks.rpc).toHaveBeenCalledWith("cancel_photo_intake", {
+        intake_id: intakeId,
+      }),
+    );
+    expect(screen.queryByText("Upload failed")).toBeNull();
+    expect(screen.queryByText("Photo upload paused")).toBeNull();
   });
 });

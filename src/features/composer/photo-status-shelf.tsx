@@ -132,6 +132,85 @@ function momentStatusFromShelfItem(
   return null;
 }
 
+function photoDeliveryHasPhotos(data: unknown) {
+  return (
+    Array.isArray(data) &&
+    data.some(
+      (row) =>
+        !!row &&
+        typeof row === "object" &&
+        "photo_id" in row &&
+        typeof row.photo_id === "string" &&
+        row.photo_id.length > 0,
+    )
+  );
+}
+
+function timelineHasPublishedPhoto(
+  data: unknown,
+  match: Readonly<{
+    journalPersonId: string;
+    momentId: string;
+    occurredOn: string;
+  }>,
+) {
+  if (!Array.isArray(data)) return false;
+  return data.some((row) => {
+    if (!row || typeof row !== "object") return false;
+    const kind = "moment_kind" in row ? row.moment_kind : null;
+    if (kind !== "photo") return false;
+    const momentId = "moment_id" in row ? row.moment_id : null;
+    const personId =
+      "moment_journal_person_id" in row ? row.moment_journal_person_id : null;
+    const occurredOn = "occurred_on" in row ? row.occurred_on : null;
+    return (
+      momentId === match.momentId ||
+      (personId === match.journalPersonId &&
+        String(occurredOn) === String(match.occurredOn))
+    );
+  });
+}
+
+async function retirePhotoIntake({
+  circleId,
+  intakeId,
+  supabase,
+}: Readonly<{
+  circleId: string;
+  intakeId: string;
+  supabase: ReturnType<typeof createOurDaysBrowserClient>;
+}>) {
+  const { data, error } = await supabase.rpc("cancel_photo_intake", {
+    intake_id: intakeId,
+  });
+  const result = data?.[0];
+  if (
+    error ||
+    result?.state !== "invalidated" ||
+    !allowedCleanupStates.has(result.cleanup_state as PhotoCleanupState)
+  ) {
+    return false;
+  }
+  try {
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    const accountId = sessionData.session?.user.id;
+    if (sessionError || !accountId) throw new Error("Session unavailable");
+    const records = await photoUploadResumeStore.listForScope(
+      accountId,
+      circleId,
+    );
+    await Promise.all(
+      records
+        .filter((record) => record.intakeId === intakeId)
+        .map((record) => photoUploadResumeStore.remove(record.id)),
+    );
+  } catch {
+    // Local resume cleanup is best-effort after server-confirmed cancellation.
+  }
+  return true;
+}
+
 function visibleState(status: string): PhotoStatusItem["state"] {
   if (status === "cancelled_cleanup_pending") return "cancelled";
   if (status === "needs_attention") return "attention";
@@ -373,7 +452,10 @@ export function PhotoStatusShelfView(props: PhotoStatusShelfViewProps) {
   return <PhotoStatusChipView {...chip} />;
 }
 
-function uploadChip(upload: OptimisticMediaUpload): PhotoStatusChipViewProps {
+function uploadChip(
+  upload: OptimisticMediaUpload,
+  onDismissFailed: (upload: OptimisticMediaUpload) => void,
+): PhotoStatusChipViewProps {
   const failed = upload.stage.state === "failed";
   return {
     busy: !failed && upload.stage.state !== "published",
@@ -389,7 +471,7 @@ function uploadChip(upload: OptimisticMediaUpload): PhotoStatusChipViewProps {
           }
         : {
             label: "Dismiss",
-            onClick: () => removeOptimisticMediaUpload(upload.id),
+            onClick: () => onDismissFailed(upload),
           }
       : null,
   };
@@ -421,18 +503,20 @@ function selectVisibleChip({
   confirmingCancelId,
   items,
   onConfirmCancel,
+  onDismissFailed,
   onKeep,
   onRequestCancel,
   saves,
   uploads,
 }: PhotoStatusShelfViewProps & {
+  onDismissFailed: (upload: OptimisticMediaUpload) => void;
   saves: readonly OptimisticMomentSave[];
   uploads: readonly OptimisticMediaUpload[];
 }): PhotoStatusChipViewProps | null {
   const failedUpload = uploads.find(
     (upload) => upload.stage.state === "failed",
   );
-  if (failedUpload) return uploadChip(failedUpload);
+  if (failedUpload) return uploadChip(failedUpload, onDismissFailed);
 
   const failedSave = saves.find((save) => save.stage.state === "failed");
   if (failedSave) return momentChip(failedSave);
@@ -440,12 +524,12 @@ function selectVisibleChip({
   const activeUpload = uploads.find((upload) =>
     activeUploadStates.has(upload.stage.state),
   );
-  if (activeUpload) return uploadChip(activeUpload);
+  if (activeUpload) return uploadChip(activeUpload, onDismissFailed);
 
   const processingUpload = uploads.find(
     (upload) => upload.stage.state === "processing",
   );
-  if (processingUpload) return uploadChip(processingUpload);
+  if (processingUpload) return uploadChip(processingUpload, onDismissFailed);
 
   const saving = saves.find((save) => save.stage.state === "saving");
   if (saving) return momentChip(saving);
@@ -453,7 +537,7 @@ function selectVisibleChip({
   const published = uploads.find(
     (upload) => upload.stage.state === "published",
   );
-  if (published) return uploadChip(published);
+  if (published) return uploadChip(published, onDismissFailed);
 
   return serverShelfChip({
     cancellationResult,
@@ -478,6 +562,9 @@ export function PhotoStatusShelf({
     useState<CancellationResult | null>(null);
   const [cancellingIds, setCancellingIds] = useState<ReadonlySet<string>>(
     new Set(),
+  );
+  const [hiddenIntakeIds, setHiddenIntakeIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
   );
   const runRef = useRef(0);
   const inFlightRef = useRef<Promise<void> | null>(null);
@@ -566,7 +653,9 @@ export function PhotoStatusShelf({
             cleanupState: row.cleanup_state as PhotoCleanupState,
           }));
           const nextItems = allItems.filter(
-            (item) => item.state === "pending" || item.state === "processing",
+            (item) =>
+              (item.state === "pending" || item.state === "processing") &&
+              !publishedRef.current.has(item.id),
           );
           setItems(nextItems);
           setCancellationResult((current) =>
@@ -695,6 +784,87 @@ export function PhotoStatusShelf({
           } catch {
             // Browser resume shortcuts are best-effort and never need a family-facing notice.
           }
+
+          const optimisticSnapshot = optimisticMediaUploadSnapshot();
+          const leftoverReserved = rows.filter((row) => {
+            if (visibleState(row.status) !== "pending" || !row.can_cancel) {
+              return false;
+            }
+            if (publishedRef.current.has(row.intake_id)) return false;
+            return !optimisticSnapshot.some(
+              (upload) =>
+                upload.intakeId === row.intake_id &&
+                upload.stage.state !== "failed" &&
+                upload.stage.state !== "published",
+            );
+          });
+          if (leftoverReserved.length > 0) {
+            const timeline = await supabase.rpc("list_timeline_moments", {
+              circle_id: circleId,
+              page_size: 40,
+            });
+            if (run !== runRef.current) return;
+            const leftoverResults = await Promise.all(
+              leftoverReserved.map(async (row) => {
+                const [statusResult, deliveryResult] = await Promise.all([
+                  supabase.rpc("get_photo_moment_status", {
+                    intake_id: row.intake_id,
+                  }),
+                  row.moment_id
+                    ? supabase.rpc("get_photo_moment_delivery", {
+                        moment_id: row.moment_id,
+                      })
+                    : Promise.resolve({ data: [], error: null }),
+                ]);
+                const status = statusResult.data?.[0]?.status;
+                const published =
+                  status === "published" ||
+                  photoDeliveryHasPhotos(deliveryResult.data) ||
+                  timelineHasPublishedPhoto(timeline.data, {
+                    journalPersonId: row.journal_person_id,
+                    momentId: row.moment_id,
+                    occurredOn: row.occurred_on,
+                  });
+                return { published, row, status };
+              }),
+            );
+            if (run !== runRef.current) return;
+            const retiredIntakeIds = new Set<string>();
+            for (const { published, row, status } of leftoverResults) {
+              if (status && allowedMomentStatuses.has(status)) {
+                resolvedStatuses.set(
+                  row.intake_id,
+                  status as PhotoMomentStatus,
+                );
+              }
+              if (!published) continue;
+              publishedRef.current.add(row.intake_id);
+              retiredIntakeIds.add(row.intake_id);
+              setHiddenIntakeIds((current) => {
+                if (current.has(row.intake_id)) return current;
+                const next = new Set(current);
+                next.add(row.intake_id);
+                return next;
+              });
+              removeOptimisticMediaUploadByIntake(row.intake_id);
+              shouldRefresh = true;
+              if (
+                await retirePhotoIntake({
+                  circleId,
+                  intakeId: row.intake_id,
+                  supabase,
+                })
+              ) {
+                resolvedStatuses.set(row.intake_id, "cancelled");
+              }
+            }
+            if (retiredIntakeIds.size > 0) {
+              setItems((current) =>
+                current.filter((item) => !retiredIntakeIds.has(item.id)),
+              );
+            }
+            if (shouldRefresh) router.refresh();
+          }
         } catch {
           // A status poll can retry quietly when the page is visible again.
         }
@@ -723,6 +893,7 @@ export function PhotoStatusShelf({
       setCancellationResult(null);
       setConfirmingCancelId(null);
       setCancellingIds(new Set());
+      setHiddenIntakeIds(new Set());
     };
     window.addEventListener("our-days:clear-private-state", clear);
     window.addEventListener("online", checkWhenVisible);
@@ -744,6 +915,28 @@ export function PhotoStatusShelf({
     }
   }, [optimisticUploads, router]);
 
+  const incomingPublishedIntakeIds = optimisticUploads.flatMap((upload) =>
+    upload.stage.state === "published" && upload.intakeId
+      ? [upload.intakeId]
+      : [],
+  );
+  if (incomingPublishedIntakeIds.some((id) => !hiddenIntakeIds.has(id))) {
+    const nextHidden = new Set(hiddenIntakeIds);
+    for (const intakeId of incomingPublishedIntakeIds) {
+      nextHidden.add(intakeId);
+    }
+    setHiddenIntakeIds(nextHidden);
+  }
+
+  const publishedUploadKey = incomingPublishedIntakeIds.join();
+  useEffect(() => {
+    if (!publishedUploadKey) return;
+    for (const intakeId of publishedUploadKey.split(",")) {
+      if (intakeId) publishedRef.current.add(intakeId);
+    }
+    void checkStatuses();
+  }, [checkStatuses, publishedUploadKey]);
+
   useEffect(() => {
     const timers: number[] = [];
     for (const upload of optimisticUploads) {
@@ -757,6 +950,31 @@ export function PhotoStatusShelf({
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [optimisticUploads, router]);
 
+  const hideIntake = (intakeId: string) => {
+    publishedRef.current.add(intakeId);
+    setHiddenIntakeIds((current) => {
+      if (current.has(intakeId)) return current;
+      const next = new Set(current);
+      next.add(intakeId);
+      return next;
+    });
+    setItems((current) => current.filter((item) => item.id !== intakeId));
+  };
+
+  const dismissFailedUpload = (upload: OptimisticMediaUpload) => {
+    if (upload.intakeId) {
+      hideIntake(upload.intakeId);
+    }
+    removeOptimisticMediaUpload(upload.id);
+    if (upload.intakeId) {
+      void retirePhotoIntake({
+        circleId,
+        intakeId: upload.intakeId,
+        supabase: createOurDaysBrowserClient(),
+      });
+    }
+  };
+
   const cancel = async (id: string) => {
     runRef.current += 1;
     inFlightRef.current = null;
@@ -764,21 +982,12 @@ export function PhotoStatusShelf({
     setCancellingIds((current) => new Set(current).add(id));
     setCancellationResult(null);
 
-    const supabase = createOurDaysBrowserClient();
-    try {
-      const { data, error } = await supabase.rpc("cancel_photo_intake", {
-        intake_id: id,
-      });
-      const result = data?.[0];
-      if (
-        error ||
-        result?.state !== "invalidated" ||
-        !allowedCleanupStates.has(result.cleanup_state as PhotoCleanupState)
-      ) {
-        throw new Error("Cancellation unavailable");
-      }
-      setItems((current) => current.filter((item) => item.id !== id));
-    } catch {
+    const retired = await retirePhotoIntake({
+      circleId,
+      intakeId: id,
+      supabase: createOurDaysBrowserClient(),
+    });
+    if (!retired) {
       setCancellationResult({
         id,
         message:
@@ -791,30 +1000,12 @@ export function PhotoStatusShelf({
       });
       return;
     }
-
-    try {
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.getSession();
-      const accountId = sessionData.session?.user.id;
-      if (sessionError || !accountId) throw new Error("Session unavailable");
-      const records = await photoUploadResumeStore.listForScope(
-        accountId,
-        circleId,
-      );
-      await Promise.all(
-        records
-          .filter((record) => record.intakeId === id)
-          .map((record) => photoUploadResumeStore.remove(record.id)),
-      );
-    } catch {
-      // Local resume cleanup is best-effort after server-confirmed cancellation.
-    } finally {
-      setCancellingIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
-    }
+    hideIntake(id);
+    setCancellingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   };
 
   return (
@@ -824,9 +1015,11 @@ export function PhotoStatusShelf({
       confirmingCancelId={confirmingCancelId}
       items={items.filter(
         (item) =>
+          !hiddenIntakeIds.has(item.id) &&
           !optimisticUploads.some((upload) => upload.intakeId === item.id),
       )}
       onConfirmCancel={(id) => void cancel(id)}
+      onDismissFailed={dismissFailedUpload}
       onKeep={() => setConfirmingCancelId(null)}
       onRequestCancel={setConfirmingCancelId}
       saves={optimisticMomentSaves}
@@ -837,6 +1030,7 @@ export function PhotoStatusShelf({
 
 function VisiblePhotoStatusChip(
   props: PhotoStatusShelfViewProps & {
+    onDismissFailed: (upload: OptimisticMediaUpload) => void;
     saves: readonly OptimisticMomentSave[];
     uploads: readonly OptimisticMediaUpload[];
   },
