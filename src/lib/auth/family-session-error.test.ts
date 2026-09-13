@@ -27,6 +27,17 @@ describe("family session error classification", () => {
     ).toBe(true);
   });
 
+  it("treats Next redirect messages as control flow so refresh helpers do not swallow them", () => {
+    expect(isFatalJournalHomeError(new Error("NEXT_REDIRECT:/sign-in"))).toBe(
+      true,
+    );
+    expect(
+      isFatalJournalHomeError(
+        Object.assign(new Error("Redirect"), { digest: "NEXT_REDIRECT" }),
+      ),
+    ).toBe(true);
+  });
+
   it("still treats required journal integrity failures as fatal", () => {
     expect(isFatalJournalHomeError(new Error("Circle is unavailable"))).toBe(
       true,

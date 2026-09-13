@@ -2,7 +2,7 @@
 
 import { catchError, type ErrorInfo } from "next/error";
 import { useEffect, useRef } from "react";
-import { isRecoverableJournalNavigationError } from "@/lib/auth/family-session-error";
+import { isTransientFamilySessionError } from "@/lib/auth/family-session-error";
 import { JournalInterrupted } from "./journal-interrupted";
 import { RoutePendingSkeleton } from "./journal-pending-route";
 
@@ -10,7 +10,7 @@ const autoRetryWindowMs = 4000;
 const autoRetryStorageKey = "our-days:journal-nav-auto-retry";
 
 export function shouldAutoRetryJournalRoute(error: unknown) {
-  return isRecoverableJournalNavigationError(error);
+  return isTransientFamilySessionError(error);
 }
 
 function canAutoRetryNow() {

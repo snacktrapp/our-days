@@ -1,11 +1,12 @@
 import "server-only";
 
-import type {
-  MomentConversationViewModel,
-  MomentReactionId,
-  TimelineEntryViewModel,
-  TimelineMomentViewModel,
-  TimelineViewModel,
+import {
+  journalLoadSoftFailEntryId,
+  type MomentConversationViewModel,
+  type MomentReactionId,
+  type TimelineEntryViewModel,
+  type TimelineMomentViewModel,
+  type TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
 import {
   retryTransientFamilySessionQuery,
@@ -789,7 +790,7 @@ export async function loadConnectedTimeline(
     entries: firstPageFailed
       ? [
           {
-            id: "journal-load-soft-fail",
+            id: journalLoadSoftFailEntryId,
             entryType: "empty-state",
             title: "These days couldn’t open",
             message: "Try again in a moment. Nothing here was lost.",
@@ -822,5 +823,6 @@ export async function loadConnectedTimeline(
             label: "Try opening earlier days again",
           }
         : undefined,
+    refreshDegraded: firstPageFailed,
   };
 }

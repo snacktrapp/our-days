@@ -14,6 +14,13 @@ function readIfPresent(path: string) {
 }
 
 const familyPage = read("src/app/(journal)/family/page.tsx");
+const journalLayout = read("src/app/(journal)/layout.tsx");
+const familyHome = read("src/data/family-home.server.ts");
+const timelineViewModel = read("src/features/timeline/timeline-view-model.ts");
+const timelineFeed = read("src/features/timeline/timeline-feed.tsx");
+const timelineFeedTest = read("src/features/timeline/timeline-feed.test.tsx");
+const familyHomeTest = read("src/data/family-home.server.test.ts");
+const rootError = read("src/app/error.tsx");
 const peoplePage = read("src/app/(journal)/people/[personId]/page.tsx");
 const accountPage = read("src/app/(journal)/settings/family/page.tsx");
 const journalAccess = read("src/lib/auth/journal-access.ts");
@@ -212,6 +219,35 @@ describe("smash harden matrix", () => {
       expect(refreshTest).toContain(
         "refreshes the timeline after a pull past the threshold",
       );
+    });
+  });
+
+  describe("R-All-circles in-place refresh", () => {
+    it("does not let layout requireJournalAccess throw a recoverable refresh miss", () => {
+      expect(journalLayout).toContain("requireJournalAccessUnlessRecoverable");
+      expect(journalAccess).toContain(
+        "export async function requireJournalAccessUnlessRecoverable",
+      );
+      expect(familyPage).toContain("requireJournalAccessUnlessRecoverable");
+      expect(familyPage).toContain("familyHomeRefreshSoftFail");
+    });
+
+    it("keeps the prior All-circles timeline when refresh soft-fails", () => {
+      expect(timelineViewModel).toContain("preferPriorTimelineOnRefresh");
+      expect(timelineFeed).toContain("preferPriorTimelineOnRefresh");
+      expect(timelineFeedTest).toContain(
+        "keeps loaded All-circles moments when a pull-refresh soft-fails",
+      );
+      expect(familyHome).toContain("refreshDegraded: true");
+      expect(familyHomeTest).toContain(
+        "does not trap JournalInterrupted when All-circles refresh misses the first page",
+      );
+    });
+
+    it("auto-retries a transient refresh miss instead of the root interrupt card", () => {
+      expect(routeBoundary).toContain("isTransientFamilySessionError(error)");
+      expect(rootError).toContain("JournalSegmentError");
+      expect(rootError).not.toContain("JournalInterrupted");
     });
   });
 });

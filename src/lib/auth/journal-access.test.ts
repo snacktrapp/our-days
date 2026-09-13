@@ -28,6 +28,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import {
   readJournalAccessState,
   requireJournalAccess,
+  requireJournalAccessUnlessRecoverable,
   requirePreviewFixtureAccess,
 } from "./journal-access";
 
@@ -250,6 +251,34 @@ describe("journal access boundary", () => {
     });
 
     await expect(requireJournalAccess()).rejects.toThrow(
+      "NEXT_REDIRECT:/sign-in",
+    );
+  });
+
+  it("does not throw a recoverable All-circles refresh access miss", async () => {
+    const abort = Object.assign(new Error("The operation was aborted."), {
+      name: "AbortError",
+    });
+    mocks.limit.mockRejectedValueOnce(abort).mockRejectedValueOnce(abort);
+
+    await expect(requireJournalAccessUnlessRecoverable()).resolves.toBeNull();
+    expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not throw a warming All-circles refresh session miss", async () => {
+    mocks.limit.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST301", message: "JWT expired" },
+    });
+
+    await expect(requireJournalAccessUnlessRecoverable()).resolves.toBeNull();
+    expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
+  it("still redirects a signed-out refresh instead of opening the journal", async () => {
+    mocks.getClaims.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(requireJournalAccessUnlessRecoverable()).rejects.toThrow(
       "NEXT_REDIRECT:/sign-in",
     );
   });

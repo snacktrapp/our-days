@@ -85,6 +85,21 @@ describe("JournalInterrupted", () => {
     ).toBe(false);
   });
 
+  it("auto-retries a recoverable All-circles refresh miss instead of the interrupt card", () => {
+    expect(
+      shouldAutoRetryJournalRoute({
+        code: "PGRST301",
+        message: "JWT expired",
+      }),
+    ).toBe(true);
+    expect(shouldAutoRetryJournalRoute(new Error("Failed to fetch"))).toBe(
+      true,
+    );
+    expect(
+      shouldAutoRetryJournalRoute(new Error("Circle is unavailable")),
+    ).toBe(false);
+  });
+
   it("auto-retries a layout remount abort from the segment error view", () => {
     const retry = vi.fn();
     render(
@@ -100,6 +115,21 @@ describe("JournalInterrupted", () => {
       screen.queryByText("Something interrupted the story"),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Family journal")).toBeVisible();
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("auto-retries a layout refresh JWT miss from the segment error view", () => {
+    const retry = vi.fn();
+    render(
+      <JournalSegmentError
+        error={Object.assign(new Error("JWT expired"), { code: "PGRST301" })}
+        retry={retry}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Something interrupted the story"),
+    ).not.toBeInTheDocument();
     expect(retry).toHaveBeenCalledOnce();
   });
 

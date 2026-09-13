@@ -2,8 +2,11 @@ import { JournalChrome } from "@/features/shell/journal-chrome";
 import { PhoneNotificationsAnnouncement } from "@/features/timeline/phone-notifications-announcement";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadFamilyHomeJournal } from "@/data/family-home.server";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
+import {
+  familyHomeRefreshSoftFail,
+  loadFamilyHomeJournal,
+} from "@/data/family-home.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
@@ -31,7 +34,24 @@ export default async function FamilyPage({
   }>;
 }>) {
   const params = await searchParams;
-  const access = await requireJournalAccess({ circleId: params.circle });
+  const access = await requireJournalAccessUnlessRecoverable({
+    circleId: params.circle,
+  });
+  if (!access) {
+    const model = familyHomeRefreshSoftFail(!params.circle);
+    return (
+      <JournalChrome
+        model={model.chrome}
+        section="timeline"
+        switcher={model.switcher}
+        onSelectGroup={selectActiveGroupAction}
+        preserveChrome
+      >
+        <PhoneNotificationsAnnouncement />
+        <TimelineFeed model={model} />
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     const model = getFamilyTimelineFixture(await previewGroupOptions(params));
     return (
@@ -59,6 +79,7 @@ export default async function FamilyPage({
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
       onSelectGroup={selectActiveGroupAction}
+      preserveChrome={model.refreshDegraded}
     >
       <PhoneNotificationsAnnouncement />
       <TimelineFeed

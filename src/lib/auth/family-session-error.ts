@@ -37,7 +37,9 @@ function errorDigest(error: unknown) {
 }
 
 export function isNextControlFlowError(error: unknown) {
-  return /^NEXT_/u.test(errorDigest(error));
+  return (
+    /^NEXT_/u.test(errorDigest(error)) || /^NEXT_/u.test(errorMessage(error))
+  );
 }
 
 export function isFatalJournalHomeError(error: unknown) {

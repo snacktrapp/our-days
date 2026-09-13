@@ -10,7 +10,10 @@ import {
 import { readActiveCircleCookie } from "@/lib/auth/active-circle";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { isTransientFamilySessionError } from "./family-session-error";
+import {
+  isFatalJournalHomeError,
+  isTransientFamilySessionError,
+} from "./family-session-error";
 
 export { isTransientFamilySessionError } from "./family-session-error";
 
@@ -229,6 +232,17 @@ export async function requireJournalAccess(
   if (access.mode === "anonymous") redirect("/sign-in");
   if (access.mode === "no-access") redirect("/access-unavailable");
   return access;
+}
+
+export async function requireJournalAccessUnlessRecoverable(
+  preference?: JournalAccessPreference,
+): Promise<JournalAccess | null> {
+  try {
+    return await requireJournalAccess(preference);
+  } catch (error) {
+    if (isFatalJournalHomeError(error)) throw error;
+    return null;
+  }
 }
 
 export async function requirePreviewFixtureAccess() {

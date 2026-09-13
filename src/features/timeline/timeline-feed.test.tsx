@@ -2,7 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { TimelineFeed } from "./timeline-feed";
-import type { TimelineViewModel } from "./timeline-view-model";
+import {
+  journalLoadSoftFailEntryId,
+  type TimelineViewModel,
+} from "./timeline-view-model";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
@@ -619,6 +622,45 @@ describe("TimelineFeed", () => {
       "href",
       "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
     );
+  });
+
+  it("keeps loaded All-circles moments when a pull-refresh soft-fails", () => {
+    const { rerender, container } = render(<TimelineFeed model={model} />);
+    expect(container.querySelectorAll("article")).toHaveLength(4);
+
+    rerender(
+      <TimelineFeed
+        model={{
+          ...model,
+          chrome: { ...model.chrome, title: "All circles" },
+          entries: [
+            {
+              id: journalLoadSoftFailEntryId,
+              entryType: "empty-state",
+              title: "These days couldn’t open",
+              message: "Try again in a moment. Nothing here was lost.",
+            },
+          ],
+          paginationError: {
+            retryHref: "/family",
+            message:
+              "The journal couldn’t open these days just now. Nothing here was lost.",
+            label: "Try opening the journal again",
+          },
+          refreshDegraded: true,
+        }}
+      />,
+    );
+
+    expect(container.querySelectorAll("article")).toHaveLength(4);
+    expect(screen.queryByText("Something interrupted the story")).toBeNull();
+    expect(screen.queryByText("These days couldn’t open")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The journal couldn’t open these days just now.",
+    );
+    expect(
+      screen.getByRole("link", { name: "Try opening the journal again" }),
+    ).toHaveAttribute("href", "/family");
   });
 
   it("keeps the earliest-entry pill and omits the no-earlier-entries bar", () => {
