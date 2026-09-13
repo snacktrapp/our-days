@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { pullThresholdPx } from "./timeline-pull-to-refresh";
+import { resumeRefreshDebounceMs } from "./timeline-resume-refresh";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -52,6 +53,26 @@ function pullFrom(startY: number, distance: number, dx = 0) {
   dispatchTouch("touchend", 180 + dx, startY + distance);
 }
 
+function setDocumentHidden(hidden: boolean) {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => hidden,
+  });
+}
+
+function becomeVisibleFromBackground() {
+  setDocumentHidden(true);
+  document.dispatchEvent(new Event("visibilitychange"));
+  setDocumentHidden(false);
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+function dispatchPageShow(persisted: boolean) {
+  const event = new Event("pageshow");
+  Object.defineProperty(event, "persisted", { value: persisted });
+  window.dispatchEvent(event);
+}
+
 describe("TimelineRefreshControl", () => {
   beforeEach(() => {
     navigation.refresh.mockReset();
@@ -68,6 +89,8 @@ describe("TimelineRefreshControl", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    setDocumentHidden(false);
     document.getElementById("journal-live-region")?.remove();
     document.documentElement.className = "";
     document.body.className = "";
@@ -174,5 +197,108 @@ describe("TimelineRefreshControl", () => {
     expect(screen.getByText("Moments")).toBeInTheDocument();
     const mark = document.querySelector(".timeline-refresh-mark");
     expect(mark).not.toBeNull();
+  });
+
+  it("refreshes the journal after the tab returns from the background", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      becomeVisibleFromBackground();
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(resumeRefreshDebounceMs - 1);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("journal-live-region")).toHaveTextContent(
+      "Checking for newer days.",
+    );
+    expect(document.querySelector(".timeline-pull-shell")).toHaveAttribute(
+      "data-pull-state",
+      "refreshing",
+    );
+  });
+
+  it("does not refresh on mount or a visible-to-visible visibilitychange", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(resumeRefreshDebounceMs * 2);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+  });
+
+  it("coalesces a resume and a persisted pageshow into one refresh", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      becomeVisibleFromBackground();
+      dispatchPageShow(true);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes a bfcache restore and ignores a first pageshow", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      dispatchPageShow(false);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      dispatchPageShow(true);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a resume refresh while pull-to-refresh is already running", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      pullFrom(200, pullThresholdPx + 20);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      becomeVisibleFromBackground();
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
   });
 });
