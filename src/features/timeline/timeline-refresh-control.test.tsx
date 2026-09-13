@@ -1,7 +1,13 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  syncBottomNavVisualInset,
+  visualViewportBottomInsetVar,
+  visualViewportOffsetTopVar,
+} from "@/features/shell/visual-viewport-bottom";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
-import { pullThresholdPx } from "./timeline-pull-to-refresh";
+import { pullArmPx, pullThresholdPx } from "./timeline-pull-to-refresh";
+import { resumeRefreshDebounceMs } from "./timeline-resume-refresh";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -52,7 +58,30 @@ function pullFrom(startY: number, distance: number, dx = 0) {
   dispatchTouch("touchend", 180 + dx, startY + distance);
 }
 
+function setDocumentHidden(hidden: boolean) {
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => hidden,
+  });
+}
+
+function becomeVisibleFromBackground() {
+  setDocumentHidden(true);
+  document.dispatchEvent(new Event("visibilitychange"));
+  setDocumentHidden(false);
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+function dispatchPageShow(persisted: boolean) {
+  const event = new Event("pageshow");
+  Object.defineProperty(event, "persisted", { value: persisted });
+  window.dispatchEvent(event);
+}
+
 describe("TimelineRefreshControl", () => {
+  const originalInnerHeight = window.innerHeight;
+  const originalVisualViewport = window.visualViewport;
+
   beforeEach(() => {
     navigation.refresh.mockReset();
     Object.defineProperty(window, "scrollY", {
@@ -68,9 +97,21 @@ describe("TimelineRefreshControl", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    setDocumentHidden(false);
     document.getElementById("journal-live-region")?.remove();
     document.documentElement.className = "";
     document.body.className = "";
+    document.documentElement.style.removeProperty(visualViewportOffsetTopVar);
+    document.documentElement.style.removeProperty(visualViewportBottomInsetVar);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: originalVisualViewport,
+    });
   });
 
   it("refreshes the timeline after a pull past the threshold", async () => {
@@ -174,5 +215,226 @@ describe("TimelineRefreshControl", () => {
     expect(screen.getByText("Moments")).toBeInTheDocument();
     const mark = document.querySelector(".timeline-refresh-mark");
     expect(mark).not.toBeNull();
+  });
+
+  it("refreshes the journal after the tab returns from the background", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      becomeVisibleFromBackground();
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(resumeRefreshDebounceMs - 1);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("journal-live-region")).toHaveTextContent(
+      "Checking for newer days.",
+    );
+    expect(document.querySelector(".timeline-pull-shell")).toHaveAttribute(
+      "data-pull-state",
+      "refreshing",
+    );
+  });
+
+  it("does not refresh on mount or a visible-to-visible visibilitychange", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      vi.advanceTimersByTime(resumeRefreshDebounceMs * 2);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+  });
+
+  it("coalesces a resume and a persisted pageshow into one refresh", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      becomeVisibleFromBackground();
+      dispatchPageShow(true);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes a bfcache restore and ignores a first pageshow", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      dispatchPageShow(false);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    act(() => {
+      dispatchPageShow(true);
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears visual-viewport chrome insets while the feed is being pulled", () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        height: 560,
+        offsetTop: 16,
+      },
+    });
+    syncBottomNavVisualInset();
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportOffsetTopVar,
+      ),
+    ).toBe("16px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("268px");
+
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+    const shell = document.querySelector(".timeline-pull-shell");
+
+    act(() => {
+      dispatchTouch("touchstart", 180, 200);
+      dispatchTouch("touchmove", 180, 200 + pullArmPx + 8);
+    });
+    expect(shell).toHaveAttribute("data-pull-state", "pulling");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportOffsetTopVar,
+      ),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+
+    act(() => {
+      dispatchTouch("touchmove", 180, 200 + pullThresholdPx + 20);
+    });
+    expect(shell).toHaveAttribute("data-pull-state", "armed");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+
+    act(() => {
+      dispatchTouch("touchend", 180, 200 + pullThresholdPx + 20);
+    });
+    expect(shell).toHaveAttribute("data-pull-state", "refreshing");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportOffsetTopVar,
+      ),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+  });
+
+  it("restores the keyboard pin after pull-to-refresh returns to idle", async () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        height: 560,
+        offsetTop: 16,
+      },
+    });
+
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+    const shell = document.querySelector(".timeline-pull-shell");
+
+    act(() => {
+      pullFrom(200, pullThresholdPx + 20);
+    });
+    expect(shell).toHaveAttribute("data-pull-state", "refreshing");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute("data-pull-state", "idle");
+    });
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportOffsetTopVar,
+      ),
+    ).toBe("16px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("268px");
+  });
+
+  it("does not start a resume refresh while pull-to-refresh is already running", () => {
+    vi.useFakeTimers();
+    render(
+      <TimelineRefreshControl>
+        <section className="timeline">Moments</section>
+      </TimelineRefreshControl>,
+    );
+
+    act(() => {
+      pullFrom(200, pullThresholdPx + 20);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      becomeVisibleFromBackground();
+      vi.advanceTimersByTime(resumeRefreshDebounceMs);
+    });
+    expect(navigation.refresh).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import { syncBottomNavVisualInset } from "@/features/shell/visual-viewport-bottom";
 import {
   announceTimelineRefresh,
   feedIsAtTop,
@@ -23,6 +25,11 @@ import {
   pullThresholdPx,
   type TimelinePullState,
 } from "./timeline-pull-to-refresh";
+import {
+  resumeRefreshDebounceMs,
+  shouldResumeRefreshOnPageShow,
+  shouldResumeRefreshOnVisibility,
+} from "./timeline-resume-refresh";
 
 function touchPoint(event: TouchEvent) {
   return event.touches[0] ?? event.changedTouches[0];
@@ -34,6 +41,7 @@ function writePull(root: HTMLElement | null, px: number) {
 
 function writeState(shell: HTMLElement | null, state: TimelinePullState) {
   if (shell) shell.dataset.pullState = state;
+  syncBottomNavVisualInset();
 }
 
 export function TimelineRefreshControl({ children }: { children: ReactNode }) {
@@ -47,6 +55,67 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshingRef.current = refreshing;
   }, [refreshing]);
+
+  const startRefresh = useCallback(
+    (pullPx?: number) => {
+      if (refreshingRef.current) return false;
+      if (pullPx != null) writePull(rootRef.current, pullPx);
+      writeState(shellRef.current, "refreshing");
+      refreshingRef.current = true;
+      setRefreshing(true);
+      announceTimelineRefresh();
+      startTransition(() => {
+        router.refresh();
+      });
+      return true;
+    },
+    [router, startTransition],
+  );
+
+  useEffect(() => {
+    // The first visibility reading is the mount state, not a resume.
+    let wasHidden: boolean | null = document.hidden;
+    let debounceId = 0;
+
+    const scheduleResumeRefresh = () => {
+      if (refreshingRef.current) return;
+      window.clearTimeout(debounceId);
+      debounceId = window.setTimeout(() => {
+        debounceId = 0;
+        if (document.hidden || refreshingRef.current) return;
+        startRefresh();
+      }, resumeRefreshDebounceMs);
+    };
+
+    const onVisibility = () => {
+      const isHidden = document.hidden;
+      if (isHidden) {
+        window.clearTimeout(debounceId);
+        debounceId = 0;
+      } else if (shouldResumeRefreshOnVisibility({ wasHidden, isHidden })) {
+        scheduleResumeRefresh();
+      }
+      wasHidden = isHidden;
+    };
+
+    const onPageShow = (event: Event) => {
+      const persisted =
+        "persisted" in event &&
+        typeof (event as PageTransitionEvent).persisted === "boolean"
+          ? (event as PageTransitionEvent).persisted
+          : false;
+      if (!shouldResumeRefreshOnPageShow({ persisted })) return;
+      scheduleResumeRefresh();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.clearTimeout(debounceId);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [startRefresh]);
 
   useEffect(() => {
     if (!refreshing) return;
@@ -158,14 +227,7 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
       if (!armed) return;
       armed = false;
       if (pullShouldRefresh(raw)) {
-        writePull(rootRef.current, resistedPull(pullThresholdPx));
-        writeState(shellRef.current, "refreshing");
-        refreshingRef.current = true;
-        setRefreshing(true);
-        announceTimelineRefresh();
-        startTransition(() => {
-          router.refresh();
-        });
+        startRefresh(resistedPull(pullThresholdPx));
         return;
       }
       snapIdle();
@@ -182,7 +244,7 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
       document.removeEventListener("touchend", onEnd);
       document.removeEventListener("touchcancel", onEnd);
     };
-  }, [router, startTransition]);
+  }, [startRefresh]);
 
   return (
     <div
