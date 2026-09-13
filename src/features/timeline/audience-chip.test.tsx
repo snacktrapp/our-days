@@ -25,7 +25,7 @@ describe("AudienceChip", () => {
     render(<AudienceChip label="Just me" audience="just_me" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Audience, Just me" }));
-    expect(screen.getByText("Just me")).toBeVisible();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Just me");
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });

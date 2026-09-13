@@ -491,7 +491,9 @@ describe("TimelineFeed", () => {
     const chip = screen.getByRole("button", { name: "Audience, Our Days" });
     expect(chip).toBeVisible();
     fireEvent.click(chip);
-    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(
+      chip.closest(".card-audience")?.querySelector(".audience-chip-detail"),
+    ).toHaveTextContent("Our Days");
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
   });

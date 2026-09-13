@@ -831,7 +831,7 @@ describe("MomentCard audience chip", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Audience, Our Days" }));
-    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Our Days");
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: /^Moment options/u }),
