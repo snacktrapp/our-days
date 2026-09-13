@@ -342,7 +342,9 @@ describe("TimelineFeed", () => {
       name: /Moment options —/u,
     });
     expect(chrome?.contains(pill)).toBe(true);
-    expect(chrome?.querySelector(".thought-label, .moment-kicker")).not.toBeNull();
+    expect(
+      chrome?.querySelector(".thought-label, .moment-kicker"),
+    ).not.toBeNull();
     expect(actions?.contains(options)).toBe(true);
     expect(chrome?.contains(options)).toBe(false);
     expect(actions?.contains(pill)).toBe(false);

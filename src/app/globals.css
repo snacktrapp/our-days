@@ -1055,6 +1055,7 @@ button.audience-chip:focus-visible .audience-chip-face {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 8px;
 }
 .card-top-chrome > .moment-kind-meta,
 .card-top-chrome > .moment-kicker,
@@ -7597,6 +7598,7 @@ html[data-theme].overlay-open .app-shell::before,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 8px;
 }
 
 .card-top-chrome > .moment-kind-meta,
