@@ -11,7 +11,6 @@ import type {
   ConnectedMomentActions,
   MomentConversationActions,
 } from "@/features/moments/moment-action-types";
-import type { PostableCircle } from "@/features/composer/post-to";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
@@ -67,7 +66,6 @@ type TimelineEntryProps = Readonly<{
   entry: TimelineEntryViewModel;
   firstMomentId?: string;
   interaction: TimelineViewModel["interaction"];
-  circles: readonly PostableCircle[];
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
@@ -78,7 +76,6 @@ function TimelineEntry({
   entry,
   firstMomentId,
   interaction,
-  circles,
   connectedActions,
   conversationActions,
   connectedPosition,
@@ -109,7 +106,6 @@ function TimelineEntry({
             interaction={interaction}
             moment={entry.moment}
             preload={entry.moment.id === firstMomentId}
-            circles={circles}
             connectedActions={connectedActions}
             conversationActions={conversationActions}
             connectedPosition={connectedPosition}
@@ -191,7 +187,6 @@ export function TimelineFeed({
               entry={entry}
               firstMomentId={firstMomentId}
               interaction={model.interaction}
-              circles={model.chrome.composer.postableCircles ?? []}
               connectedActions={connectedActions}
               conversationActions={conversationActions}
               connectedPosition={

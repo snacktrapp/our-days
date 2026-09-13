@@ -776,3 +776,66 @@ describe("MomentCard insight treatment", () => {
     expect(screen.queryByText("TARS")).toBeNull();
   });
 });
+
+describe("MomentCard audience chip", () => {
+  it("expands circle names and does not offer Edit even when setAudience exists", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          audience: "family",
+          showAudienceChip: true,
+          audienceChipLabel: "Our Days +1",
+          audienceCircleNames: ["Our Days", "Cousins"],
+          canChange: true,
+          revision: 1,
+        }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Audience, Our Days +1" }),
+    );
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.getByText("Cousins")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Moment options/u }));
+    expect(screen.getByRole("button", { name: /^Edit —/u })).toHaveTextContent(
+      "Edit moment",
+    );
+  });
+
+  it("does not offer Edit from another person's audience chip", () => {
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          audience: "family",
+          showAudienceChip: true,
+          audienceChipLabel: "Our Days",
+          audienceCircleNames: ["Our Days"],
+          canChange: false,
+        }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Audience, Our Days" }));
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^Moment options/u }),
+    ).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
+  });
+});

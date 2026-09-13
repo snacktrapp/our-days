@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { TimelineFeed } from "./timeline-feed";
@@ -351,11 +351,8 @@ describe("TimelineFeed", () => {
     expect(actions?.lastElementChild?.contains(options)).toBe(true);
   });
 
-  it("expands the audience chip inline and edits from the expanded sheet", async () => {
-    const setAudience = vi.fn().mockResolvedValue({
-      ok: true,
-      message: "Audience updated.",
-    });
+  it("expands the audience chip inline without an Edit or Posted to path", () => {
+    const setAudience = vi.fn();
     render(
       <TimelineFeed
         model={{
@@ -382,6 +379,7 @@ describe("TimelineFeed", () => {
                 audienceCircleNames: ["Our Days", "Cousins"],
                 circleId: "family",
                 linkedCircleIds: ["family", "cousins"],
+                canChange: true,
                 revision: 2,
               },
             },
@@ -400,25 +398,12 @@ describe("TimelineFeed", () => {
     );
     expect(screen.getByText("Our Days")).toBeVisible();
     expect(screen.getByText("Cousins")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Cousins" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(setAudience).toHaveBeenCalledWith({
-        momentId: "two-groups-moment",
-        revision: 2,
-        audience: "family",
-        circleIds: ["family"],
-      }),
-    );
+    expect(setAudience).not.toHaveBeenCalled();
   });
 
-  it("opens the Posted to sheet from the audience chip when a composer session exists", () => {
+  it("does not open Posted to or the composer from the audience chip", () => {
     render(
       <ComposerSessionProvider model={composer}>
         <TimelineFeed
@@ -446,6 +431,7 @@ describe("TimelineFeed", () => {
                   audienceCircleNames: ["Our Days", "Cousins"],
                   circleId: "family",
                   linkedCircleIds: ["family", "cousins"],
+                  canChange: true,
                   revision: 2,
                 },
               },
@@ -463,16 +449,16 @@ describe("TimelineFeed", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Audience, Our Days +1" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.getByRole("dialog", { name: "Posted to" })).toBeVisible();
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.getByText("Cousins")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     expect(
       screen.queryByRole("heading", { name: "New written entry" }),
     ).toBeNull();
-    expect(screen.getByRole("checkbox", { name: "Our Days" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeChecked();
   });
 
-  it("shows an audience chip on another person's card", () => {
+  it("shows an audience chip on another person's card without Edit", () => {
     render(
       <TimelineFeed
         model={{
@@ -494,12 +480,20 @@ describe("TimelineFeed", () => {
             },
           ],
         }}
+        connectedActions={{
+          update: vi.fn(),
+          trash: vi.fn(),
+          setAudience: vi.fn(),
+        }}
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Audience, Our Days" }),
-    ).toBeVisible();
+    const chip = screen.getByRole("button", { name: "Audience, Our Days" });
+    expect(chip).toBeVisible();
+    fireEvent.click(chip);
+    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
   });
 
   it("keeps the date but omits a timestamp when no time was recorded", () => {
