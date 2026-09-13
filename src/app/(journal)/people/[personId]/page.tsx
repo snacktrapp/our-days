@@ -5,8 +5,7 @@ import { getPersonalTimelineFixture } from "@/fixtures/design-preview/timelines.
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { loadConnectedTimeline } from "@/data/moments.server";
+import { loadPersonJournal } from "@/data/person-journal.server";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -47,18 +46,13 @@ export default async function PersonJournalPage({
       </JournalChrome>
     );
   }
-  const [{ pages, snapshot }, context] = await Promise.all([
-    searchParams,
-    loadConnectedJournalContext(access),
-  ]);
-  if (!context.people.some((person) => person.id === personId)) {
-    return <PrivateSoftNotFound />;
-  }
-  const model = await loadConnectedTimeline(access, context, {
-    journalPersonId: personId,
-    pages: Number(pages ?? "1"),
+  const { pages, snapshot } = await searchParams;
+  const model = await loadPersonJournal(access, {
+    personId,
+    pages,
     snapshotAt: snapshot,
   });
+  if (!model) return <PrivateSoftNotFound />;
   return (
     <JournalChrome
       model={model.chrome}
