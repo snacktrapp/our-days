@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
-  deliver: vi.fn(),
   getHeaders: vi.fn(),
   requireAccess: vi.fn(),
   rpc: vi.fn(),
@@ -18,13 +17,8 @@ vi.mock("@/lib/auth/journal-access", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
-vi.mock("@/lib/web-push/deliver-activity", () => ({
-  deliverActivityWebPush: mocks.deliver,
-}));
-
 import {
   deleteWebPushSubscriptionAction,
-  deliverPublishedMomentPushAction,
   saveWebPushSubscriptionAction,
 } from "./web-push-actions";
 
@@ -48,7 +42,6 @@ describe("web push subscription actions", () => {
       role: "member",
     });
     mocks.rpc.mockResolvedValue({ data: "sub-1", error: null });
-    mocks.deliver.mockResolvedValue(undefined);
     mocks.createClient.mockResolvedValue({ rpc: mocks.rpc });
   });
 
@@ -86,28 +79,5 @@ describe("web push subscription actions", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("delete_web_push_subscription", {
       endpoint,
     });
-  });
-
-  it("awaits published moment push delivery", async () => {
-    const momentId = "60000000-0000-4000-8000-000000000001";
-    let resolveDelivery: (() => void) | undefined;
-    const delivery = new Promise<void>((resolve) => {
-      resolveDelivery = resolve;
-    });
-    mocks.deliver.mockReturnValue(delivery);
-
-    const action = deliverPublishedMomentPushAction({ momentId });
-    await vi.waitFor(() => {
-      expect(mocks.deliver).toHaveBeenCalledWith(
-        { rpc: mocks.rpc },
-        "moment",
-        momentId,
-      );
-    });
-    expect(await Promise.race([action, Promise.resolve("pending")])).toBe(
-      "pending",
-    );
-    resolveDelivery?.();
-    await expect(action).resolves.toMatchObject({ ok: true });
   });
 });

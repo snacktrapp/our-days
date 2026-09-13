@@ -14,8 +14,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
 
-vi.mock("@/lib/web-push/deliver-activity", () => ({
-  deliverActivityWebPush: mocks.deliver,
+vi.mock("@/lib/notifications/family-activity", () => ({
+  notifyFamilyActivity: mocks.deliver,
 }));
 
 vi.mock("@/lib/photo-worker.server", () => ({
@@ -162,7 +162,11 @@ describe("private photo processing route", () => {
       intake_id: intakeId,
     });
     expect(mocks.process).toHaveBeenCalledWith(intakeId);
-    expect(mocks.deliver).not.toHaveBeenCalled();
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ rpc: mocks.rpc }),
+      "moment",
+      momentId,
+    );
     expect(response.headers.get("cache-control")).toBe(
       "private, no-store, max-age=0",
     );
@@ -178,11 +182,7 @@ describe("private photo processing route", () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(mocks.process).not.toHaveBeenCalled();
-    expect(mocks.deliver).toHaveBeenCalledWith(
-      expect.objectContaining({ rpc: mocks.rpc }),
-      "moment",
-      momentId,
-    );
+    expect(mocks.deliver).not.toHaveBeenCalled();
   });
 
   it("uses the same neutral response when the session lacks exact access", async () => {

@@ -42,14 +42,14 @@ select is(
 
 select is(
   (
-    select actor_name || '|' || moment_kind
+    select actor_name || '|' || moment_kind || '|' || circle_name
       from public.list_web_push_deliveries(
         'moment',
         '60000000-0000-4000-8000-000000000003'
       )
   ),
-  'A Organizer Two|location',
-  'delivery copy uses the actor name and moment kind only'
+  'A Organizer Two|location|Cedar Circle',
+  'delivery copy includes the actor, moment kind, and visible circle name'
 );
 
 select is(
@@ -80,14 +80,14 @@ select public.create_moment_note(
 
 select is(
   (
-    select endpoint
+    select endpoint || '|' || circle_name
       from public.list_web_push_deliveries(
         'note',
         '60000000-0000-4000-8000-000000000001'
       )
   ),
-  'https://push.example.test/member-one',
-  'a comment notifies only the entry owner'
+  'https://push.example.test/member-one|Cedar Circle',
+  'a comment notifies only the entry owner and names the circle'
 );
 
 select public.set_moment_reaction(

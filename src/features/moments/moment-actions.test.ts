@@ -34,8 +34,8 @@ vi.mock("@/lib/auth/journal-access", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
-vi.mock("@/lib/web-push/deliver-activity", () => ({
-  deliverActivityWebPush: mocks.deliver,
+vi.mock("@/lib/notifications/family-activity", () => ({
+  notifyFamilyActivity: mocks.deliver,
 }));
 
 import { displayConversationDate } from "@/features/timeline/display-conversation-date";

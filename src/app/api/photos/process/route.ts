@@ -8,7 +8,7 @@ import {
   PHOTO_WORKER_VERSION,
 } from "@/lib/photo-worker.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
+import { notifyFamilyActivity } from "@/lib/notifications/family-activity";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -93,9 +93,11 @@ export async function POST(request: Request) {
   const before = beforeRows?.[0];
   if (beforeError || !before) return response({ ok: false }, 404);
   if (before.status === "published") {
-    if (before.moment_id) {
-      await deliverActivityWebPush(supabase, "moment", before.moment_id);
-    }
+    console.info("[notifications] skipped", {
+      reason: "already_published",
+      kind: "moment",
+      activityId: before.moment_id,
+    });
     return response({ ok: true, momentId: before.moment_id }, 200);
   }
   if (before.status === "needs_attention" || before.status === "cancelled") {
@@ -160,6 +162,12 @@ export async function POST(request: Request) {
   );
   const after = afterRows?.[0];
   if (afterError || after?.status !== "published" || !after.moment_id) {
+    console.info("[notifications] skipped", {
+      reason: "not_published",
+      kind: "moment",
+      activityId: after?.moment_id ?? intakeId,
+      status: after?.status ?? "unknown",
+    });
     return response(
       { ok: false, message: "The photo is still being prepared." },
       202,
@@ -169,5 +177,6 @@ export async function POST(request: Request) {
     intakeId,
     momentId: after.moment_id,
   });
+  await notifyFamilyActivity(supabase, "moment", after.moment_id);
   return response({ ok: true, momentId: after.moment_id }, 200);
 }

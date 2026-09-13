@@ -13,7 +13,6 @@ import {
 } from "../../scripts/lib/photo-byte-validator.mjs";
 import type { Database } from "@/lib/supabase/database.types";
 import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
-import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
 
 const intakeBucket = "our-days-intake";
 const originalsBucket = "our-days-originals";
@@ -628,12 +627,13 @@ export async function processPhotoIntake(intakeId: string) {
       { intake_id: intakeId },
     );
     const published = statusRows?.[0];
-    if (published?.status === "published" && published.moment_id) {
-      await deliverActivityWebPush(
-        worker.client,
-        "moment",
-        published.moment_id,
-      );
+    if (published?.status !== "published" || !published.moment_id) {
+      console.info("[notifications] skipped", {
+        reason: "not_published",
+        kind: "moment",
+        activityId: published?.moment_id ?? intakeId,
+        status: published?.status ?? "unknown",
+      });
     }
   } finally {
     await worker.client.auth.signOut({ scope: "local" });

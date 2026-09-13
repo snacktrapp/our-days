@@ -531,13 +531,6 @@ function isAbortError(error: unknown) {
   );
 }
 
-function notifyPublishedPhotoMoment(momentId: string) {
-  void import("@/features/family-settings/web-push-actions").then(
-    ({ deliverPublishedMomentPushAction }) =>
-      deliverPublishedMomentPushAction({ momentId }),
-  );
-}
-
 function photoQuotaMessage(error: unknown) {
   const message =
     typeof error === "object" && error && "message" in error
@@ -739,7 +732,6 @@ export async function uploadPhotoMoment(
       uuidPattern.test(status.moment_id)
     ) {
       await resumeStore.remove(resumed.id);
-      notifyPublishedPhotoMoment(status.moment_id);
       return {
         state: "published",
         intakeId: resumed.intakeId,
@@ -1005,7 +997,6 @@ export async function uploadPhotoMoment(
       }
       if (status.status === "published") {
         await resumeStore.remove(resumeId);
-        notifyPublishedPhotoMoment(reservation.moment_id);
         return {
           state: "published",
           intakeId: reservation.intake_id,

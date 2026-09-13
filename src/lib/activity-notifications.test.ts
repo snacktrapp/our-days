@@ -4,6 +4,7 @@ import {
   activityNotificationTitle,
   entryCommentMessage,
   entryReactionMessage,
+  familyActivityPushTitle,
   familyMomentPostedMessage,
   isNotifiableFamilyMoment,
 } from "./activity-notifications";
@@ -22,6 +23,19 @@ describe("family activity notification copy", () => {
     expect(activityMomentHref("abc")).toBe("/family#moment-abc");
     expect(activityMomentHref("abc", "circle-home")).toBe(
       "/family?circle=circle-home#moment-abc",
+    );
+    expect(
+      familyActivityPushTitle(
+        "Molly",
+        familyMomentPostedMessage("photo"),
+        "Cedar Circle",
+      ),
+    ).toBe("Molly posted a photo in Cedar Circle.");
+    expect(
+      familyActivityPushTitle("Heidi", entryCommentMessage, "Harbor Circle"),
+    ).toBe("Heidi commented on your entry in Harbor Circle.");
+    expect(familyActivityPushTitle("Calvin", entryCommentMessage, "  ")).toBe(
+      "Calvin commented on your entry.",
     );
   });
 
