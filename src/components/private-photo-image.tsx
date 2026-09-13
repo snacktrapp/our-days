@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 
 type PrivatePhotoImageProps = Readonly<{
   src: string;
@@ -21,6 +22,7 @@ export function PrivatePhotoImage({
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
   const [decoded, setDecoded] = useState<boolean | null>(null);
+  const deliverySrc = privateMediaRetrySrc(src, attempt);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -29,8 +31,12 @@ export function PrivatePhotoImage({
       setDecoded(true);
       return;
     }
+    if (image.complete) {
+      setUnavailable(true);
+      return;
+    }
     setDecoded(false);
-  }, [attempt, src]);
+  }, [attempt, deliverySrc]);
 
   if (unavailable) {
     return (
@@ -51,13 +57,15 @@ export function PrivatePhotoImage({
   }
 
   // Private media intentionally bypasses the Next image optimizer. Every
-  // request must reach the same-origin authorization route.
+  // request must reach the same-origin authorization route. iPhone PWA
+  // lazy-load inside overflow-hidden frames can drop that request or pin a
+  // stale 404, so these always load eagerly and retry with a cache buster.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={attempt}
       ref={imageRef}
-      src={src}
+      src={deliverySrc}
       alt={alt}
       width={width}
       height={height}
@@ -68,7 +76,7 @@ export function PrivatePhotoImage({
             ? "is-pending"
             : undefined
       }
-      loading={highPriority ? "eager" : "lazy"}
+      loading="eager"
       fetchPriority={highPriority ? "high" : undefined}
       onLoad={() => setDecoded(true)}
       onError={() => setUnavailable(true)}

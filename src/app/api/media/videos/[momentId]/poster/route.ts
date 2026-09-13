@@ -2,6 +2,10 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
 } from "../../../../../../../config/our-days-environment";
+import {
+  byteSizeMatches,
+  mediaTypeMatches,
+} from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -69,8 +73,12 @@ export async function GET(
   if (downloadError || !file) return unavailable();
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.byteLength !== descriptor.size_bytes) return unavailable();
-  if (file.type && file.type !== descriptor.mime_type) return unavailable();
+  if (!byteSizeMatches(bytes.byteLength, descriptor.size_bytes)) {
+    return unavailable();
+  }
+  if (!mediaTypeMatches(file.type, descriptor.mime_type)) {
+    return unavailable();
+  }
 
   return new Response(bytes, {
     status: 200,

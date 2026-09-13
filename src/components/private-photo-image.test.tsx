@@ -18,6 +18,7 @@ describe("PrivatePhotoImage", () => {
     const image = screen.getByRole("img");
     expect(image).toHaveAttribute("src", "/api/media/moments/one");
     expect(image).toHaveAttribute("loading", "eager");
+    expect(image).toHaveAttribute("fetchpriority", "high");
     expect(image).toHaveAttribute("width", "1200");
     expect(image).toHaveAttribute("height", "800");
     expect(image).toHaveAttribute(
@@ -26,10 +27,23 @@ describe("PrivatePhotoImage", () => {
     );
   });
 
-  it("shows a stable retry control after a private response fails", () => {
+  it("loads private photos eagerly so iPhone PWA frames keep cookies", () => {
     render(
       <PrivatePhotoImage
         src="/api/media/moments/one"
+        alt="Photo in Molly’s journal"
+        width={1200}
+        height={800}
+      />,
+    );
+    expect(screen.getByRole("img")).toHaveAttribute("loading", "eager");
+    expect(screen.getByRole("img")).not.toHaveAttribute("fetchPriority");
+  });
+
+  it("shows a stable retry control after a private response fails", () => {
+    render(
+      <PrivatePhotoImage
+        src="/api/media/moments/one?photo=10000000-0000-4000-8000-000000000011"
         alt="Photo in Molly’s journal"
         width={1200}
         height={800}
@@ -40,7 +54,7 @@ describe("PrivatePhotoImage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",
-      "/api/media/moments/one",
+      "/api/media/moments/one?photo=10000000-0000-4000-8000-000000000011&retry=1",
     );
   });
 });

@@ -2,6 +2,10 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
 } from "../../../../../../config/our-days-environment";
+import {
+  byteSizeMatches,
+  mediaTypeMatches,
+} from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -89,8 +93,8 @@ export async function GET(
   if (
     downloadError ||
     !photo ||
-    photo.size !== descriptor.output_size_bytes ||
-    photo.type !== descriptor.output_mime_type
+    !byteSizeMatches(photo.size, descriptor.output_size_bytes) ||
+    !mediaTypeMatches(photo.type, descriptor.output_mime_type)
   ) {
     return unavailable();
   }

@@ -2,6 +2,11 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
 } from "../../../../../../config/our-days-environment";
+import {
+  byteSizeMatches,
+  declaredByteSize,
+  mediaTypeMatches,
+} from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -39,6 +44,63 @@ function validPartialResponse(response: Response, expectedSize: number) {
     end < total &&
     length === end - start + 1
   );
+}
+
+function requestedByteRange(range: string, total: number) {
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
+  if (!match) return null;
+  let start: number;
+  let end: number;
+  if (match[1] === "") {
+    const suffix = Number(match[2]);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
+    start = Math.max(0, total - suffix);
+    end = total - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? total - 1 : Number(match[2]);
+  }
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(end) ||
+    start < 0 ||
+    end < start ||
+    end >= total
+  ) {
+    return null;
+  }
+  return { start, end };
+}
+
+async function sliceStreamToRange(
+  body: ReadableStream<Uint8Array>,
+  start: number,
+  end: number,
+) {
+  const reader = body.getReader();
+  const needed = end - start + 1;
+  const out = new Uint8Array(needed);
+  let skipped = 0;
+  let written = 0;
+  try {
+    while (written < needed) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      let offset = 0;
+      if (skipped < start) {
+        const canSkip = Math.min(value.length, start - skipped);
+        skipped += canSkip;
+        offset = canSkip;
+        if (skipped < start) continue;
+      }
+      const take = Math.min(value.length - offset, needed - written);
+      out.set(value.subarray(offset, offset + take), written);
+      written += take;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return written === needed ? out : null;
 }
 
 export async function GET(
@@ -120,16 +182,13 @@ export async function GET(
     return unavailable();
   }
 
+  const expectedSize = declaredByteSize(descriptor.size_bytes);
   const contentType = upstream.headers.get("content-type");
   const contentLength = Number(upstream.headers.get("content-length"));
-  const normalizedContentType = contentType?.split(";")[0]?.trim() ?? "";
   if (
+    expectedSize === null ||
     !upstream.body ||
-    normalizedContentType !== descriptor.mime_type ||
-    (range
-      ? upstream.status !== 206 ||
-        !validPartialResponse(upstream, descriptor.size_bytes)
-      : upstream.status !== 200 || contentLength !== descriptor.size_bytes)
+    !mediaTypeMatches(contentType, descriptor.mime_type)
   ) {
     await upstream.body?.cancel();
     return unavailable();
@@ -137,14 +196,57 @@ export async function GET(
 
   const responseHeaders = new Headers(privateHeaders);
   responseHeaders.set("Accept-Ranges", "bytes");
-  responseHeaders.set("Content-Length", String(contentLength));
   responseHeaders.set("Content-Type", descriptor.mime_type);
   responseHeaders.set("Vary", "Range");
-  const contentRange = upstream.headers.get("content-range");
-  if (contentRange) responseHeaders.set("Content-Range", contentRange);
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: responseHeaders,
-  });
+  if (!range) {
+    if (
+      upstream.status !== 200 ||
+      !byteSizeMatches(contentLength, expectedSize)
+    ) {
+      await upstream.body.cancel();
+      return unavailable();
+    }
+    responseHeaders.set("Content-Length", String(contentLength));
+    return new Response(upstream.body, {
+      status: 200,
+      headers: responseHeaders,
+    });
+  }
+
+  if (upstream.status === 206 && validPartialResponse(upstream, expectedSize)) {
+    responseHeaders.set("Content-Length", String(contentLength));
+    const contentRange = upstream.headers.get("content-range");
+    if (contentRange) responseHeaders.set("Content-Range", contentRange);
+    return new Response(upstream.body, {
+      status: 206,
+      headers: responseHeaders,
+    });
+  }
+
+  // iPhone Safari always sends Range. Some Storage/CDN objects (especially
+  // TUS multipart videos) answer that with a 200 of the whole file. Slice
+  // a truthful 206 so the lightbox does not get an empty error mat.
+  if (upstream.status === 200 && byteSizeMatches(contentLength, expectedSize)) {
+    const parsed = requestedByteRange(range, expectedSize);
+    if (!parsed) {
+      await upstream.body.cancel();
+      return unavailable();
+    }
+    const sliced = await sliceStreamToRange(
+      upstream.body,
+      parsed.start,
+      parsed.end,
+    );
+    if (!sliced) return unavailable();
+    responseHeaders.set("Content-Length", String(sliced.byteLength));
+    responseHeaders.set(
+      "Content-Range",
+      `bytes ${parsed.start}-${parsed.end}/${expectedSize}`,
+    );
+    return new Response(sliced, { status: 206, headers: responseHeaders });
+  }
+
+  await upstream.body.cancel();
+  return unavailable();
 }

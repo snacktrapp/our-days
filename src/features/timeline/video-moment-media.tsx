@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
@@ -58,7 +58,12 @@ export function VideoMomentMedia({
 }>) {
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
-  const poster = moment.video.poster ?? storedPoster ?? undefined;
+  const candidatePoster = moment.video.poster ?? storedPoster ?? undefined;
+  const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
+  const poster =
+    candidatePoster && candidatePoster !== failedPosterSrc
+      ? candidatePoster
+      : undefined;
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +128,9 @@ export function VideoMomentMedia({
                 if (naturalWidth > 0 && naturalHeight > 0) {
                   rememberVideoFrame(moment.id, naturalWidth, naturalHeight);
                 }
+              }}
+              onError={() => {
+                if (candidatePoster) setFailedPosterSrc(candidatePoster);
               }}
             />
           ) : (

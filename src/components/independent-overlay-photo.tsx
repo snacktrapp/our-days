@@ -23,7 +23,7 @@ export function prefetchIndependentOverlayObjectUrl(src: string) {
   const work = (async () => {
     try {
       const response = await globalThis.fetch(src, {
-        cache: "force-cache",
+        cache: "no-store",
         credentials: "same-origin",
       });
       if (!response.ok) return null;

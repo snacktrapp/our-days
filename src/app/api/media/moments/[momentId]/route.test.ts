@@ -135,6 +135,20 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(404);
   });
 
+  it("still streams when Storage omits MIME type or returns size as a string", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, output_size_bytes: "5" }],
+      error: null,
+    });
+    mocks.download.mockResolvedValue({
+      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "" }),
+      error: null,
+    });
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+  });
+
   it("rejects bytes whose verified size, type, or digest no longer matches", async () => {
     mocks.download.mockResolvedValue({
       data: new Blob([new Uint8Array([1, 2])], { type: "image/png" }),
