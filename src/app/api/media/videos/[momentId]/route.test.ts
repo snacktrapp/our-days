@@ -105,6 +105,61 @@ describe("private video delivery route", () => {
     },
   );
 
+  it("still proxies when Storage omits MIME type or returns size as a string", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, size_bytes: "10" }],
+      error: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array(10), {
+        status: 200,
+        headers: {
+          "content-length": "10",
+          "content-type": "application/octet-stream",
+        },
+      }),
+    );
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+  });
+
+  it("still slices a Safari Range probe when Storage omits Content-Length", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, mime_type: "video/quicktime" }],
+      error: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request("bytes=0-1");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 0-1/10");
+    expect(response.headers.get("content-type")).toBe("video/quicktime");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array([1, 2]),
+    );
+  });
+
+  it("turns a full 200 for a Safari Range probe into a truthful 206", async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), {
+        status: 200,
+        headers: { "content-length": "10", "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request("bytes=0-1");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 0-1/10");
+    expect(response.headers.get("content-length")).toBe("2");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array([1, 2]),
+    );
+  });
+
   it("fails closed when the private descriptor or upstream shape changes", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: [], error: null });
     expect((await request()).status).toBe(404);
