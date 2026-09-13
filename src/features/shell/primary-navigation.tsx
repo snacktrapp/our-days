@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useComposerSession } from "@/features/composer/composer-session";
 import { sectionFromPathname } from "./journal-routes";
 import type { JournalSection } from "./shell-view-model";
+import { useHideBottomNavWhileComposing } from "./hide-bottom-nav-while-composing";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
@@ -66,6 +67,7 @@ export function PrimaryNavigation({
   const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const session = useComposerSession();
+  const hidden = useHideBottomNavWhileComposing(session?.isOpen ?? false);
   const addMomentRef = useRef<HTMLButtonElement>(null);
   const [pendingSelection, setPendingSelection] = useState<{
     fromPathname: string;
@@ -111,8 +113,10 @@ export function PrimaryNavigation({
 
   return (
     <nav
-      className={`bottom-nav${compact ? " is-compact" : ""}`}
+      className={`bottom-nav${compact ? " is-compact" : ""}${hidden ? " is-hidden" : ""}`}
       aria-label="Primary navigation"
+      aria-hidden={hidden ? true : undefined}
+      inert={hidden ? true : undefined}
     >
       <Link
         className={`nav-item ${selectedSection === "timeline" ? "active" : ""}`}

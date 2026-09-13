@@ -39,6 +39,17 @@ describe("bottom-nav compact CSS contract", () => {
     expect(css).not.toMatch(/\.bottom-nav\.is-compact\s+\.nav-symbol\s*\{/);
   });
 
+  it("hides the pill without lifting it when a note or composer is open", () => {
+    const hidden = ruleBody(".bottom-nav.is-hidden");
+    expect(hidden).toMatch(/visibility:\s*hidden;/);
+    expect(hidden).toMatch(/pointer-events:\s*none;/);
+    expect(hidden).not.toMatch(/transform:/);
+    expect(css).toMatch(/:root:has\(\.inline-note-form\) \.bottom-nav/);
+    expect(css).toMatch(
+      /:root:has\(\.new-moment-composer-dialog\[open\]\) \.bottom-nav/,
+    );
+  });
+
   it("animates only the pill scale in 180ms and snaps when motion is reduced", () => {
     expect(css).toMatch(
       /\.bottom-nav\s*\{\s*transition:\s*transform 180ms ease;\s*\}/,
