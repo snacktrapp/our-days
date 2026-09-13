@@ -778,7 +778,7 @@ describe("MomentCard insight treatment", () => {
 });
 
 describe("MomentCard audience chip", () => {
-  it("expands circle names and does not offer Edit even when setAudience exists", () => {
+  it("shows a decorative chip and leaves audience changes on Edit moment", () => {
     render(
       <MomentCard
         moment={{
@@ -798,11 +798,14 @@ describe("MomentCard audience chip", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Audience, Our Days +1" }),
-    );
-    expect(screen.getByText("Our Days")).toBeVisible();
-    expect(screen.getByText("Cousins")).toBeVisible();
+    const chip = screen.getByLabelText("Audience, Our Days +1");
+    expect(chip).toHaveTextContent("Our Days +1");
+    expect(
+      screen.queryByRole("button", { name: "Audience, Our Days +1" }),
+    ).toBeNull();
+    fireEvent.click(chip);
+    expect(screen.queryByText("Cousins")).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Moment options/u }));
@@ -830,8 +833,9 @@ describe("MomentCard audience chip", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Audience, Our Days" }));
-    expect(screen.getByRole("listitem")).toHaveTextContent("Our Days");
+    const chip = screen.getByLabelText("Audience, Our Days");
+    fireEvent.click(chip);
+    expect(screen.queryByRole("listitem")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: /^Moment options/u }),

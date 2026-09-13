@@ -79,13 +79,7 @@ function CardAudience({
     (moment.showJustMeBadge ? "Just me" : undefined);
   const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
   if (moment.kind === "insight" || !showChip || !chipLabel) return null;
-  return (
-    <AudienceChip
-      label={chipLabel}
-      names={moment.audienceCircleNames}
-      audience={moment.audience}
-    />
-  );
+  return <AudienceChip label={chipLabel} audience={moment.audience} />;
 }
 
 function CardTopChrome({

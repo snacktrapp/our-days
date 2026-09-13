@@ -284,7 +284,7 @@ describe("TimelineFeed", () => {
 
     const card = container.querySelector(".moment-card");
     const chrome = card?.querySelector(".card-top-chrome");
-    const pill = screen.getByRole("button", { name: "Audience, Just me" });
+    const pill = screen.getByLabelText("Audience, Just me");
     expect(pill).toBeVisible();
     expect(pill).toHaveTextContent("Just me");
     expect(card?.contains(pill)).toBe(true);
@@ -337,7 +337,7 @@ describe("TimelineFeed", () => {
     const card = container.querySelector(".moment-card");
     const chrome = card?.querySelector(".card-top-chrome");
     const actions = card?.querySelector(".soft-actions");
-    const pill = screen.getByRole("button", { name: "Audience, Our Days +1" });
+    const pill = screen.getByLabelText("Audience, Our Days +1");
     const options = screen.getByRole("button", {
       name: /Moment options —/u,
     });
@@ -351,7 +351,7 @@ describe("TimelineFeed", () => {
     expect(actions?.lastElementChild?.contains(options)).toBe(true);
   });
 
-  it("expands the audience chip inline without an Edit or Posted to path", () => {
+  it("keeps the audience chip decorative without expand, Edit, or Posted to", () => {
     const setAudience = vi.fn();
     render(
       <TimelineFeed
@@ -393,11 +393,16 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Audience, Our Days +1" }),
-    );
-    expect(screen.getByText("Our Days")).toBeVisible();
-    expect(screen.getByText("Cousins")).toBeVisible();
+    const chip = screen.getByLabelText("Audience, Our Days +1");
+    expect(chip.tagName).toBe("SPAN");
+    expect(
+      screen.queryByRole("button", { name: "Audience, Our Days +1" }),
+    ).toBeNull();
+    fireEvent.click(chip);
+    expect(screen.queryByText("Cousins")).toBeNull();
+    expect(
+      chip.closest(".card-audience")?.querySelector(".audience-chip-detail"),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     expect(setAudience).not.toHaveBeenCalled();
@@ -446,11 +451,12 @@ describe("TimelineFeed", () => {
       </ComposerSessionProvider>,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Audience, Our Days +1" }),
-    );
-    expect(screen.getByText("Our Days")).toBeVisible();
-    expect(screen.getByText("Cousins")).toBeVisible();
+    const chip = screen.getByLabelText("Audience, Our Days +1");
+    expect(
+      screen.queryByRole("button", { name: "Audience, Our Days +1" }),
+    ).toBeNull();
+    fireEvent.click(chip);
+    expect(screen.queryByText("Cousins")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
     expect(
@@ -488,12 +494,16 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    const chip = screen.getByRole("button", { name: "Audience, Our Days" });
+    const chip = screen.getByLabelText("Audience, Our Days");
     expect(chip).toBeVisible();
+    expect(chip.tagName).toBe("SPAN");
+    expect(
+      screen.queryByRole("button", { name: "Audience, Our Days" }),
+    ).toBeNull();
     fireEvent.click(chip);
     expect(
       chip.closest(".card-audience")?.querySelector(".audience-chip-detail"),
-    ).toHaveTextContent("Our Days");
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Posted to" })).toBeNull();
   });
