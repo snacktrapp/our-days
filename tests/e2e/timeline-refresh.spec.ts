@@ -106,6 +106,46 @@ test("a sideways swipe at the top of Family does not refresh", async ({
   await expect(page.locator("html")).toHaveCSS("overflow-x", /clip|hidden/u);
 });
 
+test("returning the Family tab to the foreground refreshes moments", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family", { waitUntil: "networkidle" });
+  await waitForFamilyFeed(page);
+
+  let rscRefreshes = 0;
+  page.on("request", (request) => {
+    const headers = request.headers();
+    if (headers["rsc"] === "1" || headers["next-router-state-tree"]) {
+      rscRefreshes += 1;
+    }
+  });
+
+  await page.evaluate(() => {
+    let hidden = document.hidden;
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get() {
+        return hidden;
+      },
+    });
+    hidden = true;
+    document.dispatchEvent(new Event("visibilitychange"));
+    hidden = false;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+  await expect(page.locator("#journal-live-region")).toHaveText(
+    "Checking for newer days.",
+    { timeout: 2_500 },
+  );
+  await expect.poll(() => rscRefreshes).toBeGreaterThan(0);
+  await expect(
+    page.getByRole("heading", { name: "All our days" }),
+  ).toBeVisible();
+  await expect(page.locator(".time-rail")).toBeVisible();
+});
+
 test("personal journals share the same pull-to-refresh shell", async ({
   page,
 }) => {
