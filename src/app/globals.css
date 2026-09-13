@@ -36,6 +36,8 @@
   );
   --header-drawer-gutter: max(16px, calc((100dvw - 430px) / 2 + 16px));
   --bottom-nav-visual-inset: 0px;
+  --vv-offset-top: 0px;
+  --vv-bottom-inset: 0px;
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -92,10 +94,12 @@ html {
   background-image: var(--journal-grid-image);
   background-size: var(--journal-grid-size) var(--journal-grid-size);
   scroll-padding-bottom: calc(
-    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom) +
+      var(--vv-bottom-inset)
   );
   scroll-padding-top: calc(
-    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top) +
+      var(--vv-offset-top)
   );
 }
 body {
@@ -534,10 +538,12 @@ button:focus-visible,
   overflow: hidden;
   overflow-x: clip;
   padding-top: calc(
-    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top)
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-top) +
+      var(--vv-offset-top)
   );
   padding-bottom: calc(
-    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom)
+    78px + var(--bottom-nav-float-gap) + env(safe-area-inset-bottom) +
+      var(--vv-bottom-inset)
   );
   background:
     linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0)),
@@ -553,7 +559,10 @@ button:focus-visible,
   align-items: center;
   position: fixed;
   z-index: 160;
-  top: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-top));
+  top: calc(
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top) +
+      var(--vv-offset-top)
+  );
   left: 0;
   right: 0;
   width: min(
@@ -5069,7 +5078,10 @@ span.moment-place-line {
   height: 56px;
   position: fixed;
   z-index: 160;
-  bottom: calc(var(--bottom-nav-float-gap) + env(safe-area-inset-bottom));
+  bottom: calc(
+    var(--bottom-nav-float-gap) + env(safe-area-inset-bottom) +
+      var(--vv-bottom-inset)
+  );
   left: 0;
   right: 0;
   width: min(

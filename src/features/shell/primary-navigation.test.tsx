@@ -28,6 +28,8 @@ describe("PrimaryNavigation", () => {
 
   afterEach(() => {
     document.querySelector("style#our-days-dynamic-css")?.remove();
+    document.documentElement.style.removeProperty("--vv-offset-top");
+    document.documentElement.style.removeProperty("--vv-bottom-inset");
   });
 
   it("contains Journal, Add, and Account", () => {
@@ -159,7 +161,12 @@ describe("PrimaryNavigation", () => {
 
     await user.click(screen.getByRole("link", { name: "Account" }));
 
-    expect(document.documentElement.getAttribute("style")).toBeNull();
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-offset-top"),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
+    ).toBe("84px");
     expect(
       document.head.querySelector("style#our-days-dynamic-css"),
     ).toBeNull();

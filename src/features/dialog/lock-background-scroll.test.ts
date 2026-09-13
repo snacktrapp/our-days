@@ -38,6 +38,8 @@ describe("overlay background scroll lock", () => {
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.remove();
     });
+    document.documentElement.style.removeProperty("--vv-offset-top");
+    document.documentElement.style.removeProperty("--vv-bottom-inset");
     vi.restoreAllMocks();
   });
 
@@ -266,6 +268,12 @@ describe("overlay background scroll lock", () => {
     await waitFor(() => expect(document.querySelector("dialog")).toBeNull());
     expect(document.body).not.toHaveClass(backgroundScrollLockClass);
     expect(scrollTo).toHaveBeenCalledWith(0, 160);
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-offset-top"),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
+    ).toBe("0px");
   });
 
   it("locks html and body while an overlay is open", () => {

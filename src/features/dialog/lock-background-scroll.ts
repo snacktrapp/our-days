@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useState, type RefObject } from "react";
+import { syncBottomNavVisualInset } from "@/features/shell/visual-viewport-bottom";
 
 export const backgroundScrollLockClass = "composer-scroll-locked";
 
@@ -102,6 +103,12 @@ function restoreWindowScrollAfterModal(scrollY: number) {
   });
 }
 
+function restoreChromeAfterModal(scrollY: number) {
+  restoreWindowScrollAfterModal(scrollY);
+  syncBottomNavVisualInset();
+  window.requestAnimationFrame(() => syncBottomNavVisualInset());
+}
+
 export function useLockBackgroundScroll(active: boolean) {
   useLayoutEffect(() => {
     if (!active) return;
@@ -152,7 +159,7 @@ export function useLockBackgroundScroll(active: boolean) {
       document.removeEventListener("touchstart", onTouchStart, true);
       document.removeEventListener("touchmove", onTouchMove, true);
       document.removeEventListener("wheel", onWheel, true);
-      restoreWindowScrollAfterModal(scrollY);
+      restoreChromeAfterModal(scrollY);
     };
   }, [active]);
 }
@@ -198,7 +205,7 @@ export function useModalDialog(
       showDialogPreservingScroll(dialog, modal);
       return () => {
         if (dialog.open) dialog.close();
-        restoreWindowScrollAfterModal(scrollY);
+        restoreChromeAfterModal(scrollY);
       };
     }
     // Release even when the consumer already unmounted the <dialog>.
