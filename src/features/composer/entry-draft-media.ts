@@ -11,6 +11,15 @@ export type EntryDraftMediaBlob = Readonly<{
   blob: Blob;
 }>;
 
+type StoredDraftMedia = Readonly<{
+  key: string;
+  draftId: string;
+  name: string;
+  mimeType: string;
+  bytes?: ArrayBuffer;
+  blob?: Blob;
+}>;
+
 function requestResult<T>(request: IDBRequest<T>) {
   return new Promise<T>((resolve, reject) => {
     request.addEventListener("success", () => resolve(request.result), {
@@ -69,31 +78,91 @@ async function withStore<T>(
   }
 }
 
+function byteLengthOf(value: unknown) {
+  if (!value || typeof value !== "object" || !("byteLength" in value)) {
+    return null;
+  }
+  const length = (value as { byteLength: unknown }).byteLength;
+  return typeof length === "number" ? length : null;
+}
+
+function storedByteLength(row: StoredDraftMedia) {
+  return (
+    byteLengthOf(row.bytes) ?? (row.blob instanceof Blob ? row.blob.size : null)
+  );
+}
+
+function bytesToBlob(bytes: unknown, mimeType: string) {
+  const length = byteLengthOf(bytes);
+  if (length == null) return null;
+  return new Blob([new Uint8Array(bytes as ArrayBuffer)], { type: mimeType });
+}
+
+function rowFromStored(row: StoredDraftMedia): EntryDraftMediaBlob | null {
+  const blob =
+    bytesToBlob(row.bytes, row.mimeType) ??
+    (row.blob instanceof Blob ? row.blob : null);
+  if (!blob) return null;
+  return {
+    key: row.key,
+    draftId: row.draftId,
+    name: row.name,
+    mimeType: row.mimeType,
+    blob,
+  };
+}
+
 export async function saveEntryDraftMedia(
   items: readonly EntryDraftMediaBlob[],
-) {
-  if (typeof window === "undefined" || !("indexedDB" in window)) return;
+): Promise<{ ok: boolean }> {
+  if (items.length === 0) return { ok: true };
+  if (typeof window === "undefined" || !window.indexedDB) {
+    return { ok: false };
+  }
   try {
+    const records = await Promise.all(
+      items.map(async (item) => ({
+        key: item.key,
+        draftId: item.draftId,
+        name: item.name,
+        mimeType: item.mimeType,
+        bytes: await item.blob.arrayBuffer(),
+      })),
+    );
     await withStore("readwrite", async (store) => {
-      for (const item of items) {
-        await requestResult(store.put(item));
-      }
+      await Promise.all(
+        records.map((record) => requestResult(store.put(record))),
+      );
     });
+    const stored = await withStore("readonly", async (store) => {
+      return (await requestResult(store.getAll())) as StoredDraftMedia[];
+    });
+    const missing = records.some(
+      (record) =>
+        !stored.some(
+          (row) =>
+            row.key === record.key &&
+            storedByteLength(row) === record.bytes.byteLength,
+        ),
+    );
+    return missing ? { ok: false } : { ok: true };
   } catch {
-    return;
+    return { ok: false };
   }
 }
 
 export async function loadEntryDraftMedia(draftId: string) {
-  if (typeof window === "undefined" || !("indexedDB" in window)) {
+  if (typeof window === "undefined" || !window.indexedDB) {
     return [] as EntryDraftMediaBlob[];
   }
   try {
     return await withStore("readonly", async (store) => {
-      const rows = await requestResult(store.getAll());
-      return (rows as EntryDraftMediaBlob[]).filter(
-        (row) => row.draftId === draftId,
-      );
+      const rows = (await requestResult(store.getAll())) as StoredDraftMedia[];
+      return rows.flatMap((row) => {
+        if (row.draftId !== draftId) return [];
+        const next = rowFromStored(row);
+        return next ? [next] : [];
+      });
     });
   } catch {
     return [];
@@ -101,15 +170,15 @@ export async function loadEntryDraftMedia(draftId: string) {
 }
 
 export async function removeEntryDraftMedia(draftId: string) {
-  if (typeof window === "undefined" || !("indexedDB" in window)) return;
+  if (typeof window === "undefined" || !window.indexedDB) return;
   try {
     await withStore("readwrite", async (store) => {
-      const rows = (await requestResult(
-        store.getAll(),
-      )) as EntryDraftMediaBlob[];
-      for (const row of rows) {
-        if (row.draftId === draftId) await requestResult(store.delete(row.key));
-      }
+      const rows = (await requestResult(store.getAll())) as StoredDraftMedia[];
+      await Promise.all(
+        rows
+          .filter((row) => row.draftId === draftId)
+          .map((row) => requestResult(store.delete(row.key))),
+      );
     });
   } catch {
     return;

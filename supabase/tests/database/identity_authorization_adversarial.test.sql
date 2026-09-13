@@ -356,6 +356,7 @@ select is(
     'lock_photo_validator_if_allowed(requested_auth_user_id uuid)',
     'materialize_invitation_delivery_job(requested_invitation_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
     'materialize_target_bound_invitation_job(requested_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
+    'moment_tagged_people(requested_moment_id uuid)',
     'photo_capability_is_enabled(requested_capability text)',
     'photo_derivative_source_is_readable(requested_object_path text, requested_storage_object_id uuid, requested_storage_object_version text)',
     'photo_display_path_is_readable(requested_object_path text)',

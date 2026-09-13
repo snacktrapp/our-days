@@ -27,6 +27,7 @@ import {
   clearOptimisticMediaUploads,
   optimisticMediaUploadSnapshot,
   queuedOptimisticMediaUploadCount,
+  removeOptimisticMediaUpload,
   retryOptimisticMediaUpload,
   startOptimisticPhotoUpload,
   startOptimisticVideoUpload,
@@ -86,6 +87,89 @@ describe("optimistic media upload queue", () => {
       expect.objectContaining({ body: "Porch light" }),
     );
     expect(queuedOptimisticMediaUploadCount()).toBe(1);
+    expect(photoUpload.upload).toHaveBeenCalledOnce();
+  });
+
+  it("starts the next post as a visible chip when a failed upload is still showing", async () => {
+    photoUpload.upload
+      .mockRejectedValueOnce(new PhotoUploadError("Session expired.", false))
+      .mockReturnValueOnce(new Promise(() => undefined));
+
+    startOptimisticPhotoUpload({
+      draft,
+      file: jpeg("failed.jpg"),
+      occurredTime: "14:58",
+      person,
+    });
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message: "Session expired.",
+      }),
+    );
+
+    startOptimisticPhotoUpload({
+      draft: { ...draft, body: "Second porch" },
+      file: jpeg("next.jpg"),
+      occurredTime: "15:01",
+      person,
+    });
+
+    expect(queuedOptimisticMediaUploadCount()).toBe(0);
+    expect(optimisticMediaUploadSnapshot()).toHaveLength(2);
+    expect(optimisticMediaUploadSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          body: "Porch light",
+          stage: { state: "failed", message: "Session expired." },
+        }),
+        expect.objectContaining({
+          body: "Second porch",
+          stage: { state: "preparing" },
+        }),
+      ]),
+    );
+    expect(photoUpload.upload).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a queued follow-up instead of posting it after a failed chip is dismissed", async () => {
+    let rejectFirst: (error: unknown) => void = () => {
+      throw new Error("The in-flight upload was not started.");
+    };
+    photoUpload.upload.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+
+    startOptimisticPhotoUpload({
+      draft,
+      file: jpeg("one.jpg"),
+      occurredTime: "14:58",
+      person,
+    });
+    startOptimisticPhotoUpload({
+      draft: { ...draft, body: "Queued behind in-flight" },
+      file: jpeg("two.jpg"),
+      occurredTime: "15:01",
+      person,
+    });
+    expect(queuedOptimisticMediaUploadCount()).toBe(1);
+    expect(photoUpload.upload).toHaveBeenCalledOnce();
+
+    rejectFirst(new PhotoUploadError("Stopped mid-upload.", true));
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message: "Stopped mid-upload.",
+      }),
+    );
+    expect(queuedOptimisticMediaUploadCount()).toBe(0);
+
+    removeOptimisticMediaUpload(optimisticMediaUploadSnapshot()[0]!.id);
+    expect(queuedOptimisticMediaUploadCount()).toBe(0);
+    expect(optimisticMediaUploadSnapshot()).toEqual([]);
     expect(photoUpload.upload).toHaveBeenCalledOnce();
   });
 
