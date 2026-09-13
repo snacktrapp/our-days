@@ -1056,9 +1056,6 @@ button.audience-chip:focus-visible .audience-chip-face {
   justify-content: space-between;
   gap: 12px;
 }
-.card-top-chrome:has(.audience-chip-detail) {
-  align-items: flex-start;
-}
 .card-top-chrome > .moment-kind-meta,
 .card-top-chrome > .moment-kicker,
 .card-top-chrome > .thought-label,
@@ -1066,10 +1063,11 @@ button.audience-chip:focus-visible .audience-chip-face {
   min-width: 0;
   flex: 1 1 auto;
   margin: 0;
+  align-items: center;
 }
 .card-top-chrome .card-audience {
   margin: 0;
-  align-items: flex-end;
+  align-items: center;
   flex: 0 0 auto;
 }
 .card-audience {
@@ -7599,6 +7597,11 @@ html[data-theme].overlay-open .app-shell::before,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.card-top-chrome > .moment-kind-meta,
+.card-top-chrome .card-audience {
+  align-items: center;
 }
 
 .photo-card-heading .moment-kicker,
