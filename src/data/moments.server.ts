@@ -644,38 +644,41 @@ export async function loadConnectedTimeline(
   let snapshotAt = requestedSnapshot(options.snapshotAt);
   let hasMore = false;
   let paginationFailed = false;
+  let firstPageFailed = false;
+  let usingAllCircles = allCircles;
+
+  const pageArgs = () => ({
+    cursor_occurred_on: cursor?.occurred_on,
+    cursor_has_precise_time: cursor ? cursor.occurred_at !== null : undefined,
+    cursor_occurred_at: cursor?.occurred_at ?? undefined,
+    cursor_moment_id: cursor?.moment_id,
+    page_size: pageSize + 1,
+    snapshot_at: snapshotAt,
+  });
+  const runAllPage = () =>
+    supabase.rpc("list_all_timeline_moments", pageArgs());
+  const runCirclePage = () =>
+    supabase.rpc("list_timeline_moments", {
+      circle_id: access.circleId,
+      journal_person_id: options.journalPersonId,
+      ...pageArgs(),
+    });
+  const runPage = () => (usingAllCircles ? runAllPage() : runCirclePage());
 
   for (let page = 0; page < pageCount; page += 1) {
-    const runPage = () =>
-      allCircles
-        ? supabase.rpc("list_all_timeline_moments", {
-            cursor_occurred_on: cursor?.occurred_on,
-            cursor_has_precise_time: cursor
-              ? cursor.occurred_at !== null
-              : undefined,
-            cursor_occurred_at: cursor?.occurred_at ?? undefined,
-            cursor_moment_id: cursor?.moment_id,
-            page_size: pageSize + 1,
-            snapshot_at: snapshotAt,
-          })
-        : supabase.rpc("list_timeline_moments", {
-            circle_id: access.circleId,
-            journal_person_id: options.journalPersonId,
-            cursor_occurred_on: cursor?.occurred_on,
-            cursor_has_precise_time: cursor
-              ? cursor.occurred_at !== null
-              : undefined,
-            cursor_occurred_at: cursor?.occurred_at ?? undefined,
-            cursor_moment_id: cursor?.moment_id,
-            page_size: pageSize + 1,
-            snapshot_at: snapshotAt,
-          });
-    const { data, error } =
+    let { data, error } =
       page === 0
         ? await retryTransientFamilySessionQuery(runPage)
         : await runPage();
+    if (error && page === 0 && usingAllCircles) {
+      usingAllCircles = false;
+      ({ data, error } = await retryTransientFamilySessionQuery(runCirclePage));
+    }
     if (error) {
-      if (page === 0) throw error;
+      if (page === 0) {
+        firstPageFailed = true;
+        break;
+      }
       hasMore = true;
       paginationFailed = true;
       break;
@@ -783,14 +786,18 @@ export async function loadConnectedTimeline(
         }
       : undefined,
     interaction: connectedTimelineInteraction(access, context),
-    entries: buildTimelineEntries(
-      moments,
-      context.today,
-      hasMore,
-      personal?.name,
-    ),
+    entries: firstPageFailed
+      ? [
+          {
+            id: "journal-load-soft-fail",
+            entryType: "empty-state",
+            title: "These days couldn’t open",
+            message: "Try again in a moment. Nothing here was lost.",
+          },
+        ]
+      : buildTimelineEntries(moments, context.today, hasMore, personal?.name),
     pagination:
-      hasMore && !paginationFailed
+      hasMore && !paginationFailed && !firstPageFailed
         ? {
             nextHref: journalTimelineHref(
               queryPrefix,
@@ -800,13 +807,20 @@ export async function loadConnectedTimeline(
             label: "Show earlier days",
           }
         : undefined,
-    paginationError: paginationFailed
+    paginationError: firstPageFailed
       ? {
-          retryHref: journalTimelineHref(queryPrefix, pageCount, snapshotAt!),
+          retryHref: queryPrefix,
           message:
-            "Earlier days couldn’t be opened. The moments already here are still safe.",
-          label: "Try opening earlier days again",
+            "The journal couldn’t open these days just now. Nothing here was lost.",
+          label: "Try opening the journal again",
         }
-      : undefined,
+      : paginationFailed
+        ? {
+            retryHref: journalTimelineHref(queryPrefix, pageCount, snapshotAt!),
+            message:
+              "Earlier days couldn’t be opened. The moments already here are still safe.",
+            label: "Try opening earlier days again",
+          }
+        : undefined,
   };
 }
