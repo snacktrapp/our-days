@@ -141,7 +141,7 @@ test("returning the Family tab to the foreground refreshes moments", async ({
   );
   await expect.poll(() => rscRefreshes).toBeGreaterThan(0);
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
   await expect(page.locator(".time-rail")).toBeVisible();
 });
