@@ -20,6 +20,9 @@ vi.mock("@/features/composer/composer-session", () => ({
 }));
 
 describe("PrimaryNavigation", () => {
+  const originalInnerHeight = window.innerHeight;
+  const originalVisualViewport = window.visualViewport;
+
   beforeEach(() => {
     navigation.pathname = "/family";
     composerSession.isOpen = false;
@@ -30,6 +33,14 @@ describe("PrimaryNavigation", () => {
     document.querySelector("style#our-days-dynamic-css")?.remove();
     document.documentElement.style.removeProperty("--vv-offset-top");
     document.documentElement.style.removeProperty("--vv-bottom-inset");
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: originalVisualViewport,
+    });
   });
 
   it("contains Journal, Add, and Account", () => {
@@ -142,7 +153,7 @@ describe("PrimaryNavigation", () => {
     ).toBeNull();
   });
 
-  it("pins the tab bar to the visual viewport while a destination is opening", async () => {
+  it("pins the tab bar to a keyboard-sized visual viewport while a destination is opening", async () => {
     Object.defineProperty(window, "innerHeight", {
       configurable: true,
       value: 844,
@@ -151,7 +162,7 @@ describe("PrimaryNavigation", () => {
       configurable: true,
       value: {
         addEventListener: vi.fn(),
-        height: 760,
+        height: 560,
         offsetTop: 0,
         removeEventListener: vi.fn(),
       },
@@ -166,10 +177,34 @@ describe("PrimaryNavigation", () => {
     ).toBe("0px");
     expect(
       document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
-    ).toBe("84px");
+    ).toBe("284px");
     expect(
       document.head.querySelector("style#our-days-dynamic-css"),
     ).toBeNull();
+  });
+
+  it("does not lift the tab bar for a Safari-chrome leftover gap", async () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        addEventListener: vi.fn(),
+        height: 760,
+        offsetTop: 0,
+        removeEventListener: vi.fn(),
+      },
+    });
+    render(<PrimaryNavigation section="timeline" />);
+
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-offset-top"),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
+    ).toBe("0px");
   });
 
   it("compacts the tab bar while scrolling down and restores it at the top", () => {
