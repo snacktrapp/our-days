@@ -4,6 +4,7 @@ import {
 } from "../../../../../../config/our-days-environment";
 import {
   byteSizeMatches,
+  contentLengthAgrees,
   declaredByteSize,
   mediaTypeMatches,
 } from "@/lib/private-media-delivery";
@@ -202,10 +203,18 @@ export async function GET(
   if (!range) {
     if (
       upstream.status !== 200 ||
-      !byteSizeMatches(contentLength, expectedSize)
+      !contentLengthAgrees(upstream.headers, expectedSize)
     ) {
       await upstream.body.cancel();
       return unavailable();
+    }
+    if (!upstream.headers.has("content-length")) {
+      const bytes = await upstream.arrayBuffer();
+      if (!byteSizeMatches(bytes.byteLength, expectedSize)) {
+        return unavailable();
+      }
+      responseHeaders.set("Content-Length", String(bytes.byteLength));
+      return new Response(bytes, { status: 200, headers: responseHeaders });
     }
     responseHeaders.set("Content-Length", String(contentLength));
     return new Response(upstream.body, {
@@ -225,9 +234,13 @@ export async function GET(
   }
 
   // iPhone Safari always sends Range. Some Storage/CDN objects (especially
-  // TUS multipart videos) answer that with a 200 of the whole file. Slice
-  // a truthful 206 so the lightbox does not get an empty error mat.
-  if (upstream.status === 200 && byteSizeMatches(contentLength, expectedSize)) {
+  // TUS multipart videos) answer that with a 200 of the whole file, sometimes
+  // without Content-Length. Slice a truthful 206 so the lightbox does not get
+  // an empty error mat.
+  if (
+    upstream.status === 200 &&
+    contentLengthAgrees(upstream.headers, expectedSize)
+  ) {
     const parsed = requestedByteRange(range, expectedSize);
     if (!parsed) {
       await upstream.body.cancel();

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
+import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 
 type PrivatePhotoImageProps = Readonly<{
   src: string;
@@ -18,27 +19,15 @@ export function PrivatePhotoImage({
   height,
   highPriority = false,
 }: PrivatePhotoImageProps) {
-  const imageRef = useRef<HTMLImageElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
   const [decoded, setDecoded] = useState<boolean | null>(null);
   const deliverySrc = privateMediaRetrySrc(src, attempt);
+  const { objectUrl, failed } = usePrivateMediaObjectUrl(
+    unavailable ? undefined : deliverySrc,
+  );
 
-  useEffect(() => {
-    const image = imageRef.current;
-    if (!image) return;
-    if (image.complete && image.naturalHeight > 0) {
-      setDecoded(true);
-      return;
-    }
-    if (image.complete) {
-      setUnavailable(true);
-      return;
-    }
-    setDecoded(false);
-  }, [attempt, deliverySrc]);
-
-  if (unavailable) {
+  if (unavailable || failed) {
     return (
       <div className="private-photo-unavailable" role="group" aria-label={alt}>
         <p>This photo couldn’t be opened.</p>
@@ -56,16 +45,19 @@ export function PrivatePhotoImage({
     );
   }
 
-  // Private media intentionally bypasses the Next image optimizer. Every
-  // request must reach the same-origin authorization route. iPhone PWA
-  // lazy-load inside overflow-hidden frames can drop that request or pin a
-  // stale 404, so these always load eagerly and retry with a cache buster.
+  if (!objectUrl) {
+    return (
+      <div className="private-photo-unavailable is-pending" aria-hidden="true" />
+    );
+  }
+
+  // Private media is fetched with credentials + no-store, then shown from a
+  // blob URL so iPhone PWA cannot pin a stale 404 on the authorized route.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={attempt}
-      ref={imageRef}
-      src={deliverySrc}
+      src={objectUrl}
       alt={alt}
       width={width}
       height={height}

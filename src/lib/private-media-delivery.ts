@@ -4,6 +4,16 @@ const genericBlobTypes = new Set([
   "binary/octet-stream",
 ]);
 
+const iphoneVideoTypes = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/x-m4v",
+]);
+
+const jpegTypes = new Set(["image/jpeg", "image/jpg"]);
+
+const sha256HexPattern = /^[0-9a-f]{64}$/u;
+
 export function declaredByteSize(value: unknown) {
   if (typeof value === "number" && Number.isSafeInteger(value)) return value;
   if (typeof value === "string" && /^(?:0|[1-9]\d*)$/u.test(value)) {
@@ -25,7 +35,28 @@ export function mediaTypeMatches(
   if (!wanted) return false;
   const received = normalizedMediaType(actual);
   if (genericBlobTypes.has(received)) return true;
+  if (iphoneVideoTypes.has(wanted) && iphoneVideoTypes.has(received)) {
+    return true;
+  }
+  if (jpegTypes.has(wanted) && jpegTypes.has(received)) return true;
   return received === wanted;
+}
+
+export function normalizedSha256Hex(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase().replace(/^\\x/u, "");
+  return sha256HexPattern.test(trimmed) ? trimmed : null;
+}
+
+export function sha256HexMatches(actual: unknown, expected: unknown) {
+  const got = normalizedSha256Hex(actual);
+  const wanted = normalizedSha256Hex(expected);
+  return got !== null && wanted !== null && got === wanted;
+}
+
+export function contentLengthAgrees(headers: Headers, expectedSize: number) {
+  if (!headers.has("content-length")) return true;
+  return byteSizeMatches(Number(headers.get("content-length")), expectedSize);
 }
 
 export function byteSizeMatches(actual: number, expected: unknown) {
@@ -74,8 +105,11 @@ export async function fetchSignedPrivateObject(
     return null;
   }
 
+  const bytes = await upstream.arrayBuffer();
+  if (!contentLengthAgrees(upstream.headers, bytes.byteLength)) return null;
+
   return {
-    bytes: await upstream.arrayBuffer(),
+    bytes,
     contentType: upstream.headers.get("content-type"),
   };
 }

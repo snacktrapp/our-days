@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   byteSizeMatches,
+  contentLengthAgrees,
   declaredByteSize,
   fetchSignedPrivateObject,
   mediaTypeMatches,
   privateMediaRetrySrc,
+  sha256HexMatches,
 } from "./private-media-delivery";
 
 describe("private media delivery checks", () => {
@@ -27,6 +29,31 @@ describe("private media delivery checks", () => {
     expect(mediaTypeMatches("IMAGE/WEBP", "image/webp")).toBe(true);
     expect(mediaTypeMatches("image/png", "image/webp")).toBe(false);
     expect(mediaTypeMatches("video/quicktime", "video/quicktime")).toBe(true);
+    expect(mediaTypeMatches("video/mp4", "video/quicktime")).toBe(true);
+    expect(mediaTypeMatches("video/quicktime", "video/mp4")).toBe(true);
+    expect(mediaTypeMatches("image/jpg", "image/jpeg")).toBe(true);
+  });
+
+  it("compares SHA-256 hex after stripping PostgREST prefixes and case", () => {
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    expect(sha256HexMatches(digest, digest.toUpperCase())).toBe(true);
+    expect(sha256HexMatches(digest, `\\x${digest}`)).toBe(true);
+    expect(sha256HexMatches(digest, `  ${digest}  `)).toBe(true);
+    expect(sha256HexMatches(digest, "0".repeat(64))).toBe(false);
+    expect(sha256HexMatches(digest, undefined)).toBe(false);
+  });
+
+  it("treats a missing Content-Length as unknown rather than zero bytes", () => {
+    expect(
+      contentLengthAgrees(new Headers({ "content-type": "video/mp4" }), 10),
+    ).toBe(true);
+    expect(
+      contentLengthAgrees(new Headers({ "content-length": "10" }), 10),
+    ).toBe(true);
+    expect(
+      contentLengthAgrees(new Headers({ "content-length": "9" }), 10),
+    ).toBe(false);
   });
 
   it("fetches descriptor-bound bytes through a short-lived signed URL", async () => {

@@ -6,6 +6,7 @@ import {
   byteSizeMatches,
   fetchSignedPrivateObject,
   mediaTypeMatches,
+  sha256HexMatches,
 } from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -101,7 +102,9 @@ export async function GET(
   }
 
   const digest = hex(await crypto.subtle.digest("SHA-256", photo.bytes));
-  if (digest !== descriptor.output_sha256_hex) return unavailable();
+  if (!sha256HexMatches(digest, descriptor.output_sha256_hex)) {
+    return unavailable();
+  }
 
   return new Response(photo.bytes, {
     status: 200,

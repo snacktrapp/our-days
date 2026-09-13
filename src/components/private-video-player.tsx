@@ -72,6 +72,7 @@ export function PrivateVideoPlayer({
       disablePictureInPicture
       disableRemotePlayback
       playsInline
+      webkit-playsinline=""
       preload={preload}
       autoPlay={autoPlay}
       onError={() => setUnavailable(true)}

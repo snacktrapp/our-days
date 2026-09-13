@@ -176,6 +176,21 @@ describe("private photo delivery route", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it("still streams when the descriptor digest is prefixed or uppercase", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_sha256_hex: `\\x${descriptor.output_sha256_hex.toUpperCase()}`,
+        },
+      ],
+      error: null,
+    });
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+  });
+
   it("rejects bytes whose verified size, type, or digest no longer matches", async () => {
     signedBytes([1, 2], "image/png");
     const response = await request();

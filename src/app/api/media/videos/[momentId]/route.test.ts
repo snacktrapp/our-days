@@ -124,6 +124,26 @@ describe("private video delivery route", () => {
     expect(response.headers.get("content-type")).toBe("video/mp4");
   });
 
+  it("still slices a Safari Range probe when Storage omits Content-Length", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, mime_type: "video/quicktime" }],
+      error: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request("bytes=0-1");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 0-1/10");
+    expect(response.headers.get("content-type")).toBe("video/quicktime");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array([1, 2]),
+    );
+  });
+
   it("turns a full 200 for a Safari Range probe into a truthful 206", async () => {
     mocks.fetch.mockResolvedValue(
       new Response(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), {

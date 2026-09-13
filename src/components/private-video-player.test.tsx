@@ -10,6 +10,7 @@ describe("PrivateVideoPlayer", () => {
     const video = screen.getByLabelText("Family video");
     expect(video).toHaveAttribute("src", "/api/media/videos/one");
     expect(video).toHaveAttribute("playsinline");
+    expect(video).toHaveAttribute("webkit-playsinline");
     expect(video).toHaveAttribute(
       "controlslist",
       "nodownload noremoteplayback",
