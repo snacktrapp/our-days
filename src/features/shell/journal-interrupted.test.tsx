@@ -5,6 +5,7 @@ import {
   JournalInterrupted,
   JournalRefreshInterrupted,
 } from "./journal-interrupted";
+import { shouldAutoRetryJournalRoute } from "./journal-route-boundary";
 
 const refresh = vi.fn();
 
@@ -65,5 +66,18 @@ describe("JournalInterrupted", () => {
     render(<JournalRefreshInterrupted />);
     screen.getByRole("button", { name: "Try again" }).click();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("auto-retries an aborted Account→Journal remount instead of the interrupt card", () => {
+    expect(
+      shouldAutoRetryJournalRoute(
+        Object.assign(new Error("The operation was aborted."), {
+          name: "AbortError",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      shouldAutoRetryJournalRoute(new Error("Circle is unavailable")),
+    ).toBe(false);
   });
 });
