@@ -47,7 +47,10 @@ export function PrivatePhotoImage({
 
   if (!objectUrl) {
     return (
-      <div className="private-photo-unavailable is-pending" aria-hidden="true" />
+      <div
+        className="private-photo-unavailable is-pending"
+        aria-hidden="true"
+      />
     );
   }
 
