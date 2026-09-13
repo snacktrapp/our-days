@@ -1117,17 +1117,6 @@ button.audience-chip:focus-visible .audience-chip-face {
   font-weight: 550;
   line-height: 1.35;
 }
-.audience-chip-edit {
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--font-interface);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
 
 .audience-edit-dialog {
   width: min(calc(100vw - 32px), 360px);
