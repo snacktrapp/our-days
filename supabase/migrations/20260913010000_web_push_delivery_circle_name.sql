@@ -93,8 +93,8 @@ begin
       resolved_moment_id,
       resolved_moment_kind,
       null::text,
-      visible.circle_id,
-      visible.circle_name
+      visible.id as visible_circle_id,
+      visible.name as circle_name
       from private.web_push_subscriptions as subscription
       join public.circle_memberships as subscriber
         on subscriber.circle_id = subscription.circle_id
