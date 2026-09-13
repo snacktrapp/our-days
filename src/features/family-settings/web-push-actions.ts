@@ -93,22 +93,3 @@ export async function deleteWebPushSubscriptionAction(input: {
   }
   return { ok: true, message: "Notifications are off." };
 }
-
-export async function deliverPublishedMomentPushAction(input: {
-  momentId: string;
-}): Promise<WebPushActionResult> {
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-  if (!(await hasExpectedOrigin()) || !uuidPattern.test(input.momentId)) {
-    return { ok: false, message: "That request could not be verified." };
-  }
-  const access = await requireJournalAccess();
-  if (access.mode !== "authenticated" || localJournalIsEnabled()) {
-    return { ok: true, message: "Saved." };
-  }
-  const supabase = await createOurDaysServerClient();
-  const { deliverActivityWebPush } =
-    await import("@/lib/web-push/deliver-activity");
-  await deliverActivityWebPush(supabase, "moment", input.momentId);
-  return { ok: true, message: "Saved." };
-}

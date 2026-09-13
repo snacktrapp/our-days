@@ -26,7 +26,6 @@ vi.mock("@/features/auth/sign-out-button", () => ({
 vi.mock("./web-push-actions", () => ({
   saveWebPushSubscriptionAction: vi.fn(),
   deleteWebPushSubscriptionAction: vi.fn(),
-  deliverPublishedMomentPushAction: vi.fn(),
 }));
 
 describe("Account tools", () => {

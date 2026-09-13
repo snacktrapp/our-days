@@ -1205,6 +1205,7 @@ export type Database = {
         Returns: {
           actor_name: string;
           auth: string;
+          circle_name: string;
           endpoint: string;
           moment_id: string;
           moment_kind: string;

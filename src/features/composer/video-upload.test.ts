@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/features/family-settings/web-push-actions", () => ({
-  deliverPublishedMomentPushAction: vi.fn().mockResolvedValue({ ok: true }),
-}));
-
 import type { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
   acceptedVideoMime,
@@ -102,6 +98,7 @@ describe("connected private video upload", () => {
     const attempt = createVideoUploadAttempt();
     const { client, rpc } = connectedClient();
     const stages: VideoUploadStage[] = [];
+    const publishVideo = vi.fn(async () => momentId);
     const upload = vi.fn(async (input) => {
       expect(input.endpoint).toBe(
         "https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co/storage/v1/upload/resumable",
@@ -135,7 +132,7 @@ describe("connected private video upload", () => {
         attempt,
         new AbortController().signal,
         (stage) => stages.push(stage),
-        { createClient: () => client, upload },
+        { createClient: () => client, publishVideo, upload },
       ),
     ).resolves.toEqual({ momentId });
 
@@ -150,9 +147,15 @@ describe("connected private video upload", () => {
         request_key: attempt.requestKey,
       }),
     );
-    expect(rpc).toHaveBeenNthCalledWith(2, "finalize_video_moment", {
-      request_id: requestId,
-    });
+    expect(rpc).not.toHaveBeenCalledWith(
+      "finalize_video_moment",
+      expect.anything(),
+    );
+    expect(publishVideo).toHaveBeenCalledWith(
+      requestId,
+      momentId,
+      expect.any(AbortSignal),
+    );
     expect(attempt).toMatchObject({
       momentId,
       requestId,
@@ -163,6 +166,44 @@ describe("connected private video upload", () => {
       { state: "uploading", progress: 1 },
       { state: "finishing" },
     ]);
+  });
+
+  it("does not re-publish an already published reservation", async () => {
+    const { client, rpc } = connectedClient();
+    rpc.mockImplementation(
+      async (name: string): Promise<{ data: unknown; error: unknown }> => {
+        if (name === "reserve_video_moment") {
+          return {
+            data: [
+              {
+                bucket_id: "our-days-videos",
+                moment_id: momentId,
+                object_path: `videos/${requestId}`,
+                request_id: requestId,
+                state: "published",
+              },
+            ],
+            error: null,
+          };
+        }
+        return { data: momentId, error: null };
+      },
+    );
+    const publishVideo = vi.fn();
+    const upload = vi.fn();
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client, publishVideo, upload },
+      ),
+    ).resolves.toEqual({ momentId });
+    expect(upload).not.toHaveBeenCalled();
+    expect(publishVideo).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported, oversized, and overlong files before opening a client", async () => {

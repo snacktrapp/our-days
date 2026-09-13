@@ -78,8 +78,41 @@ export class VideoUploadError extends Error {
 
 type UploadDependencies = Readonly<{
   createClient?: typeof createOurDaysBrowserClient;
+  publishVideo?: typeof publishVideoMoment;
   upload?: typeof uploadWithTusClient;
 }>;
+
+async function publishVideoMoment(
+  requestId: string,
+  momentId: string,
+  signal: AbortSignal,
+) {
+  const response = await fetch("/api/videos/publish", {
+    body: JSON.stringify({ requestId, momentId }),
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    signal,
+  });
+  let payload: { momentId?: string; message?: string } = {};
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    payload = {};
+  }
+  if (
+    !response.ok ||
+    typeof payload.momentId !== "string" ||
+    !uuidPattern.test(payload.momentId)
+  ) {
+    throw new VideoUploadError(
+      payload.message ??
+        "The upload finished, but the video could not yet be added. Try again.",
+      response.status >= 500,
+    );
+  }
+  return payload.momentId;
+}
 
 export function createVideoUploadAttempt(): VideoUploadAttempt {
   return { requestKey: crypto.randomUUID() };
@@ -444,12 +477,6 @@ export async function uploadVideoMoment(
   attempt.requestId = reservation.request_id;
   attempt.momentId = reservation.moment_id;
   if (reservation.state === "published") {
-    void import("@/features/family-settings/web-push-actions").then(
-      ({ deliverPublishedMomentPushAction }) =>
-        deliverPublishedMomentPushAction({
-          momentId: reservation.moment_id,
-        }),
-    );
     return { momentId: reservation.moment_id };
   }
 
@@ -488,18 +515,16 @@ export async function uploadVideoMoment(
 
   throwIfAborted(signal);
   onStage({ state: "finishing" });
-  const { data: momentId, error: finalizeError } = await supabase.rpc(
-    "finalize_video_moment",
-    { request_id: reservation.request_id },
+  const publish = dependencies.publishVideo ?? publishVideoMoment;
+  const momentId = await publish(
+    reservation.request_id,
+    reservation.moment_id,
+    signal,
   );
-  if (finalizeError || !momentId || momentId !== reservation.moment_id) {
+  if (momentId !== reservation.moment_id) {
     throw new VideoUploadError(
       "The upload finished, but the video could not yet be added. Try again.",
     );
   }
-  void import("@/features/family-settings/web-push-actions").then(
-    ({ deliverPublishedMomentPushAction }) =>
-      deliverPublishedMomentPushAction({ momentId }),
-  );
   return { momentId };
 }

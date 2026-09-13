@@ -48,6 +48,19 @@ export function activityNotificationTitle(actorName: string, message: string) {
   return `${actorName} ${message}`;
 }
 
+export function familyActivityPushTitle(
+  actorName: string,
+  message: string,
+  circleName?: string | null,
+) {
+  const trimmedCircle = circleName?.trim();
+  if (!trimmedCircle) {
+    return activityNotificationTitle(actorName, message);
+  }
+  const withoutPeriod = message.endsWith(".") ? message.slice(0, -1) : message;
+  return `${actorName} ${withoutPeriod} in ${trimmedCircle}.`;
+}
+
 export function activityMomentHref(momentId: string, circleId?: string | null) {
   if (circleId) {
     return `/family?circle=${encodeURIComponent(circleId)}#moment-${momentId}`;
