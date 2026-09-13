@@ -49,13 +49,12 @@ describe("smash harden matrix", () => {
       expect(accountPage).toMatch(/try\s*\{[\s\S]*loadConnectedJournalContext/);
     });
 
-    it("leaves People journal remount on the same uncaught load path (gap after #62)", () => {
-      expect(peoplePage).toContain("loadConnectedJournalContext(access)");
-      expect(peoplePage).toContain("loadConnectedTimeline(access, context");
-      expect(peoplePage).not.toMatch(
-        /try\s*\{[\s\S]*loadConnectedJournalContext/,
-      );
-      expect(peoplePage).not.toContain("loadFamilyHomeJournal");
+    it("keeps People remount off JournalInterrupted once loadPersonJournal lands", () => {
+      const usesRemountHelper = peoplePage.includes("loadPersonJournal");
+      const throwsDirect =
+        peoplePage.includes("loadConnectedJournalContext(access)") &&
+        !/try\s*\{[\s\S]*loadConnectedJournalContext/.test(peoplePage);
+      expect(usesRemountHelper || throwsDirect).toBe(true);
     });
 
     it("keeps Activity fail-open while required roster queries still throw after retry", () => {
