@@ -62,16 +62,12 @@ describe("entry draft media", () => {
     });
   });
 
-  it("fails closed when IndexedDB keeps a smaller blob than the draft attached", async () => {
+  it("fails closed when IndexedDB keeps fewer bytes than the draft attached", async () => {
     const proto = IDBObjectStore.prototype;
     const originalPut = proto.put;
-    proto.put = function putDroppedBlob(value, key) {
-      const row = value as { blob?: Blob };
-      return originalPut.call(
-        this,
-        { ...row, blob: new Blob() },
-        key,
-      );
+    proto.put = function putDroppedBytes(value, key) {
+      const row = value as { bytes?: ArrayBuffer };
+      return originalPut.call(this, { ...row, bytes: new ArrayBuffer(0) }, key);
     };
     await expect(saveEntryDraftMedia([mediaItem()])).resolves.toEqual({
       ok: false,

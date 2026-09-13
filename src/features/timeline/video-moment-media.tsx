@@ -175,7 +175,7 @@ export function VideoMomentMedia({
                   : "Video"}
               </span>
             </div>
-          )}
+          )
         }
         fullscreenMedia={
           <PrivateVideoPlayer
