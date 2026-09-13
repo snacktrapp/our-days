@@ -4,11 +4,13 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
+import { notifyInlineNotePanelChanged } from "@/features/shell/hide-bottom-nav-while-composing";
 import {
   overlayMotionReduced,
   overlayPopoverCloseMs,
@@ -293,6 +295,11 @@ export function MomentConversationControl({
     );
     return () => window.cancelAnimationFrame(frame);
   }, [editingNoteId, panel]);
+
+  useLayoutEffect(() => {
+    notifyInlineNotePanelChanged();
+    return () => notifyInlineNotePanelChanged();
+  }, [panel]);
 
   useEffect(() => {
     if (panel !== "reactions") return;

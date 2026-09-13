@@ -43,6 +43,16 @@ describe("PrimaryNavigation", () => {
     });
   });
 
+  it("hides the tab bar while Add is open so the composer sheet is unobstructed", () => {
+    composerSession.isOpen = true;
+    render(<PrimaryNavigation section="timeline" />);
+
+    const navigation = document.querySelector(".bottom-nav");
+    expect(navigation).toHaveClass("is-hidden");
+    expect(navigation).toHaveAttribute("aria-hidden", "true");
+    expect(navigation).toHaveAttribute("inert");
+  });
+
   it("contains Journal, Add, and Account", () => {
     render(<PrimaryNavigation section="timeline" />);
 

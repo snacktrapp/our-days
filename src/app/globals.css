@@ -5074,6 +5074,19 @@ span.moment-place-line {
   transform: scale(0.9);
 }
 
+.bottom-nav.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+:root:has(.inline-note-form) .bottom-nav,
+:root:has(.new-moment-composer-dialog[open]) .bottom-nav {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .nav-item {
   flex: 1 1 0;
   min-width: 0;
