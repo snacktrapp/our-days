@@ -200,4 +200,33 @@ describe("private photo delivery route", () => {
     const sameShapeCorruption = await request();
     expect(sameShapeCorruption.status).toBe(404);
   });
+
+  it("returns a neutral 404 when get_photo_moment_delivery has no live session or capability", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "Family session is unavailable" },
+    });
+    const response = await request();
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("still opens matching SHA bytes when the signed fetch omits MIME or stringifies size", async () => {
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, output_size_bytes: "5" as unknown as number }],
+      error: null,
+    });
+    signedBytes([1, 2, 3, 4, 5], "");
+    expect((await request()).status).toBe(200);
+
+    mocks.rpc.mockResolvedValue({ data: [descriptor], error: null });
+    signedBytes([1, 2, 3, 4, 5], "application/octet-stream");
+    const octet = await request();
+    expect(octet.status).toBe(200);
+    expect(octet.headers.get("content-type")).toBe("image/webp");
+    expect(mocks.createSignedUrl).toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalled();
+  });
 });
