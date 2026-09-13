@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import { syncBottomNavVisualInset } from "@/features/shell/visual-viewport-bottom";
 import {
   announceTimelineRefresh,
   feedIsAtTop,
@@ -40,6 +41,7 @@ function writePull(root: HTMLElement | null, px: number) {
 
 function writeState(shell: HTMLElement | null, state: TimelinePullState) {
   if (shell) shell.dataset.pullState = state;
+  syncBottomNavVisualInset();
 }
 
 export function TimelineRefreshControl({ children }: { children: ReactNode }) {
