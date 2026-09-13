@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
 import { PrivateVideoPlayer } from "@/components/private-video-player";
@@ -15,6 +15,7 @@ import {
   persistVideoPoster,
 } from "@/features/video/persist-video-poster";
 import { warmVideoPoster } from "@/features/video/warm-video-poster";
+import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
 function VideoFrameSizer({
@@ -58,7 +59,15 @@ export function VideoMomentMedia({
 }>) {
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
-  const poster = moment.video.poster ?? storedPoster ?? undefined;
+  const candidatePoster = moment.video.poster ?? storedPoster ?? undefined;
+  const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
+  const { objectUrl: fetchedPoster, failed: posterFetchFailed } =
+    usePrivateMediaObjectUrl(
+      candidatePoster && candidatePoster !== failedPosterSrc
+        ? candidatePoster
+        : undefined,
+    );
+  const poster = posterFetchFailed ? undefined : (fetchedPoster ?? undefined);
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +132,9 @@ export function VideoMomentMedia({
                 if (naturalWidth > 0 && naturalHeight > 0) {
                   rememberVideoFrame(moment.id, naturalWidth, naturalHeight);
                 }
+              }}
+              onError={() => {
+                if (candidatePoster) setFailedPosterSrc(candidatePoster);
               }}
             />
           ) : (

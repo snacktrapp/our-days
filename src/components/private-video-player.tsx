@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 
 export function PrivateVideoPlayer({
   src,
@@ -27,7 +28,12 @@ export function PrivateVideoPlayer({
     height: number;
   }) => void;
 }>) {
+  const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
+  const deliverySrc = privateMediaRetrySrc(src, attempt);
+  const deliveryPoster = poster
+    ? privateMediaRetrySrc(poster, attempt)
+    : undefined;
 
   if (unavailable) {
     return (
@@ -40,7 +46,13 @@ export function PrivateVideoPlayer({
         <p className="private-video-unavailable-hint">
           iPhone clips often need Safari, or an MP4 copy.
         </p>
-        <button type="button" onClick={() => setUnavailable(false)}>
+        <button
+          type="button"
+          onClick={() => {
+            setUnavailable(false);
+            setAttempt((current) => current + 1);
+          }}
+        >
           Try again
         </button>
       </div>
@@ -49,8 +61,9 @@ export function PrivateVideoPlayer({
 
   return (
     <video
-      src={src}
-      poster={poster}
+      key={attempt}
+      src={deliverySrc}
+      poster={deliveryPoster}
       aria-label={label}
       width={width}
       height={height}
@@ -59,6 +72,7 @@ export function PrivateVideoPlayer({
       disablePictureInPicture
       disableRemotePlayback
       playsInline
+      webkit-playsinline=""
       preload={preload}
       autoPlay={autoPlay}
       onError={() => setUnavailable(true)}

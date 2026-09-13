@@ -170,6 +170,32 @@ select ok(
     like '%object.get_authenticated%object.get_authenticated_info%',
   'derivative generation can read only exact authenticated original operations'
 );
+select ok(
+  (select qual from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname =
+        'our_days_display_select_exact_active_derivative_lease')
+    like '%photo_display_path_is_readable%'
+  and (select qual from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname =
+        'our_days_display_select_exact_active_derivative_lease')
+    not like '%allow_any_operation%',
+  'family display reads use the path predicate without a Storage operation allow-list'
+);
+select ok(
+  (select split_part(qual, $$bucket_id = 'our-days-display'$$, 2)
+     from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'our_days_storage_objects_closed_until_media_phase')
+    like '%photo_display_path_is_readable%'
+  and (select split_part(qual, $$bucket_id = 'our-days-display'$$, 2)
+     from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname = 'our_days_storage_objects_closed_until_media_phase')
+    not like '%allow_any_operation%',
+  'the restrictive display read arm follows the path predicate only'
+);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values
