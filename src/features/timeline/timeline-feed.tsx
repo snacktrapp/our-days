@@ -1,11 +1,7 @@
-"use client";
-
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { MomentCard } from "./moment-card";
 import {
-  isJournalLoadSoftFail,
-  preferPriorTimelineOnRefresh,
   timelineCardOccurredLabel,
   type TimelineEntryViewModel,
   type TimelineMomentViewModel,
@@ -155,15 +151,10 @@ export function TimelineFeed({
   conversationActions?: MomentConversationActions;
   pendingEntries?: ReactNode;
 }) {
-  const [retained, setRetained] = useState(model);
-  if (!isJournalLoadSoftFail(model) && retained !== model) {
-    setRetained(model);
-  }
-  const view = preferPriorTimelineOnRefresh(retained, model);
-  const firstMomentId = view.entries.find(
+  const firstMomentId = model.entries.find(
     (entry) => entry.entryType === "moment",
   )?.moment.id;
-  const connectedMomentIds = view.entries.flatMap((entry) =>
+  const connectedMomentIds = model.entries.flatMap((entry) =>
     entry.entryType === "moment" ? [entry.moment.id] : [],
   );
   const connectedPositionById = new Map(
@@ -175,9 +166,9 @@ export function TimelineFeed({
       {connectedActions ? (
         <TimelineScrollMemory
           key={
-            view.pagination?.nextHref ??
-            view.paginationError?.retryHref ??
-            `complete-${view.entries.length}`
+            model.pagination?.nextHref ??
+            model.paginationError?.retryHref ??
+            `complete-${model.entries.length}`
           }
         />
       ) : null}
@@ -186,16 +177,16 @@ export function TimelineFeed({
 
         <section
           className="timeline"
-          aria-label={view.timelineLabel ?? "Chronological family moments"}
+          aria-label={model.timelineLabel ?? "Chronological family moments"}
           tabIndex={-1}
         >
           <div className="time-rail" aria-hidden="true" />
-          {view.entries.map((entry) => (
+          {model.entries.map((entry) => (
             <TimelineEntry
               key={entry.id}
               entry={entry}
               firstMomentId={firstMomentId}
-              interaction={view.interaction}
+              interaction={model.interaction}
               connectedActions={connectedActions}
               conversationActions={conversationActions}
               connectedPosition={
@@ -206,28 +197,28 @@ export function TimelineFeed({
               connectedTotal={connectedMomentIds.length}
             />
           ))}
-          {view.pagination ? (
+          {model.pagination ? (
             <div className="timeline-pagination">
               <Link
-                href={view.pagination.nextHref}
+                href={model.pagination.nextHref}
                 prefetch={false}
                 replace
                 scroll={false}
               >
-                {view.pagination.label}
+                {model.pagination.label}
               </Link>
             </div>
           ) : null}
-          {view.paginationError ? (
+          {model.paginationError ? (
             <div className="timeline-pagination-error" role="alert">
-              <span>{view.paginationError.message}</span>
+              <span>{model.paginationError.message}</span>
               <Link
-                href={view.paginationError.retryHref}
+                href={model.paginationError.retryHref}
                 prefetch={false}
                 replace
                 scroll={false}
               >
-                {view.paginationError.label}
+                {model.paginationError.label}
               </Link>
             </div>
           ) : null}

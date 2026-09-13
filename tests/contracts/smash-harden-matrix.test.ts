@@ -17,7 +17,6 @@ const familyPage = read("src/app/(journal)/family/page.tsx");
 const journalLayout = read("src/app/(journal)/layout.tsx");
 const familyHome = read("src/data/family-home.server.ts");
 const timelineViewModel = read("src/features/timeline/timeline-view-model.ts");
-const timelineFeed = read("src/features/timeline/timeline-feed.tsx");
 const timelineFeedTest = read("src/features/timeline/timeline-feed.test.tsx");
 const familyHomeTest = read("src/data/family-home.server.test.ts");
 const rootError = read("src/app/error.tsx");
@@ -232,11 +231,10 @@ describe("smash harden matrix", () => {
       expect(familyPage).toContain("familyHomeRefreshSoftFail");
     });
 
-    it("keeps the prior All-circles timeline when refresh soft-fails", () => {
+    it("keeps All-circles refresh misses off JournalInterrupted", () => {
       expect(timelineViewModel).toContain("preferPriorTimelineOnRefresh");
-      expect(timelineFeed).toContain("preferPriorTimelineOnRefresh");
       expect(timelineFeedTest).toContain(
-        "keeps loaded All-circles moments when a pull-refresh soft-fails",
+        "does not show JournalInterrupted when an All-circles refresh soft-fails",
       );
       expect(familyHome).toContain("refreshDegraded: true");
       expect(familyHomeTest).toContain(

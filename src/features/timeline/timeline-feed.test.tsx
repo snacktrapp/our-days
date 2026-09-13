@@ -624,11 +624,8 @@ describe("TimelineFeed", () => {
     );
   });
 
-  it("keeps loaded All-circles moments when a pull-refresh soft-fails", () => {
-    const { rerender, container } = render(<TimelineFeed model={model} />);
-    expect(container.querySelectorAll("article")).toHaveLength(4);
-
-    rerender(
+  it("does not show JournalInterrupted when an All-circles refresh soft-fails", () => {
+    render(
       <TimelineFeed
         model={{
           ...model,
@@ -652,9 +649,8 @@ describe("TimelineFeed", () => {
       />,
     );
 
-    expect(container.querySelectorAll("article")).toHaveLength(4);
     expect(screen.queryByText("Something interrupted the story")).toBeNull();
-    expect(screen.queryByText("These days couldn’t open")).toBeNull();
+    expect(screen.getByText("These days couldn’t open")).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "The journal couldn’t open these days just now.",
     );
