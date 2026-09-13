@@ -597,4 +597,43 @@ describe("photo lightbox", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     reactionTarget.remove();
   });
+
+  it("keeps Done available when the private photo fetch fails", async () => {
+    resetIndependentOverlayObjectUrlCache();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+      })),
+    );
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src="/api/media/moments/10000000-0000-4000-8000-000000000001"
+          alt="First light"
+          width={80}
+          height={50}
+        >
+          {cardPhoto(cardPixelA, "First light card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    const trigger = screen.getByRole("button", {
+      name: "Open photo full screen: First light",
+    });
+    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
+    fireEvent.click(trigger);
+
+    const done = await screen.findByRole("button", { name: "Done" });
+    expect(document.documentElement).toHaveClass("overlay-open");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This photo could not be opened.",
+    );
+    fireEvent.click(done);
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(document.documentElement).not.toHaveClass("overlay-open");
+      expect(document.body).not.toHaveClass("overlay-open");
+    });
+  });
 });

@@ -1,8 +1,9 @@
 "use client";
 
-import { JournalInterrupted } from "@/features/shell/journal-interrupted";
+import { JournalSegmentError } from "@/features/shell/journal-route-boundary";
 
 export default function JournalError({
+  error,
   retry,
   reset,
 }: Readonly<{
@@ -10,5 +11,5 @@ export default function JournalError({
   retry?: () => void;
   reset?: () => void;
 }>) {
-  return <JournalInterrupted retry={retry} reset={reset} />;
+  return <JournalSegmentError error={error} retry={retry} reset={reset} />;
 }

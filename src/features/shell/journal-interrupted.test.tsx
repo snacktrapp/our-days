@@ -5,7 +5,10 @@ import {
   JournalInterrupted,
   JournalRefreshInterrupted,
 } from "./journal-interrupted";
-import { shouldAutoRetryJournalRoute } from "./journal-route-boundary";
+import {
+  JournalSegmentError,
+  shouldAutoRetryJournalRoute,
+} from "./journal-route-boundary";
 
 const refresh = vi.fn();
 
@@ -16,6 +19,7 @@ vi.mock("next/navigation", () => ({
 afterEach(() => {
   cleanup();
   refresh.mockClear();
+  sessionStorage.removeItem("our-days:journal-nav-auto-retry");
 });
 
 describe("JournalInterrupted", () => {
@@ -79,5 +83,36 @@ describe("JournalInterrupted", () => {
     expect(
       shouldAutoRetryJournalRoute(new Error("Circle is unavailable")),
     ).toBe(false);
+  });
+
+  it("auto-retries a layout remount abort from the segment error view", () => {
+    const retry = vi.fn();
+    render(
+      <JournalSegmentError
+        error={Object.assign(new Error("The operation was aborted."), {
+          name: "AbortError",
+        })}
+        retry={retry}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Something interrupted the story"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Family journal")).toBeVisible();
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a fatal layout error on the interrupt card", () => {
+    const retry = vi.fn();
+    render(
+      <JournalSegmentError
+        error={new Error("Circle is unavailable")}
+        retry={retry}
+      />,
+    );
+
+    expect(screen.getByText("Something interrupted the story")).toBeVisible();
+    expect(retry).not.toHaveBeenCalled();
   });
 });

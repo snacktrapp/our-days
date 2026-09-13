@@ -168,6 +168,18 @@ describe("journal access boundary", () => {
     );
   });
 
+  it("retries a thrown membership abort once, then fails closed for remount recovery", async () => {
+    const abort = Object.assign(new Error("The operation was aborted."), {
+      name: "AbortError",
+    });
+    mocks.limit.mockRejectedValueOnce(abort).mockRejectedValueOnce(abort);
+
+    await expect(requireJournalAccess()).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
   it("retries a warming family session once before failing closed", async () => {
     mocks.limit
       .mockResolvedValueOnce({

@@ -54,9 +54,13 @@ function isUnavailableFamilySession(error: unknown) {
 export async function retryTransientFamilySessionQuery<
   T extends { error: unknown },
 >(run: () => PromiseLike<T>): Promise<T> {
-  const first = await run();
-  if (!first.error || !isTransientFamilySessionError(first.error)) {
-    return first;
+  try {
+    const first = await run();
+    if (!first.error || !isTransientFamilySessionError(first.error)) {
+      return first;
+    }
+  } catch (error) {
+    if (!isTransientFamilySessionError(error)) throw error;
   }
   return run();
 }

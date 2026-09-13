@@ -42,10 +42,15 @@ function JournalRouteAutoRetry({ retry }: Readonly<{ retry: () => void }>) {
   );
 }
 
-function JournalRouteFallback(
-  _props: object,
-  { error, retry, reset }: ErrorInfo,
-) {
+export function JournalSegmentError({
+  error,
+  retry,
+  reset,
+}: Readonly<{
+  error?: unknown;
+  retry?: () => void;
+  reset?: () => void;
+}>) {
   const recover = retry ?? reset;
   if (
     error &&
@@ -56,6 +61,13 @@ function JournalRouteFallback(
     return <JournalRouteAutoRetry retry={recover} />;
   }
   return <JournalInterrupted retry={retry} reset={reset} />;
+}
+
+function JournalRouteFallback(
+  _props: object,
+  { error, retry, reset }: ErrorInfo,
+) {
+  return <JournalSegmentError error={error} retry={retry} reset={reset} />;
 }
 
 export const JournalRouteBoundary = catchError(JournalRouteFallback);
