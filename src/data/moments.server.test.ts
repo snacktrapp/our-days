@@ -853,26 +853,44 @@ describe("connected timeline mapping", () => {
     ).toHaveLength(1);
   });
 
-  it("throws when the first timeline page stays down after a transient retry", async () => {
+  it("keeps the journal open when the first timeline page stays down after a transient retry", async () => {
     const expired = { code: "PGRST301", message: "JWT expired" };
     const rpc = vi.fn().mockResolvedValue({ data: null, error: expired });
     vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
 
-    await expect(
-      loadConnectedTimeline(familyAccess, familyContext, { pages: 1 }),
-    ).rejects.toBe(expired);
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+    });
+
     expect(rpc).toHaveBeenCalledTimes(2);
+    expect(timeline.entries).toEqual([
+      expect.objectContaining({
+        id: "journal-load-soft-fail",
+        entryType: "empty-state",
+      }),
+    ]);
+    expect(timeline.paginationError).toEqual({
+      retryHref: "/family?circle=circle",
+      message:
+        "The journal couldn’t open these days just now. Nothing here was lost.",
+      label: "Try opening the journal again",
+    });
   });
 
-  it("does not retry a non-transient first-page RPC error", async () => {
+  it("does not retry a non-transient first-page RPC error and still keeps the journal open", async () => {
     const error = new Error("private detail");
     const rpc = vi.fn().mockResolvedValue({ data: null, error });
     vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
 
-    await expect(
-      loadConnectedTimeline(familyAccess, familyContext, { pages: 1 }),
-    ).rejects.toBe(error);
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+    });
+
     expect(rpc).toHaveBeenCalledTimes(1);
+    expect(timeline.paginationError?.retryHref).toBe("/family?circle=circle");
+    expect(
+      timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(0);
   });
 
   it("loads the All feed from list_all_timeline_moments", async () => {
@@ -893,5 +911,37 @@ describe("connected timeline mapping", () => {
     expect(timeline.switcher.find((item) => item.kind === "all")?.current).toBe(
       true,
     );
+  });
+
+  it("falls back to the active-circle feed when All-feed bootstrap fails", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42883", message: "function does not exist" },
+      })
+      .mockResolvedValueOnce({ data: [row()], error: null });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(
+      1,
+      "list_all_timeline_moments",
+      expect.objectContaining({ page_size: 21 }),
+    );
+    expect(rpc).toHaveBeenNthCalledWith(
+      2,
+      "list_timeline_moments",
+      expect.objectContaining({ circle_id: "circle", page_size: 21 }),
+    );
+    expect(
+      timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(1);
+    expect(timeline.chrome.title).toBe("All circles");
+    expect(timeline.paginationError).toBeUndefined();
   });
 });

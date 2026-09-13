@@ -10,6 +10,9 @@ import {
 import { readActiveCircleCookie } from "@/lib/auth/active-circle";
 import { isDesignPreviewEnabled } from "@/lib/design-preview.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { isTransientFamilySessionError } from "./family-session-error";
+
+export { isTransientFamilySessionError } from "./family-session-error";
 
 export type JournalAccess =
   | Readonly<{ mode: "preview" }>
@@ -45,27 +48,6 @@ function isUnavailableFamilySession(error: unknown) {
   return (
     candidate.code === "42501" &&
     candidate.message === "Family session is unavailable"
-  );
-}
-
-export function isTransientFamilySessionError(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as {
-    code?: unknown;
-    message?: unknown;
-    status?: unknown;
-  };
-  const code = typeof candidate.code === "string" ? candidate.code : "";
-  const message =
-    typeof candidate.message === "string" ? candidate.message : "";
-  return (
-    code === "PGRST301" ||
-    code === "08000" ||
-    code === "08003" ||
-    code === "08006" ||
-    code === "57014" ||
-    candidate.status === 503 ||
-    /jwt expired|fetch failed|failed to fetch|network|timeout/iu.test(message)
   );
 }
 

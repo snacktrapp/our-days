@@ -3,8 +3,7 @@ import { PhoneNotificationsAnnouncement } from "@/features/timeline/phone-notifi
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { loadConnectedTimeline } from "@/data/moments.server";
+import { loadFamilyHomeJournal } from "@/data/family-home.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
@@ -48,11 +47,10 @@ export default async function FamilyPage({
     );
   }
   const { pages, snapshot } = params;
-  const context = await loadConnectedJournalContext(access);
-  const model = await loadConnectedTimeline(access, context, {
-    pages: Number(pages ?? "1"),
+  const model = await loadFamilyHomeJournal(access, {
+    pages,
     snapshotAt: snapshot,
-    allCircles: !params.circle,
+    circleId: params.circle,
   });
   return (
     <JournalChrome
