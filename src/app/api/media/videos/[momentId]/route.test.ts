@@ -160,6 +160,19 @@ describe("private video delivery route", () => {
     );
   });
 
+  it("fails closed when Storage omits Content-Length and the body is shorter than the descriptor", async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array([1, 2]), {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request("bytes=0-1");
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-range")).toBeNull();
+    expect(await response.text()).toBe("");
+  });
+
   it("fails closed when the private descriptor or upstream shape changes", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: [], error: null });
     expect((await request()).status).toBe(404);

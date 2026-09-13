@@ -833,6 +833,36 @@ describe("MomentConversationControl", () => {
     expect(screen.queryByText("Oldest family note.")).toBeNull();
   });
 
+  it("keeps a saved note visible when conversation reload fails", async () => {
+    const empty = { notes: [], reactions: [] } as const;
+    const actions = connectedActions(empty);
+    const user = userEvent.setup();
+    renderControl(actions, empty);
+
+    await user.click(
+      screen.getByRole("button", { name: /Add a note to photo/u }),
+    );
+    actions.load.mockResolvedValue({
+      ok: false,
+      message: "This family conversation could not be loaded. Try again.",
+    });
+    await user.type(
+      screen.getByRole("textbox", { name: "Add a family note" }),
+      "The porch light was on.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(actions.createNote).toHaveBeenCalledWith({
+        momentId: "moment-one",
+        body: "The porch light was on.",
+      }),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("The porch light was on.")).toBeVisible();
+    expect(screen.getByText("Brian")).toBeVisible();
+  });
+
   it("retains the note and shows an actionable error when saving fails", async () => {
     const empty = { notes: [], reactions: [] } as const;
     const actions = connectedActions(empty);

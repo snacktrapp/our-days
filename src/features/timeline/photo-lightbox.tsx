@@ -235,6 +235,7 @@ function PhotoLightboxLayer({
   });
   const current = album[index] ?? album[0]!;
   const [, setObjectUrlVersion] = useState(0);
+  const [fetchFailed, setFetchFailed] = useState(false);
   const objectUrl = peekIndependentOverlayObjectUrl(current.src);
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
@@ -450,7 +451,18 @@ function PhotoLightboxLayer({
     const photos = request.photos?.length
       ? request.photos
       : [{ src: request.src }];
+    const primary = request.src;
+    void prefetchIndependentOverlayObjectUrl(primary).then((next) => {
+      if (cancelled) return;
+      if (next) {
+        setFetchFailed(false);
+        setObjectUrlVersion((version) => version + 1);
+        return;
+      }
+      setFetchFailed(true);
+    });
     for (const photo of photos) {
+      if (photo.src === primary) continue;
       void prefetchIndependentOverlayObjectUrl(photo.src).then((next) => {
         if (!cancelled && next) setObjectUrlVersion((version) => version + 1);
       });
@@ -724,8 +736,6 @@ function PhotoLightboxLayer({
     ...parkedIndexes.map((photoIndex) => renderFrame(photoIndex, "parked")),
   ];
 
-  if (!objectUrl) return null;
-
   return (
     <div
       className="photo-lightbox"
@@ -746,51 +756,60 @@ function PhotoLightboxLayer({
       >
         Done
       </button>
-      <div
-        ref={stageRef}
-        className={`photo-lightbox-stage${album.length > 1 ? " has-album" : ""}${
-          axis === "x" ? " is-axis-x" : ""
-        }${zoomed ? " is-zoomed" : ""}`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={cancelHorizontalDrag}
-      >
-        {album.length < 2 ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
-            src={objectUrl}
-            alt={current.alt}
-            onLoad={revealPhoto}
-            onError={revealPhoto}
-            onDoubleClick={() => setZoomed((currentZoom) => !currentZoom)}
-          />
-        ) : (
-          <div
-            ref={trackRef}
-            className={`photo-lightbox-track${pair ? " is-paired" : ""}${
-              pair?.mode === "drag" ? " is-dragging" : ""
-            }${pair?.mode === "snap" ? " is-sliding" : ""}${
-              pair?.mode === "spring" ? " is-springing" : ""
-            }${
-              pair?.mode === "snap" || pair?.mode === "spring"
-                ? " is-settling"
-                : ""
-            }`}
-            data-direction={
-              pair ? (pair.direction === 1 ? "next" : "prev") : undefined
-            }
-            data-phase={pair?.mode ?? "idle"}
-            data-dx={pair?.mode === "drag" ? String(pair.dx) : undefined}
-            style={trackStyle}
-            onTransitionEnd={onTrackTransitionEnd}
-          >
-            {trackFrames}
-          </div>
-        )}
-      </div>
-      {album.length > 1 ? (
+      {!objectUrl ? (
+        <p
+          className="photo-lightbox-unavailable"
+          role={fetchFailed ? "alert" : undefined}
+        >
+          {fetchFailed ? "This photo could not be opened." : "Opening photo…"}
+        </p>
+      ) : (
+        <div
+          ref={stageRef}
+          className={`photo-lightbox-stage${album.length > 1 ? " has-album" : ""}${
+            axis === "x" ? " is-axis-x" : ""
+          }${zoomed ? " is-zoomed" : ""}`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={cancelHorizontalDrag}
+        >
+          {album.length < 2 ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className={`photo-lightbox-photo ${zoomed ? "is-zoomed" : ""}`}
+              src={objectUrl}
+              alt={current.alt}
+              onLoad={revealPhoto}
+              onError={revealPhoto}
+              onDoubleClick={() => setZoomed((currentZoom) => !currentZoom)}
+            />
+          ) : (
+            <div
+              ref={trackRef}
+              className={`photo-lightbox-track${pair ? " is-paired" : ""}${
+                pair?.mode === "drag" ? " is-dragging" : ""
+              }${pair?.mode === "snap" ? " is-sliding" : ""}${
+                pair?.mode === "spring" ? " is-springing" : ""
+              }${
+                pair?.mode === "snap" || pair?.mode === "spring"
+                  ? " is-settling"
+                  : ""
+              }`}
+              data-direction={
+                pair ? (pair.direction === 1 ? "next" : "prev") : undefined
+              }
+              data-phase={pair?.mode ?? "idle"}
+              data-dx={pair?.mode === "drag" ? String(pair.dx) : undefined}
+              style={trackStyle}
+              onTransitionEnd={onTrackTransitionEnd}
+            >
+              {trackFrames}
+            </div>
+          )}
+        </div>
+      )}
+      {objectUrl && album.length > 1 ? (
         <p className="sr-only" aria-live="polite">
           Photo {displayIndex + 1} of {album.length}
         </p>

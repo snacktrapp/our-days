@@ -20,6 +20,19 @@ const journalAccess = read("src/lib/auth/journal-access.ts");
 const journalContext = read("src/data/journal-context.server.ts");
 const sessionError = readIfPresent("src/lib/auth/family-session-error.ts");
 const photoRoute = read("src/app/api/media/moments/[momentId]/route.ts");
+const videoRoute = read("src/app/api/media/videos/[momentId]/route.ts");
+const videoRouteTest = read(
+  "src/app/api/media/videos/[momentId]/route.test.ts",
+);
+const journalError = read("src/app/(journal)/error.tsx");
+const photoLightbox = read("src/features/timeline/photo-lightbox.tsx");
+const photoLightboxTest = read("src/features/timeline/photo-lightbox.test.tsx");
+const conversationControl = read(
+  "src/features/timeline/moment-conversation-control.tsx",
+);
+const conversationControlTest = read(
+  "src/features/timeline/moment-conversation-control.test.tsx",
+);
 const photoDelivery = read(
   "supabase/migrations/20260907204138_moment_circles.sql",
 );
@@ -79,6 +92,12 @@ describe("smash harden matrix", () => {
         );
       }
     });
+
+    it("auto-retries layout remount aborts from the segment error view", () => {
+      expect(journalError).toContain("JournalSegmentError");
+      expect(routeBoundary).toContain("export function JournalSegmentError");
+      expect(journalAccess).toContain("isTransientFamilySessionError(error)");
+    });
   });
 
   describe("M-open timeline media", () => {
@@ -121,6 +140,33 @@ describe("smash harden matrix", () => {
       );
       const usesHelper = photoRoute.includes("mediaTypeMatches");
       expect(usesOldPredicate || usesHelper).toBe(true);
+    });
+
+    it("does not advertise a Safari 206 from a truncated Storage body", () => {
+      expect(videoRoute).toContain(
+        "byteSizeMatches(bytes.byteLength, expectedSize)",
+      );
+      expect(videoRouteTest).toContain(
+        "fails closed when Storage omits Content-Length and the body is shorter than the descriptor",
+      );
+    });
+  });
+
+  describe("lightbox dismiss and note save parity", () => {
+    it("keeps Done available when a private photo fetch fails", () => {
+      expect(photoLightbox).toContain("This photo could not be opened.");
+      expect(photoLightbox).toContain("photo-lightbox-close");
+      expect(photoLightboxTest).toContain(
+        "keeps Done available when the private photo fetch fails",
+      );
+    });
+
+    it("does not treat a post-save conversation reload failure as a lost note", () => {
+      expect(conversationControl).toContain("rememberLocalNote");
+      expect(conversationControl).toContain("if (!reloaded) setError(null)");
+      expect(conversationControlTest).toContain(
+        "keeps a saved note visible when conversation reload fails",
+      );
     });
   });
 

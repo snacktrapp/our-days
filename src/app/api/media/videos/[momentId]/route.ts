@@ -246,6 +246,22 @@ export async function GET(
       await upstream.body.cancel();
       return unavailable();
     }
+    // Missing Content-Length is allowed for Safari, but the body must still
+    // be the descriptor's whole object. Slice-only reads would advertise
+    // bytes 0-1/10 from a 2-byte truncated stream.
+    if (!upstream.headers.has("content-length")) {
+      const bytes = await upstream.arrayBuffer();
+      if (!byteSizeMatches(bytes.byteLength, expectedSize)) {
+        return unavailable();
+      }
+      const sliced = bytes.slice(parsed.start, parsed.end + 1);
+      responseHeaders.set("Content-Length", String(sliced.byteLength));
+      responseHeaders.set(
+        "Content-Range",
+        `bytes ${parsed.start}-${parsed.end}/${expectedSize}`,
+      );
+      return new Response(sliced, { status: 206, headers: responseHeaders });
+    }
     const sliced = await sliceStreamToRange(
       upstream.body,
       parsed.start,

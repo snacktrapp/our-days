@@ -436,6 +436,24 @@ export function MomentConversationControl({
     return () => element.removeEventListener("our-days:heart", heart);
   });
 
+  const rememberLocalNote = (nextBody: string, idPrefix: string) => {
+    setConversation((current) => ({
+      ...current,
+      notes: [
+        ...current.notes,
+        {
+          id: `${idPrefix}-${current.notes.length + 1}`,
+          authorName: interaction.currentPerson.name,
+          authorInitial: interaction.currentPerson.initial,
+          authorAccent: interaction.currentPerson.accent,
+          body: nextBody,
+          displayDate: "Just now",
+          canChange: true,
+        },
+      ],
+    }));
+  };
+
   const saveNote = async () => {
     const body = noteDraft.trim();
     if (!body) {
@@ -459,30 +477,25 @@ export function MomentConversationControl({
           setError(result.message);
           return;
         }
-        await loadConversation(true);
+        setConversation((current) => ({
+          ...current,
+          notes: current.notes.map((note) =>
+            note.id === editingNote.id ? { ...note, body } : note,
+          ),
+        }));
+        const reloaded = await loadConversation(true);
+        if (!reloaded) setError(null);
       } else if (actions) {
         const result = await actions.createNote({ momentId: model.id, body });
         if (!result.ok) {
           setError(result.message);
           return;
         }
-        await loadConversation(true);
+        rememberLocalNote(body, "pending");
+        const reloaded = await loadConversation(true);
+        if (!reloaded) setError(null);
       } else {
-        setConversation((current) => ({
-          ...current,
-          notes: [
-            ...current.notes,
-            {
-              id: `preview-${current.notes.length + 1}`,
-              authorName: interaction.currentPerson.name,
-              authorInitial: interaction.currentPerson.initial,
-              authorAccent: interaction.currentPerson.accent,
-              body,
-              displayDate: "Just now",
-              canChange: true,
-            },
-          ],
-        }));
+        rememberLocalNote(body, "preview");
       }
       setNoteDraft("");
       setEditingNoteId(null);
