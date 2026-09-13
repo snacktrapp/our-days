@@ -35,7 +35,7 @@ describe("IndependentOverlayPhoto", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       asset,
       expect.objectContaining({
-        cache: "force-cache",
+        cache: "no-store",
         credentials: "same-origin",
       }),
     );

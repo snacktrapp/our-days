@@ -676,10 +676,11 @@ describe("MomentCard timeline media", () => {
       </PhotoLightboxRoot>,
     );
 
-    const first = screen.getByRole("img", { name: "First light" });
-    const last = screen.getByRole("img", { name: "Last light" });
+    const first = await screen.findByRole("img", { name: "First light" });
+    const last = await screen.findByRole("img", { name: "Last light" });
     await waitFor(() => {
-      expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+      expect(first.getAttribute("src")).toMatch(/^blob:/u);
+      expect(last.getAttribute("src")).toMatch(/^blob:/u);
     });
 
     fireEvent.click(
@@ -687,8 +688,8 @@ describe("MomentCard timeline media", () => {
         name: "Open photo full screen: First light",
       }),
     );
-    expect(first).toHaveAttribute("src", firstSrc);
-    expect(last).toHaveAttribute("src", lastSrc);
+    expect(first.getAttribute("src")).toMatch(/^blob:/u);
+    expect(last.getAttribute("src")).toMatch(/^blob:/u);
     expect(
       screen.getByRole("dialog").querySelector(`img[src="${firstSrc}"]`),
     ).toBeNull();
@@ -706,7 +707,7 @@ describe("MomentCard timeline media", () => {
       }),
     );
     expect(screen.getByRole("img", { name: "First light" })).toBe(first);
-    expect(last).toHaveAttribute("src", lastSrc);
+    expect(last.getAttribute("src")).toMatch(/^blob:/u);
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -720,8 +721,8 @@ describe("MomentCard timeline media", () => {
     expect(screen.getByRole("img", { name: "Last light" })).toBe(last);
     expect(first).toBeVisible();
     expect(last).toBeVisible();
-    expect(first).toHaveAttribute("src", firstSrc);
-    expect(last).toHaveAttribute("src", lastSrc);
+    expect(first.getAttribute("src")).toMatch(/^blob:/u);
+    expect(last.getAttribute("src")).toMatch(/^blob:/u);
     expect(window.getComputedStyle(first).visibility).not.toBe("hidden");
     expect(window.getComputedStyle(last).visibility).not.toBe("hidden");
     expect(document.documentElement).not.toHaveClass("media-viewer-open");

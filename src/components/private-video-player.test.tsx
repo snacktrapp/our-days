@@ -10,6 +10,7 @@ describe("PrivateVideoPlayer", () => {
     const video = screen.getByLabelText("Family video");
     expect(video).toHaveAttribute("src", "/api/media/videos/one");
     expect(video).toHaveAttribute("playsinline");
+    expect(video).toHaveAttribute("webkit-playsinline");
     expect(video).toHaveAttribute(
       "controlslist",
       "nodownload noremoteplayback",
@@ -27,7 +28,9 @@ describe("PrivateVideoPlayer", () => {
       screen.getByText("iPhone clips often need Safari, or an MP4 copy."),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(screen.getByLabelText("Family video")).toBeVisible();
+    const retried = screen.getByLabelText("Family video");
+    expect(retried).toBeVisible();
+    expect(retried).toHaveAttribute("src", "/api/media/videos/one?retry=1");
   });
 
   it("can render a quiet card preview without nested playback controls", () => {

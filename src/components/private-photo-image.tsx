@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
+import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 
 type PrivatePhotoImageProps = Readonly<{
   src: string;
@@ -17,22 +19,15 @@ export function PrivatePhotoImage({
   height,
   highPriority = false,
 }: PrivatePhotoImageProps) {
-  const imageRef = useRef<HTMLImageElement>(null);
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
   const [decoded, setDecoded] = useState<boolean | null>(null);
+  const deliverySrc = privateMediaRetrySrc(src, attempt);
+  const { objectUrl, failed } = usePrivateMediaObjectUrl(
+    unavailable ? undefined : deliverySrc,
+  );
 
-  useEffect(() => {
-    const image = imageRef.current;
-    if (!image) return;
-    if (image.complete && image.naturalHeight > 0) {
-      setDecoded(true);
-      return;
-    }
-    setDecoded(false);
-  }, [attempt, src]);
-
-  if (unavailable) {
+  if (unavailable || failed) {
     return (
       <div className="private-photo-unavailable" role="group" aria-label={alt}>
         <p>This photo couldn’t be opened.</p>
@@ -50,14 +45,22 @@ export function PrivatePhotoImage({
     );
   }
 
-  // Private media intentionally bypasses the Next image optimizer. Every
-  // request must reach the same-origin authorization route.
+  if (!objectUrl) {
+    return (
+      <div
+        className="private-photo-unavailable is-pending"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  // Private media is fetched with credentials + no-store, then shown from a
+  // blob URL so iPhone PWA cannot pin a stale 404 on the authorized route.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={attempt}
-      ref={imageRef}
-      src={src}
+      src={objectUrl}
       alt={alt}
       width={width}
       height={height}
@@ -68,7 +71,7 @@ export function PrivatePhotoImage({
             ? "is-pending"
             : undefined
       }
-      loading={highPriority ? "eager" : "lazy"}
+      loading="eager"
       fetchPriority={highPriority ? "high" : undefined}
       onLoad={() => setDecoded(true)}
       onError={() => setUnavailable(true)}
