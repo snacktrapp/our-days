@@ -92,6 +92,7 @@ describe("smash harden matrix", () => {
       );
       expect(photoRoute).toContain("get_photo_moment_delivery");
       expect(photoRoute).toContain("if (descriptorError || !descriptor)");
+      expect(photoRoute).toContain("fetchSignedPrivateObject");
     });
 
     it("would have 404'd openable photos when Storage omitted MIME or stringified size", () => {

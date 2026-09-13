@@ -209,32 +209,24 @@ describe("private photo delivery route", () => {
     const response = await request();
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("");
-    expect(mocks.download).not.toHaveBeenCalled();
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("M-open broken path: empty Storage MIME or stringified size 404s matching SHA bytes on main", async () => {
+  it("still opens matching SHA bytes when the signed fetch omits MIME or stringifies size", async () => {
     mocks.rpc.mockResolvedValue({
       data: [{ ...descriptor, output_size_bytes: "5" as unknown as number }],
       error: null,
     });
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "" }),
-      error: null,
-    });
-    const stringSizeStatus = (await request()).status;
+    signedBytes([1, 2, 3, 4, 5], "");
+    expect((await request()).status).toBe(200);
 
     mocks.rpc.mockResolvedValue({ data: [descriptor], error: null });
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], {
-        type: "application/octet-stream",
-      }),
-      error: null,
-    });
-    const octetStatus = (await request()).status;
-
-    // Code-path proof of the burning M-open 404. #61 flips both to 200 —
-    // drop or invert this assertion when that PR merges.
-    expect(stringSizeStatus).toBe(404);
-    expect(octetStatus).toBe(404);
+    signedBytes([1, 2, 3, 4, 5], "application/octet-stream");
+    const octet = await request();
+    expect(octet.status).toBe(200);
+    expect(octet.headers.get("content-type")).toBe("image/webp");
+    expect(mocks.createSignedUrl).toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalled();
   });
 });
