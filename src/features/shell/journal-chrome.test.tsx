@@ -192,6 +192,31 @@ describe("JournalChrome", () => {
     expect(container.querySelector(".title-switcher-heading svg")).toBeNull();
   });
 
+  it("keeps the All-circles header when a refresh chrome is degraded", () => {
+    const { rerender } = render(
+      <JournalChrome
+        model={{ ...model, title: "All circles", eyebrow: "Circles" }}
+        section="timeline"
+      >
+        <p>Moments</p>
+      </JournalChrome>,
+    );
+    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
+
+    rerender(
+      <JournalChrome
+        model={{ ...model, title: "Our Days", eyebrow: "Our family" }}
+        section="timeline"
+        preserveChrome
+      >
+        <p>Moments</p>
+      </JournalChrome>,
+    );
+
+    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
+    expect(screen.queryByText("Something interrupted the story")).toBeNull();
+  });
+
   it("replaces page content with a destination skeleton as soon as a journal is chosen", () => {
     render(
       <JournalChrome

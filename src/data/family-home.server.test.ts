@@ -23,6 +23,7 @@ vi.mock("./moments.server", async () => {
 });
 
 import {
+  familyHomeRefreshSoftFail,
   loadFamilyHomeJournal,
   shouldTrapJournalHomeInInterrupt,
 } from "./family-home.server";
@@ -108,6 +109,44 @@ describe("Account → Journal remount", () => {
     });
     expect(model.paginationError?.label).toBe("Try opening the journal again");
     expect(loadConnectedTimeline).not.toHaveBeenCalled();
+  });
+
+  it("does not trap JournalInterrupted when All-circles refresh misses the first page", async () => {
+    loadConnectedJournalContext.mockResolvedValueOnce(context);
+    loadConnectedTimeline.mockRejectedValueOnce({
+      message: "Failed to fetch",
+    });
+
+    const model = await loadFamilyHomeJournal(access, {});
+
+    expect(shouldTrapJournalHomeInInterrupt(new Error("Failed to fetch"))).toBe(
+      false,
+    );
+    expect(model.refreshDegraded).toBe(true);
+    expect(model.chrome.title).toBe("All circles");
+    expect(model.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
+    expect(model.paginationError?.retryHref).toBe("/family");
+  });
+
+  it("soft-fails an All-circles refresh when journal access is still warming", () => {
+    const model = familyHomeRefreshSoftFail(true);
+
+    expect(
+      shouldTrapJournalHomeInInterrupt({
+        name: "AbortError",
+        message: "The operation was aborted.",
+      }),
+    ).toBe(false);
+    expect(model.refreshDegraded).toBe(true);
+    expect(model.chrome.title).toBe("All circles");
+    expect(model.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
+    expect(model.paginationError?.retryHref).toBe("/family");
   });
 
   it("does not trap JournalInterrupted when All-feed remount throws after Account", async () => {

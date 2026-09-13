@@ -258,4 +258,26 @@ export type TimelineViewModel = Readonly<{
     message: string;
     label: string;
   }>;
+  refreshDegraded?: boolean;
 }>;
+
+export const journalLoadSoftFailEntryId = "journal-load-soft-fail";
+
+export function isJournalLoadSoftFail(
+  model: Pick<TimelineViewModel, "entries">,
+) {
+  return model.entries.some((entry) => entry.id === journalLoadSoftFailEntryId);
+}
+
+export function preferPriorTimelineOnRefresh(
+  previous: TimelineViewModel,
+  next: TimelineViewModel,
+): TimelineViewModel {
+  if (!isJournalLoadSoftFail(next) || isJournalLoadSoftFail(previous)) {
+    return next;
+  }
+  return {
+    ...previous,
+    paginationError: next.paginationError ?? previous.paginationError,
+  };
+}

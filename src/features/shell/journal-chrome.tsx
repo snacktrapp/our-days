@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
@@ -37,6 +37,7 @@ type JournalChromeProps = Readonly<{
   standaloneNavigation?: boolean;
   switcher?: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
+  preserveChrome?: boolean;
 }>;
 
 function PrimaryJournalHeader({
@@ -148,20 +149,31 @@ export function JournalChrome({
   createMomentAction,
   switcher,
   onSelectGroup,
+  preserveChrome = false,
 }: JournalChromeProps) {
+  const [retained, setRetained] = useState({ model, switcher });
+  if (
+    !preserveChrome &&
+    (retained.model !== model || retained.switcher !== switcher)
+  ) {
+    setRetained({ model, switcher });
+  }
+  const chrome = preserveChrome ? retained.model : model;
+  const shownSwitcher = preserveChrome ? retained.switcher : switcher;
+
   return (
     <ComposerSessionProvider
-      model={model.composer}
+      model={chrome.composer}
       createMomentAction={createMomentAction}
-      homeContext={currentHomeContext(switcher)}
+      homeContext={currentHomeContext(shownSwitcher)}
     >
       <PhotoLightboxRoot>
         <JournalPendingRouteProvider>
           <JournalStage
-            model={model}
+            model={chrome}
             section={section}
             createMomentAction={createMomentAction}
-            switcher={switcher}
+            switcher={shownSwitcher}
             onSelectGroup={onSelectGroup}
           >
             {children}

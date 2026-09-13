@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  journalLoadSoftFailEntryId,
+  preferPriorTimelineOnRefresh,
   timelineCardOccurredLabel,
   type TimelineViewModel,
 } from "./timeline-view-model";
@@ -99,5 +101,38 @@ describe("timeline presentation contract", () => {
         Object.values(value).forEach(visit);
     };
     visit(model);
+  });
+
+  it("keeps the prior All-circles timeline when a refresh soft-fails", () => {
+    const failed: TimelineViewModel = {
+      ...model,
+      chrome: {
+        ...model.chrome,
+        title: "All circles",
+      },
+      entries: [
+        {
+          id: journalLoadSoftFailEntryId,
+          entryType: "empty-state",
+          title: "These days couldn’t open",
+          message: "Try again in a moment. Nothing here was lost.",
+        },
+      ],
+      paginationError: {
+        retryHref: "/family",
+        message:
+          "The journal couldn’t open these days just now. Nothing here was lost.",
+        label: "Try opening the journal again",
+      },
+      refreshDegraded: true,
+    };
+
+    const kept = preferPriorTimelineOnRefresh(model, failed);
+    expect(kept.entries).toEqual(model.entries);
+    expect(kept.chrome.title).toBe("A timeline");
+    expect(kept.paginationError?.retryHref).toBe("/family");
+    expect(preferPriorTimelineOnRefresh(failed, failed).entries[0]?.id).toBe(
+      journalLoadSoftFailEntryId,
+    );
   });
 });

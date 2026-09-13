@@ -5,7 +5,10 @@ import {
   journalSwitcherEyebrow,
 } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
-import type { TimelineViewModel } from "@/features/timeline/timeline-view-model";
+import {
+  journalLoadSoftFailEntryId,
+  type TimelineViewModel,
+} from "@/features/timeline/timeline-view-model";
 import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import { loadConnectedJournalContext } from "./journal-context.server";
@@ -112,7 +115,7 @@ function remountSoftFailTimeline(
         },
     entries: [
       {
-        id: "journal-load-soft-fail",
+        id: journalLoadSoftFailEntryId,
         entryType: "empty-state",
         title: "These days couldn’t open",
         message: "Try again in a moment. Nothing here was lost.",
@@ -124,6 +127,7 @@ function remountSoftFailTimeline(
         "The journal couldn’t open these days just now. Nothing here was lost.",
       label: "Try opening the journal again",
     },
+    refreshDegraded: true,
   };
 }
 
