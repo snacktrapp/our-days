@@ -43,7 +43,7 @@ function request(id = momentId) {
 }
 
 function signedBytes(
-  bytes: Uint8Array,
+  values: number[],
   contentType = "image/webp",
   status = 200,
 ) {
@@ -52,10 +52,10 @@ function signedBytes(
     error: null,
   });
   mocks.fetch.mockResolvedValue(
-    new Response(bytes, {
+    new Response(Uint8Array.from(values), {
       status,
       headers: {
-        "content-length": String(bytes.byteLength),
+        "content-length": String(values.length),
         "content-type": contentType,
       },
     }),
@@ -76,7 +76,7 @@ describe("private photo delivery route", () => {
       storage: { from: mocks.from },
     });
     vi.stubGlobal("fetch", mocks.fetch);
-    signedBytes(new Uint8Array([1, 2, 3, 4, 5]));
+    signedBytes([1, 2, 3, 4, 5]);
   });
 
   afterEach(() => {
@@ -160,7 +160,7 @@ describe("private photo delivery route", () => {
       data: [{ ...descriptor, output_size_bytes: "5" }],
       error: null,
     });
-    signedBytes(new Uint8Array([1, 2, 3, 4, 5]), "");
+    signedBytes([1, 2, 3, 4, 5], "");
     const response = await request();
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
@@ -177,11 +177,11 @@ describe("private photo delivery route", () => {
   });
 
   it("rejects bytes whose verified size, type, or digest no longer matches", async () => {
-    signedBytes(new Uint8Array([1, 2]), "image/png");
+    signedBytes([1, 2], "image/png");
     const response = await request();
     expect(response.status).toBe(404);
 
-    signedBytes(new Uint8Array([5, 4, 3, 2, 1]));
+    signedBytes([5, 4, 3, 2, 1]);
     const sameShapeCorruption = await request();
     expect(sameShapeCorruption.status).toBe(404);
   });
