@@ -80,11 +80,7 @@ function CardAudience({
   const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
   if (moment.kind === "insight" || !showChip || !chipLabel) return null;
   return (
-    <AudienceChip
-      label={chipLabel}
-      names={moment.audienceCircleNames}
-      audience={moment.audience}
-    />
+    <AudienceChip label={chipLabel} audience={moment.audience} />
   );
 }
 
