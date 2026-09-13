@@ -1052,19 +1052,25 @@ button.audience-chip:focus-visible .audience-chip-face {
 }
 .card-top-chrome {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
+.card-top-chrome:has(.audience-chip-detail) {
+  align-items: flex-start;
+}
 .card-top-chrome > .moment-kind-meta,
 .card-top-chrome > .moment-kicker,
-.card-top-chrome > .thought-label {
+.card-top-chrome > .thought-label,
+.card-copy .card-top-chrome > .moment-kicker {
   min-width: 0;
   flex: 1 1 auto;
+  margin: 0;
 }
 .card-top-chrome .card-audience {
   margin: 0;
   align-items: flex-end;
+  flex: 0 0 auto;
 }
 .card-audience {
   margin: 0 0 10px;
@@ -1076,9 +1082,12 @@ button.audience-chip:focus-visible .audience-chip-face {
 .moment-card .audience-chip,
 .moment-card button.audience-chip {
   position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: auto;
   height: auto;
-  min-height: 28px;
+  min-height: 0;
 }
 .moment-card .audience-chip-face,
 .moment-card .just-me-pill {
@@ -7587,7 +7596,7 @@ html[data-theme].overlay-open .app-shell::before,
 .location-card-heading,
 .card-top-chrome {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -7615,7 +7624,7 @@ html[data-theme].overlay-open .app-shell::before,
 .photo-card-heading > .moment-kicker,
 .location-card-heading > .moment-kicker,
 .card-top-chrome > .moment-kicker {
-  margin: 0 0 6px;
+  margin: 0;
   color: var(--accent);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 8px;
