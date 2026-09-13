@@ -1069,7 +1069,7 @@ export function MomentComposer({
     setSavingDraft(true);
     setSaveError(null);
     try {
-      await saveEntryDraftMedia(
+      const mediaResult = await saveEntryDraftMedia(
         mediaFiles.map((item, index) => ({
           key: media[index]!.key,
           draftId: id,
@@ -1078,6 +1078,10 @@ export function MomentComposer({
           blob: item.file,
         })),
       );
+      if (!mediaResult.ok) {
+        setSaveError("That draft could not keep its media. Try saving again.");
+        return;
+      }
       const result = await draftsApi.save({
         id,
         kind: mode,

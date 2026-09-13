@@ -511,6 +511,59 @@ describe("MomentCard timeline media", () => {
     );
   });
 
+  it("offers a photo-style retry when the private video poster fails to open", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        blob: async () => new Blob(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        blob: async () =>
+          new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:video-poster-retry");
+
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "retry-poster-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/retry-poster-video",
+            poster: "/api/media/videos/retry-poster-video/poster",
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("This video couldn’t be opened.")).toBeVisible();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/media/videos/retry-poster-video/poster?retry=1",
+        expect.objectContaining({
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(document.querySelector(".video-card-poster")).toHaveAttribute(
+        "src",
+        "blob:video-poster-retry",
+      );
+    });
+  });
+
   it("reserves a 16:9 mat for posterless videos with unknown dimensions", () => {
     const { container } = render(
       <MomentCard

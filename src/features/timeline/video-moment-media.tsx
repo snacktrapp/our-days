@@ -15,6 +15,7 @@ import {
   persistVideoPoster,
 } from "@/features/video/persist-video-poster";
 import { warmVideoPoster } from "@/features/video/warm-video-poster";
+import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
@@ -60,14 +61,23 @@ export function VideoMomentMedia({
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
   const candidatePoster = moment.video.poster ?? storedPoster ?? undefined;
+  const [posterAttempt, setPosterAttempt] = useState(0);
   const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
+  const deliveryPoster = candidatePoster
+    ? privateMediaRetrySrc(candidatePoster, posterAttempt)
+    : undefined;
   const { objectUrl: fetchedPoster, failed: posterFetchFailed } =
     usePrivateMediaObjectUrl(
-      candidatePoster && candidatePoster !== failedPosterSrc
-        ? candidatePoster
+      deliveryPoster && deliveryPoster !== failedPosterSrc
+        ? deliveryPoster
         : undefined,
     );
   const poster = posterFetchFailed ? undefined : (fetchedPoster ?? undefined);
+
+  const retryPoster = () => {
+    setFailedPosterSrc(null);
+    setPosterAttempt((current) => current + 1);
+  };
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -134,9 +144,23 @@ export function VideoMomentMedia({
                 }
               }}
               onError={() => {
-                if (candidatePoster) setFailedPosterSrc(candidatePoster);
+                if (deliveryPoster) setFailedPosterSrc(deliveryPoster);
               }}
             />
+          ) : posterFetchFailed ? (
+            <div className="private-video-unavailable" role="group">
+              <p>This video couldn’t be opened.</p>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  retryPoster();
+                }}
+              >
+                Try again
+              </button>
+            </div>
           ) : (
             <div
               className={`video-card-mat${
@@ -151,7 +175,7 @@ export function VideoMomentMedia({
                   : "Video"}
               </span>
             </div>
-          )
+          )}
         }
         fullscreenMedia={
           <PrivateVideoPlayer

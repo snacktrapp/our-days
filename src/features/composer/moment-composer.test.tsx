@@ -38,9 +38,16 @@ const videoUpload = vi.hoisted(() => ({
 const videoInspect = vi.hoisted(() => ({
   inspect: vi.fn(),
 }));
+const draftMedia = vi.hoisted(() => ({
+  save: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => navigation,
   usePathname: () => "/family",
+}));
+vi.mock("./entry-draft-media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./entry-draft-media")>()),
+  saveEntryDraftMedia: (...args: unknown[]) => draftMedia.save(...args),
 }));
 vi.mock("./photo-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./photo-upload")>()),
@@ -181,6 +188,8 @@ beforeEach(() => {
   photoUpload.upload.mockReset();
   videoUpload.upload.mockReset();
   videoInspect.inspect.mockReset();
+  draftMedia.save.mockReset();
+  draftMedia.save.mockResolvedValue({ ok: true });
   videoInspect.inspect.mockResolvedValue({
     durationMs: 12_400,
     width: 1920,
@@ -2569,6 +2578,26 @@ describe("MomentComposer", () => {
     expect(screen.getByLabelText("Entry")).toHaveValue("A porch morning.");
     expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+  });
+
+  it("does not claim a photo draft was saved when IndexedDB drops the blob", async () => {
+    draftMedia.save.mockResolvedValue({ ok: false });
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "porch.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That draft could not keep its media. Try saving again.",
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
+    expect(screen.queryByText(/Note · /u)).toBeNull();
   });
 
   it("deletes a draft from the drafts sheet without posting", async () => {

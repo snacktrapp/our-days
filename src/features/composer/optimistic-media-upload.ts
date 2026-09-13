@@ -174,6 +174,10 @@ function createOptimisticUpload(
   return id;
 }
 
+function clearFailedUploadQueue() {
+  queuedUploads.length = 0;
+}
+
 function startNextQueuedUpload() {
   if (hasActiveUploadTask() || hasBlockingFailure()) return;
   const next = queuedUploads.shift();
@@ -187,6 +191,12 @@ function startNextQueuedUpload() {
 
 function finishUploadTask(id: string) {
   controllers.delete(id);
+  if (hasBlockingFailure()) {
+    // A failed chip must not keep an invisible follow-up ready to fire
+    // when the family later dismisses or retries the failure.
+    clearFailedUploadQueue();
+    return;
+  }
   startNextQueuedUpload();
 }
 
@@ -392,7 +402,9 @@ function beginVideoUpload(input: StartVideoUploadInput) {
 
 /** Starts a photo upload independently of the composer component lifecycle. */
 export function startOptimisticPhotoUpload(input: StartPhotoUploadInput) {
-  if (hasActiveUploadTask() || hasBlockingFailure()) {
+  // Queue only behind an in-flight upload. A failed chip must not hide the
+  // next post — start it so the family sees a chip instead of a silent queue.
+  if (hasActiveUploadTask()) {
     queuedUploads.push({ kind: "photo", input });
     return "";
   }
@@ -401,7 +413,7 @@ export function startOptimisticPhotoUpload(input: StartPhotoUploadInput) {
 
 /** Starts a video upload independently of the composer component lifecycle. */
 export function startOptimisticVideoUpload(input: StartVideoUploadInput) {
-  if (hasActiveUploadTask() || hasBlockingFailure()) {
+  if (hasActiveUploadTask()) {
     queuedUploads.push({ kind: "video", input });
     return "";
   }
@@ -578,13 +590,15 @@ export function retryOptimisticMediaUpload(id: string) {
 export function removeOptimisticMediaUpload(id: string) {
   const removed = uploads.find((upload) => upload.id === id);
   const hadRunningTask = controllers.has(id);
+  const wasFailed = removed?.stage.state === "failed";
   uploads = uploads.filter((upload) => upload.id !== id);
   controllers.get(id)?.abort();
   controllers.delete(id);
   retryRecords.delete(id);
   if (removed) revokePreview(removed.previewUrl);
+  if (wasFailed) clearFailedUploadQueue();
   emit();
-  if (!hadRunningTask) startNextQueuedUpload();
+  if (!hadRunningTask && !wasFailed) startNextQueuedUpload();
 }
 
 export function removeOptimisticMediaUploadByIntake(intakeId: string) {

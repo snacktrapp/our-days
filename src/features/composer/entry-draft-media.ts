@@ -71,16 +71,29 @@ async function withStore<T>(
 
 export async function saveEntryDraftMedia(
   items: readonly EntryDraftMediaBlob[],
-) {
-  if (typeof window === "undefined" || !("indexedDB" in window)) return;
+): Promise<{ ok: boolean }> {
+  if (items.length === 0) return { ok: true };
+  if (typeof window === "undefined" || !window.indexedDB) {
+    return { ok: false };
+  }
   try {
     await withStore("readwrite", async (store) => {
       for (const item of items) {
         await requestResult(store.put(item));
       }
     });
+    const draftId = items[0]?.draftId;
+    if (!draftId) return { ok: false };
+    const stored = await loadEntryDraftMedia(draftId);
+    const missing = items.some(
+      (item) =>
+        !stored.some(
+          (row) => row.key === item.key && row.blob.size === item.blob.size,
+        ),
+    );
+    return missing ? { ok: false } : { ok: true };
   } catch {
-    return;
+    return { ok: false };
   }
 }
 
