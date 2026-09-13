@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { MomentCard } from "./moment-card";
 import {
+  isJournalLoadSoftFail,
   preferPriorTimelineOnRefresh,
   timelineCardOccurredLabel,
   type TimelineEntryViewModel,
@@ -154,9 +155,11 @@ export function TimelineFeed({
   conversationActions?: MomentConversationActions;
   pendingEntries?: ReactNode;
 }) {
-  const lastGood = useRef(model);
-  const view = preferPriorTimelineOnRefresh(lastGood.current, model);
-  lastGood.current = view;
+  const [retained, setRetained] = useState(model);
+  if (!isJournalLoadSoftFail(model) && retained !== model) {
+    setRetained(model);
+  }
+  const view = preferPriorTimelineOnRefresh(retained, model);
   const firstMomentId = view.entries.find(
     (entry) => entry.entryType === "moment",
   )?.moment.id;

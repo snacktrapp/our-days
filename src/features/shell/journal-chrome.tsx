@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
@@ -151,14 +151,15 @@ export function JournalChrome({
   onSelectGroup,
   preserveChrome = false,
 }: JournalChromeProps) {
-  const lastGood = useRef(model);
-  const lastGoodSwitcher = useRef(switcher);
-  if (!preserveChrome) {
-    lastGood.current = model;
-    lastGoodSwitcher.current = switcher;
+  const [retained, setRetained] = useState({ model, switcher });
+  if (
+    !preserveChrome &&
+    (retained.model !== model || retained.switcher !== switcher)
+  ) {
+    setRetained({ model, switcher });
   }
-  const chrome = preserveChrome ? lastGood.current : model;
-  const shownSwitcher = preserveChrome ? lastGoodSwitcher.current : switcher;
+  const chrome = preserveChrome ? retained.model : model;
+  const shownSwitcher = preserveChrome ? retained.switcher : switcher;
 
   return (
     <ComposerSessionProvider
