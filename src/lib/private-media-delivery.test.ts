@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   byteSizeMatches,
   declaredByteSize,
+  fetchSignedPrivateObject,
   mediaTypeMatches,
   privateMediaRetrySrc,
 } from "./private-media-delivery";
@@ -26,6 +27,70 @@ describe("private media delivery checks", () => {
     expect(mediaTypeMatches("IMAGE/WEBP", "image/webp")).toBe(true);
     expect(mediaTypeMatches("image/png", "image/webp")).toBe(false);
     expect(mediaTypeMatches("video/quicktime", "video/quicktime")).toBe(true);
+  });
+
+  it("fetches descriptor-bound bytes through a short-lived signed URL", async () => {
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.example.test/signed" },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([9, 8, 7]), {
+        status: 200,
+        headers: { "content-type": "image/webp" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const object = await fetchSignedPrivateObject(
+      { createSignedUrl },
+      "display/private/photo.webp",
+    );
+
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      "display/private/photo.webp",
+      60,
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://storage.example.test/signed",
+      { cache: "no-store", redirect: "error" },
+    );
+    expect(object?.contentType).toBe("image/webp");
+    expect(new Uint8Array(object?.bytes ?? [])).toEqual(
+      new Uint8Array([9, 8, 7]),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("returns null when Storage refuses to sign or the signed fetch is empty", async () => {
+    expect(
+      await fetchSignedPrivateObject(
+        {
+          createSignedUrl: async () => ({
+            data: null,
+            error: { message: "denied" },
+          }),
+        },
+        "display/private/photo.webp",
+      ),
+    ).toBeNull();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(
+      await fetchSignedPrivateObject(
+        {
+          createSignedUrl: async () => ({
+            data: { signedUrl: "https://storage.example.test/signed" },
+            error: null,
+          }),
+        },
+        "display/private/photo.webp",
+      ),
+    ).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it("cache-busts a same-origin retry without dropping the photo id", () => {

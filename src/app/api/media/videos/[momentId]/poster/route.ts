@@ -4,6 +4,7 @@ import {
 } from "../../../../../../../config/our-days-environment";
 import {
   byteSizeMatches,
+  fetchSignedPrivateObject,
   mediaTypeMatches,
 } from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -67,18 +68,19 @@ export async function GET(
   const descriptor = rows?.[0];
   if (error || !descriptor) return unavailable();
 
-  const { data: file, error: downloadError } = await supabase.storage
-    .from(descriptor.bucket_id)
-    .download(descriptor.object_path);
-  if (downloadError || !file) return unavailable();
+  const file = await fetchSignedPrivateObject(
+    supabase.storage.from(descriptor.bucket_id),
+    descriptor.object_path,
+  );
+  if (
+    !file ||
+    !byteSizeMatches(file.bytes.byteLength, descriptor.size_bytes) ||
+    !mediaTypeMatches(file.contentType, descriptor.mime_type)
+  ) {
+    return unavailable();
+  }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!byteSizeMatches(bytes.byteLength, descriptor.size_bytes)) {
-    return unavailable();
-  }
-  if (!mediaTypeMatches(file.type, descriptor.mime_type)) {
-    return unavailable();
-  }
+  const bytes = new Uint8Array(file.bytes);
 
   return new Response(bytes, {
     status: 200,

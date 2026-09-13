@@ -41,3 +41,41 @@ export function privateMediaRetrySrc(src: string, attempt: number) {
   const joiner = pathAndQuery.includes("?") ? "&" : "?";
   return `${pathAndQuery}${joiner}retry=${attempt}${hash}`;
 }
+
+type SignedUrlBucket = {
+  createSignedUrl: (
+    path: string,
+    expiresIn: number,
+  ) => Promise<{
+    data: { signedUrl?: string | null } | null;
+    error: unknown;
+  }>;
+};
+
+export async function fetchSignedPrivateObject(
+  bucket: SignedUrlBucket,
+  objectPath: string,
+) {
+  const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
+  if (error || !signed?.signedUrl) return null;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(signed.signedUrl, {
+      cache: "no-store",
+      redirect: "error",
+    });
+  } catch {
+    return null;
+  }
+
+  if (upstream.status !== 200 || !upstream.body) {
+    await upstream.body?.cancel();
+    return null;
+  }
+
+  return {
+    bytes: await upstream.arrayBuffer(),
+    contentType: upstream.headers.get("content-type"),
+  };
+}

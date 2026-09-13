@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
-  download: vi.fn(),
+  createSignedUrl: vi.fn(),
+  fetch: vi.fn(),
   from: vi.fn(),
   rpc: vi.fn(),
 }));
@@ -41,6 +42,26 @@ function request(id = momentId) {
   });
 }
 
+function signedBytes(
+  bytes: Uint8Array,
+  contentType = "image/webp",
+  status = 200,
+) {
+  mocks.createSignedUrl.mockResolvedValue({
+    data: { signedUrl: "https://storage.example.test/signed-photo" },
+    error: null,
+  });
+  mocks.fetch.mockResolvedValue(
+    new Response(bytes, {
+      status,
+      headers: {
+        "content-length": String(bytes.byteLength),
+        "content-type": contentType,
+      },
+    }),
+  );
+}
+
 describe("private photo delivery route", () => {
   beforeEach(() => {
     vi.stubEnv("OUR_DAYS_MEDIA_DELIVERY_MODE", "enabled");
@@ -49,21 +70,18 @@ describe("private photo delivery route", () => {
       data: [descriptor, secondDescriptor],
       error: null,
     });
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], {
-        type: "image/webp",
-      }),
-      error: null,
-    });
-    mocks.from.mockReturnValue({ download: mocks.download });
+    mocks.from.mockReturnValue({ createSignedUrl: mocks.createSignedUrl });
     mocks.createClient.mockResolvedValue({
       rpc: mocks.rpc,
       storage: { from: mocks.from },
     });
+    vi.stubGlobal("fetch", mocks.fetch);
+    signedBytes(new Uint8Array([1, 2, 3, 4, 5]));
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -89,10 +107,13 @@ describe("private photo delivery route", () => {
       moment_id: momentId,
     });
     expect(mocks.from).toHaveBeenCalledWith("our-days-display");
-    expect(mocks.download).toHaveBeenCalledWith(
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(
       "display/private/photo.webp",
-      {},
-      { cache: "no-store" },
+      60,
+    );
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/signed-photo",
+      expect.objectContaining({ cache: "no-store", redirect: "error" }),
     );
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(
       new Uint8Array([1, 2, 3, 4, 5]),
@@ -118,10 +139,9 @@ describe("private photo delivery route", () => {
       { params: Promise.resolve({ momentId }) },
     );
     expect(response.status).toBe(200);
-    expect(mocks.download).toHaveBeenCalledWith(
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(
       "display/private/photo-2.webp",
-      {},
-      { cache: "no-store" },
+      60,
     );
   });
 
@@ -140,29 +160,28 @@ describe("private photo delivery route", () => {
       data: [{ ...descriptor, output_size_bytes: "5" }],
       error: null,
     });
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([1, 2, 3, 4, 5])], { type: "" }),
-      error: null,
-    });
+    signedBytes(new Uint8Array([1, 2, 3, 4, 5]), "");
     const response = await request();
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
   });
 
-  it("rejects bytes whose verified size, type, or digest no longer matches", async () => {
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([1, 2])], { type: "image/png" }),
-      error: null,
+  it("fails closed when Storage cannot mint a signed URL", async () => {
+    mocks.createSignedUrl.mockResolvedValue({
+      data: null,
+      error: { message: "Object not found" },
     });
     const response = await request();
     expect(response.status).toBe(404);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
 
-    mocks.download.mockResolvedValue({
-      data: new Blob([new Uint8Array([5, 4, 3, 2, 1])], {
-        type: "image/webp",
-      }),
-      error: null,
-    });
+  it("rejects bytes whose verified size, type, or digest no longer matches", async () => {
+    signedBytes(new Uint8Array([1, 2]), "image/png");
+    const response = await request();
+    expect(response.status).toBe(404);
+
+    signedBytes(new Uint8Array([5, 4, 3, 2, 1]));
     const sameShapeCorruption = await request();
     expect(sameShapeCorruption.status).toBe(404);
   });

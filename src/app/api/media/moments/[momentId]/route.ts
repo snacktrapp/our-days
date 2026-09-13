@@ -4,6 +4,7 @@ import {
 } from "../../../../../../config/our-days-environment";
 import {
   byteSizeMatches,
+  fetchSignedPrivateObject,
   mediaTypeMatches,
 } from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -87,27 +88,26 @@ export async function GET(
     : rows?.[0];
   if (descriptorError || !descriptor) return unavailable();
 
-  const { data: photo, error: downloadError } = await supabase.storage
-    .from(descriptor.bucket_id)
-    .download(descriptor.object_path, {}, { cache: "no-store" });
+  const photo = await fetchSignedPrivateObject(
+    supabase.storage.from(descriptor.bucket_id),
+    descriptor.object_path,
+  );
   if (
-    downloadError ||
     !photo ||
-    !byteSizeMatches(photo.size, descriptor.output_size_bytes) ||
-    !mediaTypeMatches(photo.type, descriptor.output_mime_type)
+    !byteSizeMatches(photo.bytes.byteLength, descriptor.output_size_bytes) ||
+    !mediaTypeMatches(photo.contentType, descriptor.output_mime_type)
   ) {
     return unavailable();
   }
 
-  const bytes = await photo.arrayBuffer();
-  const digest = hex(await crypto.subtle.digest("SHA-256", bytes));
+  const digest = hex(await crypto.subtle.digest("SHA-256", photo.bytes));
   if (digest !== descriptor.output_sha256_hex) return unavailable();
 
-  return new Response(bytes, {
+  return new Response(photo.bytes, {
     status: 200,
     headers: {
       ...privateHeaders,
-      "Content-Length": String(bytes.byteLength),
+      "Content-Length": String(photo.bytes.byteLength),
       "Content-Type": descriptor.output_mime_type,
     },
   });
