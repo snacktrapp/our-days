@@ -20,7 +20,6 @@ import type {
 import { VideoMomentMedia } from "./video-moment-media";
 import { MomentPlaceButton, MomentPlaceMeta } from "./moment-place-meta";
 import { AudienceChip } from "./audience-chip";
-import type { PostableCircle } from "@/features/composer/post-to";
 
 function PhotoFrameSizer({
   width,
@@ -74,13 +73,7 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
 
 function CardAudience({
   moment,
-  circles,
-  connectedActions,
-}: Readonly<{
-  moment: TimelineMomentViewModel;
-  circles: readonly PostableCircle[];
-  connectedActions?: ConnectedMomentActions;
-}>) {
+}: Readonly<{ moment: TimelineMomentViewModel }>) {
   const chipLabel =
     moment.audienceChipLabel ??
     (moment.showJustMeBadge ? "Just me" : undefined);
@@ -90,13 +83,7 @@ function CardAudience({
     <AudienceChip
       label={chipLabel}
       names={moment.audienceCircleNames}
-      momentId={moment.id}
-      revision={moment.revision}
       audience={moment.audience}
-      circleId={moment.circleId}
-      linkedCircleIds={moment.linkedCircleIds}
-      circles={circles}
-      setAudience={connectedActions?.setAudience}
     />
   );
 }
@@ -170,7 +157,6 @@ type MomentCardProps = Readonly<{
   interaction?: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   preload?: boolean;
-  circles?: readonly PostableCircle[];
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
@@ -181,7 +167,6 @@ export function MomentCard({
   interaction,
   moment,
   preload = false,
-  circles = [],
   connectedActions,
   conversationActions,
   connectedPosition,
@@ -254,15 +239,7 @@ export function MomentCard({
           </div>
         )}
         <div className="card-copy">
-          <CardTopChrome
-            audience={
-              <CardAudience
-                moment={moment}
-                circles={circles}
-                connectedActions={connectedActions}
-              />
-            }
-          >
+          <CardTopChrome audience={<CardAudience moment={moment} />}>
             <MomentPlaceMeta
               heading
               typeLabel={typeLabel}
@@ -296,15 +273,7 @@ export function MomentCard({
       <div
         className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
       >
-        <CardTopChrome
-          audience={
-            <CardAudience
-              moment={moment}
-              circles={circles}
-              connectedActions={connectedActions}
-            />
-          }
-        >
+        <CardTopChrome audience={<CardAudience moment={moment} />}>
           <MomentPlaceMeta
             typeLabel={bibleVerse ? "Verse" : typeLabel}
             placeName={moment.placeName}
@@ -397,15 +366,7 @@ export function MomentCard({
     return (
       <div className="moment-card location-card">
         <div className="card-copy">
-          <CardTopChrome
-            audience={
-              <CardAudience
-                moment={moment}
-                circles={circles}
-                connectedActions={connectedActions}
-              />
-            }
-          >
+          <CardTopChrome audience={<CardAudience moment={moment} />}>
             <p className="moment-kicker">{typeLabel}</p>
           </CardTopChrome>
           <h3>
@@ -446,15 +407,7 @@ export function MomentCard({
         {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
-        <CardTopChrome
-          audience={
-            <CardAudience
-              moment={moment}
-              circles={circles}
-              connectedActions={connectedActions}
-            />
-          }
-        >
+        <CardTopChrome audience={<CardAudience moment={moment} />}>
           <MomentPlaceMeta
             typeLabel={typeLabel}
             placeName={moment.placeName}
