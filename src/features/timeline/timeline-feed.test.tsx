@@ -637,6 +637,42 @@ describe("TimelineFeed", () => {
     );
   });
 
+  it("keeps the prior timeline when a later refresh soft-fails", () => {
+    const { container, rerender } = render(<TimelineFeed model={model} />);
+    expect(container.querySelectorAll("article")).toHaveLength(4);
+    expect(screen.getByText("First step")).toBeVisible();
+
+    rerender(
+      <TimelineFeed
+        model={{
+          ...model,
+          entries: [
+            {
+              id: journalLoadSoftFailEntryId,
+              entryType: "empty-state",
+              title: "These days couldn’t open",
+              message: "Try again in a moment. Nothing here was lost.",
+            },
+          ],
+          paginationError: {
+            retryHref: "/family",
+            message:
+              "The journal couldn’t open these days just now. Nothing here was lost.",
+            label: "Try opening the journal again",
+          },
+          refreshDegraded: true,
+        }}
+      />,
+    );
+
+    expect(container.querySelectorAll("article")).toHaveLength(4);
+    expect(screen.getByText("First step")).toBeVisible();
+    expect(screen.queryByText("These days couldn’t open")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The journal couldn’t open these days just now.",
+    );
+  });
+
   it("does not show JournalInterrupted when an All-circles refresh soft-fails", () => {
     render(
       <TimelineFeed

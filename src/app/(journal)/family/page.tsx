@@ -14,7 +14,7 @@ import type { JournalAccess } from "@/lib/auth/journal-access";
 import {
   familyHomeRefreshSoftFail,
   loadFamilyHomeChrome,
-  loadFamilyHomeFirstMoment,
+  loadFamilyHomeOpeningTimeline,
   loadFamilyHomeRemainder,
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
@@ -104,17 +104,14 @@ async function FamilyTimeline({
     circleId?: string;
   }>;
 }>) {
-  const first = await loadFamilyHomeFirstMoment(access, context, options);
-  const showRemainder =
-    !first.refreshDegraded &&
-    first.entries.some((entry) => entry.entryType === "moment");
+  const opening = await loadFamilyHomeOpeningTimeline(access, context, options);
   return (
     <TimelineFeed
-      model={first}
+      model={opening.model}
       connectedActions={connectedActions}
       conversationActions={conversationActions}
       trailing={
-        showRemainder ? (
+        opening.streamRemainder ? (
           <Suspense
             fallback={
               <div className="route-pending-card is-short" aria-hidden="true" />

@@ -54,9 +54,13 @@ describe("JournalInterrupted", () => {
       </AccountPanelInterrupted>,
     );
 
+    expect(screen.getByText("These days couldn’t open")).toBeVisible();
     expect(
       screen.getByText("We couldn’t open Account just now."),
     ).toBeVisible();
+    expect(
+      screen.queryByText("Something interrupted the story"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "This page couldn’t load" }),
     ).not.toBeInTheDocument();

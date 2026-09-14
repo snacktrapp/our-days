@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getClaims: vi.fn(),
   isPreview: vi.fn(),
   limit: vi.fn(),
+  maybeSingle: vi.fn(),
   redirect: vi.fn((destination: string) => {
     throw new Error(`NEXT_REDIRECT:${destination}`);
   }),
@@ -65,9 +66,17 @@ describe("journal access boundary", () => {
       error: null,
     });
     const query = membershipQuery();
+    mocks.maybeSingle.mockResolvedValue({ data: null, error: null });
+    const peopleQuery = {
+      select: vi.fn(() => peopleQuery),
+      eq: vi.fn(() => peopleQuery),
+      maybeSingle: mocks.maybeSingle,
+    };
     mocks.createClient.mockResolvedValue({
       auth: { getClaims: mocks.getClaims },
-      from: vi.fn(() => query),
+      from: vi.fn((table: string) =>
+        table === "people" ? peopleQuery : query,
+      ),
     });
   });
 
@@ -273,6 +282,18 @@ describe("journal access boundary", () => {
 
     await expect(requireJournalAccessUnlessRecoverable()).resolves.toBeNull();
     expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a transient People circle lookup instead of interrupting the journal", async () => {
+    const abort = Object.assign(new Error("The operation was aborted."), {
+      name: "AbortError",
+    });
+    mocks.maybeSingle.mockRejectedValueOnce(abort).mockRejectedValueOnce(abort);
+
+    await expect(
+      requireJournalAccessUnlessRecoverable({ personId: "calvin" }),
+    ).resolves.toBeNull();
+    expect(mocks.maybeSingle).toHaveBeenCalledTimes(2);
   });
 
   it("still redirects a signed-out refresh instead of opening the journal", async () => {
