@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => {
     rpc: vi.fn(),
   };
 });
+const photoUpload = vi.hoisted(() => ({
+  upload: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mocks.router,
@@ -35,12 +38,17 @@ vi.mock("./photo-upload-resume-store", () => ({
     remove: mocks.remove,
   },
 }));
+vi.mock("./photo-upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./photo-upload")>()),
+  uploadPhotoMoment: photoUpload.upload,
+}));
 
 import { PhotoStatusShelf } from "./photo-status-shelf";
 import {
   addOptimisticMediaUpload,
   clearOptimisticMediaUploads,
   removeOptimisticMediaUpload,
+  startOptimisticPhotoUpload,
   updateOptimisticMediaUpload,
 } from "./optimistic-media-upload";
 import {
@@ -76,6 +84,22 @@ const localRecord = {
   requestKey: "request-1",
   uploadRequestKey: "upload-request-1",
 };
+const optimisticPerson = {
+  id: "person-1",
+  name: "Brian",
+  initial: "B",
+  accent: "teal" as const,
+};
+const optimisticDraft = {
+  body: "Porch light",
+  circleId,
+  journalPersonId: optimisticPerson.id,
+  occurredAt: "2026-09-01T14:58:00.000Z",
+  occurredOn: "2026-09-01",
+  occurredTimezone: "America/Chicago",
+  placeName: "",
+  taggedPersonIds: [],
+} as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -88,6 +112,7 @@ beforeEach(() => {
   });
   mocks.listForScope.mockResolvedValue([]);
   mocks.remove.mockResolvedValue(undefined);
+  photoUpload.upload.mockReset();
   mocks.rpc.mockImplementation(async (name: string) => {
     if (name === "cancel_photo_intake") {
       return {
@@ -291,6 +316,32 @@ describe("PhotoStatusShelf", () => {
     expect(
       screen.getAllByRole("region", { name: "Private photo status" }),
     ).toHaveLength(1);
+  });
+
+  it("shows waiting detail when a second post is queued behind an active upload", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    photoUpload.upload.mockReturnValue(new Promise(() => undefined));
+    startOptimisticPhotoUpload({
+      draft: optimisticDraft,
+      file: new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "one.jpg", {
+        type: "image/jpeg",
+      }),
+      occurredTime: "14:58",
+      person: optimisticPerson,
+    });
+
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+    startOptimisticPhotoUpload({
+      draft: { ...optimisticDraft, body: "Second post" },
+      file: new File([new Uint8Array([0xff, 0xd8, 0xff, 0x01])], "two.jpg", {
+        type: "image/jpeg",
+      }),
+      occurredTime: "15:04",
+      person: optimisticPerson,
+    });
+
+    expect(await screen.findByText("Uploading…")).toBeVisible();
+    expect(screen.getByText("1 more post is waiting to upload.")).toBeVisible();
   });
 
   it("keeps Uploading X of Y through every in-batch stage", async () => {

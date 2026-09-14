@@ -175,13 +175,16 @@ function createOptimisticUpload(
 }
 
 function clearFailedUploadQueue() {
+  if (queuedUploads.length === 0) return;
   queuedUploads.length = 0;
+  emit();
 }
 
 function startNextQueuedUpload() {
   if (hasActiveUploadTask() || hasBlockingFailure()) return;
   const next = queuedUploads.shift();
   if (!next) return;
+  emit();
   if (next.kind === "photo") {
     beginPhotoUpload(next.input);
     return;
@@ -407,6 +410,7 @@ export function startOptimisticPhotoUpload(input: StartPhotoUploadInput) {
   // next post — start it so the family sees a chip instead of a silent queue.
   if (hasActiveUploadTask()) {
     queuedUploads.push({ kind: "photo", input });
+    emit();
     return "";
   }
   return beginPhotoUpload(input);
@@ -416,6 +420,7 @@ export function startOptimisticPhotoUpload(input: StartPhotoUploadInput) {
 export function startOptimisticVideoUpload(input: StartVideoUploadInput) {
   if (hasActiveUploadTask()) {
     queuedUploads.push({ kind: "video", input });
+    emit();
     return "";
   }
   return beginVideoUpload(input);
@@ -429,8 +434,11 @@ export function emptyOptimisticMediaUploadSnapshot() {
   return emptyUploads;
 }
 
-export function queuedOptimisticMediaUploadCount() {
-  return queuedUploads.length;
+export function queuedOptimisticMediaUploadCount(circleId?: string) {
+  if (!circleId) return queuedUploads.length;
+  return queuedUploads.filter(
+    (upload) => upload.input.draft.circleId === circleId,
+  ).length;
 }
 
 export function subscribeToOptimisticMediaUploads(listener: () => void) {

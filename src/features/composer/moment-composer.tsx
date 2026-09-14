@@ -76,6 +76,7 @@ import {
   entryDraftMediaKey,
   loadEntryDraftMedia,
   removeEntryDraftMedia,
+  removeStaleEntryDraftMedia,
   saveEntryDraftMedia,
 } from "./entry-draft-media";
 import {
@@ -1082,6 +1083,10 @@ export function MomentComposer({
         setSaveError("That draft could not keep its media. Try saving again.");
         return;
       }
+      await removeStaleEntryDraftMedia(
+        id,
+        media.map((item) => item.key),
+      );
       const result = await draftsApi.save({
         id,
         kind: mode,
@@ -1122,9 +1127,13 @@ export function MomentComposer({
     const nextItems: ComposerPhotoItem[] = [];
     let nextVideo: File | null = null;
     let nextVideoUrl: string | null = null;
+    let missingMedia = false;
     for (const ref of record.media) {
       const stored = blobs.find((blob) => blob.key === ref.key);
-      if (!stored) continue;
+      if (!stored) {
+        missingMedia = true;
+        continue;
+      }
       const file = new File([stored.blob], ref.name, { type: ref.mimeType });
       const previewUrl = URL.createObjectURL(file);
       if (ref.kind === "video" || record.kind === "video") {
@@ -1168,7 +1177,11 @@ export function MomentComposer({
     setPhotoDecodeState(nextVideo || nextItems.length ? "ready" : "empty");
     setPhotoError(null);
     setContentError(null);
-    setSaveError(null);
+    setSaveError(
+      missingMedia
+        ? "Some saved media couldn't be restored. Add it again before posting."
+        : null,
+    );
   };
 
   const deletePersistedDraft = async (id: string) => {

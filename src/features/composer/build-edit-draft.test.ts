@@ -105,7 +105,13 @@ describe("buildComposerEditDraft", () => {
       kind: "photo",
       src: "/api/media/moments/moment-1",
       alt: "Lake",
-      photos: [{ src: "/api/media/moments/moment-1", alt: "Lake" }],
+      photos: [
+        {
+          id: "moment-1",
+          src: "/api/media/moments/moment-1",
+          alt: "Lake",
+        },
+      ],
     });
     expect(buildComposerEditDraft(location, save)).toEqual(
       expect.objectContaining({
