@@ -3,12 +3,12 @@ import { notFound } from "next/navigation";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { getYearMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 import {
-  loadConnectedMemoryJourney,
-  parseMemoryYear,
-} from "@/data/memories.server";
+  loadMemoryJourneyJournal,
+  memoryJourneyRefreshSoftFail,
+} from "@/data/memories-home.server";
+import { parseMemoryYear } from "@/data/memories.server";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -30,27 +30,46 @@ type YearMemoriesProps = Readonly<{
 export async function generateMetadata({
   params,
 }: YearMemoriesProps): Promise<Metadata> {
-  const access = await requireJournalAccess();
   const { year } = await params;
-  if (access.mode === "authenticated") {
-    return {
-      title: parseMemoryYear(year)
-        ? `${year} memories — Our Days`
-        : "Memories — Our Days",
-    };
-  }
-  const model = getYearMemoriesFixture(year);
   return {
-    title: model ? `${year} memories — Our Days` : "Memories — Our Days",
+    title: parseMemoryYear(year)
+      ? `${year} memories — Our Days`
+      : "Memories — Our Days",
   };
 }
+
+const connectedActions = {
+  update: updateFamilyMomentAction,
+  trash: trashWrittenMomentAction,
+  removePhoto: removeMomentPhotoAction,
+  reorderPhotos: reorderMomentPhotosAction,
+};
+
+const conversationActions = {
+  load: loadMomentConversationAction,
+  createNote: createMomentNoteAction,
+  updateNote: updateMomentNoteAction,
+  trashNote: trashMomentNoteAction,
+  setReaction: setMomentReactionAction,
+};
 
 export default async function YearMemoriesPage({
   params,
   searchParams,
 }: YearMemoriesProps) {
-  const access = await requireJournalAccess();
+  const access = await requireJournalAccessUnlessRecoverable();
   const { year } = await params;
+  if (!access) {
+    const model = memoryJourneyRefreshSoftFail({
+      mode: "year",
+      year: parseMemoryYear(year) ?? 0,
+    });
+    return (
+      <JournalChrome model={model.chrome} section="memories" preserveChrome>
+        <MemoryJourneyPanel model={model} />
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     const model = getYearMemoriesFixture(year);
     if (!model) notFound();
@@ -62,14 +81,11 @@ export default async function YearMemoriesPage({
   }
   const memoryYear = parseMemoryYear(year);
   if (!memoryYear) notFound();
-  const [{ pages, snapshot }, context] = await Promise.all([
-    searchParams,
-    loadConnectedJournalContext(access),
-  ]);
-  const model = await loadConnectedMemoryJourney(access, context, {
+  const { pages, snapshot } = await searchParams;
+  const model = await loadMemoryJourneyJournal(access, {
     mode: "year",
     year: memoryYear,
-    pages: Number(pages ?? "1"),
+    pages,
     snapshotAt: snapshot,
   });
 
@@ -81,19 +97,8 @@ export default async function YearMemoriesPage({
     >
       <MemoryJourneyPanel
         model={model}
-        connectedActions={{
-          update: updateFamilyMomentAction,
-          trash: trashWrittenMomentAction,
-          removePhoto: removeMomentPhotoAction,
-          reorderPhotos: reorderMomentPhotosAction,
-        }}
-        conversationActions={{
-          load: loadMomentConversationAction,
-          createNote: createMomentNoteAction,
-          updateNote: updateMomentNoteAction,
-          trashNote: trashMomentNoteAction,
-          setReaction: setMomentReactionAction,
-        }}
+        connectedActions={connectedActions}
+        conversationActions={conversationActions}
       />
     </JournalChrome>
   );
