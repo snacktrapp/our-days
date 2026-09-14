@@ -477,11 +477,11 @@ describe("smash harden matrix", () => {
     });
   });
 
-  describe("M-album open + K-note keyboard + fail-chip dismiss", () => {
-    it("opens the album photo the pager is showing", () => {
-      expect(photoCardPager).toMatch(/index=\{displayIndex\}/);
+  describe("M-album paging + K-note keyboard + fail-chip dismiss", () => {
+    it("pages the album in place without a fullscreen trigger", () => {
+      expect(photoCardPager).toContain("Photo {displayIndex + 1} of");
       expect(photoCardPagerTest).toContain(
-        "opens the album photo currently on screen",
+        "keeps album photos out of fullscreen buttons",
       );
     });
 
