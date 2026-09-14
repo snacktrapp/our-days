@@ -730,12 +730,7 @@ function visibleMoments(
       if (moment.trashedAt !== null) return false;
       if (!journalPersonId) {
         if (allCircles) {
-          if (moment.audience === "just_me") {
-            return Boolean(
-              moment.journalPersonId &&
-              ownPersonIds?.has(moment.journalPersonId),
-            );
-          }
+          if (moment.audience === "just_me") return false;
           return momentLinkedCircleIds(moment, document.circle.id).some(
             (circleId) => viewerCircleIds.has(circleId),
           );
