@@ -5,6 +5,8 @@ on:
     branches: [main, staging]
   pull_request:
     branches: [main, staging]
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,6 +23,53 @@ env:
   OUR_DAYS_RESOURCE_MODE: detached
 
 jobs:
+  changes:
+    name: Specialist test scope
+    runs-on: ubuntu-latest
+    outputs:
+      database: ${{ steps.scope.outputs.database }}
+      visual: ${{ steps.scope.outputs.visual }}
+    steps:
+      - name: Check out history for path classification
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify database and visual changes
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          database=false
+          visual=false
+
+          if [[ "$EVENT_NAME" == "schedule" || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            database=true
+            visual=true
+          else
+            if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+              BASE_SHA="$(git rev-parse "$HEAD_SHA^")"
+            fi
+
+            while IFS= read -r file; do
+              case "$file" in
+                package.json|package-lock.json|supabase/*|src/app/api/*|src/lib/auth/*|src/lib/supabase/*|scripts/test-auth-*|scripts/test-database-*|scripts/test-db-*|scripts/test-invitation-*|scripts/test-photo-*)
+                  database=true
+                  ;;
+              esac
+              case "$file" in
+                public/*|src/*.css|src/*.tsx|src/fixtures/*|tests/e2e/visual.spec.ts|tests/e2e/visual.spec.ts-snapshots/*)
+                  visual=true
+                  ;;
+              esac
+            done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          fi
+
+          echo "database=$database" >> "$GITHUB_OUTPUT"
+          echo "visual=$visual" >> "$GITHUB_OUTPUT"
+
   quality:
     name: Quality and production build
     runs-on: ubuntu-latest
@@ -76,11 +125,18 @@ jobs:
           npx playwright test -c playwright.local-journal.config.ts
           --grep "cold open paints usable Family content after sign-in"
 
-  browser:
-    name: Functional browsers
+  exhaustive-browser:
+    name: Nightly full Chromium (${{ matrix.project }})
     needs: quality
+    if: >-
+      needs.quality.result == 'success' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium-mobile, chromium-short]
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,22 +149,87 @@ jobs:
           package-manager-cache: false
       - name: Install the exact dependency tree
         run: npm ci
-      - name: Install pinned browser engines and system libraries
-        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Install pinned Chromium and system libraries
+        run: npx playwright install --with-deps chromium
       - name: Build and scan the production application
         run: npm run build
-      - name: Run Chromium, Firefox, and WebKit functional checks
-        run: npx playwright test --grep-invert @visual
+      - name: Run the full Chromium functional suite
+        run: >-
+          npx playwright test --grep-invert @visual
+          --project=${{ matrix.project }}
+
+  browser-smoke:
+    name: Critical ${{ matrix.label }}
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Chromium
+            engine: chromium
+            project: chromium-mobile
+          - label: Firefox
+            engine: firefox
+            project: firefox-mobile
+          - label: WebKit
+            engine: webkit
+            project: webkit-mobile
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use the pinned Node.js runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install the exact dependency tree
+        run: npm ci
+      - name: Install the pinned browser engine and system libraries
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Build and scan the production application
+        run: npm run build
+      - name: Run critical cross-browser flows
+        run: >-
+          npx playwright test --grep @critical
+          --project=${{ matrix.project }}
+
+  local-journal:
+    name: Local journal browser flow
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Use the pinned Node.js runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install the exact dependency tree
+        run: npm ci
+      - name: Install pinned Chromium and system libraries
+        run: npx playwright install --with-deps chromium
+      - name: Build and scan the production application
+        run: npm run build
       - name: Run the no-Docker local journal flow
         run: npx playwright test -c playwright.local-journal.config.ts
 
   database:
     name: Local Supabase authorization
-    needs: quality
+    needs: [quality, changes]
+    if: >-
+      needs.quality.result == 'success' &&
+      needs.changes.outputs.database == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    # Optional extra gate. The merge path is quality + browser, which do
-    # not start Docker Desktop or the multi-container studio stack.
+    # Optional, path-gated PR signal plus a complete nightly/manual run.
     continue-on-error: true
     steps:
       - name: Check out the tested commit
@@ -154,11 +275,13 @@ jobs:
 
   visual:
     name: Intel macOS visual baselines
-    needs: quality
+    needs: [quality, changes]
+    if: >-
+      needs.quality.result == 'success' &&
+      needs.changes.outputs.visual == 'true'
     runs-on: macos-15-intel
     timeout-minutes: 25
-    # First hosted Intel run is a calibration gate. Journal pixels are not
-    # rewritten from Linux; reviewed darwin snapshots replace these later.
+    # Path-gated PR signal plus a complete nightly/manual calibration run.
     continue-on-error: true
     steps:
       - name: Check out the tested commit
@@ -182,3 +305,26 @@ jobs:
           --project=chromium-mobile
           --project=chromium-short
           --project=chromium-wide-visual
+
+  pr-gate:
+    name: PR Gate
+    if: always()
+    needs: [quality, browser-smoke, local-journal]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every merge-path job
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          BROWSER_SMOKE_RESULT: ${{ needs['browser-smoke'].result }}
+          LOCAL_JOURNAL_RESULT: ${{ needs['local-journal'].result }}
+        run: |
+          for result in \
+            "$QUALITY_RESULT" \
+            "$BROWSER_SMOKE_RESULT" \
+            "$LOCAL_JOURNAL_RESULT"
+          do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::A required merge-path job finished as $result"
+              exit 1
+            fi
+          done
