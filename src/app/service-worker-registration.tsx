@@ -27,21 +27,32 @@ export function ServiceWorkerRegistration() {
           );
         }
 
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const sameOriginRegistrations = registrations.filter(
+          (registration) =>
+            new URL(registration.scope).origin === window.location.origin,
+        );
+
         if (vapidPublicKey()) {
-          await navigator.serviceWorker.register("/sw.js", {
+          await Promise.all(
+            sameOriginRegistrations
+              .filter(
+                (registration) => new URL(registration.scope).pathname !== "/",
+              )
+              .map((registration) => registration.unregister()),
+          );
+          const registration = await navigator.serviceWorker.register("/sw.js", {
             scope: "/",
             updateViaCache: "none",
           });
+          if (typeof registration.update === "function") {
+            await registration.update();
+          }
           return;
         }
 
-        const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(
-          registrations
-            .filter(
-              (registration) =>
-                new URL(registration.scope).origin === window.location.origin,
-            )
+          sameOriginRegistrations
             .map((registration) => registration.unregister()),
         );
       } catch (error) {

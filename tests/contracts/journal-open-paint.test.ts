@@ -16,10 +16,10 @@ const journalContext = read("src/data/journal-context.server.ts");
 const openingShell = read("src/features/shell/opening-journal-shell.tsx");
 
 describe("journal open paint", () => {
-  it("does not make the journal layout wait on access before the shell can stream", () => {
-    expect(journalLayout).toContain("requireJournalAccessUnlessRecoverable");
-    expect(journalLayout).toContain("async function JournalAccessGate");
-    expect(journalLayout).toContain("<Suspense fallback={null}>");
+  it("keeps the journal layout shell-first without an eager access throw path", () => {
+    expect(journalLayout).toContain("JournalRouteBoundary");
+    expect(journalLayout).not.toContain("requireJournalAccessUnlessRecoverable");
+    expect(journalLayout).not.toContain("JournalAccessGate");
     expect(journalLayout).not.toMatch(
       /export default async function JournalLayout/,
     );

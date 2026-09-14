@@ -149,4 +149,31 @@ describe("JournalInterrupted", () => {
     expect(screen.getByText("Something interrupted the story")).toBeVisible();
     expect(retry).not.toHaveBeenCalled();
   });
+
+  it("keeps non-fatal layout errors on an opening shell instead of the interrupt card", () => {
+    render(
+      <JournalSegmentError
+        error={new Error("Circle is unavailable")}
+        retry={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Something interrupted the story"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Opening this journal")).toBeVisible();
+  });
+
+  it("rethrows Next control-flow errors so redirects are handled by Next", () => {
+    expect(() =>
+      render(
+        <JournalSegmentError
+          error={Object.assign(new Error("Redirect"), {
+            digest: "NEXT_REDIRECT;/sign-in",
+          })}
+          retry={vi.fn()}
+        />,
+      ),
+    ).toThrow();
+  });
 });

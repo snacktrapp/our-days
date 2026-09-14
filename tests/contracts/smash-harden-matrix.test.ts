@@ -318,8 +318,9 @@ describe("smash harden matrix", () => {
   });
 
   describe("R-All-circles in-place refresh", () => {
-    it("does not let layout requireJournalAccess throw a recoverable refresh miss", () => {
-      expect(journalLayout).toContain("requireJournalAccessUnlessRecoverable");
+    it("keeps layout shell-first while pages own recoverable access decisions", () => {
+      expect(journalLayout).toContain("JournalRouteBoundary");
+      expect(journalLayout).not.toContain("requireJournalAccessUnlessRecoverable");
       expect(journalAccess).toContain(
         "export async function requireJournalAccessUnlessRecoverable",
       );
@@ -338,10 +339,13 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("auto-retries a transient refresh miss instead of the root interrupt card", () => {
+    it("keeps root and route boundaries off the interrupt card for non-fatal refresh misses", () => {
       expect(routeBoundary).toContain("isTransientFamilySessionError(error)");
-      expect(rootError).toContain("JournalSegmentError");
-      expect(rootError).not.toContain("JournalInterrupted");
+      expect(routeBoundary).toContain("isNextControlFlowError(error)");
+      expect(routeBoundary).toContain("OpeningJournalShell");
+      expect(rootError).toContain("isNextControlFlowError(error)");
+      expect(rootError).toContain("OpeningJournalShell");
+      expect(rootError).not.toContain("JournalSegmentError");
     });
   });
 
