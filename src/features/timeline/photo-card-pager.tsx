@@ -460,7 +460,6 @@ export function PhotoCardPager({
         height={shown.height}
         photos={photos}
         index={displayIndex}
-        reactionTargetId={moment.id}
       >
         {photos.length < 2 ? (
           (images[0] ?? null)

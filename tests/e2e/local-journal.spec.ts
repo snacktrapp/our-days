@@ -124,34 +124,34 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(videoCard).toBeVisible();
   await expect(videoCard.getByText("Video", { exact: true })).toBeVisible();
   await expect(videoCard.locator(".video-viewer-play")).toBeVisible();
-  await expect(videoCard.locator("video")).toHaveCount(0);
+  const timelineVideo = videoCard.locator("video");
+  await expect(timelineVideo).toHaveCount(1);
+  await expect(timelineVideo).not.toHaveAttribute("controls");
   await expect(
     videoCard.locator(".video-card-poster, .video-card-mat"),
   ).toBeVisible();
-  await videoCard
-    .getByRole("button", { name: /Open video full screen/u })
-    .click();
-  const fullscreen = page.getByRole("dialog", { name: /Full-screen video/u });
-  await expect(fullscreen).toBeVisible();
-  const lightboxVideo = fullscreen.locator("video");
-  await expect(lightboxVideo).toHaveAttribute("controls");
-  await expect(lightboxVideo).toHaveAttribute("playsinline");
-  await expect(lightboxVideo).toHaveAttribute("autoplay");
+  const videoTrigger = videoCard.getByRole("button", {
+    name: /Open video full screen/u,
+  });
+  await videoTrigger.click();
+  await expect(
+    page.getByRole("dialog", { name: /Full-screen video/u }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Close" })).toHaveCount(0);
   await expect
     .poll(
       async () =>
-        lightboxVideo.evaluate((node) => !(node as HTMLVideoElement).paused),
+        timelineVideo.evaluate((node) => document.fullscreenElement === node),
       {
         timeout: 8_000,
       },
     )
     .toBe(true);
-  const close = fullscreen.getByRole("button", { name: "Close" });
-  await expect(close).toBeVisible();
-  await expect(close).toHaveText("×");
-  await expect(fullscreen.locator(".media-viewer-chrome")).toHaveCount(0);
-  await close.click();
-  await expect(fullscreen).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement === null))
+    .toBe(true);
+  await expect(videoTrigger).toBeFocused();
 
   await page.goto("/memories");
   await expect(page.getByText("On this day", { exact: true })).toBeVisible();

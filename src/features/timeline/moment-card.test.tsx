@@ -444,7 +444,9 @@ describe("MomentCard timeline media", () => {
       "src",
       poster,
     );
-    expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
+    expect(
+      container.querySelector(".native-video-viewer video"),
+    ).toHaveAttribute("poster", poster);
     expect(container.querySelector(".video-card")).not.toBeNull();
     expect(container.querySelector(".video-frame")).toHaveClass(
       "has-known-ratio",
@@ -464,22 +466,14 @@ describe("MomentCard timeline media", () => {
         name: "Open video full screen: Video in Molly’s journal from Aug 28, 2026",
       }),
     );
-    const dialog = screen.getByRole("dialog", {
-      name: "Full-screen video: Video in Molly’s journal from Aug 28, 2026",
-    });
-    const lightboxVideo = dialog.querySelector("video");
-    expect(lightboxVideo).toHaveAttribute("controls");
-    expect(lightboxVideo).toHaveAttribute("playsinline");
-    expect(lightboxVideo).toHaveAttribute("autoplay");
-    expect(lightboxVideo).toHaveAttribute("poster", poster);
+    const timelineVideo = container.querySelector(".native-video-viewer video");
+    expect(timelineVideo).toHaveAttribute("controls");
+    expect(timelineVideo).not.toHaveAttribute("playsinline");
+    expect(timelineVideo).not.toHaveAttribute("autoplay");
+    expect(timelineVideo).toHaveAttribute("poster", poster);
     expect(play).toHaveBeenCalled();
-    const close = screen.getByRole("button", { name: "Close" });
-    expect(close).toHaveTextContent("×");
-    expect(close.closest(".media-viewer-chrome")).toBeNull();
-    expect(dialog.querySelector(".media-viewer-chrome")).toBeNull();
-    expect(dialog.querySelector(".media-viewer-video")).not.toBeNull();
-    fireEvent.click(close);
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
   it("keeps a play badge on a dark mat when no poster is ready yet", () => {
@@ -503,7 +497,9 @@ describe("MomentCard timeline media", () => {
     expect(container.querySelector(".video-card-mat-label")).toHaveTextContent(
       "Video",
     );
-    expect(container.querySelector(".video-viewer-trigger video")).toBeNull();
+    expect(
+      container.querySelector(".native-video-viewer video"),
+    ).not.toBeNull();
     expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
       "▶",
     );
@@ -513,22 +509,14 @@ describe("MomentCard timeline media", () => {
     );
   });
 
-  it("offers a photo-style retry when the private video poster fails to open", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        blob: async () => new Blob(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        blob: async () =>
-          new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" }),
-      });
+  it("keeps the video tap available when its private poster fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      blob: async () => new Blob(),
+    });
     vi.stubGlobal("fetch", fetchMock);
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:video-poster-retry");
 
-    render(
+    const { container } = render(
       <MomentCard
         moment={{
           ...thought,
@@ -546,24 +534,14 @@ describe("MomentCard timeline media", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("This video couldn’t be opened.")).toBeVisible();
+      expect(fetchMock).toHaveBeenCalled();
     });
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith(
-        "/api/media/videos/retry-poster-video/poster?retry=1",
-        expect.objectContaining({
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      );
-    });
-    await waitFor(() => {
-      expect(document.querySelector(".video-card-poster")).toHaveAttribute(
-        "src",
-        "blob:video-poster-retry",
-      );
-    });
+    expect(container.querySelector(".video-card-mat")).not.toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: /Open video full screen/u,
+      }),
+    ).toBeVisible();
   });
 
   it("reserves a 16:9 mat for posterless videos with unknown dimensions", () => {

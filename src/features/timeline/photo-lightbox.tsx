@@ -21,10 +21,6 @@ import { useOverlayOpenChrome } from "@/features/shell/use-overlay-open-chrome";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
 import { useVisualViewportFill } from "@/features/shell/use-visual-viewport-fill";
 import {
-  dispatchMomentHeart,
-  usePairedTap,
-} from "@/features/timeline/double-tap-heart";
-import {
   albumSlideWidth,
   axisLockPx,
   clampDragDx,
@@ -106,7 +102,6 @@ export function PhotoLightboxTrigger({
   height,
   photos,
   index = 0,
-  reactionTargetId,
   children,
 }: Readonly<{
   src: string;
@@ -115,36 +110,30 @@ export function PhotoLightboxTrigger({
   height?: number;
   photos?: readonly PhotoLightboxPhoto[];
   index?: number;
-  reactionTargetId?: string;
   children: ReactNode;
 }>) {
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const handleTap = usePairedTap({
-    enabled: Boolean(reactionTargetId),
-    onDoubleTap: () => {
-      if (reactionTargetId) dispatchMomentHeart(reactionTargetId);
-    },
-    onSingleTap: () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      requestPhotoLightbox({
-        src,
-        alt,
-        origin: {
-          left: rect.left,
-          top: rect.top,
-          width: Math.max(rect.width, 1),
-          height: Math.max(rect.height, 1),
-        },
-        trigger,
-        width,
-        height,
-        photos,
-        index,
-      });
-    },
-  });
+
+  function openLightbox() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    requestPhotoLightbox({
+      src,
+      alt,
+      origin: {
+        left: rect.left,
+        top: rect.top,
+        width: Math.max(rect.width, 1),
+        height: Math.max(rect.height, 1),
+      },
+      trigger,
+      width,
+      height,
+      photos,
+      index,
+    });
+  }
 
   useEffect(() => {
     void prefetchIndependentOverlayObjectUrl(src);
@@ -160,7 +149,7 @@ export function PhotoLightboxTrigger({
       type="button"
       className="media-viewer-trigger photo-viewer-trigger"
       aria-label={`Open photo full screen: ${alt}`}
-      onClick={(event) => handleTap(event.detail)}
+      onClick={openLightbox}
     >
       {children}
     </button>
@@ -243,6 +232,7 @@ function PhotoLightboxLayer({
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const layerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   useVisualViewportFill(layerRef, true);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -266,6 +256,10 @@ function PhotoLightboxLayer({
   } | null>(null);
   const titleId = useId();
   const displayIndex = pair?.mode === "snap" ? pair.to : index;
+
+  useEffect(() => {
+    closeButtonRef.current?.focus({ preventScroll: true });
+  }, []);
 
   function writePair(next: AlbumPair | null) {
     if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
@@ -519,6 +513,7 @@ function PhotoLightboxLayer({
 
   function teardown() {
     clearCloseTimer();
+    const trigger = request.trigger;
     onClosed();
     document.getElementById("journal-focus-target")?.blur();
     if (document.activeElement instanceof HTMLElement) {
@@ -530,6 +525,9 @@ function PhotoLightboxLayer({
         active.blur();
       }
     }
+    window.requestAnimationFrame(() => {
+      if (trigger.isConnected) trigger.focus({ preventScroll: true });
+    });
   }
 
   function close() {
@@ -761,6 +759,7 @@ function PhotoLightboxLayer({
         Full-screen photo: {current.alt}
       </h2>
       <button
+        ref={closeButtonRef}
         type="button"
         className="photo-lightbox-close media-viewer-close"
         aria-label="Close"

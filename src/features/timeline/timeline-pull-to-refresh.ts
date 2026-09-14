@@ -65,7 +65,7 @@ export function readJournalRefreshBlock(target: EventTarget | null) {
     body.classList.contains("overlay-open");
   const dialogOpen = Boolean(
     document.querySelector(
-      "dialog[open], .photo-lightbox, .fullscreen-media-dialog[open]",
+      "dialog[open], .photo-lightbox",
     ),
   );
   const scroller = overlayScrollParent(target);

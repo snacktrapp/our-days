@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { FullscreenMediaViewer } from "@/components/fullscreen-media-viewer";
-import { PrivateVideoPlayer } from "@/components/private-video-player";
+import { NativeVideoFullscreen } from "@/components/native-video-fullscreen";
 import {
   rememberVideoFrame,
   rememberVideoPoster,
@@ -15,7 +14,6 @@ import {
   persistVideoPoster,
 } from "@/features/video/persist-video-poster";
 import { warmVideoPoster } from "@/features/video/warm-video-poster";
-import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
@@ -61,23 +59,10 @@ export function VideoMomentMedia({
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
   const candidatePoster = moment.video.poster ?? storedPoster ?? undefined;
-  const [posterAttempt, setPosterAttempt] = useState(0);
-  const [failedPosterSrc, setFailedPosterSrc] = useState<string | null>(null);
-  const deliveryPoster = candidatePoster
-    ? privateMediaRetrySrc(candidatePoster, posterAttempt)
-    : undefined;
   const { objectUrl: fetchedPoster, failed: posterFetchFailed } =
-    usePrivateMediaObjectUrl(
-      deliveryPoster && deliveryPoster !== failedPosterSrc
-        ? deliveryPoster
-        : undefined,
-    );
+    usePrivateMediaObjectUrl(candidatePoster);
   const poster = posterFetchFailed ? undefined : (fetchedPoster ?? undefined);
-
-  const retryPoster = () => {
-    setFailedPosterSrc(null);
-    setPosterAttempt((current) => current + 1);
-  };
+  const [videoNearViewport, setVideoNearViewport] = useState(false);
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -87,7 +72,6 @@ export function VideoMomentMedia({
     }
   }, [moment.id, moment.video.poster]);
   useEffect(() => {
-    if (poster) return;
     const root = rootRef.current;
     if (!root || typeof IntersectionObserver === "undefined") return;
     let cancelled = false;
@@ -96,10 +80,13 @@ export function VideoMomentMedia({
         if (cancelled) return;
         if (!entries.some((entry) => entry.isIntersecting)) return;
         observer.disconnect();
-        void warmVideoPoster({
-          momentId: moment.id,
-          src: moment.video.src,
-        });
+        setVideoNearViewport(true);
+        if (!poster) {
+          void warmVideoPoster({
+            momentId: moment.id,
+            src: moment.video.src,
+          });
+        }
       },
       { rootMargin: "200px 0px", threshold: 0.01 },
     );
@@ -122,10 +109,10 @@ export function VideoMomentMedia({
       }`}
     >
       <VideoFrameSizer width={width} height={height} />
-      <FullscreenMediaViewer
-        kind="video"
+      <NativeVideoFullscreen
+        src={moment.video.src}
         label={label}
-        reactionTargetId={moment.id}
+        poster={poster}
         preview={
           poster ? (
             // Poster may be a private API URL or a local data URL; it must not
@@ -143,24 +130,7 @@ export function VideoMomentMedia({
                   rememberVideoFrame(moment.id, naturalWidth, naturalHeight);
                 }
               }}
-              onError={() => {
-                if (deliveryPoster) setFailedPosterSrc(deliveryPoster);
-              }}
             />
-          ) : posterFetchFailed ? (
-            <div className="private-video-unavailable" role="group">
-              <p>This video couldn’t be opened.</p>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  retryPoster();
-                }}
-              >
-                Try again
-              </button>
-            </div>
           ) : (
             <div
               className={`video-card-mat${
@@ -177,18 +147,10 @@ export function VideoMomentMedia({
             </div>
           )
         }
-        fullscreenMedia={
-          <PrivateVideoPlayer
-            src={moment.video.src}
-            label={label}
-            poster={poster}
-            preload="metadata"
-            autoPlay
-            width={width}
-            height={height}
-            onReadyFrame={(frame) => handleCapturedFrame(moment.id, frame)}
-          />
-        }
+        preload={videoNearViewport ? "metadata" : "none"}
+        width={width}
+        height={height}
+        onReadyFrame={(frame) => handleCapturedFrame(moment.id, frame)}
       />
     </div>
   );

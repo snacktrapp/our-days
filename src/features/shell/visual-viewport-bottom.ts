@@ -11,7 +11,7 @@ const chromeInsetFreezePullStates = new Set([
   "settling",
 ]);
 
-const overlayFreezeSelector = ".photo-lightbox, .fullscreen-media-dialog[open]";
+const overlayFreezeSelector = ".photo-lightbox";
 
 type VisualViewportView = Pick<Window, "innerHeight" | "visualViewport"> & {
   innerWidth?: number;

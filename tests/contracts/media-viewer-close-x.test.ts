@@ -23,15 +23,15 @@ function ruleBody(selector: string) {
   throw new Error(`unclosed rule ${selector}`);
 }
 
-describe("media viewer Close X CSS contract", () => {
-  it("overlays a translucent X that does not reserve a chrome band", () => {
+describe("media viewer controls CSS contract", () => {
+  it("keeps a translucent X for photos and no custom video dialog", () => {
     const close = ruleBody(".photo-lightbox-close.media-viewer-close");
     const light = ruleBody(
       ':root[data-theme="light"] .photo-lightbox-close.media-viewer-close',
     );
     const stage = ruleBody(".photo-lightbox-stage");
-    const dialog = ruleBody(".fullscreen-media-dialog[open]");
     const lightbox = ruleBody(".photo-lightbox");
+    const nativeVideoTrigger = ruleBody(".native-video-trigger");
 
     expect(close).toMatch(/position:\s*absolute;/);
     expect(close).toMatch(/min-height:\s*44px;/);
@@ -44,10 +44,10 @@ describe("media viewer Close X CSS contract", () => {
     expect(light).toMatch(/background:\s*rgba\(8,\s*10,\s*9,\s*0\.42\);/);
     expect(stage).toMatch(/env\(safe-area-inset-bottom, 0px\)/);
     expect(stage).not.toMatch(/max\(56px/);
-    expect(dialog).not.toMatch(/grid-template-rows/);
-    expect(css).toMatch(
-      /\.media-viewer-photo,\s*\.media-viewer-video \{[\s\S]*?env\(safe-area-inset-bottom, 0px\)/,
-    );
+    expect(nativeVideoTrigger).toMatch(/position:\s*absolute;/);
+    expect(nativeVideoTrigger).toMatch(/inset:\s*0;/);
+    expect(css).not.toMatch(/\.fullscreen-media-dialog/);
+    expect(css).not.toMatch(/\.video-media-viewer-close/);
     expect(css).not.toMatch(/grid-row:\s*2;/);
     expect(lightbox).toMatch(/height:\s*100dvh;/);
     expect(lightbox).not.toMatch(/100lvh/);

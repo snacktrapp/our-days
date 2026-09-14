@@ -49,9 +49,7 @@ describe("bottom-nav compact CSS contract", () => {
       /:root:has\(\.new-moment-composer-dialog\[open\]\) \.bottom-nav/,
     );
     expect(css).toMatch(/:root:has\(\.photo-lightbox\) \.bottom-nav/);
-    expect(css).toMatch(
-      /:root:has\(\.fullscreen-media-dialog\[open\]\) \.bottom-nav/,
-    );
+    expect(css).not.toMatch(/\.fullscreen-media-dialog/);
     expect(css).toMatch(/html\.overlay-open \.bottom-nav/);
   });
 
