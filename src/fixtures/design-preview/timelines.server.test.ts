@@ -4,6 +4,7 @@ import {
   getFamilyTimelineFixture,
   getPeopleFixture,
   getPersonalTimelineFixture,
+  getTimelineMediaDemoFixture,
 } from "./timelines.server";
 
 vi.mock("server-only", () => ({}));
@@ -163,5 +164,34 @@ describe("design preview timeline chronology", () => {
       entryType: "end-message",
       markerLabel: "The beginning",
     });
+  });
+
+  it("keeps the public media demo fixture-only", () => {
+    const demo = getTimelineMediaDemoFixture();
+    const moments = demo.entries.flatMap((entry) =>
+      entry.entryType === "moment" ? [entry.moment] : [],
+    );
+
+    expect(moments.map((moment) => moment.kind)).toEqual(["photo", "video"]);
+    expect(
+      moments.flatMap((moment) =>
+        moment.kind === "photo"
+          ? [
+              moment.image.src,
+              ...(moment.photos?.map((photo) => photo.src) ?? []),
+            ]
+          : moment.kind === "video"
+            ? [moment.video.src]
+            : [],
+      ),
+    ).toEqual([
+      "/sample-family.jpg",
+      "/sample-family.jpg",
+      "/sample-family.jpg",
+      "/sample-family.jpg",
+      "/synthetic-short.mp4",
+    ]);
+    expect(JSON.stringify(demo)).not.toContain("/api/media/");
+    expect(demo.switcher).toEqual([]);
   });
 });

@@ -19,6 +19,7 @@ const fixtureText = [
   "No entries for this date",
   "March 4",
   "/sample-family.jpg",
+  "/synthetic-short.mp4",
   detailCanary,
   "I can still hear everyone laughing by the water.",
   "I wrote this down because I knew I would miss the noise.",
@@ -47,6 +48,7 @@ const privateRoutes = [
   "/quality/memories-empty",
   "/quality/video-feasibility",
   "/quality/photo-status",
+  "/quality/timeline-media",
 ];
 
 function isRscNavigationRequest(url: string, headers: Record<string, string>) {

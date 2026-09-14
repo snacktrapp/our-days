@@ -48,8 +48,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   // Safari paints theme-color in the toolbar / home-indicator gap. Dark
-  // matches the journal canvas. Photo fullscreen and the Activity / New
-  // moment sheets set it to #000 via lockOverlayChrome.
+  // matches the journal canvas. Activity and New moment sheets set it to
+  // #000 via lockOverlayChrome.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f3eee4" },
     { media: "(prefers-color-scheme: dark)", color: "#0b1712" },

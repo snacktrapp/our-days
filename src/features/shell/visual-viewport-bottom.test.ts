@@ -281,7 +281,7 @@ describe("visual viewport bottom inset", () => {
     ).toBe(284);
   });
 
-  it("freezes chrome insets while a media lightbox is open", () => {
+  it("freezes chrome insets while an overlay is open", () => {
     document.documentElement.classList.add("overlay-open");
     expect(overlayFreezesChromeInset(document)).toBe(true);
     document.documentElement.style.setProperty(

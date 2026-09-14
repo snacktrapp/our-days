@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type MouseEvent,
   type PointerEvent,
   type ReactNode,
   type TransitionEvent,
@@ -27,7 +26,6 @@ import {
   type AlbumPair,
 } from "./photo-album-gesture";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
-import { PhotoLightboxTrigger } from "./photo-lightbox";
 
 export function PhotoCardPager({
   moment,
@@ -60,8 +58,6 @@ export function PhotoCardPager({
     dx: number;
     commit: boolean;
   } | null>(null);
-  const suppressClickRef = useRef(false);
-
   function writePair(next: AlbumPair | null) {
     if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
       const width = readSlideWidth();
@@ -77,18 +73,8 @@ export function PhotoCardPager({
     return slideWidthRef.current;
   }
 
-  const current = photos[index] ??
-    photos[0] ?? {
-      id: moment.id,
-      src: moment.image.src,
-      alt: moment.image.alt,
-      width: moment.image.width,
-      height: moment.image.height,
-    };
   const displayIndex =
     pair?.mode === "snap" || pair?.mode === "drag" ? pair.to : index;
-  const shown = photos[displayIndex] ?? current;
-
   function frameEl(photoIndex: number): HTMLElement | null {
     return (
       stageRef.current?.querySelector(`[data-photo-index="${photoIndex}"]`) ??
@@ -343,10 +329,7 @@ export function PhotoCardPager({
     const pending = pendingDragRef.current;
     const dx = currentPair?.dx ?? pending?.dx ?? rawDx;
     const commit = Math.abs(dx) >= swipeThreshold;
-    if (commit || Math.abs(dx) > axisLockPx) {
-      event.preventDefault();
-      suppressClickRef.current = true;
-    }
+    if (commit || Math.abs(dx) > axisLockPx) event.preventDefault();
     if (overlayMotionReduced()) {
       pendingDragRef.current = null;
       if (!commit) {
@@ -379,13 +362,6 @@ export function PhotoCardPager({
     pendingToRef.current = currentPair.from;
     pendingDragRef.current = null;
     startSettle({ ...currentPair, mode: "spring", dx: 0 });
-  }
-
-  function onClickCapture(event: MouseEvent<HTMLDivElement>) {
-    if (!suppressClickRef.current) return;
-    suppressClickRef.current = false;
-    event.preventDefault();
-    event.stopPropagation();
   }
 
   const reserved = new Set(pair ? [pair.from, pair.to] : [index]);
@@ -451,47 +427,37 @@ export function PhotoCardPager({
         if (!currentPair) pendingToRef.current = null;
         clearReadyWait();
       }}
-      onClickCapture={onClickCapture}
     >
-      <PhotoLightboxTrigger
-        src={shown.src}
-        alt={shown.alt}
-        width={shown.width}
-        height={shown.height}
-        photos={photos}
-        index={displayIndex}
-      >
-        {photos.length < 2 ? (
-          (images[0] ?? null)
-        ) : (
+      {photos.length < 2 ? (
+        (images[0] ?? null)
+      ) : (
+        <div
+          ref={stageRef}
+          className="photo-card-pager-stage"
+          style={stageStyle}
+        >
           <div
-            ref={stageRef}
-            className="photo-card-pager-stage"
-            style={stageStyle}
+            className={`photo-card-pager-track${pair ? " is-paired" : ""}${
+              pair?.mode === "drag" ? " is-dragging" : ""
+            }${pair?.mode === "snap" ? " is-sliding" : ""}${
+              pair?.mode === "spring" ? " is-springing" : ""
+            }${
+              pair?.mode === "snap" || pair?.mode === "spring"
+                ? " is-settling"
+                : ""
+            }`}
+            data-direction={
+              pair ? (pair.direction === 1 ? "next" : "prev") : undefined
+            }
+            data-phase={pair?.mode ?? "idle"}
+            data-dx={pair?.mode === "drag" ? String(pair.dx) : undefined}
+            style={trackStyle}
+            onTransitionEnd={onTrackTransitionEnd}
           >
-            <div
-              className={`photo-card-pager-track${pair ? " is-paired" : ""}${
-                pair?.mode === "drag" ? " is-dragging" : ""
-              }${pair?.mode === "snap" ? " is-sliding" : ""}${
-                pair?.mode === "spring" ? " is-springing" : ""
-              }${
-                pair?.mode === "snap" || pair?.mode === "spring"
-                  ? " is-settling"
-                  : ""
-              }`}
-              data-direction={
-                pair ? (pair.direction === 1 ? "next" : "prev") : undefined
-              }
-              data-phase={pair?.mode ?? "idle"}
-              data-dx={pair?.mode === "drag" ? String(pair.dx) : undefined}
-              style={trackStyle}
-              onTransitionEnd={onTrackTransitionEnd}
-            >
-              {trackFrames}
-            </div>
+            {trackFrames}
           </div>
-        )}
-      </PhotoLightboxTrigger>
+        </div>
+      )}
       {photos.length > 1 ? (
         <>
           <div className="photo-card-pager-dots" aria-hidden="true">

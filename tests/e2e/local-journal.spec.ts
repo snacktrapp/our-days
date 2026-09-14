@@ -123,35 +123,24 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   const videoCard = page.locator('[data-moment-kind="video"]').first();
   await expect(videoCard).toBeVisible();
   await expect(videoCard.getByText("Video", { exact: true })).toBeVisible();
-  await expect(videoCard.locator(".video-viewer-play")).toBeVisible();
   const timelineVideo = videoCard.locator("video");
   await expect(timelineVideo).toHaveCount(1);
-  await expect(timelineVideo).not.toHaveAttribute("controls");
+  await expect(timelineVideo).toHaveAttribute("controls");
+  await expect(timelineVideo).toHaveAttribute("playsinline");
   await expect(
-    videoCard.locator(".video-card-poster, .video-card-mat"),
-  ).toBeVisible();
-  const videoTrigger = videoCard.getByRole("button", {
-    name: /Open video full screen/u,
-  });
-  await videoTrigger.click();
-  await expect(
-    page.getByRole("dialog", { name: /Full-screen video/u }),
+    videoCard.getByRole("button", { name: /full screen/u }),
   ).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Close" })).toHaveCount(0);
+  await timelineVideo.evaluate((video) => (video as HTMLVideoElement).play());
   await expect
     .poll(
       async () =>
-        timelineVideo.evaluate((node) => document.fullscreenElement === node),
+        timelineVideo.evaluate((video) => !(video as HTMLVideoElement).paused),
       {
         timeout: 8_000,
       },
     )
     .toBe(true);
-  await page.evaluate(() => document.exitFullscreen());
-  await expect
-    .poll(() => page.evaluate(() => document.fullscreenElement === null))
-    .toBe(true);
-  await expect(videoTrigger).toBeFocused();
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
 
   await page.goto("/memories");
   await expect(page.getByText("On this day", { exact: true })).toBeVisible();

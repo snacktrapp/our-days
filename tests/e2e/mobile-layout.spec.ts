@@ -1052,46 +1052,17 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   await expect(photoChoice).toBeInViewport({ ratio: 1 });
 });
 
-test("a timeline photo expands over the floating header", async ({ page }) => {
+test("a timeline photo stays inline when tapped", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family");
-  await page.locator(".photo-viewer-trigger").first().click();
-  const dialog = page.locator(".photo-lightbox");
-  await expect(dialog).toBeVisible();
-  const geometry = await page.evaluate(() => {
-    const viewer = document.querySelector(".photo-lightbox");
-    if (!(viewer instanceof HTMLElement)) return null;
-    const rect = viewer.getBoundingClientRect();
-    const header = document.querySelector(".topbar");
-    const headerRect = header?.getBoundingClientRect();
-    const headerHit =
-      headerRect &&
-      document.elementFromPoint(headerRect.left + 12, headerRect.top + 12);
-    return {
-      top: Math.round(rect.top),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-      coversHeader: !headerHit?.closest(".topbar"),
-    };
-  });
-  expect(geometry?.top).toBe(0);
-  expect(geometry?.width).toBe(390);
-  expect(geometry?.height).toBe(844);
-  expect(geometry?.coversHeader).toBe(true);
-  await expect(page.locator("html")).toHaveClass(/overlay-open/u);
-  const paint = await page.evaluate(() => {
-    const viewer = document.querySelector(".photo-lightbox");
-    if (!(viewer instanceof HTMLElement)) return null;
-    return {
-      html: getComputedStyle(document.documentElement).backgroundColor,
-      body: getComputedStyle(document.body).backgroundColor,
-      lightbox: getComputedStyle(viewer).backgroundColor,
-    };
-  });
-  expect(paint?.html).toBe("rgb(0, 0, 0)");
-  expect(paint?.body).toBe("rgb(0, 0, 0)");
-  expect(paint?.lightbox).toBe("rgb(0, 0, 0)");
-  await expect(
-    page.locator('meta[name="theme-color"]').first(),
-  ).toHaveAttribute("content", "#000000");
+  const photo = page
+    .locator('[data-moment-kind="photo"] .photo-frame img')
+    .first();
+  await expect(photo).toBeVisible();
+  expect(await photo.evaluate((image) => image.closest("button"))).toBeNull();
+
+  await photo.click();
+
+  await expect(page.locator(".photo-lightbox")).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveClass(/overlay-open/u);
 });

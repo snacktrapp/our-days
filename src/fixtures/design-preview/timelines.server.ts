@@ -5,6 +5,7 @@ import type {
   MomentInteractionViewModel,
   TimelineEntryViewModel,
   TimelineViewModel,
+  VideoMomentViewModel,
 } from "@/features/timeline/timeline-view-model";
 import type {
   MemoriesViewModel,
@@ -529,6 +530,63 @@ export function getFamilyTimelineFixture(
     entries: extraSelected
       ? buildTimelineEntries([], designPreviewToday, false)
       : buildTimelineEntries(moments, designPreviewToday, false),
+  };
+}
+
+export function getTimelineMediaDemoFixture(): TimelineViewModel {
+  const family = getFamilyTimelineFixture();
+  const photo = family.entries.find(
+    (
+      entry,
+    ): entry is Extract<TimelineEntryViewModel, { entryType: "moment" }> =>
+      entry.entryType === "moment" && entry.moment.kind === "photo",
+  );
+  if (!photo) {
+    throw new Error("The timeline media demo requires a photo fixture.");
+  }
+
+  const video = {
+    id: "inline-video-demo",
+    journalPersonId: "brian",
+    kind: "video",
+    personName: "Brian",
+    personInitial: "B",
+    personAccent: "teal",
+    displayTime: "8:16 pm",
+    displayDate: "Aug 28, 2026",
+    occurredOn: "2026-08-28",
+    kicker: "A short video",
+    text: "Playback stays here in the timeline.",
+    conversation: momentDetail({ notes: [], reactions: [] }),
+    video: {
+      src: "/synthetic-short.mp4",
+      mimeType: "video/mp4",
+      durationMs: 1_000,
+      width: 320,
+      height: 180,
+    },
+  } satisfies VideoMomentViewModel;
+
+  return {
+    chrome: {
+      ...family.chrome,
+      eyebrow: "Quality-only preview",
+      title: "Inline timeline media",
+      notifications: [],
+    },
+    switcher: [],
+    timelineLabel: "Inline photo and video demonstration",
+    entries: [
+      { id: "media-demo-date", entryType: "date-marker", label: "Preview" },
+      photo,
+      { id: video.id, entryType: "moment", moment: video },
+      {
+        id: "media-demo-end",
+        entryType: "end-message",
+        markerLabel: "The beginning",
+        message: "This fixture contains no private family data.",
+      },
+    ],
   };
 }
 
