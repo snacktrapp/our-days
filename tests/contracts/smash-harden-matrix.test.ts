@@ -122,10 +122,6 @@ const momentComposer = read("src/features/composer/moment-composer.tsx");
 const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
 );
-const photoStatusShelf = read("src/features/composer/photo-status-shelf.tsx");
-const photoStatusShelfTest = read(
-  "src/features/composer/photo-status-shelf.test.tsx",
-);
 
 describe("smash harden matrix", () => {
   describe("R-Account Account→Journal remount", () => {
