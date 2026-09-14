@@ -1449,7 +1449,7 @@ describe("MomentComposer", () => {
   });
 
   it("opens the type picker as a modal sheet, locks body scroll, and restores focus", async () => {
-    const user = await openComposer();
+    await openComposer();
     const dialog = screen.getByRole("dialog", { name: "New moment" });
     expect(dialog).toBeVisible();
     expect(dialog).toHaveClass("composer-dialog");

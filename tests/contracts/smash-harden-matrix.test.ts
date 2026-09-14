@@ -196,9 +196,13 @@ describe("smash harden matrix", () => {
   describe("lightbox dismiss and note save parity", () => {
     it("keeps Close available when a private photo fetch fails", () => {
       expect(photoLightbox).toContain("This photo could not be opened.");
+      expect(photoLightbox).toContain("Try again");
       expect(photoLightbox).toContain("photo-lightbox-close");
       expect(photoLightboxTest).toContain(
         "keeps Close available when the private photo fetch fails",
+      );
+      expect(photoLightboxTest).toContain(
+        "retries a failed private photo fetch without leaving the lightbox",
       );
     });
 

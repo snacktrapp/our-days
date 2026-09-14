@@ -233,8 +233,10 @@ function PhotoLightboxLayer({
   });
   const current = album[index] ?? album[0]!;
   const [, setObjectUrlVersion] = useState(0);
-  const [fetchFailed, setFetchFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const objectUrl = peekIndependentOverlayObjectUrl(current.src);
+  const fetchFailed = failedSrc === current.src;
   const [zoomed, setZoomed] = useState(false);
   const [motion, setMotion] = useState<PhotoMotion>("opening");
   const [pair, setPair] = useState<AlbumPair | null>(null);
@@ -448,21 +450,29 @@ function PhotoLightboxLayer({
 
   useEffect(() => {
     let cancelled = false;
+    void prefetchIndependentOverlayObjectUrl(current.src).then((next) => {
+      if (cancelled) return;
+      if (next) {
+        setFailedSrc((previous) =>
+          previous === current.src ? null : previous,
+        );
+        setObjectUrlVersion((version) => version + 1);
+      } else {
+        setFailedSrc(current.src);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [current.src, retryKey]);
+
+  useEffect(() => {
+    let cancelled = false;
     const photos = request.photos?.length
       ? request.photos
       : [{ src: request.src }];
-    const primary = request.src;
-    void prefetchIndependentOverlayObjectUrl(primary).then((next) => {
-      if (cancelled) return;
-      if (next) {
-        setFetchFailed(false);
-        setObjectUrlVersion((version) => version + 1);
-        return;
-      }
-      setFetchFailed(true);
-    });
     for (const photo of photos) {
-      if (photo.src === primary) continue;
+      if (photo.src === current.src) continue;
       void prefetchIndependentOverlayObjectUrl(photo.src).then((next) => {
         if (!cancelled && next) setObjectUrlVersion((version) => version + 1);
       });
@@ -470,7 +480,7 @@ function PhotoLightboxLayer({
     return () => {
       cancelled = true;
     };
-  }, [request]);
+  }, [current.src, request]);
 
   useLayoutEffect(() => {
     if (album.length < 2) return;
@@ -759,12 +769,25 @@ function PhotoLightboxLayer({
         <span aria-hidden="true">×</span>
       </button>
       {!objectUrl ? (
-        <p
+        <div
           className="photo-lightbox-unavailable"
           role={fetchFailed ? "alert" : undefined}
         >
-          {fetchFailed ? "This photo could not be opened." : "Opening photo…"}
-        </p>
+          <p>
+            {fetchFailed ? "This photo could not be opened." : "Opening photo…"}
+          </p>
+          {fetchFailed ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFailedSrc(null);
+                setRetryKey((value) => value + 1);
+              }}
+            >
+              Try again
+            </button>
+          ) : null}
+        </div>
       ) : (
         <div
           ref={stageRef}

@@ -706,11 +706,49 @@ describe("photo lightbox", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "This photo could not be opened.",
     );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
     fireEvent.click(close);
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(document.documentElement).not.toHaveClass("overlay-open");
       expect(document.body).not.toHaveClass("overlay-open");
     });
+  });
+
+  it("retries a failed private photo fetch without leaving the lightbox", async () => {
+    resetIndependentOverlayObjectUrlCache();
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:overlay-retry");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({
+      ok: true,
+      blob: async () => new Blob(["retry-bytes"], { type: "image/gif" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <PhotoLightboxRoot>
+        <PhotoLightboxTrigger
+          src="/api/media/moments/10000000-0000-4000-8000-000000000009"
+          alt="Retry light"
+          width={80}
+          height={50}
+        >
+          {cardPhoto(cardPixelA, "Retry card")}
+        </PhotoLightboxTrigger>
+      </PhotoLightboxRoot>,
+    );
+    const trigger = screen.getByRole("button", {
+      name: "Open photo full screen: Retry light",
+    });
+    mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
+    fireEvent.click(trigger);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This photo could not be opened.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    const recovered = await screen.findByRole("img", { name: "Retry light" });
+    expect(recovered).toHaveAttribute("src", "blob:overlay-retry");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
