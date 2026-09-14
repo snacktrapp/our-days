@@ -12,7 +12,6 @@ import type {
   MomentConversationActions,
 } from "@/features/moments/moment-action-types";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
-import { TimelineRefreshMemory } from "./timeline-refresh-memory";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
@@ -221,56 +220,47 @@ export function TimelineFeed({
   pendingEntries?: ReactNode;
   trailing?: ReactNode;
 }) {
+  const firstMomentId = model.entries.find(
+    (entry) => entry.entryType === "moment",
+  )?.moment.id;
+
   return (
-    <TimelineRefreshMemory model={model}>
-      {(resolved) => {
-        const firstMomentId = resolved.entries.find(
-          (entry) => entry.entryType === "moment",
-        )?.moment.id;
-        const streamRemainder = Boolean(trailing) && resolved === model;
+    <>
+      {connectedActions ? (
+        <TimelineScrollMemory
+          key={
+            model.pagination?.nextHref ??
+            model.paginationError?.retryHref ??
+            `complete-${model.entries.length}`
+          }
+        />
+      ) : null}
+      <TimelineRefreshControl>
+        {pendingEntries}
 
-        return (
-          <>
-            {connectedActions ? (
-              <TimelineScrollMemory
-                key={
-                  resolved.pagination?.nextHref ??
-                  resolved.paginationError?.retryHref ??
-                  `complete-${resolved.entries.length}`
-                }
-              />
-            ) : null}
-            <TimelineRefreshControl>
-              {pendingEntries}
-
-              <section
-                className="timeline"
-                aria-label={
-                  resolved.timelineLabel ?? "Chronological family moments"
-                }
-                tabIndex={-1}
-              >
-                <div className="time-rail" aria-hidden="true" />
-                <TimelineFeedEntries
-                  model={
-                    streamRemainder
-                      ? {
-                          ...resolved,
-                          pagination: undefined,
-                          paginationError: undefined,
-                        }
-                      : resolved
+        <section
+          className="timeline"
+          aria-label={model.timelineLabel ?? "Chronological family moments"}
+          tabIndex={-1}
+        >
+          <div className="time-rail" aria-hidden="true" />
+          <TimelineFeedEntries
+            model={
+              trailing
+                ? {
+                    ...model,
+                    pagination: undefined,
+                    paginationError: undefined,
                   }
-                  firstMomentId={firstMomentId}
-                  connectedActions={connectedActions}
-                  conversationActions={conversationActions}
-                />
-                {streamRemainder ? trailing : null}
-              </section>
-            </TimelineRefreshControl>
-          </>
-        );
-      }}
-    </TimelineRefreshMemory>
+                : model
+            }
+            firstMomentId={firstMomentId}
+            connectedActions={connectedActions}
+            conversationActions={conversationActions}
+          />
+          {trailing}
+        </section>
+      </TimelineRefreshControl>
+    </>
   );
 }

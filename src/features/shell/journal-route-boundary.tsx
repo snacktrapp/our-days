@@ -7,8 +7,10 @@ import {
   isNextControlFlowError,
   isTransientFamilySessionError,
 } from "@/lib/auth/family-session-error";
-import { OpeningJournalShell } from "./opening-journal-shell";
-import { JournalInterrupted } from "./journal-interrupted";
+import {
+  JournalInterrupted,
+  JournalOpenUnavailable,
+} from "./journal-interrupted";
 import { RoutePendingSkeleton } from "./journal-pending-route";
 
 const autoRetryWindowMs = 4000;
@@ -67,7 +69,7 @@ export function JournalSegmentError({
     return <JournalRouteAutoRetry retry={recover} />;
   }
   if (!error || !isFatalJournalHomeError(error)) {
-    return <OpeningJournalShell />;
+    return <JournalOpenUnavailable retry={retry} reset={reset} />;
   }
   return <JournalInterrupted retry={retry} reset={reset} />;
 }

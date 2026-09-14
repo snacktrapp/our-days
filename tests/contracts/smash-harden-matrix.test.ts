@@ -18,9 +18,6 @@ const journalLayout = read("src/app/(journal)/layout.tsx");
 const familyHome = read("src/data/family-home.server.ts");
 const timelineViewModel = read("src/features/timeline/timeline-view-model.ts");
 const timelineFeed = read("src/features/timeline/timeline-feed.tsx");
-const timelineRefreshMemory = readIfPresent(
-  "src/features/timeline/timeline-refresh-memory.tsx",
-);
 const timelineFeedTest = read("src/features/timeline/timeline-feed.test.tsx");
 const familyHomeTest = read("src/data/family-home.server.test.ts");
 const rootError = read("src/app/error.tsx");
@@ -344,10 +341,9 @@ describe("smash harden matrix", () => {
     it("keeps root and route boundaries off the interrupt card for non-fatal refresh misses", () => {
       expect(routeBoundary).toContain("isTransientFamilySessionError(error)");
       expect(routeBoundary).toContain("isNextControlFlowError(error)");
-      expect(routeBoundary).toContain("OpeningJournalShell");
-      expect(rootError).toContain("isNextControlFlowError(error)");
-      expect(rootError).toContain("OpeningJournalShell");
-      expect(rootError).not.toContain("JournalSegmentError");
+      expect(routeBoundary).toContain("JournalOpenUnavailable");
+      expect(rootError).toContain("JournalSegmentError");
+      expect(rootError).not.toContain("OpeningJournalShell");
     });
   });
 
@@ -470,12 +466,12 @@ describe("smash harden matrix", () => {
     });
   });
 
-  describe("R-All-circles refresh memory + first-card recover", () => {
-    it("keeps a loaded timeline when a later refresh soft-fails", () => {
-      expect(timelineFeed).toContain("TimelineRefreshMemory");
-      expect(timelineRefreshMemory).toContain("preferPriorTimelineOnRefresh");
+  describe("R-All-circles first-card recover", () => {
+    it("keeps timeline rendering server-owned and recovers the first card", () => {
+      expect(timelineFeed).not.toContain("TimelineRefreshMemory");
+      expect(timelineFeed).not.toMatch(/\{\(resolved\)\s*=>/u);
       expect(timelineFeedTest).toContain(
-        "keeps the prior timeline when a later refresh soft-fails",
+        "does not show JournalInterrupted when an All-circles refresh soft-fails",
       );
       expect(familyHome).toContain("loadFamilyHomeOpeningTimeline");
     });

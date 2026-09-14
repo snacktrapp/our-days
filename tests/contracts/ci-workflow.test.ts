@@ -59,6 +59,10 @@ describe("CI workflow privacy and supply-chain contract", () => {
       "playwright install --with-deps chromium firefox webkit",
     );
     expect(workflow).toContain("playwright test --grep-invert @visual");
+    expect(workflow).toContain(
+      '--grep "cold open paints usable Family content after sign-in"',
+    );
+    expect(workflow).toContain("name: Prove Family paints after sign-in");
     expect(workflow).toContain("runs-on: macos-15-intel");
     expect(workflow).toContain("--project=chromium-wide-visual");
     expect(workflow).not.toContain("upload-artifact");

@@ -1,11 +1,6 @@
 "use client";
 
-import { OpeningJournalShell } from "@/features/shell/opening-journal-shell";
-import { JournalInterrupted } from "@/features/shell/journal-interrupted";
-import {
-  isFatalJournalHomeError,
-  isNextControlFlowError,
-} from "@/lib/auth/family-session-error";
+import { JournalSegmentError } from "@/features/shell/journal-route-boundary";
 
 export default function RootError({
   error,
@@ -16,7 +11,5 @@ export default function RootError({
   retry?: () => void;
   reset?: () => void;
 }>) {
-  if (isNextControlFlowError(error)) throw error;
-  if (!isFatalJournalHomeError(error)) return <OpeningJournalShell />;
-  return <JournalInterrupted retry={retry} reset={reset} />;
+  return <JournalSegmentError error={error} retry={retry} reset={reset} />;
 }
