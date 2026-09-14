@@ -11,6 +11,11 @@ import {
   usePairedTap,
 } from "@/features/timeline/double-tap-heart";
 
+type WebkitFullscreenVideo = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+  webkitSupportsFullscreen?: boolean;
+};
+
 type FullscreenMediaViewerProps = Readonly<{
   kind: "video";
   label: string;
@@ -34,30 +39,66 @@ export function FullscreenMediaViewer({
   reactionTargetId,
 }: FullscreenMediaViewerProps) {
   const [open, setOpen] = useState(false);
+  const [nativeFullscreen, setNativeFullscreen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const nativeCleanupRef = useRef<() => void>(() => undefined);
   const titleId = useId();
   useVisualViewportFill(dialogRef, open);
   useOverlayOpenChrome(open);
+
+  function openVideo() {
+    nativeCleanupRef.current();
+    nativeCleanupRef.current = () => undefined;
+    flushSync(() => setOpen(true));
+    const dialog = dialogRef.current;
+    try {
+      if (dialog && !dialog.open) dialog.showModal();
+    } catch {
+      // Some test environments expose dialog without modal helpers.
+    }
+    playDialogVideo(dialog);
+    const video = dialog?.querySelector(
+      "video",
+    ) as WebkitFullscreenVideo | null;
+    if (
+      typeof video?.webkitEnterFullscreen === "function" &&
+      video.webkitSupportsFullscreen !== false
+    ) {
+      const onNativeBegin = () => {
+        setNativeFullscreen(true);
+      };
+      const onNativeEnd = () => close();
+      video.addEventListener("webkitbeginfullscreen", onNativeBegin);
+      video.addEventListener("webkitendfullscreen", onNativeEnd);
+      nativeCleanupRef.current = () => {
+        video.removeEventListener("webkitbeginfullscreen", onNativeBegin);
+        video.removeEventListener("webkitendfullscreen", onNativeEnd);
+      };
+      try {
+        video.webkitEnterFullscreen();
+        return;
+      } catch {
+        nativeCleanupRef.current();
+        nativeCleanupRef.current = () => undefined;
+        setNativeFullscreen(false);
+      }
+    }
+  }
+
   const handlePreviewTap = usePairedTap({
     enabled: Boolean(reactionTargetId),
     onDoubleTap: () => {
       if (reactionTargetId) dispatchMomentHeart(reactionTargetId);
     },
-    onSingleTap: () => {
-      flushSync(() => setOpen(true));
-      const dialog = dialogRef.current;
-      try {
-        if (dialog && !dialog.open) dialog.showModal();
-      } catch {
-        // Some test environments expose dialog without modal helpers.
-      }
-      playDialogVideo(dialog);
-    },
+    onSingleTap: openVideo,
   });
 
   function close() {
+    nativeCleanupRef.current();
+    nativeCleanupRef.current = () => undefined;
     dialogRef.current?.querySelector("video")?.pause();
+    setNativeFullscreen(false);
     setOpen(false);
     document.getElementById("journal-focus-target")?.blur();
     window.requestAnimationFrame(() =>
@@ -75,6 +116,8 @@ export function FullscreenMediaViewer({
     }
     playDialogVideo(dialog);
     return () => {
+      nativeCleanupRef.current();
+      nativeCleanupRef.current = () => undefined;
       dialog.querySelector("video")?.pause();
       if (dialog.open) dialog.close();
     };
@@ -87,7 +130,17 @@ export function FullscreenMediaViewer({
         type="button"
         className="media-viewer-trigger video-viewer-trigger"
         aria-label={`Open ${kind} full screen: ${label}`}
-        onClick={(event) => handlePreviewTap(event.detail)}
+        onClick={(event) => {
+          if (
+            typeof HTMLVideoElement !== "undefined" &&
+            typeof (HTMLVideoElement.prototype as WebkitFullscreenVideo)
+              .webkitEnterFullscreen === "function"
+          ) {
+            openVideo();
+            return;
+          }
+          handlePreviewTap(event.detail);
+        }}
       >
         {preview}
         <span className="video-viewer-play" aria-hidden="true">
@@ -113,14 +166,16 @@ export function FullscreenMediaViewer({
           <h2 id={titleId} className="sr-only">
             Full-screen video: {label}
           </h2>
-          <button
-            type="button"
-            className="photo-lightbox-close media-viewer-close"
-            aria-label="Close"
-            onClick={close}
-          >
-            <span aria-hidden="true">×</span>
-          </button>
+          {nativeFullscreen ? null : (
+            <button
+              type="button"
+              className="photo-lightbox-close media-viewer-close video-media-viewer-close"
+              aria-label="Close"
+              onClick={close}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
           <div className="media-viewer-video">{fullscreenMedia}</div>
         </dialog>
       ) : null}

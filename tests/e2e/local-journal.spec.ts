@@ -175,7 +175,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   });
 });
 
-test("Just Me stays on the author's journal and off Family", async ({
+test("Just Me stays owner-only across All Circles and personal journals", async ({
   page,
 }) => {
   await page.goto("/sign-in");
@@ -191,9 +191,9 @@ test("Just Me stays on the author's journal and off Family", async ({
     .getByRole("textbox", { name: "Entry" })
     .fill("A porch thought just for me.");
   await page.getByRole("checkbox", { name: "Just me" }).click();
-  await expect(
-    page.getByRole("button", { name: /Alex · You/u }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Alex · You/u })).toHaveCount(
+    0,
+  );
   await expect(page.getByText("Who else was part of this?")).toBeVisible();
   await page.getByRole("button", { name: "Post", exact: true }).click();
 
@@ -213,7 +213,7 @@ test("Just Me stays on the author's journal and off Family", async ({
     page
       .getByLabel("Chronological family moments")
       .getByText("A porch thought just for me."),
-  ).toHaveCount(0);
+  ).toBeVisible();
 
   await page.goto(`/people/${localJordanPersonId}`);
   await expect(page.getByLabel("Chronological moments for Jordan")).toBeVisible(

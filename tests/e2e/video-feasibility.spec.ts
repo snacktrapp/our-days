@@ -21,7 +21,7 @@ async function expectFocusToStayInDialog(
   }
 }
 
-test("video remains an isolated, honest, accessible feasibility preview", async ({
+test("video remains an isolated, honest, accessible feasibility preview @critical", async ({
   page,
 }) => {
   const response = await page.goto("/quality/video-feasibility");

@@ -311,7 +311,7 @@ test("date, time, and Post to stay separated inside every phone-width drawer", a
   }
 });
 
-test("composer is modal, contains focus, protects every draft, and restores focus", async ({
+test("composer is modal, contains focus, protects every draft, and restores focus @critical", async ({
   page,
 }) => {
   await page.goto("/family");
