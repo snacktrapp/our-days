@@ -132,9 +132,13 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toHaveCount(0);
   await timelineVideo.evaluate((video) => (video as HTMLVideoElement).play());
   await expect
-    .poll(async () => timelineVideo.evaluate((video) => !video.paused), {
-      timeout: 8_000,
-    })
+    .poll(
+      async () =>
+        timelineVideo.evaluate((video) => !(video as HTMLVideoElement).paused),
+      {
+        timeout: 8_000,
+      },
+    )
     .toBe(true);
   expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
 
