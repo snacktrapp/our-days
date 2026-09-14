@@ -1,9 +1,14 @@
 import "server-only";
 
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
 import { localJournalIsEnabled } from "../../config/our-days-environment";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
-import { mapDatabaseAccent } from "./journal-context.server";
+import {
+  loadConnectedJournalContext,
+  mapDatabaseAccent,
+  type ConnectedJournalContext,
+} from "./journal-context.server";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 
@@ -53,4 +58,28 @@ export async function loadManageableTrash(
     occurredOn: moment.occurred_on,
     revision: moment.revision,
   }));
+}
+
+export function shouldTrapTrashInInterrupt(error: unknown) {
+  return isFatalJournalHomeError(error);
+}
+
+export async function loadTrashJournal(access: AuthenticatedAccess): Promise<
+  | Readonly<{
+      ok: true;
+      context: ConnectedJournalContext;
+      moments: readonly TrashedMomentViewModel[];
+    }>
+  | Readonly<{ ok: false }>
+> {
+  try {
+    const [context, moments] = await Promise.all([
+      loadConnectedJournalContext(access),
+      loadManageableTrash(access),
+    ]);
+    return { ok: true, context, moments };
+  } catch (error) {
+    if (shouldTrapTrashInInterrupt(error)) throw error;
+    return { ok: false };
+  }
 }

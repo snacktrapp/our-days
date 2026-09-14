@@ -4,8 +4,11 @@ import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getPersonalTimelineFixture } from "@/fixtures/design-preview/timelines.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadPersonJournal } from "@/data/person-journal.server";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
+import {
+  loadPersonJournal,
+  personJournalRefreshSoftFail,
+} from "@/data/person-journal.server";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -28,7 +31,21 @@ export default async function PersonJournalPage({
   searchParams: Promise<{ pages?: string; snapshot?: string }>;
 }>) {
   const { personId } = await params;
-  const access = await requireJournalAccess({ personId });
+  const access = await requireJournalAccessUnlessRecoverable({ personId });
+  if (!access) {
+    const model = personJournalRefreshSoftFail(personId);
+    return (
+      <JournalChrome
+        model={model.chrome}
+        section="timeline"
+        switcher={model.switcher}
+        onSelectGroup={selectActiveGroupAction}
+        preserveChrome
+      >
+        <TimelineFeed model={model} />
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     const model = getPersonalTimelineFixture(
       personId,

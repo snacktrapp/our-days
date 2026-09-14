@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { loadConnectedMemoryJourney } from "@/data/memories.server";
+import {
+  loadMemoryJourneyJournal,
+  memoryJourneyRefreshSoftFail,
+} from "@/data/memories-home.server";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import {
   createFamilyMomentAction,
@@ -16,10 +18,25 @@ import {
 } from "@/features/moments/moment-actions";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { getMilestoneMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 
 export const metadata: Metadata = {
   title: "Milestones — Our Days",
+};
+
+const connectedActions = {
+  update: updateFamilyMomentAction,
+  trash: trashWrittenMomentAction,
+  removePhoto: removeMomentPhotoAction,
+  reorderPhotos: reorderMomentPhotosAction,
+};
+
+const conversationActions = {
+  load: loadMomentConversationAction,
+  createNote: createMomentNoteAction,
+  updateNote: updateMomentNoteAction,
+  trashNote: trashMomentNoteAction,
+  setReaction: setMomentReactionAction,
 };
 
 export default async function MilestonesPage({
@@ -27,7 +44,15 @@ export default async function MilestonesPage({
 }: Readonly<{
   searchParams: Promise<{ pages?: string; snapshot?: string }>;
 }>) {
-  const access = await requireJournalAccess();
+  const access = await requireJournalAccessUnlessRecoverable();
+  if (!access) {
+    const model = memoryJourneyRefreshSoftFail({ mode: "milestones" });
+    return (
+      <JournalChrome model={model.chrome} section="memories" preserveChrome>
+        <MemoryJourneyPanel model={model} />
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     const model = getMilestoneMemoriesFixture();
     return (
@@ -37,13 +62,10 @@ export default async function MilestonesPage({
     );
   }
 
-  const [{ pages, snapshot }, context] = await Promise.all([
-    searchParams,
-    loadConnectedJournalContext(access),
-  ]);
-  const model = await loadConnectedMemoryJourney(access, context, {
+  const { pages, snapshot } = await searchParams;
+  const model = await loadMemoryJourneyJournal(access, {
     mode: "milestones",
-    pages: Number(pages ?? "1"),
+    pages,
     snapshotAt: snapshot,
   });
 
@@ -55,19 +77,8 @@ export default async function MilestonesPage({
     >
       <MemoryJourneyPanel
         model={model}
-        connectedActions={{
-          update: updateFamilyMomentAction,
-          trash: trashWrittenMomentAction,
-          removePhoto: removeMomentPhotoAction,
-          reorderPhotos: reorderMomentPhotosAction,
-        }}
-        conversationActions={{
-          load: loadMomentConversationAction,
-          createNote: createMomentNoteAction,
-          updateNote: updateMomentNoteAction,
-          trashNote: trashMomentNoteAction,
-          setReaction: setMomentReactionAction,
-        }}
+        connectedActions={connectedActions}
+        conversationActions={conversationActions}
       />
     </JournalChrome>
   );

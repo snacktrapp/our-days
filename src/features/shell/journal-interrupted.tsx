@@ -56,16 +56,17 @@ export function JournalRefreshInterrupted() {
   return <JournalInterrupted retry={() => router.refresh()} />;
 }
 
-export function AccountPanelInterrupted({
+export function JournalPanelInterrupted({
   children,
-}: Readonly<{ children?: ReactNode }>) {
+  message,
+}: Readonly<{ children?: ReactNode; message: string }>) {
   const router = useRouter();
 
   return (
     <section className="family-settings-panel">
       <div className="timeline-empty-state" role="alert">
-        <strong>Something interrupted the story</strong>
-        <span>We couldn’t open Account just now.</span>
+        <strong>These days couldn’t open</strong>
+        <span>{message}</span>
         <button
           className="retry-button"
           type="button"
@@ -79,5 +80,15 @@ export function AccountPanelInterrupted({
       </div>
       {children}
     </section>
+  );
+}
+
+export function AccountPanelInterrupted({
+  children,
+}: Readonly<{ children?: ReactNode }>) {
+  return (
+    <JournalPanelInterrupted message="We couldn’t open Account just now.">
+      {children}
+    </JournalPanelInterrupted>
   );
 }

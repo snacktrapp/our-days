@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import { getDesignPreviewOnThisDayFixture } from "@/fixtures/design-preview/timelines.server";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { loadConnectedMemoryJourney } from "@/data/memories.server";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
+import {
+  loadMemoryJourneyJournal,
+  memoryJourneyRefreshSoftFail,
+} from "@/data/memories-home.server";
 import {
   createFamilyMomentAction,
   createMomentNoteAction,
@@ -22,6 +24,21 @@ export const metadata: Metadata = {
   title: "On this day — Our Days",
 };
 
+const connectedActions = {
+  update: updateFamilyMomentAction,
+  trash: trashWrittenMomentAction,
+  removePhoto: removeMomentPhotoAction,
+  reorderPhotos: reorderMomentPhotosAction,
+};
+
+const conversationActions = {
+  load: loadMomentConversationAction,
+  createNote: createMomentNoteAction,
+  updateNote: updateMomentNoteAction,
+  trashNote: trashMomentNoteAction,
+  setReaction: setMomentReactionAction,
+};
+
 export default async function OnThisDayPage({
   searchParams,
 }: Readonly<{
@@ -31,7 +48,15 @@ export default async function OnThisDayPage({
     anniversary?: string;
   }>;
 }>) {
-  const access = await requireJournalAccess();
+  const access = await requireJournalAccessUnlessRecoverable();
+  if (!access) {
+    const model = memoryJourneyRefreshSoftFail({ mode: "anniversary" });
+    return (
+      <JournalChrome model={model.chrome} section="memories" preserveChrome>
+        <MemoryJourneyPanel model={model} />
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     const model = getDesignPreviewOnThisDayFixture();
     return (
@@ -40,13 +65,10 @@ export default async function OnThisDayPage({
       </JournalChrome>
     );
   }
-  const [{ pages, snapshot, anniversary }, context] = await Promise.all([
-    searchParams,
-    loadConnectedJournalContext(access),
-  ]);
-  const model = await loadConnectedMemoryJourney(access, context, {
+  const { pages, snapshot, anniversary } = await searchParams;
+  const model = await loadMemoryJourneyJournal(access, {
     mode: "anniversary",
-    pages: Number(pages ?? "1"),
+    pages,
     snapshotAt: snapshot,
     anniversaryKey: anniversary,
   });
@@ -58,19 +80,8 @@ export default async function OnThisDayPage({
     >
       <MemoryJourneyPanel
         model={model}
-        connectedActions={{
-          update: updateFamilyMomentAction,
-          trash: trashWrittenMomentAction,
-          removePhoto: removeMomentPhotoAction,
-          reorderPhotos: reorderMomentPhotosAction,
-        }}
-        conversationActions={{
-          load: loadMomentConversationAction,
-          createNote: createMomentNoteAction,
-          updateNote: updateMomentNoteAction,
-          trashNote: trashMomentNoteAction,
-          setReaction: setMomentReactionAction,
-        }}
+        connectedActions={connectedActions}
+        conversationActions={conversationActions}
       />
     </JournalChrome>
   );
