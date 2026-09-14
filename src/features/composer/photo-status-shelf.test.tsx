@@ -247,8 +247,35 @@ describe("PhotoStatusShelf", () => {
 
     expect(screen.getByText("Upload failed")).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.queryByText("Should not become a feed card.")).toBeNull();
+  });
+
+  it("dismisses a retryable failed upload without retrying", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    addOptimisticMediaUpload({
+      id: "failed-retryable-dismiss",
+      circleId,
+      kind: "photo",
+      body: "Should not stay as a chip.",
+      occurredOn: "2026-09-01",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal",
+      previewUrl: "blob:failed-retryable",
+      retryable: true,
+      stage: { state: "failed", message: "That photo could not be uploaded." },
+    });
+
+    const user = userEvent.setup();
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByText("Upload failed")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
   it("shows one chip when two uploads are in flight", async () => {
