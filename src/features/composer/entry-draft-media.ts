@@ -185,6 +185,26 @@ export async function removeEntryDraftMedia(draftId: string) {
   }
 }
 
+export async function removeStaleEntryDraftMedia(
+  draftId: string,
+  keepKeys: readonly string[],
+) {
+  if (typeof window === "undefined" || !window.indexedDB) return;
+  const keep = new Set(keepKeys);
+  try {
+    await withStore("readwrite", async (store) => {
+      const rows = (await requestResult(store.getAll())) as StoredDraftMedia[];
+      await Promise.all(
+        rows
+          .filter((row) => row.draftId === draftId && !keep.has(row.key))
+          .map((row) => requestResult(store.delete(row.key))),
+      );
+    });
+  } catch {
+    return;
+  }
+}
+
 export function entryDraftMediaKey(draftId: string, index: number) {
   return `${draftId}:${index}`;
 }

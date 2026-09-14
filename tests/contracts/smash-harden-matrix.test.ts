@@ -101,17 +101,26 @@ const optimisticUpload = read(
 const optimisticUploadTest = read(
   "src/features/composer/optimistic-media-upload.test.ts",
 );
+const photoStatusShelf = read("src/features/composer/photo-status-shelf.tsx");
+const photoStatusShelfTest = read(
+  "src/features/composer/photo-status-shelf.test.tsx",
+);
 const activityNotifications = read("src/lib/activity-notifications.ts");
 const activityNotificationsTest = read(
   "src/lib/activity-notifications.test.ts",
 );
 const momentActionsTest = read("src/features/moments/moment-actions.test.ts");
+const buildEditDraft = read("src/features/composer/build-edit-draft.ts");
+const buildEditDraftTest = read(
+  "src/features/composer/build-edit-draft.test.ts",
+);
+const entryDraftMedia = read("src/features/composer/entry-draft-media.ts");
+const entryDraftMediaTest = read(
+  "src/features/composer/entry-draft-media.test.ts",
+);
+const momentComposer = read("src/features/composer/moment-composer.tsx");
 const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
-);
-const photoStatusShelf = read("src/features/composer/photo-status-shelf.tsx");
-const photoStatusShelfTest = read(
-  "src/features/composer/photo-status-shelf.test.tsx",
 );
 
 describe("smash harden matrix", () => {
@@ -416,6 +425,42 @@ describe("smash harden matrix", () => {
       expect(momentActionsTest).toContain(
         "delivers a reaction push without treating it as a moment post",
       );
+    });
+  });
+
+  describe("composer queue + draft integrity", () => {
+    it("surfaces queued uploads so a second post is not silently hidden", () => {
+      expect(optimisticUpload).toContain(
+        "export function queuedOptimisticMediaUploadCount(circleId?: string)",
+      );
+      expect(optimisticUpload).toContain("queuedUploads.push");
+      expect(photoStatusShelf).toContain(
+        "() => queuedOptimisticMediaUploadCount(circleId)",
+      );
+      expect(photoStatusShelf).toContain("post is");
+      expect(photoStatusShelfTest).toContain(
+        "shows waiting detail when a second post is queued behind an active upload",
+      );
+    });
+
+    it("warns when saved draft media is missing and clears stale blob keys", () => {
+      expect(momentComposer).toContain(
+        "Some saved media couldn't be restored. Add it again before posting.",
+      );
+      expect(momentComposerTest).toContain(
+        "warns when a saved photo draft reopens without its local media",
+      );
+      expect(entryDraftMedia).toContain(
+        "export async function removeStaleEntryDraftMedia",
+      );
+      expect(entryDraftMediaTest).toContain(
+        "removes stale media keys when a draft is re-saved with fewer files",
+      );
+    });
+
+    it("keeps primary photo ids in edit drafts for remove/reorder calls", () => {
+      expect(buildEditDraft).toContain("id: photo.id");
+      expect(buildEditDraftTest).toContain('id: "moment-1"');
     });
   });
 

@@ -16,6 +16,7 @@ import {
   firstAcceptedMomentRefresh,
   firstPublishedMediaRefresh,
   optimisticMediaUploadSnapshot,
+  queuedOptimisticMediaUploadCount,
   removeOptimisticMediaUpload,
   removeOptimisticMediaUploadByIntake,
   retryOptimisticMediaUpload,
@@ -455,11 +456,17 @@ export function PhotoStatusShelfView(props: PhotoStatusShelfViewProps) {
 function uploadChip(
   upload: OptimisticMediaUpload,
   onDismissFailed: (upload: OptimisticMediaUpload) => void,
+  queuedCount: number,
 ): PhotoStatusChipViewProps {
   const failed = upload.stage.state === "failed";
+  const waitingDetail =
+    !failed && queuedCount > 0
+      ? `${queuedCount} more ${queuedCount === 1 ? "post is" : "posts are"} waiting to upload.`
+      : null;
   return {
     busy: !failed && upload.stage.state !== "published",
     label: optimisticUploadChipLabel(upload),
+    detail: waitingDetail,
     progress: optimisticUploadChipProgress(upload),
     primaryAction: failed
       ? upload.retryable
@@ -513,17 +520,20 @@ function selectVisibleChip({
   onDismissFailed,
   onKeep,
   onRequestCancel,
+  queuedCount,
   saves,
   uploads,
 }: PhotoStatusShelfViewProps & {
   onDismissFailed: (upload: OptimisticMediaUpload) => void;
+  queuedCount: number;
   saves: readonly OptimisticMomentSave[];
   uploads: readonly OptimisticMediaUpload[];
 }): PhotoStatusChipViewProps | null {
   const failedUpload = uploads.find(
     (upload) => upload.stage.state === "failed",
   );
-  if (failedUpload) return uploadChip(failedUpload, onDismissFailed);
+  if (failedUpload)
+    return uploadChip(failedUpload, onDismissFailed, queuedCount);
 
   const failedSave = saves.find((save) => save.stage.state === "failed");
   if (failedSave) return momentChip(failedSave);
@@ -531,12 +541,15 @@ function selectVisibleChip({
   const activeUpload = uploads.find((upload) =>
     activeUploadStates.has(upload.stage.state),
   );
-  if (activeUpload) return uploadChip(activeUpload, onDismissFailed);
+  if (activeUpload)
+    return uploadChip(activeUpload, onDismissFailed, queuedCount);
 
   const processingUpload = uploads.find(
     (upload) => upload.stage.state === "processing",
   );
-  if (processingUpload) return uploadChip(processingUpload, onDismissFailed);
+  if (processingUpload) {
+    return uploadChip(processingUpload, onDismissFailed, queuedCount);
+  }
 
   const saving = saves.find((save) => save.stage.state === "saving");
   if (saving) return momentChip(saving);
@@ -544,7 +557,7 @@ function selectVisibleChip({
   const published = uploads.find(
     (upload) => upload.stage.state === "published",
   );
-  if (published) return uploadChip(published, onDismissFailed);
+  if (published) return uploadChip(published, onDismissFailed, queuedCount);
 
   return serverShelfChip({
     cancellationResult,
@@ -581,6 +594,11 @@ export function PhotoStatusShelf({
     optimisticMediaUploadSnapshot,
     emptyOptimisticMediaUploadSnapshot,
   ).filter((upload) => upload.circleId === circleId);
+  const queuedUploads = useSyncExternalStore(
+    subscribeToOptimisticMediaUploads,
+    () => queuedOptimisticMediaUploadCount(circleId),
+    () => 0,
+  );
   const optimisticMomentSaves = useSyncExternalStore(
     subscribeToOptimisticMomentSaves,
     optimisticMomentSaveSnapshot,
@@ -1029,6 +1047,7 @@ export function PhotoStatusShelf({
       onDismissFailed={dismissFailedUpload}
       onKeep={() => setConfirmingCancelId(null)}
       onRequestCancel={setConfirmingCancelId}
+      queuedCount={queuedUploads}
       saves={optimisticMomentSaves}
       uploads={optimisticUploads}
     />
@@ -1038,6 +1057,7 @@ export function PhotoStatusShelf({
 function VisiblePhotoStatusChip(
   props: PhotoStatusShelfViewProps & {
     onDismissFailed: (upload: OptimisticMediaUpload) => void;
+    queuedCount: number;
     saves: readonly OptimisticMomentSave[];
     uploads: readonly OptimisticMediaUpload[];
   },
