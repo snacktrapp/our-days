@@ -27,6 +27,26 @@ async function jpegFixture() {
   return path;
 }
 
+test("cold open paints usable Family content after sign-in", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+
+  await expect(page).toHaveURL(/\/family$/u);
+  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await expect(page.getByLabel("Opening this journal")).toHaveCount(0);
+  await expect(page.getByText("Something interrupted the story")).toHaveCount(
+    0,
+  );
+  expect(pageErrors).toEqual([]);
+});
+
 test("sign in, write a moment, attach media, and browse by date", async ({
   page,
 }) => {

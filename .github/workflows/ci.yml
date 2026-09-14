@@ -69,6 +69,12 @@ jobs:
         run: npm run check
       - name: Build and scan with the default production bundler
         run: npm run build
+      - name: Install the pinned Chromium smoke-test browser
+        run: npx playwright install --with-deps chromium
+      - name: Prove Family paints after sign-in
+        run: >-
+          npx playwright test -c playwright.local-journal.config.ts
+          --grep "cold open paints usable Family content after sign-in"
 
   browser:
     name: Functional browsers
