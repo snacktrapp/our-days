@@ -179,6 +179,34 @@ function familyHomeTimelineOptions(
   };
 }
 
+export async function loadFamilyHomeOpeningTimeline(
+  access: AuthenticatedAccess,
+  context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>,
+): Promise<
+  Readonly<{
+    model: TimelineViewModel;
+    streamRemainder: boolean;
+  }>
+> {
+  const first = await loadFamilyHomeFirstMoment(access, context, options);
+  const hasFirstMoment = first.entries.some(
+    (entry) => entry.entryType === "moment",
+  );
+  if (!first.refreshDegraded && hasFirstMoment) {
+    return { model: first, streamRemainder: true };
+  }
+  if (first.refreshDegraded) {
+    const recovered = await loadFamilyHomeJournal(access, options);
+    return { model: recovered, streamRemainder: false };
+  }
+  return { model: first, streamRemainder: false };
+}
+
 export async function loadFamilyHomeFirstMoment(
   access: AuthenticatedAccess,
   context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,

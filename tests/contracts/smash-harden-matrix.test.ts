@@ -17,11 +17,29 @@ const familyPage = read("src/app/(journal)/family/page.tsx");
 const journalLayout = read("src/app/(journal)/layout.tsx");
 const familyHome = read("src/data/family-home.server.ts");
 const timelineViewModel = read("src/features/timeline/timeline-view-model.ts");
+const timelineFeed = read("src/features/timeline/timeline-feed.tsx");
+const timelineRefreshMemory = readIfPresent(
+  "src/features/timeline/timeline-refresh-memory.tsx",
+);
 const timelineFeedTest = read("src/features/timeline/timeline-feed.test.tsx");
 const familyHomeTest = read("src/data/family-home.server.test.ts");
 const rootError = read("src/app/error.tsx");
 const peoplePage = read("src/app/(journal)/people/[personId]/page.tsx");
 const accountPage = read("src/app/(journal)/settings/family/page.tsx");
+const trashPage = read("src/app/(journal)/trash/page.tsx");
+const memoriesPage = read("src/app/(journal)/memories/page.tsx");
+const memoriesYearPage = read(
+  "src/app/(journal)/memories/years/[year]/page.tsx",
+);
+const memoriesOnThisDayPage = read(
+  "src/app/(journal)/memories/on-this-day/page.tsx",
+);
+const memoriesMilestonesPage = read(
+  "src/app/(journal)/memories/milestones/page.tsx",
+);
+const memoriesHome = readIfPresent("src/data/memories-home.server.ts");
+const journalInterrupted = read("src/features/shell/journal-interrupted.tsx");
+const openingShell = read("src/features/shell/opening-journal-shell.tsx");
 const journalAccess = read("src/lib/auth/journal-access.ts");
 const journalContext = read("src/data/journal-context.server.ts");
 const sessionError = readIfPresent("src/lib/auth/family-session-error.ts");
@@ -93,6 +111,7 @@ describe("smash harden matrix", () => {
     it("proves Family still throws required loads unless a remount helper landed", () => {
       const usesRemountHelper =
         familyPage.includes("loadFamilyHomeJournal") ||
+        familyPage.includes("loadFamilyHomeOpeningTimeline") ||
         (familyPage.includes("loadFamilyHomeChrome") &&
           familyPage.includes("loadFamilyHomeFirstMoment"));
       const throwsDirect =
@@ -389,6 +408,68 @@ describe("smash harden matrix", () => {
       expect(momentActionsTest).toContain(
         "delivers a reaction push without treating it as a moment post",
       );
+    });
+  });
+
+  describe("R-All-circles refresh memory + first-card recover", () => {
+    it("keeps a loaded timeline when a later refresh soft-fails", () => {
+      expect(timelineFeed).toContain("TimelineRefreshMemory");
+      expect(timelineRefreshMemory).toContain("preferPriorTimelineOnRefresh");
+      expect(timelineFeedTest).toContain(
+        "keeps the prior timeline when a later refresh soft-fails",
+      );
+      expect(familyHome).toContain("loadFamilyHomeOpeningTimeline");
+    });
+  });
+
+  describe("R-Memories / R-Trash remount", () => {
+    it("keeps Memories landing off JournalInterrupted on recoverable misses", () => {
+      expect(memoriesPage).toContain("requireJournalAccessUnlessRecoverable");
+      expect(memoriesPage).toContain("loadMemoriesJournal");
+      expect(memoriesHome).toContain(
+        "export async function loadMemoriesJournal",
+      );
+      expect(memoriesHome).toContain("memoriesRefreshSoftFail");
+    });
+
+    it("keeps Memories journeys off JournalInterrupted on page-0 misses", () => {
+      expect(memoriesYearPage).toContain("loadMemoryJourneyJournal");
+      expect(memoriesOnThisDayPage).toContain("loadMemoryJourneyJournal");
+      expect(memoriesMilestonesPage).toContain("loadMemoryJourneyJournal");
+      expect(memoriesHome).toContain(
+        "export async function loadMemoryJourneyJournal",
+      );
+    });
+
+    it("keeps Recently removed off JournalInterrupted on recoverable misses", () => {
+      expect(trashPage).toContain("requireJournalAccessUnlessRecoverable");
+      expect(trashPage).toContain("loadTrashJournal");
+      expect(trashPage).toContain("JournalPanelInterrupted");
+    });
+  });
+
+  describe("R-Account chrome + People access gate", () => {
+    it("keeps Account chrome when context misses instead of the full interrupt card", () => {
+      expect(accountPage).toContain("requireJournalAccessUnlessRecoverable");
+      expect(accountPage).toContain("AccountPanelInterrupted");
+      expect(accountPage).not.toContain("JournalRefreshInterrupted");
+      expect(journalInterrupted).toContain("JournalPanelInterrupted");
+    });
+
+    it("soft-fails People access-gate misses the same way as Family", () => {
+      expect(peoplePage).toContain("requireJournalAccessUnlessRecoverable");
+      expect(peoplePage).toContain("personJournalRefreshSoftFail");
+      expect(journalAccess).toContain("retryTransientFamilySessionQuery");
+      expect(journalAccess).toContain('.from("people")');
+    });
+  });
+
+  describe("C-Cold-open shell-first", () => {
+    it("keeps Family streaming chrome then the first moment", () => {
+      expect(familyPage).toContain("OpeningJournalShell");
+      expect(familyPage).toContain("loadFamilyHomeChrome");
+      expect(familyPage).toContain("loadFamilyHomeOpeningTimeline");
+      expect(openingShell).toContain("Opening this journal");
     });
   });
 });

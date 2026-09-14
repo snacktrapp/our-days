@@ -1,14 +1,16 @@
 import { FamilySettingsPanel } from "@/features/family-settings/family-settings-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
-import {
-  AccountPanelInterrupted,
-  JournalRefreshInterrupted,
-} from "@/features/shell/journal-interrupted";
+import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import { getFamilySettingsFixture } from "@/fixtures/design-preview/timelines.server";
 import {
   readJournalCircleMemberships,
-  requireJournalAccess,
+  requireJournalAccessUnlessRecoverable,
 } from "@/lib/auth/journal-access";
+import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
+import {
+  anonymousJournalAccess,
+  fallbackJournalChrome,
+} from "@/data/journal-chrome-fallback";
 import {
   buildConnectedFamilySettingsModel,
   loadConnectedFamilyAccess,
@@ -40,7 +42,23 @@ export default async function FamilySettingsPage({
   }>;
 }>) {
   const { inviteCircle, previewLoading, name } = await searchParams;
-  const access = await requireJournalAccess();
+  const access = await requireJournalAccessUnlessRecoverable();
+  if (!access) {
+    return (
+      <JournalChrome
+        model={fallbackJournalChrome(anonymousJournalAccess(), {
+          title: "Account",
+          eyebrow: "Account",
+        })}
+        section="settings"
+        preserveChrome
+      >
+        <AccountPanelInterrupted>
+          <AccountTools />
+        </AccountPanelInterrupted>
+      </JournalChrome>
+    );
+  }
   if (access.mode === "preview") {
     if (previewLoading === "navigation") {
       await new Promise((resolve) => setTimeout(resolve, 900));
@@ -73,8 +91,23 @@ export default async function FamilySettingsPage({
   let context;
   try {
     context = await loadConnectedJournalContext(access);
-  } catch {
-    return <JournalRefreshInterrupted />;
+  } catch (error) {
+    if (isFatalJournalHomeError(error)) throw error;
+    return (
+      <JournalChrome
+        model={fallbackJournalChrome(access, {
+          title: "Account",
+          eyebrow: "Account",
+        })}
+        section="settings"
+        createMomentAction={createFamilyMomentAction}
+        preserveChrome
+      >
+        <AccountPanelInterrupted>
+          <AccountTools />
+        </AccountPanelInterrupted>
+      </JournalChrome>
+    );
   }
 
   const groupIds = (context.groups ?? [{ id: access.circleId }]).map(

@@ -24,6 +24,7 @@ vi.mock("./moments.server", async () => {
 
 import {
   loadPersonJournal,
+  personJournalRefreshSoftFail,
   shouldTrapPersonJournalInInterrupt,
 } from "./person-journal.server";
 
@@ -183,6 +184,16 @@ describe("People journal remount", () => {
     ).rejects.toBe(missingMember);
     expect(shouldTrapPersonJournalInInterrupt(missingMember)).toBe(true);
     expect(loadConnectedTimeline).not.toHaveBeenCalled();
+  });
+
+  it("keeps a People access-gate miss on the soft-fail timeline", () => {
+    const model = personJournalRefreshSoftFail("calvin");
+    expect(model.refreshDegraded).toBe(true);
+    expect(model.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
+    expect(model.paginationError?.retryHref).toBe("/people/calvin");
   });
 
   it("returns not-found when the person is missing from the roster", async () => {

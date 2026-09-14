@@ -27,6 +27,7 @@ import {
   loadFamilyHomeChrome,
   loadFamilyHomeFirstMoment,
   loadFamilyHomeJournal,
+  loadFamilyHomeOpeningTimeline,
   loadFamilyHomeRemainder,
   shouldTrapJournalHomeInInterrupt,
 } from "./family-home.server";
@@ -235,6 +236,18 @@ describe("Account → Journal remount", () => {
       allCircles: true,
     });
     expect(model.entries).toEqual(timeline.entries);
+  });
+
+  it("recovers a degraded first card with a full journal load instead of hiding the remainder", async () => {
+    loadConnectedTimeline.mockRejectedValueOnce(new Error("Failed to fetch"));
+    loadConnectedJournalContext.mockResolvedValueOnce(context);
+    loadConnectedTimeline.mockResolvedValueOnce(timeline);
+
+    const opening = await loadFamilyHomeOpeningTimeline(access, context, {});
+
+    expect(opening.streamRemainder).toBe(false);
+    expect(opening.model.entries).toEqual(timeline.entries);
+    expect(opening.model.refreshDegraded).toBeUndefined();
   });
 
   it("still fails closed for a missing circle", async () => {

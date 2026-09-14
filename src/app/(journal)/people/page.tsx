@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import { requireJournalAccess } from "@/lib/auth/journal-access";
+import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 
 export default async function PeoplePage() {
-  await requireJournalAccess();
+  const access = await requireJournalAccessUnlessRecoverable();
+  if (!access) redirect("/family");
   redirect("/settings/family");
 }

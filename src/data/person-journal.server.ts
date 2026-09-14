@@ -11,6 +11,7 @@ import {
 } from "@/features/timeline/timeline-view-model";
 import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import { anonymousJournalAccess } from "./journal-chrome-fallback";
 import { loadConnectedJournalContext } from "./journal-context.server";
 import {
   connectedTimelineInteraction,
@@ -133,6 +134,10 @@ function remountSoftFailTimeline(
 
 export function shouldTrapPersonJournalInInterrupt(error: unknown) {
   return isFatalJournalHomeError(error);
+}
+
+export function personJournalRefreshSoftFail(personId: string) {
+  return remountSoftFailTimeline(anonymousJournalAccess(), null, personId);
 }
 
 export async function loadPersonJournal(
