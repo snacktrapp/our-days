@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   isJournalLoadSoftFail,
   preferPriorTimelineOnRefresh,
@@ -10,14 +10,24 @@ import {
 export function TimelineRefreshMemory({
   model,
   children,
+  afterContent,
 }: {
   model: TimelineViewModel;
-  children: (resolved: TimelineViewModel) => ReactNode;
+  children: ReactNode;
+  afterContent?: ReactNode;
 }) {
-  const [prior, setPrior] = useState(model);
-  const resolved = preferPriorTimelineOnRefresh(prior, model);
-  if (!isJournalLoadSoftFail(model) && model !== prior) {
-    setPrior(model);
-  }
-  return children(resolved);
+  const [prior, setPrior] = useState({ model, content: children });
+  const usePriorContent = preferPriorTimelineOnRefresh(prior.model, model) !== model;
+
+  useEffect(() => {
+    if (isJournalLoadSoftFail(model)) return;
+    setPrior({ model, content: children });
+  }, [model, children]);
+
+  return (
+    <>
+      {usePriorContent ? prior.content : children}
+      {afterContent}
+    </>
+  );
 }

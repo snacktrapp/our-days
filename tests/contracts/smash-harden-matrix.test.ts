@@ -468,6 +468,11 @@ describe("smash harden matrix", () => {
     it("keeps a loaded timeline when a later refresh soft-fails", () => {
       expect(timelineFeed).toContain("TimelineRefreshMemory");
       expect(timelineRefreshMemory).toContain("preferPriorTimelineOnRefresh");
+      expect(timelineRefreshMemory).toContain("children: ReactNode");
+      expect(timelineRefreshMemory).not.toContain("children: (resolved");
+      expect(timelineFeed).not.toMatch(
+        /<TimelineRefreshMemory[\s\S]*\{\(resolved\)\s*=>/,
+      );
       expect(timelineFeedTest).toContain(
         "keeps the prior timeline when a later refresh soft-fails",
       );
