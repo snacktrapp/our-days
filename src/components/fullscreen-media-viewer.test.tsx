@@ -1,10 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import {
@@ -21,6 +15,10 @@ describe("FullscreenMediaViewer", () => {
     HTMLVideoElement.prototype,
     "webkitEnterFullscreen",
   );
+  const originalWebkitSupportsFullscreen = Object.getOwnPropertyDescriptor(
+    HTMLVideoElement.prototype,
+    "webkitSupportsFullscreen",
+  );
 
   function pinPortraitLayout() {
     Object.defineProperty(window, "innerHeight", {
@@ -34,7 +32,6 @@ describe("FullscreenMediaViewer", () => {
   }
 
   afterEach(() => {
-    vi.useRealTimers();
     resetOverlayChromeForTests();
     document.documentElement.classList.remove("overlay-open");
     document.body.classList.remove("overlay-open");
@@ -62,6 +59,18 @@ describe("FullscreenMediaViewer", () => {
       Reflect.deleteProperty(
         HTMLVideoElement.prototype,
         "webkitEnterFullscreen",
+      );
+    }
+    if (originalWebkitSupportsFullscreen) {
+      Object.defineProperty(
+        HTMLVideoElement.prototype,
+        "webkitSupportsFullscreen",
+        originalWebkitSupportsFullscreen,
+      );
+    } else {
+      Reflect.deleteProperty(
+        HTMLVideoElement.prototype,
+        "webkitSupportsFullscreen",
       );
     }
     vi.restoreAllMocks();
@@ -121,7 +130,9 @@ describe("FullscreenMediaViewer", () => {
   });
 
   it("enters iOS native video fullscreen without overlapping native controls", async () => {
-    const webkitEnterFullscreen = vi.fn();
+    const webkitEnterFullscreen = vi.fn(function (this: HTMLVideoElement) {
+      this.dispatchEvent(new Event("webkitbeginfullscreen"));
+    });
     Object.defineProperty(HTMLVideoElement.prototype, "webkitEnterFullscreen", {
       configurable: true,
       value: webkitEnterFullscreen,
@@ -163,11 +174,12 @@ describe("FullscreenMediaViewer", () => {
     );
 
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveClass(
+      "video-media-viewer-close",
+    );
   });
 
-  it("restores the custom Close when native fullscreen never begins", () => {
-    vi.useFakeTimers();
+  it("keeps the custom Close when native fullscreen never begins", () => {
     Object.defineProperty(HTMLVideoElement.prototype, "webkitEnterFullscreen", {
       configurable: true,
       value: vi.fn(),
@@ -179,11 +191,34 @@ describe("FullscreenMediaViewer", () => {
         name: "Open video full screen: Family video",
       }),
     );
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-
-    act(() => vi.advanceTimersByTime(1_500));
 
     expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+  });
+
+  it("uses the non-overlapping fallback until WebKit supports fullscreen", () => {
+    const webkitEnterFullscreen = vi.fn();
+    Object.defineProperties(HTMLVideoElement.prototype, {
+      webkitEnterFullscreen: {
+        configurable: true,
+        value: webkitEnterFullscreen,
+      },
+      webkitSupportsFullscreen: {
+        configurable: true,
+        value: false,
+      },
+    });
+    renderViewer({ reactionTargetId: "moment-1" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Family video",
+      }),
+    );
+
+    expect(webkitEnterFullscreen).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveClass(
+      "video-media-viewer-close",
+    );
   });
 
   it("fills a landscape visual viewport without a reserved chrome row", () => {

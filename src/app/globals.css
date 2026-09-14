@@ -8006,6 +8006,11 @@ html[data-theme].overlay-open .app-shell::before,
   -webkit-backdrop-filter: blur(10px);
 }
 
+.photo-lightbox-close.media-viewer-close.video-media-viewer-close {
+  right: auto;
+  left: max(10px, env(safe-area-inset-left, 0px));
+}
+
 :root[data-theme="light"] .photo-lightbox-close.media-viewer-close {
   color: rgba(255, 250, 240, 0.96);
   background: rgba(8, 10, 9, 0.42);

@@ -13,6 +13,7 @@ import {
 
 type WebkitFullscreenVideo = HTMLVideoElement & {
   webkitEnterFullscreen?: () => void;
+  webkitSupportsFullscreen?: boolean;
 };
 
 type FullscreenMediaViewerProps = Readonly<{
@@ -47,6 +48,8 @@ export function FullscreenMediaViewer({
   useOverlayOpenChrome(open);
 
   function openVideo() {
+    nativeCleanupRef.current();
+    nativeCleanupRef.current = () => undefined;
     flushSync(() => setOpen(true));
     const dialog = dialogRef.current;
     try {
@@ -58,25 +61,20 @@ export function FullscreenMediaViewer({
     const video = dialog?.querySelector(
       "video",
     ) as WebkitFullscreenVideo | null;
-    if (typeof video?.webkitEnterFullscreen === "function") {
-      let beginFallback = window.setTimeout(() => {
-        beginFallback = 0;
-        setNativeFullscreen(false);
-      }, 1_500);
+    if (
+      typeof video?.webkitEnterFullscreen === "function" &&
+      video.webkitSupportsFullscreen !== false
+    ) {
       const onNativeBegin = () => {
-        if (beginFallback) window.clearTimeout(beginFallback);
-        beginFallback = 0;
         setNativeFullscreen(true);
       };
       const onNativeEnd = () => close();
       video.addEventListener("webkitbeginfullscreen", onNativeBegin);
       video.addEventListener("webkitendfullscreen", onNativeEnd);
       nativeCleanupRef.current = () => {
-        if (beginFallback) window.clearTimeout(beginFallback);
         video.removeEventListener("webkitbeginfullscreen", onNativeBegin);
         video.removeEventListener("webkitendfullscreen", onNativeEnd);
       };
-      flushSync(() => setNativeFullscreen(true));
       try {
         video.webkitEnterFullscreen();
         return;
@@ -171,7 +169,7 @@ export function FullscreenMediaViewer({
           {nativeFullscreen ? null : (
             <button
               type="button"
-              className="photo-lightbox-close media-viewer-close"
+              className="photo-lightbox-close media-viewer-close video-media-viewer-close"
               aria-label="Close"
               onClick={close}
             >
