@@ -320,7 +320,9 @@ describe("smash harden matrix", () => {
   describe("R-All-circles in-place refresh", () => {
     it("keeps layout shell-first while pages own recoverable access decisions", () => {
       expect(journalLayout).toContain("JournalRouteBoundary");
-      expect(journalLayout).not.toContain("requireJournalAccessUnlessRecoverable");
+      expect(journalLayout).not.toContain(
+        "requireJournalAccessUnlessRecoverable",
+      );
       expect(journalAccess).toContain(
         "export async function requireJournalAccessUnlessRecoverable",
       );

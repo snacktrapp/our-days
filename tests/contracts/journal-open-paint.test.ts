@@ -18,7 +18,9 @@ const openingShell = read("src/features/shell/opening-journal-shell.tsx");
 describe("journal open paint", () => {
   it("keeps the journal layout shell-first without an eager access throw path", () => {
     expect(journalLayout).toContain("JournalRouteBoundary");
-    expect(journalLayout).not.toContain("requireJournalAccessUnlessRecoverable");
+    expect(journalLayout).not.toContain(
+      "requireJournalAccessUnlessRecoverable",
+    );
     expect(journalLayout).not.toContain("JournalAccessGate");
     expect(journalLayout).not.toMatch(
       /export default async function JournalLayout/,

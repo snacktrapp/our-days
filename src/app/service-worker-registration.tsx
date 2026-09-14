@@ -41,10 +41,13 @@ export function ServiceWorkerRegistration() {
               )
               .map((registration) => registration.unregister()),
           );
-          const registration = await navigator.serviceWorker.register("/sw.js", {
-            scope: "/",
-            updateViaCache: "none",
-          });
+          const registration = await navigator.serviceWorker.register(
+            "/sw.js",
+            {
+              scope: "/",
+              updateViaCache: "none",
+            },
+          );
           if (typeof registration.update === "function") {
             await registration.update();
           }
@@ -52,8 +55,9 @@ export function ServiceWorkerRegistration() {
         }
 
         await Promise.all(
-          sameOriginRegistrations
-            .map((registration) => registration.unregister()),
+          sameOriginRegistrations.map((registration) =>
+            registration.unregister(),
+          ),
         );
       } catch (error) {
         if (process.env.NODE_ENV === "development")

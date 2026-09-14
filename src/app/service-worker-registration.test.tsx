@@ -23,22 +23,20 @@ describe("ServiceWorkerRegistration", () => {
       configurable: true,
       value: {
         register,
-        getRegistrations: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              scope: `${window.location.origin}/`,
-              unregister: rootUnregister,
-            },
-            {
-              scope: `${window.location.origin}/family/`,
-              unregister: staleScopeUnregister,
-            },
-            {
-              scope: "https://another-app.test/",
-              unregister: foreignUnregister,
-            },
-          ]),
+        getRegistrations: vi.fn().mockResolvedValue([
+          {
+            scope: `${window.location.origin}/`,
+            unregister: rootUnregister,
+          },
+          {
+            scope: `${window.location.origin}/family/`,
+            unregister: staleScopeUnregister,
+          },
+          {
+            scope: "https://another-app.test/",
+            unregister: foreignUnregister,
+          },
+        ]),
       },
     });
     Object.defineProperty(window, "caches", {
