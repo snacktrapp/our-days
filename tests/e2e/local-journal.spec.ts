@@ -128,7 +128,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     .toBe(true);
   const close = fullscreen.getByRole("button", { name: "Close" });
   await expect(close).toBeVisible();
-  await expect(close).toHaveTextContent("×");
+  await expect(close).toHaveText("×");
   await expect(fullscreen.locator(".media-viewer-chrome")).toHaveCount(0);
   await close.click();
   await expect(fullscreen).toBeHidden();
