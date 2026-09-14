@@ -36,19 +36,19 @@ describe("CI workflow privacy and supply-chain contract", () => {
     const actionReferences = [...workflow.matchAll(/uses:\s+(\S+)/g)].map(
       ([, reference]) => reference,
     );
-    expect(actionReferences).toHaveLength(8);
+    expect(actionReferences).toHaveLength(13);
     expect(new Set(actionReferences)).toEqual(
       new Set([checkoutAction, setupNodeAction]),
     );
 
     const checkoutSteps = actionStepBlocks(checkoutAction);
-    expect(checkoutSteps).toHaveLength(4);
+    expect(checkoutSteps).toHaveLength(7);
     for (const step of checkoutSteps) {
       expect(step).toContain("persist-credentials: false");
     }
 
     const setupNodeSteps = actionStepBlocks(setupNodeAction);
-    expect(setupNodeSteps).toHaveLength(4);
+    expect(setupNodeSteps).toHaveLength(6);
     for (const step of setupNodeSteps) {
       expect(step).toContain("package-manager-cache: false");
     }
@@ -59,6 +59,10 @@ describe("CI workflow privacy and supply-chain contract", () => {
       "playwright install --with-deps chromium firefox webkit",
     );
     expect(workflow).toContain("playwright test --grep-invert @visual");
+    expect(workflow).toContain("npx playwright test --grep @critical");
+    expect(workflow).toContain("name: PR Gate");
+    expect(workflow).toContain("name: Specialist test scope");
+    expect(workflow).toContain("github.event_name == 'schedule'");
     expect(workflow).toContain(
       '--grep "cold open paints usable Family content after sign-in"',
     );
@@ -74,7 +78,7 @@ describe("CI workflow privacy and supply-chain contract", () => {
         /^\s*run: npm run build\s*$/m.test(step) ? index : -1,
       )
       .filter((index) => index !== -1);
-    expect(buildStepIndexes).toHaveLength(3);
+    expect(buildStepIndexes).toHaveLength(5);
     expect(packageJson.scripts.build).toMatch(
       /^next build && npm run verify:artifacts$/,
     );
