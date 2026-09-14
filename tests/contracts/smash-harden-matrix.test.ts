@@ -420,6 +420,42 @@ describe("smash harden matrix", () => {
     });
   });
 
+  describe("composer queue + draft integrity", () => {
+    it("surfaces queued uploads so a second post is not silently hidden", () => {
+      expect(optimisticUpload).toContain(
+        "export function queuedOptimisticMediaUploadCount(circleId?: string)",
+      );
+      expect(optimisticUpload).toContain("queuedUploads.push");
+      expect(photoStatusShelf).toContain(
+        "() => queuedOptimisticMediaUploadCount(circleId)",
+      );
+      expect(photoStatusShelf).toContain("post is");
+      expect(photoStatusShelfTest).toContain(
+        "shows waiting detail when a second post is queued behind an active upload",
+      );
+    });
+
+    it("warns when saved draft media is missing and clears stale blob keys", () => {
+      expect(momentComposer).toContain(
+        "Some saved media couldn't be restored. Add it again before posting.",
+      );
+      expect(momentComposerTest).toContain(
+        "warns when a saved photo draft reopens without its local media",
+      );
+      expect(entryDraftMedia).toContain(
+        "export async function removeStaleEntryDraftMedia",
+      );
+      expect(entryDraftMediaTest).toContain(
+        "removes stale media keys when a draft is re-saved with fewer files",
+      );
+    });
+
+    it("keeps primary photo ids in edit drafts for remove/reorder calls", () => {
+      expect(buildEditDraft).toContain("id: photo.id");
+      expect(buildEditDraftTest).toContain('id: "moment-1"');
+    });
+  });
+
   describe("R-All-circles refresh memory + first-card recover", () => {
     it("keeps a loaded timeline when a later refresh soft-fails", () => {
       expect(timelineFeed).toContain("TimelineRefreshMemory");
@@ -479,42 +515,6 @@ describe("smash harden matrix", () => {
       expect(familyPage).toContain("loadFamilyHomeChrome");
       expect(familyPage).toContain("loadFamilyHomeOpeningTimeline");
       expect(openingShell).toContain("Opening this journal");
-    });
-  });
-
-  describe("composer queue + draft integrity", () => {
-    it("surfaces queued uploads so a second post is not silently hidden", () => {
-      expect(optimisticUpload).toContain(
-        "export function queuedOptimisticMediaUploadCount(circleId?: string)",
-      );
-      expect(optimisticUpload).toContain("queuedUploads.push");
-      expect(photoStatusShelf).toContain(
-        "() => queuedOptimisticMediaUploadCount(circleId)",
-      );
-      expect(photoStatusShelf).toContain("post is");
-      expect(photoStatusShelfTest).toContain(
-        "shows waiting detail when a second post is queued behind an active upload",
-      );
-    });
-
-    it("warns when saved draft media is missing and clears stale blob keys", () => {
-      expect(momentComposer).toContain(
-        "Some saved media couldn't be restored. Add it again before posting.",
-      );
-      expect(momentComposerTest).toContain(
-        "warns when a saved photo draft reopens without its local media",
-      );
-      expect(entryDraftMedia).toContain(
-        "export async function removeStaleEntryDraftMedia",
-      );
-      expect(entryDraftMediaTest).toContain(
-        "removes stale media keys when a draft is re-saved with fewer files",
-      );
-    });
-
-    it("keeps primary photo ids in edit drafts for remove/reorder calls", () => {
-      expect(buildEditDraft).toContain("id: photo.id");
-      expect(buildEditDraftTest).toContain('id: "moment-1"');
     });
   });
 });
