@@ -53,18 +53,23 @@ jobs:
               BASE_SHA="$(git rev-parse "$HEAD_SHA^")"
             fi
 
+            diff_range="$BASE_SHA..$HEAD_SHA"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              diff_range="$BASE_SHA...$HEAD_SHA"
+            fi
+
             while IFS= read -r file; do
               case "$file" in
-                package.json|package-lock.json|supabase/*|src/app/api/*|src/lib/auth/*|src/lib/supabase/*|scripts/test-auth-*|scripts/test-database-*|scripts/test-db-*|scripts/test-invitation-*|scripts/test-photo-*)
+                .github/workflows/ci.yml|package.json|package-lock.json|playwright*.config.ts|supabase/*|src/app/api/*|src/lib/auth/*|src/lib/supabase/*|scripts/test-auth-*|scripts/test-database-*|scripts/test-db-*|scripts/test-invitation-*|scripts/test-photo-*|tests/integration/*)
                   database=true
                   ;;
               esac
               case "$file" in
-                public/*|src/*.css|src/*.tsx|src/fixtures/*|tests/e2e/visual.spec.ts|tests/e2e/visual.spec.ts-snapshots/*)
+                .github/workflows/ci.yml|playwright.config.ts|public/*|src/*.css|src/*.tsx|src/fixtures/*|tests/e2e/visual.spec.ts|tests/e2e/visual.spec.ts-snapshots/*)
                   visual=true
                   ;;
               esac
-            done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+            done < <(git diff --name-only "$diff_range")
           fi
 
           echo "database=$database" >> "$GITHUB_OUTPUT"
@@ -230,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     # Optional, path-gated PR signal plus a complete nightly/manual run.
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -282,7 +287,7 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 25
     # Path-gated PR signal plus a complete nightly/manual calibration run.
-    continue-on-error: true
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out the tested commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -308,17 +313,20 @@ jobs:
 
   pr-gate:
     name: PR Gate
-    if: always()
-    needs: [quality, browser-smoke, local-journal]
+    if: ${{ !cancelled() }}
+    needs: [changes, quality, browser-smoke, local-journal]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Require every merge-path job
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           BROWSER_SMOKE_RESULT: ${{ needs['browser-smoke'].result }}
           LOCAL_JOURNAL_RESULT: ${{ needs['local-journal'].result }}
         run: |
           for result in \
+            "$CHANGES_RESULT" \
             "$QUALITY_RESULT" \
             "$BROWSER_SMOKE_RESULT" \
             "$LOCAL_JOURNAL_RESULT"

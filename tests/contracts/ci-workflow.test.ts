@@ -61,7 +61,12 @@ describe("CI workflow privacy and supply-chain contract", () => {
     expect(workflow).toContain("playwright test --grep-invert @visual");
     expect(workflow).toContain("npx playwright test --grep @critical");
     expect(workflow).toContain("name: PR Gate");
+    expect(workflow).toContain("if: ${{ !cancelled() }}");
+    expect(workflow).toContain(
+      "needs: [changes, quality, browser-smoke, local-journal]",
+    );
     expect(workflow).toContain("name: Specialist test scope");
+    expect(workflow).toContain('diff_range="$BASE_SHA...$HEAD_SHA"');
     expect(workflow).toContain("github.event_name == 'schedule'");
     expect(workflow).toContain(
       '--grep "cold open paints usable Family content after sign-in"',
