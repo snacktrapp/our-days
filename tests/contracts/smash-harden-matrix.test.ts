@@ -422,7 +422,9 @@ describe("smash harden matrix", () => {
     it("keeps Memories landing off JournalInterrupted on recoverable misses", () => {
       expect(memoriesPage).toContain("requireJournalAccessUnlessRecoverable");
       expect(memoriesPage).toContain("loadMemoriesJournal");
-      expect(memoriesHome).toContain("export async function loadMemoriesJournal");
+      expect(memoriesHome).toContain(
+        "export async function loadMemoriesJournal",
+      );
       expect(memoriesHome).toContain("memoriesRefreshSoftFail");
     });
 
@@ -437,10 +439,7 @@ describe("smash harden matrix", () => {
 
     it("keeps Recently removed off JournalInterrupted on recoverable misses", () => {
       expect(trashPage).toContain("requireJournalAccessUnlessRecoverable");
-      expect(
-        trashPage.includes("loadTrashJournal") ||
-          /try\s*\{[\s\S]*loadConnectedJournalContext/.test(trashPage),
-      ).toBe(true);
+      expect(trashPage).toContain("loadTrashJournal");
       expect(trashPage).toContain("JournalPanelInterrupted");
     });
   });

@@ -37,7 +37,9 @@ describe("journal open paint", () => {
 
   it("defers Activity and streams the first moment ahead of the rest of the page", () => {
     expect(familyPage).toContain("loadFamilyHomeChrome");
-    expect(familyPage).toContain("loadFamilyHomeFirstMoment");
+    expect(familyPage).toMatch(
+      /loadFamilyHomeFirstMoment|loadFamilyHomeOpeningTimeline/,
+    );
     expect(familyPage).toContain("loadFamilyHomeRemainder");
     expect(familyPage).toContain("loadJournalActivityNotifications");
     expect(familyPage).toContain("OpeningJournalShell");

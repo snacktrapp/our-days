@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { loadConnectedJournalContext } from "@/data/journal-context.server";
-import { loadManageableTrash } from "@/data/trash.server";
+import { loadTrashJournal } from "@/data/trash.server";
 import { TrashPanel } from "@/features/moments/trash-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { JournalPanelInterrupted } from "@/features/shell/journal-interrupted";
@@ -9,19 +8,15 @@ import {
   restoreWrittenMomentAction,
 } from "@/features/moments/moment-actions";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
-import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
 import {
   anonymousJournalAccess,
   fallbackJournalChrome,
 } from "@/data/journal-chrome-fallback";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 
-function trashChrome(
-  access: Readonly<{ circleId: string; personId: string }>,
-  title = "Recently removed",
-) {
+function trashChrome(access: Readonly<{ circleId: string; personId: string }>) {
   return fallbackJournalChrome(access, {
-    title,
+    title: "Recently removed",
     eyebrow: "Account",
   });
 }
@@ -40,26 +35,8 @@ export default async function TrashPage() {
     );
   }
   if (access.mode === "preview") redirect("/family");
-  try {
-    const [context, moments] = await Promise.all([
-      loadConnectedJournalContext(access),
-      loadManageableTrash(access),
-    ]);
-    const chrome = { ...context.chrome, title: "Recently removed" };
-    return (
-      <JournalChrome
-        model={chrome}
-        section="trash"
-        createMomentAction={createFamilyMomentAction}
-      >
-        <TrashPanel moments={moments} restore={restoreWrittenMomentAction} />
-        <div className="trash-sign-out">
-          <SignOutButton />
-        </div>
-      </JournalChrome>
-    );
-  } catch (error) {
-    if (isFatalJournalHomeError(error)) throw error;
+  const loaded = await loadTrashJournal(access);
+  if (!loaded.ok) {
     return (
       <JournalChrome
         model={trashChrome(access)}
@@ -75,4 +52,19 @@ export default async function TrashPage() {
       </JournalChrome>
     );
   }
+  return (
+    <JournalChrome
+      model={{ ...loaded.context.chrome, title: "Recently removed" }}
+      section="trash"
+      createMomentAction={createFamilyMomentAction}
+    >
+      <TrashPanel
+        moments={loaded.moments}
+        restore={restoreWrittenMomentAction}
+      />
+      <div className="trash-sign-out">
+        <SignOutButton />
+      </div>
+    </JournalChrome>
+  );
 }
