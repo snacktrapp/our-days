@@ -223,11 +223,89 @@ describe("optimistic media upload queue", () => {
       second,
       expect.objectContaining({
         existingMomentId: "d6000000-0000-4000-8000-000000000002",
+        announcePublication: false,
       }),
       expect.any(Object),
       expect.any(AbortSignal),
       expect.any(Function),
     );
+  });
+
+  it("announces only the first photo of a new multi-photo post", async () => {
+    const momentId = "d6000000-0000-4000-8000-000000000002";
+    photoUpload.upload.mockImplementation(async (_file, nextDraft) => ({
+      state: "published" as const,
+      intakeId: "d6000000-0000-4000-8000-000000000001",
+      momentId: nextDraft.existingMomentId ?? momentId,
+    }));
+    const files = [jpeg("one.jpg"), jpeg("two.jpg"), jpeg("three.jpg")];
+    startOptimisticPhotoUpload({
+      draft,
+      file: files[0]!,
+      files,
+      occurredTime: "14:58",
+      person,
+    });
+    await vi.waitFor(() => expect(photoUpload.upload).toHaveBeenCalledTimes(3));
+    expect(
+      photoUpload.upload.mock.calls.map(([, nextDraft]) => nextDraft),
+    ).toEqual([
+      expect.objectContaining({
+        announcePublication: true,
+        existingMomentId: undefined,
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId: momentId,
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId: momentId,
+      }),
+    ]);
+  });
+
+  it("announces only the first photo when an edit adds several", async () => {
+    const existingMomentId = "d6000000-0000-4000-8000-000000000009";
+    photoUpload.upload.mockResolvedValue({
+      state: "published",
+      intakeId: "d6000000-0000-4000-8000-000000000001",
+      momentId: existingMomentId,
+    });
+    const files = [
+      jpeg("four.jpg"),
+      jpeg("five.jpg"),
+      jpeg("six.jpg"),
+      jpeg("seven.jpg"),
+    ];
+    startOptimisticPhotoUpload({
+      draft: { ...draft, existingMomentId },
+      file: files[0]!,
+      files,
+      occurredTime: "14:58",
+      person,
+    });
+    await vi.waitFor(() => expect(photoUpload.upload).toHaveBeenCalledTimes(4));
+    expect(
+      photoUpload.upload.mock.calls.map(([, nextDraft]) => nextDraft),
+    ).toEqual([
+      expect.objectContaining({
+        announcePublication: true,
+        existingMomentId,
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId,
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId,
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId,
+      }),
+    ]);
   });
 
   it("inspects a video after Save when duration is not ready yet", async () => {

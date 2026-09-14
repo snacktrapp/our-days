@@ -102,6 +102,11 @@ describe("written moment actions", () => {
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith(`/people/${personId}`);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/memories/milestones");
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      { rpc: mocks.rpc },
+      "moment",
+      momentId,
+    );
   });
 
   it("fails cross-origin requests before reading access or touching Supabase", async () => {
@@ -217,6 +222,11 @@ describe("written moment actions", () => {
       longitude: null,
       audience: "family",
     });
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      { rpc: mocks.rpc },
+      "moment",
+      momentId,
+    );
   });
 
   it("rejects duplicate and self tags before a database request", async () => {
@@ -351,6 +361,23 @@ describe("written moment actions", () => {
       moment_id: momentId,
       reaction_type: null,
     });
+  });
+
+  it("delivers a reaction push without treating it as a moment post", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 2, error: null });
+    await expect(
+      setMomentReactionAction({ momentId, reactionId: "held-close" }),
+    ).resolves.toMatchObject({ ok: true, message: "Response saved." });
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      { rpc: mocks.rpc },
+      "reaction",
+      momentId,
+    );
+    expect(mocks.deliver).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "moment",
+      expect.anything(),
+    );
   });
 
   it("delivers comment push with the parent moment id, not the note id", async () => {

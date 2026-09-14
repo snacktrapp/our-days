@@ -6,6 +6,7 @@ import {
   entryReactionMessage,
   familyMomentPostedMessage,
   isNotifiableFamilyMoment,
+  shouldAnnouncePhotoMomentPublication,
 } from "./activity-notifications";
 
 describe("family activity notification copy", () => {
@@ -58,5 +59,21 @@ describe("family activity notification copy", () => {
         audience: "family",
       }),
     ).toBe(true);
+  });
+
+  it("announces one photo batch once, including an edit that adds several", () => {
+    expect(shouldAnnouncePhotoMomentPublication({ batchIndex: 0 })).toBe(true);
+    expect(shouldAnnouncePhotoMomentPublication({ batchIndex: 1 })).toBe(false);
+    expect(shouldAnnouncePhotoMomentPublication({ batchIndex: 3 })).toBe(false);
+    expect(
+      shouldAnnouncePhotoMomentPublication({ announcePublication: false }),
+    ).toBe(false);
+    expect(
+      shouldAnnouncePhotoMomentPublication({
+        announcePublication: true,
+        batchIndex: 0,
+      }),
+    ).toBe(true);
+    expect(shouldAnnouncePhotoMomentPublication({})).toBe(true);
   });
 });
