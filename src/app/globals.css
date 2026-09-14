@@ -5083,7 +5083,6 @@ span.moment-place-line {
 :root:has(.inline-note-form) .bottom-nav,
 :root:has(.new-moment-composer-dialog[open]) .bottom-nav,
 :root:has(.photo-lightbox) .bottom-nav,
-:root:has(.fullscreen-media-dialog[open]) .bottom-nav,
 html.overlay-open .bottom-nav {
   opacity: 0;
   visibility: hidden;
@@ -7675,6 +7674,11 @@ html[data-theme].overlay-open .app-shell::before,
   outline: none;
 }
 
+.photo-viewer-trigger:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -4px;
+}
+
 .media-viewer-trigger > img,
 .media-viewer-trigger > video,
 .media-viewer-trigger > .video-card-poster,
@@ -7697,11 +7701,6 @@ html[data-theme].overlay-open .app-shell::before,
   aspect-ratio: 16 / 9;
   object-fit: contain;
   object-position: center;
-}
-
-.video-viewer-trigger {
-  cursor: pointer;
-  background: transparent;
 }
 
 .video-frame {
@@ -7785,6 +7784,67 @@ html[data-theme].overlay-open .app-shell::before,
   line-height: 1;
   transform: translate(-50%, -50%);
   backdrop-filter: blur(8px);
+}
+
+.native-video-viewer {
+  position: relative;
+  isolation: isolate;
+  background: #050b08;
+}
+
+.native-video-viewer > video,
+.native-video-viewer > .private-video-unavailable {
+  grid-area: 1 / 1;
+}
+
+.native-video-viewer > video {
+  z-index: 0;
+  opacity: 0;
+}
+
+.native-video-viewer.is-inline > video,
+.native-video-viewer.is-native > video,
+.native-video-viewer > video:fullscreen,
+.native-video-viewer > video:-webkit-full-screen {
+  z-index: 1;
+  opacity: 1;
+}
+
+.native-video-preview {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: stretch;
+}
+
+.native-video-preview > img,
+.native-video-preview > .video-card-mat {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
+.native-video-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.native-video-trigger:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -4px;
 }
 
 .photo-lightbox {
@@ -8006,100 +8066,9 @@ html[data-theme].overlay-open .app-shell::before,
   -webkit-backdrop-filter: blur(10px);
 }
 
-.photo-lightbox-close.media-viewer-close.video-media-viewer-close {
-  right: auto;
-  left: max(10px, env(safe-area-inset-left, 0px));
-}
-
 :root[data-theme="light"] .photo-lightbox-close.media-viewer-close {
   color: rgba(255, 250, 240, 0.96);
   background: rgba(8, 10, 9, 0.42);
-}
-
-.fullscreen-media-dialog {
-  width: 100dvw;
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  position: fixed;
-  inset: 0;
-  box-sizing: border-box;
-  background: #000;
-  color: white;
-  overflow: hidden;
-  overscroll-behavior: none;
-  touch-action: none;
-}
-
-.fullscreen-media-dialog[open] {
-  display: grid;
-}
-
-.fullscreen-media-dialog::backdrop {
-  background: #000;
-}
-
-.media-viewer-dimmer {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: #020403;
-  pointer-events: none;
-}
-
-.media-viewer-photo,
-.media-viewer-video {
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-  overflow: hidden;
-  overscroll-behavior: contain;
-}
-
-.media-viewer-photo {
-  z-index: 1;
-  touch-action: pinch-zoom;
-}
-
-.media-viewer-photo.is-pulling {
-  transition: none;
-}
-
-.media-viewer-photo img,
-.media-viewer-video video {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  display: block;
-  position: relative;
-  inset: auto;
-  object-fit: contain;
-  object-position: center;
-}
-
-.media-viewer-photo.is-zoomed {
-  place-items: start;
-  touch-action: pan-x pan-y pinch-zoom;
-}
-
-.media-viewer-photo.is-zoomed img {
-  width: 200%;
-  height: 200%;
-  max-width: none;
-  max-height: none;
-  position: relative;
 }
 
 .media-viewer-close {
@@ -9253,8 +9222,6 @@ iframe.composer-location-map {
     animation: none;
   }
 
-  .media-viewer-photo,
-  .media-viewer-dimmer,
   .photo-lightbox-photo,
   .photo-lightbox-dimmer {
     animation: none !important;

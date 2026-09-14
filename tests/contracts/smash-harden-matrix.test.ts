@@ -52,9 +52,11 @@ const photoCardPager = read("src/features/timeline/photo-card-pager.tsx");
 const photoCardPagerTest = read(
   "src/features/timeline/photo-card-pager.test.tsx",
 );
-const fullscreenViewer = read("src/components/fullscreen-media-viewer.tsx");
-const fullscreenViewerTest = read(
-  "src/components/fullscreen-media-viewer.test.tsx",
+const nativeVideoFullscreen = read(
+  "src/components/native-video-fullscreen.tsx",
+);
+const nativeVideoFullscreenTest = read(
+  "src/components/native-video-fullscreen.test.tsx",
 );
 const overlayOpenChrome = read("src/features/shell/use-overlay-open-chrome.ts");
 const overlayOpenChromeTest = read(
@@ -281,10 +283,11 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("uses one overlay chrome hook so photo and video both restore the tab bar", () => {
+    it("uses overlay chrome only for the custom photo lightbox", () => {
       expect(overlayOpenChrome).toContain("restoreBottomNavAfterOverlay");
       expect(photoLightbox).toContain("useOverlayOpenChrome");
-      expect(fullscreenViewer).toContain("useOverlayOpenChrome");
+      expect(nativeVideoFullscreen).not.toContain("useOverlayOpenChrome");
+      expect(nativeVideoFullscreen).not.toContain("<dialog");
       expect(overlayOpenChromeTest).toContain(
         "freezes the tab bar while open and restores it on close",
       );
@@ -348,19 +351,20 @@ describe("smash harden matrix", () => {
   });
 
   describe("fullscreen media works", () => {
-    it("dismisses photos and videos with an overlay Close X, not a Done bar", () => {
+    it("keeps an app Close for photos and delegates video chrome to the platform", () => {
       expect(photoLightbox).toContain('aria-label="Close"');
       expect(photoLightbox).not.toContain("Done");
-      expect(fullscreenViewer).toContain('aria-label="Close"');
-      expect(fullscreenViewer).not.toContain("Done");
-      expect(fullscreenViewer).not.toContain("media-viewer-chrome");
+      expect(nativeVideoFullscreen).not.toContain('aria-label="Close"');
+      expect(nativeVideoFullscreen).not.toContain("<dialog");
+      expect(nativeVideoFullscreen).toContain("webkitEnterFullscreen");
+      expect(nativeVideoFullscreen).toContain("requestFullscreen");
       expect(globalsCss).not.toMatch(/\.media-viewer-chrome\s*\{/);
-      expect(mediaCloseCss).toContain("does not reserve a chrome band");
+      expect(mediaCloseCss).toContain("no custom video dialog");
     });
 
-    it("sizes photo and video overlays to the visual viewport in portrait and landscape", () => {
+    it("sizes the photo overlay while video uses the native viewport", () => {
       expect(photoLightbox).toContain("useVisualViewportFill");
-      expect(fullscreenViewer).toContain("useVisualViewportFill");
+      expect(nativeVideoFullscreen).not.toContain("useVisualViewportFill");
       expect(viewportFill).toContain("readVisualViewportBox");
       expect(viewportFillTest).toContain(
         "sizes an overlay to a landscape visual viewport",
@@ -368,21 +372,20 @@ describe("smash harden matrix", () => {
       expect(photoLightboxTest).toContain(
         "fills the visual viewport and restores the bottom nav on Close",
       );
-      expect(fullscreenViewerTest).toContain(
-        "fills a landscape visual viewport without a reserved chrome row",
+      expect(nativeVideoFullscreenTest).toContain(
+        "enters native iOS fullscreen on its first tap",
       );
       expect(globalsCss).not.toContain("100lvh");
       expect(globalsCss).not.toContain("max(56px, env(safe-area-inset-bottom");
     });
 
-    it("keeps media correct after rotate and pins the tab bar after close", () => {
+    it("restores photo chrome and native video scroll position after exit", () => {
       expect(photoLightboxTest).toContain("visualViewport.height = 390");
-      expect(fullscreenViewerTest).toContain(
-        "keeps filling the visual viewport after a rotate and restores the nav on close",
-      );
-      expect(fullscreenViewerTest).toContain(
-        "restores the bottom nav after Close, cancel, and a leftover landscape inset",
-      );
+      expect(nativeVideoFullscreen).toContain("webkitendfullscreen");
+      expect(nativeVideoFullscreen).toContain("fullscreenchange");
+      expect(nativeVideoFullscreen).toContain("scrollSnapshotRef");
+      expect(nativeVideoFullscreenTest).toContain("stage.scrollTop = 240");
+      expect(nativeVideoFullscreenTest).toContain("toHaveFocus");
       expect(viewportTest).toContain(
         "does not treat a stale landscape visual viewport as a keyboard",
       );

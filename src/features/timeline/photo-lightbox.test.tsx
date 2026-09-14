@@ -580,28 +580,28 @@ describe("photo lightbox", () => {
         </PhotoLightboxTrigger>
       </PhotoLightboxRoot>,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open photo full screen: Porch" }),
-    );
-    await screen.findByRole("button", { name: "Close" });
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const trigger = screen.getByRole("button", {
+      name: "Open photo full screen: Porch",
+    });
+    fireEvent.click(trigger);
+    const close = await screen.findByRole("button", { name: "Close" });
+    expect(close).toHaveFocus();
+    fireEvent.click(close);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it("uses a second media tap for the exact entry reaction instead of opening", () => {
+  it("opens on the first media tap and leaves reactions to their control", async () => {
     const reactionTarget = document.createElement("div");
     reactionTarget.id = "moment-conversation-moment-one";
     const heart = vi.fn();
     reactionTarget.addEventListener("our-days:heart", heart);
     document.body.append(reactionTarget);
+    mockIndependentOverlayDecode();
 
     render(
       <PhotoLightboxRoot>
-        <PhotoLightboxTrigger
-          src={cardPixelA}
-          alt="Family outside"
-          reactionTargetId="moment-one"
-        >
+        <PhotoLightboxTrigger src={cardPixelA} alt="Family outside">
           <span>Photo preview</span>
         </PhotoLightboxTrigger>
       </PhotoLightboxRoot>,
@@ -610,9 +610,12 @@ describe("photo lightbox", () => {
       name: "Open photo full screen: Family outside",
     });
     fireEvent.click(trigger, { detail: 1 });
-    fireEvent.click(trigger, { detail: 2 });
-    expect(heart).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Full-screen photo: Family outside",
+      }),
+    ).toBeVisible();
+    expect(heart).not.toHaveBeenCalled();
     reactionTarget.remove();
   });
 

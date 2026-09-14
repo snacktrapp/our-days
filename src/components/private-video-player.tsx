@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import { useState } from "react";
 import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 
@@ -13,6 +14,9 @@ export function PrivateVideoPlayer({
   width,
   height,
   onReadyFrame,
+  onUnavailableChange,
+  playsInline = true,
+  videoRef,
 }: Readonly<{
   src: string;
   label: string;
@@ -27,6 +31,9 @@ export function PrivateVideoPlayer({
     width: number;
     height: number;
   }) => void;
+  onUnavailableChange?: (unavailable: boolean) => void;
+  playsInline?: boolean;
+  videoRef?: Ref<HTMLVideoElement>;
 }>) {
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
@@ -50,6 +57,7 @@ export function PrivateVideoPlayer({
           type="button"
           onClick={() => {
             setUnavailable(false);
+            onUnavailableChange?.(false);
             setAttempt((current) => current + 1);
           }}
         >
@@ -61,6 +69,7 @@ export function PrivateVideoPlayer({
 
   return (
     <video
+      ref={videoRef}
       key={attempt}
       src={deliverySrc}
       poster={deliveryPoster}
@@ -71,11 +80,14 @@ export function PrivateVideoPlayer({
       controlsList="nodownload noremoteplayback"
       disablePictureInPicture
       disableRemotePlayback
-      playsInline
-      webkit-playsinline=""
+      playsInline={playsInline}
+      webkit-playsinline={playsInline ? "" : undefined}
       preload={preload}
       autoPlay={autoPlay}
-      onError={() => setUnavailable(true)}
+      onError={() => {
+        setUnavailable(true);
+        onUnavailableChange?.(true);
+      }}
       onLoadedData={(event) => {
         if (!onReadyFrame) return;
         const video = event.currentTarget;

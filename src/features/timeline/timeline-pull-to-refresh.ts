@@ -64,9 +64,7 @@ export function readJournalRefreshBlock(target: EventTarget | null) {
     html.classList.contains("overlay-open") ||
     body.classList.contains("overlay-open");
   const dialogOpen = Boolean(
-    document.querySelector(
-      "dialog[open], .photo-lightbox, .fullscreen-media-dialog[open]",
-    ),
+    document.querySelector("dialog[open], .photo-lightbox"),
   );
   const scroller = overlayScrollParent(target);
   const nestedScrollTop =
