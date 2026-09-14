@@ -126,12 +126,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
       },
     )
     .toBe(true);
-  const done = fullscreen.getByRole("button", { name: "Done" });
-  await expect(done).toBeVisible();
-  await expect(fullscreen.locator(".media-viewer-chrome")).toContainText(
-    "Done",
-  );
-  await done.click();
+  const close = fullscreen.getByRole("button", { name: "Close" });
+  await expect(close).toBeVisible();
+  await expect(close).toHaveText("×");
+  await expect(fullscreen.locator(".media-viewer-chrome")).toHaveCount(0);
+  await close.click();
   await expect(fullscreen).toBeHidden();
 
   await page.goto("/memories");

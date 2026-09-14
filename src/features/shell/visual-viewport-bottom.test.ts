@@ -2,16 +2,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   clearBottomNavVisualInset,
   keyboardLikeVisualViewportMinShrinkPx,
+  overlayFreezesChromeInset,
   pinVisualViewportBottomInset,
+  restoreBottomNavAfterOverlay,
   syncBottomNavVisualInset,
   timelinePullFreezesChromeInset,
   visualViewportBottomInset,
   visualViewportBottomInsetVar,
   visualViewportOffsetTop,
   visualViewportOffsetTopVar,
+  visualViewportOrientationMatchesLayout,
 } from "./visual-viewport-bottom";
 
 afterEach(() => {
+  document.documentElement.classList.remove("overlay-open");
+  document.body.classList.remove("overlay-open");
   document.documentElement.style.removeProperty(visualViewportOffsetTopVar);
   document.documentElement.style.removeProperty(visualViewportBottomInsetVar);
   document.querySelectorAll(".timeline-pull-shell").forEach((shell) => {
@@ -23,14 +28,28 @@ function viewport(
   innerHeight: number,
   height: number,
   offsetTop: number,
-): Pick<Window, "innerHeight" | "visualViewport"> & { document: Document } {
+  extras: {
+    innerWidth?: number;
+    width?: number;
+  } = {},
+): Pick<Window, "innerHeight" | "visualViewport"> & {
+  document: Document;
+  innerWidth?: number;
+  requestAnimationFrame: Window["requestAnimationFrame"];
+} {
   return {
     innerHeight,
+    innerWidth: extras.innerWidth,
     visualViewport: {
       height,
+      width: extras.width,
       offsetTop,
     } as VisualViewport,
     document,
+    requestAnimationFrame: (callback) => {
+      callback(0);
+      return 1;
+    },
   };
 }
 
@@ -231,6 +250,85 @@ describe("visual viewport bottom inset", () => {
         visualViewportBottomInsetVar,
       ),
     ).toBe("268px");
+  });
+
+  it("does not treat a stale landscape visual viewport as a keyboard", () => {
+    const leftover = {
+      innerHeight: 844,
+      innerWidth: 390,
+      visualViewport: {
+        height: 390,
+        width: 844,
+        offsetTop: 0,
+      } as VisualViewport,
+    };
+    expect(visualViewportOrientationMatchesLayout(leftover)).toBe(false);
+    expect(pinVisualViewportBottomInset(leftover)).toBe(0);
+    expect(visualViewportBottomInset(leftover)).toBe(454);
+  });
+
+  it("still pins a matching-orientation keyboard shrink", () => {
+    expect(
+      pinVisualViewportBottomInset({
+        innerHeight: 844,
+        innerWidth: 390,
+        visualViewport: {
+          height: 560,
+          width: 390,
+          offsetTop: 0,
+        } as VisualViewport,
+      }),
+    ).toBe(284);
+  });
+
+  it("freezes chrome insets while a media lightbox is open", () => {
+    document.documentElement.classList.add("overlay-open");
+    expect(overlayFreezesChromeInset(document)).toBe(true);
+    document.documentElement.style.setProperty(
+      visualViewportBottomInsetVar,
+      "454px",
+    );
+    syncBottomNavVisualInset(
+      viewport(844, 390, 0, { innerWidth: 390, width: 844 }),
+    );
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+    document.documentElement.classList.remove("overlay-open");
+  });
+
+  it("restores the tab bar after a landscape overlay leaves a stale visual viewport", () => {
+    document.documentElement.classList.add("overlay-open");
+    document.documentElement.style.setProperty(
+      visualViewportBottomInsetVar,
+      "454px",
+    );
+    const leftover = viewport(844, 390, 0, { innerWidth: 390, width: 844 });
+    syncBottomNavVisualInset(leftover);
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
+
+    document.documentElement.classList.remove("overlay-open");
+    document.documentElement.style.setProperty(
+      visualViewportBottomInsetVar,
+      "454px",
+    );
+    restoreBottomNavAfterOverlay(leftover);
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportOffsetTopVar,
+      ),
+    ).toBe("0px");
+    expect(
+      document.documentElement.style.getPropertyValue(
+        visualViewportBottomInsetVar,
+      ),
+    ).toBe("0px");
   });
 
   it("clears the pins back to 0px", () => {

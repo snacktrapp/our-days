@@ -48,6 +48,11 @@ describe("bottom-nav compact CSS contract", () => {
     expect(css).toMatch(
       /:root:has\(\.new-moment-composer-dialog\[open\]\) \.bottom-nav/,
     );
+    expect(css).toMatch(/:root:has\(\.photo-lightbox\) \.bottom-nav/);
+    expect(css).toMatch(
+      /:root:has\(\.fullscreen-media-dialog\[open\]\) \.bottom-nav/,
+    );
+    expect(css).toMatch(/html\.overlay-open \.bottom-nav/);
   });
 
   it("animates only the pill scale in 180ms and snaps when motion is reduced", () => {
