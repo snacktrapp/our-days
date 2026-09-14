@@ -152,7 +152,7 @@ The connected Milestones archive checkpoint is recorded in `docs/quality/PHASE_6
 
 The isolated local short-video preview is recorded in `docs/quality/VIDEO_FEASIBILITY_REPORT.md`. It established the quiet timeline treatment and on-device inspection contract.
 
-PD-004 is accepted. Live Add Moment now shares the photo/media intake for one short clip, and the Home timeline presents video moments with a still mat, play control, no autoplay, letterboxed `playsInline` playback, and photo-lightbox Done dismiss. The v1 quality report is `docs/quality/SHORT_VIDEO_V1_REPORT.md`. Multi-clip albums, trimmer/editor UI, autoplay feeds, and People/Memories redesign remain out of scope.
+PD-004 is accepted. Live Add Moment now shares the photo/media intake for one short clip, and the Home timeline presents video moments with native inline `playsInline` controls and no autoplay or app-initiated fullscreen. The v1 quality report is `docs/quality/SHORT_VIDEO_V1_REPORT.md`. Multi-clip albums, trimmer/editor UI, autoplay feeds, and People/Memories redesign remain out of scope.
 
 Deliver:
 

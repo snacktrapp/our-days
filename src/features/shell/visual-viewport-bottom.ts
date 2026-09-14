@@ -11,8 +11,6 @@ const chromeInsetFreezePullStates = new Set([
   "settling",
 ]);
 
-const overlayFreezeSelector = ".photo-lightbox";
-
 type VisualViewportView = Pick<Window, "innerHeight" | "visualViewport"> & {
   innerWidth?: number;
 };
@@ -71,8 +69,7 @@ export function timelinePullFreezesChromeInset(doc: Document) {
 export function overlayFreezesChromeInset(doc: Document) {
   return (
     doc.documentElement.classList.contains("overlay-open") ||
-    doc.body.classList.contains("overlay-open") ||
-    Boolean(doc.querySelector(overlayFreezeSelector))
+    doc.body.classList.contains("overlay-open")
   );
 }
 

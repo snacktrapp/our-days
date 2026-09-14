@@ -5,11 +5,9 @@ import {
   formatBibleVerseMoment,
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
-import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
 import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import { MomentCard } from "./moment-card";
 import { timelineCardOccurredLabel } from "./timeline-view-model";
-import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
 import type {
   InsightMomentViewModel,
@@ -231,8 +229,6 @@ describe("MomentCard long thought copy", () => {
 
 describe("MomentCard timeline media", () => {
   afterEach(() => {
-    resetPhotoLightboxSession();
-    resetIndependentOverlayObjectUrlCache();
     resetOverlayChromeForTests();
     document.documentElement.classList.remove("overlay-open");
     document.body.classList.remove("overlay-open");
@@ -411,16 +407,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("presents a video moment as a poster card and starts play on one tap", () => {
-    const play = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(HTMLMediaElement.prototype, "play", {
-      configurable: true,
-      value: play,
-    });
-    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
-      configurable: true,
-      value: vi.fn(),
-    });
+  it("presents a video with native inline controls and no fullscreen trigger", () => {
     const poster =
       "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIhwgMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGfAD//2Q==";
     const { container } = render(
@@ -440,13 +427,13 @@ describe("MomentCard timeline media", () => {
       />,
     );
 
-    expect(container.querySelector(".video-card-poster")).toHaveAttribute(
-      "src",
-      poster,
+    const timelineVideo = screen.getByLabelText(
+      "Video in Molly’s journal from Aug 28, 2026",
     );
-    expect(
-      container.querySelector(".native-video-viewer video"),
-    ).toHaveAttribute("poster", poster);
+    expect(timelineVideo).toHaveAttribute("poster", poster);
+    expect(timelineVideo).toHaveAttribute("controls");
+    expect(timelineVideo).toHaveAttribute("playsinline");
+    expect(timelineVideo).not.toHaveAttribute("autoplay");
     expect(container.querySelector(".video-card")).not.toBeNull();
     expect(container.querySelector(".video-frame")).toHaveClass(
       "has-known-ratio",
@@ -456,27 +443,14 @@ describe("MomentCard timeline media", () => {
       "viewBox",
       "0 0 160 90",
     );
-    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
-      "▶",
-    );
     expect(screen.getByText("Video")).toBeVisible();
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open video full screen: Video in Molly’s journal from Aug 28, 2026",
-      }),
-    );
-    const timelineVideo = container.querySelector(".native-video-viewer video");
-    expect(timelineVideo).toHaveAttribute("controls");
-    expect(timelineVideo).not.toHaveAttribute("playsinline");
-    expect(timelineVideo).not.toHaveAttribute("autoplay");
-    expect(timelineVideo).toHaveAttribute("poster", poster);
-    expect(play).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Open video full screen/u }),
+    ).toBeNull();
   });
 
-  it("keeps a play badge on a dark mat when no poster is ready yet", () => {
+  it("keeps native inline controls when no poster is ready yet", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -493,30 +467,26 @@ describe("MomentCard timeline media", () => {
       />,
     );
 
-    expect(container.querySelector(".video-card-mat")).not.toBeNull();
-    expect(container.querySelector(".video-card-mat-label")).toHaveTextContent(
-      "Video",
+    const timelineVideo = screen.getByLabelText(
+      "Video in Molly’s journal from Aug 28, 2026",
     );
-    expect(
-      container.querySelector(".native-video-viewer video"),
-    ).not.toBeNull();
-    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
-      "▶",
-    );
+    expect(timelineVideo).toHaveAttribute("controls");
+    expect(timelineVideo).toHaveAttribute("playsinline");
+    expect(timelineVideo).not.toHaveAttribute("poster");
     expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
       "viewBox",
       "0 0 160 90",
     );
   });
 
-  it("keeps the video tap available when its private poster fails", async () => {
+  it("keeps the inline video available when its private poster fails", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       blob: async () => new Blob(),
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container } = render(
+    render(
       <MomentCard
         moment={{
           ...thought,
@@ -536,15 +506,15 @@ describe("MomentCard timeline media", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
-    expect(container.querySelector(".video-card-mat")).not.toBeNull();
-    expect(
-      screen.getByRole("button", {
-        name: /Open video full screen/u,
-      }),
-    ).toBeVisible();
+    const timelineVideo = screen.getByLabelText(
+      "Video in Molly’s journal from Aug 28, 2026",
+    );
+    expect(timelineVideo).toHaveAttribute("controls");
+    expect(timelineVideo).toHaveAttribute("playsinline");
+    expect(timelineVideo).not.toHaveAttribute("poster");
   });
 
-  it("reserves a 16:9 mat for posterless videos with unknown dimensions", () => {
+  it("reserves a 16:9 inline player for videos with unknown dimensions", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -567,12 +537,8 @@ describe("MomentCard timeline media", () => {
       "viewBox",
       "0 0 16 9",
     );
-    expect(container.querySelector(".video-card-mat")).not.toBeNull();
-    expect(container.querySelector(".video-card-mat-label")).toHaveTextContent(
-      "iPhone video",
-    );
-    expect(container.querySelector(".video-viewer-play")).toHaveTextContent(
-      "▶",
+    expect(screen.getByLabelText(/Video in Molly’s journal/u)).toHaveAttribute(
+      "controls",
     );
   });
 
@@ -654,113 +620,6 @@ describe("MomentCard timeline media", () => {
     });
     expect(image).toHaveAttribute("width", "1080");
     expect(image).toHaveAttribute("height", "1920");
-  });
-
-  it("leaves both card images in place when opening A then B then A", async () => {
-    const firstSrc = "/private-photo-a.jpg";
-    const lastSrc = "/private-photo-b.jpg";
-    let created = 0;
-    vi.spyOn(URL, "createObjectURL").mockImplementation(
-      () => `blob:card-overlay-${++created}`,
-    );
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        blob: async () => new Blob(["overlay-bytes"], { type: "image/gif" }),
-      })),
-    );
-
-    render(
-      <PhotoLightboxRoot>
-        <MomentCard
-          moment={{
-            ...thought,
-            id: "photo-a",
-            kind: "photo",
-            kicker: "A photo",
-            image: {
-              src: firstSrc,
-              alt: "First light",
-              badgeLabel: "AUG 28",
-              delivery: "private",
-              width: 80,
-              height: 50,
-            },
-          }}
-        />
-        <MomentCard
-          moment={{
-            ...thought,
-            id: "photo-b",
-            kind: "photo",
-            kicker: "A photo",
-            image: {
-              src: lastSrc,
-              alt: "Last light",
-              badgeLabel: "AUG 28",
-              delivery: "private",
-              width: 80,
-              height: 50,
-            },
-          }}
-        />
-      </PhotoLightboxRoot>,
-    );
-
-    const first = await screen.findByRole("img", { name: "First light" });
-    const last = await screen.findByRole("img", { name: "Last light" });
-    await waitFor(() => {
-      expect(first.getAttribute("src")).toMatch(/^blob:/u);
-      expect(last.getAttribute("src")).toMatch(/^blob:/u);
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open photo full screen: First light",
-      }),
-    );
-    expect(first.getAttribute("src")).toMatch(/^blob:/u);
-    expect(last.getAttribute("src")).toMatch(/^blob:/u);
-    expect(
-      screen.getByRole("dialog").querySelector(`img[src="${firstSrc}"]`),
-    ).toBeNull();
-    expect(screen.getByRole("dialog").querySelector("img")?.src).toMatch(
-      /^blob:/u,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open photo full screen: Last light",
-      }),
-    );
-    expect(screen.getByRole("img", { name: "First light" })).toBe(first);
-    expect(last.getAttribute("src")).toMatch(/^blob:/u);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", {
-        name: "Open photo full screen: First light",
-      }),
-    );
-    expect(screen.getByRole("img", { name: "Last light" })).toBe(last);
-    expect(first).toBeVisible();
-    expect(last).toBeVisible();
-    expect(first.getAttribute("src")).toMatch(/^blob:/u);
-    expect(last.getAttribute("src")).toMatch(/^blob:/u);
-    expect(window.getComputedStyle(first).visibility).not.toBe("hidden");
-    expect(window.getComputedStyle(last).visibility).not.toBe("hidden");
-    expect(document.documentElement).not.toHaveClass("media-viewer-open");
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
   });
 });
 

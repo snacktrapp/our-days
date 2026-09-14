@@ -5,7 +5,6 @@ import { useState, type ReactNode } from "react";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
-import { PhotoLightboxRoot } from "@/features/timeline/photo-lightbox";
 import { PrimaryNavigation } from "./primary-navigation";
 import { TimelineHeaderComposer } from "./timeline-header-composer";
 import { ThemeToggle } from "./theme-toggle";
@@ -173,20 +172,18 @@ export function JournalChrome({
       createMomentAction={createMomentAction}
       homeContext={currentHomeContext(shownSwitcher)}
     >
-      <PhotoLightboxRoot>
-        <JournalPendingRouteProvider>
-          <JournalStage
-            model={chrome}
-            section={section}
-            activity={activity}
-            createMomentAction={createMomentAction}
-            switcher={shownSwitcher}
-            onSelectGroup={onSelectGroup}
-          >
-            {children}
-          </JournalStage>
-        </JournalPendingRouteProvider>
-      </PhotoLightboxRoot>
+      <JournalPendingRouteProvider>
+        <JournalStage
+          model={chrome}
+          section={section}
+          activity={activity}
+          createMomentAction={createMomentAction}
+          switcher={shownSwitcher}
+          onSelectGroup={onSelectGroup}
+        >
+          {children}
+        </JournalStage>
+      </JournalPendingRouteProvider>
     </ComposerSessionProvider>
   );
 }

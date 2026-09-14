@@ -168,7 +168,7 @@ describe("TimelineRefreshControl", () => {
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
-  it("does not steal composer lock or the photo lightbox", () => {
+  it("does not steal composer lock or an open overlay", () => {
     render(
       <TimelineRefreshControl>
         <section className="timeline">Moments</section>

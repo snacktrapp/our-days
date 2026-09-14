@@ -63,9 +63,7 @@ export function readJournalRefreshBlock(target: EventTarget | null) {
   const overlayOpen =
     html.classList.contains("overlay-open") ||
     body.classList.contains("overlay-open");
-  const dialogOpen = Boolean(
-    document.querySelector("dialog[open], .photo-lightbox"),
-  );
+  const dialogOpen = Boolean(document.querySelector("dialog[open]"));
   const scroller = overlayScrollParent(target);
   const nestedScrollTop =
     scroller && !pageScroller(scroller) ? scroller.scrollTop : null;

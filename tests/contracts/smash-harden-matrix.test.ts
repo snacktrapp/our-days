@@ -46,28 +46,13 @@ const videoRouteTest = read(
   "src/app/api/media/videos/[momentId]/route.test.ts",
 );
 const journalError = read("src/app/(journal)/error.tsx");
-const photoLightbox = read("src/features/timeline/photo-lightbox.tsx");
-const photoLightboxTest = read("src/features/timeline/photo-lightbox.test.tsx");
 const photoCardPager = read("src/features/timeline/photo-card-pager.tsx");
 const photoCardPagerTest = read(
   "src/features/timeline/photo-card-pager.test.tsx",
 );
-const nativeVideoFullscreen = read(
-  "src/components/native-video-fullscreen.tsx",
-);
-const nativeVideoFullscreenTest = read(
-  "src/components/native-video-fullscreen.test.tsx",
-);
-const overlayOpenChrome = read("src/features/shell/use-overlay-open-chrome.ts");
-const overlayOpenChromeTest = read(
-  "src/features/shell/use-overlay-open-chrome.test.ts",
-);
-const viewportFill = read("src/features/shell/visual-viewport-fill.ts");
-const viewportFillTest = read(
-  "src/features/shell/visual-viewport-fill.test.ts",
-);
-const mediaCloseCss = read("tests/contracts/media-viewer-close-x.test.ts");
-const globalsCss = read("src/app/globals.css");
+const journalChrome = read("src/features/shell/journal-chrome.tsx");
+const videoMomentMedia = read("src/features/timeline/video-moment-media.tsx");
+const privateVideoPlayer = read("src/components/private-video-player.tsx");
 const conversationControl = read(
   "src/features/timeline/moment-conversation-control.tsx",
 );
@@ -228,19 +213,7 @@ describe("smash harden matrix", () => {
     });
   });
 
-  describe("lightbox dismiss and note save parity", () => {
-    it("keeps Close available when a private photo fetch fails", () => {
-      expect(photoLightbox).toContain("This photo could not be opened.");
-      expect(photoLightbox).toContain("Try again");
-      expect(photoLightbox).toContain("photo-lightbox-close");
-      expect(photoLightboxTest).toContain(
-        "keeps Close available when the private photo fetch fails",
-      );
-      expect(photoLightboxTest).toContain(
-        "retries a failed private photo fetch without leaving the lightbox",
-      );
-    });
-
+  describe("note save parity", () => {
     it("does not treat a post-save conversation reload failure as a lost note", () => {
       expect(conversationControl).toContain("rememberLocalNote");
       expect(conversationControl).toContain("if (!reloaded) setError(null)");
@@ -271,7 +244,7 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("does not leave the tab bar mid-screen after a landscape lightbox", () => {
+    it("does not leave the tab bar mid-screen after a landscape overlay", () => {
       expect(viewport).toContain("overlayFreezesChromeInset");
       expect(viewport).toContain("restoreBottomNavAfterOverlay");
       expect(viewport).toContain("visualViewportOrientationMatchesLayout");
@@ -280,16 +253,6 @@ describe("smash harden matrix", () => {
       );
       expect(viewportTest).toContain(
         "restores the tab bar after a landscape overlay leaves a stale visual viewport",
-      );
-    });
-
-    it("uses overlay chrome only for the custom photo lightbox", () => {
-      expect(overlayOpenChrome).toContain("restoreBottomNavAfterOverlay");
-      expect(photoLightbox).toContain("useOverlayOpenChrome");
-      expect(nativeVideoFullscreen).not.toContain("useOverlayOpenChrome");
-      expect(nativeVideoFullscreen).not.toContain("<dialog");
-      expect(overlayOpenChromeTest).toContain(
-        "freezes the tab bar while open and restores it on close",
       );
     });
 
@@ -350,45 +313,28 @@ describe("smash harden matrix", () => {
     });
   });
 
-  describe("fullscreen media works", () => {
-    it("keeps an app Close for photos and delegates video chrome to the platform", () => {
-      expect(photoLightbox).toContain('aria-label="Close"');
-      expect(photoLightbox).not.toContain("Done");
-      expect(nativeVideoFullscreen).not.toContain('aria-label="Close"');
-      expect(nativeVideoFullscreen).not.toContain("<dialog");
-      expect(nativeVideoFullscreen).toContain("webkitEnterFullscreen");
-      expect(nativeVideoFullscreen).toContain("requestFullscreen");
-      expect(globalsCss).not.toMatch(/\.media-viewer-chrome\s*\{/);
-      expect(mediaCloseCss).toContain("no custom video dialog");
+  describe("timeline media stays inline", () => {
+    it("renders photos without a lightbox trigger", () => {
+      expect(photoCardPager).not.toContain("PhotoLightboxTrigger");
+      expect(journalChrome).not.toContain("PhotoLightboxRoot");
+      expect(photoCardPagerTest).toContain(
+        "keeps album photos out of fullscreen buttons",
+      );
+      expect(
+        existsSync(resolve(root, "src/features/timeline/photo-lightbox.tsx")),
+      ).toBe(false);
     });
 
-    it("sizes the photo overlay while video uses the native viewport", () => {
-      expect(photoLightbox).toContain("useVisualViewportFill");
-      expect(nativeVideoFullscreen).not.toContain("useVisualViewportFill");
-      expect(viewportFill).toContain("readVisualViewportBox");
-      expect(viewportFillTest).toContain(
-        "sizes an overlay to a landscape visual viewport",
-      );
-      expect(photoLightboxTest).toContain(
-        "fills the visual viewport and restores the bottom nav on Close",
-      );
-      expect(nativeVideoFullscreenTest).toContain(
-        "enters native iOS fullscreen on its first tap",
-      );
-      expect(globalsCss).not.toContain("100lvh");
-      expect(globalsCss).not.toContain("max(56px, env(safe-area-inset-bottom");
-    });
-
-    it("restores photo chrome and native video scroll position after exit", () => {
-      expect(photoLightboxTest).toContain("visualViewport.height = 390");
-      expect(nativeVideoFullscreen).toContain("webkitendfullscreen");
-      expect(nativeVideoFullscreen).toContain("fullscreenchange");
-      expect(nativeVideoFullscreen).toContain("scrollSnapshotRef");
-      expect(nativeVideoFullscreenTest).toContain("stage.scrollTop = 240");
-      expect(nativeVideoFullscreenTest).toContain("toHaveFocus");
-      expect(viewportTest).toContain(
-        "does not treat a stale landscape visual viewport as a keyboard",
-      );
+    it("renders videos with native inline controls and no fullscreen API", () => {
+      expect(videoMomentMedia).toContain("<PrivateVideoPlayer");
+      expect(videoMomentMedia).toContain("controls");
+      expect(videoMomentMedia).toContain("playsInline");
+      expect(videoMomentMedia).not.toContain("requestFullscreen");
+      expect(videoMomentMedia).not.toContain("webkitEnterFullscreen");
+      expect(privateVideoPlayer).toContain("playsInline={playsInline}");
+      expect(
+        existsSync(resolve(root, "src/components/native-video-fullscreen.tsx")),
+      ).toBe(false);
     });
   });
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { NativeVideoFullscreen } from "@/components/native-video-fullscreen";
+import { PrivateVideoPlayer } from "@/components/private-video-player";
 import {
   rememberVideoFrame,
   rememberVideoPoster,
@@ -109,45 +109,13 @@ export function VideoMomentMedia({
       }`}
     >
       <VideoFrameSizer width={width} height={height} />
-      <NativeVideoFullscreen
+      <PrivateVideoPlayer
         src={moment.video.src}
         label={label}
         poster={poster}
-        preview={
-          poster ? (
-            // Poster may be a private API URL or a local data URL; it must not
-            // enter the public image optimizer.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="video-card-poster"
-              src={poster}
-              alt=""
-              width={width}
-              height={height}
-              onLoad={(event) => {
-                const { naturalWidth, naturalHeight } = event.currentTarget;
-                if (naturalWidth > 0 && naturalHeight > 0) {
-                  rememberVideoFrame(moment.id, naturalWidth, naturalHeight);
-                }
-              }}
-            />
-          ) : (
-            <div
-              className={`video-card-mat${
-                moment.video.mimeType === "video/quicktime"
-                  ? " is-quicktime"
-                  : ""
-              }`}
-            >
-              <span className="video-card-mat-label">
-                {moment.video.mimeType === "video/quicktime"
-                  ? "iPhone video"
-                  : "Video"}
-              </span>
-            </div>
-          )
-        }
         preload={videoNearViewport ? "metadata" : "none"}
+        controls
+        playsInline
         width={width}
         height={height}
         onReadyFrame={(frame) => handleCapturedFrame(moment.id, frame)}

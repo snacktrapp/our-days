@@ -246,11 +246,6 @@ describe("PhotoCardPager", () => {
 
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
-    expect(
-      screen.getByRole("button", {
-        name: "Open photo full screen: Second porch",
-      }),
-    ).toBeInTheDocument();
   });
 
   it("slides a ready neighbor immediately and settles height to the incoming photo", () => {
@@ -331,22 +326,14 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
-  it("opens the album photo currently on screen", () => {
+  it("keeps album photos out of fullscreen buttons", () => {
     renderPager();
-    expect(
-      screen.getByRole("button", {
-        name: "Open photo full screen: First porch",
-      }),
-    ).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
 
     markPagerImagesReady();
     swipeAlbum(document.querySelector(".photo-card-pager")!);
     expect(track()).toHaveClass("is-sliding");
-    expect(
-      screen.getByRole("button", {
-        name: "Open photo full screen: Second porch",
-      }),
-    ).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   function mockCardSlideWidth(width: number) {
