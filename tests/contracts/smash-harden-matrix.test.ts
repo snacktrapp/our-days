@@ -59,7 +59,10 @@ const routeBoundary = read("src/features/shell/journal-route-boundary.tsx");
 describe("smash harden matrix", () => {
   describe("R-Account Account→Journal remount", () => {
     it("proves Family still throws required loads unless a remount helper landed", () => {
-      const usesRemountHelper = familyPage.includes("loadFamilyHomeJournal");
+      const usesRemountHelper =
+        familyPage.includes("loadFamilyHomeJournal") ||
+        (familyPage.includes("loadFamilyHomeChrome") &&
+          familyPage.includes("loadFamilyHomeFirstMoment"));
       const throwsDirect =
         familyPage.includes(
           "const context = await loadConnectedJournalContext(access);",

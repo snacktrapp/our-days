@@ -33,6 +33,7 @@ type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
   section: JournalSection;
   children: ReactNode;
+  activity?: ReactNode;
   createMomentAction?: SaveFamilyMomentAction;
   standaloneNavigation?: boolean;
   switcher?: readonly FamilyTimelineSwitcherItem[];
@@ -42,11 +43,13 @@ type JournalChromeProps = Readonly<{
 
 function PrimaryJournalHeader({
   model,
+  activity,
   createMomentAction,
   switcher,
   onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
+  activity?: ReactNode;
   createMomentAction?: SaveFamilyMomentAction;
   switcher?: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
@@ -71,7 +74,7 @@ function PrimaryJournalHeader({
       />
       {title}
       <div className="topbar-actions">
-        <NotificationCenter items={model.notifications} />
+        {activity ?? <NotificationCenter items={model.notifications} />}
         <ThemeToggle />
       </div>
     </header>
@@ -99,6 +102,7 @@ function JournalStage({
   model,
   section,
   children,
+  activity,
   createMomentAction,
   switcher,
   onSelectGroup,
@@ -112,6 +116,7 @@ function JournalStage({
     ) : (
       <PrimaryJournalHeader
         model={chromeModel}
+        activity={activity}
         createMomentAction={createMomentAction}
         switcher={switcher}
         onSelectGroup={onSelectGroup}
@@ -146,6 +151,7 @@ export function JournalChrome({
   model,
   section,
   children,
+  activity,
   createMomentAction,
   switcher,
   onSelectGroup,
@@ -172,6 +178,7 @@ export function JournalChrome({
           <JournalStage
             model={chrome}
             section={section}
+            activity={activity}
             createMomentAction={createMomentAction}
             switcher={shownSwitcher}
             onSelectGroup={onSelectGroup}

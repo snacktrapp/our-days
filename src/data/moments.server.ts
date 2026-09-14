@@ -614,6 +614,68 @@ function circleNamesFromContext(context: ConnectedJournalContext) {
   );
 }
 
+function applyTimelineSlice(
+  model: TimelineViewModel,
+  options: Readonly<{
+    enrichOffset?: number;
+    enrichLimit?: number;
+    omitCompletion?: boolean;
+    omitPagination?: boolean;
+  }>,
+): TimelineViewModel {
+  const offset = options.enrichOffset ?? 0;
+  const limit = options.enrichLimit;
+  let entries = model.entries;
+  if (offset > 0) {
+    entries = sliceTimelineAfterNthMoment(entries, offset);
+  } else if (limit != null) {
+    entries = sliceTimelineThroughNthMoment(entries, limit);
+  } else if (options.omitCompletion) {
+    entries = entries.filter((entry) => entry.entryType !== "end-message");
+  }
+  return {
+    ...model,
+    entries,
+    pagination: options.omitPagination ? undefined : model.pagination,
+    paginationError: options.omitPagination ? undefined : model.paginationError,
+  };
+}
+
+export function sliceTimelineThroughNthMoment(
+  entries: readonly TimelineEntryViewModel[],
+  count: number,
+) {
+  let seen = 0;
+  const sliced: TimelineEntryViewModel[] = [];
+  for (const entry of entries) {
+    if (entry.entryType === "end-message") continue;
+    sliced.push(entry);
+    if (entry.entryType === "moment") {
+      seen += 1;
+      if (seen >= count) break;
+    }
+  }
+  return sliced;
+}
+
+export function sliceTimelineAfterNthMoment(
+  entries: readonly TimelineEntryViewModel[],
+  count: number,
+) {
+  let seen = 0;
+  const sliced: TimelineEntryViewModel[] = [];
+  for (const entry of entries) {
+    if (entry.entryType === "moment") {
+      seen += 1;
+      if (seen <= count) continue;
+    } else if (seen < count) {
+      continue;
+    }
+    sliced.push(entry);
+  }
+  return sliced;
+}
+
 export async function loadConnectedTimeline(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -622,11 +684,18 @@ export async function loadConnectedTimeline(
     pages: number;
     snapshotAt?: string;
     allCircles?: boolean;
+    enrichOffset?: number;
+    enrichLimit?: number;
+    omitCompletion?: boolean;
+    omitPagination?: boolean;
   }>,
 ): Promise<TimelineViewModel> {
   if (localJournalIsEnabled()) {
     const { loadLocalTimeline } = await import("@/lib/local-journal/views");
-    return loadLocalTimeline(access, context, options);
+    return applyTimelineSlice(
+      await loadLocalTimeline(access, context, options),
+      options,
+    );
   }
   const supabase = await createOurDaysServerClient();
   const pageCount = requestedPageCount(options.pages);
@@ -693,10 +762,18 @@ export async function loadConnectedTimeline(
     if (!hasMore || !cursor) break;
   }
 
-  const photoMomentIds = rows
+  const enrichOffset = options.enrichOffset ?? 0;
+  const enrichRows = rows.slice(
+    enrichOffset,
+    options.enrichLimit == null
+      ? undefined
+      : enrichOffset + options.enrichLimit,
+  );
+  const stubRows = rows.slice(0, enrichOffset);
+  const photoMomentIds = enrichRows
     .filter((row) => row.moment_kind === "photo")
     .map((row) => row.moment_id);
-  const videoMomentIds = rows
+  const videoMomentIds = enrichRows
     .filter((row) => row.moment_kind === "video")
     .map((row) => row.moment_id);
   const photosByMoment = await loadMomentPhotosByMomentId(
@@ -715,23 +792,28 @@ export async function loadConnectedTimeline(
         ? context.viewerMembershipIds
         : [access.membershipId],
     },
-    rows.map((row) => row.moment_id),
+    enrichRows.map((row) => row.moment_id),
   );
-  const moments = rows.map((row) =>
+  const visibility = {
+    viewerPersonId: access.personId,
+    viewingJournalPersonId: options.journalPersonId,
+    feedCircleId: allCircles || personal ? null : access.circleId,
+    circleNames,
+  };
+  const stubMoments = stubRows.map((row) =>
+    mapTimelineRow(row, context.today, visibility),
+  );
+  const moments = enrichRows.map((row) =>
     mapTimelineRow(
       row,
       context.today,
-      {
-        viewerPersonId: access.personId,
-        viewingJournalPersonId: options.journalPersonId,
-        feedCircleId: allCircles || personal ? null : access.circleId,
-        circleNames,
-      },
+      visibility,
       photosByMoment.get(row.moment_id),
       conversationsByMoment.get(row.moment_id) ?? emptyConversation,
       videoMetaByMoment.get(row.moment_id),
     ),
   );
+  const mappedMoments = [...stubMoments, ...moments];
   const personalJournalIsWritable = Boolean(
     personal &&
     context.chrome.composer.journalPeople.some(
@@ -796,33 +878,56 @@ export async function loadConnectedTimeline(
             message: "Try again in a moment. Nothing here was lost.",
           },
         ]
-      : buildTimelineEntries(moments, context.today, hasMore, personal?.name),
+      : applyTimelineSlice(
+          {
+            chrome,
+            switcher,
+            timelineLabel: "Chronological family moments",
+            interaction: connectedTimelineInteraction(access, context),
+            entries: buildTimelineEntries(
+              mappedMoments,
+              context.today,
+              hasMore || Boolean(options.omitCompletion),
+              personal?.name,
+            ),
+            pagination: undefined,
+          },
+          options,
+        ).entries,
     pagination:
-      hasMore && !paginationFailed && !firstPageFailed
-        ? {
+      options.omitPagination ||
+      !(hasMore && !paginationFailed && !firstPageFailed)
+        ? undefined
+        : {
             nextHref: journalTimelineHref(
               queryPrefix,
               pageCount + 1,
               snapshotAt!,
             ),
             label: "Show earlier days",
-          }
-        : undefined,
-    paginationError: firstPageFailed
-      ? {
-          retryHref: queryPrefix,
-          message:
-            "The journal couldn’t open these days just now. Nothing here was lost.",
-          label: "Try opening the journal again",
-        }
-      : paginationFailed
-        ? {
-            retryHref: journalTimelineHref(queryPrefix, pageCount, snapshotAt!),
-            message:
-              "Earlier days couldn’t be opened. The moments already here are still safe.",
-            label: "Try opening earlier days again",
-          }
-        : undefined,
+          },
+    paginationError:
+      options.omitPagination && !firstPageFailed
+        ? undefined
+        : firstPageFailed
+          ? {
+              retryHref: queryPrefix,
+              message:
+                "The journal couldn’t open these days just now. Nothing here was lost.",
+              label: "Try opening the journal again",
+            }
+          : paginationFailed
+            ? {
+                retryHref: journalTimelineHref(
+                  queryPrefix,
+                  pageCount,
+                  snapshotAt!,
+                ),
+                message:
+                  "Earlier days couldn’t be opened. The moments already here are still safe.",
+                label: "Try opening earlier days again",
+              }
+            : undefined,
     refreshDegraded: firstPageFailed,
   };
 }

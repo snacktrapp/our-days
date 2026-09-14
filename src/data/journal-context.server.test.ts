@@ -24,6 +24,7 @@ import {
   buildJournalPersonSurface,
   buildTaggablePeopleByCircle,
   loadConnectedJournalContext,
+  loadJournalActivityNotifications,
   plainToday,
 } from "./journal-context.server";
 
@@ -529,6 +530,59 @@ describe("connected journal context load", () => {
       },
     ]);
   }
+
+  it("skips optional Activity when chrome is opened first", async () => {
+    stubMemberships();
+    const { from, momentCircles } = connectedClient({
+      momentCircles: {
+        data: [{ moment_id: "italy-video", circle_id: "family" }],
+        error: null,
+      },
+    });
+
+    const context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
+
+    expect(from).not.toHaveBeenCalledWith("moment_circles");
+    expect(momentCircles.eq).not.toHaveBeenCalled();
+    expect(context.chrome.notifications).toEqual([]);
+    expect(context.circleName).toBe("Our family");
+  });
+
+  it("loads deferred Activity after chrome without trapping the journal", async () => {
+    stubMemberships();
+    connectedClient({
+      momentCircles: {
+        data: [{ moment_id: "italy-video", circle_id: "family" }],
+        error: null,
+      },
+      linkedMoments: {
+        data: [
+          {
+            id: "italy-video",
+            recorded_by_membership_id: "membership-calvin",
+            kind: "video",
+            created_at: "2026-09-11T18:00:00.000Z",
+            audience: "family",
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const items = await loadJournalActivityNotifications(access, {
+      "membership-calvin": "Calvin",
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        id: "moment:italy-video",
+        actorName: "Calvin",
+        message: "posted a video.",
+      }),
+    ]);
+  });
 
   it("keeps the journal open when optional Activity queries fail", async () => {
     stubMemberships();

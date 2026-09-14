@@ -72,6 +72,25 @@ describe("JournalChrome", () => {
     },
   );
 
+  it("can stream Activity without waiting for notification items on the chrome model", () => {
+    render(
+      <JournalChrome
+        model={model}
+        section="timeline"
+        activity={<button type="button">Deferred activity</button>}
+      >
+        <p>Page content</p>
+      </JournalChrome>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Deferred activity" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Open notifications" }),
+    ).toBeNull();
+  });
+
   it("keeps the upload chip outside the scrolling journal stage", () => {
     const { container } = render(
       <JournalChrome

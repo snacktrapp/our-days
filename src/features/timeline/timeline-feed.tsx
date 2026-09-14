@@ -140,26 +140,89 @@ function TimelineEntry({
   }
 }
 
+export function TimelineFeedEntries({
+  model,
+  connectedActions,
+  conversationActions,
+  firstMomentId,
+  connectedOffset = 0,
+}: {
+  model: TimelineViewModel;
+  connectedActions?: ConnectedMomentActions;
+  conversationActions?: MomentConversationActions;
+  firstMomentId?: string;
+  connectedOffset?: number;
+}) {
+  const connectedMomentIds = model.entries.flatMap((entry) =>
+    entry.entryType === "moment" ? [entry.moment.id] : [],
+  );
+  const connectedPositionById = new Map(
+    connectedMomentIds.map((id, index) => [id, connectedOffset + index + 1]),
+  );
+
+  return (
+    <>
+      {model.entries.map((entry) => (
+        <TimelineEntry
+          key={entry.id}
+          entry={entry}
+          firstMomentId={firstMomentId}
+          interaction={model.interaction}
+          connectedActions={connectedActions}
+          conversationActions={conversationActions}
+          connectedPosition={
+            entry.entryType === "moment"
+              ? connectedPositionById.get(entry.moment.id)
+              : undefined
+          }
+          connectedTotal={connectedMomentIds.length + connectedOffset}
+        />
+      ))}
+      {model.pagination ? (
+        <div className="timeline-pagination">
+          <Link
+            href={model.pagination.nextHref}
+            prefetch={false}
+            replace
+            scroll={false}
+          >
+            {model.pagination.label}
+          </Link>
+        </div>
+      ) : null}
+      {model.paginationError ? (
+        <div className="timeline-pagination-error" role="alert">
+          <span>{model.paginationError.message}</span>
+          <Link
+            href={model.paginationError.retryHref}
+            prefetch={false}
+            replace
+            scroll={false}
+          >
+            {model.paginationError.label}
+          </Link>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export function TimelineFeed({
   model,
   connectedActions,
   conversationActions,
   pendingEntries,
+  trailing,
 }: {
   model: TimelineViewModel;
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   pendingEntries?: ReactNode;
+  trailing?: ReactNode;
 }) {
   const firstMomentId = model.entries.find(
     (entry) => entry.entryType === "moment",
   )?.moment.id;
-  const connectedMomentIds = model.entries.flatMap((entry) =>
-    entry.entryType === "moment" ? [entry.moment.id] : [],
-  );
-  const connectedPositionById = new Map(
-    connectedMomentIds.map((id, index) => [id, index + 1]),
-  );
 
   return (
     <>
@@ -181,47 +244,21 @@ export function TimelineFeed({
           tabIndex={-1}
         >
           <div className="time-rail" aria-hidden="true" />
-          {model.entries.map((entry) => (
-            <TimelineEntry
-              key={entry.id}
-              entry={entry}
-              firstMomentId={firstMomentId}
-              interaction={model.interaction}
-              connectedActions={connectedActions}
-              conversationActions={conversationActions}
-              connectedPosition={
-                entry.entryType === "moment"
-                  ? connectedPositionById.get(entry.moment.id)
-                  : undefined
-              }
-              connectedTotal={connectedMomentIds.length}
-            />
-          ))}
-          {model.pagination ? (
-            <div className="timeline-pagination">
-              <Link
-                href={model.pagination.nextHref}
-                prefetch={false}
-                replace
-                scroll={false}
-              >
-                {model.pagination.label}
-              </Link>
-            </div>
-          ) : null}
-          {model.paginationError ? (
-            <div className="timeline-pagination-error" role="alert">
-              <span>{model.paginationError.message}</span>
-              <Link
-                href={model.paginationError.retryHref}
-                prefetch={false}
-                replace
-                scroll={false}
-              >
-                {model.paginationError.label}
-              </Link>
-            </div>
-          ) : null}
+          <TimelineFeedEntries
+            model={
+              trailing
+                ? {
+                    ...model,
+                    pagination: undefined,
+                    paginationError: undefined,
+                  }
+                : model
+            }
+            firstMomentId={firstMomentId}
+            connectedActions={connectedActions}
+            conversationActions={conversationActions}
+          />
+          {trailing}
         </section>
       </TimelineRefreshControl>
     </>

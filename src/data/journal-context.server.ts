@@ -165,6 +165,7 @@ export type ConnectedJournalContext = Readonly<{
   }>[];
   viewerMembershipIds?: readonly string[];
   viewerPersonIds?: readonly string[];
+  memberNames?: Readonly<Record<string, string>>;
 }>;
 
 export type JournalPersonOption = Readonly<{
@@ -499,14 +500,49 @@ async function loadOptionalJournalActivity(
   }
 }
 
+export async function loadJournalActivityNotifications(
+  access: AuthenticatedAccess,
+  memberNames: Readonly<Record<string, string>> = {},
+): Promise<NonNullable<JournalChromeViewModel["notifications"]>> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalJournalContext } =
+      await import("@/lib/local-journal/views");
+    return (await loadLocalJournalContext(access)).chrome.notifications ?? [];
+  }
+  try {
+    const supabase = await createOurDaysServerClient();
+    const circleMemberships = await readJournalCircleMemberships();
+    const myMembershipIds = new Set(
+      circleMemberships.map((membership) => membership.membershipId),
+    );
+    const activity = await loadOptionalJournalActivity(
+      supabase,
+      access,
+      myMembershipIds,
+    );
+    return buildActivityNotifications(
+      activity.notes,
+      activity.reactions,
+      activity.ownedMomentIds,
+      new Map(Object.entries(memberNames)),
+      activity.familyMoments,
+      access.membershipId,
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function loadConnectedJournalContext(
   access: AuthenticatedAccess,
+  options?: Readonly<{ includeActivity?: boolean }>,
 ): Promise<ConnectedJournalContext> {
   if (localJournalIsEnabled()) {
     const { loadLocalJournalContext } =
       await import("@/lib/local-journal/views");
     return loadLocalJournalContext(access);
   }
+  const includeActivity = options?.includeActivity !== false;
   const supabase = await createOurDaysServerClient();
   const circleMemberships = await readJournalCircleMemberships();
   const rosterCircleIds =
@@ -552,7 +588,9 @@ export async function loadConnectedJournalContext(
         .eq("circle_id", access.circleId)
         .is("revoked_at", null),
     ),
-    loadOptionalJournalActivity(supabase, access, myMembershipIds),
+    includeActivity
+      ? loadOptionalJournalActivity(supabase, access, myMembershipIds)
+      : Promise.resolve(emptyOptionalActivity),
   ]);
 
   const error =
@@ -615,7 +653,7 @@ export async function loadConnectedJournalContext(
   const allPersonNameById = new Map(
     allPeople.map((person) => [person.id, person.display_name]),
   );
-  const memberNames = new Map(
+  const memberNameById = new Map(
     allMemberships.map((membership) => [
       membership.id,
       allPersonNameById.get(membership.person_id) ?? "Family",
@@ -738,7 +776,7 @@ export async function loadConnectedJournalContext(
       activity.notes,
       activity.reactions,
       activity.ownedMomentIds,
-      memberNames,
+      memberNameById,
       activity.familyMoments,
       access.membershipId,
     ),
@@ -753,5 +791,6 @@ export async function loadConnectedJournalContext(
     people: switcherPeople,
     viewerMembershipIds: [...myMembershipIds],
     viewerPersonIds,
+    memberNames: Object.fromEntries(memberNameById),
   };
 }

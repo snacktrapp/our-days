@@ -154,6 +154,19 @@ describe("TimelineFeed", () => {
     expect(pending.nextElementSibling).toHaveClass("timeline");
   });
 
+  it("keeps streamed remainder cards inside the same timeline rail", () => {
+    const { container } = render(
+      <TimelineFeed
+        model={model}
+        trailing={<article className="moment">Later day</article>}
+      />,
+    );
+    const timeline = container.querySelector(".timeline");
+    const trailing = screen.getByText("Later day");
+    expect(timeline).toContainElement(trailing);
+    expect(timeline?.querySelectorAll(".time-rail")).toHaveLength(1);
+  });
+
   it("does not render a person-journal banner above the feed", () => {
     render(
       <TimelineFeed
