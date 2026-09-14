@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import {
@@ -11,6 +17,10 @@ describe("FullscreenMediaViewer", () => {
   const originalVisualViewport = window.visualViewport;
   const originalInnerHeight = window.innerHeight;
   const originalInnerWidth = window.innerWidth;
+  const originalWebkitEnterFullscreen = Object.getOwnPropertyDescriptor(
+    HTMLVideoElement.prototype,
+    "webkitEnterFullscreen",
+  );
 
   function pinPortraitLayout() {
     Object.defineProperty(window, "innerHeight", {
@@ -24,6 +34,7 @@ describe("FullscreenMediaViewer", () => {
   }
 
   afterEach(() => {
+    vi.useRealTimers();
     resetOverlayChromeForTests();
     document.documentElement.classList.remove("overlay-open");
     document.body.classList.remove("overlay-open");
@@ -41,10 +52,24 @@ describe("FullscreenMediaViewer", () => {
       configurable: true,
       value: originalInnerWidth,
     });
+    if (originalWebkitEnterFullscreen) {
+      Object.defineProperty(
+        HTMLVideoElement.prototype,
+        "webkitEnterFullscreen",
+        originalWebkitEnterFullscreen,
+      );
+    } else {
+      Reflect.deleteProperty(
+        HTMLVideoElement.prototype,
+        "webkitEnterFullscreen",
+      );
+    }
     vi.restoreAllMocks();
   });
 
-  function renderViewer() {
+  function renderViewer({
+    reactionTargetId,
+  }: Readonly<{ reactionTargetId?: string }> = {}) {
     const play = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(HTMLMediaElement.prototype, "play", {
       configurable: true,
@@ -58,6 +83,7 @@ describe("FullscreenMediaViewer", () => {
       <FullscreenMediaViewer
         kind="video"
         label="Family video"
+        reactionTargetId={reactionTargetId}
         preview={<div className="video-card-mat" aria-hidden="true" />}
         fullscreenMedia={
           <video src="/video.mp4" aria-label="Family video" controls />
@@ -92,6 +118,72 @@ describe("FullscreenMediaViewer", () => {
     fireEvent.click(close);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.documentElement).not.toHaveClass("overlay-open");
+  });
+
+  it("enters iOS native video fullscreen without overlapping native controls", async () => {
+    const webkitEnterFullscreen = vi.fn();
+    Object.defineProperty(HTMLVideoElement.prototype, "webkitEnterFullscreen", {
+      configurable: true,
+      value: webkitEnterFullscreen,
+    });
+    renderViewer({ reactionTargetId: "moment-1" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Family video",
+      }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Full-screen video: Family video",
+    });
+    const video = dialog.querySelector("video");
+    expect(webkitEnterFullscreen).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+
+    video?.dispatchEvent(new Event("webkitendfullscreen"));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.documentElement).not.toHaveClass("overlay-open");
+  });
+
+  it("keeps the custom viewer when native fullscreen entry is rejected", () => {
+    Object.defineProperty(HTMLVideoElement.prototype, "webkitEnterFullscreen", {
+      configurable: true,
+      value: vi.fn(() => {
+        throw new Error("Native fullscreen unavailable");
+      }),
+    });
+    renderViewer();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Family video",
+      }),
+    );
+
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+  });
+
+  it("restores the custom Close when native fullscreen never begins", () => {
+    vi.useFakeTimers();
+    Object.defineProperty(HTMLVideoElement.prototype, "webkitEnterFullscreen", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    renderViewer();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open video full screen: Family video",
+      }),
+    );
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+
+    act(() => vi.advanceTimersByTime(1_500));
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
   });
 
   it("fills a landscape visual viewport without a reserved chrome row", () => {
