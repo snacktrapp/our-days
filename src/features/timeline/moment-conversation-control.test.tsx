@@ -627,6 +627,8 @@ describe("MomentConversationControl", () => {
 
   it("opens a compact note field inline with only Cancel and Save", async () => {
     const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
     renderControl();
 
     await user.click(
@@ -635,6 +637,7 @@ describe("MomentConversationControl", () => {
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
+    expect(scrollIntoView).toHaveBeenCalled();
     expect(form).toHaveClass("inline-note-form");
     expect(form).not.toHaveClass("overlay-popover");
     expect(form).not.toHaveClass("note-drawer");

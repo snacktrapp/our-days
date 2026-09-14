@@ -290,9 +290,16 @@ export function MomentConversationControl({
 
   useEffect(() => {
     if (panel !== "note") return;
-    const frame = window.requestAnimationFrame(() =>
-      noteRef.current?.focus({ preventScroll: !editingNoteId }),
-    );
+    const frame = window.requestAnimationFrame(() => {
+      const field = noteRef.current;
+      if (!field) return;
+      field.focus({ preventScroll: false });
+      const form = field.closest("form");
+      form?.scrollIntoView?.({
+        block: "nearest",
+        inline: "nearest",
+      });
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [editingNoteId, panel]);
 
