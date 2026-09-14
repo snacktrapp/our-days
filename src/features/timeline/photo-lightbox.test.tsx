@@ -79,6 +79,8 @@ function renderPhotos() {
 }
 
 describe("photo lightbox", () => {
+  const originalVisualViewport = window.visualViewport;
+
   beforeEach(() => {
     const meta = document.createElement("meta");
     meta.setAttribute("name", "theme-color");
@@ -90,6 +92,12 @@ describe("photo lightbox", () => {
     resetPhotoLightboxSession();
     resetIndependentOverlayObjectUrlCache();
     resetOverlayChromeForTests();
+    document.documentElement.style.removeProperty("--vv-bottom-inset");
+    document.documentElement.style.removeProperty("--vv-offset-top");
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: originalVisualViewport,
+    });
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.remove();
     });
@@ -135,9 +143,9 @@ describe("photo lightbox", () => {
     expect(stage).toBeTruthy();
     expect(stage.contains(overlay)).toBe(true);
     expect(screen.getByRole("dialog")).toHaveClass("photo-lightbox");
-    expect(screen.getByRole("button", { name: "Done" })).toHaveTextContent(
-      "Done",
-    );
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close).toHaveTextContent("×");
+    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
     expect(screen.getByRole("dialog").closest(".timeline")).toBeNull();
     expect(screen.getByRole("dialog").closest(".photo-frame")).toBeNull();
     expect(document.body.contains(screen.getByRole("dialog"))).toBe(true);
@@ -156,7 +164,7 @@ describe("photo lightbox", () => {
     expect(overlay).toHaveAttribute("src", "blob:overlay-1");
     expect(overlay).not.toBe(card);
 
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByRole("dialog")).toHaveAttribute(
       "data-motion",
       "closing",
@@ -205,7 +213,7 @@ describe("photo lightbox", () => {
     ).toHaveAttribute("src", "blob:overlay-1");
     expect(screen.getByRole("img", { name: "First light card" })).toBe(first);
     expect(screen.getByRole("img", { name: "Last light card" })).toBe(last);
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -218,7 +226,7 @@ describe("photo lightbox", () => {
     expect(
       await screen.findByRole("img", { name: "Last light" }),
     ).toHaveAttribute("src", "blob:overlay-2");
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -565,8 +573,8 @@ describe("photo lightbox", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Open photo full screen: Porch" }),
     );
-    await screen.findByRole("button", { name: "Done" });
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await screen.findByRole("button", { name: "Close" });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -598,7 +606,58 @@ describe("photo lightbox", () => {
     reactionTarget.remove();
   });
 
-  it("keeps Done available when the private photo fetch fails", async () => {
+  it("fills the visual viewport and restores the bottom nav on Close", async () => {
+    const visualViewport = {
+      offsetTop: 0,
+      offsetLeft: 0,
+      width: 390,
+      height: 844,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: visualViewport,
+    });
+    document.documentElement.style.setProperty("--vv-bottom-inset", "454px");
+    mockIndependentOverlayDecode();
+    renderPhotos();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First light",
+      }),
+    );
+    const overlay = await screen.findByRole("img", { name: "First light" });
+    fireEvent.load(overlay);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.style.width).toBe("390px");
+    expect(dialog.style.height).toBe("844px");
+    expect(screen.getByRole("button", { name: "Close" })).toHaveTextContent(
+      "×",
+    );
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
+    ).toBe("0px");
+
+    visualViewport.width = 844;
+    visualViewport.height = 390;
+    const resize = visualViewport.addEventListener.mock.calls.find(
+      ([name]) => name === "resize",
+    )?.[1] as EventListener | undefined;
+    resize?.(new Event("resize"));
+    expect(dialog.style.width).toBe("844px");
+    expect(dialog.style.height).toBe("390px");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(
+      document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
+    ).toBe("0px");
+  });
+
+  it("keeps Close available when the private photo fetch fails", async () => {
     resetIndependentOverlayObjectUrlCache();
     vi.stubGlobal(
       "fetch",
@@ -624,12 +683,12 @@ describe("photo lightbox", () => {
     mockRect(trigger, { left: 24, top: 180, width: 342, height: 220 });
     fireEvent.click(trigger);
 
-    const done = await screen.findByRole("button", { name: "Done" });
+    const close = await screen.findByRole("button", { name: "Close" });
     expect(document.documentElement).toHaveClass("overlay-open");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "This photo could not be opened.",
     );
-    fireEvent.click(done);
+    fireEvent.click(close);
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(document.documentElement).not.toHaveClass("overlay-open");

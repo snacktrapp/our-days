@@ -6,6 +6,7 @@ import {
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
 import { resetIndependentOverlayObjectUrlCache } from "@/components/independent-overlay-photo";
+import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
 import { MomentCard } from "./moment-card";
 import { timelineCardOccurredLabel } from "./timeline-view-model";
 import { PhotoLightboxRoot, resetPhotoLightboxSession } from "./photo-lightbox";
@@ -232,6 +233,9 @@ describe("MomentCard timeline media", () => {
   afterEach(() => {
     resetPhotoLightboxSession();
     resetIndependentOverlayObjectUrlCache();
+    resetOverlayChromeForTests();
+    document.documentElement.classList.remove("overlay-open");
+    document.body.classList.remove("overlay-open");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -469,14 +473,12 @@ describe("MomentCard timeline media", () => {
     expect(lightboxVideo).toHaveAttribute("autoplay");
     expect(lightboxVideo).toHaveAttribute("poster", poster);
     expect(play).toHaveBeenCalled();
-    const done = screen.getByRole("button", { name: "Done" });
-    expect(done.closest(".media-viewer-chrome")).not.toBeNull();
-    expect(
-      dialog
-        .querySelector(".media-viewer-chrome")
-        ?.compareDocumentPosition(dialog.querySelector(".media-viewer-video")!),
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    fireEvent.click(done);
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close).toHaveTextContent("×");
+    expect(close.closest(".media-viewer-chrome")).toBeNull();
+    expect(dialog.querySelector(".media-viewer-chrome")).toBeNull();
+    expect(dialog.querySelector(".media-viewer-video")).not.toBeNull();
+    fireEvent.click(close);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -749,7 +751,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.getByRole("dialog").querySelector("img")?.src).toMatch(
       /^blob:/u,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
@@ -761,7 +763,7 @@ describe("MomentCard timeline media", () => {
     );
     expect(screen.getByRole("img", { name: "First light" })).toBe(first);
     expect(last.getAttribute("src")).toMatch(/^blob:/u);
-    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

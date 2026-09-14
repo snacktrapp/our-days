@@ -11,6 +11,12 @@ const chromeInsetFreezePullStates = new Set([
   "settling",
 ]);
 
+const overlayFreezeSelector = ".photo-lightbox, .fullscreen-media-dialog[open]";
+
+type VisualViewportView = Pick<Window, "innerHeight" | "visualViewport"> & {
+  innerWidth?: number;
+};
+
 export function visualViewportOffsetTop(
   view: Pick<Window, "visualViewport"> = window,
 ) {
@@ -21,9 +27,7 @@ export function visualViewportOffsetTop(
   return Math.max(0, viewport.offsetTop);
 }
 
-export function visualViewportBottomInset(
-  view: Pick<Window, "innerHeight" | "visualViewport"> = window,
-) {
+export function visualViewportBottomInset(view: VisualViewportView = window) {
   const viewport = view.visualViewport;
   if (!viewport) return 0;
   // A negative offsetTop is pull-down overscroll, not a gap below the
@@ -32,9 +36,26 @@ export function visualViewportBottomInset(
   return Math.max(0, view.innerHeight - viewport.height - viewport.offsetTop);
 }
 
-export function pinVisualViewportBottomInset(
-  view: Pick<Window, "innerHeight" | "visualViewport"> = window,
+export function visualViewportOrientationMatchesLayout(
+  view: VisualViewportView = window,
 ) {
+  const viewport = view.visualViewport;
+  if (!viewport) return true;
+  const visualWidth = viewport.width;
+  const layoutWidth = view.innerWidth;
+  if (visualWidth == null || layoutWidth == null) return true;
+  const layoutPortrait = view.innerHeight >= layoutWidth;
+  const visualPortrait = viewport.height >= visualWidth;
+  return layoutPortrait === visualPortrait;
+}
+
+export function pinVisualViewportBottomInset(
+  view: VisualViewportView = window,
+) {
+  // After a landscape lightbox, Safari can leave visualViewport at the
+  // previous orientation while innerHeight already flipped. That leftover
+  // looks keyboard-sized and pins the tab bar mid-screen.
+  if (!visualViewportOrientationMatchesLayout(view)) return 0;
   const inset = visualViewportBottomInset(view);
   return inset >= keyboardLikeVisualViewportMinShrinkPx ? inset : 0;
 }
@@ -47,17 +68,28 @@ export function timelinePullFreezesChromeInset(doc: Document) {
   );
 }
 
+export function overlayFreezesChromeInset(doc: Document) {
+  return (
+    doc.documentElement.classList.contains("overlay-open") ||
+    doc.body.classList.contains("overlay-open") ||
+    Boolean(doc.querySelector(overlayFreezeSelector))
+  );
+}
+
 function writeViewportVar(root: HTMLElement, name: string, value: number) {
   root.style.setProperty(name, `${value}px`);
 }
 
 export function syncBottomNavVisualInset(
-  view: Pick<Window, "innerHeight" | "visualViewport"> & {
+  view: VisualViewportView & {
     document: Document;
   } = window,
 ) {
   const root = view.document.documentElement;
-  if (timelinePullFreezesChromeInset(view.document)) {
+  if (
+    timelinePullFreezesChromeInset(view.document) ||
+    overlayFreezesChromeInset(view.document)
+  ) {
     writeViewportVar(root, visualViewportOffsetTopVar, 0);
     writeViewportVar(root, visualViewportBottomInsetVar, 0);
     return;
@@ -77,4 +109,19 @@ export function syncBottomNavVisualInset(
 export function clearBottomNavVisualInset(root: HTMLElement) {
   writeViewportVar(root, visualViewportOffsetTopVar, 0);
   writeViewportVar(root, visualViewportBottomInsetVar, 0);
+}
+
+export function restoreBottomNavAfterOverlay(
+  view: VisualViewportView & {
+    document: Document;
+    requestAnimationFrame: Window["requestAnimationFrame"];
+  } = window,
+) {
+  clearBottomNavVisualInset(view.document.documentElement);
+  const sync = () => syncBottomNavVisualInset(view);
+  sync();
+  view.requestAnimationFrame(() => {
+    sync();
+    view.requestAnimationFrame(sync);
+  });
 }

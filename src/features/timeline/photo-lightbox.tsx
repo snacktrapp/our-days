@@ -17,11 +17,9 @@ import {
   peekIndependentOverlayObjectUrl,
   prefetchIndependentOverlayObjectUrl,
 } from "@/components/independent-overlay-photo";
-import {
-  lockOverlayChrome,
-  unlockOverlayChrome,
-} from "@/features/shell/overlay-chrome";
+import { useOverlayOpenChrome } from "@/features/shell/use-overlay-open-chrome";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import { useVisualViewportFill } from "@/features/shell/use-visual-viewport-fill";
 import {
   dispatchMomentHeart,
   usePairedTap,
@@ -242,7 +240,9 @@ function PhotoLightboxLayer({
   const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const closeTimerRef = useRef<number | null>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  useVisualViewportFill(layerRef, true);
   const trackRef = useRef<HTMLDivElement>(null);
   const slideWidthRef = useRef(0);
   const pairRef = useRef<AlbumPair | null>(null);
@@ -738,6 +738,7 @@ function PhotoLightboxLayer({
 
   return (
     <div
+      ref={layerRef}
       className="photo-lightbox"
       role="dialog"
       aria-modal="true"
@@ -752,9 +753,10 @@ function PhotoLightboxLayer({
       <button
         type="button"
         className="photo-lightbox-close media-viewer-close"
+        aria-label="Close"
         onClick={close}
       >
-        Done
+        <span aria-hidden="true">×</span>
       </button>
       {!objectUrl ? (
         <p
@@ -825,22 +827,7 @@ export function PhotoLightboxHost() {
   }, []);
 
   const overlayOpen = request != null;
-  useLayoutEffect(() => {
-    if (!overlayOpen) {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.classList.add("overlay-open");
-    document.body.classList.add("overlay-open");
-    lockOverlayChrome();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.documentElement.classList.remove("overlay-open");
-      document.body.classList.remove("overlay-open");
-      unlockOverlayChrome();
-    };
-  }, [overlayOpen]);
+  useOverlayOpenChrome(overlayOpen);
 
   if (!request || typeof document === "undefined") return null;
 

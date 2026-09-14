@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
+import { useOverlayOpenChrome } from "@/features/shell/use-overlay-open-chrome";
+import { useVisualViewportFill } from "@/features/shell/use-visual-viewport-fill";
 import {
   dispatchMomentHeart,
   usePairedTap,
@@ -35,6 +37,8 @@ export function FullscreenMediaViewer({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  useVisualViewportFill(dialogRef, open);
+  useOverlayOpenChrome(open);
   const handlePreviewTap = usePairedTap({
     enabled: Boolean(reactionTargetId),
     onDoubleTap: () => {
@@ -106,18 +110,17 @@ export function FullscreenMediaViewer({
           }}
         >
           <div className="media-viewer-dimmer" />
-          <div className="media-viewer-chrome">
-            <h2 id={titleId} className="sr-only">
-              Full-screen video: {label}
-            </h2>
-            <button
-              type="button"
-              className="photo-lightbox-close media-viewer-close"
-              onClick={close}
-            >
-              Done
-            </button>
-          </div>
+          <h2 id={titleId} className="sr-only">
+            Full-screen video: {label}
+          </h2>
+          <button
+            type="button"
+            className="photo-lightbox-close media-viewer-close"
+            aria-label="Close"
+            onClick={close}
+          >
+            <span aria-hidden="true">×</span>
+          </button>
           <div className="media-viewer-video">{fullscreenMedia}</div>
         </dialog>
       ) : null}

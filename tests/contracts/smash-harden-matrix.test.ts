@@ -33,6 +33,20 @@ const videoRouteTest = read(
 const journalError = read("src/app/(journal)/error.tsx");
 const photoLightbox = read("src/features/timeline/photo-lightbox.tsx");
 const photoLightboxTest = read("src/features/timeline/photo-lightbox.test.tsx");
+const fullscreenViewer = read("src/components/fullscreen-media-viewer.tsx");
+const fullscreenViewerTest = read(
+  "src/components/fullscreen-media-viewer.test.tsx",
+);
+const overlayOpenChrome = read("src/features/shell/use-overlay-open-chrome.ts");
+const overlayOpenChromeTest = read(
+  "src/features/shell/use-overlay-open-chrome.test.ts",
+);
+const viewportFill = read("src/features/shell/visual-viewport-fill.ts");
+const viewportFillTest = read(
+  "src/features/shell/visual-viewport-fill.test.ts",
+);
+const mediaCloseCss = read("tests/contracts/media-viewer-close-x.test.ts");
+const globalsCss = read("src/app/globals.css");
 const conversationControl = read(
   "src/features/timeline/moment-conversation-control.tsx",
 );
@@ -162,11 +176,11 @@ describe("smash harden matrix", () => {
   });
 
   describe("lightbox dismiss and note save parity", () => {
-    it("keeps Done available when a private photo fetch fails", () => {
+    it("keeps Close available when a private photo fetch fails", () => {
       expect(photoLightbox).toContain("This photo could not be opened.");
       expect(photoLightbox).toContain("photo-lightbox-close");
       expect(photoLightboxTest).toContain(
-        "keeps Done available when the private photo fetch fails",
+        "keeps Close available when the private photo fetch fails",
       );
     });
 
@@ -197,6 +211,27 @@ describe("smash harden matrix", () => {
       );
       expect(viewportTest).toContain(
         "clears rubber-band measurements instead of lifting chrome",
+      );
+    });
+
+    it("does not leave the tab bar mid-screen after a landscape lightbox", () => {
+      expect(viewport).toContain("overlayFreezesChromeInset");
+      expect(viewport).toContain("restoreBottomNavAfterOverlay");
+      expect(viewport).toContain("visualViewportOrientationMatchesLayout");
+      expect(viewportTest).toContain(
+        "does not treat a stale landscape visual viewport as a keyboard",
+      );
+      expect(viewportTest).toContain(
+        "restores the tab bar after a landscape overlay leaves a stale visual viewport",
+      );
+    });
+
+    it("uses one overlay chrome hook so photo and video both restore the tab bar", () => {
+      expect(overlayOpenChrome).toContain("restoreBottomNavAfterOverlay");
+      expect(photoLightbox).toContain("useOverlayOpenChrome");
+      expect(fullscreenViewer).toContain("useOverlayOpenChrome");
+      expect(overlayOpenChromeTest).toContain(
+        "freezes the tab bar while open and restores it on close",
       );
     });
 
@@ -249,6 +284,48 @@ describe("smash harden matrix", () => {
       expect(routeBoundary).toContain("isTransientFamilySessionError(error)");
       expect(rootError).toContain("JournalSegmentError");
       expect(rootError).not.toContain("JournalInterrupted");
+    });
+  });
+
+  describe("fullscreen media works", () => {
+    it("dismisses photos and videos with an overlay Close X, not a Done bar", () => {
+      expect(photoLightbox).toContain('aria-label="Close"');
+      expect(photoLightbox).not.toContain("Done");
+      expect(fullscreenViewer).toContain('aria-label="Close"');
+      expect(fullscreenViewer).not.toContain("Done");
+      expect(fullscreenViewer).not.toContain("media-viewer-chrome");
+      expect(globalsCss).not.toMatch(/\.media-viewer-chrome\s*\{/);
+      expect(mediaCloseCss).toContain("does not reserve a chrome band");
+    });
+
+    it("sizes photo and video overlays to the visual viewport in portrait and landscape", () => {
+      expect(photoLightbox).toContain("useVisualViewportFill");
+      expect(fullscreenViewer).toContain("useVisualViewportFill");
+      expect(viewportFill).toContain("readVisualViewportBox");
+      expect(viewportFillTest).toContain(
+        "sizes an overlay to a landscape visual viewport",
+      );
+      expect(photoLightboxTest).toContain(
+        "fills the visual viewport and restores the bottom nav on Close",
+      );
+      expect(fullscreenViewerTest).toContain(
+        "fills a landscape visual viewport without a reserved chrome row",
+      );
+      expect(globalsCss).not.toContain("100lvh");
+      expect(globalsCss).not.toContain("max(56px, env(safe-area-inset-bottom");
+    });
+
+    it("keeps media correct after rotate and pins the tab bar after close", () => {
+      expect(photoLightboxTest).toContain("visualViewport.height = 390");
+      expect(fullscreenViewerTest).toContain(
+        "keeps filling the visual viewport after a rotate and restores the nav on close",
+      );
+      expect(fullscreenViewerTest).toContain(
+        "restores the bottom nav after Close, cancel, and a leftover landscape inset",
+      );
+      expect(viewportTest).toContain(
+        "does not treat a stale landscape visual viewport as a keyboard",
+      );
     });
   });
 });
