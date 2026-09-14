@@ -219,7 +219,12 @@ function TimelinePaginationError({
   return (
     <div className="timeline-pagination-error" role="alert">
       <span>{paginationError.message}</span>
-      <Link href={paginationError.retryHref} prefetch={false} replace scroll={false}>
+      <Link
+        href={paginationError.retryHref}
+        prefetch={false}
+        replace
+        scroll={false}
+      >
         {paginationError.label}
       </Link>
     </div>
@@ -278,7 +283,8 @@ export function TimelineFeed({
           <TimelineFeedEntries
             model={entriesModel}
             firstMomentId={
-              model.entries.find((entry) => entry.entryType === "moment")?.moment.id
+              model.entries.find((entry) => entry.entryType === "moment")
+                ?.moment.id
             }
             connectedActions={connectedActions}
             conversationActions={conversationActions}

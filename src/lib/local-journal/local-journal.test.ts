@@ -276,7 +276,9 @@ describe("local journal happy path", () => {
         entry.moment.text === "A porch thought just for me.",
     );
     expect(texts(family)).not.toContain("A porch thought just for me.");
-    expect(texts(allCirclesFamily)).not.toContain("A porch thought just for me.");
+    expect(texts(allCirclesFamily)).not.toContain(
+      "A porch thought just for me.",
+    );
     expect(texts(ownJournal)).toContain("A porch thought just for me.");
     expect(texts(otherJournal)).not.toContain("A porch thought just for me.");
     expect(texts(jordanView)).not.toContain("A porch thought just for me.");

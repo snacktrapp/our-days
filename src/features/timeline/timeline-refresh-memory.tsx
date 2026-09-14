@@ -17,7 +17,8 @@ export function TimelineRefreshMemory({
   afterContent?: ReactNode;
 }) {
   const [prior, setPrior] = useState({ model, content: children });
-  const usePriorContent = preferPriorTimelineOnRefresh(prior.model, model) !== model;
+  const usePriorContent =
+    preferPriorTimelineOnRefresh(prior.model, model) !== model;
 
   useEffect(() => {
     if (isJournalLoadSoftFail(model)) return;

@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TimelineRefreshMemory } from "./timeline-refresh-memory";
-import { journalLoadSoftFailEntryId, type TimelineViewModel } from "./timeline-view-model";
+import {
+  journalLoadSoftFailEntryId,
+  type TimelineViewModel,
+} from "./timeline-view-model";
 
 function model(overrides?: Partial<TimelineViewModel>): TimelineViewModel {
   return {
