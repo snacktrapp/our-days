@@ -39,6 +39,8 @@ const videoInspect = vi.hoisted(() => ({
   inspect: vi.fn(),
 }));
 const draftMedia = vi.hoisted(() => ({
+  load: vi.fn(),
+  prune: vi.fn(),
   save: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -47,6 +49,8 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("./entry-draft-media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./entry-draft-media")>()),
+  loadEntryDraftMedia: (...args: unknown[]) => draftMedia.load(...args),
+  removeStaleEntryDraftMedia: (...args: unknown[]) => draftMedia.prune(...args),
   saveEntryDraftMedia: (...args: unknown[]) => draftMedia.save(...args),
 }));
 vi.mock("./photo-upload", async (importOriginal) => ({
@@ -188,6 +192,10 @@ beforeEach(() => {
   photoUpload.upload.mockReset();
   videoUpload.upload.mockReset();
   videoInspect.inspect.mockReset();
+  draftMedia.load.mockReset();
+  draftMedia.load.mockResolvedValue([]);
+  draftMedia.prune.mockReset();
+  draftMedia.prune.mockResolvedValue(undefined);
   draftMedia.save.mockReset();
   draftMedia.save.mockResolvedValue({ ok: true });
   videoInspect.inspect.mockResolvedValue({
@@ -2683,6 +2691,32 @@ describe("MomentComposer", () => {
     expect(screen.getByRole("dialog")).toBeVisible();
     expect(screen.getByRole("button", { name: "Save draft" })).toBeVisible();
     expect(screen.queryByText(/Note · /u)).toBeNull();
+  });
+
+  it("warns when a saved photo draft reopens without its local media", async () => {
+    draftMedia.load.mockResolvedValue([]);
+    const user = await openComposer();
+    await user.click(screen.getByRole("button", { name: /^Photo/u }));
+    await user.upload(
+      screen.getByLabelText(/Choose photo/u),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], "porch.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    fireEvent.load(screen.getByAltText("Selected photo preview"));
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open composer" }));
+    await user.click(screen.getByRole("button", { name: /^Drafts/u }));
+    await user.click(screen.getByRole("button", { name: /^Edit Photo · /u }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Some saved media couldn't be restored. Add it again before posting.",
+    );
+    expect(screen.queryByAltText("Selected photo preview")).toBeNull();
   });
 
   it("deletes a draft from the drafts sheet without posting", async () => {

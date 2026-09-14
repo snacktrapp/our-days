@@ -78,7 +78,7 @@ export function buildComposerEditDraft(
             src: moment.image.src,
             alt: moment.image.alt,
             photos: photoAlbum(moment).map((photo) => ({
-              ...(photo.id !== moment.id ? { id: photo.id } : {}),
+              id: photo.id,
               src: photo.src,
               alt: photo.alt,
             })),

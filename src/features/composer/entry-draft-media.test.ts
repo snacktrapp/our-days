@@ -6,6 +6,7 @@ import {
   entryDraftDatabaseName,
   entryDraftMediaKey,
   loadEntryDraftMedia,
+  removeStaleEntryDraftMedia,
   saveEntryDraftMedia,
 } from "./entry-draft-media";
 
@@ -17,11 +18,11 @@ function jpegBlob() {
   });
 }
 
-function mediaItem() {
+function mediaItem(index = 0) {
   return {
-    key: entryDraftMediaKey(draftId, 0),
+    key: entryDraftMediaKey(draftId, index),
     draftId,
-    name: "porch.jpg",
+    name: `porch-${index + 1}.jpg`,
     mimeType: "image/jpeg",
     blob: jpegBlob(),
   };
@@ -73,5 +74,19 @@ describe("entry draft media", () => {
       ok: false,
     });
     proto.put = originalPut;
+  });
+
+  it("removes stale media keys when a draft is re-saved with fewer files", async () => {
+    const first = mediaItem(0);
+    const second = mediaItem(1);
+    await expect(saveEntryDraftMedia([first, second])).resolves.toEqual({
+      ok: true,
+    });
+    await removeStaleEntryDraftMedia(draftId, [first.key]);
+    await expect(loadEntryDraftMedia(draftId)).resolves.toEqual([
+      expect.objectContaining({
+        key: first.key,
+      }),
+    ]);
   });
 });

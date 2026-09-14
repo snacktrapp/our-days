@@ -50,6 +50,7 @@ const draft = {
   placeName: "",
   taggedPersonIds: [],
 };
+const otherCircleId = "20000000-0000-4000-8000-000000000002";
 
 function jpeg(name: string) {
   return new File([new Uint8Array([0xff, 0xd8, 0xff])], name, {
@@ -87,7 +88,38 @@ describe("optimistic media upload queue", () => {
       expect.objectContaining({ body: "Porch light" }),
     );
     expect(queuedOptimisticMediaUploadCount()).toBe(1);
+    expect(queuedOptimisticMediaUploadCount(draft.circleId)).toBe(1);
     expect(photoUpload.upload).toHaveBeenCalledOnce();
+  });
+
+  it("counts queued uploads by circle", async () => {
+    photoUpload.upload.mockReturnValue(new Promise(() => undefined));
+    startOptimisticPhotoUpload({
+      draft,
+      file: jpeg("one.jpg"),
+      occurredTime: "14:58",
+      person,
+    });
+    startOptimisticPhotoUpload({
+      draft: { ...draft, body: "Second in same circle" },
+      file: jpeg("two.jpg"),
+      occurredTime: "15:01",
+      person,
+    });
+    startOptimisticPhotoUpload({
+      draft: {
+        ...draft,
+        circleId: otherCircleId,
+        body: "Queued in another circle",
+      },
+      file: jpeg("three.jpg"),
+      occurredTime: "15:05",
+      person,
+    });
+
+    expect(queuedOptimisticMediaUploadCount()).toBe(2);
+    expect(queuedOptimisticMediaUploadCount(draft.circleId)).toBe(1);
+    expect(queuedOptimisticMediaUploadCount(otherCircleId)).toBe(1);
   });
 
   it("starts the next post as a visible chip when a failed upload is still showing", async () => {
