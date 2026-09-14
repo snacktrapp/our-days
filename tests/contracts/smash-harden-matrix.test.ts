@@ -51,6 +51,10 @@ const videoRouteTest = read(
 const journalError = read("src/app/(journal)/error.tsx");
 const photoLightbox = read("src/features/timeline/photo-lightbox.tsx");
 const photoLightboxTest = read("src/features/timeline/photo-lightbox.test.tsx");
+const photoCardPager = read("src/features/timeline/photo-card-pager.tsx");
+const photoCardPagerTest = read(
+  "src/features/timeline/photo-card-pager.test.tsx",
+);
 const fullscreenViewer = read("src/components/fullscreen-media-viewer.tsx");
 const fullscreenViewerTest = read(
   "src/components/fullscreen-media-viewer.test.tsx",
@@ -117,6 +121,10 @@ const entryDraftMediaTest = read(
 const momentComposer = read("src/features/composer/moment-composer.tsx");
 const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
+);
+const photoStatusShelf = read("src/features/composer/photo-status-shelf.tsx");
+const photoStatusShelfTest = read(
+  "src/features/composer/photo-status-shelf.test.tsx",
 );
 
 describe("smash harden matrix", () => {
@@ -515,6 +523,30 @@ describe("smash harden matrix", () => {
       expect(familyPage).toContain("loadFamilyHomeChrome");
       expect(familyPage).toContain("loadFamilyHomeOpeningTimeline");
       expect(openingShell).toContain("Opening this journal");
+    });
+  });
+
+  describe("M-album open + K-note keyboard + fail-chip dismiss", () => {
+    it("opens the album photo the pager is showing", () => {
+      expect(photoCardPager).toMatch(/index=\{displayIndex\}/);
+      expect(photoCardPagerTest).toContain(
+        "opens the album photo currently on screen",
+      );
+    });
+
+    it("scrolls a new inline note into view so Save is not under the keyboard", () => {
+      expect(conversationControl).toContain("preventScroll: false");
+      expect(conversationControl).toContain("scrollIntoView");
+      expect(conversationControlTest).toContain("scrollIntoView");
+    });
+
+    it("lets a retryable failed upload chip be dismissed", () => {
+      expect(photoStatusShelf).toMatch(
+        /uploadChip[\s\S]*secondaryAction:[\s\S]*Dismiss/,
+      );
+      expect(photoStatusShelfTest).toContain(
+        "dismisses a retryable failed upload without retrying",
+      );
     });
   });
 });

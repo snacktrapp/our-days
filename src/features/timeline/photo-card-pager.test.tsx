@@ -331,6 +331,24 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
+  it("opens the album photo currently on screen", () => {
+    renderPager();
+    expect(
+      screen.getByRole("button", {
+        name: "Open photo full screen: First porch",
+      }),
+    ).toBeVisible();
+
+    markPagerImagesReady();
+    swipeAlbum(document.querySelector(".photo-card-pager")!);
+    expect(track()).toHaveClass("is-sliding");
+    expect(
+      screen.getByRole("button", {
+        name: "Open photo full screen: Second porch",
+      }),
+    ).toBeVisible();
+  });
+
   function mockCardSlideWidth(width: number) {
     const previous = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,

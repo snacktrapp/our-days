@@ -481,6 +481,13 @@ function uploadChip(
             onClick: () => onDismissFailed(upload),
           }
       : null,
+    secondaryAction:
+      failed && upload.retryable
+        ? {
+            label: "Dismiss",
+            onClick: () => onDismissFailed(upload),
+          }
+        : null,
   };
 }
 

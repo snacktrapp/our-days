@@ -85,7 +85,9 @@ export function PhotoCardPager({
       width: moment.image.width,
       height: moment.image.height,
     };
-  const displayIndex = pair?.mode === "snap" ? pair.to : index;
+  const displayIndex =
+    pair?.mode === "snap" || pair?.mode === "drag" ? pair.to : index;
+  const shown = photos[displayIndex] ?? current;
 
   function frameEl(photoIndex: number): HTMLElement | null {
     return (
@@ -452,12 +454,12 @@ export function PhotoCardPager({
       onClickCapture={onClickCapture}
     >
       <PhotoLightboxTrigger
-        src={current.src}
-        alt={current.alt}
-        width={current.width}
-        height={current.height}
+        src={shown.src}
+        alt={shown.alt}
+        width={shown.width}
+        height={shown.height}
         photos={photos}
-        index={index}
+        index={displayIndex}
         reactionTargetId={moment.id}
       >
         {photos.length < 2 ? (
