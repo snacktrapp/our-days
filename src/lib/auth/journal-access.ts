@@ -183,11 +183,14 @@ async function circleIdForPerson(
   }
   if (!supabaseResourceIsActive()) return null;
   const supabase = await createOurDaysServerClient();
-  const { data } = await supabase
-    .from("people")
-    .select("circle_id")
-    .eq("id", personId)
-    .maybeSingle();
+  const { data, error } = await retryTransientFamilySessionQuery(() =>
+    supabase
+      .from("people")
+      .select("circle_id")
+      .eq("id", personId)
+      .maybeSingle(),
+  );
+  if (error && isTransientFamilySessionError(error)) throw error;
   return data?.circle_id ?? null;
 }
 
