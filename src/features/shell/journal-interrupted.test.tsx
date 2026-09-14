@@ -141,7 +141,7 @@ describe("JournalInterrupted", () => {
     const retry = vi.fn();
     render(
       <JournalSegmentError
-        error={new Error("Circle is unavailable")}
+        error={new Error("Timeline snapshot is invalid")}
         retry={retry}
       />,
     );

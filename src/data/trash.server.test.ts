@@ -45,11 +45,11 @@ describe("trash remount helper", () => {
     expect(shouldTrapTrashInInterrupt({ name: "AbortError" })).toBe(false);
   });
 
-  it("still fails closed for a missing circle", async () => {
+  it("keeps Recently removed on a soft panel when context bootstrap misses", async () => {
     const missing = new Error("Circle is unavailable");
     loadConnectedJournalContext.mockRejectedValueOnce(missing);
 
-    await expect(loadTrashJournal(access)).rejects.toBe(missing);
-    expect(shouldTrapTrashInInterrupt(missing)).toBe(true);
+    await expect(loadTrashJournal(access)).resolves.toEqual({ ok: false });
+    expect(shouldTrapTrashInInterrupt(missing)).toBe(false);
   });
 });

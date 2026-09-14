@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isFatalJournalHomeError,
+  isRecoverableJournalBootstrapError,
   isRecoverableJournalNavigationError,
   isTransientFamilySessionError,
 } from "./family-session-error";
@@ -38,12 +39,32 @@ describe("family session error classification", () => {
     ).toBe(true);
   });
 
-  it("still treats required journal integrity failures as fatal", () => {
+  it("keeps bootstrap context misses recoverable on cold open", () => {
+    expect(
+      isRecoverableJournalBootstrapError(new Error("Circle is unavailable")),
+    ).toBe(true);
+    expect(
+      isRecoverableJournalBootstrapError(
+        new Error("Member profile is unavailable"),
+      ),
+    ).toBe(true);
     expect(isFatalJournalHomeError(new Error("Circle is unavailable"))).toBe(
-      true,
+      false,
     );
     expect(
       isFatalJournalHomeError(new Error("Member profile is unavailable")),
+    ).toBe(false);
+    expect(
+      isFatalJournalHomeError(new Error("Circle date is unavailable")),
+    ).toBe(false);
+  });
+
+  it("still treats unrecoverable timeline integrity failures as fatal", () => {
+    expect(
+      isFatalJournalHomeError(new Error("Timeline request is too large")),
+    ).toBe(true);
+    expect(
+      isFatalJournalHomeError(new Error("Timeline snapshot is invalid")),
     ).toBe(true);
     expect(isFatalJournalHomeError({ message: "JWT expired" })).toBe(false);
     expect(
