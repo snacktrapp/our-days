@@ -171,9 +171,10 @@ test("Just Me stays on the author's journal and off Family", async ({
     .getByRole("textbox", { name: "Entry" })
     .fill("A porch thought just for me.");
   await page.getByRole("checkbox", { name: "Just me" }).click();
+  await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
   await expect(
-    page.getByRole("button", { name: /Alex · You/u }),
-  ).toBeDisabled();
+    page.getByRole("checkbox", { name: /Our Days/u }),
+  ).not.toBeChecked();
   await expect(page.getByText("Who else was part of this?")).toBeVisible();
   await page.getByRole("button", { name: "Post", exact: true }).click();
 

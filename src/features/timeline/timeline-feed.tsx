@@ -147,12 +147,14 @@ export function TimelineFeedEntries({
   conversationActions,
   firstMomentId,
   connectedOffset = 0,
+  showPaginationError = true,
 }: {
   model: TimelineViewModel;
   connectedActions?: ConnectedMomentActions;
   conversationActions?: MomentConversationActions;
   firstMomentId?: string;
   connectedOffset?: number;
+  showPaginationError?: boolean;
 }) {
   const connectedMomentIds = model.entries.flatMap((entry) =>
     entry.entryType === "moment" ? [entry.moment.id] : [],
@@ -191,7 +193,7 @@ export function TimelineFeedEntries({
           </Link>
         </div>
       ) : null}
-      {model.paginationError ? (
+      {showPaginationError && model.paginationError ? (
         <div className="timeline-pagination-error" role="alert">
           <span>{model.paginationError.message}</span>
           <Link
@@ -208,6 +210,27 @@ export function TimelineFeedEntries({
   );
 }
 
+function TimelinePaginationError({
+  paginationError,
+}: {
+  paginationError?: TimelineViewModel["paginationError"];
+}) {
+  if (!paginationError) return null;
+  return (
+    <div className="timeline-pagination-error" role="alert">
+      <span>{paginationError.message}</span>
+      <Link
+        href={paginationError.retryHref}
+        prefetch={false}
+        replace
+        scroll={false}
+      >
+        {paginationError.label}
+      </Link>
+    </div>
+  );
+}
+
 export function TimelineFeed({
   model,
   connectedActions,
@@ -221,56 +244,55 @@ export function TimelineFeed({
   pendingEntries?: ReactNode;
   trailing?: ReactNode;
 }) {
+  const streamRemainder = Boolean(trailing);
+  const entriesModel = streamRemainder
+    ? {
+        ...model,
+        pagination: undefined,
+        paginationError: undefined,
+      }
+    : model;
+
   return (
-    <TimelineRefreshMemory model={model}>
-      {(resolved) => {
-        const firstMomentId = resolved.entries.find(
-          (entry) => entry.entryType === "moment",
-        )?.moment.id;
-        const streamRemainder = Boolean(trailing) && resolved === model;
+    <TimelineRefreshMemory
+      model={model}
+      afterContent={
+        streamRemainder ? null : (
+          <TimelinePaginationError paginationError={model.paginationError} />
+        )
+      }
+    >
+      {connectedActions ? (
+        <TimelineScrollMemory
+          key={
+            model.pagination?.nextHref ??
+            model.paginationError?.retryHref ??
+            `complete-${model.entries.length}`
+          }
+        />
+      ) : null}
+      <TimelineRefreshControl>
+        {pendingEntries}
 
-        return (
-          <>
-            {connectedActions ? (
-              <TimelineScrollMemory
-                key={
-                  resolved.pagination?.nextHref ??
-                  resolved.paginationError?.retryHref ??
-                  `complete-${resolved.entries.length}`
-                }
-              />
-            ) : null}
-            <TimelineRefreshControl>
-              {pendingEntries}
-
-              <section
-                className="timeline"
-                aria-label={
-                  resolved.timelineLabel ?? "Chronological family moments"
-                }
-                tabIndex={-1}
-              >
-                <div className="time-rail" aria-hidden="true" />
-                <TimelineFeedEntries
-                  model={
-                    streamRemainder
-                      ? {
-                          ...resolved,
-                          pagination: undefined,
-                          paginationError: undefined,
-                        }
-                      : resolved
-                  }
-                  firstMomentId={firstMomentId}
-                  connectedActions={connectedActions}
-                  conversationActions={conversationActions}
-                />
-                {streamRemainder ? trailing : null}
-              </section>
-            </TimelineRefreshControl>
-          </>
-        );
-      }}
+        <section
+          className="timeline"
+          aria-label={model.timelineLabel ?? "Chronological family moments"}
+          tabIndex={-1}
+        >
+          <div className="time-rail" aria-hidden="true" />
+          <TimelineFeedEntries
+            model={entriesModel}
+            firstMomentId={
+              model.entries.find((entry) => entry.entryType === "moment")
+                ?.moment.id
+            }
+            connectedActions={connectedActions}
+            conversationActions={conversationActions}
+            showPaginationError={false}
+          />
+          {streamRemainder ? trailing : null}
+        </section>
+      </TimelineRefreshControl>
     </TimelineRefreshMemory>
   );
 }

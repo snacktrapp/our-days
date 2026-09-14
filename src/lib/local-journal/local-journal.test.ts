@@ -249,6 +249,10 @@ describe("local journal happy path", () => {
     });
     const context = await loadLocalJournalContext(access);
     const family = await loadLocalTimeline(access, context, { pages: 1 });
+    const allCirclesFamily = await loadLocalTimeline(access, context, {
+      pages: 1,
+      allCircles: true,
+    });
     const ownJournal = await loadLocalTimeline(access, context, {
       journalPersonId: localAlexPersonId,
       pages: 1,
@@ -272,6 +276,9 @@ describe("local journal happy path", () => {
         entry.moment.text === "A porch thought just for me.",
     );
     expect(texts(family)).not.toContain("A porch thought just for me.");
+    expect(texts(allCirclesFamily)).not.toContain(
+      "A porch thought just for me.",
+    );
     expect(texts(ownJournal)).toContain("A porch thought just for me.");
     expect(texts(otherJournal)).not.toContain("A porch thought just for me.");
     expect(texts(jordanView)).not.toContain("A porch thought just for me.");
@@ -352,6 +359,10 @@ describe("local journal happy path", () => {
         entry.entryType === "moment" ? [entry.moment.text] : [],
       );
     const family = await loadLocalTimeline(access, context, { pages: 1 });
+    const allCirclesFamily = await loadLocalTimeline(access, context, {
+      pages: 1,
+      allCircles: true,
+    });
     const ownJournal = await loadLocalTimeline(access, context, {
       journalPersonId: localAlexPersonId,
       pages: 1,
@@ -367,6 +378,7 @@ describe("local journal happy path", () => {
         entry.moment.text === "A porch clip just for me.",
     );
     expect(texts(family)).not.toContain("A porch clip just for me.");
+    expect(texts(allCirclesFamily)).not.toContain("A porch clip just for me.");
     expect(texts(ownJournal)).toContain("A porch clip just for me.");
     expect(texts(jordanView)).not.toContain("A porch clip just for me.");
     expect(ownMoment?.entryType).toBe("moment");
