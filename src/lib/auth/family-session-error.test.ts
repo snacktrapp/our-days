@@ -54,9 +54,9 @@ describe("family session error classification", () => {
     expect(
       isFatalJournalHomeError(new Error("Member profile is unavailable")),
     ).toBe(false);
-    expect(isFatalJournalHomeError(new Error("Circle date is unavailable"))).toBe(
-      false,
-    );
+    expect(
+      isFatalJournalHomeError(new Error("Circle date is unavailable")),
+    ).toBe(false);
   });
 
   it("still treats unrecoverable timeline integrity failures as fatal", () => {
