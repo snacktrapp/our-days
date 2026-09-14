@@ -10,6 +10,7 @@ import {
   readOptionalSupabasePublicConfig,
   readSupabasePublicConfig,
 } from "@/lib/supabase/public-config";
+import { shouldAnnouncePhotoMomentPublication } from "@/lib/activity-notifications";
 import { hashPhotoInWorker } from "./photo-hash";
 import {
   photoUploadResumeStore,
@@ -51,6 +52,7 @@ export type PhotoMomentDraft = Readonly<{
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
   existingMomentId?: string;
+  announcePublication?: boolean;
 }>;
 
 export type PhotoUploadResult = Readonly<{
@@ -531,7 +533,11 @@ function isAbortError(error: unknown) {
   );
 }
 
-function notifyPublishedPhotoMoment(momentId: string) {
+function notifyPublishedPhotoMoment(
+  momentId: string,
+  draft: Pick<PhotoMomentDraft, "announcePublication">,
+) {
+  if (!shouldAnnouncePhotoMomentPublication(draft)) return;
   void import("@/features/family-settings/web-push-actions").then(
     ({ deliverPublishedMomentPushAction }) =>
       deliverPublishedMomentPushAction({ momentId }),
@@ -739,7 +745,7 @@ export async function uploadPhotoMoment(
       uuidPattern.test(status.moment_id)
     ) {
       await resumeStore.remove(resumed.id);
-      notifyPublishedPhotoMoment(status.moment_id);
+      notifyPublishedPhotoMoment(status.moment_id, draft);
       return {
         state: "published",
         intakeId: resumed.intakeId,
@@ -1005,7 +1011,7 @@ export async function uploadPhotoMoment(
       }
       if (status.status === "published") {
         await resumeStore.remove(resumeId);
-        notifyPublishedPhotoMoment(reservation.moment_id);
+        notifyPublishedPhotoMoment(reservation.moment_id, draft);
         return {
           state: "published",
           intakeId: reservation.intake_id,

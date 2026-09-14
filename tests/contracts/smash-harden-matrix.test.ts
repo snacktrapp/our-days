@@ -69,6 +69,24 @@ const refreshTest = read(
   "src/features/timeline/timeline-refresh-control.test.tsx",
 );
 const routeBoundary = read("src/features/shell/journal-route-boundary.tsx");
+const photoWorker = read("src/lib/photo-worker.server.ts");
+const photoProcessRoute = read("src/app/api/photos/process/route.ts");
+const photoProcessRouteTest = read("src/app/api/photos/process/route.test.ts");
+const photoUpload = read("src/features/composer/photo-upload.ts");
+const optimisticUpload = read(
+  "src/features/composer/optimistic-media-upload.ts",
+);
+const optimisticUploadTest = read(
+  "src/features/composer/optimistic-media-upload.test.ts",
+);
+const activityNotifications = read("src/lib/activity-notifications.ts");
+const activityNotificationsTest = read(
+  "src/lib/activity-notifications.test.ts",
+);
+const momentActionsTest = read("src/features/moments/moment-actions.test.ts");
+const momentComposerTest = read(
+  "src/features/composer/moment-composer.test.tsx",
+);
 
 describe("smash harden matrix", () => {
   describe("R-Account Account→Journal remount", () => {
@@ -325,6 +343,47 @@ describe("smash harden matrix", () => {
       );
       expect(viewportTest).toContain(
         "does not treat a stale landscape visual viewport as a keyboard",
+      );
+    });
+  });
+
+  describe("edit multi-photo notify", () => {
+    it("does not fire a moment push from photo-ready worker or process retry", () => {
+      expect(photoWorker).not.toContain("deliverActivityWebPush");
+      expect(photoProcessRoute).not.toContain("deliverActivityWebPush");
+      expect(photoProcessRouteTest).toContain(
+        "expect(mocks.deliver).not.toHaveBeenCalled()",
+      );
+    });
+
+    it("announces one create or edit batch from the first photo only", () => {
+      expect(activityNotifications).toContain(
+        "shouldAnnouncePhotoMomentPublication",
+      );
+      expect(photoUpload).toContain("shouldAnnouncePhotoMomentPublication");
+      expect(optimisticUpload).toContain(
+        "announcePublication: absoluteIndex === 0",
+      );
+      expect(optimisticUploadTest).toContain(
+        "announces only the first photo of a new multi-photo post",
+      );
+      expect(optimisticUploadTest).toContain(
+        "announces only the first photo when an edit adds several",
+      );
+      expect(activityNotificationsTest).toContain(
+        "announces one photo batch once, including an edit that adds several",
+      );
+      expect(momentComposerTest).toContain(
+        "adds several photos to a saved moment as one announce batch",
+      );
+    });
+
+    it("keeps comment and reaction pushes on their own kinds", () => {
+      expect(momentActionsTest).toContain(
+        "delivers comment push with the parent moment id, not the note id",
+      );
+      expect(momentActionsTest).toContain(
+        "delivers a reaction push without treating it as a moment post",
       );
     });
   });

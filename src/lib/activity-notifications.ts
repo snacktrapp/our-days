@@ -44,6 +44,19 @@ export function isNotifiableFamilyMoment(input: {
   );
 }
 
+/**
+ * One create or edit session is one family action. Only the first photo
+ * in that batch should announce the moment; later media finishes stay quiet.
+ */
+export function shouldAnnouncePhotoMomentPublication(input: {
+  announcePublication?: boolean;
+  batchIndex?: number;
+}) {
+  if (input.announcePublication === false) return false;
+  if (input.batchIndex !== undefined) return input.batchIndex === 0;
+  return true;
+}
+
 export function activityNotificationTitle(actorName: string, message: string) {
   return `${actorName} ${message}`;
 }
