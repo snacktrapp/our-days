@@ -60,6 +60,17 @@ const nextConfig: NextConfig = {
     return [
       ...privateRoutes.map((source) => ({ source, headers: privateHeaders })),
       {
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate",
+          },
+          { key: "Pragma", value: "no-cache" },
+          { key: "Expires", value: "0" },
+        ],
+      },
+      {
         source: "/internal/map-picker",
         headers: httpSecurityHeaders(environment.identity, {
           allowSameOriginFrame: true,

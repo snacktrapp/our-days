@@ -9,22 +9,34 @@ afterEach(() => {
 });
 
 describe("ServiceWorkerRegistration", () => {
-  it("registers the push worker when a VAPID public key is present", async () => {
+  it("registers and updates the push worker while retiring stale same-origin scopes", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
-    const register = vi.fn().mockResolvedValue({});
-    const unregister = vi.fn();
+    const update = vi.fn().mockResolvedValue(undefined);
+    const register = vi.fn().mockResolvedValue({ update });
+    const rootUnregister = vi.fn();
+    const staleScopeUnregister = vi.fn();
+    const foreignUnregister = vi.fn();
     const deleteCache = vi.fn().mockResolvedValue(true);
 
     Object.defineProperty(navigator, "serviceWorker", {
       configurable: true,
       value: {
         register,
-        getRegistrations: vi
-          .fn()
-          .mockResolvedValue([
-            { scope: `${window.location.origin}/`, unregister },
-          ]),
+        getRegistrations: vi.fn().mockResolvedValue([
+          {
+            scope: `${window.location.origin}/`,
+            unregister: rootUnregister,
+          },
+          {
+            scope: `${window.location.origin}/family/`,
+            unregister: staleScopeUnregister,
+          },
+          {
+            scope: "https://another-app.test/",
+            unregister: foreignUnregister,
+          },
+        ]),
       },
     });
     Object.defineProperty(window, "caches", {
@@ -44,7 +56,10 @@ describe("ServiceWorkerRegistration", () => {
       scope: "/",
       updateViaCache: "none",
     });
-    expect(unregister).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledOnce();
+    expect(rootUnregister).not.toHaveBeenCalled();
+    expect(staleScopeUnregister).toHaveBeenCalledOnce();
+    expect(foreignUnregister).not.toHaveBeenCalled();
     expect(deleteCache).toHaveBeenCalledWith("our-days-public-shell-v4");
     expect(deleteCache).not.toHaveBeenCalledWith("another-app-cache");
   });

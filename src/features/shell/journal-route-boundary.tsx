@@ -2,7 +2,12 @@
 
 import { catchError, type ErrorInfo } from "next/error";
 import { useEffect, useRef } from "react";
-import { isTransientFamilySessionError } from "@/lib/auth/family-session-error";
+import {
+  isFatalJournalHomeError,
+  isNextControlFlowError,
+  isTransientFamilySessionError,
+} from "@/lib/auth/family-session-error";
+import { OpeningJournalShell } from "./opening-journal-shell";
 import { JournalInterrupted } from "./journal-interrupted";
 import { RoutePendingSkeleton } from "./journal-pending-route";
 
@@ -51,6 +56,7 @@ export function JournalSegmentError({
   retry?: () => void;
   reset?: () => void;
 }>) {
+  if (error && isNextControlFlowError(error)) throw error;
   const recover = retry ?? reset;
   if (
     error &&
@@ -59,6 +65,9 @@ export function JournalSegmentError({
     canAutoRetryNow()
   ) {
     return <JournalRouteAutoRetry retry={recover} />;
+  }
+  if (!error || !isFatalJournalHomeError(error)) {
+    return <OpeningJournalShell />;
   }
   return <JournalInterrupted retry={retry} reset={reset} />;
 }
