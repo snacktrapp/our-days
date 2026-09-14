@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountPanelInterrupted,
   JournalInterrupted,
+  JournalOpenUnavailable,
   JournalRefreshInterrupted,
 } from "./journal-interrupted";
 import {
@@ -68,6 +69,25 @@ describe("JournalInterrupted", () => {
 
     screen.getByRole("button", { name: "Try again" }).click();
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a terminal open failure actionable without the interrupt copy", () => {
+    const retry = vi.fn();
+    render(<JournalOpenUnavailable retry={retry} />);
+
+    expect(screen.getByText("These days couldn’t open")).toBeVisible();
+    expect(
+      screen.queryByText("Something interrupted the story"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Opening this journal"),
+    ).not.toBeInTheDocument();
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.getByRole("link", { name: "Sign in again" })).toHaveAttribute(
+      "href",
+      "/sign-in",
+    );
   });
 
   it("retries a warming journal session from the route boundary", () => {
@@ -150,18 +170,21 @@ describe("JournalInterrupted", () => {
     expect(retry).not.toHaveBeenCalled();
   });
 
-  it("keeps non-fatal layout errors on an opening shell instead of the interrupt card", () => {
+  it("keeps non-fatal layout errors on an actionable soft failure", () => {
+    const retry = vi.fn();
     render(
       <JournalSegmentError
         error={new Error("Circle is unavailable")}
-        retry={vi.fn()}
+        retry={retry}
       />,
     );
 
     expect(
       screen.queryByText("Something interrupted the story"),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Opening this journal")).toBeVisible();
+    expect(screen.getByText("These days couldn’t open")).toBeVisible();
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it("rethrows Next control-flow errors so redirects are handled by Next", () => {

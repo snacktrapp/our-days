@@ -8,13 +8,21 @@ afterEach(() => {
 });
 
 describe("RootError", () => {
-  it("keeps non-fatal errors on an opening shell", () => {
-    render(<RootError error={new Error("Circle is unavailable")} />);
+  it("keeps non-fatal errors on an actionable soft failure", () => {
+    const retry = vi.fn();
+    render(
+      <RootError error={new Error("Circle is unavailable")} retry={retry} />,
+    );
 
-    expect(screen.getByLabelText("Opening this journal")).toBeVisible();
+    expect(screen.getByText("These days couldn’t open")).toBeVisible();
     expect(
       screen.queryByText("Something interrupted the story"),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Opening this journal"),
+    ).not.toBeInTheDocument();
+    screen.getByRole("button", { name: "Try again" }).click();
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it("keeps fatal integrity errors on the interrupt card", () => {
