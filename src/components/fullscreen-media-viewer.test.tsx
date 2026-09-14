@@ -9,6 +9,19 @@ import { FullscreenMediaViewer } from "./fullscreen-media-viewer";
 
 describe("FullscreenMediaViewer", () => {
   const originalVisualViewport = window.visualViewport;
+  const originalInnerHeight = window.innerHeight;
+  const originalInnerWidth = window.innerWidth;
+
+  function pinPortraitLayout() {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+  }
 
   afterEach(() => {
     resetOverlayChromeForTests();
@@ -19,6 +32,14 @@ describe("FullscreenMediaViewer", () => {
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
       value: originalVisualViewport,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: originalInnerWidth,
     });
     vi.restoreAllMocks();
   });
@@ -111,6 +132,7 @@ describe("FullscreenMediaViewer", () => {
       configurable: true,
       value: visualViewport,
     });
+    pinPortraitLayout();
     document.documentElement.style.setProperty(
       visualViewportBottomInsetVar,
       "0px",
@@ -193,7 +215,10 @@ describe("FullscreenMediaViewer", () => {
       visualViewportBottomInsetVar,
       "454px",
     );
-    fireEvent.cancel(screen.getByRole("dialog"));
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });

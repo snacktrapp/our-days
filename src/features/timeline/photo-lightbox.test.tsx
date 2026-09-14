@@ -80,6 +80,8 @@ function renderPhotos() {
 
 describe("photo lightbox", () => {
   const originalVisualViewport = window.visualViewport;
+  const originalInnerHeight = window.innerHeight;
+  const originalInnerWidth = window.innerWidth;
 
   beforeEach(() => {
     const meta = document.createElement("meta");
@@ -97,6 +99,14 @@ describe("photo lightbox", () => {
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
       value: originalVisualViewport,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: originalInnerWidth,
     });
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
       meta.remove();
@@ -618,6 +628,14 @@ describe("photo lightbox", () => {
     Object.defineProperty(window, "visualViewport", {
       configurable: true,
       value: visualViewport,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 844,
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
     });
     document.documentElement.style.setProperty("--vv-bottom-inset", "454px");
     mockIndependentOverlayDecode();
