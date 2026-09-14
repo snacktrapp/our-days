@@ -42,10 +42,11 @@ test("Home switcher PERSON chips open five distinct, owner-correct life journals
   page,
 }) => {
   await page.goto("/family");
-  await page.locator(".title-switcher summary").click();
+  await page.getByRole("button", { name: "Choose a journal" }).click();
   const journalLinks = page
     .getByRole("navigation", { name: "Choose a family timeline" })
     .getByRole("link")
+    .filter({ hasNotText: "All circles" })
     .filter({ hasNotText: "All our days" });
   await expect(journalLinks).toHaveCount(5);
   expect(
@@ -76,8 +77,8 @@ test("Home switcher PERSON chips open five distinct, owner-correct life journals
     ).toEqual(journal.dates);
     await expect(page.locator(".elapsed-gap")).toHaveCount(0);
     await expect(page.locator(".year-divider")).toHaveText(journal.years);
-    await page.locator(".title-switcher summary").click();
-    await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+    await page.getByRole("button", { name: "Choose a journal" }).click();
+    await expect(page.getByRole("dialog", { name: "Journal" })).toBeVisible();
     await expect(
       page
         .getByRole("navigation", { name: "Choose a family timeline" })
@@ -130,7 +131,7 @@ test("composer posts onto the recorder journal and hides the Journal picker", as
   await page.getByRole("button", { name: "Post" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 
-  await page.locator(".title-switcher summary").click();
+  await page.getByRole("button", { name: "Choose a journal" }).click();
   await page
     .getByRole("navigation", { name: "Choose a family timeline" })
     .getByRole("link", { name: "Sam", exact: true })

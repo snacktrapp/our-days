@@ -24,11 +24,18 @@ export async function previewGroupOptions(
     : extraSource && extraSource !== "family"
       ? { id: extraSource, name: "New circle" }
       : undefined;
+  const cookieSelectedGroupId =
+    !requestedCircle &&
+    cookieCircle &&
+    cookieCircle !== "family" &&
+    (!extraGroup || extraGroup.id === cookieCircle)
+      ? cookieCircle
+      : null;
   const selectedGroupId = requestedCircle
     ? extraGroup && requestedCircle === extraGroup.id
       ? extraGroup.id
       : requestedCircle
-    : null;
+    : cookieSelectedGroupId;
   return extraGroup
     ? { extraGroup, selectedGroupId }
     : selectedGroupId

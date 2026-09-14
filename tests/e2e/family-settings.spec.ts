@@ -201,7 +201,7 @@ test("the shared Account navigation opens settings and returns through the prima
 }) => {
   await page.goto("/family");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Primary navigation" })

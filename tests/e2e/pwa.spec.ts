@@ -55,7 +55,7 @@ test("a failed media request leaves the timeline stable without leaking errors",
   await page.route("**/_next/image?*", (route) => route.abort());
   await page.goto("/family");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
   await expect(page.locator(".time-rail")).toBeVisible();
   await expect(page.locator("#moment-kitchen")).toBeVisible();

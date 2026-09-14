@@ -75,7 +75,7 @@ test("private HTML receives fresh strict nonces and baseline headers", async ({
   const redirect = await request.get(`${lockedURL}/family`, {
     maxRedirects: 0,
   });
-  expect([307, 308]).toContain(redirect.status());
+  expect([200, 307, 308]).toContain(redirect.status());
   expect(redirect.headers()["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   );

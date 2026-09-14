@@ -79,7 +79,7 @@ test("pulling the Family feed at the top refreshes moments", async ({
   await expect.poll(() => rscRefreshes).toBeGreaterThan(0);
   await expect(shell).toHaveAttribute("data-pull-state", "idle");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
   await expect(page.locator(".time-rail")).toBeVisible();
 });

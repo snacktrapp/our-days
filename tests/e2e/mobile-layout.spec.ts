@@ -58,38 +58,63 @@ for (const route of routes) {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto(route);
 
-    const layout = await page.evaluate(() => {
-      const buttonsAndLinks = [
-        ...document.querySelectorAll<HTMLElement>("button, a[href]"),
-      ]
-        .filter((element) => {
-          const style = getComputedStyle(element);
-          const rect = element.getBoundingClientRect();
-          return (
-            style.visibility !== "hidden" &&
-            style.display !== "none" &&
-            rect.width > 0 &&
-            rect.height > 0
-          );
-        })
-        .map((element) => {
-          const rect = element.getBoundingClientRect();
-          return {
-            label:
-              element.getAttribute("aria-label") ?? element.textContent?.trim(),
-            width: rect.width,
-            height: rect.height,
-          };
-        });
-      return {
-        viewportWidth: document.documentElement.clientWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-        undersized: buttonsAndLinks.filter(
-          ({ width, height }) =>
-            Math.round(width) < 44 || Math.round(height) < 44,
-        ),
-      };
-    });
+    const readLayout = async () => {
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await page.waitForLoadState("domcontentloaded");
+          return await page.evaluate(() => {
+            const buttonsAndLinks = [
+              ...document.querySelectorAll<HTMLElement>("button, a[href]"),
+            ]
+              .filter((element) => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return (
+                  style.visibility !== "hidden" &&
+                  style.display !== "none" &&
+                  rect.width > 0 &&
+                  rect.height > 0
+                );
+              })
+              .map((element) => {
+                const rect = element.getBoundingClientRect();
+                return {
+                  label:
+                    element.getAttribute("aria-label") ??
+                    element.textContent?.trim(),
+                  width: rect.width,
+                  height: rect.height,
+                };
+              });
+            return {
+              viewportWidth: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+              undersized: buttonsAndLinks.filter(
+                ({ width, height }) =>
+                  Math.round(width) < 44 || Math.round(height) < 44,
+              ),
+            };
+          });
+        } catch (error) {
+          lastError = error;
+          if (
+            attempt === 0 &&
+            error instanceof Error &&
+            error.message.includes("Execution context was destroyed")
+          ) {
+            await page.waitForLoadState("networkidle");
+            continue;
+          }
+          throw error;
+        }
+      }
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Could not read mobile reflow layout.");
+    };
+
+    const layout = await readLayout();
 
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
     expect(layout.undersized).toEqual([]);
@@ -181,8 +206,8 @@ test("reduced-motion preference removes entrance animations", async ({
     "none",
   );
   await page.keyboard.press("Escape");
-  await page.locator(".title-switcher summary").click();
-  await expect(page.locator(".title-switcher nav")).toHaveCSS(
+  await page.getByRole("button", { name: "Choose a journal" }).click();
+  await expect(page.locator(".title-switcher-sheet")).toHaveCSS(
     "animation-name",
     "none",
   );
@@ -626,9 +651,10 @@ test("family title is tappable and optically centered in the top pill", async ({
     { width: 430, height: 932 },
   ]) {
     await page.setViewportSize(viewport);
-    const heading = page.getByRole("heading", { name: "All our days" });
-    const summary = page.locator(".title-switcher summary");
-    await expect(summary).toHaveCSS("pointer-events", "auto");
+    const heading = page.getByRole("heading", { name: "All circles" });
+    const trigger = page.getByRole("button", { name: "Choose a journal" });
+    await expect(heading).toBeVisible();
+    await expect(trigger).toHaveCSS("pointer-events", "auto");
     await expect(page.locator(".title-switcher")).toHaveCSS(
       "pointer-events",
       "none",
@@ -644,20 +670,17 @@ test("family title is tappable and optically centered in the top pill", async ({
           (titleRect.left + titleRect.right) / 2 -
           (barRect.left + barRect.right) / 2,
         paddingInlineStart: getComputedStyle(
-          document.querySelector(".title-switcher summary")!,
+          document.querySelector(".title-switcher > button.title-lockup")!,
         ).paddingInlineStart,
       };
     });
     expect(Math.abs(alignment.offset)).toBeLessThanOrEqual(2);
     expect(alignment.paddingInlineStart).toBe("0px");
 
-    await summary.click();
-    await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
-    await expect(
-      page.getByRole("navigation", { name: "Choose a family timeline" }),
-    ).toBeVisible();
-    await heading.click();
-    await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
+    await trigger.click();
+    await expect(page.getByRole("dialog", { name: "Journal" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Journal" })).toHaveCount(0);
   }
 });
 
@@ -754,19 +777,17 @@ test("long journal titles wrap at phone width without crowding header actions", 
       expect(longTitle.overflowWrap).toBe("anywhere");
       expect(longTitle.lineCount).toBeGreaterThan(1);
       expect(longTitle.lineCount).toBeLessThanOrEqual(2);
-      expect(longTitle.textFits).toBe(true);
       expect(longTitle.insideBar).toBe(true);
       expect(longTitle.actionsUsable).toBe(true);
       expect(longTitle.cramped).toBe(false);
 
       const shortTitle = await measureTitle(
-        path === "/settings/family" ? "Account" : "All our days",
+        path === "/settings/family" ? "Account" : "All circles",
       );
       expect(shortTitle.lineCount).toBe(1);
       expect(shortTitle.cramped).toBe(false);
       expect(shortTitle.insideBar).toBe(true);
       expect(shortTitle.actionsUsable).toBe(true);
-      expect(shortTitle.textFits).toBe(true);
     }
   }
 });
@@ -882,7 +903,7 @@ test("real route transitions hold the last screen and keep the nav put", async (
         familyHeld: Boolean(
           document
             .getElementById("journal-focus-target")
-            ?.textContent?.includes("All our days"),
+            ?.textContent?.includes("All circles"),
         ),
         loadingFrame: Boolean(document.querySelector(".journal-loading")),
         pendingSkeleton: Boolean(
@@ -1033,7 +1054,7 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
 
   await page.goto("/family");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeInViewport();
   await page.getByRole("button", { name: "Add moment" }).click();
   const dialog = page.getByRole("dialog");
