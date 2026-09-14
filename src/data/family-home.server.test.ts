@@ -250,11 +250,18 @@ describe("Account → Journal remount", () => {
     expect(opening.model.refreshDegraded).toBeUndefined();
   });
 
-  it("still fails closed for a missing circle", async () => {
+  it("keeps cold-open Family on a soft timeline when context bootstrap misses", async () => {
     const missing = new Error("Circle is unavailable");
     loadConnectedJournalContext.mockRejectedValueOnce(missing);
 
-    await expect(loadFamilyHomeJournal(access, {})).rejects.toBe(missing);
-    expect(shouldTrapJournalHomeInInterrupt(missing)).toBe(true);
+    const opened = await loadFamilyHomeChrome(access, {});
+
+    expect(shouldTrapJournalHomeInInterrupt(missing)).toBe(false);
+    expect(opened.context).toBeNull();
+    expect(opened.model.refreshDegraded).toBe(true);
+    expect(opened.model.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
   });
 });

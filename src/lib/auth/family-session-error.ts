@@ -1,7 +1,10 @@
-const fatalJournalHomeMessages = new Set([
+const recoverableJournalBootstrapMessages = new Set([
   "Circle is unavailable",
   "Member profile is unavailable",
   "Circle date is unavailable",
+]);
+
+const fatalJournalHomeMessages = new Set([
   "Timeline request is too large",
   "Timeline snapshot is invalid",
 ]);
@@ -42,8 +45,13 @@ export function isNextControlFlowError(error: unknown) {
   );
 }
 
+export function isRecoverableJournalBootstrapError(error: unknown) {
+  return recoverableJournalBootstrapMessages.has(errorMessage(error));
+}
+
 export function isFatalJournalHomeError(error: unknown) {
   if (isNextControlFlowError(error)) return true;
+  if (isRecoverableJournalBootstrapError(error)) return false;
   return fatalJournalHomeMessages.has(errorMessage(error));
 }
 

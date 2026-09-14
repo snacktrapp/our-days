@@ -113,12 +113,15 @@ describe("memories remount helpers", () => {
     );
   });
 
-  it("still fails closed for a missing circle", async () => {
+  it("keeps Memories on the soft-empty shell when context bootstrap misses", async () => {
     const missing = new Error("Circle is unavailable");
     loadConnectedJournalContext.mockRejectedValueOnce(missing);
 
-    await expect(loadMemoriesJournal(access)).rejects.toBe(missing);
-    expect(shouldTrapMemoriesInInterrupt(missing)).toBe(true);
+    const model = await loadMemoriesJournal(access);
+    expect(shouldTrapMemoriesInInterrupt(missing)).toBe(false);
+    expect(model.feature.state).toBe("empty");
+    if (model.feature.state !== "empty") throw new Error("expected empty");
+    expect(model.feature.title).toBe("These days couldn’t open");
   });
 
   it("returns the landing model when the remount load succeeds", async () => {

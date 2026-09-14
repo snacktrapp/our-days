@@ -167,22 +167,26 @@ describe("People journal remount", () => {
     expect(model?.entries).toEqual(timeline.entries);
   });
 
-  it("still fails closed for a missing circle or member", async () => {
+  it("keeps People on a soft timeline when context bootstrap misses", async () => {
     const missingCircle = new Error("Circle is unavailable");
     loadConnectedJournalContext.mockRejectedValueOnce(missingCircle);
 
-    await expect(
-      loadPersonJournal(access, { personId: "calvin" }),
-    ).rejects.toBe(missingCircle);
-    expect(shouldTrapPersonJournalInInterrupt(missingCircle)).toBe(true);
+    const circleMiss = await loadPersonJournal(access, { personId: "calvin" });
+    expect(shouldTrapPersonJournalInInterrupt(missingCircle)).toBe(false);
+    expect(circleMiss?.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
 
     const missingMember = new Error("Member profile is unavailable");
     loadConnectedJournalContext.mockRejectedValueOnce(missingMember);
 
-    await expect(
-      loadPersonJournal(access, { personId: "calvin" }),
-    ).rejects.toBe(missingMember);
-    expect(shouldTrapPersonJournalInInterrupt(missingMember)).toBe(true);
+    const memberMiss = await loadPersonJournal(access, { personId: "calvin" });
+    expect(shouldTrapPersonJournalInInterrupt(missingMember)).toBe(false);
+    expect(memberMiss?.entries[0]).toMatchObject({
+      id: "journal-load-soft-fail",
+      entryType: "empty-state",
+    });
     expect(loadConnectedTimeline).not.toHaveBeenCalled();
   });
 
