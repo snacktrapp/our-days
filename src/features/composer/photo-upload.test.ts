@@ -339,6 +339,53 @@ describe("connected private photo upload", () => {
     expect(calls).not.toContain("reserve_photo_moment");
   });
 
+  it("does not announce later photos appended in the same batch", async () => {
+    const { client } = clientWithStatus();
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        { ...draft, existingMomentId: momentId, announcePublication: false },
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          hash: vi.fn(async () => "a".repeat(64)),
+          resumeStore: memoryResumeStore(),
+          statusAttempts: 1,
+          upload: vi.fn(),
+        },
+      ),
+    ).resolves.toEqual({ state: "published", intakeId, momentId });
+    expect(deliverPublishedMomentPushAction).not.toHaveBeenCalled();
+  });
+
+  it("announces an edit when the first added photo publishes", async () => {
+    const { client } = clientWithStatus();
+    await expect(
+      uploadPhotoMoment(
+        jpegFile(),
+        { ...draft, existingMomentId: momentId, announcePublication: true },
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          hash: vi.fn(async () => "a".repeat(64)),
+          resumeStore: memoryResumeStore(),
+          statusAttempts: 1,
+          upload: vi.fn(),
+        },
+      ),
+    ).resolves.toEqual({ state: "published", intakeId, momentId });
+    await vi.waitFor(() => {
+      expect(deliverPublishedMomentPushAction).toHaveBeenCalledWith({
+        momentId,
+      });
+    });
+    expect(deliverPublishedMomentPushAction).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the Safari-safe TUS transport in the production path", async () => {
     const { client } = clientWithStatus();
     const upload = vi.fn(async (input) => {

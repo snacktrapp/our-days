@@ -228,6 +228,7 @@ function runPhotoUpload(
             ...input.draft,
             existingMomentId:
               absoluteIndex === 0 ? input.draft.existingMomentId : lastMomentId,
+            announcePublication: absoluteIndex === 0,
           },
           attempt,
           controller.signal,

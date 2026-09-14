@@ -2193,6 +2193,91 @@ describe("MomentComposer", () => {
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
+  it("adds several photos to a saved moment as one announce batch", async () => {
+    const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    photoUpload.upload.mockImplementation(async (_file, draft) => ({
+      state: "published" as const,
+      intakeId: "d6000000-0000-4000-8000-000000000031",
+      momentId: draft.existingMomentId ?? "moment-photo",
+    }));
+    const user = userEvent.setup({ applyAccept: false });
+    function PhotoEditHarness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <MomentComposer
+          model={{
+            ...model,
+            circleId: "20000000-0000-4000-8000-000000000001",
+            experience: "connected-family",
+            photoPostingEnabled: true,
+          }}
+          open={open}
+          editDraft={{
+            momentId: "moment-photo",
+            revision: 4,
+            mode: "photo",
+            journalPersonId: "brian",
+            occurredOn: "2026-08-28",
+            maxOccurredOn: "2026-08-30",
+            occurredTime: "",
+            occurredAt: null,
+            occurredTimezone: null,
+            taggedPersonIds: [],
+            place: emptyPlaceSelection(),
+            verseSelection: emptyBibleVerseSelection,
+            title: "",
+            body: "College tours",
+            existingMedia: {
+              kind: "photo",
+              src: "/api/media/moments/moment-photo",
+              alt: "UCLA walk",
+            },
+            save: update,
+          }}
+          returnFocusRef={{ current: null }}
+          onRequestClose={() => setOpen(false)}
+        />
+      );
+    }
+    render(<PhotoEditHarness />);
+
+    const added = [1, 2, 3, 4].map(
+      (index) =>
+        new File(
+          [new Uint8Array([0xff, 0xd8, 0xff, index])],
+          `tour-${index}.jpg`,
+          {
+            type: "image/jpeg",
+          },
+        ),
+    );
+    await user.upload(screen.getByLabelText("Add photo"), added);
+    for (const index of [2, 3, 4, 5]) {
+      fireEvent.load(screen.getByAltText(`Photo ${index} of 5`));
+    }
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(photoUpload.upload).toHaveBeenCalledTimes(4));
+    expect(photoUpload.upload.mock.calls.map(([, draft]) => draft)).toEqual([
+      expect.objectContaining({
+        announcePublication: true,
+        existingMomentId: "moment-photo",
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId: "moment-photo",
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId: "moment-photo",
+      }),
+      expect.objectContaining({
+        announcePublication: false,
+        existingMomentId: "moment-photo",
+      }),
+    ]);
+  });
+
   it("does not show a false change error when added photos attach after Save", async () => {
     const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
     const onRequestClose = vi.fn();
