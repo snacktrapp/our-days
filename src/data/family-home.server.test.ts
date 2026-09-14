@@ -24,7 +24,10 @@ vi.mock("./moments.server", async () => {
 
 import {
   familyHomeRefreshSoftFail,
+  loadFamilyHomeChrome,
+  loadFamilyHomeFirstMoment,
   loadFamilyHomeJournal,
+  loadFamilyHomeRemainder,
   shouldTrapJournalHomeInInterrupt,
 } from "./family-home.server";
 
@@ -58,7 +61,14 @@ const context = {
     settingsHref: "/settings/family",
   },
   people: [
-    { id: "brian", name: "Brian", initial: "B", accent: "teal" as const },
+    {
+      id: "brian",
+      name: "Brian",
+      initial: "B",
+      accent: "teal" as const,
+      roleLabel: "Organizer",
+      journalHref: "/people/brian",
+    },
   ],
 };
 
@@ -166,6 +176,51 @@ describe("Account → Journal remount", () => {
     expect(shouldTrapJournalHomeInInterrupt({ message: "JWT expired" })).toBe(
       false,
     );
+  });
+
+  it("opens chrome without waiting for Activity or the first timeline page", async () => {
+    loadConnectedJournalContext.mockResolvedValueOnce(context);
+
+    const opened = await loadFamilyHomeChrome(access, {});
+
+    expect(loadConnectedJournalContext).toHaveBeenCalledWith(access, {
+      includeActivity: false,
+    });
+    expect(loadConnectedTimeline).not.toHaveBeenCalled();
+    expect(opened.context).toBe(context);
+    expect(opened.model.chrome.title).toBe("All circles");
+    expect(opened.model.entries).toEqual([]);
+    expect(opened.model.refreshDegraded).toBeUndefined();
+  });
+
+  it("loads only the first moment for the opening card", async () => {
+    loadConnectedTimeline.mockResolvedValueOnce(timeline);
+
+    const model = await loadFamilyHomeFirstMoment(access, context, {});
+
+    expect(loadConnectedTimeline).toHaveBeenCalledWith(access, context, {
+      pages: 1,
+      snapshotAt: undefined,
+      allCircles: true,
+      enrichLimit: 1,
+      omitCompletion: true,
+      omitPagination: true,
+    });
+    expect(model.entries).toEqual(timeline.entries);
+  });
+
+  it("does not trap JournalInterrupted when the remainder after the first card misses", async () => {
+    loadConnectedTimeline.mockRejectedValueOnce({
+      message: "Failed to fetch",
+    });
+
+    const model = await loadFamilyHomeRemainder(access, context, {});
+
+    expect(shouldTrapJournalHomeInInterrupt(new Error("Failed to fetch"))).toBe(
+      false,
+    );
+    expect(model.entries).toEqual([]);
+    expect(model.paginationError?.label).toBe("Try opening earlier days again");
   });
 
   it("returns the timeline when the remount load succeeds", async () => {

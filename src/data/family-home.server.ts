@@ -46,7 +46,7 @@ function fallbackFamilyChrome(
   };
 }
 
-function remountSoftFailTimeline(
+function familyHomeFrame(
   access: AuthenticatedAccess,
   context: Awaited<ReturnType<typeof loadConnectedJournalContext>> | null,
   allCircles: boolean,
@@ -69,6 +69,7 @@ function remountSoftFailTimeline(
     chrome: {
       ...chrome,
       eyebrow: journalSwitcherEyebrow(switcher),
+      notifications: [],
     },
     switcher,
     timelineLabel: "Chronological family moments",
@@ -88,6 +89,17 @@ function remountSoftFailTimeline(
             { id: "remember-this", label: "Remember this", symbol: "✦" },
           ],
         },
+    entries: [],
+  };
+}
+
+function remountSoftFailTimeline(
+  access: AuthenticatedAccess,
+  context: Awaited<ReturnType<typeof loadConnectedJournalContext>> | null,
+  allCircles: boolean,
+): TimelineViewModel {
+  return {
+    ...familyHomeFrame(access, context, allCircles),
     entries: [
       {
         id: journalLoadSoftFailEntryId,
@@ -122,6 +134,103 @@ export function familyHomeRefreshSoftFail(allCircles: boolean) {
 
 export function shouldTrapJournalHomeInInterrupt(error: unknown) {
   return isFatalJournalHomeError(error);
+}
+
+export async function loadFamilyHomeChrome(
+  access: AuthenticatedAccess,
+  options: Readonly<{
+    circleId?: string;
+  }>,
+): Promise<
+  Readonly<{
+    model: TimelineViewModel;
+    context: Awaited<ReturnType<typeof loadConnectedJournalContext>> | null;
+  }>
+> {
+  const allCircles = !options.circleId;
+  try {
+    const context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
+    return {
+      context,
+      model: familyHomeFrame(access, context, allCircles),
+    };
+  } catch (error) {
+    if (shouldTrapJournalHomeInInterrupt(error)) throw error;
+    return {
+      context: null,
+      model: remountSoftFailTimeline(access, null, allCircles),
+    };
+  }
+}
+
+function familyHomeTimelineOptions(
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>,
+) {
+  return {
+    pages: Number(options.pages ?? "1"),
+    snapshotAt: options.snapshotAt,
+    allCircles: !options.circleId,
+  };
+}
+
+export async function loadFamilyHomeFirstMoment(
+  access: AuthenticatedAccess,
+  context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>,
+): Promise<TimelineViewModel> {
+  try {
+    return await loadConnectedTimeline(access, context, {
+      ...familyHomeTimelineOptions(options),
+      enrichLimit: 1,
+      omitCompletion: true,
+      omitPagination: true,
+    });
+  } catch (error) {
+    if (shouldTrapJournalHomeInInterrupt(error)) throw error;
+    return remountSoftFailTimeline(access, context, !options.circleId);
+  }
+}
+
+export async function loadFamilyHomeRemainder(
+  access: AuthenticatedAccess,
+  context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>,
+): Promise<TimelineViewModel> {
+  try {
+    return await loadConnectedTimeline(access, context, {
+      ...familyHomeTimelineOptions(options),
+      enrichOffset: 1,
+    });
+  } catch (error) {
+    if (shouldTrapJournalHomeInInterrupt(error)) throw error;
+    const frame = remountSoftFailTimeline(access, context, !options.circleId);
+    return {
+      ...frame,
+      entries: [],
+      paginationError: {
+        retryHref: !options.circleId
+          ? "/family"
+          : `/family?circle=${access.circleId}`,
+        message:
+          "Earlier days couldn’t be opened. The moments already here are still safe.",
+        label: "Try opening earlier days again",
+      },
+    };
+  }
 }
 
 export async function loadFamilyHomeJournal(

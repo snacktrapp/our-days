@@ -893,6 +893,49 @@ describe("connected timeline mapping", () => {
     ).toHaveLength(0);
   });
 
+  it("enriches only the first moment for an opening paint", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        row({ moment_id: "first", moment_kind: "thought" }),
+        row({ moment_id: "second", moment_kind: "thought" }),
+      ],
+      error: null,
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
+
+    const first = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+      enrichLimit: 1,
+      omitCompletion: true,
+      omitPagination: true,
+    });
+    const rest = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+      enrichOffset: 1,
+    });
+
+    expect(
+      first.entries.filter((entry) => entry.entryType === "moment"),
+    ).toEqual([
+      expect.objectContaining({
+        moment: expect.objectContaining({ id: "first" }),
+      }),
+    ]);
+    expect(first.pagination).toBeUndefined();
+    expect(
+      first.entries.some((entry) => entry.entryType === "end-message"),
+    ).toBe(false);
+    expect(
+      rest.entries.filter((entry) => entry.entryType === "moment"),
+    ).toEqual([
+      expect.objectContaining({
+        moment: expect.objectContaining({ id: "second" }),
+      }),
+    ]);
+  });
+
   it("loads the All feed from list_all_timeline_moments", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: [row()], error: null });
     vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);
