@@ -147,7 +147,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
       },
     )
     .toBe(true);
-  await page.keyboard.press("Escape");
+  await page.evaluate(() => document.exitFullscreen());
   await expect
     .poll(() => page.evaluate(() => document.fullscreenElement === null))
     .toBe(true);
