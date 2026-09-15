@@ -143,12 +143,12 @@ describe("overlay background scroll lock", () => {
   it("leaves Safari theme-color on the journal so New moment frost can sample the grid", () => {
     const meta = document.createElement("meta");
     meta.setAttribute("name", "theme-color");
-    meta.setAttribute("content", "#0b1712");
+    meta.setAttribute("content", "#383635");
     document.head.append(meta);
     const { unmount } = renderHook(() => useLockBackgroundScroll(true));
-    expect(meta.getAttribute("content")).toBe("#0b1712");
+    expect(meta.getAttribute("content")).toBe("#383635");
     unmount();
-    expect(meta.getAttribute("content")).toBe("#0b1712");
+    expect(meta.getAttribute("content")).toBe("#383635");
   });
 
   it("prevents wheel default on overlay chrome while locked", () => {

@@ -13,7 +13,7 @@ describe("overlay chrome", () => {
   beforeEach(() => {
     const meta = document.createElement("meta");
     meta.setAttribute("name", "theme-color");
-    meta.setAttribute("content", "#0b1712");
+    meta.setAttribute("content", "#383635");
     document.head.append(meta);
   });
 
@@ -26,7 +26,7 @@ describe("overlay chrome", () => {
     lockOverlayChrome();
     expect(themeMeta()?.getAttribute("content")).toBe("#000000");
     unlockOverlayChrome();
-    expect(themeMeta()?.getAttribute("content")).toBe("#0b1712");
+    expect(themeMeta()?.getAttribute("content")).toBe("#383635");
   });
 
   it("keeps the chrome black until the last overlay unlocks", () => {
@@ -36,6 +36,6 @@ describe("overlay chrome", () => {
     unlockOverlayChrome();
     expect(themeMeta()?.getAttribute("content")).toBe("#000000");
     unlockOverlayChrome();
-    expect(themeMeta()?.getAttribute("content")).toBe("#0b1712");
+    expect(themeMeta()?.getAttribute("content")).toBe("#383635");
   });
 });

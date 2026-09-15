@@ -46,7 +46,7 @@ export function MapPickerCanvas() {
       if (!map || !maplibre) return;
       if (!marker) {
         marker = new maplibre.Marker({
-          color: "#c9a227",
+          color: "#e3ff65",
           draggable: interactive,
         })
           .setLngLat([longitude, latitude])
