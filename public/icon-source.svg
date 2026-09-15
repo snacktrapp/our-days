@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <title>Our Days</title>
-  <rect width="1024" height="1024" fill="#0b1712"/>
-  <path d="M512 192V832" fill="none" stroke="#2d433a" stroke-width="12" stroke-linecap="round"/>
+  <rect width="1024" height="1024" fill="#3f495a"/>
+  <path d="M512 192V832" fill="none" stroke="#7d8c93" stroke-width="12" stroke-linecap="round"/>
   <rect x="432" y="192" width="160" height="160" rx="48" fill="#79aaa4"/>
   <rect x="432" y="432" width="160" height="160" rx="48" fill="#c77c80"/>
-  <rect x="432" y="672" width="160" height="160" rx="48" fill="#b88b42"/>
+  <rect x="432" y="672" width="160" height="160" rx="48" fill="#c59a56"/>
 </svg>

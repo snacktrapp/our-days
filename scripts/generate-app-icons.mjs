@@ -19,7 +19,7 @@ const svg = await readFile(sourcePath);
 for (const { file, size } of outputs) {
   await sharp(svg, { density: 384 })
     .resize(size, size, { fit: "fill" })
-    .flatten({ background: "#0b1712" })
+    .flatten({ background: "#3f495a" })
     .png({ compressionLevel: 9, adaptiveFiltering: true })
     .toFile(`${publicDir}${file}`);
 }

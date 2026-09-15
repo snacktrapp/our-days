@@ -15,7 +15,7 @@ const iconFiles = [
   { file: "icon-1024.png", size: 1024 },
 ] as const;
 
-const canvas = { r: 0x0b, g: 0x17, b: 0x12 };
+const canvas = { r: 0x3f, g: 0x49, b: 0x5a };
 
 function channelDelta(
   actual: { r: number; g: number; b: number },
@@ -31,19 +31,19 @@ function channelDelta(
 describe("installed app icons", () => {
   it("uses the dark login-page mark for PWA and home-screen chrome", async () => {
     const source = await readFile(`${publicDir}icon-source.svg`, "utf8");
-    expect(source).toContain('fill="#0b1712"');
-    expect(source).toContain('stroke="#2d433a"');
+    expect(source).toContain('fill="#3f495a"');
+    expect(source).toContain('stroke="#7d8c93"');
     expect(source).toContain('fill="#79aaa4"');
     expect(source).toContain('fill="#c77c80"');
-    expect(source).toContain('fill="#b88b42"');
+    expect(source).toContain('fill="#c59a56"');
     expect(source).not.toContain("paper");
     expect(source).not.toContain("#fffaf0");
     expect(source).not.toContain("#f3eee4");
 
     const webManifest = manifest();
     expect(webManifest).toMatchObject({
-      background_color: "#0b1712",
-      theme_color: "#0b1712",
+      background_color: "#3f495a",
+      theme_color: "#3f495a",
     });
     expect(webManifest.icons).toEqual(
       expect.arrayContaining([
