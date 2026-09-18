@@ -88,28 +88,28 @@ export function waitForFrameReady(
   frame: Element | null,
   onReady: () => void,
 ): () => void {
-  const img = frameImage(frame);
-  if (img) return waitForImageReady(img, onReady);
   if (!frame) return () => {};
-
-  let cancelled = false;
   let cancelInner: (() => void) | null = null;
-  let raf = 0;
-
-  const retry = () => {
-    if (cancelled) return;
+  const observer = new MutationObserver(check);
+  function check() {
     const next = frameImage(frame);
     if (next) {
+      observer.disconnect();
       cancelInner = waitForImageReady(next, onReady);
       return;
     }
-    raf = requestAnimationFrame(retry);
-  };
-  raf = requestAnimationFrame(retry);
+    // A failed authenticated fetch has a retry control, not an <img>. Let the
+    // user reach that control rather than leaving the swipe waiting forever.
+    if (frame?.querySelector('[data-media-state="error"]')) {
+      observer.disconnect();
+      onReady();
+    }
+  }
+  observer.observe(frame, { childList: true, subtree: true, attributes: true });
+  check();
 
   return () => {
-    cancelled = true;
-    cancelAnimationFrame(raf);
+    observer.disconnect();
     cancelInner?.();
   };
 }

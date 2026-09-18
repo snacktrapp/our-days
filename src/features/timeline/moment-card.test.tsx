@@ -365,18 +365,20 @@ describe("MomentCard timeline media", () => {
 
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
-    document
-      .querySelectorAll<HTMLImageElement>(".photo-card-pager img")
-      .forEach((img) => {
-        Object.defineProperty(img, "complete", {
-          configurable: true,
-          get: () => true,
-        });
-        Object.defineProperty(img, "naturalWidth", {
-          configurable: true,
-          get: () => 800,
-        });
+    for (const photoIndex of [0, 1]) {
+      const img = document.querySelector<HTMLImageElement>(
+        `[data-photo-index="${photoIndex}"] img`,
+      )!;
+      Object.defineProperty(img, "complete", {
+        configurable: true,
+        get: () => true,
       });
+      Object.defineProperty(img, "naturalWidth", {
+        configurable: true,
+        get: () => 800,
+      });
+      fireEvent.load(img);
+    }
     const pager = document.querySelector(".photo-card-pager")!;
     fireEvent.pointerDown(pager, {
       pointerId: 2,

@@ -127,3 +127,37 @@ typecheck and lint passed; four local mobile journeys passed with deferred
 loading. The final network-priority hint has focused test coverage. No measured
 installed-iPhone speed improvement is claimed yet. The twenty-second feed switch
 remains open pending request timings from the updated preview.
+
+## Device confirmation and separate carousel follow-up
+
+Brian reported substantially faster initial media and Just me / All circles
+switching, then confirmed three successful installed-iPhone cold opens at
+approximately 3–5 seconds each. This supersedes the unverified device-speed
+status above for those tested opens, not a guarantee against every intermittent
+failure. PR #86 was merged as `75a0526` after that confirmation and explicit
+merge approval. Quality, the required PR gate, all three critical browser
+engines, and the local journal journey passed. Non-gating database-validation
+and Intel visual-baseline failures remain visible; they were not waived into
+claims of a completely green suite.
+
+The carousel follow-up stays separate: mount the first photo only, warm its
+immediate neighbors after it settles, and retain mounted photos while the card
+is open. Demand-load a neighbor if the user swipes before warming finishes.
+Wait for authenticated bytes and image readiness before moving the slide;
+a failed fetch must expose its retry control, not leave the gesture waiting.
+No persistent media cache, new service, schema change, or IA change is involved.
+
+Local production-build verification: five mobile-Chromium journeys passed,
+including a synthetic six-photo upload, reload, and forward/back swipes. The
+browser recorded three initial private-photo requests, one more for the next
+neighbor after advancing, and no repeat request on returning. The original
+blob URL remained mounted; no page errors were observed. Screenshot inspected.
+Build and artifact scan, typecheck, lint, and formatting passed. Forty focused
+card/pager/readiness tests passed. The first broad unit run exposed an old
+eager-mount assumption in the card test (updated to simulate sequential image
+loads) and a note-edit test that dropped its final typed period under parallel
+load; the latter passed when isolated, with no composer changes. This is local
+browser evidence, not installed-iPhone verification of the new carousel code.
+The final broad run, limited to four workers after the card fixture correction,
+passed: 1,493 tests passed, three skipped. No repeated production builds were
+needed for this follow-up.

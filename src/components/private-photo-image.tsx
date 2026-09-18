@@ -53,7 +53,12 @@ export function PrivatePhotoImage({
 
   if (unavailable || failed) {
     return (
-      <div className="private-photo-unavailable" role="group" aria-label={alt}>
+      <div
+        className="private-photo-unavailable"
+        data-media-state="error"
+        role="group"
+        aria-label={alt}
+      >
         <p>This photo couldn’t be opened.</p>
         <button
           type="button"

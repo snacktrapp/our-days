@@ -1,9 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   albumSlideWidth,
   pairSlideTransform,
   pairTransform,
+  waitForFrameReady,
 } from "./photo-album-gesture";
+
+describe("waitForFrameReady", () => {
+  it("waits for a deferred image to mount and decode", async () => {
+    const frame = document.createElement("div");
+    const ready = vi.fn();
+    const cancel = waitForFrameReady(frame, ready);
+    expect(ready).not.toHaveBeenCalled();
+    const img = document.createElement("img");
+    frame.append(img);
+    await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    Object.defineProperty(img, "naturalWidth", { value: 100 });
+    img.dispatchEvent(new Event("load"));
+    expect(ready).toHaveBeenCalledTimes(1);
+    cancel();
+  });
+
+  it("settles a failed private fetch without an image element", async () => {
+    const frame = document.createElement("div");
+    const ready = vi.fn();
+    const cancel = waitForFrameReady(frame, ready);
+    const error = document.createElement("div");
+    error.dataset.mediaState = "error";
+    frame.append(error);
+    await Promise.resolve();
+    expect(ready).toHaveBeenCalledTimes(1);
+    cancel();
+  });
+
+  it("cancels a pending mount when the gesture is abandoned", async () => {
+    const frame = document.createElement("div");
+    const ready = vi.fn();
+    waitForFrameReady(frame, ready)();
+    const img = document.createElement("img");
+    Object.defineProperty(img, "naturalWidth", { value: 100 });
+    frame.append(img);
+    await Promise.resolve();
+    img.dispatchEvent(new Event("load"));
+    expect(ready).not.toHaveBeenCalled();
+  });
+});
 
 describe("pairSlideTransform", () => {
   const next = {
