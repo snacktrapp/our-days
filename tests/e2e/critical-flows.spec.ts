@@ -95,6 +95,9 @@ test("page transitions show only the background grid", async ({ page }) => {
     await page.getByRole("link", { name: "Circles", exact: true }).click();
     const pending = page.locator(".route-pending-field");
     await expect(pending).toBeVisible();
+    const icons = page.locator(".bottom-nav .nav-symbol svg");
+    await expect(icons).toHaveCount(3);
+    for (const icon of await icons.all()) await expect(icon).toBeVisible();
     await expect(
       page.locator(".phone-stage .time-rail, .route-pending-card"),
     ).toHaveCount(0);

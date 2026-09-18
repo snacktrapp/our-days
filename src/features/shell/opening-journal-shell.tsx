@@ -2,6 +2,7 @@ import { allHomeLabel, journalSwitcherTypeLabel } from "./journal-switcher";
 import { SettingsLink } from "./settings-link";
 import { JournalHomeLink } from "./journal-home-link";
 import { RoutePendingSkeleton } from "./journal-pending-route";
+import { NavSymbol } from "./nav-symbol";
 
 export function OpeningJournalShell() {
   return (
@@ -33,15 +34,15 @@ export function OpeningJournalShell() {
       </main>
       <nav className="bottom-nav" aria-label="Primary navigation">
         <JournalHomeLink className="nav-item active" aria-current="page">
-          <span className="nav-symbol" aria-hidden="true" />
+          <NavSymbol name="family" />
           <span>Journal</span>
         </JournalHomeLink>
         <span className="nav-item">
-          <span className="nav-symbol" aria-hidden="true" />
+          <NavSymbol name="add" />
           <span>Add</span>
         </span>
         <a className="nav-item" href="/circles">
-          <span className="nav-symbol" aria-hidden="true" />
+          <NavSymbol name="circles" />
           <span>Circles</span>
         </a>
       </nav>

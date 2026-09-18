@@ -25,6 +25,12 @@ describe("OpeningJournalShell", () => {
     ).toHaveClass("route-pending-skeleton");
     expect(container.querySelector(".topbar")).not.toBeNull();
     expect(container.querySelector(".bottom-nav")).not.toBeNull();
+    const icons = container.querySelectorAll(".bottom-nav .nav-symbol svg");
+    expect(icons).toHaveLength(3);
+    for (const icon of icons) {
+      expect(icon.children.length).toBeGreaterThan(0);
+      expect(icon).toHaveAttribute("viewBox", "0 0 24 24");
+    }
     expect(container.querySelector(".moment")).toBeNull();
     expect(
       container.querySelector(".time-rail, .route-pending-card"),

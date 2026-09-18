@@ -95,13 +95,19 @@ test("cold open paints usable Family content after sign-in", async ({
   ).toBeVisible();
   await expect(page.getByLabel("Chronological family moments")).toBeVisible();
   await expect(page.getByLabel("Opening this journal")).toHaveCount(0);
+  // The first nav in the streamed HTML is the loading shell, before client
+  // hydration or feed data. Its icons must not be empty placeholder spans.
+  const html = await (await page.request.get("/family")).text();
+  const firstNav = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0];
+  expect(firstNav).toBeDefined();
+  expect(firstNav!.match(/<svg\b/g)).toHaveLength(3);
   await expect(page.getByText("Something interrupted the story")).toHaveCount(
     0,
   );
   expect(pageErrors).toEqual([]);
 });
 
-test("album downloads first and neighbors only, then retains photos across swipes", async ({
+test("nearby album requests all photos before the cover finishes and retains them across swipes", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -134,6 +140,20 @@ test("album downloads first and neighbors only, then retains photos across swipe
     timeout: 30_000,
   });
 
+  // Hold every response: all album requests must start without waiting for
+  // the cover (or any earlier slide) to finish downloading.
+  const momentId = await card.evaluate((node) =>
+    node.closest("article")!.id.replace(/^moment-/, ""),
+  );
+  const albumPath = `/api/media/moments/${momentId}`;
+  let releasePhotos!: () => void;
+  const heldPhotos = new Promise<void>((resolve) => {
+    releasePhotos = resolve;
+  });
+  await page.route(`**${albumPath}?*`, async (route) => {
+    await heldPhotos;
+    await route.continue();
+  });
   // Reload the persisted album so the assertions measure delivery, not upload.
   const requests: string[] = [];
   page.on("request", (request) => {
@@ -147,17 +167,19 @@ test("album downloads first and neighbors only, then retains photos across swipe
   await page.reload();
   await card.scrollIntoViewIfNeeded();
   const pager = card.locator(".photo-card-pager");
-  await expect(pager.locator("img")).toHaveCount(3);
+  const albumRequests = () =>
+    requests.filter((url) => new URL(url).pathname === albumPath);
+  try {
+    await expect.poll(() => albumRequests().length).toBe(6);
+    await expect(pager.locator("img")).toHaveCount(0);
+  } finally {
+    releasePhotos();
+  }
+  await expect(pager.locator("img")).toHaveCount(6);
   const firstSrc = await pager
     .locator('[data-photo-index="0"] img')
     .getAttribute("src");
-  const momentId = await card.evaluate((node) =>
-    node.closest("article")!.id.replace(/^moment-/, ""),
-  );
-  const albumPath = `/api/media/moments/${momentId}`;
-  const albumRequests = () =>
-    requests.filter((url) => new URL(url).pathname === albumPath);
-  await expect.poll(() => albumRequests().length).toBe(3);
+  await expect.poll(() => albumRequests().length).toBe(6);
   const swipe = async (direction: "next" | "prev") => {
     await pager.evaluate((node, direction) => {
       const box = node.getBoundingClientRect();
@@ -187,10 +209,10 @@ test("album downloads first and neighbors only, then retains photos across swipe
   };
   await swipe("next");
   await expect(pager.getByText("Photo 2 of 6")).toHaveCount(1);
-  await expect.poll(() => albumRequests().length).toBe(4);
+  await expect.poll(() => albumRequests().length).toBe(6);
   await swipe("prev");
   await expect(pager.getByText("Photo 1 of 6")).toHaveCount(1);
-  expect(albumRequests()).toHaveLength(4);
+  expect(albumRequests()).toHaveLength(6);
   await expect(pager.locator('[data-photo-index="0"] img')).toHaveAttribute(
     "src",
     firstSrc!,

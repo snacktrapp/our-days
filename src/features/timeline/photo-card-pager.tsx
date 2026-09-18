@@ -69,23 +69,32 @@ export function PhotoCardPager({
 
   useEffect(() => {
     if (photos.length < 2) return;
-    const frame = stageRef.current?.querySelector(
-      `[data-photo-index="${index}"]`,
-    );
-    // The visible photo gets the connection first. Only after it settles do
-    // we warm the next/previous swipe, not the rest of the album.
-    return waitForFrameReady(frame ?? null, () => {
-      const neighbors = [
-        wrapIndex(index - 1, photos.length),
-        wrapIndex(index + 1, photos.length),
-      ];
+    const stage = stageRef.current;
+    if (!stage) return;
+    // Warm this album before the reader arrives, without waiting for the
+    // cover to finish or for each swipe. Distant albums stay unmounted.
+    const warmAlbum = () => {
       setRequested((current) =>
-        neighbors.every((neighbor) => current.has(neighbor))
+        current.size === photos.length
           ? current
-          : new Set([...current, ...neighbors]),
+          : new Set(Array.from({ length: photos.length }, (_, i) => i)),
       );
-    });
-  }, [index, photos.length]);
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      warmAlbum();
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        warmAlbum();
+        observer.disconnect();
+      },
+      { rootMargin: "800px 0px" },
+    );
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [photos.length]);
   function writePair(next: AlbumPair | null) {
     if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
       const width = readSlideWidth();

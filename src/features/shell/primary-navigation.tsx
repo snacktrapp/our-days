@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useComposerSession } from "@/features/composer/composer-session";
 import { sectionFromPathname } from "./journal-routes";
 import { JournalHomeLink } from "./journal-home-link";
+import { NavSymbol } from "./nav-symbol";
 import type { JournalSection } from "./shell-view-model";
 import { useHideBottomNavWhileComposing } from "./hide-bottom-nav-while-composing";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
@@ -23,39 +24,6 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
     !event.ctrlKey &&
     !event.metaKey &&
     !event.shiftKey
-  );
-}
-
-function NavIcon({ name }: { name: "family" | "add" | "circles" }) {
-  if (name === "family") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 11.2v1.6" strokeWidth={2.15} />
-        <rect x="5.5" y="5" width="13" height="5.2" rx="1.6" />
-        <rect x="5.5" y="13.8" width="13" height="5.2" rx="1.6" />
-      </svg>
-    );
-  }
-  if (name === "add") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5.65" />
-    </svg>
-  );
-}
-
-function NavSymbol({ name }: { name: "family" | "add" | "circles" }) {
-  return (
-    <span className="nav-symbol" aria-hidden="true">
-      <NavIcon name={name} />
-    </span>
   );
 }
 
