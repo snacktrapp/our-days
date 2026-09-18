@@ -14,17 +14,17 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
           className="settings-section people-group"
           aria-labelledby={`people-group-${group.id}`}
         >
-          <div className="settings-heading">
+          <div className="settings-heading circle-directory-heading">
             <span>Circle</span>
-            <h2 id={`people-group-${group.id}`}>
-              <Link
-                href={groupHomeHref(group.id)}
-                prefetch={false}
-                aria-label={`Open ${group.name} circle feed`}
-              >
-                {group.name} →
-              </Link>
-            </h2>
+            <h2 id={`people-group-${group.id}`}>{group.name}</h2>
+            <Link
+              className="person-arrow circle-journal-link"
+              href={groupHomeHref(group.id)}
+              prefetch={false}
+              aria-label={`Open ${group.name} circle feed`}
+            >
+              View journal
+            </Link>
             <p>{peopleCountLabel(group.members.length)}</p>
           </div>
           <div className="people-list">

@@ -26,6 +26,9 @@ describe("OpeningJournalShell", () => {
     expect(container.querySelector(".topbar")).not.toBeNull();
     expect(container.querySelector(".bottom-nav")).not.toBeNull();
     expect(container.querySelector(".moment")).toBeNull();
+    expect(
+      container.querySelector(".time-rail, .route-pending-card"),
+    ).toBeNull();
     expect(container.querySelector(".photo-status-shelf")).toBeNull();
   });
 });

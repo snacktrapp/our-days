@@ -10,10 +10,11 @@ test("route-based journal navigation preserves the approved views", async ({
     page.getByRole("heading", { name: "All circles", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Choose a journal" }).click();
-  await expect(page.getByRole("dialog").getByRole("link")).toHaveText([
-    "Just me",
-    "All circles",
-  ]);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Choose a family timeline" })
+      .getByRole("link"),
+  ).toHaveText(["Just me", "All circles"]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(7);

@@ -228,12 +228,13 @@ describe("JournalChrome", () => {
     );
     expect(screen.queryByRole("link", { name: "Molly" })).toBeNull();
 
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "Journal" }), {
-      key: "Escape",
-    });
-    expect(document.querySelector(".title-switcher-sheet")).toHaveClass(
-      "is-closing",
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "Choose a journal" }),
+      {
+        key: "Escape",
+      },
     );
+    expect(document.querySelector(".title-switcher-sheet")).toBeNull();
     expect(
       screen.queryByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeNull();

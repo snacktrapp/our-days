@@ -51,16 +51,63 @@ test("family journal paints and opens its journal selector @critical", async ({
 
   const trigger = page.getByRole("button", { name: "Choose a journal" });
   await trigger.click();
-  const dialog = page.getByRole("dialog", { name: "Journal" });
+  const dialog = page.getByRole("navigation", {
+    name: "Choose a family timeline",
+  });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("link")).toHaveText(["Just me", "All circles"]);
-  await expect(
-    dialog.getByRole("navigation", { name: "Choose a family timeline" }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const triggerBox = await trigger.boundingBox();
+  const menuBox = await dialog.boundingBox();
+  expect(menuBox!.y).toBeGreaterThanOrEqual(triggerBox!.y + triggerBox!.height);
+  expect(menuBox!.y - (triggerBox!.y + triggerBox!.height)).toBeLessThan(40);
+  expect(menuBox!.height).toBeLessThan(130);
+  await page.screenshot({
+    path: test.info().outputPath("header-selector.png"),
+  });
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
+  await trigger.click();
+  await trigger.click();
+  await expect(dialog).toBeHidden();
+  await trigger.click();
+  await page
+    .locator(".moment-card")
+    .first()
+    .click({ position: { x: 5, y: 5 } });
+  await expect(dialog).toBeHidden();
+});
+
+test("page transitions show only the background grid", async ({ page }) => {
+  await page.goto("/family");
+  await expect(page.locator(".moment-card").first()).toBeVisible();
+  let resume!: () => void;
+  const held = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  await page.route("**/circles*", async (route) => {
+    await held;
+    await route.continue();
+  });
+  try {
+    await page.getByRole("link", { name: "Circles", exact: true }).click();
+    const pending = page.locator(".route-pending-field");
+    await expect(pending).toBeVisible();
+    await expect(
+      page.locator(".phone-stage .time-rail, .route-pending-card"),
+    ).toHaveCount(0);
+    await expect(pending).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await page.screenshot({
+      path: test.info().outputPath("grid-only-transition.png"),
+    });
+  } finally {
+    resume();
+  }
+  await expect(
+    page.getByRole("link", { name: /Open All our days circle feed/ }),
+  ).toBeVisible();
 });
 
 test("Journal, Circles, and Settings remain distinct with one Add entry point @critical", async ({

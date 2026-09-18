@@ -71,21 +71,6 @@ export function RoutePendingSkeleton({
           ? "Opening circles"
           : "Opening account";
 
-  if (kind === "timeline") {
-    return (
-      <section
-        className="timeline route-pending-skeleton"
-        aria-busy="true"
-        aria-label={label}
-      >
-        <div className="time-rail" aria-hidden="true" />
-        <div className="route-pending-card" />
-        <div className="route-pending-card" />
-        <div className="route-pending-card is-short" />
-      </section>
-    );
-  }
-
   return (
     <section
       className={`route-pending-field route-pending-skeleton route-pending-${kind}`}

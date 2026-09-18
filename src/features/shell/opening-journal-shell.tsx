@@ -1,6 +1,7 @@
 import { allHomeLabel, journalSwitcherTypeLabel } from "./journal-switcher";
 import { SettingsLink } from "./settings-link";
 import { JournalHomeLink } from "./journal-home-link";
+import { RoutePendingSkeleton } from "./journal-pending-route";
 
 export function OpeningJournalShell() {
   return (
@@ -27,16 +28,7 @@ export function OpeningJournalShell() {
             aria-live="assertive"
             aria-atomic="true"
           />
-          <section
-            className="timeline route-pending-skeleton"
-            aria-busy="true"
-            aria-label="Opening this journal"
-          >
-            <div className="time-rail" aria-hidden="true" />
-            <div className="route-pending-card" />
-            <div className="route-pending-card" />
-            <div className="route-pending-card is-short" />
-          </section>
+          <RoutePendingSkeleton kind="timeline" />
         </section>
       </main>
       <nav className="bottom-nav" aria-label="Primary navigation">
