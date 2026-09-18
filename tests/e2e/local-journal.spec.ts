@@ -8,9 +8,9 @@ import {
   localJordanPersonId,
 } from "../../src/lib/local-journal/ids";
 
-async function jpegFixture() {
+async function jpegFixture(index = 0) {
   const directory = mkdtempSync(join(tmpdir(), "our-days-photo-"));
-  const path = join(directory, "porch.jpg");
+  const path = join(directory, `porch-${index}.jpg`);
   writeFileSync(
     path,
     await sharp({
@@ -18,7 +18,7 @@ async function jpegFixture() {
         width: 64,
         height: 48,
         channels: 3,
-        background: { r: 196, g: 122, b: 88 },
+        background: { r: 196, g: 122, b: 88 + index },
       },
     })
       .jpeg()
@@ -45,6 +45,98 @@ test("cold open paints usable Family content after sign-in", async ({
     0,
   );
   expect(pageErrors).toEqual([]);
+});
+
+test("album downloads first and neighbors only, then retains photos across swipes", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("button", { name: "Add moment" }).click();
+  await page
+    .getByRole("button", { name: "Photo or video Media with date and note" })
+    .click();
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles(
+      await Promise.all(Array.from({ length: 6 }, (_, i) => jpegFixture(i))),
+    );
+  await expect(
+    page.getByText("6 photos ready to upload privately."),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Note" })
+    .fill("Six carousel loading fixtures.");
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+  const card = page
+    .locator(".moment-card")
+    .filter({ hasText: "Six carousel loading fixtures." });
+  await expect(card.locator(".photo-card-pager-dots span")).toHaveCount(6, {
+    timeout: 30_000,
+  });
+
+  // Reload the persisted album so the assertions measure delivery, not upload.
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      request.url().includes("/api/media/moments/") &&
+      request.url().includes("photo=")
+    )
+      requests.push(request.url());
+  });
+  await page.reload();
+  await card.scrollIntoViewIfNeeded();
+  const pager = card.locator(".photo-card-pager");
+  await expect(pager.locator("img")).toHaveCount(3);
+  await expect.poll(() => requests.length).toBe(3);
+  const firstSrc = await pager
+    .locator('[data-photo-index="0"] img')
+    .getAttribute("src");
+  const swipe = async (direction: "next" | "prev") => {
+    await pager.evaluate((node, direction) => {
+      const box = node.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + 30;
+      const end = x + (direction === "next" ? -90 : 90);
+      for (const [type, clientX] of [
+        ["pointerdown", x],
+        ["pointermove", end],
+        ["pointerup", end],
+      ] as const) {
+        node.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 7,
+            pointerType: "touch",
+            clientX,
+            clientY: y,
+          }),
+        );
+      }
+    }, direction);
+    await expect(pager.locator(".photo-card-pager-track")).toHaveAttribute(
+      "data-phase",
+      "idle",
+    );
+  };
+  await swipe("next");
+  await expect(pager.getByText("Photo 2 of 6")).toHaveCount(1);
+  await expect.poll(() => requests.length).toBe(4);
+  await swipe("prev");
+  await expect(pager.getByText("Photo 1 of 6")).toHaveCount(1);
+  expect(requests).toHaveLength(4);
+  await expect(pager.locator('[data-photo-index="0"] img')).toHaveAttribute(
+    "src",
+    firstSrc!,
+  );
+  await page.screenshot({ path: "test-results/carousel-neighbor-loading.png" });
+  expect(errors).toEqual([]);
 });
 
 test("sign in, write a moment, attach media, and browse by date", async ({

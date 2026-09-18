@@ -8,6 +8,7 @@ type CspImageProps = Readonly<{
   sizes: string;
   className?: string;
   highPriority?: boolean;
+  eager?: boolean;
 }>;
 
 const reviewedPublicImagePaths = new Set(["/sample-family.jpg"]);
@@ -25,6 +26,7 @@ export function CspPublicImage({
   sizes,
   className,
   highPriority = false,
+  eager = false,
 }: CspImageProps) {
   if (!reviewedPublicImagePaths.has(src)) {
     throw new Error("CspPublicImage received an unreviewed public asset.");
@@ -36,7 +38,7 @@ export function CspPublicImage({
     width,
     height,
     sizes,
-    loading: highPriority ? "eager" : "lazy",
+    loading: highPriority || eager ? "eager" : "lazy",
     fetchPriority: highPriority ? "high" : undefined,
   });
   const { style: _inlineStyle, ...imageProps } = props;

@@ -207,7 +207,7 @@ export function MomentCard({
             <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
             <PhotoCardPager
               moment={moment}
-              images={photoAlbum(moment).map((photo) =>
+              images={photoAlbum(moment).map((photo, photoIndex) =>
                 moment.image.delivery === "private" ? (
                   <PrivatePhotoImage
                     key={photo.id}
@@ -215,7 +215,7 @@ export function MomentCard({
                     alt={photo.alt}
                     width={photo.width}
                     height={photo.height}
-                    highPriority={preload}
+                    highPriority={preload && photoIndex === 0}
                   />
                 ) : (
                   <CspPublicImage
@@ -224,7 +224,8 @@ export function MomentCard({
                     alt={photo.alt}
                     width={photo.width ?? 1200}
                     height={photo.height ?? 801}
-                    highPriority={preload}
+                    highPriority={preload && photoIndex === 0}
+                    eager={photoIndex > 0}
                     sizes="(max-width: 520px) 92vw, 410px"
                   />
                 ),

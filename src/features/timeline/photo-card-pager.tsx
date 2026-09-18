@@ -17,11 +17,10 @@ import {
   albumSlideWidth,
   axisLockPx,
   clampDragDx,
-  frameImage,
   pairSlideTransform,
   slideMs,
   swipeThreshold,
-  waitForImageReady,
+  waitForFrameReady,
   wrapIndex,
   type AlbumPair,
 } from "./photo-album-gesture";
@@ -36,6 +35,9 @@ export function PhotoCardPager({
 }>) {
   const photos = photoAlbum(moment);
   const [index, setIndex] = useState(0);
+  // Keep mounted images for the life of this card: revisiting a slide must not
+  // revoke its blob URL and download it again. Empty frames cost no requests.
+  const [requested, setRequested] = useState(() => new Set([0]));
   const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
   const [stageHeight, setStageHeight] = useState<number | null>(null);
@@ -58,6 +60,32 @@ export function PhotoCardPager({
     dx: number;
     commit: boolean;
   } | null>(null);
+
+  function requestPhoto(photoIndex: number) {
+    setRequested((current) =>
+      current.has(photoIndex) ? current : new Set([...current, photoIndex]),
+    );
+  }
+
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const frame = stageRef.current?.querySelector(
+      `[data-photo-index="${index}"]`,
+    );
+    // The visible photo gets the connection first. Only after it settles do
+    // we warm the next/previous swipe, not the rest of the album.
+    return waitForFrameReady(frame ?? null, () => {
+      const neighbors = [
+        wrapIndex(index - 1, photos.length),
+        wrapIndex(index + 1, photos.length),
+      ];
+      setRequested((current) =>
+        neighbors.every((neighbor) => current.has(neighbor))
+          ? current
+          : new Set([...current, ...neighbors]),
+      );
+    });
+  }, [index, photos.length]);
   function writePair(next: AlbumPair | null) {
     if (next && (next.slideWidth == null || next.slideWidth <= 0)) {
       const width = readSlideWidth();
@@ -223,10 +251,11 @@ export function PhotoCardPager({
     const dx = clampDragDx(rawDx, direction, readSlideWidth());
     pendingToRef.current = to;
     pendingDragRef.current = { to, direction, dx, commit: false };
+    requestPhoto(to);
     if (overlayMotionReduced()) return;
     clearReadyWait();
-    cancelReadyRef.current = waitForImageReady(
-      frameImage(frameEl(to)),
+    cancelReadyRef.current = waitForFrameReady(
+      frameEl(to),
       onIncomingReadyForDrag,
     );
   }
@@ -238,6 +267,7 @@ export function PhotoCardPager({
     const dx = clampDragDx(rawDx, direction, readSlideWidth());
     if (pointerRef.current) pointerRef.current.dx = dx;
     const pending = pendingDragRef.current;
+    const changedPendingTarget = pending != null && pending.to !== to;
     if (pending) {
       pending.to = to;
       pending.direction = direction;
@@ -252,13 +282,14 @@ export function PhotoCardPager({
       pendingToRef.current = to;
       pendingDragRef.current = { to, direction, dx, commit: false };
       clearReadyWait();
-      cancelReadyRef.current = waitForImageReady(
-        frameImage(frameEl(to)),
+      requestPhoto(to);
+      cancelReadyRef.current = waitForFrameReady(
+        frameEl(to),
         onIncomingReadyForDrag,
       );
       return;
     }
-    if (!pending) {
+    if (!pending || changedPendingTarget) {
       beginHorizontalDrag(rawDx);
     }
   }
@@ -339,7 +370,8 @@ export function PhotoCardPager({
       const direction: 1 | -1 = dx < 0 ? 1 : -1;
       const to = wrapIndex(index + direction, photos.length);
       clearReadyWait();
-      cancelReadyRef.current = waitForImageReady(frameImage(frameEl(to)), () =>
+      requestPhoto(to);
+      cancelReadyRef.current = waitForFrameReady(frameEl(to), () =>
         startSnap(index, to, direction),
       );
       return;
@@ -391,7 +423,7 @@ export function PhotoCardPager({
         }
         aria-hidden={role === "parked" ? true : undefined}
       >
-        {images[photoIndex]}
+        {requested.has(photoIndex) ? images[photoIndex] : null}
       </div>
     );
   }
