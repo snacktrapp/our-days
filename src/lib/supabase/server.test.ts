@@ -15,7 +15,31 @@ vi.mock("./public-config", () => ({
 }));
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+
+it("logs preview request timing without private query parameters or object paths", async () => {
+  vi.stubEnv("VERCEL_ENV", "preview");
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response()));
+  await createOurDaysServerClient();
+  const request = mocks.create.mock.calls.at(-1)![2].global.fetch;
+  await request("https://example.supabase.co/rest/v1/moments?id=eq.private-id");
+  await request(
+    "https://example.supabase.co/storage/v1/object/sign/private/family-photo.jpg?token=secret",
+  );
+  expect(log).toHaveBeenCalledWith(
+    "[preview-supabase-timing]",
+    expect.objectContaining({ operation: "rest/v1/moments", status: 200 }),
+  );
+  expect(log).toHaveBeenCalledWith(
+    "[preview-supabase-timing]",
+    expect.objectContaining({ operation: "storage", status: 200 }),
+  );
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(
+    /private-id|family-photo|secret/,
+  );
 });
 
 it("aborts stalled journal reads when their deadline expires", async () => {

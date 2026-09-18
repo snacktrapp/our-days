@@ -101,3 +101,29 @@ response without following Google: callback origin must equal the verifier
 cookie host. The stable alias passed that live check. Vercel share-link expiry
 is separate from journal authentication; this fix does not make share links
 permanent. Full Google login and installed-iPhone feed verification remain open.
+
+## Slow-feed follow-up
+
+User reports roughly six seconds to first paint, ten more to the first photo
+carousel, and twenty seconds to switch Just me to All circles. Preview runtime
+logs show a burst of many media requests during a feed load. They do not provide
+per-query durations, so these observations do not yet identify the entire delay.
+
+Confirmed code issue: private photos start fetching on mount, including all
+parked carousel slides and off-screen cards. Image `fetchPriority` previously
+applied to the resulting blob, not the network request. Defer non-priority
+photos until their carousel is within 200px of the viewport, and apply priority
+to the actual fetch. Observe the carousel rather than hidden slides to preserve
+the existing swipe preloading behavior. Keep host-only authorization, no-store,
+retry, and request cancellation unchanged.
+
+Preview-only Supabase request logs now emit operation category, response status,
+and time to response headers. They exclude queries, object paths, tokens, IDs,
+and payloads. This will distinguish slow feed/auth queries from media congestion
+without adding monitoring infrastructure. It is not total response-body timing.
+
+Focused media/timing tests: twelve passed. Production build, artifact scan,
+typecheck and lint passed; four local mobile journeys passed with deferred
+loading. The final network-priority hint has focused test coverage. No measured
+installed-iPhone speed improvement is claimed yet. The twenty-second feed switch
+remains open pending request timings from the updated preview.

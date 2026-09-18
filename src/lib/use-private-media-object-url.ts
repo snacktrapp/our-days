@@ -7,7 +7,10 @@ function inlineMediaSrc(src: string | undefined) {
   return src.startsWith("data:") || src.startsWith("blob:") ? src : null;
 }
 
-export function usePrivateMediaObjectUrl(src: string | undefined) {
+export function usePrivateMediaObjectUrl(
+  src: string | undefined,
+  priority: "high" | "auto" = "auto",
+) {
   const inline = inlineMediaSrc(src);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -25,6 +28,7 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
           cache: "no-store",
           credentials: "same-origin",
           signal: controller.signal,
+          priority,
         });
         if (!response.ok) {
           if (!handle.cancelled) {
@@ -65,7 +69,7 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
       controller.abort();
       if (handle.created) URL.revokeObjectURL(handle.created);
     };
-  }, [inline, src]);
+  }, [inline, src, priority]);
 
   const current = loadedSrc === src;
   return {

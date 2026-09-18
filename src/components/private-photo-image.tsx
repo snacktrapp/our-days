@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 
@@ -22,9 +22,33 @@ export function PrivatePhotoImage({
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
   const [decoded, setDecoded] = useState<boolean | null>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const [nearViewport, setNearViewport] = useState(false);
+  const shouldLoad =
+    highPriority || nearViewport || typeof IntersectionObserver === "undefined";
+  useEffect(() => {
+    if (shouldLoad) return;
+    const placeholder = placeholderRef.current;
+    if (!placeholder) return;
+    // Observe the album, not its hidden slides: the swipe controller expects
+    // neighboring images to be ready once the carousel reaches the viewport.
+    const target = placeholder.closest(".photo-card-pager") ?? placeholder;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setNearViewport(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
   const deliverySrc = privateMediaRetrySrc(src, attempt);
   const { objectUrl, failed } = usePrivateMediaObjectUrl(
-    unavailable ? undefined : deliverySrc,
+    unavailable || !shouldLoad ? undefined : deliverySrc,
+    highPriority ? "high" : "auto",
   );
 
   if (unavailable || failed) {
@@ -48,6 +72,7 @@ export function PrivatePhotoImage({
   if (!objectUrl) {
     return (
       <div
+        ref={placeholderRef}
         className="private-photo-unavailable is-pending"
         aria-hidden="true"
       />
