@@ -96,6 +96,41 @@ describe("OAuth start route", () => {
     );
   });
 
+  it.each(["google", "x"])(
+    "moves Preview %s to the callback host before creating host-only auth cookies",
+    async (provider) => {
+      vi.stubEnv("VERCEL", "1");
+      vi.stubEnv("VERCEL_ENV", "preview");
+      vi.stubEnv("VERCEL_URL", "our-days-build123.vercel.app");
+      vi.stubEnv("VERCEL_BRANCH_URL", "our-days-git-review.vercel.app");
+      vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
+
+      const response = await GET(
+        new Request(
+          `https://our-days-build123.vercel.app/api/auth/oauth/${provider}?next=https://untrusted.example`,
+        ),
+        { params: Promise.resolve({ provider }) },
+      );
+      expect(response.headers.get("location")).toBe(
+        `https://our-days-git-review.vercel.app/api/auth/oauth/${provider}`,
+      );
+      expect(response.headers.get("cache-control")).toContain("no-store");
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(mocks.createClient).not.toHaveBeenCalled();
+
+      await GET(new Request(response.headers.get("location")!), {
+        params: Promise.resolve({ provider }),
+      });
+      expect(mocks.signInWithOAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: expect.objectContaining({
+            redirectTo: "https://our-days-git-review.vercel.app/auth/callback",
+          }),
+        }),
+      );
+    },
+  );
+
   it("uses the Vercel Preview origin for redirect_to when SITE_URL is a copied staging host", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://our-days-staging.vercel.app");
     vi.stubEnv("VERCEL", "1");

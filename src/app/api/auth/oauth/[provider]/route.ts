@@ -46,6 +46,20 @@ export async function GET(
 
   const origin = siteOrigin(request);
 
+  // Vercel's build URL and branch alias serve the same app, but cookies are
+  // host-only. Start on the callback host before Supabase creates its PKCE
+  // verifier, or returning from Google/X cannot complete the exchange.
+  if (
+    process.env.VERCEL === "1" &&
+    process.env.VERCEL_ENV === "preview" &&
+    new URL(request.url).origin !== origin
+  ) {
+    return appRedirect(
+      request,
+      new URL(`/api/auth/oauth/${rawProvider}`, origin).toString(),
+    );
+  }
+
   if (localJournalIsEnabled()) {
     const config = readOAuthProviderConfig(rawProvider);
     if (!config) return appRedirect(request, "/sign-in?oauth=unavailable");

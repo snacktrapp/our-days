@@ -81,3 +81,23 @@ Keep this PR narrow. Capture/reproduce the connected first-feed failure; test
 All-circles refresh and Back/remount with injected failures; then verify
 edit/comment/reaction and interrupted-save recovery. Preserve the existing IA
 and media behavior. Do not describe a local test pass as real-PWA verification.
+
+## Preview sign-in follow-up
+
+Confirmed against the deployed preview: starting Google OAuth on the immutable
+build hostname wrote PKCE verifier cookies on that hostname, but `redirect_to`
+pointed to the branch alias. The callback therefore could not receive those
+host-only cookies. The callback reports this exchange failure as an invalid
+sign-in link, explaining the misleading message after Google sign-in.
+
+The OAuth start route now redirects preview requests to the configured callback
+origin before creating any auth state. Google and X regression tests fail before
+the fix and pass after it. Production/local behavior is unchanged; no cookie
+domain broadening or authentication bypass is used.
+
+Preview handoff rule: share the branch-alias URL, not the immutable build URL.
+Generate any Vercel access link for that same alias. Check the OAuth start
+response without following Google: callback origin must equal the verifier
+cookie host. The stable alias passed that live check. Vercel share-link expiry
+is separate from journal authentication; this fix does not make share links
+permanent. Full Google login and installed-iPhone feed verification remain open.
