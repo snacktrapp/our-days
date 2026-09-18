@@ -112,11 +112,7 @@ async function FamilyTimeline({
       conversationActions={conversationActions}
       trailing={
         opening.streamRemainder ? (
-          <Suspense
-            fallback={
-              <div className="route-pending-card is-short" aria-hidden="true" />
-            }
-          >
+          <Suspense fallback={null}>
             <FamilyTimelineRest
               access={access}
               context={context}

@@ -4,7 +4,17 @@ Dated **2026-09-18**. Resume document for any agent without chat history.
 
 This is a state checkpoint, not a product spec. Do not treat it as permission to change app source, reopen closed palette PRs, or unpark notifications.
 
-Verified against GitHub on 2026-09-18. `main` tip is `5a2323e` — *Keep timeline photos and videos inline (#82)*.
+## Current navigation work — 2026-09-18
+
+The current branch, `codex/journal-circles-navigation`, starts at `95dd8c8` (carousel loading, #87), after the reliability work in #86. Brian approved implementing the IA below. This branch is for preview review; production promotion still requires approval.
+
+- Settings replaces the duplicate header Add. Bottom navigation is Journal · Add · Circles.
+- The primary selector contains only Just me / All circles. Circles lists existing circles and their people using the existing membership-filtered loader.
+- Circle/person drill-ins have named headers and Back to Circles. Pagination preserves that context. They do not change the remembered primary Journal mode.
+- Mode preference is tab-scoped; no person identity or journal data is stored. Loaded and temporary loading shells share JournalHomeLink. `/journal?view=you` resolves the signed-in identity if a temporary shell has no person ID yet.
+- No migrations, new dependencies, palette changes, or notification changes. Existing posting identity and audience defaults remain intact.
+
+The historical checkpoint below was verified at `5a2323e` — *Keep timeline photos and videos inline (#82)* — and predates #86/#87.
 
 ---
 

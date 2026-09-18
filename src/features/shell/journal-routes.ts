@@ -8,10 +8,30 @@ export function pathWithoutSearch(href: string) {
   return path.split("#")[0] ?? path;
 }
 
+export function withCircleBrowseContext(href: string, circleId?: string) {
+  if (!circleId) return href;
+  const url = new URL(href, "https://our-days.local");
+  url.searchParams.set("fromCircle", circleId);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 export function sectionFromPathname(
   pathname: string | null,
-): Extract<JournalSection, "timeline" | "memories" | "settings"> | null {
-  const path = pathname ?? "";
+): Extract<
+  JournalSection,
+  "timeline" | "circles" | "memories" | "settings"
+> | null {
+  const path = pathWithoutSearch(pathname ?? "");
+  const query = new URLSearchParams(
+    (pathname ?? "").split("?")[1]?.split("#")[0],
+  );
+  if (
+    path === "/circles" ||
+    path === "/people" ||
+    query.has("fromCircle") ||
+    (path === "/family" && query.has("circle"))
+  )
+    return "circles";
   if (
     path === "/family" ||
     path.startsWith("/journal") ||
@@ -19,7 +39,6 @@ export function sectionFromPathname(
   ) {
     return "timeline";
   }
-  if (path === "/people") return "settings";
   if (path.startsWith("/memories")) return "memories";
   if (path.startsWith("/settings")) return "settings";
   return null;
@@ -29,7 +48,7 @@ export function skeletonKindFromPathname(
   pathname: string | null,
 ): JournalSkeletonKind | null {
   const path = pathWithoutSearch(pathname ?? "");
-  if (path === "/people") return "settings";
+  if (path === "/people" || path === "/circles") return "people";
   if (
     path === "/family" ||
     path.startsWith("/journal") ||

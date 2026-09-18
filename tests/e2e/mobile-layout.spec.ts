@@ -168,7 +168,7 @@ test("reduced-motion preference removes entrance animations", async ({
       cards.map((card) => getComputedStyle(card).animationName),
     );
   expect(animationNames.every((name) => name === "none")).toBe(true);
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".composer-sheet")).toHaveCSS(
     "animation-name",
     "none",
@@ -223,7 +223,7 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
 });
 
 async function expectComposerMatchesActivitySheet(page: Page) {
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   const picker = page.locator(".new-moment-composer-dialog");
   await expect(picker).toBeVisible();
   await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(0);
@@ -566,7 +566,7 @@ test("top chrome floats as a compact rounded pill above the feed", async ({
   );
   await expect(header.locator(".nav-item")).toHaveCount(0);
   await expect(
-    header.getByRole("button", { name: "Add moment" }),
+    header.getByRole("link", { name: "Settings", exact: true }),
   ).toBeVisible();
 
   const geometry = await header.evaluate((element) => {
@@ -776,7 +776,7 @@ test("touch-focused composer textareas keep content spacing without a selection 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family");
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   const composer = page.getByRole("dialog");
   await composer.getByRole("button", { name: /Written entry/u }).click();
   const details = composer.getByRole("textbox", { name: "Entry" });
@@ -897,19 +897,18 @@ test("real route transitions hold the last screen and keep the nav put", async (
   });
 
   await page
-    .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Account" })
+    .getByRole("link", { name: "Settings", exact: true })
     .click({ noWaitAfter: true });
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Account" }),
-  ).toHaveAttribute("aria-current", "page");
+      .getByRole("link", { name: "Circles" }),
+  ).not.toHaveAttribute("aria-current");
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Account" })
+      .getByRole("link", { name: "Circles" })
       .locator(".nav-symbol-pending"),
   ).toHaveCount(0);
   await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
@@ -920,7 +919,7 @@ test("real route transitions hold the last screen and keep the nav put", async (
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Account" })
+      .getByRole("link", { name: "Circles" })
       .locator(".nav-symbol-pending"),
   ).toHaveCount(0);
   const samples = await page.evaluate(() => {
@@ -974,7 +973,11 @@ test("primary navigation remains above every secondary page canvas", async ({
   for (const path of ["/people", "/memories", "/settings/family"]) {
     await page.goto(path);
     const panel = page.locator(
-      path === "/memories" ? ".section-panel" : ".family-settings-panel",
+      path === "/memories"
+        ? ".section-panel"
+        : path === "/people"
+          ? ".people-panel"
+          : ".family-settings-panel",
     );
     await expect(panel).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(panel).toHaveCSS("border-top-width", "0px");
@@ -1035,7 +1038,7 @@ test("200 percent zoom-equivalent viewport retains one-dimensional reflow", asyn
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeInViewport();
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   const dialog = page.getByRole("dialog");
   const photoChoice = page.getByRole("button", { name: /^Photo/u });
   await expect(dialog).toBeVisible();

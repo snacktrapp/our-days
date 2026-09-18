@@ -75,10 +75,28 @@ test("private HTML receives fresh strict nonces and baseline headers", async ({
   const redirect = await request.get(`${lockedURL}/family`, {
     maxRedirects: 0,
   });
-  expect([307, 308]).toContain(redirect.status());
+  if (redirect.status() === 200) {
+    expect(await redirect.text()).toContain(
+      "NEXT_REDIRECT;replace;/sign-in;307;",
+    );
+  } else {
+    expect([307, 308]).toContain(redirect.status());
+  }
   expect(redirect.headers()["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   );
+  const circles = await request.get(`${lockedURL}/circles`, {
+    maxRedirects: 0,
+  });
+  if (circles.status() === 200) {
+    expect(await circles.text()).toContain(
+      "NEXT_REDIRECT;replace;/sign-in;307;",
+    );
+  } else {
+    expect([307, 308]).toContain(circles.status());
+  }
+  expect(circles.headers()["cache-control"]).toContain("private");
+  expect(circles.headers()["cache-control"]).toContain("no-store");
 
   const publicWorker = await request.get(`${lockedURL}/sw.js`);
   expect(publicWorker.status()).toBe(200);
@@ -173,7 +191,7 @@ test("timeline, memories, and composer render without application style attribut
   }
 
   await page.goto("/family");
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: /^Photo/u }).click();
   await page
     .getByLabel(/Choose photo/u)

@@ -23,8 +23,7 @@ export type PeopleViewModel = Readonly<{
   groups: readonly PeopleGroupViewModel[];
 }>;
 
-export const peopleIntro =
-  "Everyone in your circles, organized by circle — not by the Home switcher.";
+export const peopleIntro = "Choose a circle or a person’s journal.";
 
 export function peopleInviteHref(circleId: string) {
   const params = new URLSearchParams({ inviteCircle: circleId });
@@ -46,7 +45,7 @@ export function buildPeopleViewModel(input: {
   }>[];
 }): PeopleViewModel {
   return {
-    chrome: { ...input.chrome, title: "Our people" },
+    chrome: { ...input.chrome, title: "Circles", eyebrow: "Journals" },
     intro: input.intro ?? peopleIntro,
     groups: input.groups.map((group) => ({
       id: group.id,

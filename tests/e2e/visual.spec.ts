@@ -110,7 +110,7 @@ test(
     test.skip(testInfo.project.name !== "chromium-mobile");
     await page.goto("/family");
     await page.evaluate(() => document.fonts.ready);
-    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page).toHaveScreenshot(
       "composer-chooser-chromium-mobile.png",
       { animations: "disabled", caret: "hide" },
@@ -143,7 +143,7 @@ test(
     });
     await page.getByRole("button", { name: "Close preview" }).click();
 
-    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("button", { name: /^Photo/u }).click();
     await page
       .getByLabel(/Choose photo/u)
@@ -165,7 +165,7 @@ test(
     );
     await page.getByRole("button", { name: "Close preview" }).click();
 
-    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /Bible verse/u })
@@ -186,7 +186,7 @@ test(
     await page.getByRole("button", { name: "Preview moment" }).click();
     await page.getByRole("button", { name: "Close preview" }).click();
 
-    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(
       0,
     );
@@ -201,7 +201,7 @@ test(
     await page.setViewportSize({ width: 320, height: 350 });
     await page.goto("/family");
     await page.evaluate(() => document.fonts.ready);
-    await page.getByRole("button", { name: "Add moment" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await expect(page.getByRole("button", { name: /Location/u })).toHaveCount(
       0,
     );

@@ -2,30 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-} from "react";
-import { createPortal } from "react-dom";
-import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
-import { useModalDialog } from "@/features/dialog/lock-background-scroll";
-import { peopleCountLabel } from "@/features/people/people-view-model";
+import { useEffect, useId, useRef, useState } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
-import { lockOverlayChrome, unlockOverlayChrome } from "./overlay-chrome";
+import { useJournalNavigationMemory } from "./journal-navigation-memory";
 import {
-  sheetCloseMs,
-  useOverlayPopoverClose,
-} from "./use-overlay-popover-close";
-import { useSheetDismiss } from "./use-sheet-dismiss";
-import {
-  groupHomeHref,
-  isFamilyHomePath,
-  journalSwitcherSections,
   journalSwitcherTypeLabel,
   type FamilyTimelineSwitcherItem,
 } from "./journal-switcher";
@@ -69,351 +49,161 @@ export function StaticJournalTitle({
   );
 }
 
-function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
-  return (
-    event.button === 0 &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey
-  );
-}
-
-function SwitcherCheck() {
-  return (
-    <svg
-      className="title-switcher-check"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-    >
-      <path d="m3.5 8.2 3 3 6-6.4" />
-    </svg>
-  );
-}
-
-function swallowNextClick() {
-  const onClick = (event: Event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    teardown();
-  };
-  const teardown = () => {
-    document.removeEventListener("click", onClick, true);
-    window.clearTimeout(timer);
-  };
-  document.addEventListener("click", onClick, true);
-  const timer = window.setTimeout(teardown, 400);
-}
-
-function SwitcherLink({
-  item,
-  current,
-  onPreview,
-  onChoose,
-}: Readonly<{
-  item: FamilyTimelineSwitcherItem;
-  current: boolean;
-  onPreview: (item: FamilyTimelineSwitcherItem) => void;
-  onChoose: (item: FamilyTimelineSwitcherItem) => void;
-}>) {
-  function preview(event: MouseEvent<HTMLAnchorElement>) {
-    if (!isUnmodifiedPrimaryClick(event)) return;
-    onPreview(item);
-  }
-
-  function choose(event: MouseEvent<HTMLAnchorElement>) {
-    if (!isUnmodifiedPrimaryClick(event)) return;
-    event.preventDefault();
-    onChoose(item);
-  }
-
-  return (
-    <Link
-      href={item.href}
-      prefetch={false}
-      aria-current={current ? "page" : undefined}
-      className={current ? "active" : undefined}
-      onPointerDown={preview}
-      onClick={choose}
-    >
-      <span className="title-switcher-check-slot" aria-hidden="true">
-        {current ? <SwitcherCheck /> : null}
-      </span>
-      <span className="title-switcher-link-copy">
-        <strong>{item.label}</strong>
-        {item.kind === "group" && item.memberCount != null ? (
-          <small>{peopleCountLabel(item.memberCount)}</small>
-        ) : null}
-      </span>
-    </Link>
-  );
-}
-
-function SwitcherSection({
-  title,
-  items,
-  currentHref,
-  onPreview,
-  onChoose,
-}: Readonly<{
-  title: string;
-  items: readonly FamilyTimelineSwitcherItem[];
-  currentHref: string | null;
-  onPreview: (item: FamilyTimelineSwitcherItem) => void;
-  onChoose: (item: FamilyTimelineSwitcherItem) => void;
-}>) {
-  if (items.length === 0) return null;
-  return (
-    <section className="title-switcher-section">
-      <h3 className="private-label">{title}</h3>
-      {items.map((item) => (
-        <SwitcherLink
-          key={item.href}
-          item={item}
-          current={item.href === currentHref}
-          onPreview={onPreview}
-          onChoose={onChoose}
-        />
-      ))}
-    </section>
-  );
-}
-
 export function FamilyTitleSwitcher({
   model,
   switcher,
-  onSelectGroup,
 }: Readonly<{
   model: JournalChromeViewModel;
   switcher: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const router = useRouter();
+  const { rememberJournal } = useJournalNavigationMemory();
   const panelId = useId();
-  const titleId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const sheetRef = useRef<HTMLElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [chosenHref, setChosenHref] = useState<string | null>(null);
-  const [chosenFrom, setChosenFrom] = useState<string | null>(null);
-  const { closing, closingRef, requestClose, cancel, onAnimationEnd } =
-    useOverlayPopoverClose("sheet-down", sheetCloseMs);
-  const serverCurrentHref = switcher.find((item) => item.current)?.href ?? null;
-  const [observedHref, setObservedHref] = useState(serverCurrentHref);
-  if (observedHref !== serverCurrentHref) {
-    setObservedHref(serverCurrentHref);
+  const serverHref = switcher.find((item) => item.current)?.href ?? null;
+  const [selection, setSelection] = useState({
+    from: serverHref,
+    href: serverHref,
+  });
+  const [observedHref, setObservedHref] = useState(serverHref);
+  if (observedHref !== serverHref) {
+    setObservedHref(serverHref);
+    setSelection({ from: serverHref, href: serverHref });
     setOpen(false);
   }
   const currentHref =
-    chosenHref && chosenFrom === serverCurrentHref
-      ? chosenHref
-      : serverCurrentHref;
-  const chosenItem = switcher.find((item) => item.href === currentHref);
-  const displayModel = chosenItem
+    selection.from === serverHref ? selection.href : serverHref;
+  const selected = switcher.find((item) => item.href === currentHref);
+  const displayModel = selected
     ? {
         ...model,
-        title: chosenItem.label,
-        eyebrow: journalSwitcherTypeLabel(chosenItem.kind),
+        title: selected.kind === "you" ? "Just me" : selected.label,
+        eyebrow: journalSwitcherTypeLabel(selected.kind),
       }
     : model;
-  const sections = journalSwitcherSections(switcher);
-
-  const closePanel = useCallback(() => {
-    requestClose(() => {
-      setOpen(false);
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    });
-  }, [requestClose]);
-
-  const dismissFromPointer = useCallback(() => {
-    swallowNextClick();
-    closePanel();
-  }, [closePanel]);
-
-  const dismissGesture = useSheetDismiss({
-    onDismiss: dismissFromPointer,
-    scrollerRef,
-    sheetRef,
-  });
-
-  const dialogMounted = useModalDialog(open, dialogRef);
-
-  useLayoutEffect(() => {
-    if (!dialogMounted) return;
-    lockOverlayChrome();
-    return () => unlockOverlayChrome();
-  }, [dialogMounted]);
+  const items = switcher.filter(
+    (item) => item.kind === "you" || item.kind === "all",
+  );
 
   useEffect(() => {
     if (!open) return;
-    const focusFrame = window.requestAnimationFrame(() =>
-      headingRef.current?.focus({ preventScroll: true }),
-    );
-    return () => window.cancelAnimationFrame(focusFrame);
+    const outside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !rootRef.current?.contains(event.target)
+      )
+        setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
   }, [open]);
 
   useEffect(() => {
-    const remember = (href: string) => {
-      setChosenHref(href);
-      setChosenFrom(serverCurrentHref);
+    const navigate = (event: Event) => {
+      const href = (event as CustomEvent<{ href?: string }>).detail?.href;
+      if (!href) return;
       setOpen(false);
-      cancel();
+      if (switcher.some((item) => item.href === href))
+        setSelection({ from: serverHref, href });
     };
-    const onNavigateSection = (event: Event) => {
-      const href =
-        event && typeof event === "object" && "detail" in event
-          ? (event as { detail?: { href?: unknown } }).detail?.href
-          : undefined;
-      if (typeof href !== "string") return;
-      const path = href.split("?")[0] ?? href;
-      if (path !== "/family" && !path.startsWith("/people/")) return;
-      const match = switcher.find((item) => item.href === href);
-      remember(match?.href ?? (path === "/family" ? "/family" : href));
-    };
-    const onPopState = () => {
-      const path = window.location.pathname;
-      const circle = new URLSearchParams(window.location.search).get("circle");
-      remember(
-        isFamilyHomePath(path)
-          ? circle
-            ? groupHomeHref(circle)
-            : "/family"
-          : path,
-      );
-    };
-    window.addEventListener("our-days:navigate-section", onNavigateSection);
-    window.addEventListener("popstate", onPopState);
+    const back = () => setOpen(false);
+    window.addEventListener("our-days:navigate-section", navigate);
+    window.addEventListener("popstate", back);
     return () => {
-      window.removeEventListener(
-        "our-days:navigate-section",
-        onNavigateSection,
-      );
-      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("our-days:navigate-section", navigate);
+      window.removeEventListener("popstate", back);
     };
-  }, [cancel, serverCurrentHref, switcher]);
+  }, [serverHref, switcher]);
 
-  function previewItem(item: FamilyTimelineSwitcherItem) {
-    setChosenHref(item.href);
-    setChosenFrom(serverCurrentHref);
-  }
-
-  function chooseItem(item: FamilyTimelineSwitcherItem) {
-    previewItem(item);
-    cancel();
-    setOpen(false);
-    if (item.kind === "group" && item.circleId && onSelectGroup) {
-      void Promise.resolve(onSelectGroup(item.circleId)).catch(() => {
-        // Navigation still opens the circle via ?circle=; cookie write can
-        // catch up on the next request if this action fails.
-      });
-    }
-    router.push(item.href);
-    window.dispatchEvent(
-      new CustomEvent("our-days:navigate-section", {
-        detail: { href: item.href },
-      }),
-    );
-  }
-
-  const toggle = () => {
-    if (open) {
-      if (closingRef.current) return;
-      closePanel();
-      return;
-    }
-    cancel();
-    setOpen(true);
-  };
-
-  const sheet = (
-    <dialog
-      ref={dialogRef}
-      id={panelId}
-      className="composer-dialog activity-dialog"
-      aria-labelledby={titleId}
-      aria-modal="true"
-      aria-hidden={closing ? true : undefined}
+  return (
+    <div
+      ref={rootRef}
+      className={`title-switcher${open ? " is-open" : ""}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
-          closePanel();
-          return;
+          setOpen(false);
+          triggerRef.current?.focus({ preventScroll: true });
         }
-        containDialogFocus(event);
-      }}
-      onCancel={(event) => {
-        event.preventDefault();
-        closePanel();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) closePanel();
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          if (!open) {
+            setOpen(true);
+            return;
+          }
+          const links = Array.from(
+            rootRef.current?.querySelectorAll("nav a") ?? [],
+          ) as HTMLAnchorElement[];
+          const index = links.indexOf(
+            document.activeElement as HTMLAnchorElement,
+          );
+          links[
+            (index + (event.key === "ArrowDown" ? 1 : links.length - 1)) %
+              links.length
+          ]?.focus();
+        }
       }}
     >
-      <section
-        ref={sheetRef}
-        className={`composer-sheet activity-sheet title-switcher-sheet${closing ? " is-closing" : ""}`}
-        onAnimationEnd={onAnimationEnd}
-        onPointerDown={dismissGesture.onPointerDown}
-        onPointerMove={dismissGesture.onPointerMove}
-        onPointerUp={dismissGesture.onPointerUp}
-        onPointerCancel={dismissGesture.onPointerCancel}
-      >
-        <div className="activity-sheet-chrome">
-          <span className="sheet-handle" aria-hidden="true" />
-          <header className="activity-sheet-bar">
-            <h2 ref={headingRef} id={titleId} tabIndex={-1}>
-              Journal
-            </h2>
-          </header>
-        </div>
-        <div ref={scrollerRef} className="activity-sheet-list">
-          <nav aria-label="Choose a family timeline">
-            <SwitcherSection
-              title="Just me"
-              items={sections.justMe}
-              currentHref={currentHref}
-              onPreview={previewItem}
-              onChoose={chooseItem}
-            />
-            <SwitcherSection
-              title="Circles"
-              items={sections.circles}
-              currentHref={currentHref}
-              onPreview={previewItem}
-              onChoose={chooseItem}
-            />
-            <SwitcherSection
-              title="Person"
-              items={sections.people}
-              currentHref={currentHref}
-              onPreview={previewItem}
-              onChoose={chooseItem}
-            />
-          </nav>
-        </div>
-      </section>
-    </dialog>
-  );
-
-  return (
-    <div className={`title-switcher${open && !closing ? " is-open" : ""}`}>
       <button
         ref={triggerRef}
         type="button"
         className="title-lockup"
         aria-label="Choose a journal"
-        aria-expanded={open && !closing}
+        aria-expanded={open}
         aria-controls={panelId}
-        onClick={toggle}
+        onClick={() => setOpen((value) => !value)}
       >
         <TitleCopy model={displayModel} chevron />
       </button>
-      {dialogMounted && typeof document !== "undefined"
-        ? createPortal(sheet, document.body)
-        : null}
+      {open ? (
+        <nav id={panelId} aria-label="Choose a family timeline">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              aria-current={item.href === currentHref ? "page" : undefined}
+              className={item.href === currentHref ? "active" : undefined}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.altKey ||
+                  event.shiftKey
+                )
+                  return;
+                event.preventDefault();
+                rememberJournal(item.href);
+                setSelection({ from: serverHref, href: item.href });
+                setOpen(false);
+                triggerRef.current?.focus({ preventScroll: true });
+                router.push(item.href);
+                window.dispatchEvent(
+                  new CustomEvent("our-days:navigate-section", {
+                    detail: { href: item.href },
+                  }),
+                );
+              }}
+            >
+              <span className="title-switcher-check-slot" aria-hidden="true">
+                {item.href === currentHref ? (
+                  <svg className="title-switcher-check" viewBox="0 0 16 16">
+                    <path d="m3.5 8.2 3 3 6-6.4" />
+                  </svg>
+                ) : null}
+              </span>
+              <span>{item.kind === "you" ? "Just me" : item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }

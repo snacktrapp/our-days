@@ -655,6 +655,7 @@ button:focus-visible,
   white-space: normal;
 }
 .title-switcher {
+  position: relative;
   overflow: visible;
   text-align: center;
 }
@@ -736,7 +737,7 @@ button:focus-visible,
   z-index: 110;
   top: calc(100% + var(--header-drawer-gap));
   left: 50%;
-  width: min(280px, calc(100dvw - 48px));
+  width: min(220px, calc(100dvw - 32px));
   padding: 4px;
   display: grid;
   translate: -50% 0;
@@ -745,6 +746,7 @@ button:focus-visible,
   border-radius: var(--header-drawer-radius);
 }
 .title-switcher nav a {
+  font-family: var(--font-record);
   min-height: 44px;
   padding: 8px 10px 8px 8px;
   display: flex;
@@ -842,6 +844,7 @@ button:focus-visible,
   cursor: pointer;
 }
 .topbar > .header-add-moment,
+.topbar > .header-settings,
 .topbar-leading-spacer,
 .topbar > .family-mark {
   width: 44px;
@@ -868,6 +871,43 @@ button:focus-visible,
   stroke: currentColor;
   stroke-width: 1.55;
   stroke-linecap: round;
+}
+
+.header-settings {
+  color: var(--muted);
+  text-decoration: none;
+}
+.header-settings svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.circle-back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0 16px;
+  color: var(--muted);
+  font-family: var(--font-record);
+  font-size: 12px;
+  text-decoration: none;
+}
+.people-group > .circle-directory-heading {
+  position: relative;
+  padding-right: 118px;
+}
+.circle-directory-heading .circle-journal-link {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  text-decoration: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 
 .settings-close-link {

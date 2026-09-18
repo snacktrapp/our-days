@@ -114,7 +114,7 @@ test("video remains an isolated, honest, accessible feasibility preview @critica
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("button", { name: /Short video/u })).toHaveCount(
     0,
   );

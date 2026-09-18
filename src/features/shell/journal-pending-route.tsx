@@ -49,6 +49,7 @@ export function pendingChromeModel(
   pending: PendingJournalRoute | null,
 ): JournalChromeViewModel {
   if (!pending) return model;
+  if (pending.kind === "people") return { ...model, title: "Circles" };
   if (pending.kind === "memories") {
     return { ...model, title: "Memories" };
   }
@@ -66,22 +67,9 @@ export function RoutePendingSkeleton({
       ? "Opening this journal"
       : kind === "memories"
         ? "Opening memories"
-        : "Opening account";
-
-  if (kind === "timeline") {
-    return (
-      <section
-        className="timeline route-pending-skeleton"
-        aria-busy="true"
-        aria-label={label}
-      >
-        <div className="time-rail" aria-hidden="true" />
-        <div className="route-pending-card" />
-        <div className="route-pending-card" />
-        <div className="route-pending-card is-short" />
-      </section>
-    );
-  }
+        : kind === "people"
+          ? "Opening circles"
+          : "Opening account";
 
   return (
     <section

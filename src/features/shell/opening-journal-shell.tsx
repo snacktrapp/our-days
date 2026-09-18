@@ -1,10 +1,14 @@
 import { allHomeLabel, journalSwitcherTypeLabel } from "./journal-switcher";
+import { SettingsLink } from "./settings-link";
+import { JournalHomeLink } from "./journal-home-link";
+import { RoutePendingSkeleton } from "./journal-pending-route";
+import { NavSymbol } from "./nav-symbol";
 
 export function OpeningJournalShell() {
   return (
     <>
       <header className="topbar">
-        <span className="topbar-leading-spacer" aria-hidden="true" />
+        <SettingsLink />
         <div className="title-lockup">
           <span className="eyebrow">{journalSwitcherTypeLabel("all")}</span>
           <span className="title-switcher-heading">
@@ -25,30 +29,21 @@ export function OpeningJournalShell() {
             aria-live="assertive"
             aria-atomic="true"
           />
-          <section
-            className="timeline route-pending-skeleton"
-            aria-busy="true"
-            aria-label="Opening this journal"
-          >
-            <div className="time-rail" aria-hidden="true" />
-            <div className="route-pending-card" />
-            <div className="route-pending-card" />
-            <div className="route-pending-card is-short" />
-          </section>
+          <RoutePendingSkeleton kind="timeline" />
         </section>
       </main>
       <nav className="bottom-nav" aria-label="Primary navigation">
-        <a className="nav-item active" href="/family" aria-current="page">
-          <span className="nav-symbol" aria-hidden="true" />
+        <JournalHomeLink className="nav-item active" aria-current="page">
+          <NavSymbol name="family" />
           <span>Journal</span>
-        </a>
+        </JournalHomeLink>
         <span className="nav-item">
-          <span className="nav-symbol" aria-hidden="true" />
+          <NavSymbol name="add" />
           <span>Add</span>
         </span>
-        <a className="nav-item" href="/settings/family">
-          <span className="nav-symbol" aria-hidden="true" />
-          <span>Account</span>
+        <a className="nav-item" href="/circles">
+          <NavSymbol name="circles" />
+          <span>Circles</span>
         </a>
       </nav>
     </>

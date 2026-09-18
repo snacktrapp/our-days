@@ -13,6 +13,7 @@ const composerSession = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock("@/features/composer/composer-session", () => ({
@@ -53,7 +54,7 @@ describe("PrimaryNavigation", () => {
     expect(navigation).toHaveAttribute("inert");
   });
 
-  it("contains Journal, Add, and Account", () => {
+  it("contains Journal, Add, and Circles", () => {
     render(<PrimaryNavigation section="timeline" />);
 
     const navigation = screen.getByRole("navigation", {
@@ -64,7 +65,7 @@ describe("PrimaryNavigation", () => {
     expect(navigation).not.toHaveTextContent("People");
     expect(navigation).not.toHaveTextContent("Memories");
     expect(navigation).toHaveTextContent("Add");
-    expect(navigation).toHaveTextContent("Account");
+    expect(navigation).toHaveTextContent("Circles");
     expect(screen.getByRole("button", { name: "Add" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Add moment" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Memories" })).toBeNull();
@@ -96,12 +97,14 @@ describe("PrimaryNavigation", () => {
     );
   });
 
-  it("marks Account current in family settings", () => {
+  it("keeps Settings separate from the bottom tabs", () => {
     navigation.pathname = "/settings/family";
     render(<PrimaryNavigation section="settings" />);
-    expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Circles" })).not.toHaveAttribute(
       "aria-current",
-      "page",
+    );
+    expect(screen.getByRole("link", { name: "Journal" })).not.toHaveAttribute(
+      "aria-current",
     );
   });
 
@@ -118,7 +121,7 @@ describe("PrimaryNavigation", () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);
 
-    const account = screen.getByRole("link", { name: "Account" });
+    const account = screen.getByRole("link", { name: "Circles" });
     await user.click(account);
 
     expect(account).toHaveClass("active");
@@ -147,7 +150,7 @@ describe("PrimaryNavigation", () => {
     });
 
     expect(screen.getByRole("link", { name: "Journal" })).toHaveClass("active");
-    expect(screen.getByRole("link", { name: "Account" })).not.toHaveClass(
+    expect(screen.getByRole("link", { name: "Circles" })).not.toHaveClass(
       "active",
     );
   });
@@ -180,7 +183,7 @@ describe("PrimaryNavigation", () => {
     const user = userEvent.setup();
     render(<PrimaryNavigation section="timeline" />);
 
-    await user.click(screen.getByRole("link", { name: "Account" }));
+    await user.click(screen.getByRole("link", { name: "Circles" }));
 
     expect(
       document.documentElement.style.getPropertyValue("--vv-offset-top"),

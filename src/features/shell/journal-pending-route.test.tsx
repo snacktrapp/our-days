@@ -47,13 +47,13 @@ const model = {
 } as JournalChromeViewModel;
 
 describe("route pending skeleton", () => {
-  it("paints a quiet timeline rail instead of holding the last journal", () => {
+  it("leaves only the background grid while a journal loads", () => {
     const { container } = render(<RoutePendingSkeleton kind="timeline" />);
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),
-    ).toHaveClass("timeline", "route-pending-skeleton");
-    expect(container.querySelector(".time-rail")).not.toBeNull();
-    expect(container.querySelectorAll(".route-pending-card")).toHaveLength(3);
+    ).toHaveClass("route-pending-field", "route-pending-skeleton");
+    expect(container.querySelector(".time-rail")).toBeNull();
+    expect(container.querySelectorAll(".route-pending-card")).toHaveLength(0);
     expect(container.querySelector(".timeline-empty-state")).toBeNull();
   });
 
