@@ -17,11 +17,14 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
     if (!src || inline) return;
 
     const handle = { cancelled: false, created: null as string | null };
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
     void (async () => {
       try {
         const response = await fetch(src, {
           cache: "no-store",
           credentials: "same-origin",
+          signal: controller.signal,
         });
         if (!response.ok) {
           if (!handle.cancelled) {
@@ -51,11 +54,15 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
           setFailed(true);
           setLoadedSrc(src);
         }
+      } finally {
+        window.clearTimeout(timeout);
       }
     })();
 
     return () => {
       handle.cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
       if (handle.created) URL.revokeObjectURL(handle.created);
     };
   }, [inline, src]);

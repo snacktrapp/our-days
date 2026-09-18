@@ -697,7 +697,7 @@ export async function loadConnectedTimeline(
       options,
     );
   }
-  const supabase = await createOurDaysServerClient();
+  const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
   const pageCount = requestedPageCount(options.pages);
   const rows: TimelineRow[] = [];
   const personal = options.journalPersonId
@@ -776,24 +776,21 @@ export async function loadConnectedTimeline(
   const videoMomentIds = enrichRows
     .filter((row) => row.moment_kind === "video")
     .map((row) => row.moment_id);
-  const photosByMoment = await loadMomentPhotosByMomentId(
-    supabase,
-    photoMomentIds,
-  );
-  const videoMetaByMoment = await loadVideoMetaByMomentId(
-    supabase,
-    videoMomentIds,
-  );
-  const conversationsByMoment = await loadMomentConversationsByMomentId(
-    supabase,
-    {
-      ...access,
-      membershipIds: context.viewerMembershipIds?.length
-        ? context.viewerMembershipIds
-        : [access.membershipId],
-    },
-    enrichRows.map((row) => row.moment_id),
-  );
+  const [photosByMoment, videoMetaByMoment, conversationsByMoment] =
+    await Promise.all([
+      loadMomentPhotosByMomentId(supabase, photoMomentIds),
+      loadVideoMetaByMomentId(supabase, videoMomentIds),
+      loadMomentConversationsByMomentId(
+        supabase,
+        {
+          ...access,
+          membershipIds: context.viewerMembershipIds?.length
+            ? context.viewerMembershipIds
+            : [access.membershipId],
+        },
+        enrichRows.map((row) => row.moment_id),
+      ),
+    ]);
   const visibility = {
     viewerPersonId: access.personId,
     viewingJournalPersonId: options.journalPersonId,

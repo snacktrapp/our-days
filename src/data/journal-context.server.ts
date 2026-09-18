@@ -510,7 +510,7 @@ export async function loadJournalActivityNotifications(
     return (await loadLocalJournalContext(access)).chrome.notifications ?? [];
   }
   try {
-    const supabase = await createOurDaysServerClient();
+    const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
     const circleMemberships = await readJournalCircleMemberships();
     const myMembershipIds = new Set(
       circleMemberships.map((membership) => membership.membershipId),
@@ -543,7 +543,7 @@ export async function loadConnectedJournalContext(
     return loadLocalJournalContext(access);
   }
   const includeActivity = options?.includeActivity !== false;
-  const supabase = await createOurDaysServerClient();
+  const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
   const circleMemberships = await readJournalCircleMemberships();
   const rosterCircleIds =
     circleMemberships.length > 0

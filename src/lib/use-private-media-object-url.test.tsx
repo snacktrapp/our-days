@@ -1,13 +1,52 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { usePrivateMediaObjectUrl } from "./use-private-media-object-url";
 
 describe("usePrivateMediaObjectUrl", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("ends a stalled photo request so the user can retry", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      (_src, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal!.addEventListener("abort", () =>
+            reject(init.signal!.reason),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() =>
+      usePrivateMediaObjectUrl("/api/media/moments/one"),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(20000));
+    expect(result.current.failed).toBe(true);
+    expect(result.current.objectUrl).toBeNull();
+  });
+
+  it("cancels the old download when switching photos or leaving the page", () => {
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_src, init: RequestInit) => {
+        signals.push(init.signal!);
+        return new Promise(() => {});
+      }),
+    );
+    const view = renderHook(({ src }) => usePrivateMediaObjectUrl(src), {
+      initialProps: { src: "/api/media/moments/one" },
+    });
+    view.rerender({ src: "/api/media/moments/two" });
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    view.unmount();
+    expect(signals[1].aborted).toBe(true);
   });
 
   it("passes data URLs through without fetching", () => {

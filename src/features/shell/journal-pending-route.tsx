@@ -98,6 +98,14 @@ export function JournalPendingRouteProvider({
   const pathname = usePathname() ?? "";
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const currentPath = pathWithoutSearch(pathname);
+  const [committedPath, setCommittedPath] = useState(currentPath);
+
+  // A completed (or redirected) navigation consumes its pending destination.
+  // Otherwise Back can revive that destination and hide an already loaded feed.
+  if (committedPath !== currentPath) {
+    setCommittedPath(currentPath);
+    setPendingHref(null);
+  }
 
   const begin = useCallback(
     (href: string) => {

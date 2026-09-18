@@ -32,6 +32,10 @@ export async function proxy(request: NextRequest) {
   };
 
   let response = buildResponse();
+  // Loading application assets must not wait for a session refresh. This is
+  // especially important on a fresh Home Screen install with an empty cache.
+  // Keep the response policy, but authenticate pages and APIs, not JS/CSS.
+  if (request.nextUrl.pathname.startsWith("/_next/static/")) return response;
   const supabaseConfig = readOptionalSupabasePublicConfig();
   if (!supabaseConfig) return applyActiveCircleCookie(request, response);
 

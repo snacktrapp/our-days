@@ -5,11 +5,27 @@ import { cookies } from "next/headers";
 import type { Database } from "./database.types";
 import { readSupabasePublicConfig } from "./public-config";
 
-export async function createOurDaysServerClient() {
+export async function createOurDaysServerClient(
+  options: Readonly<{ readTimeoutMs?: number }> = {},
+) {
   const { url, publishableKey } = readSupabasePublicConfig();
   const cookieStore = await cookies();
 
   return createServerClient<Database>(url, publishableKey, {
+    ...(options.readTimeoutMs
+      ? {
+          global: {
+            fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+              fetch(input, {
+                ...init,
+                signal: AbortSignal.any([
+                  ...(init?.signal ? [init.signal] : []),
+                  AbortSignal.timeout(options.readTimeoutMs!),
+                ]),
+              }),
+          },
+        }
+      : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();
