@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrivatePhotoImage } from "./private-photo-image";
 
@@ -8,6 +14,42 @@ describe("PrivatePhotoImage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("defers off-screen photos until their carousel approaches the viewport", async () => {
+    let notify: IntersectionObserverCallback;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          notify = callback;
+        }
+        observe = observe;
+        disconnect = disconnect;
+      },
+    );
+    const fetchMock = vi.fn(async () => ({ ok: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = render(
+      <div className="photo-card-pager">
+        <PrivatePhotoImage
+          src="/api/media/moments/offscreen"
+          alt="Later photo"
+        />
+      </div>,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(observe).toHaveBeenCalledWith(view.container.firstChild);
+    act(() =>
+      notify(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(disconnect).toHaveBeenCalled();
   });
 
   it("shows authorized bytes from a credentialed blob URL", async () => {
@@ -42,6 +84,7 @@ describe("PrivatePhotoImage", () => {
       expect.objectContaining({
         cache: "no-store",
         credentials: "same-origin",
+        priority: "high",
       }),
     );
   });

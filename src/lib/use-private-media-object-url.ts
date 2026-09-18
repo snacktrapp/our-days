@@ -7,7 +7,10 @@ function inlineMediaSrc(src: string | undefined) {
   return src.startsWith("data:") || src.startsWith("blob:") ? src : null;
 }
 
-export function usePrivateMediaObjectUrl(src: string | undefined) {
+export function usePrivateMediaObjectUrl(
+  src: string | undefined,
+  priority: "high" | "auto" = "auto",
+) {
   const inline = inlineMediaSrc(src);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -17,11 +20,15 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
     if (!src || inline) return;
 
     const handle = { cancelled: false, created: null as string | null };
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
     void (async () => {
       try {
         const response = await fetch(src, {
           cache: "no-store",
           credentials: "same-origin",
+          signal: controller.signal,
+          priority,
         });
         if (!response.ok) {
           if (!handle.cancelled) {
@@ -51,14 +58,18 @@ export function usePrivateMediaObjectUrl(src: string | undefined) {
           setFailed(true);
           setLoadedSrc(src);
         }
+      } finally {
+        window.clearTimeout(timeout);
       }
     })();
 
     return () => {
       handle.cancelled = true;
+      window.clearTimeout(timeout);
+      controller.abort();
       if (handle.created) URL.revokeObjectURL(handle.created);
     };
-  }, [inline, src]);
+  }, [inline, src, priority]);
 
   const current = loadedSrc === src;
   return {

@@ -39,6 +39,18 @@ describe("security proxy", () => {
     vi.clearAllMocks();
   });
 
+  it("serves application chunks without waiting for Supabase auth", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    const response = await proxy(
+      new NextRequest("https://journal.example.com/_next/static/chunks/app.js"),
+    );
+    expect(supabaseMocks.createServerClient).not.toHaveBeenCalled();
+    expect(response.headers.get("content-security-policy")).toContain(
+      "script-src",
+    );
+  });
+
   it("remembers the selected group from the family query", async () => {
     const response = await proxy(
       new NextRequest(
