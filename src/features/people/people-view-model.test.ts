@@ -69,7 +69,7 @@ describe("people view model", () => {
       ],
     });
 
-    expect(model.chrome.title).toBe("Our people");
+    expect(model.chrome.title).toBe("Circles");
     expect(model.groups.map((group) => group.name)).toEqual([
       "All our days",
       "Cousins",

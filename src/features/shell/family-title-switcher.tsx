@@ -16,6 +16,7 @@ import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 import { peopleCountLabel } from "@/features/people/people-view-model";
 import type { JournalChromeViewModel } from "./shell-view-model";
+import { useJournalNavigationMemory } from "./journal-navigation-memory";
 import { lockOverlayChrome, unlockOverlayChrome } from "./overlay-chrome";
 import {
   sheetCloseMs,
@@ -189,6 +190,7 @@ export function FamilyTitleSwitcher({
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const router = useRouter();
+  const { rememberJournal } = useJournalNavigationMemory();
   const panelId = useId();
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -215,11 +217,17 @@ export function FamilyTitleSwitcher({
   const displayModel = chosenItem
     ? {
         ...model,
-        title: chosenItem.label,
+        title: chosenItem.kind === "you" ? "Just me" : chosenItem.label,
         eyebrow: journalSwitcherTypeLabel(chosenItem.kind),
       }
     : model;
-  const sections = journalSwitcherSections(switcher);
+  const sections = journalSwitcherSections(
+    switcher
+      .filter((item) => item.kind === "you" || item.kind === "all")
+      .map((item) =>
+        item.kind === "you" ? { ...item, label: "Just me" } : item,
+      ),
+  );
 
   const closePanel = useCallback(() => {
     requestClose(() => {
@@ -301,6 +309,7 @@ export function FamilyTitleSwitcher({
   }
 
   function chooseItem(item: FamilyTimelineSwitcherItem) {
+    if (item.kind === "you" || item.kind === "all") rememberJournal(item.href);
     previewItem(item);
     cancel();
     setOpen(false);

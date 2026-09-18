@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { groupHomeHref } from "@/features/shell/journal-switcher";
+import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 import { peopleCountLabel, type PeopleViewModel } from "./people-view-model";
 
 export function PeoplePanel({ model }: { model: PeopleViewModel }) {
@@ -8,12 +10,21 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
       {model.groups.map((group) => (
         <section
           key={group.id}
+          id={`circle-${group.id}`}
           className="settings-section people-group"
           aria-labelledby={`people-group-${group.id}`}
         >
           <div className="settings-heading">
             <span>Circle</span>
-            <h2 id={`people-group-${group.id}`}>{group.name}</h2>
+            <h2 id={`people-group-${group.id}`}>
+              <Link
+                href={groupHomeHref(group.id)}
+                prefetch={false}
+                aria-label={`Open ${group.name} circle feed`}
+              >
+                {group.name} →
+              </Link>
+            </h2>
             <p>{peopleCountLabel(group.members.length)}</p>
           </div>
           <div className="people-list">
@@ -42,7 +53,7 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
               return person.journalHref ? (
                 <Link
                   key={person.id}
-                  href={person.journalHref}
+                  href={withCircleBrowseContext(person.journalHref, group.id)}
                   prefetch={false}
                 >
                   {content}
@@ -54,17 +65,11 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
               );
             })}
           </div>
-          {group.inviteHref ? (
-            <Link
-              className="invite-button"
-              href={group.inviteHref}
-              prefetch={false}
-            >
-              Invite into this circle
-            </Link>
-          ) : null}
         </section>
       ))}
+      {model.groups.length === 0 ? (
+        <p>No circles yet. You can still write in your journal.</p>
+      ) : null}
     </section>
   );
 }

@@ -42,7 +42,7 @@ describe("FamilyTitleSwitcher", () => {
     navigation.push.mockClear();
   });
 
-  it("opens a bottom sheet with a pull handle and three sections", async () => {
+  it("offers only the two primary feeds, not a directory", async () => {
     await openSwitcher();
     const dialog = screen.getByRole("dialog", { name: "Journal" });
     expect(dialog).toHaveClass("composer-dialog");
@@ -51,9 +51,13 @@ describe("FamilyTitleSwitcher", () => {
     );
     expect(dialog.querySelector(".sheet-handle")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Just me", level: 3 }),
+    ).toBeVisible();
     expect(screen.getByRole("heading", { name: "Circles" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Person" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Person" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Molly" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Trapp Family" })).toBeNull();
     expect(
       screen.getByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeVisible();
@@ -107,17 +111,19 @@ describe("FamilyTitleSwitcher", () => {
 
   it("highlights a journal row on press and chooses it on click", async () => {
     await openSwitcher();
-    const molly = screen.getByRole("link", { name: "Molly" });
+    const molly = screen.getByRole("link", { name: "Just me" });
     fireEvent.pointerDown(molly, { button: 0 });
     expect(molly).toHaveClass("active");
     expect(navigation.push).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
     fireEvent.click(molly);
-    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
+    expect(navigation.push).toHaveBeenCalledWith("/people/brian");
     expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Just me", level: 1 }),
+    ).toBeVisible();
     expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Person",
+      "Just me",
     );
   });
 
@@ -132,12 +138,12 @@ describe("FamilyTitleSwitcher", () => {
       </div>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    const molly = screen.getByRole("link", { name: "Molly" });
+    const molly = screen.getByRole("link", { name: "Just me" });
     fireEvent.pointerDown(molly, { button: 0 });
     expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
     fireEvent.pointerUp(molly, { button: 0 });
     fireEvent.click(molly);
-    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
+    expect(navigation.push).toHaveBeenCalledWith("/people/brian");
     expect(openPhoto).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Open photo" }));
     expect(openPhoto).toHaveBeenCalledTimes(1);
@@ -146,7 +152,7 @@ describe("FamilyTitleSwitcher", () => {
   it("moves the current highlight to the pressed journal immediately", async () => {
     await openSwitcher();
     const all = screen.getByRole("link", { name: "All circles" });
-    const molly = screen.getByRole("link", { name: "Molly" });
+    const molly = screen.getByRole("link", { name: "Just me" });
     expect(all).toHaveClass("active");
     expect(all).toHaveAttribute("aria-current", "page");
 
@@ -156,7 +162,9 @@ describe("FamilyTitleSwitcher", () => {
     expect(molly).toHaveAttribute("aria-current", "page");
     expect(all).not.toHaveClass("active");
     expect(all).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Just me", level: 1 }),
+    ).toBeVisible();
   });
 
   it("keeps You first, All with circles, and a check on the selected row only", async () => {
@@ -165,14 +173,11 @@ describe("FamilyTitleSwitcher", () => {
       ...document.querySelectorAll(".title-switcher-sheet a"),
     ] as HTMLAnchorElement[];
     expect(links.map((link) => link.textContent?.trim())).toEqual([
-      "Brian",
+      "Just me",
       "All circles",
-      "Trapp Family",
-      "Molly",
     ]);
     expect(links[0].querySelector(".title-switcher-check")).toBeNull();
     expect(links[1].querySelector(".title-switcher-check")).not.toBeNull();
-    expect(links[2].querySelector(".title-switcher-check")).toBeNull();
     expect(
       document.querySelector(".title-lockup .title-switcher-type-pill"),
     ).toBeNull();
@@ -261,9 +266,7 @@ describe("FamilyTitleSwitcher", () => {
     );
     render(<FamilyTitleSwitcher model={model} switcher={counted} />);
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    const family = screen.getByRole("link", { name: /Trapp Family/u });
-    expect(family.querySelector("small")).toHaveTextContent("3 people");
-    expect(family.querySelector(".title-switcher-member-count")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Trapp Family/u })).toBeNull();
     expect(
       screen.getByRole("link", { name: "All circles" }).querySelector("small"),
     ).toBeNull();

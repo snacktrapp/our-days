@@ -203,10 +203,7 @@ test("the shared Account navigation opens settings and returns through the prima
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Account" })
-    .click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
   await expect(
     page.getByRole("heading", { name: "This page couldn’t load" }),

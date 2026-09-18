@@ -1,10 +1,12 @@
 import { allHomeLabel, journalSwitcherTypeLabel } from "./journal-switcher";
+import { SettingsLink } from "./settings-link";
+import { JournalHomeLink } from "./journal-home-link";
 
 export function OpeningJournalShell() {
   return (
     <>
       <header className="topbar">
-        <span className="topbar-leading-spacer" aria-hidden="true" />
+        <SettingsLink />
         <div className="title-lockup">
           <span className="eyebrow">{journalSwitcherTypeLabel("all")}</span>
           <span className="title-switcher-heading">
@@ -38,17 +40,17 @@ export function OpeningJournalShell() {
         </section>
       </main>
       <nav className="bottom-nav" aria-label="Primary navigation">
-        <a className="nav-item active" href="/family" aria-current="page">
+        <JournalHomeLink className="nav-item active" aria-current="page">
           <span className="nav-symbol" aria-hidden="true" />
           <span>Journal</span>
-        </a>
+        </JournalHomeLink>
         <span className="nav-item">
           <span className="nav-symbol" aria-hidden="true" />
           <span>Add</span>
         </span>
-        <a className="nav-item" href="/settings/family">
+        <a className="nav-item" href="/circles">
           <span className="nav-symbol" aria-hidden="true" />
-          <span>Account</span>
+          <span>Circles</span>
         </a>
       </nav>
     </>

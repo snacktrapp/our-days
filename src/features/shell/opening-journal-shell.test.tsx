@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { OpeningJournalShell } from "./opening-journal-shell";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 describe("OpeningJournalShell", () => {
   it("paints top and bottom chrome without waiting for a timeline page", () => {
@@ -14,9 +16,9 @@ describe("OpeningJournalShell", () => {
       "href",
       "/family",
     );
-    expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Circles" })).toHaveAttribute(
       "href",
-      "/settings/family",
+      "/circles",
     );
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),

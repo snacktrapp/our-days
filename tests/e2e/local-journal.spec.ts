@@ -6,6 +6,7 @@ import sharp from "sharp";
 import {
   localAlexPersonId,
   localJordanPersonId,
+  localCircleId,
 } from "../../src/lib/local-journal/ids";
 
 async function jpegFixture(index = 0) {
@@ -27,6 +28,57 @@ async function jpegFixture(index = 0) {
   return path;
 }
 
+test("Circles browsing retains the personal Journal and posts as the signed-in author", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("button", { name: "Choose a journal" }).click();
+  await page.getByRole("link", { name: "Just me", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}$`));
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
+  await page
+    .locator(
+      `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,
+    )
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Jordan", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: /Written entry Text/ }).click();
+  await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+  await page
+    .getByRole("textbox", { name: "Entry", exact: true })
+    .fill("My own entry while browsing Jordan.");
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}`));
+  await expect(
+    page
+      .getByLabel("Chronological moments for Alex")
+      .getByText("My own entry while browsing Jordan."),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.locator(`a[href="/family?circle=${localCircleId}"]`).click();
+  await expect(
+    page.getByRole("button", { name: "Choose a journal" }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Account", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Journal", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+});
+
 test("cold open paints usable Family content after sign-in", async ({
   page,
 }) => {
@@ -38,7 +90,9 @@ test("cold open paints usable Family content after sign-in", async ({
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
 
   await expect(page).toHaveURL(/\/family$/u);
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
   await expect(page.getByLabel("Chronological family moments")).toBeVisible();
   await expect(page.getByLabel("Opening this journal")).toHaveCount(0);
   await expect(page.getByText("Something interrupted the story")).toHaveCount(
@@ -56,7 +110,7 @@ test("album downloads first and neighbors only, then retains photos across swipe
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -94,10 +148,16 @@ test("album downloads first and neighbors only, then retains photos across swipe
   await card.scrollIntoViewIfNeeded();
   const pager = card.locator(".photo-card-pager");
   await expect(pager.locator("img")).toHaveCount(3);
-  await expect.poll(() => requests.length).toBe(3);
   const firstSrc = await pager
     .locator('[data-photo-index="0"] img')
     .getAttribute("src");
+  const momentId = await card.evaluate((node) =>
+    node.closest("article")!.id.replace(/^moment-/, ""),
+  );
+  const albumPath = `/api/media/moments/${momentId}`;
+  const albumRequests = () =>
+    requests.filter((url) => new URL(url).pathname === albumPath);
+  await expect.poll(() => albumRequests().length).toBe(3);
   const swipe = async (direction: "next" | "prev") => {
     await pager.evaluate((node, direction) => {
       const box = node.getBoundingClientRect();
@@ -127,10 +187,10 @@ test("album downloads first and neighbors only, then retains photos across swipe
   };
   await swipe("next");
   await expect(pager.getByText("Photo 2 of 6")).toHaveCount(1);
-  await expect.poll(() => requests.length).toBe(4);
+  await expect.poll(() => albumRequests().length).toBe(4);
   await swipe("prev");
   await expect(pager.getByText("Photo 1 of 6")).toHaveCount(1);
-  expect(requests).toHaveLength(4);
+  expect(albumRequests()).toHaveLength(4);
   await expect(pager.locator('[data-photo-index="0"] img')).toHaveAttribute(
     "src",
     firstSrc!,
@@ -154,9 +214,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toHaveAttribute("href", "/api/auth/oauth/x");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Written entry Text, date, and details" })
     .click();
@@ -172,7 +234,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     timeout: 15_000,
   });
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -193,7 +255,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.locator('[data-moment-kind="photo"]').first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -262,9 +324,11 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Written entry Text, date, and details" })
     .click();
@@ -284,7 +348,12 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
       .getByLabel("Chronological moments for Alex")
       .getByText("A porch thought just for me."),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".just-me-pill")).toHaveText("Just me");
+  await expect(
+    page
+      .locator(".moment-card")
+      .filter({ hasText: "A porch thought just for me." })
+      .locator(".just-me-pill"),
+  ).toHaveText("Just me");
 
   await page.goto("/family");
   await expect(page.getByLabel("Chronological family moments")).toBeVisible({

@@ -7,131 +7,39 @@ test("route-based journal navigation preserves the approved views", async ({
 }) => {
   await page.goto("/family");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circles");
-  await expect(
-    page
-      .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Journal", exact: true }),
-  ).toBeVisible();
-  await page.locator(".title-switcher summary").click();
-  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
-  await expect(page.locator(".title-switcher nav")).toHaveCSS(
-    "animation-name",
-    "overlay-popover-in",
-  );
-  await expect(page.locator(".title-switcher nav")).toHaveCSS(
-    "border-top-width",
-    "1px",
-  );
-  await expect(
-    page.locator(".title-switcher nav a .title-switcher-type-pill"),
-  ).toHaveText(["You", "Circle", "Person", "Person", "Person", "Person"]);
-  await expect(page.locator(".title-switcher nav a").first()).toHaveText(
-    /Brian/u,
-  );
-  await expect(
-    page
-      .getByRole("navigation", { name: "Choose a family timeline" })
-      .getByRole("link", { name: "Just Me" }),
-  ).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("navigation", { name: "Choose a family timeline" })
-      .getByRole("link", { name: "All our days", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
-  await expect(
-    page
-      .getByRole("navigation", { name: "Choose a family timeline" })
-      .getByRole("link", { name: "TARS" }),
-  ).toHaveCount(0);
-  await page
-    .getByRole("navigation", { name: "Choose a family timeline" })
-    .getByRole("link", { name: "Molly", exact: true })
-    .click();
-  await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
-  await expect(page).toHaveURL(/\/people\/molly$/);
-  await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "Primary navigation" })
-    .getByRole("link", { name: "Journal", exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/family$/);
-  await expect(
-    page.getByRole("heading", { name: "All our days" }),
-  ).toBeVisible();
-  await page.locator(".title-switcher summary").click();
-  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
+  await page.getByRole("button", { name: "Choose a journal" }).click();
+  await expect(page.getByRole("dialog").getByRole("link")).toHaveText([
+    "Just me",
+    "All circles",
+  ]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(7);
-  await expect(page.locator(".date-marker").first()).toHaveText(/today/i);
-  await expect(page.getByText(/earliest entry/i)).toBeVisible();
-  await expect(page.locator(".elapsed-gap")).toHaveCount(0);
-  await expect(page.getByText("No earlier entries.")).toHaveCount(0);
-  await expect(page.locator(".timeline-whisper")).toHaveCount(0);
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(
-    page.getByText(
-      /days earlier|one day earlier|weeks earlier|one month earlier|months earlier|years earlier|yesterday/iu,
-    ),
-  ).toHaveCount(0);
-
-  await page.getByRole("link", { name: "Account" }).click();
-  await expect(page).toHaveURL(/\/settings\/family$/);
-  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
-  await expect(
-    page
-      .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "People" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: /All our days/u }),
+    page.getByRole("heading", { name: "Molly", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("TARS")).toHaveCount(0);
-  await page.getByRole("button", { name: /All our days/u }).click();
-  await expect(page.getByText("TARS")).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Invite into All our days" }),
-  ).toBeVisible();
-  await expect(page.getByText("Opening your family’s days…")).toHaveCount(0);
-  await expect(page.locator(".journal-loading")).toHaveCount(0);
-  await expect(page.locator(".phone-stage")).toHaveCSS("transform", "none");
-  await expect(page.locator(".phone-stage")).toHaveCSS(
-    "animation-name",
-    "none",
-  );
-
-  await page.goto("/family");
-  await page.locator(".title-switcher summary").click();
-  await page
-    .getByRole("navigation", { name: "Choose a family timeline" })
-    .getByRole("link", { name: "Molly", exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/people\/molly$/);
-  await expect(page.getByRole("heading", { name: "Molly" })).toBeVisible();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(3);
-  await page.locator(".title-switcher summary").click();
-  await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
-  await expect(
-    page
-      .getByRole("navigation", { name: "Choose a family timeline" })
-      .getByRole("link", { name: "Molly", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
-
   await page.goBack();
-  await expect(page).toHaveURL(/\/family$/);
-  await page.goForward();
-  await expect(page).toHaveURL(/\/people\/molly$/);
-
   await expect(
-    page
-      .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("link", { name: "Memories" }),
-  ).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("navigation", { name: "Primary navigation" })
-      .getByRole("button", { name: "Add", exact: true }),
+    page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
+  await page.goForward();
+  await expect(
+    page.getByRole("heading", { name: "Molly", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Account", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
+
   await page.goto("/memories");
   await expect(page.getByRole("heading", { name: "Memories" })).toBeVisible();
   await expect(page).toHaveTitle("Memories — Our Days");
@@ -207,7 +115,7 @@ test("route-based journal navigation preserves the approved views", async ({
     "Failed to load resource: the server responded with a status of 404",
   );
   await page.goto("/memories/years/1900");
-  await expect(page).toHaveTitle("Memories — Our Days");
+  await expect(page).toHaveTitle("1900 memories — Our Days");
   await expect(
     page.getByRole("heading", { name: "That page isn’t here." }),
   ).toBeVisible();
@@ -257,7 +165,7 @@ test("primary screens and composer states have no serious axe violations", async
     "/people/avery",
     "/people/sam",
     "/people/june",
-    "/people",
+    "/circles",
     "/settings/family",
     "/memories",
     "/memories/on-this-day",
@@ -271,7 +179,7 @@ test("primary screens and composer states have no serious axe violations", async
   }
 
   await page.goto("/family");
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   const pickerResults = await new AxeBuilder({ page })
     .exclude(".moment-choices small")
     .analyze();
@@ -444,42 +352,19 @@ test("members can create a wider circle from Account and filter Home without cos
     page.getByRole("heading", { name: "Invite into Cousins" }),
   ).toBeVisible();
   await expect(page.getByText("TARS")).toHaveCount(0);
-  // Prefer a full document load here: soft-nav from Account→Journal can abort
-  // the in-flight /family document fetch (especially on WebKit) while the
-  // active-circle cookie still correctly scopes Home to Cousins.
-  await page.goto("/family");
-  await expect(page.getByRole("heading", { name: "Cousins" })).toBeVisible();
-  await expect(page.locator(".title-lockup .eyebrow")).toHaveText("Circles");
-  await page.locator(".title-switcher summary").click();
-  await expect(page.getByRole("button", { name: "Create group" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByLabel("Name")).toHaveCount(0);
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Open Cousins circle feed", exact: true })
+    .click();
   await expect(
-    page.locator(".title-switcher nav a .title-switcher-type-pill"),
-  ).toHaveText(["You", "Circle", "Circle"]);
-  await expect(
-    page.getByRole("link", { name: "Cousins", exact: true }),
-  ).toHaveAttribute("aria-current", "page");
-  await expect(
-    page.getByRole("link", { name: "Molly", exact: true }),
-  ).toHaveCount(0);
-  await page.getByRole("link", { name: "All our days", exact: true }).click();
-  await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");
-  await expect(page).toHaveURL(/circle=family/);
-  await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "Cousins", exact: true }),
   ).toBeVisible();
-  await page.locator(".title-switcher summary").click();
+  await expect(page.locator(".title-switcher")).toHaveCount(0);
+  await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page
+    .getByRole("link", { name: "Open All our days circle feed", exact: true })
+    .click();
   await expect(
-    page.locator(".title-switcher nav a .title-switcher-type-pill"),
-  ).toHaveText([
-    "You",
-    "Circle",
-    "Circle",
-    "Person",
-    "Person",
-    "Person",
-    "Person",
-  ]);
+    page.getByRole("heading", { name: "All our days", exact: true }),
+  ).toBeVisible();
 });

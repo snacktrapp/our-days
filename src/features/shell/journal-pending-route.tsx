@@ -49,6 +49,7 @@ export function pendingChromeModel(
   pending: PendingJournalRoute | null,
 ): JournalChromeViewModel {
   if (!pending) return model;
+  if (pending.kind === "people") return { ...model, title: "Circles" };
   if (pending.kind === "memories") {
     return { ...model, title: "Memories" };
   }
@@ -66,7 +67,9 @@ export function RoutePendingSkeleton({
       ? "Opening this journal"
       : kind === "memories"
         ? "Opening memories"
-        : "Opening account";
+        : kind === "people"
+          ? "Opening circles"
+          : "Opening account";
 
   if (kind === "timeline") {
     return (
