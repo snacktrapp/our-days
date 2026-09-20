@@ -254,6 +254,8 @@ test("posts fill the feed width without widening navigation or removing text pad
               width: rect.width,
               padding: Number.parseFloat(getComputedStyle(copy).paddingLeft),
               background: getComputedStyle(card).backgroundColor,
+              border: getComputedStyle(card).borderWidth,
+              shadow: getComputedStyle(card).boxShadow,
             };
           }),
         };
@@ -267,6 +269,12 @@ test("posts fill the feed width without widening navigation or removing text pad
         );
         expect(card.padding).toBeGreaterThanOrEqual(15);
         expect(card.background).not.toBe("rgba(0, 0, 0, 0)");
+        expect(card.border).toBe("0px");
+        expect(card.shadow).toBe("none");
+      }
+      for (const row of await page.locator(".timeline .soft-actions").all()) {
+        await expect(row).toHaveCSS("border-top-width", "0px");
+        await expect(row).toHaveCSS("margin-top", "12px");
       }
       for (const selector of [".topbar", ".bottom-nav"]) {
         const nav = page.locator(selector);
