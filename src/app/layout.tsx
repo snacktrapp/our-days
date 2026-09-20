@@ -51,8 +51,8 @@ export const viewport: Viewport = {
   // matches the journal canvas. Activity and New moment sheets set it to
   // #000 via lockOverlayChrome.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3eee4" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1712" },
+    { media: "(prefers-color-scheme: light)", color: "#edf0f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#101216" },
   ],
 };
 
