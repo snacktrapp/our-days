@@ -51,9 +51,11 @@
   --bottom-nav-inline-gap: 12px;
   --nav-pill-fill: rgba(27, 32, 40, 0.88);
   --nav-pill-blur: 14px;
-  --journal-grid-line: rgba(134, 166, 151, 0.045);
-  --journal-grid-size: 22px;
-  --journal-grid-image: none;
+  --journal-grid-line: rgba(139, 160, 190, 0.085);
+  --journal-grid-size: 28px;
+  --journal-grid-image:
+    linear-gradient(var(--journal-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--journal-grid-line) 1px, transparent 1px);
   --timeline-media-max-height: min(90dvh, calc(min(100vw, 430px) * 16 / 9));
 }
 
@@ -79,7 +81,7 @@
   --slate: #59677d;
   --moss: #58764e;
   --nav-pill-fill: rgba(255, 255, 255, 0.88);
-  --journal-grid-line: rgba(57, 123, 118, 0.07);
+  --journal-grid-line: rgba(74, 96, 128, 0.075);
   --header-drawer-shadow: 0 18px 42px rgba(25, 35, 52, 0.18);
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
 }
@@ -5504,7 +5506,7 @@ html.overlay-open .bottom-nav {
 }
 
 .moment {
-  margin-bottom: 22px;
+  margin-bottom: 30px;
 }
 
 .connection {
