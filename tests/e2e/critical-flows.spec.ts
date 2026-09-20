@@ -80,7 +80,7 @@ test("family journal paints and opens its journal selector @critical", async ({
   await expect(dialog).toBeHidden();
 });
 
-test("page transitions show only the background grid", async ({ page }) => {
+test("page transitions show only the plain background", async ({ page }) => {
   await page.goto("/family");
   await expect(page.locator(".moment-card").first()).toBeVisible();
   let resume!: () => void;
@@ -105,7 +105,7 @@ test("page transitions show only the background grid", async ({ page }) => {
     ).toHaveCount(0);
     await expect(pending).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await page.screenshot({
-      path: test.info().outputPath("grid-only-transition.png"),
+      path: test.info().outputPath("plain-background-transition.png"),
     });
   } finally {
     resume();

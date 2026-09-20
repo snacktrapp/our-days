@@ -199,7 +199,7 @@ test("primary screens and composer states have no serious axe violations", async
   await scan();
 });
 
-test("appearance preference persists and the journal grid stays fixed", async ({
+test("appearance preference persists and the journal canvas stays plain", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -239,7 +239,7 @@ test("appearance preference persists and the journal grid stays fixed", async ({
     };
   });
   expect(rootGrid.position).toBe("fixed");
-  expect(rootGrid.image).not.toBe("none");
+  expect(rootGrid.image).toBe("none");
   expect(rootGrid.phoneStageImage).toBe("none");
 
   await page.reload();

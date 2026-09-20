@@ -1,14 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --grid-surface: #0b1712;
-  --paper: #0b1712;
-  --ink: #f0f2ed;
-  --muted: #98a39c;
-  --hairline: rgba(190, 211, 199, 0.14);
-  --line: #2d433a;
-  --cream: #111f19;
-  --teal: #79aaa4;
+  --grid-surface: #101216;
+  --paper: #101216;
+  --ink: #edf0f5;
+  --muted: #a1abba;
+  --hairline: rgba(176, 190, 210, 0.2);
+  --line: #343c49;
+  --cream: #1b2028;
+  --surface-raised: #242b35;
+  --teal: #79adff;
+  --action: #79adff;
+  --action-ink: #101216;
   --clay: #c77c80;
   --ochre: #c59a56;
   --slate: #8b98ad;
@@ -44,13 +47,11 @@
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
-  --nav-pill-fill: rgba(7, 17, 13, 0.64);
+  --nav-pill-fill: rgba(27, 32, 40, 0.88);
   --nav-pill-blur: 14px;
   --journal-grid-line: rgba(134, 166, 151, 0.045);
   --journal-grid-size: 22px;
-  --journal-grid-image:
-    linear-gradient(var(--journal-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--journal-grid-line) 1px, transparent 1px);
+  --journal-grid-image: none;
   --timeline-media-max-height: min(
     90dvh,
     calc((min(100vw, 430px) - 24px) * 16 / 9)
@@ -63,21 +64,24 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --grid-surface: #e7dfd3;
-  --paper: #f3eee4;
-  --ink: #202721;
-  --muted: #59645e;
-  --hairline: rgba(45, 67, 58, 0.18);
-  --line: #c6d0c9;
-  --cream: #fbf8f1;
-  --teal: #397b76;
+  --grid-surface: #edf0f4;
+  --paper: #edf0f4;
+  --ink: #1b2431;
+  --muted: #596678;
+  --hairline: rgba(56, 73, 98, 0.18);
+  --line: #c8d1de;
+  --cream: #ffffff;
+  --surface-raised: #f2f5f9;
+  --teal: #2764be;
+  --action: #2764be;
+  --action-ink: #ffffff;
   --clay: #a8525c;
   --ochre: #9b6d24;
   --slate: #59677d;
   --moss: #58764e;
-  --nav-pill-fill: rgba(243, 238, 228, 0.7);
+  --nav-pill-fill: rgba(255, 255, 255, 0.88);
   --journal-grid-line: rgba(57, 123, 118, 0.07);
-  --header-drawer-shadow: 0 18px 42px rgba(58, 44, 31, 0.18);
+  --header-drawer-shadow: 0 18px 42px rgba(25, 35, 52, 0.18);
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
 }
 
@@ -1599,7 +1603,7 @@ button:focus-visible,
 }
 
 .inline-note-summary li p {
-  color: #c5cec8;
+  color: var(--ink);
 }
 .inline-note-summary .note-avatar {
   width: 26px;
@@ -5416,7 +5420,7 @@ html.overlay-open .bottom-nav {
 }
 
 .view-switch a.active {
-  background: #17271f;
+  background: var(--surface-raised);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent);
 }
@@ -5562,7 +5566,7 @@ html.overlay-open .bottom-nav {
 .photo-frame {
   height: auto;
   max-height: var(--timeline-media-max-height);
-  background: #17231e;
+  background: var(--cream);
 }
 
 .photo-frame img,
@@ -5791,7 +5795,7 @@ html.overlay-open .bottom-nav {
 .inline-note-summary li {
   border-left: 2px solid var(--accent);
   border-radius: 3px;
-  background: #17261f;
+  background: var(--surface-raised);
   color: var(--ink);
 }
 
@@ -5799,7 +5803,7 @@ html.overlay-open .bottom-nav {
 .inline-note-form,
 .inline-note-edit {
   border-color: var(--hairline);
-  background: #0e1b16;
+  background: var(--cream);
 }
 
 .quick-reaction-control {
@@ -5842,7 +5846,7 @@ html.overlay-open .bottom-nav {
   display: flex;
   gap: 2px;
   border-radius: 999px;
-  background: #17261f;
+  background: var(--surface-raised);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
   /* Heart is 44px, picker is shifted 7px left and 7px above it. */
   transform-origin: 29px calc(100% + 29px);
@@ -5896,7 +5900,7 @@ html.overlay-open .bottom-nav {
 .connected-moment-menu {
   border-color: var(--hairline);
   border-radius: 8px;
-  background: #14231c;
+  background: var(--cream);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
 }
 
@@ -6013,7 +6017,7 @@ html.overlay-open .bottom-nav {
 .memory-photo,
 .memory-collection-node {
   border-color: var(--hairline);
-  background: #14231c;
+  background: var(--cream);
   color: var(--ink);
 }
 
@@ -6054,7 +6058,7 @@ html.overlay-open .bottom-nav {
 
 .nav-item {
   height: 50px;
-  color: #77847d;
+  color: var(--muted);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 8px;
   font-weight: 600;
@@ -6063,7 +6067,7 @@ html.overlay-open .bottom-nav {
 }
 
 .nav-item.active {
-  color: var(--ochre);
+  color: var(--action);
 }
 
 .nav-symbol {
@@ -6089,7 +6093,7 @@ html.overlay-open .bottom-nav {
   height: 50px;
   border: 1px solid color-mix(in srgb, var(--ochre) 78%, transparent);
   border-radius: 8px;
-  background: #15231d;
+  background: var(--surface-raised);
   color: var(--ochre);
   box-shadow: none;
 }
@@ -6109,7 +6113,7 @@ html.overlay-open .bottom-nav {
 .moment-detail-sheet,
 .moment-detail-sticky-bar {
   border: 1px solid var(--hairline);
-  background: #0d1a14;
+  background: var(--paper);
   color: var(--ink);
   box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.38);
 }
@@ -6161,7 +6165,7 @@ html.overlay-open .bottom-nav {
 .moment-choices button:hover,
 .moment-choices button:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 58%, transparent);
-  background: #17271f;
+  background: var(--surface-raised);
 }
 
 .moment-choices strong {
@@ -6199,7 +6203,7 @@ html.overlay-open .bottom-nav {
 .composer-preview-card {
   border-color: color-mix(in srgb, var(--clay) 58%, transparent);
   border-radius: 8px;
-  background: #101d17;
+  background: var(--paper);
   color: var(--ink);
 }
 
@@ -6222,7 +6226,7 @@ html.overlay-open .bottom-nav {
 .private-entry-content input {
   border: 1px solid var(--hairline);
   border-radius: 7px;
-  background: #13211b;
+  background: var(--surface-raised);
   color: var(--ink);
   box-shadow: none;
 }
@@ -6286,10 +6290,10 @@ html.overlay-open .bottom-nav {
 .private-entry-content button,
 .retry-button,
 .invite-button {
-  border: 1px solid color-mix(in srgb, var(--ochre) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--action) 72%, transparent);
   border-radius: 7px;
-  background: var(--ochre);
-  color: #101711;
+  background: var(--action);
+  color: var(--action-ink);
   box-shadow: none;
 }
 
@@ -6298,16 +6302,16 @@ html.overlay-open .bottom-nav {
 .inline-note-edit button {
   border: 1px solid var(--hairline);
   border-radius: 7px;
-  background: #15231d;
+  background: var(--surface-raised);
   color: var(--ink);
   box-shadow: none;
 }
 
 .inline-note-form button[type="submit"]:not(:disabled),
 .inline-note-edit button[type="submit"]:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ochre) 72%, transparent);
-  background: var(--ochre);
-  color: #101711;
+  border-color: color-mix(in srgb, var(--action) 72%, transparent);
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 .inline-note-form button[type="submit"]:disabled {
@@ -6322,7 +6326,7 @@ html.overlay-open .bottom-nav {
 .photo-status-result,
 .photo-status-quality-preview {
   border-color: var(--hairline);
-  background: #14231c;
+  background: var(--cream);
   color: var(--ink);
 }
 
@@ -6429,7 +6433,7 @@ html.overlay-open .bottom-nav {
   padding: 12px 13px;
   border: 1px solid var(--hairline);
   border-radius: 7px;
-  background: #13211b;
+  background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-interface);
   font-size: 16px;
@@ -6461,9 +6465,9 @@ html.overlay-open .bottom-nav {
 }
 
 .private-entry-backup button[type="submit"] {
-  border-color: color-mix(in srgb, var(--ochre) 72%, transparent);
-  background: var(--ochre);
-  color: #101711;
+  border-color: color-mix(in srgb, var(--action) 72%, transparent);
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 .private-entry-backup {
@@ -6520,7 +6524,7 @@ html.overlay-open .bottom-nav {
 .inline-note-summary li p,
 .location-card .card-copy > p:not(.moment-kicker),
 .milestone-copy > p {
-  color: #c5cec8;
+  color: var(--ink);
 }
 
 .inline-note-summary li p {
@@ -6655,7 +6659,7 @@ html.overlay-open .bottom-nav {
   top: 0;
   z-index: 3;
   flex: 0 0 auto;
-  background: #0d1a14;
+  background: var(--paper);
 }
 
 .activity-sheet-chrome .sheet-handle,
@@ -6975,19 +6979,19 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 :root[data-theme="light"] .nav-item {
-  color: #4f5d56;
+  color: var(--muted);
 }
 
 :root[data-theme="light"] .nav-item.active {
-  color: #7d520f;
+  color: var(--action);
 }
 
 :root[data-theme="light"] .invite-section form > button,
 :root[data-theme="light"] .invite-section .first-members-prompt > button,
 :root[data-theme="light"] .circles-create-section form > button,
 :root[data-theme="light"] .circle-rename-section form > button {
-  border-color: #b8893f;
-  background: #b8893f;
+  border-color: var(--action);
+  background: var(--action);
 }
 
 :root[data-theme="light"] .memory-feature-written,
@@ -7077,8 +7081,8 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 :root[data-theme="light"] .invite-button {
-  border-color: #b8893f;
-  background: #b8893f;
+  border-color: var(--action);
+  background: var(--action);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7391,7 +7395,7 @@ html[data-theme].overlay-open .app-shell::before,
 .settings-delivery-boundary {
   border-color: var(--hairline);
   border-radius: 8px;
-  background: #14231c;
+  background: var(--cream);
 }
 
 .invite-section form input,
@@ -7399,7 +7403,7 @@ html[data-theme].overlay-open .app-shell::before,
 .circle-rename-section form input {
   border-color: var(--hairline);
   border-radius: 7px;
-  background: #13211b;
+  background: var(--surface-raised);
   color: var(--ink);
 }
 
@@ -7411,7 +7415,7 @@ html[data-theme].overlay-open .app-shell::before,
 .settings-removal-zone > button {
   border-color: var(--hairline);
   border-radius: 7px;
-  background: #17271f;
+  background: var(--surface-raised);
   color: var(--ink);
 }
 
@@ -7419,10 +7423,10 @@ html[data-theme].overlay-open .app-shell::before,
 .invite-section .first-members-prompt > button,
 .circles-create-section form > button,
 .circle-rename-section form > button {
-  border: 1px solid color-mix(in srgb, var(--ochre) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--action) 72%, transparent);
   border-radius: 7px;
-  background: var(--ochre);
-  color: #101711;
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 /* Light Account actions: keep ink on cream. The danger fill is cream in
@@ -7442,9 +7446,9 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .invite-section .first-members-prompt > button,
 :root[data-theme="light"] .circles-create-section form > button,
 :root[data-theme="light"] .circle-rename-section form > button {
-  border-color: #b8893f;
-  background: #b8893f;
-  color: #101711;
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 :root[data-theme="light"] .access-list button {
@@ -7520,7 +7524,7 @@ html[data-theme].overlay-open .app-shell::before,
   justify-content: space-between;
   gap: 8px;
   border-radius: 6px;
-  background: #17271f;
+  background: var(--surface-raised);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -7560,7 +7564,7 @@ html[data-theme].overlay-open .app-shell::before,
   display: grid;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: #14231c;
+  background: var(--cream);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
 }
 
@@ -7993,7 +7997,7 @@ html[data-theme].overlay-open .app-shell::before,
   gap: 6px;
   border: 1px solid var(--hairline);
   border-radius: 7px;
-  background: #13211b;
+  background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-record);
   font-size: 13px;
@@ -8062,7 +8066,7 @@ html[data-theme].overlay-open .app-shell::before,
   padding: 14px;
   border: 1px solid var(--hairline);
   border-radius: 9px;
-  background: #101d17;
+  background: var(--paper);
   color: var(--ink);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.22);
   animation: none;
@@ -8131,8 +8135,8 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .composer-calendar-grid button[aria-pressed="true"] {
-  background: var(--ochre);
-  color: #10150f;
+  background: var(--action);
+  color: var(--action-ink);
   font-weight: 700;
 }
 
@@ -8183,7 +8187,7 @@ html[data-theme].overlay-open .app-shell::before,
   padding: 0 10px;
   border: 1px solid var(--hairline);
   border-radius: 7px;
-  background: #13211b;
+  background: var(--surface-raised);
   color: var(--ink);
   font-family: var(--font-record);
   font-size: 16px;
@@ -8202,9 +8206,9 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .composer-picker-primary {
-  border-color: var(--ochre);
-  background: var(--ochre);
-  color: #10150f;
+  border-color: var(--action);
+  background: var(--action);
+  color: var(--action-ink);
 }
 
 :root[data-theme="light"] .composer-picker-trigger,
@@ -8349,7 +8353,7 @@ html[data-theme].overlay-open .app-shell::before,
   height: 180px;
   border: 1px solid var(--hairline);
   border-radius: 8px;
-  background: #101d17;
+  background: var(--paper);
 }
 
 iframe.composer-location-map {
@@ -8541,8 +8545,8 @@ iframe.composer-location-map {
 }
 
 :root[data-theme="light"] .save-moment {
-  border-color: #b8893f;
-  background: #b8893f;
+  border-color: var(--action);
+  background: var(--action);
 }
 
 /* Keep every compact journal control comfortably tappable on narrow phones. */

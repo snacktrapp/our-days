@@ -42,8 +42,8 @@ describe("installed app icons", () => {
 
     const webManifest = manifest();
     expect(webManifest).toMatchObject({
-      background_color: "#0b1712",
-      theme_color: "#0b1712",
+      background_color: "#101216",
+      theme_color: "#101216",
     });
     expect(webManifest.icons).toEqual(
       expect.arrayContaining([
