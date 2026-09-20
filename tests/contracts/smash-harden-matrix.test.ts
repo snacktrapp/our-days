@@ -488,10 +488,24 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("scrolls a new inline note into view so Save is not under the keyboard", () => {
-      expect(conversationControl).toContain("preventScroll: false");
-      expect(conversationControl).toContain("scrollIntoView");
-      expect(conversationControlTest).toContain("scrollIntoView");
+    it("opens comments with tap-synchronous focus and keeps Post above the keyboard", () => {
+      expect(conversationControl).toContain("<CommentDrawer");
+      expect(conversationControl).toContain(
+        'flushSync(() => setPanel("note"))',
+      );
+      expect(conversationControl).toContain(
+        "noteRef.current?.focus({ preventScroll: true })",
+      );
+      expect(conversationControl).not.toContain("scrollIntoView");
+      expect(read("src/features/timeline/comment-drawer.tsx")).toContain(
+        "useVisualViewportFill(dialogRef, true)",
+      );
+      expect(conversationControlTest).toContain(
+        "retains a draft after dismissing the drawer and restores focus",
+      );
+      expect(read("tests/e2e/moment-detail.spec.ts")).toContain(
+        "comment drawer follows the keyboard viewport and keeps Post readable",
+      );
     });
 
     it("lets a retryable failed upload chip be dismissed", () => {
