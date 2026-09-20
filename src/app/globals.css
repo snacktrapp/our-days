@@ -52,10 +52,7 @@
   --journal-grid-line: rgba(134, 166, 151, 0.045);
   --journal-grid-size: 22px;
   --journal-grid-image: none;
-  --timeline-media-max-height: min(
-    90dvh,
-    calc((min(100vw, 430px) - 24px) * 16 / 9)
-  );
+  --timeline-media-max-height: min(90dvh, calc(min(100vw, 430px) * 16 / 9));
 }
 
 :root[data-theme="dark"] {
@@ -5468,7 +5465,8 @@ html.overlay-open .bottom-nav {
 }
 
 .timeline {
-  padding: 4px 16px 76px;
+  --timeline-inline-inset: 16px;
+  padding: 4px var(--timeline-inline-inset) 76px;
 }
 
 .time-rail {
@@ -5561,6 +5559,15 @@ html.overlay-open .bottom-nav {
 .moment-card:has(.connected-moment-menu),
 .moment-card:has(.inline-reaction-picker) {
   overflow: visible;
+}
+
+/* Only posts reach the feed edges; chronology and navigation keep their insets. */
+.timeline .moment-card {
+  width: calc(100% + 2 * var(--timeline-inline-inset));
+  max-width: none;
+  margin-inline: calc(-1 * var(--timeline-inline-inset));
+  border-inline-width: 0;
+  border-radius: 0;
 }
 
 .photo-frame {
