@@ -24,7 +24,9 @@
   --chrome-eyebrow: 650 9px / 1.2 var(--font-record);
   --chrome-title: 600 16px / 1.25 var(--font-interface);
   --chrome-body: 400 12px / 1.45 var(--font-interface);
-  --chrome-meta: 600 10px / 1.35 var(--font-record);
+  --chrome-meta: 400 10px / 1.35 var(--font-record);
+  --selection-fill: color-mix(in srgb, var(--action) 14%, var(--cream));
+  --selection-border: color-mix(in srgb, var(--action) 55%, var(--hairline));
   --header-drawer-radius: 10px;
   --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
@@ -1592,7 +1594,7 @@ button:focus-visible,
 .inline-note-when {
   color: var(--muted);
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.2;
   white-space: nowrap;
   flex-shrink: 0;
@@ -6249,7 +6251,7 @@ html.overlay-open .bottom-nav {
 }
 
 .composer-field > span small {
-  color: #718079;
+  color: var(--muted);
   font-family: var(--font-record);
   font-size: 7px;
   font-weight: 600;
@@ -6268,7 +6270,7 @@ html.overlay-open .bottom-nav {
 .inline-note-form textarea::placeholder,
 .inline-note-edit textarea::placeholder,
 .private-entry-content input::placeholder {
-  color: #68756e;
+  color: var(--muted);
 }
 
 .composer-select-arrow {
@@ -6314,6 +6316,15 @@ html.overlay-open .bottom-nav {
   box-shadow: none;
 }
 
+.secondary-composer-action,
+.inline-note-form button[type="button"],
+.inline-note-edit button[type="button"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .inline-note-form button[type="submit"]:not(:disabled),
 .inline-note-edit button[type="submit"]:not(:disabled) {
   border-color: color-mix(in srgb, var(--action) 72%, transparent);
@@ -6322,9 +6333,9 @@ html.overlay-open .bottom-nav {
 }
 
 .inline-note-form button[type="submit"]:disabled {
-  border-color: #46564e;
-  background: #25352e;
-  color: #d5dcd8;
+  border-color: var(--hairline);
+  background: var(--surface-raised);
+  color: var(--muted);
   cursor: not-allowed;
   opacity: 1;
 }
@@ -7069,9 +7080,6 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .inline-note-form textarea,
 :root[data-theme="light"] .inline-note-edit textarea,
 :root[data-theme="light"] .private-entry-content input,
-:root[data-theme="light"] .secondary-composer-action,
-:root[data-theme="light"] .inline-note-form button,
-:root[data-theme="light"] .inline-note-edit button,
 :root[data-theme="light"] .photo-status-item,
 :root[data-theme="light"] .photo-status-result,
 :root[data-theme="light"] .photo-status-quality-preview,
@@ -7333,14 +7341,6 @@ html[data-theme].overlay-open .app-shell::before,
 
 :root[data-theme="light"] .composer-drafts-count {
   background: color-mix(in srgb, var(--teal) 16%, #fff);
-}
-
-:root[data-theme="light"] .composer-field input::placeholder,
-:root[data-theme="light"] .composer-field textarea::placeholder,
-:root[data-theme="light"] .inline-note-form textarea::placeholder,
-:root[data-theme="light"] .inline-note-edit textarea::placeholder,
-:root[data-theme="light"] .private-entry-content input::placeholder {
-  color: #778079;
 }
 
 :root[data-theme="light"] .inline-note-summary li p,
@@ -7925,8 +7925,8 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--ink);
 }
 .people-tags.post-to-chips label:has(input:checked) {
-  border-color: color-mix(in srgb, var(--moss) 52%, var(--hairline));
-  background: color-mix(in srgb, var(--moss) 34%, var(--cream));
+  border-color: var(--selection-border);
+  background: var(--selection-fill);
   color: var(--ink);
 }
 .post-to-chips label small {
@@ -7934,7 +7934,7 @@ html[data-theme].overlay-open .app-shell::before,
   color: var(--muted);
   font-family: var(--font-ui), sans-serif;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.02em;
 }
 .post-to-advanced,
@@ -7954,10 +7954,6 @@ html[data-theme].overlay-open .app-shell::before,
 }
 .people-tags.post-to-chips label:has(input:disabled) {
   opacity: 1;
-}
-:root[data-theme="light"] .people-tags.post-to-chips label:has(input:checked) {
-  background: color-mix(in srgb, var(--moss) 24%, #fff);
-  border-color: color-mix(in srgb, var(--moss) 46%, var(--hairline));
 }
 
 .composer-journal-trigger {
@@ -8261,12 +8257,12 @@ html[data-theme].overlay-open .app-shell::before,
 
 :root[data-theme="light"] .composer-picker-trigger,
 :root[data-theme="light"] .composer-time-controls select {
-  background: #f7f1e7;
+  background: var(--surface-raised);
 }
 
 :root[data-theme="light"] .composer-picker-panel {
-  background: #fffaf1;
-  box-shadow: 0 16px 34px rgba(48, 43, 34, 0.16);
+  background: var(--paper);
+  box-shadow: 0 16px 34px rgba(25, 35, 52, 0.16);
 }
 
 .composer-location-fields {
