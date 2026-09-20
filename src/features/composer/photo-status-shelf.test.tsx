@@ -44,6 +44,7 @@ vi.mock("./photo-upload", async (importOriginal) => ({
 }));
 
 import { PhotoStatusShelf } from "./photo-status-shelf";
+import { requestPhotoProcessingResponse } from "./photo-processing-request";
 import {
   addOptimisticMediaUpload,
   clearOptimisticMediaUploads,
@@ -717,6 +718,44 @@ describe("PhotoStatusShelf", () => {
       ),
     );
     expect(mocks.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("joins uploader processing and refreshes publication without a failed chip", async () => {
+    let finish!: (response: Response) => void;
+    const processRequest = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", processRequest);
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ ...serverRow, can_cancel: false, status: "processing" }],
+        error: null,
+      })
+      .mockResolvedValue({
+        data: [
+          {
+            ...serverRow,
+            can_cancel: false,
+            status: "published_cleanup_pending",
+            cleanup_state: "queued",
+          },
+        ],
+        error: null,
+      });
+    const uploaderRequest = requestPhotoProcessingResponse(intakeId);
+    render(<PhotoStatusShelf circleId={circleId} />);
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      finish(Response.json({ ok: true, momentId: serverRow.moment_id }));
+      await uploaderRequest;
+    });
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+    expect(processRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Upload failed")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
   });
 
   it("cancels through the server before removing matching local resume state", async () => {

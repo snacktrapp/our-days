@@ -113,22 +113,21 @@ export async function POST(request: Request) {
   try {
     await processPhotoIntake(intakeId);
   } catch (error) {
-    const workerRetryable =
-      error instanceof PhotoWorkerError ? error.retryable : true;
-    let terminal = false;
-    let serverStatus = "unavailable";
-    if (!workerRetryable) {
-      const { data: failureRows, error: failureStatusError } =
-        await supabase.rpc("get_photo_moment_status", {
-          intake_id: intakeId,
-        });
-      const failureStatus = failureRows?.[0]?.status;
-      if (!failureStatusError && failureStatus) serverStatus = failureStatus;
-      terminal =
-        !failureStatusError &&
-        (failureStatus === "needs_attention" || failureStatus === "cancelled");
+    // A different tab/request may have finished while this worker lost its
+    // lease. The authoritative result wins over this request's worker error.
+    const { data: failureRows, error: failureStatusError } = await supabase
+      .rpc("get_photo_moment_status", { intake_id: intakeId })
+      .then(
+        (result) => result,
+        () => ({ data: null, error: true }),
+      );
+    const current = failureStatusError ? null : failureRows?.[0];
+    if (current?.status === "published" && current.moment_id) {
+      return response({ ok: true, momentId: current.moment_id }, 200);
     }
-    const retryable = workerRetryable || !terminal;
+    const serverStatus = current?.status ?? "unavailable";
+    const retryable =
+      serverStatus !== "needs_attention" && serverStatus !== "cancelled";
     console.error("[photo-process] failed", {
       code:
         error instanceof PhotoWorkerError
