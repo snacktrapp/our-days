@@ -224,6 +224,60 @@ test("the journal uses a plain canvas and retains compact floating navigation", 
   await expect(page.locator(".bottom-nav")).toHaveCSS("height", "56px");
 });
 
+test("posts fill the feed width without widening navigation or removing text padding", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  await expect(page.locator(".timeline .moment-card").first()).toBeVisible();
+
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    for (const width of [320, 390, 430, 1024]) {
+      await page.setViewportSize({ width, height: 844 });
+      const geometry = await page.locator(".phone-stage").evaluate((stage) => {
+        const bounds = stage.getBoundingClientRect();
+        const left = bounds.left + (stage as HTMLElement).clientLeft;
+        const feedWidth = stage.clientWidth;
+        return {
+          left,
+          feedWidth,
+          overflow: document.documentElement.scrollWidth > window.innerWidth,
+          cards: Array.from(
+            stage.querySelectorAll(".timeline .moment-card"),
+          ).map((card) => {
+            const rect = card.getBoundingClientRect();
+            const copy = card.querySelector(".card-copy") ?? card;
+            return {
+              left: rect.left,
+              width: rect.width,
+              padding: Number.parseFloat(getComputedStyle(copy).paddingLeft),
+              background: getComputedStyle(card).backgroundColor,
+            };
+          }),
+        };
+      });
+      expect(geometry.overflow).toBe(false);
+      expect(geometry.cards.length).toBeGreaterThan(2);
+      for (const card of geometry.cards) {
+        expect(Math.abs(card.left - geometry.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(card.width - geometry.feedWidth)).toBeLessThanOrEqual(
+          1,
+        );
+        expect(card.padding).toBeGreaterThanOrEqual(15);
+        expect(card.background).not.toBe("rgba(0, 0, 0, 0)");
+      }
+      for (const selector of [".topbar", ".bottom-nav"]) {
+        const nav = page.locator(selector);
+        await expect(nav).toHaveCSS("height", "56px");
+        const bounds = await nav.boundingBox();
+        expect(bounds!.width).toBeLessThan(geometry.feedWidth);
+      }
+    }
+  }
+});
+
 async function expectComposerMatchesActivitySheet(page: Page) {
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const picker = page.locator(".new-moment-composer-dialog");
