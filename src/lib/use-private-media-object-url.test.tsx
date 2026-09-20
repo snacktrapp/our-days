@@ -3,9 +3,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { usePrivateMediaObjectUrl } from "./use-private-media-object-url";
+import { clearPrivateMediaMemory } from "./private-media-memory";
 
 describe("usePrivateMediaObjectUrl", () => {
   afterEach(() => {
+    clearPrivateMediaMemory();
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -98,5 +100,38 @@ describe("usePrivateMediaObjectUrl", () => {
       expect(result.current.failed).toBe(true);
     });
     expect(result.current.objectUrl).toBeNull();
+  });
+
+  it("reuses a completed photo across remounts, but clears it on sign out", async () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      blob: async () => new Blob(["photo"], { type: "image/webp" }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const first = renderHook(() =>
+      usePrivateMediaObjectUrl("/api/media/moments/reused"),
+    );
+    await waitFor(() =>
+      expect(first.result.current.objectUrl).toBe("blob:photo"),
+    );
+    first.unmount();
+    const second = renderHook(() =>
+      usePrivateMediaObjectUrl("/api/media/moments/reused"),
+    );
+    await waitFor(() =>
+      expect(second.result.current.objectUrl).toBe("blob:photo"),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    second.unmount();
+    window.dispatchEvent(new Event("our-days:clear-private-state"));
+    const third = renderHook(() =>
+      usePrivateMediaObjectUrl("/api/media/moments/reused"),
+    );
+    await waitFor(() =>
+      expect(third.result.current.objectUrl).toBe("blob:photo"),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    third.unmount();
   });
 });

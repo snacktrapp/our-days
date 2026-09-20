@@ -20,6 +20,7 @@ import type { CreatePostToHomeContext, CreatePostToIntent } from "./post-to";
 import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
 type ComposerSessionValue = Readonly<{
+  canCreate: boolean;
   openCreate: (
     trigger?: HTMLButtonElement | null,
     intent?: CreatePostToIntent | null,
@@ -115,8 +116,14 @@ export function ComposerSessionProvider({
   }, []);
 
   const value = useMemo(
-    () => ({ openCreate, toggleCreate, isOpen: open, openEdit }),
-    [open, openCreate, openEdit, toggleCreate],
+    () => ({
+      openCreate,
+      toggleCreate,
+      isOpen: open,
+      openEdit,
+      canCreate: Boolean(model.recorderPersonId),
+    }),
+    [open, openCreate, openEdit, toggleCreate, model.recorderPersonId],
   );
 
   return (

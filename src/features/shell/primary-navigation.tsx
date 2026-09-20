@@ -7,6 +7,7 @@ import { useComposerSession } from "@/features/composer/composer-session";
 import { sectionFromPathname } from "./journal-routes";
 import { JournalHomeLink } from "./journal-home-link";
 import { NavSymbol } from "./nav-symbol";
+import { usePendingJournalRoute } from "./journal-pending-route";
 import type { JournalSection } from "./shell-view-model";
 import { useHideBottomNavWhileComposing } from "./hide-bottom-nav-while-composing";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
@@ -35,6 +36,7 @@ export function PrimaryNavigation({
   justMeHref?: string;
 }) {
   const pathname = usePathname() ?? "";
+  const pendingRoute = usePendingJournalRoute()?.pending;
   const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const session = useComposerSession();
@@ -45,11 +47,12 @@ export function PrimaryNavigation({
     section: PrimarySection;
   } | null>(null);
   const selectedSection =
-    pendingSelection?.fromPathname === pathname
+    (pendingRoute ? sectionFromPathname(pendingRoute.href) : null) ??
+    (pendingSelection?.fromPathname === pathname
       ? pendingSelection.section
       : section === "circles"
         ? "circles"
-        : (sectionFromPathname(pathname) ?? section);
+        : (sectionFromPathname(pathname) ?? section));
   useEffect(() => {
     const onNavigateSection = (event: Event) => {
       const href =
@@ -112,6 +115,7 @@ export function PrimaryNavigation({
         ref={addMomentRef}
         className="nav-item"
         type="button"
+        disabled={session?.canCreate === false}
         aria-expanded={session?.isOpen ?? false}
         onClick={() => {
           // Match Post-to to the journal you're looking at. Forcing Just me from

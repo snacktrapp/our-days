@@ -109,7 +109,10 @@ export function FamilyTitleSwitcher({
       if (switcher.some((item) => item.href === href))
         setSelection({ from: serverHref, href });
     };
-    const back = () => setOpen(false);
+    const back = () => {
+      setOpen(false);
+      setSelection({ from: serverHref, href: serverHref });
+    };
     window.addEventListener("our-days:navigate-section", navigate);
     window.addEventListener("popstate", back);
     return () => {

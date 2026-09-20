@@ -111,6 +111,72 @@ test("header touch selection survives a focusless blur and opens the signed-in j
   await expect(page.getByLabel("Chronological family moments")).toBeVisible();
 });
 
+test("navigation keeps the same controls and chosen title through a delayed feed", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await page.evaluate(() => {
+    const nav = document.querySelector(".bottom-nav");
+    const header = document.querySelector(".topbar");
+    const evidence = { titles: [] as string[], lostControls: false };
+    Object.assign(window, { transitionEvidence: evidence });
+    const observer = new MutationObserver(() => {
+      evidence.titles.push(
+        document.querySelector(".topbar h1")?.textContent ?? "missing",
+      );
+      if (
+        document.querySelector(".bottom-nav") !== nav ||
+        document.querySelector(".topbar") !== header
+      )
+        evidence.lostControls = true;
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/people/${localAlexPersonId}*`, async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Choose a journal" }).tap();
+  await page.getByRole("link", { name: "Just me", exact: true }).tap();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".bottom-nav svg")).toHaveCount(3);
+  await expect(page.getByLabel("Opening this journal")).toBeVisible();
+  release();
+  await expect(page.getByLabel("Chronological moments for Alex")).toBeVisible();
+  const evidence = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          transitionEvidence: { titles: string[]; lostControls: boolean };
+        }
+      ).transitionEvidence,
+  );
+  expect(evidence.lostControls).toBe(false);
+  const selected = evidence.titles.indexOf("Just me");
+  expect(selected).toBeGreaterThanOrEqual(0);
+  expect(
+    evidence.titles.slice(selected).every((title) => title === "Just me"),
+  ).toBe(true);
+  expect(errors).toEqual([]);
+  await page.screenshot({ path: "/tmp/our-days-persistent-shell.png" });
+});
+
 test("cold open paints usable Family content after sign-in", async ({
   page,
 }) => {
@@ -249,6 +315,14 @@ test("nearby album requests all photos before the cover finishes and retains the
     "src",
     firstSrc!,
   );
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Journal", exact: true }).click();
+  await card.scrollIntoViewIfNeeded();
+  await expect(pager.locator("img")).toHaveCount(6);
+  expect(albumRequests()).toHaveLength(6);
   await page.screenshot({ path: "test-results/carousel-neighbor-loading.png" });
   expect(errors).toEqual([]);
 });

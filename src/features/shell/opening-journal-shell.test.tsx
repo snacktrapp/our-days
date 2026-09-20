@@ -1,14 +1,23 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OpeningJournalShell } from "./opening-journal-shell";
+import { PersistentJournalShell } from "./journal-chrome";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/family",
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 describe("OpeningJournalShell", () => {
   it("paints top and bottom chrome without waiting for a timeline page", () => {
-    const { container } = render(<OpeningJournalShell />);
+    const { container } = render(
+      <PersistentJournalShell>
+        <OpeningJournalShell />
+      </PersistentJournalShell>,
+    );
 
-    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Our Days" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
     expect(
       screen.getByRole("navigation", { name: "Primary navigation" }),
     ).toBeVisible();

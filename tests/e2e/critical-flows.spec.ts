@@ -99,7 +99,9 @@ test("page transitions show only the background grid", async ({ page }) => {
     await expect(icons).toHaveCount(3);
     for (const icon of await icons.all()) await expect(icon).toBeVisible();
     await expect(
-      page.locator(".phone-stage .time-rail, .route-pending-card"),
+      page.locator(
+        ".phone-stage .time-rail:visible, .route-pending-card:visible",
+      ),
     ).toHaveCount(0);
     await expect(pending).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await page.screenshot({

@@ -4,7 +4,8 @@ import type {
   JournalChromeViewModel,
   JournalSection,
 } from "./shell-view-model";
-import { JournalChrome } from "./journal-chrome";
+import { JournalChrome, PersistentJournalShell } from "./journal-chrome";
+import { OpeningJournalShell } from "./opening-journal-shell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
@@ -310,7 +311,7 @@ describe("JournalChrome", () => {
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
     fireEvent.click(screen.getByRole("link", { name: "Just me" }));
 
-    expect(screen.queryByText("Moments")).toBeNull();
+    expect(screen.getByText("Moments")).not.toBeVisible();
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),
     ).toHaveClass("route-pending-skeleton");
@@ -319,5 +320,63 @@ describe("JournalChrome", () => {
       "is-open",
     );
     expect(document.querySelector(".timeline-empty-state")).toBeNull();
+  });
+
+  it("retains the same navigation and selected title through the loading boundary", () => {
+    const switcher = [
+      {
+        kind: "all" as const,
+        label: "All circles",
+        href: "/family",
+        current: true,
+      },
+      {
+        kind: "you" as const,
+        label: "Brian",
+        href: "/people/brian",
+        current: false,
+      },
+    ];
+    const { container, rerender } = render(
+      <PersistentJournalShell>
+        <JournalChrome
+          model={{ ...model, title: "All circles" }}
+          section="timeline"
+          switcher={switcher}
+        >
+          <p>All entries</p>
+        </JournalChrome>
+      </PersistentJournalShell>,
+    );
+    const nav = container.querySelector(".bottom-nav");
+    const header = container.querySelector(".topbar");
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    fireEvent.click(screen.getByRole("link", { name: "Just me" }));
+    rerender(
+      <PersistentJournalShell>
+        <OpeningJournalShell />
+      </PersistentJournalShell>,
+    );
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    expect(container.querySelector(".bottom-nav")).toBe(nav);
+    expect(container.querySelector(".topbar")).toBe(header);
+    rerender(
+      <PersistentJournalShell>
+        <JournalChrome
+          model={{ ...model, title: "Just me" }}
+          section="timeline"
+          switcher={switcher.map((item) => ({
+            ...item,
+            current: item.kind === "you",
+          }))}
+        >
+          <p>My entries</p>
+        </JournalChrome>
+      </PersistentJournalShell>,
+    );
+    expect(screen.getByText("My entries")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    expect(container.querySelector(".bottom-nav")).toBe(nav);
+    expect(container.querySelector(".topbar")).toBe(header);
   });
 });

@@ -1,7 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { useJournalShell } from "./journal-shell-context";
+import { usePendingJournalRoute } from "./journal-pending-route";
+
+function InPlaceJournalError({ recover }: { recover?: () => void }) {
+  const finish = usePendingJournalRoute()?.finish;
+  useEffect(() => {
+    finish?.();
+  }, [finish]);
+  return (
+    <section className="timeline-empty-state" role="alert">
+      <strong>This journal couldn’t open.</strong>
+      <span>Try again, or choose another page.</span>
+      {recover ? (
+        <button type="button" className="retry-button" onClick={recover}>
+          Try again
+        </button>
+      ) : null}
+    </section>
+  );
+}
 
 export function JournalInterrupted({
   retry,
@@ -11,6 +31,8 @@ export function JournalInterrupted({
   reset?: () => void;
 }>) {
   const recover = retry ?? reset;
+  const shell = useJournalShell();
+  if (shell) return <InPlaceJournalError recover={recover} />;
 
   return (
     <main className="app-shell journal-error-shell">
@@ -59,6 +81,8 @@ export function JournalOpenUnavailable({
   reset?: () => void;
 }>) {
   const recover = retry ?? reset;
+  const shell = useJournalShell();
+  if (shell) return <InPlaceJournalError recover={recover} />;
 
   return (
     <main className="app-shell journal-error-shell">

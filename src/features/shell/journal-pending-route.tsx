@@ -16,6 +16,7 @@ import {
   type JournalSkeletonKind,
 } from "./journal-routes";
 import type { JournalChromeViewModel } from "./shell-view-model";
+import { useJournalShell } from "./journal-shell-context";
 
 export type PendingJournalRoute = Readonly<{
   href: string;
@@ -25,6 +26,7 @@ export type PendingJournalRoute = Readonly<{
 type JournalPendingRouteValue = Readonly<{
   pending: PendingJournalRoute | null;
   begin: (href: string) => void;
+  finish: () => void;
 }>;
 
 const JournalPendingRouteContext =
@@ -56,6 +58,13 @@ export function pendingChromeModel(
   if (pending.kind === "settings") {
     return { ...model, title: "Account" };
   }
+  if (pending.kind === "timeline") {
+    const ownHref = `/people/${model.composer?.recorderPersonId}`;
+    if (pending.href === ownHref || pending.href === "/journal?view=you")
+      return { ...model, title: "Just me", eyebrow: "Just me" };
+    if (pending.href === "/family")
+      return { ...model, title: "All circles", eyebrow: "Circles" };
+  }
   return model;
 }
 
@@ -84,7 +93,9 @@ export function JournalPendingRouteProvider({
   children,
 }: Readonly<{ children: ReactNode }>) {
   const pathname = usePathname() ?? "";
+  const persistent = Boolean(useJournalShell());
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const finish = useCallback(() => setPendingHref(null), []);
   const currentPath = pathWithoutSearch(pathname);
   const [committedPath, setCommittedPath] = useState(currentPath);
 
@@ -92,7 +103,7 @@ export function JournalPendingRouteProvider({
   // Otherwise Back can revive that destination and hide an already loaded feed.
   if (committedPath !== currentPath) {
     setCommittedPath(currentPath);
-    setPendingHref(null);
+    if (!persistent) setPendingHref(null);
   }
 
   const begin = useCallback(
@@ -125,6 +136,7 @@ export function JournalPendingRouteProvider({
       begin(href);
     };
     window.addEventListener("our-days:navigate-section", onNavigateSection);
+    window.addEventListener("popstate", finish);
     document.addEventListener("click", onDocumentClick, true);
     return () => {
       window.removeEventListener(
@@ -132,8 +144,9 @@ export function JournalPendingRouteProvider({
         onNavigateSection,
       );
       document.removeEventListener("click", onDocumentClick, true);
+      window.removeEventListener("popstate", finish);
     };
-  }, [begin]);
+  }, [begin, finish]);
 
   const value = useMemo(() => {
     const pendingKind = pendingHref
@@ -142,11 +155,11 @@ export function JournalPendingRouteProvider({
     const pending =
       pendingHref &&
       pendingKind &&
-      pathWithoutSearch(pendingHref) !== currentPath
+      (persistent || pathWithoutSearch(pendingHref) !== currentPath)
         ? { href: pendingHref, kind: pendingKind }
         : null;
-    return { pending, begin };
-  }, [begin, currentPath, pendingHref]);
+    return { pending, begin, finish };
+  }, [begin, finish, currentPath, pendingHref, persistent]);
 
   return (
     <JournalPendingRouteContext.Provider value={value}>
