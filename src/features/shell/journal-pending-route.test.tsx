@@ -7,6 +7,7 @@ import {
   usePendingJournalRoute,
 } from "./journal-pending-route";
 import type { JournalChromeViewModel } from "./shell-view-model";
+import { journalHeadings, sectionHeading } from "./journal-heading";
 
 const route = vi.hoisted(() => ({ pathname: "/family" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
@@ -47,6 +48,24 @@ const model = {
 } as JournalChromeViewModel;
 
 describe("route pending skeleton", () => {
+  it.each([
+    ["/circles", "people", "circles"],
+    ["/settings/family", "settings", "settings"],
+    ["/memories", "memories", "memories"],
+  ] as const)(
+    "uses the same eyebrow/title pair while opening and after loading %s",
+    (href, kind, section) => {
+      for (const previous of Object.values(journalHeadings)) {
+        const next = pendingChromeModel(
+          { ...model, ...previous },
+          { href, kind },
+        );
+        expect({ title: next.title, eyebrow: next.eyebrow }).toEqual(
+          sectionHeading(section),
+        );
+      }
+    },
+  );
   it("leaves only the background grid while a journal loads", () => {
     const { container } = render(<RoutePendingSkeleton kind="timeline" />);
     expect(

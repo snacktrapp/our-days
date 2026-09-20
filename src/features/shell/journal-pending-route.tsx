@@ -17,6 +17,7 @@ import {
 } from "./journal-routes";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useJournalShell } from "./journal-shell-context";
+import { journalHeadings } from "./journal-heading";
 
 export type PendingJournalRoute = Readonly<{
   href: string;
@@ -51,19 +52,19 @@ export function pendingChromeModel(
   pending: PendingJournalRoute | null,
 ): JournalChromeViewModel {
   if (!pending) return model;
-  if (pending.kind === "people") return { ...model, title: "Circles" };
+  if (pending.kind === "people")
+    return { ...model, ...journalHeadings.circles };
   if (pending.kind === "memories") {
-    return { ...model, title: "Memories" };
+    return { ...model, ...journalHeadings.memories };
   }
   if (pending.kind === "settings") {
-    return { ...model, title: "Account" };
+    return { ...model, ...journalHeadings.settings };
   }
   if (pending.kind === "timeline") {
     const ownHref = `/people/${model.composer?.recorderPersonId}`;
     if (pending.href === ownHref || pending.href === "/journal?view=you")
-      return { ...model, title: "Just me", eyebrow: "Just me" };
-    if (pending.href === "/family")
-      return { ...model, title: "All circles", eyebrow: "Circles" };
+      return { ...model, ...journalHeadings.you };
+    if (pending.href === "/family") return { ...model, ...journalHeadings.all };
   }
   return model;
 }

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { JournalChromeViewModel } from "./shell-view-model";
 import { useJournalNavigationMemory } from "./journal-navigation-memory";
+import { journalHeadings } from "./journal-heading";
 import {
   journalSwitcherTypeLabel,
   type FamilyTimelineSwitcherItem,
@@ -80,8 +81,12 @@ export function FamilyTitleSwitcher({
   const displayModel = selected
     ? {
         ...model,
-        title: selected.kind === "you" ? "Just me" : selected.label,
-        eyebrow: journalSwitcherTypeLabel(selected.kind),
+        ...(selected.kind === "you" || selected.kind === "all"
+          ? journalHeadings[selected.kind]
+          : {
+              title: selected.label,
+              eyebrow: journalSwitcherTypeLabel(selected.kind),
+            }),
       }
     : model;
   const items = switcher.filter(

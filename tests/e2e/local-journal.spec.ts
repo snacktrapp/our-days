@@ -127,7 +127,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
     Object.assign(window, { transitionEvidence: evidence });
     const observer = new MutationObserver(() => {
       evidence.titles.push(
-        document.querySelector(".topbar h1")?.textContent ?? "missing",
+        `${document.querySelector(".topbar .eyebrow")?.textContent}|${document.querySelector(".topbar h1")?.textContent}`,
       );
       if (
         document.querySelector(".bottom-nav") !== nav ||
@@ -168,11 +168,61 @@ test("navigation keeps the same controls and chosen title through a delayed feed
       ).transitionEvidence,
   );
   expect(evidence.lostControls).toBe(false);
-  const selected = evidence.titles.indexOf("Just me");
+  const selected = evidence.titles.indexOf("Just me|Just me");
   expect(selected).toBeGreaterThanOrEqual(0);
   expect(
-    evidence.titles.slice(selected).every((title) => title === "Just me"),
+    evidence.titles
+      .slice(selected)
+      .every((title) => title === "Just me|Just me"),
   ).toBe(true);
+  for (const destination of [
+    { href: "/circles", link: "Circles", pair: "Journals|Circles" },
+    { href: "/settings/family", link: "Settings", pair: "Our family|Account" },
+    {
+      href: `/people/${localAlexPersonId}`,
+      link: "Journal",
+      pair: "Just me|Just me",
+    },
+  ]) {
+    await page.evaluate(() => {
+      (
+        window as unknown as { transitionEvidence: { titles: string[] } }
+      ).transitionEvidence.titles = [];
+    });
+    let resume!: () => void;
+    const responseGate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    await page.route(`**${destination.href}*`, async (route) => {
+      const response = await route.fetch();
+      await responseGate;
+      await route.fulfill({ response });
+    });
+    try {
+      await page
+        .getByRole("link", { name: destination.link, exact: true })
+        .click();
+      await expect(page.locator(".topbar h1")).toHaveText(
+        destination.pair.split("|")[1],
+      );
+      await expect(page.locator(".topbar .eyebrow")).toHaveText(
+        destination.pair.split("|")[0],
+      );
+    } finally {
+      resume();
+    }
+    await expect(page.locator(".journal-route-content")).not.toHaveAttribute(
+      "hidden",
+    );
+    const pairs = await page.evaluate(
+      () =>
+        (window as unknown as { transitionEvidence: { titles: string[] } })
+          .transitionEvidence.titles,
+    );
+    expect(pairs.length).toBeGreaterThan(0);
+    expect(pairs.every((pair) => pair === destination.pair)).toBe(true);
+    await page.unroute(`**${destination.href}*`);
+  }
   expect(errors).toEqual([]);
   await page.screenshot({ path: "/tmp/our-days-persistent-shell.png" });
 });

@@ -37,6 +37,7 @@ import type {
   JournalChromeViewModel,
 } from "./shell-view-model";
 import { currentHomeContext } from "./journal-switcher";
+import { sectionHeading } from "./journal-heading";
 
 export type { FamilyTimelineSwitcherItem };
 
@@ -117,7 +118,11 @@ function JournalStage({
 }: JournalChromeProps) {
   const pendingRoute = usePendingJournalRoute();
   const pending = pendingRoute?.pending ?? null;
-  const chromeModel = pendingChromeModel(model, pending);
+  const heading = sectionHeading(section);
+  const chromeModel = pendingChromeModel(
+    heading ? { ...model, ...heading } : model,
+    pending,
+  );
   const current = switcher?.find((item) => item.current);
   const browsingCircle = Boolean(
     backToCirclesHref ||
