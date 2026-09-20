@@ -40,10 +40,10 @@ for (const theme of ["dark", "light"]) {
       .poll(async () => (await card.boundingBox())!.y)
       .toBeLessThan(y);
     expect(await grid()).toEqual(before);
-      await card.evaluate((element) => {
-        scrollTo(0, element.getBoundingClientRect().bottom + scrollY - 200);
-      });
-      await page.screenshot({ path: `/tmp/our-days-grid-${theme}.png` });
+    await card.evaluate((element) => {
+      scrollTo(0, element.getBoundingClientRect().bottom + scrollY - 200);
+    });
+    await page.screenshot({ path: `/tmp/our-days-grid-${theme}.png` });
     // Fullscreen media and other overlays must retain their plain canvas.
     await page.evaluate(() =>
       document.documentElement.classList.add("overlay-open"),
