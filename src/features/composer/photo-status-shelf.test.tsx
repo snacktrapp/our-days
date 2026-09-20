@@ -131,12 +131,33 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   clearOptimisticMediaUploads();
   clearOptimisticMomentSaves();
   vi.unstubAllGlobals();
 });
 
 describe("PhotoStatusShelf", () => {
+  it("does not poll an idle journal, but checks again when it resumes", async () => {
+    vi.useFakeTimers();
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    const view = render(<PhotoStatusShelf circleId={circleId} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const initial = mocks.rpc.mock.calls.length;
+    expect(initial).toBeGreaterThan(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mocks.rpc).toHaveBeenCalledTimes(initial);
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mocks.rpc.mock.calls.length).toBeGreaterThan(initial);
+    view.unmount();
+  });
   it("shows a compact chip while a written save continues", async () => {
     mocks.rpc.mockResolvedValue({ data: [], error: null });
     startOptimisticMomentSave({

@@ -61,7 +61,7 @@ export async function loadPeopleDirectory(
       ...memberships.map((membership) => membership.circleId),
     ]),
   ];
-  const supabase = await createOurDaysServerClient();
+  const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
   const [peopleResult, membershipsResult] = await Promise.all([
     supabase
       .from("people")

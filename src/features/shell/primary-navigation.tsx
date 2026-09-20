@@ -5,12 +5,18 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useComposerSession } from "@/features/composer/composer-session";
 import { sectionFromPathname } from "./journal-routes";
+import { JournalHomeLink } from "./journal-home-link";
+import { NavSymbol } from "./nav-symbol";
+import { usePendingJournalRoute } from "./journal-pending-route";
 import type { JournalSection } from "./shell-view-model";
 import { useHideBottomNavWhileComposing } from "./hide-bottom-nav-while-composing";
 import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
-type PrimarySection = Extract<JournalSection, "timeline" | "settings">;
+type PrimarySection = Extract<
+  JournalSection,
+  "timeline" | "circles" | "settings"
+>;
 
 function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   return (
@@ -22,48 +28,15 @@ function isUnmodifiedPrimaryClick(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 
-function NavIcon({ name }: { name: "family" | "add" | "account" }) {
-  if (name === "family") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 11.2v1.6" strokeWidth={2.15} />
-        <rect x="5.5" y="5" width="13" height="5.2" rx="1.6" />
-        <rect x="5.5" y="13.8" width="13" height="5.2" rx="1.6" />
-      </svg>
-    );
-  }
-  if (name === "add") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="8" r="3" />
-      <path d="M5.5 19c.55-3.7 2.7-5.6 6.5-5.6s5.95 1.9 6.5 5.6" />
-      <path d="M18.5 4.75 20 6.25l-1.5 1.5" />
-    </svg>
-  );
-}
-
-function NavSymbol({ name }: { name: "family" | "add" | "account" }) {
-  return (
-    <span className="nav-symbol" aria-hidden="true">
-      <NavIcon name={name} />
-    </span>
-  );
-}
-
 export function PrimaryNavigation({
   section,
-  settingsHref,
+  justMeHref,
 }: {
   section: JournalSection;
-  settingsHref?: string | null;
+  justMeHref?: string;
 }) {
   const pathname = usePathname() ?? "";
+  const pendingRoute = usePendingJournalRoute()?.pending;
   const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const session = useComposerSession();
@@ -74,9 +47,12 @@ export function PrimaryNavigation({
     section: PrimarySection;
   } | null>(null);
   const selectedSection =
-    pendingSelection?.fromPathname === pathname
+    (pendingRoute ? sectionFromPathname(pendingRoute.href) : null) ??
+    (pendingSelection?.fromPathname === pathname
       ? pendingSelection.section
-      : (sectionFromPathname(pathname) ?? section);
+      : section === "circles"
+        ? "circles"
+        : (sectionFromPathname(pathname) ?? section));
   useEffect(() => {
     const onNavigateSection = (event: Event) => {
       const href =
@@ -118,20 +94,28 @@ export function PrimaryNavigation({
       aria-hidden={hidden ? true : undefined}
       inert={hidden ? true : undefined}
     >
-      <Link
+      <JournalHomeLink
         className={`nav-item ${selectedSection === "timeline" ? "active" : ""}`}
         aria-current={selectedSection === "timeline" ? "page" : undefined}
-        href="/family"
-        onClick={selectImmediately("timeline")}
-        prefetch={false}
+        justMeHref={justMeHref}
+        onJournalNavigate={(href) => {
+          pinToVisualViewport();
+          setPendingSelection({ fromPathname: pathname, section: "timeline" });
+          window.dispatchEvent(
+            new CustomEvent("our-days:navigate-section", {
+              detail: { href },
+            }),
+          );
+        }}
       >
         <NavSymbol name="family" />
         <span>Journal</span>
-      </Link>
+      </JournalHomeLink>
       <button
         ref={addMomentRef}
         className="nav-item"
         type="button"
+        disabled={session?.canCreate === false}
         aria-expanded={session?.isOpen ?? false}
         onClick={() => {
           // Match Post-to to the journal you're looking at. Forcing Just me from
@@ -146,20 +130,16 @@ export function PrimaryNavigation({
         <NavSymbol name="add" />
         <span>Add</span>
       </button>
-      {settingsHref === null ? (
-        <span className="nav-item nav-item-unavailable" aria-hidden="true" />
-      ) : (
-        <Link
-          className={`nav-item ${selectedSection === "settings" ? "active" : ""}`}
-          aria-current={selectedSection === "settings" ? "page" : undefined}
-          href={settingsHref ?? "/settings/family"}
-          onClick={selectImmediately("settings")}
-          prefetch={false}
-        >
-          <NavSymbol name="account" />
-          <span>Account</span>
-        </Link>
-      )}
+      <Link
+        className={`nav-item ${selectedSection === "circles" ? "active" : ""}`}
+        aria-current={selectedSection === "circles" ? "page" : undefined}
+        href="/circles"
+        onClick={selectImmediately("circles")}
+        prefetch={false}
+      >
+        <NavSymbol name="circles" />
+        <span>Circles</span>
+      </Link>
     </nav>
   );
 }

@@ -40,13 +40,7 @@ function JournalRouteAutoRetry({ retry }: Readonly<{ retry: () => void }>) {
     retry();
   }, [retry]);
 
-  return (
-    <main className="app-shell">
-      <section className="phone-stage" aria-label="Family journal">
-        <RoutePendingSkeleton kind="timeline" />
-      </section>
-    </main>
-  );
+  return <RoutePendingSkeleton kind="timeline" />;
 }
 
 export function JournalSegmentError({

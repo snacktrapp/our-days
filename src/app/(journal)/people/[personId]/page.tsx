@@ -1,4 +1,5 @@
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 import { PrivateSoftNotFound } from "@/features/shell/private-soft-not-found";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
 import { getPersonalTimelineFixture } from "@/fixtures/design-preview/timelines.server";
@@ -28,14 +29,23 @@ export default async function PersonJournalPage({
   searchParams,
 }: Readonly<{
   params: Promise<{ personId: string }>;
-  searchParams: Promise<{ pages?: string; snapshot?: string }>;
+  searchParams: Promise<{
+    pages?: string;
+    snapshot?: string;
+    fromCircle?: string;
+  }>;
 }>) {
   const { personId } = await params;
+  const { pages, snapshot, fromCircle } = await searchParams;
+  const backToCirclesHref = fromCircle
+    ? `/circles#circle-${encodeURIComponent(fromCircle)}`
+    : undefined;
   const access = await requireJournalAccessUnlessRecoverable({ personId });
   if (!access) {
     const model = personJournalRefreshSoftFail(personId);
     return (
       <JournalChrome
+        backToCirclesHref={backToCirclesHref}
         model={model.chrome}
         section="timeline"
         switcher={model.switcher}
@@ -54,6 +64,7 @@ export default async function PersonJournalPage({
     if (!model) return <PrivateSoftNotFound />;
     return (
       <JournalChrome
+        backToCirclesHref={backToCirclesHref}
         model={model.chrome}
         section="timeline"
         switcher={model.switcher}
@@ -63,7 +74,6 @@ export default async function PersonJournalPage({
       </JournalChrome>
     );
   }
-  const { pages, snapshot } = await searchParams;
   const model = await loadPersonJournal(access, {
     personId,
     pages,
@@ -72,6 +82,7 @@ export default async function PersonJournalPage({
   if (!model) return <PrivateSoftNotFound />;
   return (
     <JournalChrome
+      backToCirclesHref={backToCirclesHref}
       model={model.chrome}
       section="timeline"
       createMomentAction={createFamilyMomentAction}
@@ -79,7 +90,27 @@ export default async function PersonJournalPage({
       onSelectGroup={selectActiveGroupAction}
     >
       <TimelineFeed
-        model={model}
+        model={{
+          ...model,
+          pagination: model.pagination
+            ? {
+                ...model.pagination,
+                nextHref: withCircleBrowseContext(
+                  model.pagination.nextHref,
+                  fromCircle,
+                ),
+              }
+            : undefined,
+          paginationError: model.paginationError
+            ? {
+                ...model.paginationError,
+                retryHref: withCircleBrowseContext(
+                  model.paginationError.retryHref,
+                  fromCircle,
+                ),
+              }
+            : undefined,
+        }}
         connectedActions={{
           update: updateFamilyMomentAction,
           trash: trashWrittenMomentAction,

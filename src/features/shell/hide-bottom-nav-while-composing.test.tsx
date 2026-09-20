@@ -22,6 +22,7 @@ const composerSession = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => navigation.pathname,
 }));
 

@@ -1,9 +1,8 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilyTitleSwitcher } from "./family-title-switcher";
 import type { JournalChromeViewModel } from "./shell-view-model";
-import { sheetDismissThresholdPx } from "./use-sheet-dismiss";
 
 const navigation = vi.hoisted(() => ({
   push: vi.fn(),
@@ -40,267 +39,107 @@ async function openSwitcher() {
 describe("FamilyTitleSwitcher", () => {
   afterEach(() => {
     navigation.push.mockClear();
+    sessionStorage.clear();
   });
 
-  it("opens a bottom sheet with a pull handle and three sections", async () => {
+  it("opens a compact inline selector with only two choices", async () => {
     await openSwitcher();
-    const dialog = screen.getByRole("dialog", { name: "Journal" });
-    expect(dialog).toHaveClass("composer-dialog");
-    expect(dialog.querySelector(".activity-sheet")).toHaveClass(
-      "composer-sheet",
-    );
-    expect(dialog.querySelector(".sheet-handle")).not.toBeNull();
-    expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Circles" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Person" })).toBeVisible();
-    expect(
-      screen.getByRole("navigation", { name: "Choose a family timeline" }),
-    ).toBeVisible();
-  });
-
-  it("dismisses the journal sheet with Escape and a reverse sheet motion", async () => {
-    await openSwitcher();
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "Journal" }), {
-      key: "Escape",
+    const menu = screen.getByRole("navigation", {
+      name: "Choose a family timeline",
     });
-    const sheet = document.querySelector(".activity-sheet");
-    expect(sheet).toHaveClass("composer-sheet");
-    expect(sheet).toHaveClass("is-closing");
-    expect(screen.getByRole("dialog", { hidden: true })).toHaveAttribute(
-      "aria-hidden",
-      "true",
-    );
-  });
-
-  it("dismisses the journal sheet instantly when motion is reduced", async () => {
-    const media = vi.mocked(window.matchMedia);
-    media.mockImplementation((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
-    try {
-      const user = userEvent.setup();
-      await openSwitcher();
-      await user.keyboard("{Escape}");
-      expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
-      expect(document.querySelector(".activity-sheet")).toBeNull();
-    } finally {
-      media.mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }));
-    }
-  });
-
-  it("highlights a journal row on press and chooses it on click", async () => {
-    await openSwitcher();
-    const molly = screen.getByRole("link", { name: "Molly" });
-    fireEvent.pointerDown(molly, { button: 0 });
-    expect(molly).toHaveClass("active");
-    expect(navigation.push).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
-    fireEvent.click(molly);
-    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
-    expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
-    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Person",
-    );
-  });
-
-  it("does not let choosing a journal click through to the timeline", async () => {
-    const openPhoto = vi.fn();
-    render(
-      <div>
-        <button type="button" onClick={openPhoto}>
-          Open photo
-        </button>
-        <FamilyTitleSwitcher model={model} switcher={switcher} />
-      </div>,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    const molly = screen.getByRole("link", { name: "Molly" });
-    fireEvent.pointerDown(molly, { button: 0 });
-    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
-    fireEvent.pointerUp(molly, { button: 0 });
-    fireEvent.click(molly);
-    expect(navigation.push).toHaveBeenCalledWith("/people/molly");
-    expect(openPhoto).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Open photo" }));
-    expect(openPhoto).toHaveBeenCalledTimes(1);
-  });
-
-  it("moves the current highlight to the pressed journal immediately", async () => {
-    await openSwitcher();
-    const all = screen.getByRole("link", { name: "All circles" });
-    const molly = screen.getByRole("link", { name: "Molly" });
-    expect(all).toHaveClass("active");
-    expect(all).toHaveAttribute("aria-current", "page");
-
-    fireEvent.pointerDown(molly, { button: 0 });
-
-    expect(molly).toHaveClass("active");
-    expect(molly).toHaveAttribute("aria-current", "page");
-    expect(all).not.toHaveClass("active");
-    expect(all).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
-  });
-
-  it("keeps You first, All with circles, and a check on the selected row only", async () => {
-    await openSwitcher();
-    const links = [
-      ...document.querySelectorAll(".title-switcher-sheet a"),
-    ] as HTMLAnchorElement[];
-    expect(links.map((link) => link.textContent?.trim())).toEqual([
-      "Brian",
-      "All circles",
-      "Trapp Family",
-      "Molly",
-    ]);
-    expect(links[0].querySelector(".title-switcher-check")).toBeNull();
-    expect(links[1].querySelector(".title-switcher-check")).not.toBeNull();
-    expect(links[2].querySelector(".title-switcher-check")).toBeNull();
+    expect(menu.parentElement).toHaveClass("title-switcher");
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(
-      document.querySelector(".title-lockup .title-switcher-type-pill"),
-    ).toBeNull();
-    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Circles",
+      Array.from(menu.querySelectorAll("a")).map((a) => a.textContent),
+    ).toEqual(["Just me", "All circles"]);
+    expect(screen.getByRole("link", { name: "All circles" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
+    expect(document.querySelector(".sheet-handle")).toBeNull();
   });
 
-  it("syncs the header to All when the server current href becomes /family", async () => {
-    const circleCurrent = switcher.map((item) =>
-      item.kind === "group"
-        ? { ...item, current: true }
-        : { ...item, current: false },
-    );
-    const allCurrent = switcher.map((item) =>
-      item.kind === "all"
-        ? { ...item, current: true }
-        : { ...item, current: false },
-    );
-    const { rerender } = render(
-      <FamilyTitleSwitcher
-        model={{ ...model, title: "Trapp Family", eyebrow: "Circles" }}
-        switcher={circleCurrent}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Trapp Family" })).toBeVisible();
-    rerender(
-      <FamilyTitleSwitcher
-        model={{ ...model, title: "All circles", eyebrow: "Circles" }}
-        switcher={allCurrent}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
-    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Circles",
-    );
+  it("closes on a second tap", async () => {
+    await openSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 
-  it("closes the sheet when the family current href changes", async () => {
+  it("closes on an outside tap", async () => {
+    await openSwitcher();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+
+  it("closes with Escape and returns focus to the header", async () => {
+    await openSwitcher();
+    const choice = screen.getByRole("link", { name: "Just me" });
+    choice.focus();
+    fireEvent.keyDown(choice, { key: "Escape" });
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Choose a journal" }),
+    ).toHaveFocus();
+  });
+
+  it("allows keyboard navigation without trapping focus", async () => {
+    const user = userEvent.setup();
+    await openSwitcher();
+    render(<button type="button">Outside selector</button>);
+    const trigger = screen.getByRole("button", { name: "Choose a journal" });
+    trigger.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("link", { name: "Just me" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("link", { name: "All circles" })).toHaveFocus();
+    await user.tab();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Outside selector" }),
+    ).toHaveFocus();
+  });
+
+  it("chooses a feed and remembers it without opening a modal", async () => {
+    await openSwitcher();
+    fireEvent.click(screen.getByRole("link", { name: "Just me" }));
+    expect(navigation.push).toHaveBeenCalledWith("/people/brian");
+    expect(sessionStorage.getItem("our-days:primary-feed")).toBe("you");
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+  });
+
+  it("keeps a touched choice mounted when the trigger blurs before its click", async () => {
+    await openSwitcher();
+    const trigger = screen.getByRole("button", { name: "Choose a journal" });
+    trigger.focus();
+    const choice = screen.getByRole("link", { name: "Just me" });
+    fireEvent.pointerDown(choice, { pointerType: "touch", pointerId: 1 });
+    // iOS can blur the trigger without focusing the tapped anchor.
+    fireEvent.blur(trigger, { relatedTarget: null });
+    expect(choice).toBeInTheDocument();
+    fireEvent.pointerUp(choice, { pointerType: "touch", pointerId: 1 });
+    fireEvent.click(choice);
+    expect(navigation.push).toHaveBeenCalledExactlyOnceWith("/people/brian");
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+
+  it("closes when the server destination changes", async () => {
     const { rerender } = render(
       <FamilyTitleSwitcher model={model} switcher={switcher} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
-    const circleCurrent = switcher.map((item) =>
-      item.kind === "group"
-        ? { ...item, current: true }
-        : { ...item, current: false },
-    );
-    rerender(<FamilyTitleSwitcher model={model} switcher={circleCurrent} />);
-    expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
-  });
-
-  it("treats a Journal bottom-nav to /family as All", async () => {
-    const circleCurrent = switcher.map((item) =>
-      item.kind === "group"
-        ? { ...item, current: true }
-        : { ...item, current: false },
-    );
-    render(
+    fireEvent.click(screen.getByRole("button"));
+    rerender(
       <FamilyTitleSwitcher
-        model={{ ...model, title: "Trapp Family", eyebrow: "Circles" }}
-        switcher={circleCurrent}
+        model={model}
+        switcher={switcher.map((item) => ({
+          ...item,
+          current: item.kind === "you",
+        }))}
       />,
     );
-    expect(screen.getByRole("heading", { name: "Trapp Family" })).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    expect(screen.getByRole("dialog", { name: "Journal" })).toBeVisible();
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent("our-days:navigate-section", {
-          detail: { href: "/family" },
-        }),
-      );
-    });
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    rerender(<FamilyTitleSwitcher model={model} switcher={switcher} />);
     expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
-    expect(document.querySelector(".title-lockup .eyebrow")).toHaveTextContent(
-      "Circles",
-    );
-    expect(screen.queryByRole("dialog", { name: "Journal" })).toBeNull();
-  });
-
-  it("shows a people-count line on circle rows only", async () => {
-    const counted = switcher.map((item) =>
-      item.kind === "group" ? { ...item, memberCount: 3 } : item,
-    );
-    render(<FamilyTitleSwitcher model={model} switcher={counted} />);
-    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    const family = screen.getByRole("link", { name: /Trapp Family/u });
-    expect(family.querySelector("small")).toHaveTextContent("3 people");
-    expect(family.querySelector(".title-switcher-member-count")).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "All circles" }).querySelector("small"),
-    ).toBeNull();
-    expect(screen.queryByText("Brian, Molly")).toBeNull();
-  });
-
-  it("is a feed filter only and does not offer create or admin actions", async () => {
-    await openSwitcher();
-    expect(
-      screen.queryByRole("button", { name: "Create group" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Create circle" }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Group name")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Name the ring")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Create" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("dismisses when the sheet is dragged down from the handle", async () => {
-    await openSwitcher();
-    const handle = document.querySelector(".sheet-handle");
-    const sheet = document.querySelector(".activity-sheet") as HTMLElement;
-    expect(handle).not.toBeNull();
-    fireEvent.pointerDown(handle!, { pointerId: 1, clientX: 40, clientY: 20 });
-    fireEvent.pointerMove(sheet, {
-      pointerId: 1,
-      clientX: 40,
-      clientY: 20 + sheetDismissThresholdPx,
-    });
-    fireEvent.pointerUp(sheet, {
-      pointerId: 1,
-      clientX: 40,
-      clientY: 20 + sheetDismissThresholdPx,
-    });
-    expect(sheet).toHaveClass("is-closing");
   });
 });

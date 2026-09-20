@@ -28,10 +28,11 @@ describe("journal open paint", () => {
     expect(journalLoading).toContain("OpeningJournalShell");
   });
 
-  it("paints All-circles chrome without a first-page moment payload", () => {
-    expect(openingShell).toContain("allHomeLabel");
-    expect(openingShell).toContain('aria-label="Primary navigation"');
-    expect(openingShell).toContain("route-pending-skeleton");
+  it("keeps loading content inside the persistent chrome without a first-page payload", () => {
+    expect(journalLayout).toContain("<PersistentJournalShell>");
+    expect(openingShell).not.toContain("allHomeLabel");
+    expect(openingShell).not.toContain("Primary navigation");
+    expect(openingShell).toContain('<RoutePendingSkeleton kind="timeline" />');
     expect(openingShell).not.toContain("JournalChrome");
     expect(openingShell).not.toContain("PhotoStatusShelf");
     expect(openingShell).not.toContain("loadConnectedTimeline");

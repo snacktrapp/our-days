@@ -473,7 +473,10 @@ describe("smash harden matrix", () => {
       expect(familyPage).toContain("OpeningJournalShell");
       expect(familyPage).toContain("loadFamilyHomeChrome");
       expect(familyPage).toContain("loadFamilyHomeOpeningTimeline");
-      expect(openingShell).toContain("Opening this journal");
+      expect(openingShell).toContain(
+        '<RoutePendingSkeleton kind="timeline" />',
+      );
+      expect(openingShell).not.toContain('className="time-rail"');
     });
   });
 

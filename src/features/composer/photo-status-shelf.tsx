@@ -18,7 +18,6 @@ import {
   optimisticMediaUploadSnapshot,
   queuedOptimisticMediaUploadCount,
   removeOptimisticMediaUpload,
-  removeOptimisticMediaUploadByIntake,
   retryOptimisticMediaUpload,
   subscribeToOptimisticMediaUploads,
   updateOptimisticMediaUpload,
@@ -276,6 +275,7 @@ function optimisticUploadChipProgress(
 }
 
 function optimisticMomentChipLabel(save: OptimisticMomentSave) {
+  if (save.stage.state === "published") return "Saved";
   if (save.stage.state === "failed") return "Couldn’t add";
   if (save.mode === "bible-verse") return "Adding verse…";
   if (save.mode === "thought") return "Adding note…";
@@ -468,19 +468,25 @@ function uploadChip(
     label: optimisticUploadChipLabel(upload),
     detail: waitingDetail,
     progress: optimisticUploadChipProgress(upload),
-    primaryAction: failed
-      ? upload.retryable
+    primaryAction:
+      upload.stage.state === "published"
         ? {
-            label: "Retry",
-            onClick: () => {
-              retryOptimisticMediaUpload(upload.id);
-            },
-          }
-        : {
             label: "Dismiss",
-            onClick: () => onDismissFailed(upload),
+            onClick: () => removeOptimisticMediaUpload(upload.id),
           }
-      : null,
+        : failed
+          ? upload.retryable
+            ? {
+                label: "Retry",
+                onClick: () => {
+                  retryOptimisticMediaUpload(upload.id);
+                },
+              }
+            : {
+                label: "Dismiss",
+                onClick: () => onDismissFailed(upload),
+              }
+          : null,
     secondaryAction:
       failed && upload.retryable
         ? {
@@ -494,7 +500,7 @@ function uploadChip(
 function momentChip(save: OptimisticMomentSave): PhotoStatusChipViewProps {
   const failed = save.stage.state === "failed";
   return {
-    busy: !failed,
+    busy: save.stage.state === "saving",
     label: optimisticMomentChipLabel(save),
     primaryAction: failed
       ? {
@@ -502,12 +508,13 @@ function momentChip(save: OptimisticMomentSave): PhotoStatusChipViewProps {
           onClick: () => retryOptimisticMomentSave(save.id),
         }
       : null,
-    secondaryAction: failed
-      ? {
-          label: "Dismiss",
-          onClick: () => removeOptimisticMomentSave(save.id),
-        }
-      : null,
+    secondaryAction:
+      failed || save.stage.state === "published"
+        ? {
+            label: "Dismiss",
+            onClick: () => removeOptimisticMomentSave(save.id),
+          }
+        : null,
   };
 }
 
@@ -553,6 +560,9 @@ function selectVisibleChip({
 
   const saving = saves.find((save) => save.stage.state === "saving");
   if (saving) return momentChip(saving);
+
+  const saved = saves.find((save) => save.stage.state === "published");
+  if (saved) return momentChip(saved);
 
   const published = uploads.find(
     (upload) => upload.stage.state === "published",
@@ -701,7 +711,13 @@ export function PhotoStatusShelf({
                 firstPublishedMediaRefresh(item.id)
               ) {
                 publishedRef.current.add(item.id);
-                removeOptimisticMediaUploadByIntake(item.id);
+                const upload = optimisticMediaUploadSnapshot().find(
+                  (upload) => upload.intakeId === item.id,
+                );
+                if (upload && upload.completedFiles >= upload.totalFiles)
+                  updateOptimisticMediaUpload(upload.id, {
+                    stage: { state: "published" },
+                  });
                 shouldRefresh = true;
               }
             } else if (status === "needs_attention" || status === "cancelled") {
@@ -745,7 +761,10 @@ export function PhotoStatusShelf({
             if (!status || !upload.intakeId) continue;
             resolvedStatuses.set(upload.intakeId, status);
             if (status === "published") {
-              removeOptimisticMediaUpload(upload.id);
+              if (upload.completedFiles >= upload.totalFiles)
+                updateOptimisticMediaUpload(upload.id, {
+                  stage: { state: "published" },
+                });
               if (firstPublishedMediaRefresh(upload.intakeId)) {
                 publishedRef.current.add(upload.intakeId);
                 shouldRefresh = true;
@@ -871,7 +890,13 @@ export function PhotoStatusShelf({
                 next.add(row.intake_id);
                 return next;
               });
-              removeOptimisticMediaUploadByIntake(row.intake_id);
+              const upload = optimisticMediaUploadSnapshot().find(
+                (upload) => upload.intakeId === row.intake_id,
+              );
+              if (upload && upload.completedFiles >= upload.totalFiles)
+                updateOptimisticMediaUpload(upload.id, {
+                  stage: { state: "published" },
+                });
               shouldRefresh = true;
               if (
                 await retirePhotoIntake({
@@ -908,7 +933,6 @@ export function PhotoStatusShelf({
     const checkWhenVisible = () => {
       if (!document.hidden) void checkStatuses(true);
     };
-    const interval = window.setInterval(checkWhenVisible, 10_000);
     const clear = () => {
       runRef.current += 1;
       inFlightRef.current = null;
@@ -924,7 +948,6 @@ export function PhotoStatusShelf({
     window.addEventListener("online", checkWhenVisible);
     document.addEventListener("visibilitychange", checkWhenVisible);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("our-days:clear-private-state", clear);
       window.removeEventListener("online", checkWhenVisible);
       document.removeEventListener("visibilitychange", checkWhenVisible);
@@ -932,6 +955,23 @@ export function PhotoStatusShelf({
       inFlightRef.current = null;
     };
   }, [checkStatuses]);
+
+  const hasActiveWork =
+    items.some(
+      (item) => item.state === "pending" || item.state === "processing",
+    ) ||
+    optimisticUploads.some(
+      (upload) =>
+        activeUploadStates.has(upload.stage.state) ||
+        upload.stage.state === "processing",
+    );
+  useEffect(() => {
+    if (!hasActiveWork) return;
+    const interval = window.setInterval(() => {
+      if (!document.hidden) void checkStatuses(true);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [checkStatuses, hasActiveWork]);
 
   useEffect(() => {
     for (const upload of optimisticUploads) {
@@ -963,16 +1003,11 @@ export function PhotoStatusShelf({
   }, [checkStatuses, publishedUploadKey]);
 
   useEffect(() => {
-    const timers: number[] = [];
     for (const upload of optimisticUploads) {
       if (upload.stage.state !== "published") continue;
       const refreshKey = upload.intakeId ?? upload.momentId ?? upload.id;
       if (firstPublishedMediaRefresh(refreshKey)) router.refresh();
-      timers.push(
-        window.setTimeout(() => removeOptimisticMediaUpload(upload.id), 1_200),
-      );
     }
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [optimisticUploads, router]);
 
   const hideIntake = (intakeId: string) => {

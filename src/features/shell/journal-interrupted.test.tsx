@@ -138,7 +138,7 @@ describe("JournalInterrupted", () => {
     expect(
       screen.queryByText("Something interrupted the story"),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Family journal")).toBeVisible();
+    expect(screen.getByLabelText("Opening this journal")).toBeVisible();
     expect(retry).toHaveBeenCalledOnce();
   });
 

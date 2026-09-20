@@ -67,26 +67,21 @@ describe("PeoplePanel", () => {
   it("lists each circle with its members and the Account invite path", () => {
     render(<PeoplePanel model={model} />);
 
-    expect(screen.getByRole("heading", { name: "All our days" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Cousins" })).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Open All our days circle feed" }),
+    ).toHaveAttribute("href", "/family?circle=family");
+    expect(
+      screen.getByRole("link", { name: "Open Cousins circle feed" }),
+    ).toHaveAttribute("href", "/family?circle=cousins");
     expect(screen.getByText("2 people")).toBeVisible();
     expect(screen.getByText("1 person")).toBeVisible();
     expect(screen.getByRole("link", { name: /Molly/u })).toHaveAttribute(
       "href",
-      "/people/molly",
+      "/people/molly?fromCircle=family",
     );
     expect(screen.queryByText("TARS")).toBeNull();
-    const invites = screen.getAllByRole("link", {
-      name: "Invite into this circle",
-    });
-    expect(invites).toHaveLength(2);
-    expect(invites[0]).toHaveAttribute(
-      "href",
-      "/settings/family?inviteCircle=family#invite",
-    );
-    expect(invites[1]).toHaveAttribute(
-      "href",
-      "/settings/family?inviteCircle=cousins#invite",
-    );
+    expect(
+      screen.queryByRole("link", { name: "Invite into this circle" }),
+    ).toBeNull();
   });
 });

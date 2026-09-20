@@ -4,7 +4,27 @@ Dated **2026-09-18**. Resume document for any agent without chat history.
 
 This is a state checkpoint, not a product spec. Do not treat it as permission to change app source, reopen closed palette PRs, or unpark notifications.
 
-Verified against GitHub on 2026-09-18. `main` tip is `5a2323e` — *Keep timeline photos and videos inline (#82)*.
+## Current navigation work — 2026-09-18
+
+### Legacy cleanup follow-up — 2026-09-20 (preview only)
+
+- `(journal)/layout.tsx` owns `PersistentJournalShell`. Page-level `JournalChrome` registers metadata; loading/error content must not render another header/nav. Do not move chrome back into route loading fallbacks.
+- Keep the pending destination until page registration commits, not merely until `usePathname` changes. A URL can update before server content arrives. Browser Back cancels pending selection.
+- Written/media success remains dismissible until `FeedSaveAcknowledgment` sees the entry (and complete album count). A refresh failure must never retry an already successful write. Streamed remainder entries participate in acknowledgment too.
+- Completed private images reuse a bounded, one-minute in-memory blob cache (24 entries / 16 MB), cleared on private-state reset. Requests remain credentialed/no-store; nothing is persisted to disk or browser storage.
+- Upload status checks run initially, on resume/online, and every 10 seconds only while work is active. No idle polling interval.
+- Removed obsolete bottom-sheet selector CSS. No palette, schema, dependency, or production changes.
+- Regression coverage includes actual DOM identity/title history through delayed navigation, six-photo remount request counts, idle polling, save acknowledgment, cache expiry/limits/reset, and failed refresh after a successful write. Local browser tests are not installed-iPhone PWA certification.
+
+The current branch, `codex/journal-circles-navigation`, starts at `95dd8c8` (carousel loading, #87), after the reliability work in #86. Brian approved implementing the IA below. This branch is for preview review; production promotion still requires approval.
+
+- Settings replaces the duplicate header Add. Bottom navigation is Journal · Add · Circles.
+- The primary selector contains only Just me / All circles. Circles lists existing circles and their people using the existing membership-filtered loader.
+- Circle/person drill-ins have named headers and Back to Circles. Pagination preserves that context. They do not change the remembered primary Journal mode.
+- Mode preference is tab-scoped; no person identity or journal data is stored. Loaded and temporary loading shells share JournalHomeLink. `/journal?view=you` resolves the signed-in identity if a temporary shell has no person ID yet.
+- No migrations, new dependencies, palette changes, or notification changes. Existing posting identity and audience defaults remain intact.
+
+The historical checkpoint below was verified at `5a2323e` — *Keep timeline photos and videos inline (#82)* — and predates #86/#87.
 
 ---
 

@@ -46,7 +46,9 @@ async function pullFeed(
 }
 
 async function waitForFamilyFeed(page: Page) {
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".timeline-pull-shell")).toHaveAttribute(
     "data-pull-state",
     "idle",

@@ -182,7 +182,7 @@ afterEach(() => {
 });
 
 describe("PhotoCardPager", () => {
-  it("downloads only first + neighbors, waits for private bytes, and never refetches on return", async () => {
+  it("starts the whole nearby album before the cover finishes and never refetches on return", async () => {
     const pending = new Map<string, (value: unknown) => void>();
     const fetchMock = vi.fn(
       (src: string) => new Promise((resolve) => pending.set(src, resolve)),
@@ -222,12 +222,11 @@ describe("PhotoCardPager", () => {
         fireEvent.load(img);
       }
     };
-    expect(fetchMock.mock.calls.map(([src]) => src)).toEqual(["/api/photo/0"]);
-    await resolvePhoto(0);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
     expect(new Set(fetchMock.mock.calls.map(([src]) => src))).toEqual(
-      new Set(["/api/photo/0", "/api/photo/1", "/api/photo/5"]),
+      new Set(Array.from({ length: 6 }, (_, i) => `/api/photo/${i}`)),
     );
+    await resolvePhoto(0);
     const original = document.querySelector('[data-photo-index="0"] img');
 
     const pager = document.querySelector(".photo-card-pager")!;
@@ -237,13 +236,12 @@ describe("PhotoCardPager", () => {
     await resolvePhoto(1);
     await waitFor(() => expect(track()).toHaveClass("is-sliding"));
     settleSlide();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe("/api/photo/2");
+    expect(fetchMock).toHaveBeenCalledTimes(6);
 
     swipeAlbum(pager, { fromX: 120, toX: 180 });
     settleSlide();
     expect(screen.getByRole("img", { name: "Porch 1" })).toBe(original);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(revoke).not.toHaveBeenCalled();
 
     // Wrapping to a failed neighbor exposes its retry control rather than
@@ -272,7 +270,24 @@ describe("PhotoCardPager", () => {
     expect(track()).toBeNull();
   });
 
-  it("loads the first image before its neighbors and retains visited images", () => {
+  it("does not mount a distant album until it approaches the viewport, then retains its images", () => {
+    let notify: IntersectionObserverCallback;
+    const disconnect = vi.fn();
+    const options = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(
+          callback: IntersectionObserverCallback,
+          init: IntersectionObserverInit,
+        ) {
+          notify = callback;
+          options(init);
+        }
+        observe = vi.fn();
+        disconnect = disconnect;
+      },
+    );
     renderPager(porchAlbum(4));
 
     expect(screen.getByRole("img", { name: "Porch 1" })).toBeVisible();
@@ -293,9 +308,23 @@ describe("PhotoCardPager", () => {
       screen.queryByRole("button", { name: "Previous photo" }),
     ).not.toBeInTheDocument();
 
+    expect(options).toHaveBeenCalledWith({ rootMargin: "800px 0px" });
+    act(() =>
+      notify(
+        [{ isIntersecting: false } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+    expect(document.querySelectorAll(".photo-card-pager img")).toHaveLength(1);
+    act(() =>
+      notify(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      ),
+    );
+    expect(document.querySelectorAll(".photo-card-pager img")).toHaveLength(4);
+    expect(disconnect).toHaveBeenCalled();
     markPagerImagesReady();
-    expect(document.querySelectorAll(".photo-card-pager img")).toHaveLength(3);
-    expect(document.querySelector('[data-photo-index="2"] img')).toBeNull();
     const firstImage = document.querySelector('[data-photo-index="0"] img');
     const pager = document.querySelector(".photo-card-pager")!;
     swipeAlbum(pager);

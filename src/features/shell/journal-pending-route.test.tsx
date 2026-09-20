@@ -7,6 +7,7 @@ import {
   usePendingJournalRoute,
 } from "./journal-pending-route";
 import type { JournalChromeViewModel } from "./shell-view-model";
+import { journalHeadings, sectionHeading } from "./journal-heading";
 
 const route = vi.hoisted(() => ({ pathname: "/family" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
@@ -47,13 +48,31 @@ const model = {
 } as JournalChromeViewModel;
 
 describe("route pending skeleton", () => {
-  it("paints a quiet timeline rail instead of holding the last journal", () => {
+  it.each([
+    ["/circles", "people", "circles"],
+    ["/settings/family", "settings", "settings"],
+    ["/memories", "memories", "memories"],
+  ] as const)(
+    "uses the same eyebrow/title pair while opening and after loading %s",
+    (href, kind, section) => {
+      for (const previous of Object.values(journalHeadings)) {
+        const next = pendingChromeModel(
+          { ...model, ...previous },
+          { href, kind },
+        );
+        expect({ title: next.title, eyebrow: next.eyebrow }).toEqual(
+          sectionHeading(section),
+        );
+      }
+    },
+  );
+  it("leaves only the background grid while a journal loads", () => {
     const { container } = render(<RoutePendingSkeleton kind="timeline" />);
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),
-    ).toHaveClass("timeline", "route-pending-skeleton");
-    expect(container.querySelector(".time-rail")).not.toBeNull();
-    expect(container.querySelectorAll(".route-pending-card")).toHaveLength(3);
+    ).toHaveClass("route-pending-field", "route-pending-skeleton");
+    expect(container.querySelector(".time-rail")).toBeNull();
+    expect(container.querySelectorAll(".route-pending-card")).toHaveLength(0);
     expect(container.querySelector(".timeline-empty-state")).toBeNull();
   });
 

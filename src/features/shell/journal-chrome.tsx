@@ -1,12 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  JournalShellContext,
+  useJournalShell,
+  type JournalShellRegistration,
+} from "./journal-shell-context";
+import { fallbackJournalChrome } from "@/data/journal-chrome-fallback";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
 import { PrimaryNavigation } from "./primary-navigation";
-import { TimelineHeaderComposer } from "./timeline-header-composer";
+import { SettingsLink } from "./settings-link";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationCenter } from "./notification-center";
 import {
@@ -25,10 +37,11 @@ import type {
   JournalChromeViewModel,
 } from "./shell-view-model";
 import { currentHomeContext } from "./journal-switcher";
+import { sectionHeading } from "./journal-heading";
 
 export type { FamilyTimelineSwitcherItem };
 
-type JournalChromeProps = Readonly<{
+export type JournalChromeProps = Readonly<{
   model: JournalChromeViewModel;
   section: JournalSection;
   children: ReactNode;
@@ -38,23 +51,24 @@ type JournalChromeProps = Readonly<{
   switcher?: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
   preserveChrome?: boolean;
+  backToCirclesHref?: string;
 }>;
 
 function PrimaryJournalHeader({
   model,
   activity,
-  createMomentAction,
   switcher,
   onSelectGroup,
+  browsingCircle,
 }: Readonly<{
   model: JournalChromeViewModel;
   activity?: ReactNode;
-  createMomentAction?: SaveFamilyMomentAction;
+  browsingCircle?: boolean;
   switcher?: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const title =
-    switcher && switcher.length > 0 ? (
+    !browsingCircle && switcher && switcher.length > 0 ? (
       <FamilyTitleSwitcher
         model={model}
         switcher={switcher}
@@ -66,11 +80,7 @@ function PrimaryJournalHeader({
 
   return (
     <header className="topbar">
-      <TimelineHeaderComposer
-        composer={model.composer}
-        createMomentAction={createMomentAction}
-        homeContext={currentHomeContext(switcher)}
-      />
+      <SettingsLink href={model.settingsHref} />
       {title}
       <div className="topbar-actions">
         {activity ?? <NotificationCenter items={model.notifications} />}
@@ -102,13 +112,28 @@ function JournalStage({
   section,
   children,
   activity,
-  createMomentAction,
   switcher,
   onSelectGroup,
+  backToCirclesHref,
 }: JournalChromeProps) {
   const pendingRoute = usePendingJournalRoute();
   const pending = pendingRoute?.pending ?? null;
-  const chromeModel = pendingChromeModel(model, pending);
+  const heading = sectionHeading(section);
+  const chromeModel = pendingChromeModel(
+    heading ? { ...model, ...heading } : model,
+    pending,
+  );
+  const current = switcher?.find((item) => item.current);
+  const browsingCircle = Boolean(
+    backToCirclesHref ||
+    current?.kind === "group" ||
+    current?.kind === "person",
+  );
+  const backHref =
+    backToCirclesHref ??
+    (current?.circleId
+      ? `/circles#circle-${encodeURIComponent(current.circleId)}`
+      : "/circles");
   const header =
     section === "trash" ? (
       <TrashHeader model={chromeModel} />
@@ -116,8 +141,8 @@ function JournalStage({
       <PrimaryJournalHeader
         model={chromeModel}
         activity={activity}
-        createMomentAction={createMomentAction}
-        switcher={switcher}
+        switcher={pending && pending.kind !== "timeline" ? undefined : switcher}
+        browsingCircle={browsingCircle}
         onSelectGroup={onSelectGroup}
       />
     );
@@ -138,15 +163,35 @@ function JournalStage({
             aria-live="assertive"
             aria-atomic="true"
           />
-          {pending ? <RoutePendingSkeleton kind={pending.kind} /> : children}
+          {pending ? <RoutePendingSkeleton kind={pending.kind} /> : null}
+          <div className="journal-route-content" hidden={Boolean(pending)}>
+            {browsingCircle && !pending ? (
+              <Link
+                className="circle-back-link"
+                href={backHref}
+                prefetch={false}
+              >
+                ← Back to Circles
+              </Link>
+            ) : null}
+            {children}
+          </div>
         </section>
       </main>
-      <PrimaryNavigation section={section} settingsHref={model.settingsHref} />
+      <PrimaryNavigation
+        section={browsingCircle ? "circles" : section}
+        justMeHref={
+          switcher?.find((item) => item.kind === "you")?.href ??
+          (model.composer.recorderPersonId
+            ? `/people/${model.composer.recorderPersonId}`
+            : undefined)
+        }
+      />
     </>
   );
 }
 
-export function JournalChrome({
+function StandaloneJournalChrome({
   model,
   section,
   children,
@@ -155,6 +200,7 @@ export function JournalChrome({
   switcher,
   onSelectGroup,
   preserveChrome = false,
+  backToCirclesHref,
 }: JournalChromeProps) {
   const [retained, setRetained] = useState({ model, switcher });
   if (
@@ -180,10 +226,97 @@ export function JournalChrome({
           createMomentAction={createMomentAction}
           switcher={shownSwitcher}
           onSelectGroup={onSelectGroup}
+          backToCirclesHref={backToCirclesHref}
         >
           {children}
         </JournalStage>
       </JournalPendingRouteProvider>
     </ComposerSessionProvider>
+  );
+}
+
+const openingModel = fallbackJournalChrome(
+  { circleId: "", personId: "" },
+  { title: "Our Days", eyebrow: "Journal" },
+);
+
+/** Lives above loading/error boundaries; route pages supply data, not new navs. */
+export function PersistentJournalShell({ children }: { children: ReactNode }) {
+  const [page, setPage] = useState<JournalShellRegistration>({
+    model: openingModel,
+    section: "timeline",
+  });
+  const register = useCallback((next: JournalShellRegistration) => {
+    setPage((previous) =>
+      next.preserveChrome && previous.model.composer.recorderPersonId
+        ? { ...next, model: previous.model, switcher: previous.switcher }
+        : next,
+    );
+  }, []);
+  useEffect(() => {
+    const clear = () => setPage({ model: openingModel, section: "timeline" });
+    window.addEventListener("our-days:clear-private-state", clear);
+    return () =>
+      window.removeEventListener("our-days:clear-private-state", clear);
+  }, []);
+  return (
+    <JournalShellContext.Provider value={register}>
+      <StandaloneJournalChrome {...page} preserveChrome={false}>
+        {children}
+      </StandaloneJournalChrome>
+    </JournalShellContext.Provider>
+  );
+}
+
+function RegisteredJournalPage({
+  register,
+  ...props
+}: JournalChromeProps & {
+  register: (page: JournalShellRegistration) => void;
+}) {
+  const finish = usePendingJournalRoute()?.finish;
+  const {
+    model,
+    section,
+    activity,
+    createMomentAction,
+    switcher,
+    onSelectGroup,
+    preserveChrome,
+    backToCirclesHref,
+  } = props;
+  useLayoutEffect(() => {
+    register({
+      model,
+      section,
+      activity,
+      createMomentAction,
+      switcher,
+      onSelectGroup,
+      preserveChrome,
+      backToCirclesHref,
+    });
+    finish?.();
+  }, [
+    register,
+    finish,
+    model,
+    section,
+    activity,
+    createMomentAction,
+    switcher,
+    onSelectGroup,
+    preserveChrome,
+    backToCirclesHref,
+  ]);
+  return props.children;
+}
+
+export function JournalChrome(props: JournalChromeProps) {
+  const register = useJournalShell();
+  return register ? (
+    <RegisteredJournalPage {...props} register={register} />
+  ) : (
+    <StandaloneJournalChrome {...props} />
   );
 }

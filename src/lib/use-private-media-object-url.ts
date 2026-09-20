@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  privateMediaGeneration,
+  readPrivateMedia,
+  rememberPrivateMedia,
+} from "./private-media-memory";
 
 function inlineMediaSrc(src: string | undefined) {
   if (!src) return null;
@@ -20,24 +25,28 @@ export function usePrivateMediaObjectUrl(
     if (!src || inline) return;
 
     const handle = { cancelled: false, created: null as string | null };
+    const generation = privateMediaGeneration();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 20000);
     void (async () => {
       try {
-        const response = await fetch(src, {
-          cache: "no-store",
-          credentials: "same-origin",
-          signal: controller.signal,
-          priority,
-        });
-        if (!response.ok) {
+        const cached = readPrivateMedia(src);
+        const response = cached
+          ? null
+          : await fetch(src, {
+              cache: "no-store",
+              credentials: "same-origin",
+              signal: controller.signal,
+              priority,
+            });
+        if (response && !response.ok) {
           if (!handle.cancelled) {
             setFailed(true);
             setLoadedSrc(src);
           }
           return;
         }
-        const blob = await response.blob();
+        const blob = cached ?? (await response!.blob());
         if (blob.size < 1) {
           if (!handle.cancelled) {
             setFailed(true);
@@ -45,6 +54,8 @@ export function usePrivateMediaObjectUrl(
           }
           return;
         }
+        if (handle.cancelled || generation !== privateMediaGeneration()) return;
+        if (!cached) rememberPrivateMedia(src, blob, generation);
         handle.created = URL.createObjectURL(blob);
         if (handle.cancelled) {
           URL.revokeObjectURL(handle.created);

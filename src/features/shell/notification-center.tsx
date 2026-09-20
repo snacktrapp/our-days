@@ -40,7 +40,11 @@ function subscribeToSeenNotifications(onStoreChange: () => void) {
 }
 
 function readSeenNotifications() {
-  return window.localStorage.getItem(storageKey) ?? "[]";
+  try {
+    return window.localStorage.getItem(storageKey) ?? "[]";
+  } catch {
+    return "[]";
+  }
 }
 
 export function NotificationCenter({

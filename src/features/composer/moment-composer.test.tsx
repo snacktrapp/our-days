@@ -1365,7 +1365,9 @@ describe("MomentComposer", () => {
     );
 
     retryOptimisticMomentSave(optimisticMomentSaveSnapshot()[0]!.id);
-    await waitFor(() => expect(optimisticMomentSaveSnapshot()).toEqual([]));
+    await waitFor(() =>
+      expect(optimisticMomentSaveSnapshot()[0]?.stage.state).toBe("published"),
+    );
     expect(save).toHaveBeenLastCalledWith(
       expect.objectContaining({
         body: "Kept draft",
@@ -1406,7 +1408,9 @@ describe("MomentComposer", () => {
     expect(navigation.replace).toHaveBeenCalledWith("/family");
 
     finishSave({ ok: true, message: "Saved" });
-    await waitFor(() => expect(optimisticMomentSaveSnapshot()).toEqual([]));
+    await waitFor(() =>
+      expect(optimisticMomentSaveSnapshot()[0]?.stage.state).toBe("published"),
+    );
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 

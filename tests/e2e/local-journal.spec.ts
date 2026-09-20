@@ -6,6 +6,7 @@ import sharp from "sharp";
 import {
   localAlexPersonId,
   localJordanPersonId,
+  localCircleId,
 } from "../../src/lib/local-journal/ids";
 
 async function jpegFixture(index = 0) {
@@ -27,6 +28,205 @@ async function jpegFixture(index = 0) {
   return path;
 }
 
+test("Circles browsing retains the personal Journal and posts as the signed-in author", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("button", { name: "Choose a journal" }).click();
+  await page.getByRole("link", { name: "Just me", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}$`));
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
+  await page
+    .locator(
+      `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,
+    )
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Jordan", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: /Written entry Text/ }).click();
+  await expect(page.getByRole("checkbox", { name: "Just me" })).toBeChecked();
+  await page
+    .getByRole("textbox", { name: "Entry", exact: true })
+    .fill("My own entry while browsing Jordan.");
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}`));
+  await expect(
+    page
+      .getByLabel("Chronological moments for Alex")
+      .getByText("My own entry while browsing Jordan."),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.locator(`a[href="/family?circle=${localCircleId}"]`).click();
+  await expect(
+    page.getByRole("button", { name: "Choose a journal" }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Account", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Journal", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+});
+
+test("header touch selection survives a focusless blur and opens the signed-in journal", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  const trigger = page.getByRole("button", { name: "Choose a journal" });
+  await trigger.tap();
+  await trigger.focus();
+  const justMe = page.getByRole("link", { name: "Just me", exact: true });
+  // Exercise Safari's blur-before-click ordering even on Chromium CI.
+  await justMe.evaluate((node) => {
+    node.addEventListener(
+      "pointerdown",
+      () => {
+        (document.activeElement as HTMLElement)?.blur();
+      },
+      { once: true },
+    );
+  });
+  await justMe.tap();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}$`));
+  await expect(page.getByLabel("Chronological moments for Alex")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+  await trigger.tap();
+  await page.getByRole("link", { name: "All circles", exact: true }).tap();
+  await expect(page).toHaveURL(/\/family$/);
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+});
+
+test("navigation keeps the same controls and chosen title through a delayed feed", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await page.evaluate(() => {
+    const nav = document.querySelector(".bottom-nav");
+    const header = document.querySelector(".topbar");
+    const evidence = { titles: [] as string[], lostControls: false };
+    Object.assign(window, { transitionEvidence: evidence });
+    const observer = new MutationObserver(() => {
+      evidence.titles.push(
+        `${document.querySelector(".topbar .eyebrow")?.textContent}|${document.querySelector(".topbar h1")?.textContent}`,
+      );
+      if (
+        document.querySelector(".bottom-nav") !== nav ||
+        document.querySelector(".topbar") !== header
+      )
+        evidence.lostControls = true;
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/people/${localAlexPersonId}*`, async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Choose a journal" }).tap();
+  await page.getByRole("link", { name: "Just me", exact: true }).tap();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".bottom-nav svg")).toHaveCount(3);
+  await expect(page.getByLabel("Opening this journal")).toBeVisible();
+  release();
+  await expect(page.getByLabel("Chronological moments for Alex")).toBeVisible();
+  const evidence = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          transitionEvidence: { titles: string[]; lostControls: boolean };
+        }
+      ).transitionEvidence,
+  );
+  expect(evidence.lostControls).toBe(false);
+  const selected = evidence.titles.indexOf("Just me|Just me");
+  expect(selected).toBeGreaterThanOrEqual(0);
+  expect(
+    evidence.titles
+      .slice(selected)
+      .every((title) => title === "Just me|Just me"),
+  ).toBe(true);
+  for (const destination of [
+    { href: "/circles", link: "Circles", pair: "Journals|Circles" },
+    { href: "/settings/family", link: "Settings", pair: "Our family|Account" },
+    {
+      href: `/people/${localAlexPersonId}`,
+      link: "Journal",
+      pair: "Just me|Just me",
+    },
+  ]) {
+    await page.evaluate(() => {
+      (
+        window as unknown as { transitionEvidence: { titles: string[] } }
+      ).transitionEvidence.titles = [];
+    });
+    let resume!: () => void;
+    const responseGate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    await page.route(`**${destination.href}*`, async (route) => {
+      const response = await route.fetch();
+      await responseGate;
+      await route.fulfill({ response });
+    });
+    try {
+      await page
+        .getByRole("link", { name: destination.link, exact: true })
+        .click();
+      await expect(page.locator(".topbar h1")).toHaveText(
+        destination.pair.split("|")[1],
+      );
+      await expect(page.locator(".topbar .eyebrow")).toHaveText(
+        destination.pair.split("|")[0],
+      );
+    } finally {
+      resume();
+    }
+    await expect(page.locator(".journal-route-content")).not.toHaveAttribute(
+      "hidden",
+    );
+    const pairs = await page.evaluate(
+      () =>
+        (window as unknown as { transitionEvidence: { titles: string[] } })
+          .transitionEvidence.titles,
+    );
+    expect(pairs.length).toBeGreaterThan(0);
+    expect(pairs.every((pair) => pair === destination.pair)).toBe(true);
+    await page.unroute(`**${destination.href}*`);
+  }
+  expect(errors).toEqual([]);
+  await page.screenshot({ path: "/tmp/our-days-persistent-shell.png" });
+});
+
 test("cold open paints usable Family content after sign-in", async ({
   page,
 }) => {
@@ -38,16 +238,24 @@ test("cold open paints usable Family content after sign-in", async ({
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
 
   await expect(page).toHaveURL(/\/family$/u);
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
   await expect(page.getByLabel("Chronological family moments")).toBeVisible();
   await expect(page.getByLabel("Opening this journal")).toHaveCount(0);
+  // The first nav in the streamed HTML is the loading shell, before client
+  // hydration or feed data. Its icons must not be empty placeholder spans.
+  const html = await (await page.request.get("/family")).text();
+  const firstNav = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0];
+  expect(firstNav).toBeDefined();
+  expect(firstNav!.match(/<svg\b/g)).toHaveLength(3);
   await expect(page.getByText("Something interrupted the story")).toHaveCount(
     0,
   );
   expect(pageErrors).toEqual([]);
 });
 
-test("album downloads first and neighbors only, then retains photos across swipes", async ({
+test("nearby album requests all photos before the cover finishes and retains them across swipes", async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -56,7 +264,7 @@ test("album downloads first and neighbors only, then retains photos across swipe
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -80,6 +288,20 @@ test("album downloads first and neighbors only, then retains photos across swipe
     timeout: 30_000,
   });
 
+  // Hold every response: all album requests must start without waiting for
+  // the cover (or any earlier slide) to finish downloading.
+  const momentId = await card.evaluate((node) =>
+    node.closest("article")!.id.replace(/^moment-/, ""),
+  );
+  const albumPath = `/api/media/moments/${momentId}`;
+  let releasePhotos!: () => void;
+  const heldPhotos = new Promise<void>((resolve) => {
+    releasePhotos = resolve;
+  });
+  await page.route(`**${albumPath}?*`, async (route) => {
+    await heldPhotos;
+    await route.continue();
+  });
   // Reload the persisted album so the assertions measure delivery, not upload.
   const requests: string[] = [];
   page.on("request", (request) => {
@@ -93,11 +315,19 @@ test("album downloads first and neighbors only, then retains photos across swipe
   await page.reload();
   await card.scrollIntoViewIfNeeded();
   const pager = card.locator(".photo-card-pager");
-  await expect(pager.locator("img")).toHaveCount(3);
-  await expect.poll(() => requests.length).toBe(3);
+  const albumRequests = () =>
+    requests.filter((url) => new URL(url).pathname === albumPath);
+  try {
+    await expect.poll(() => albumRequests().length).toBe(6);
+    await expect(pager.locator("img")).toHaveCount(0);
+  } finally {
+    releasePhotos();
+  }
+  await expect(pager.locator("img")).toHaveCount(6);
   const firstSrc = await pager
     .locator('[data-photo-index="0"] img')
     .getAttribute("src");
+  await expect.poll(() => albumRequests().length).toBe(6);
   const swipe = async (direction: "next" | "prev") => {
     await pager.evaluate((node, direction) => {
       const box = node.getBoundingClientRect();
@@ -127,14 +357,22 @@ test("album downloads first and neighbors only, then retains photos across swipe
   };
   await swipe("next");
   await expect(pager.getByText("Photo 2 of 6")).toHaveCount(1);
-  await expect.poll(() => requests.length).toBe(4);
+  await expect.poll(() => albumRequests().length).toBe(6);
   await swipe("prev");
   await expect(pager.getByText("Photo 1 of 6")).toHaveCount(1);
-  expect(requests).toHaveLength(4);
+  expect(albumRequests()).toHaveLength(6);
   await expect(pager.locator('[data-photo-index="0"] img')).toHaveAttribute(
     "src",
     firstSrc!,
   );
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Journal", exact: true }).click();
+  await card.scrollIntoViewIfNeeded();
+  await expect(pager.locator("img")).toHaveCount(6);
+  expect(albumRequests()).toHaveLength(6);
   await page.screenshot({ path: "test-results/carousel-neighbor-loading.png" });
   expect(errors).toEqual([]);
 });
@@ -154,9 +392,11 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   ).toHaveAttribute("href", "/api/auth/oauth/x");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Written entry Text, date, and details" })
     .click();
@@ -172,7 +412,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     timeout: 15_000,
   });
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -193,7 +433,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.locator('[data-moment-kind="photo"]').first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
     .click();
@@ -262,9 +502,11 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByRole("button", { name: "Add moment" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Written entry Text, date, and details" })
     .click();
@@ -284,7 +526,12 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
       .getByLabel("Chronological moments for Alex")
       .getByText("A porch thought just for me."),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator(".just-me-pill")).toHaveText("Just me");
+  await expect(
+    page
+      .locator(".moment-card")
+      .filter({ hasText: "A porch thought just for me." })
+      .locator(".just-me-pill"),
+  ).toHaveText("Just me");
 
   await page.goto("/family");
   await expect(page.getByLabel("Chronological family moments")).toBeVisible({

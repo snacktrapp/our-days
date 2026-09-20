@@ -23,6 +23,7 @@ export type OptimisticMomentSave = Readonly<{
   journalPersonAccent: AccentToken;
   stage:
     | Readonly<{ state: "saving" }>
+    | Readonly<{ state: "published"; momentId?: string }>
     | Readonly<{ state: "failed"; message: string }>;
 }>;
 
@@ -73,8 +74,14 @@ async function runSave(id: string) {
       updateSave(id, { state: "failed", message: result.message });
       return;
     }
-    removeOptimisticMomentSave(id);
-    task.onPublished();
+    updateSave(id, { state: "published", momentId: result.momentId });
+    tasks.delete(id);
+    // A refresh failure must not offer Retry for a write that already succeeded.
+    try {
+      task.onPublished();
+    } catch {
+      /* The saved status remains dismissible. */
+    }
   } catch {
     updateSave(id, {
       state: "failed",

@@ -4,7 +4,8 @@ import type {
   JournalChromeViewModel,
   JournalSection,
 } from "./shell-view-model";
-import { JournalChrome } from "./journal-chrome";
+import { JournalChrome, PersistentJournalShell } from "./journal-chrome";
+import { OpeningJournalShell } from "./opening-journal-shell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
@@ -50,6 +51,51 @@ const model = {
 } as unknown as JournalChromeViewModel;
 
 describe("JournalChrome", () => {
+  it.each(["group", "person"] as const)(
+    "shows a named %s feed with Back to Circles instead of the main selector",
+    (kind) => {
+      render(
+        <JournalChrome
+          model={{ ...model, title: "Named feed" }}
+          section="timeline"
+          switcher={[
+            { kind, label: "Named feed", current: true, href: "/people/other" },
+          ]}
+        >
+          <p>Entries</p>
+        </JournalChrome>,
+      );
+      expect(screen.getByRole("heading", { name: "Named feed" })).toBeVisible();
+      expect(
+        screen.queryByRole("button", { name: "Choose a journal" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("link", { name: "← Back to Circles" }),
+      ).toHaveAttribute("href", "/circles");
+    },
+  );
+
+  it("keeps your own journal a named drill-in when opened from Circles", () => {
+    render(
+      <JournalChrome
+        model={{ ...model, title: "Brian" }}
+        section="timeline"
+        backToCirclesHref="/circles#circle-family"
+        switcher={[
+          { kind: "you", label: "Brian", current: true, href: "/people/brian" },
+        ]}
+      >
+        <p>Entries</p>
+      </JournalChrome>,
+    );
+    expect(screen.getByRole("heading", { name: "Brian" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Choose a journal" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "← Back to Circles" }),
+    ).toHaveAttribute("href", "/circles#circle-family");
+  });
   it.each<JournalSection>(["timeline", "people", "memories", "settings"])(
     "uses the identical primary header controls for %s",
     (section) => {
@@ -59,7 +105,11 @@ describe("JournalChrome", () => {
         </JournalChrome>,
       );
 
-      expect(screen.getByRole("button", { name: "Add moment" })).toBeVisible();
+      expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+        "href",
+        "/settings/family",
+      );
+      expect(screen.queryByRole("button", { name: "Add moment" })).toBeNull();
       expect(
         screen.getByRole("button", { name: "Open notifications" }),
       ).toBeVisible();
@@ -177,17 +227,15 @@ describe("JournalChrome", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByRole("link", { name: "Molly" })).toHaveAttribute(
-      "href",
-      "/people/molly",
-    );
+    expect(screen.queryByRole("link", { name: "Molly" })).toBeNull();
 
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "Journal" }), {
-      key: "Escape",
-    });
-    expect(document.querySelector(".title-switcher-sheet")).toHaveClass(
-      "is-closing",
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "Choose a journal" }),
+      {
+        key: "Escape",
+      },
     );
+    expect(document.querySelector(".title-switcher-sheet")).toBeNull();
     expect(
       screen.queryByRole("navigation", { name: "Choose a family timeline" }),
     ).toBeNull();
@@ -249,9 +297,9 @@ describe("JournalChrome", () => {
             current: true,
           },
           {
-            kind: "person",
-            label: "Molly",
-            href: "/people/molly",
+            kind: "you",
+            label: "Brian",
+            href: "/people/brian",
             current: false,
           },
         ]}
@@ -261,16 +309,74 @@ describe("JournalChrome", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
-    fireEvent.click(screen.getByRole("link", { name: "Molly" }));
+    fireEvent.click(screen.getByRole("link", { name: "Just me" }));
 
-    expect(screen.queryByText("Moments")).toBeNull();
+    expect(screen.getByText("Moments")).not.toBeVisible();
     expect(
       screen.getByRole("region", { name: "Opening this journal" }),
     ).toHaveClass("route-pending-skeleton");
-    expect(screen.getByRole("heading", { name: "Molly" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
     expect(document.querySelector(".title-switcher")).not.toHaveClass(
       "is-open",
     );
     expect(document.querySelector(".timeline-empty-state")).toBeNull();
+  });
+
+  it("retains the same navigation and selected title through the loading boundary", () => {
+    const switcher = [
+      {
+        kind: "all" as const,
+        label: "All circles",
+        href: "/family",
+        current: true,
+      },
+      {
+        kind: "you" as const,
+        label: "Brian",
+        href: "/people/brian",
+        current: false,
+      },
+    ];
+    const { container, rerender } = render(
+      <PersistentJournalShell>
+        <JournalChrome
+          model={{ ...model, title: "All circles" }}
+          section="timeline"
+          switcher={switcher}
+        >
+          <p>All entries</p>
+        </JournalChrome>
+      </PersistentJournalShell>,
+    );
+    const nav = container.querySelector(".bottom-nav");
+    const header = container.querySelector(".topbar");
+    fireEvent.click(screen.getByRole("button", { name: "Choose a journal" }));
+    fireEvent.click(screen.getByRole("link", { name: "Just me" }));
+    rerender(
+      <PersistentJournalShell>
+        <OpeningJournalShell />
+      </PersistentJournalShell>,
+    );
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    expect(container.querySelector(".bottom-nav")).toBe(nav);
+    expect(container.querySelector(".topbar")).toBe(header);
+    rerender(
+      <PersistentJournalShell>
+        <JournalChrome
+          model={{ ...model, title: "Just me" }}
+          section="timeline"
+          switcher={switcher.map((item) => ({
+            ...item,
+            current: item.kind === "you",
+          }))}
+        >
+          <p>My entries</p>
+        </JournalChrome>
+      </PersistentJournalShell>,
+    );
+    expect(screen.getByText("My entries")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+    expect(container.querySelector(".bottom-nav")).toBe(nav);
+    expect(container.querySelector(".topbar")).toBe(header);
   });
 });

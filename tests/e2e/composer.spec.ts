@@ -142,7 +142,7 @@ async function expectCompleteFocusTraversal(
 }
 
 async function openComposer(page: Page) {
-  await page.getByRole("button", { name: "Add moment" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
   return page.locator(".new-moment-composer-dialog");
 }
 
@@ -340,7 +340,7 @@ test("composer is modal, contains focus, protects every draft, and restores focu
   await page.keyboard.press("Escape");
   await expect(activityDialog).toBeHidden();
 
-  const trigger = page.getByRole("button", { name: "Add moment" });
+  const trigger = page.getByRole("button", { name: "Add", exact: true });
   const dialog = await openComposer(page);
 
   await expect(dialog).toBeVisible();
@@ -516,7 +516,7 @@ test("Escape and backdrop dismissal restore focus without a draft", async ({
   page,
 }) => {
   await page.goto("/family");
-  const trigger = page.getByRole("button", { name: "Add moment" });
+  const trigger = page.getByRole("button", { name: "Add", exact: true });
 
   await openComposer(page);
   await page.keyboard.press("Escape");
@@ -853,7 +853,9 @@ test("an open entry overlay does not scroll the family feed underneath", async (
 
   // Playwright's locator.click() scrolls the header Add moment into view
   // and would zero the feed before the overlay opens.
-  await page.getByRole("button", { name: "Add moment" }).dispatchEvent("click");
+  await page
+    .getByRole("button", { name: "Add", exact: true })
+    .dispatchEvent("click");
   const dialog = page.locator(".new-moment-composer-dialog");
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: /Bible verse/u }).click();

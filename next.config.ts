@@ -22,6 +22,7 @@ const privateRoutes = [
   "/api/media/:path*",
   "/journal",
   "/family",
+  "/circles",
   "/trash",
   "/people",
   "/people/:path*",

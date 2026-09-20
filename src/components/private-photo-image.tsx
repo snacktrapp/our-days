@@ -40,7 +40,7 @@ export function PrivatePhotoImage({
           observer.disconnect();
         }
       },
-      { rootMargin: "200px 0px" },
+      { rootMargin: "800px 0px" },
     );
     observer.observe(target);
     return () => observer.disconnect();

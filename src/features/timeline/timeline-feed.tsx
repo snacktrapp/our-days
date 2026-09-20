@@ -13,6 +13,7 @@ import type {
 } from "@/features/moments/moment-action-types";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
+import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   const dateAndTime = timelineCardOccurredLabel(
@@ -162,6 +163,25 @@ export function TimelineFeedEntries({
 
   return (
     <>
+      <FeedSaveAcknowledgment
+        momentIds={connectedMomentIds}
+        mediaCounts={Object.fromEntries(
+          model.entries.flatMap((entry) => {
+            if (entry.entryType !== "moment") return [];
+            const moment = entry.moment;
+            return [
+              [
+                moment.id,
+                moment.kind === "photo"
+                  ? (moment.photos?.length ?? (moment.image.src ? 1 : 0))
+                  : moment.kind === "video" && moment.video.src
+                    ? 1
+                    : 0,
+              ],
+            ];
+          }),
+        )}
+      />
       {model.entries.map((entry) => (
         <TimelineEntry
           key={entry.id}
