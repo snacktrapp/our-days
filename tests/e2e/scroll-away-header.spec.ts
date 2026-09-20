@@ -36,6 +36,7 @@ test("header hides down, returns up, and never moves the bottom navigation", asy
   await expect(header).toHaveAttribute("data-scroll-hidden", "true");
   await page.evaluate(() => scrollTo(0, 470));
   await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+  await expect(header).toHaveCSS("translate", "none");
   await page.screenshot({ path: "/tmp/our-days-header-returned.png" });
   await page.getByRole("button", { name: "Choose a journal" }).click();
   await page.evaluate(() => scrollTo(0, 700));
