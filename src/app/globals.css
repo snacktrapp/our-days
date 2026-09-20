@@ -5566,8 +5566,12 @@ html.overlay-open .bottom-nav {
   width: calc(100% + 2 * var(--timeline-inline-inset));
   max-width: none;
   margin-inline: calc(-1 * var(--timeline-inline-inset));
-  border-inline-width: 0;
+  border: 0;
   border-radius: 0;
+}
+
+.timeline .moment-card .soft-actions {
+  border-top: 0;
 }
 
 .photo-frame {
