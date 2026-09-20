@@ -8,8 +8,25 @@ function firstPhoto(page: Page) {
 
 async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   const trigger = card.getByRole("button", { name: /Add a note to/u });
+  await page.evaluate(() => {
+    document.addEventListener(
+      "click",
+      () => {
+        document.documentElement.dataset.commentFocusedDuringTap = String(
+          document.activeElement?.matches(".comment-dialog textarea") ?? false,
+        );
+      },
+      { once: true },
+    );
+  });
   await trigger.click();
-  const form = card.locator(".inline-note-form");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-comment-focused-during-tap",
+    "true",
+  );
+  const form = page
+    .getByRole("dialog", { name: "Add comment" })
+    .locator("form");
   await expect(form).toBeVisible();
   return { form, trigger };
 }
@@ -86,7 +103,7 @@ test("reduced motion opens the heart picker without scale or fade", async ({
   await expect(picker).toBeHidden();
 });
 
-test("inline note drafts save safely and remain reversible", async ({
+test("comment drawer drafts save safely and remain reversible", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -94,12 +111,12 @@ test("inline note drafts save safely and remain reversible", async ({
   const { form, trigger } = await openNoteForm(page, card);
   const note = form.getByRole("textbox", { name: "Add a family note" });
   await expect(note).toBeFocused();
-  await expect(form.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(form.getByRole("button", { name: "Post" })).toBeDisabled();
 
   const hostileNote =
     '<img data-detail-injection src=x onerror="window.__detailInjected=true"> A safe family note';
   await note.fill(hostileNote);
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Post" }).click();
   await expect(form).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(card.getByText(hostileNote, { exact: true })).toBeVisible();
@@ -129,6 +146,76 @@ test("inline note drafts save safely and remain reversible", async ({
   await reopened.form.getByRole("button", { name: "Cancel" }).click();
   await expect(reopened.form).toBeHidden();
   await expect(card.getByText("Discard this draft")).toHaveCount(0);
+});
+
+test("comment drawer preserves dismissed drafts and the timeline position", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const trigger = firstPhoto(page).getByRole("button", {
+    name: /Add a note to/u,
+  });
+  await trigger.scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => window.scrollY);
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Add comment" });
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(
+    true,
+  );
+  await dialog.getByRole("textbox").fill("Keep my draft");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  expect(
+    Math.abs((await page.evaluate(() => window.scrollY)) - before),
+  ).toBeLessThanOrEqual(2);
+  await trigger.click();
+  await expect(dialog.getByRole("textbox")).toHaveValue("Keep my draft");
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeHidden();
+  await trigger.click();
+  await expect(dialog.getByRole("textbox")).toHaveValue("Keep my draft");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("comment drawer follows the keyboard viewport and keeps Post readable", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const { form } = await openNoteForm(page);
+  await form.getByRole("textbox").fill("Ready to post");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const colors = await form
+      .getByRole("button", { name: "Post" })
+      .evaluate((button) => {
+        const style = getComputedStyle(button);
+        return { color: style.color, background: style.backgroundColor };
+      });
+    expect(colors.color).not.toBe(colors.background);
+    const result = await new AxeBuilder({ page })
+      .include(".comment-dialog")
+      .analyze();
+    expect(
+      result.violations.filter((v) =>
+        ["serious", "critical"].includes(v.impact ?? ""),
+      ),
+    ).toEqual([]);
+  }
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, "height", {
+      configurable: true,
+      value: 330,
+    });
+    window.visualViewport!.dispatchEvent(new Event("resize"));
+  });
+  await expect(page.getByRole("dialog")).toHaveCSS("height", "330px");
+  const button = await form.getByRole("button", { name: "Post" }).boundingBox();
+  expect(button!.y).toBeGreaterThanOrEqual(0);
+  expect(button!.y + button!.height).toBeLessThanOrEqual(330);
 });
 
 test("preview interactions do not navigate, persist, or make requests", async ({
@@ -162,7 +249,7 @@ test("preview interactions do not navigate, persist, or make requests", async ({
   await form
     .getByRole("textbox", { name: "Add a family note" })
     .fill("A local-only preview note");
-  await form.getByRole("button", { name: "Save" }).click();
+  await form.getByRole("button", { name: "Post" }).click();
 
   expect(requests).toEqual([]);
   expect(await inventory()).toEqual(baseline);

@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -22,6 +23,7 @@ import {
   visibleConversationNotes,
 } from "./moment-conversation-notes";
 import { displayConversationDate } from "./display-conversation-date";
+import { CommentDrawer } from "./comment-drawer";
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -288,21 +290,6 @@ export function MomentConversationControl({
     [panel, requestOverlayClose, setPanel],
   );
 
-  useEffect(() => {
-    if (panel !== "note") return;
-    const frame = window.requestAnimationFrame(() => {
-      const field = noteRef.current;
-      if (!field) return;
-      field.focus({ preventScroll: false });
-      const form = field.closest("form");
-      form?.scrollIntoView?.({
-        block: "nearest",
-        inline: "nearest",
-      });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [editingNoteId, panel]);
-
   useLayoutEffect(() => {
     notifyInlineNotePanelChanged();
     return () => notifyInlineNotePanelChanged();
@@ -382,7 +369,14 @@ export function MomentConversationControl({
       return;
     }
     cancelReactionPickerClose();
-    setPanel(nextPanel);
+    if (nextPanel === "note") {
+      // iOS only opens its keyboard while focus is still part of the tap.
+      // Mount/show the modal before focusing; never defer this to an effect.
+      flushSync(() => setPanel("note"));
+      noteRef.current?.focus({ preventScroll: true });
+    } else {
+      setPanel(nextPanel);
+    }
     await loadConversation();
   };
 
@@ -622,10 +616,13 @@ export function MomentConversationControl({
                               type="button"
                               disabled={pending}
                               onClick={() => {
-                                setEditingNoteId(note.id);
-                                setNoteDraft(note.body);
-                                setPanel("note");
-                                setError(null);
+                                flushSync(() => {
+                                  setEditingNoteId(note.id);
+                                  setNoteDraft(note.body);
+                                  setPanel("note");
+                                  setError(null);
+                                });
+                                noteRef.current?.focus({ preventScroll: true });
                               }}
                             >
                               Edit
@@ -775,54 +772,73 @@ export function MomentConversationControl({
       </div>
 
       {panel === "note" ? (
-        <form
+        <CommentDrawer
           id={`${panelId}-note`}
-          className="inline-note-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void saveNote();
+          title={editingNoteId ? "Edit comment" : "Add comment"}
+          context={`${model.personName} · ${kindLabel}${controlLabel ? ` · ${controlLabel}` : ""}`}
+          pending={pending}
+          onDismiss={() => {
+            setPanel(null);
+            window.requestAnimationFrame(() =>
+              noteTriggerRef.current?.focus({ preventScroll: true }),
+            );
           }}
         >
-          <textarea
-            ref={noteRef}
-            id={`${panelId}-note-field`}
-            aria-label={editingNoteId ? "Edit your note" : "Add a family note"}
-            value={noteDraft}
-            maxLength={1000}
-            placeholder="A memory, detail, or reply…"
-            disabled={loading || pending}
-            onChange={(event) => {
-              setNoteDraft(event.target.value);
-              if (event.target.value.trim()) setError(null);
+          <form
+            className="inline-note-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveNote();
             }}
-          />
-          <div>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setNoteDraft("");
-                setEditingNoteId(null);
-                setError(null);
-                setPanel(null);
-                window.requestAnimationFrame(() =>
-                  noteTriggerRef.current?.focus({ preventScroll: true }),
-                );
+          >
+            <textarea
+              ref={noteRef}
+              id={`${panelId}-note-field`}
+              aria-label={
+                editingNoteId ? "Edit your note" : "Add a family note"
+              }
+              value={noteDraft}
+              maxLength={1000}
+              placeholder="A memory, detail, or reply…"
+              disabled={loading || pending}
+              onChange={(event) => {
+                setNoteDraft(event.target.value);
+                if (event.target.value.trim()) setError(null);
               }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || pending || !noteDraft.trim()}
-            >
-              {pending ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </form>
+            />
+            {error ? (
+              <p className="inline-conversation-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <div>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setNoteDraft("");
+                  setEditingNoteId(null);
+                  setError(null);
+                  setPanel(null);
+                  window.requestAnimationFrame(() =>
+                    noteTriggerRef.current?.focus({ preventScroll: true }),
+                  );
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || pending || !noteDraft.trim()}
+              >
+                {pending ? "Saving…" : editingNoteId ? "Save" : "Post"}
+              </button>
+            </div>
+          </form>
+        </CommentDrawer>
       ) : null}
 
-      {error ? (
+      {error && panel !== "note" ? (
         <p className="inline-conversation-error" role="alert">
           {error}
         </p>

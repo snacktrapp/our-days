@@ -139,7 +139,7 @@ describe("MomentConversationControl", () => {
       screen.getByRole("textbox", { name: "Add a family note" }),
       "A fresh detail.",
     );
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(within(notes).getByText("Brian")).toBeVisible();
@@ -625,7 +625,7 @@ describe("MomentConversationControl", () => {
     expect(actions.load).not.toHaveBeenCalled();
   });
 
-  it("opens a compact note field inline with only Cancel and Save", async () => {
+  it("opens a comment drawer with Cancel and Post without scrolling the entry", async () => {
     const user = userEvent.setup();
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
@@ -637,7 +637,7 @@ describe("MomentConversationControl", () => {
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     expect(note).toHaveFocus();
     const form = note.closest("form")!;
-    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
     expect(form).toHaveClass("inline-note-form");
     expect(form).not.toHaveClass("overlay-popover");
     expect(form).not.toHaveClass("note-drawer");
@@ -645,8 +645,13 @@ describe("MomentConversationControl", () => {
       within(form)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Cancel", "Save"]);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    ).toEqual(["Cancel", "Post"]);
+    expect(
+      screen.getByRole("dialog", { name: "Add comment" }),
+    ).toContainElement(form);
+    expect(document.querySelector(".inline-conversation")).not.toContainElement(
+      form,
+    );
 
     await user.type(note, "Keep this draft?");
     await user.click(within(form).getByRole("button", { name: "Cancel" }));
@@ -655,7 +660,28 @@ describe("MomentConversationControl", () => {
     ).toBeNull();
   });
 
-  it("saves a note inline and immediately shows its author and text", async () => {
+  it("retains a draft after dismissing the drawer and restores focus", async () => {
+    const user = userEvent.setup();
+    renderControl();
+    const trigger = screen.getByRole("button", {
+      name: /Add a note to photo/u,
+    });
+    await user.click(trigger);
+    await user.type(screen.getByRole("textbox"), "Keep this comment");
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await user.click(trigger);
+    expect(screen.getByRole("textbox")).toHaveValue("Keep this comment");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(trigger);
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it("saves a note and immediately shows its author and text in the timeline", async () => {
     const empty = { notes: [], reactions: [] } as const;
     const saved = {
       notes: [
@@ -684,7 +710,7 @@ describe("MomentConversationControl", () => {
       screen.getByRole("textbox", { name: "Add a family note" }),
       "The sky was even better in person.",
     );
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(actions.createNote).toHaveBeenCalledWith({
@@ -754,7 +780,7 @@ describe("MomentConversationControl", () => {
       screen.getByRole("textbox", { name: "Add a family note" }),
       "Nana just replied.",
     );
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(actions.createNote).toHaveBeenCalledWith({
@@ -853,7 +879,7 @@ describe("MomentConversationControl", () => {
       screen.getByRole("textbox", { name: "Add a family note" }),
       "The porch light was on.",
     );
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() =>
       expect(actions.createNote).toHaveBeenCalledWith({
@@ -881,7 +907,7 @@ describe("MomentConversationControl", () => {
     );
     const note = screen.getByRole("textbox", { name: "Add a family note" });
     await user.type(note, "Do not lose this.");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Post" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That note could not be saved.",
