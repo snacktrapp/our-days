@@ -29,6 +29,8 @@ vi.mock("@supabase/supabase-js", () => ({
 }));
 
 import {
+  addExistingCircleMemberAction,
+  listExistingCircleMembersAction,
   requestFamilyInvitationAction,
   revokeFamilyMembershipAction,
   setFamilyMembershipRoleAction,
@@ -43,6 +45,54 @@ const requestKey = "90000000-0000-4000-8000-000000000002";
 const managedPersonId = "30000000-0000-4000-8000-000000000008";
 
 describe("family settings actions", () => {
+  it("adds an existing member with the current caller and refreshes circle surfaces", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: otherMembershipId, error: null });
+    await expect(
+      addExistingCircleMemberAction({
+        targetCircleId: "20000000-0000-4000-8000-000000000001",
+        sourceMembershipId: otherMembershipId,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(mocks.rpc).toHaveBeenCalledWith("add_existing_circle_member", {
+      source_membership_id: otherMembershipId,
+      target_circle_id: "20000000-0000-4000-8000-000000000001",
+    });
+    expect(mocks.revalidatePath).toHaveBeenCalledWith("/", "layout");
+  });
+  it("rejects malformed member selection without calling the database", async () => {
+    await expect(
+      addExistingCircleMemberAction({
+        targetCircleId: "bad",
+        sourceMembershipId: otherMembershipId,
+      }),
+    ).resolves.toMatchObject({ ok: false });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+  it("returns candidate names without account identifiers or email", async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: [{ membership_id: otherMembershipId, display_name: "Heidi" }],
+      error: null,
+    });
+    await expect(
+      listExistingCircleMembersAction({
+        targetCircleId: "20000000-0000-4000-8000-000000000001",
+        sourceCircleId: "20000000-0000-4000-8000-000000000002",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      members: [{ membership_id: otherMembershipId, display_name: "Heidi" }],
+    });
+  });
+  it("does not report success or refresh when adding a member fails", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "42501" } });
+    await expect(
+      addExistingCircleMemberAction({
+        targetCircleId: "20000000-0000-4000-8000-000000000001",
+        sourceMembershipId: otherMembershipId,
+      }),
+    ).resolves.toMatchObject({ ok: false });
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://journal.example.com");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");

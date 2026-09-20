@@ -18,6 +18,8 @@ import {
 } from "@/data/family-settings.server";
 import { loadConnectedJournalContext } from "@/data/journal-context.server";
 import {
+  addExistingCircleMemberAction,
+  listExistingCircleMembersAction,
   requestFamilyInvitationAction,
   revokeFamilyMembershipAction,
   setFamilyMembershipRoleAction,
@@ -201,6 +203,10 @@ export default async function FamilySettingsPage({
         inviteCircleName={inviteGroup?.name}
         defaultCircleId={access.circleId}
         actions={{
+          existingMembers: {
+            list: listExistingCircleMembersAction,
+            add: addExistingCircleMemberAction,
+          },
           requestInvitation: requestFamilyInvitationAction,
           revokeMembership: revokeFamilyMembershipAction,
           setMembershipRole: setFamilyMembershipRoleAction,

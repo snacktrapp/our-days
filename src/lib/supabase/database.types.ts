@@ -652,6 +652,14 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      list_existing_circle_members: {
+        Args: { source_circle_id: string; target_circle_id: string };
+        Returns: { membership_id: string; display_name: string }[];
+      };
+      add_existing_circle_member: {
+        Args: { source_membership_id: string; target_circle_id: string };
+        Returns: string;
+      };
       accept_invitation: { Args: { token: string }; Returns: string };
       accept_pending_invitation_for_current_user: {
         Args: Record<PropertyKey, never>;

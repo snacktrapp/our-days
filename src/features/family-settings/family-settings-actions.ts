@@ -95,6 +95,61 @@ function refreshFamilyAccessSurfaces(personId?: string) {
   if (personId) revalidatePath(`/people/${personId}`);
 }
 
+export async function listExistingCircleMembersAction(input: unknown) {
+  const target = readUuid(input, "targetCircleId");
+  const source = readUuid(input, "sourceCircleId");
+  if (
+    !target ||
+    !source ||
+    target === source ||
+    !(await requireOrganizer(target))
+  ) {
+    return {
+      ok: false as const,
+      members: [],
+      message: "Members could not be loaded.",
+    };
+  }
+  const client = await createOurDaysServerClient();
+  const { data, error } = await client.rpc("list_existing_circle_members", {
+    source_circle_id: source,
+    target_circle_id: target,
+  });
+  return error
+    ? {
+        ok: false as const,
+        members: [],
+        message: "Members could not be loaded. Try again.",
+      }
+    : { ok: true as const, members: data ?? [], message: "" };
+}
+
+export async function addExistingCircleMemberAction(
+  input: unknown,
+): Promise<FamilySettingsActionResult> {
+  const target = readUuid(input, "targetCircleId");
+  const source = readUuid(input, "sourceMembershipId");
+  if (!target || !source || !(await requireOrganizer(target))) {
+    return { ok: false, message: "That person could not be added." };
+  }
+  const client = await createOurDaysServerClient();
+  const { data, error } = await client.rpc("add_existing_circle_member", {
+    source_membership_id: source,
+    target_circle_id: target,
+  });
+  if (error || !data)
+    return {
+      ok: false,
+      message:
+        "That person could not be added. Refresh the list and try again. Previously removed members need a new invitation.",
+    };
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: "Member added. No new invitation or sign-in is needed.",
+  };
+}
+
 export async function setFamilyMembershipRoleAction(
   input: unknown,
 ): Promise<FamilySettingsActionResult> {
