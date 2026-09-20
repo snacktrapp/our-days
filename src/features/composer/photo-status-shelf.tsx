@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import { photoUploadResumeStore } from "./photo-upload-resume-store";
+import { requestPhotoProcessingResponse } from "./photo-processing-request";
 import {
   clearOptimisticMediaUploads,
   emptyOptimisticMediaUploadSnapshot,
@@ -649,12 +650,7 @@ export function PhotoStatusShelf({
             if (pendingIds.length > 0) {
               await Promise.allSettled(
                 pendingIds.map((intakeId) =>
-                  globalThis.fetch("/api/photos/process", {
-                    body: JSON.stringify({ intakeId }),
-                    credentials: "same-origin",
-                    headers: { "content-type": "application/json" },
-                    method: "POST",
-                  }),
+                  requestPhotoProcessingResponse(intakeId),
                 ),
               );
               const refreshed = await supabase.rpc("list_my_photo_intakes", {

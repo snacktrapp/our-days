@@ -877,48 +877,64 @@ describe("connected private photo upload", () => {
     expect(expiredAttempt.uploadUrl).toBe(uploadUrl);
   });
 
-  it("reports processing honestly when publication has not completed", async () => {
-    const { client } = clientWithStatus("processing");
-    const resumeStore = memoryResumeStore();
-    let offset = 0;
-    const fetcher = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "POST") {
-          return new Response(null, {
-            status: 201,
-            headers: { location: uploadUrl },
-          });
+  it.each(["processing", "unavailable", "missing", "throws"])(
+    "keeps an acknowledged photo processing when status is %s",
+    async (status) => {
+      const { client, rpc } = clientWithStatus("processing");
+      const original = rpc.getMockImplementation()!;
+      rpc.mockImplementation(async (name) => {
+        if (name === "get_photo_moment_status") {
+          if (status === "throws") throw new Error("Network interrupted");
+          if (status === "unavailable")
+            return { data: null, error: { message: "Unavailable" } };
+          if (status === "missing") return { data: [], error: null };
         }
-        if (init?.method === "HEAD") {
+        return original(name);
+      });
+      const resumeStore = memoryResumeStore();
+      let offset = 0;
+      const fetcher = vi.fn(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method === "POST") {
+            return new Response(null, {
+              status: 201,
+              headers: { location: uploadUrl },
+            });
+          }
+          if (init?.method === "HEAD") {
+            return new Response(null, {
+              status: 200,
+              headers: { "upload-offset": String(offset) },
+            });
+          }
+          offset += (init?.body as Blob).size;
           return new Response(null, {
-            status: 200,
+            status: 204,
             headers: { "upload-offset": String(offset) },
           });
-        }
-        offset += (init?.body as Blob).size;
-        return new Response(null, {
-          status: 204,
-          headers: { "upload-offset": String(offset) },
-        });
-      },
-    );
-    const result = await uploadPhotoMoment(
-      jpegFile(),
-      draft,
-      createPhotoUploadAttempt(),
-      new AbortController().signal,
-      () => undefined,
-      {
-        createClient: () => client,
-        fetch: fetcher,
-        hash: vi.fn(async () => "c".repeat(64)),
-        resumeStore,
-        statusAttempts: 1,
-      },
-    );
-    expect(result.state).toBe("processing");
-    expect(deliverPublishedMomentPushAction).not.toHaveBeenCalled();
-  });
+        },
+      );
+      const result = await uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          fetch: fetcher,
+          hash: vi.fn(async () => "c".repeat(64)),
+          resumeStore,
+          statusAttempts: 1,
+        },
+      );
+      expect(result.state).toBe("processing");
+      expect(result.intakeId).toBe(intakeId);
+      expect(result.momentId).toBe(momentId);
+      expect(resumeStore.remove).not.toHaveBeenCalled();
+      expect(deliverPublishedMomentPushAction).not.toHaveBeenCalled();
+    },
+  );
 
   it("retires an acknowledged needs-attention record so a retry starts fresh", async () => {
     const { client } = clientWithStatus("needs_attention");
@@ -1034,82 +1050,129 @@ describe("connected private photo upload", () => {
     );
   });
 
-  it("recovers stable keys and the same upload URL after file reselection", async () => {
-    const file = jpegFile();
-    const resumeStore = memoryResumeStore();
-    const firstAttempt = createPhotoUploadAttempt();
-    const firstKeys = {
-      requestKey: firstAttempt.requestKey,
-      uploadRequestKey: firstAttempt.uploadRequestKey,
-    };
-    let offset = 0;
-    const fetcher = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "POST") {
+  it.each(["processing", "unavailable", "throws"])(
+    "resumes acknowledged photos without reuploading when status is %s",
+    async (status) => {
+      const file = jpegFile();
+      const resumeStore = memoryResumeStore();
+      const firstAttempt = createPhotoUploadAttempt();
+      const firstKeys = {
+        requestKey: firstAttempt.requestKey,
+        uploadRequestKey: firstAttempt.uploadRequestKey,
+      };
+      let offset = 0;
+      const fetcher = vi.fn(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (init?.method === "POST") {
+            return new Response(null, {
+              status: 201,
+              headers: { location: uploadUrl },
+            });
+          }
+          if (init?.method === "HEAD") {
+            return new Response(null, {
+              status: 200,
+              headers: { "upload-offset": String(offset) },
+            });
+          }
+          offset += (init?.body as Blob).size;
           return new Response(null, {
-            status: 201,
-            headers: { location: uploadUrl },
-          });
-        }
-        if (init?.method === "HEAD") {
-          return new Response(null, {
-            status: 200,
+            status: 204,
             headers: { "upload-offset": String(offset) },
           });
-        }
-        offset += (init?.body as Blob).size;
-        return new Response(null, {
-          status: 204,
-          headers: { "upload-offset": String(offset) },
+        },
+      );
+      const firstClient = clientWithStatus("processing").client;
+      await uploadPhotoMoment(
+        file,
+        draft,
+        firstAttempt,
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => firstClient,
+          fetch: fetcher,
+          hash: vi.fn(async () => "d".repeat(64)),
+          resumeStore,
+          statusAttempts: 1,
+        },
+      );
+
+      const resumedAttempt = createPhotoUploadAttempt();
+      const second = clientWithStatus("processing");
+      if (status === "unavailable")
+        second.rpc.mockResolvedValue({
+          data: null,
+          error: { message: "Unavailable" },
         });
-      },
-    );
-    const firstClient = clientWithStatus("processing").client;
-    await uploadPhotoMoment(
-      file,
-      draft,
-      firstAttempt,
-      new AbortController().signal,
-      () => undefined,
-      {
-        createClient: () => firstClient,
-        fetch: fetcher,
-        hash: vi.fn(async () => "d".repeat(64)),
-        resumeStore,
-        statusAttempts: 1,
-      },
-    );
+      if (status === "throws")
+        second.rpc.mockRejectedValue(new Error("Network interrupted"));
+      const result = await uploadPhotoMoment(
+        file,
+        draft,
+        resumedAttempt,
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => second.client,
+          fetch: fetcher,
+          hash: vi.fn(async () => "d".repeat(64)),
+          resumeStore,
+          statusAttempts: 1,
+        },
+      );
 
-    const resumedAttempt = createPhotoUploadAttempt();
-    const secondClient = clientWithStatus("processing").client;
-    await uploadPhotoMoment(
-      file,
-      draft,
-      resumedAttempt,
-      new AbortController().signal,
-      () => undefined,
-      {
-        createClient: () => secondClient,
-        fetch: fetcher,
-        hash: vi.fn(async () => "d".repeat(64)),
-        resumeStore,
-        statusAttempts: 1,
-      },
-    );
+      expect(result.state).toBe("processing");
+      expect(second.rpc).toHaveBeenCalledTimes(1);
 
-    expect(resumedAttempt).toMatchObject({
-      ...firstKeys,
-      intakeId,
-      momentId,
-      uploadUrl,
-    });
-    expect(
-      fetcher.mock.calls.filter(([, init]) => init?.method === "POST"),
-    ).toHaveLength(1);
-    expect(
-      fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH"),
-    ).toHaveLength(1);
-  });
+      expect(resumedAttempt).toMatchObject({
+        ...firstKeys,
+        intakeId,
+        momentId,
+        uploadUrl,
+      });
+      expect(
+        fetcher.mock.calls.filter(([, init]) => init?.method === "POST"),
+      ).toHaveLength(1);
+      expect(
+        fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH"),
+      ).toHaveLength(1);
+    },
+  );
+
+  it.each(["save", "remove"])(
+    "does not fail a published upload if local resume %s fails",
+    async (operation) => {
+      const resumeStore = memoryResumeStore();
+      if (operation === "remove")
+        resumeStore.remove.mockRejectedValue(
+          new Error("Device storage unavailable"),
+        );
+      if (operation === "save") {
+        const original = resumeStore.save.getMockImplementation()!;
+        resumeStore.save.mockImplementation(async (record) => {
+          if (record.acknowledged)
+            throw new Error("Device storage unavailable");
+          return original(record);
+        });
+      }
+      const result = await uploadPhotoMoment(
+        jpegFile(),
+        draft,
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => clientWithStatus("published").client,
+          hash: vi.fn(async () => "d".repeat(64)),
+          upload: vi.fn().mockResolvedValue(undefined),
+          processPhoto: vi.fn().mockResolvedValue(undefined),
+          resumeStore,
+        },
+      );
+      expect(result.state).toBe("published");
+    },
+  );
 
   it("re-delivers family photo push when a resumed intake is already published", async () => {
     const publishedResume: PhotoUploadResumeRecord = {

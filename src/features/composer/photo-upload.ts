@@ -12,6 +12,7 @@ import {
 } from "@/lib/supabase/public-config";
 import { shouldAnnouncePhotoMomentPublication } from "@/lib/activity-notifications";
 import { hashPhotoInWorker } from "./photo-hash";
+import { requestPhotoProcessingResponse } from "./photo-processing-request";
 import {
   photoUploadResumeStore,
   type PhotoUploadResumeRecord,
@@ -576,13 +577,7 @@ function renewPhotoUploadAttempt(attempt: PhotoUploadAttempt) {
 async function requestPhotoProcessing(intakeId: string, signal: AbortSignal) {
   let response: Response;
   try {
-    response = await globalThis.fetch("/api/photos/process", {
-      body: JSON.stringify({ intakeId }),
-      credentials: "same-origin",
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal,
-    });
+    response = await requestPhotoProcessingResponse(intakeId, signal);
   } catch {
     return;
   }
@@ -733,10 +728,12 @@ export async function uploadPhotoMoment(
       : undefined;
   }
   if (resumed?.acknowledged && resumed.intakeId) {
-    const { data: statusRows, error: statusError } = await supabase.rpc(
-      "get_photo_moment_status",
-      { intake_id: resumed.intakeId },
-    );
+    const { data: statusRows, error: statusError } = await supabase
+      .rpc("get_photo_moment_status", { intake_id: resumed.intakeId })
+      .then(
+        (result) => result,
+        () => ({ data: null, error: true }),
+      );
     const status = firstRow(statusRows);
     if (
       !statusError &&
@@ -744,7 +741,8 @@ export async function uploadPhotoMoment(
       status.moment_id &&
       uuidPattern.test(status.moment_id)
     ) {
-      await resumeStore.remove(resumed.id);
+      // Device cleanup cannot undo a confirmed publication.
+      await resumeStore.remove(resumed.id).catch(() => undefined);
       notifyPublishedPhotoMoment(status.moment_id, draft);
       return {
         state: "published",
@@ -761,8 +759,10 @@ export async function uploadPhotoMoment(
       resumed = null;
     }
     if (
-      !statusError &&
-      (status?.status === "uploading" || status?.status === "processing") &&
+      (statusError ||
+        !status ||
+        status.status === "uploading" ||
+        status.status === "processing") &&
       resumed?.intakeId &&
       resumed?.momentId &&
       uuidPattern.test(resumed.momentId)
@@ -989,7 +989,7 @@ export async function uploadPhotoMoment(
     await saveResume({
       acknowledged: true,
       expiresAt: claim.upload_expires_at,
-    });
+    }).catch(() => undefined); // Server acknowledgement is already durable.
 
     onStage({ state: "processing" });
     await (dependencies.processPhoto ?? requestPhotoProcessing)(
@@ -999,18 +999,24 @@ export async function uploadPhotoMoment(
     const pause = dependencies.pause ?? defaultPause;
     const statusAttempts = dependencies.statusAttempts ?? 1;
     for (let index = 0; index < statusAttempts; index += 1) {
-      const { data: statusRows, error: statusError } = await supabase.rpc(
-        "get_photo_moment_status",
-        { intake_id: reservation.intake_id },
-      );
+      const { data: statusRows, error: statusError } = await supabase
+        .rpc("get_photo_moment_status", { intake_id: reservation.intake_id })
+        .then(
+          (result) => result,
+          () => ({ data: null, error: true }),
+        );
       const status = firstRow(statusRows);
       if (statusError || !status) {
-        throw new PhotoUploadError(
-          "The photo’s private status was unavailable.",
-        );
+        // Acknowledgement succeeded: a failed read is not a failed upload.
+        // Keep the resume record and let the status shelf confirm publication.
+        return {
+          state: "processing",
+          intakeId: reservation.intake_id,
+          momentId: reservation.moment_id,
+        };
       }
       if (status.status === "published") {
-        await resumeStore.remove(resumeId);
+        await resumeStore.remove(resumeId).catch(() => undefined);
         notifyPublishedPhotoMoment(reservation.moment_id, draft);
         return {
           state: "published",

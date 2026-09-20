@@ -190,6 +190,11 @@ describe("private photo processing route", () => {
   });
 
   it("returns a retryable response for a temporary worker failure", async () => {
+    mocks.rpc.mockReset();
+    mocks.rpc.mockResolvedValue({
+      data: [{ moment_id: momentId, status: "processing" }],
+      error: null,
+    });
     mocks.process.mockRejectedValue(
       new PhotoWorkerError("private details", true),
     );
@@ -199,6 +204,30 @@ describe("private photo processing route", () => {
       ok: false,
       message: "The photo is still being prepared. Check again shortly.",
     });
+  });
+
+  it("returns success when another request published despite this worker error", async () => {
+    mocks.process.mockRejectedValue(
+      new PhotoWorkerError("Lease already claimed", true),
+    );
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, momentId });
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not claim a failure is terminal when its status cannot be read", async () => {
+    mocks.rpc.mockReset();
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      })
+      .mockRejectedValueOnce(new Error("Network unavailable"));
+    mocks.process.mockRejectedValue(
+      new PhotoWorkerError("Private failure", false),
+    );
+    expect((await request()).status).toBe(503);
   });
 
   it("returns a stable attention response after a terminal safe failure", async () => {
