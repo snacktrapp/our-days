@@ -562,14 +562,6 @@ function selectVisibleChip({
   const saving = saves.find((save) => save.stage.state === "saving");
   if (saving) return momentChip(saving);
 
-  const saved = saves.find((save) => save.stage.state === "published");
-  if (saved) return momentChip(saved);
-
-  const published = uploads.find(
-    (upload) => upload.stage.state === "published",
-  );
-  if (published) return uploadChip(published, onDismissFailed, queuedCount);
-
   return serverShelfChip({
     cancellationResult,
     cancellingIds,

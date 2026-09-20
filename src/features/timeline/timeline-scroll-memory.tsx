@@ -43,6 +43,11 @@ export function TimelineScrollMemory() {
     const shouldRestore = savedPosition > 0;
     let ready = !shouldRestore;
     let scrollFrame = 0;
+    let restoreCancelled = false;
+    const cancelRestore = () => {
+      restoreCancelled = true;
+      ready = true;
+    };
     const previousRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = "manual";
 
@@ -55,10 +60,11 @@ export function TimelineScrollMemory() {
     };
 
     window.addEventListener("scroll", remember, { passive: true });
+    window.addEventListener("our-days:reveal-new-entry", cancelRestore);
     if (shouldRestore) {
       window.requestAnimationFrame(() =>
         window.requestAnimationFrame(() => {
-          window.scrollTo(0, savedPosition);
+          if (!restoreCancelled) window.scrollTo(0, savedPosition);
           ready = true;
           remember();
         }),
@@ -69,6 +75,7 @@ export function TimelineScrollMemory() {
 
     return () => {
       window.removeEventListener("scroll", remember);
+      window.removeEventListener("our-days:reveal-new-entry", cancelRestore);
       window.cancelAnimationFrame(scrollFrame);
       window.history.scrollRestoration = previousRestoration;
     };

@@ -53,4 +53,19 @@ describe("TimelineScrollMemory", () => {
     replaceState.mockRestore();
     scrollTo.mockRestore();
   });
+
+  it("does not restore an old position over a newly published entry", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    const scrollTo = vi.spyOn(window, "scrollTo");
+    sessionStorage.setItem(storageKey, JSON.stringify({ [route()]: 240 }));
+    render(<TimelineScrollMemory />);
+    window.dispatchEvent(new Event("our-days:reveal-new-entry"));
+    while (frames.length) frames.shift()!(0);
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
 });

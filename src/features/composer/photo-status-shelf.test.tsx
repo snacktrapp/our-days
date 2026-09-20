@@ -1183,7 +1183,7 @@ describe("PhotoStatusShelf", () => {
         stage: { state: "published" },
       });
     });
-    expect(screen.getByText("Added to timeline")).toBeVisible();
+    expect(screen.queryByText("Added to timeline")).toBeNull();
 
     act(() => {
       removeOptimisticMediaUpload("published-local-upload");

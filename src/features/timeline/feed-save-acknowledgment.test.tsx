@@ -1,5 +1,5 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
 import {
   addOptimisticMediaUpload,
@@ -13,10 +13,73 @@ import {
   retryOptimisticMomentSave,
 } from "@/features/composer/optimistic-moment-save";
 
+beforeEach(() => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+});
+
 afterEach(() => {
   cleanup();
   clearOptimisticMomentSaves();
   clearOptimisticMediaUploads();
+  vi.restoreAllMocks();
+});
+
+it("reveals the completed post once, below the header, and not again on refresh", async () => {
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const view = render(
+    <>
+      <header className="topbar" />
+      <article id="moment-backdated-photo" />
+      <FeedSaveAcknowledgment
+        momentIds={["backdated-photo"]}
+        mediaCounts={{ "backdated-photo": 1 }}
+      />
+    </>,
+  );
+  vi.spyOn(
+    document.querySelector(".topbar")!,
+    "getBoundingClientRect",
+  ).mockReturnValue({ bottom: 100 } as DOMRect);
+  vi.spyOn(
+    document.getElementById("moment-backdated-photo")!,
+    "getBoundingClientRect",
+  ).mockReturnValue({ top: 900 } as DOMRect);
+  act(() =>
+    addOptimisticMediaUpload({
+      id: "new-upload",
+      circleId: "family",
+      kind: "photo",
+      body: "",
+      occurredOn: "2020-01-01",
+      occurredTime: "",
+      journalPersonId: "alex",
+      journalPersonName: "Alex",
+      journalPersonInitial: "A",
+      journalPersonAccent: "teal",
+      previewUrl: "",
+      momentId: "backdated-photo",
+      totalFiles: 1,
+      completedFiles: 1,
+      stage: { state: "published" },
+    }),
+  );
+  act(() => frames.splice(0).forEach((callback) => callback(0)));
+  expect(window.scrollTo).toHaveBeenCalledWith({
+    top: 784,
+    behavior: "instant",
+  });
+  expect(optimisticMediaUploadSnapshot()).toHaveLength(0);
+  view.rerender(
+    <FeedSaveAcknowledgment
+      momentIds={["backdated-photo"]}
+      mediaCounts={{ "backdated-photo": 1 }}
+    />,
+  );
+  expect(window.scrollTo).toHaveBeenCalledTimes(1);
 });
 
 it("waits for the complete album, not just its already-visible cover", () => {
