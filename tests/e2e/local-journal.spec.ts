@@ -79,6 +79,38 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   ).toBeVisible();
 });
 
+test("header touch selection survives a focusless blur and opens the signed-in journal", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  const trigger = page.getByRole("button", { name: "Choose a journal" });
+  await trigger.tap();
+  await trigger.focus();
+  const justMe = page.getByRole("link", { name: "Just me", exact: true });
+  // Exercise Safari's blur-before-click ordering even on Chromium CI.
+  await justMe.evaluate((node) => {
+    node.addEventListener(
+      "pointerdown",
+      () => {
+        (document.activeElement as HTMLElement)?.blur();
+      },
+      { once: true },
+    );
+  });
+  await justMe.tap();
+  await expect(page).toHaveURL(new RegExp(`/people/${localAlexPersonId}$`));
+  await expect(page.getByLabel("Chronological moments for Alex")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Just me", exact: true }),
+  ).toBeVisible();
+  await trigger.tap();
+  await page.getByRole("link", { name: "All circles", exact: true }).tap();
+  await expect(page).toHaveURL(/\/family$/);
+  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+});
+
 test("cold open paints usable Family content after sign-in", async ({
   page,
 }) => {

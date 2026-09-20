@@ -85,6 +85,7 @@ describe("FamilyTitleSwitcher", () => {
   it("allows keyboard navigation without trapping focus", async () => {
     const user = userEvent.setup();
     await openSwitcher();
+    render(<button type="button">Outside selector</button>);
     const trigger = screen.getByRole("button", { name: "Choose a journal" });
     trigger.focus();
     await user.keyboard("{ArrowDown}");
@@ -93,6 +94,9 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.getByRole("link", { name: "All circles" })).toHaveFocus();
     await user.tab();
     expect(screen.queryByRole("navigation")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Outside selector" }),
+    ).toHaveFocus();
   });
 
   it("chooses a feed and remembers it without opening a modal", async () => {
@@ -102,6 +106,21 @@ describe("FamilyTitleSwitcher", () => {
     expect(sessionStorage.getItem("our-days:primary-feed")).toBe("you");
     expect(screen.queryByRole("navigation")).toBeNull();
     expect(screen.getByRole("heading", { name: "Just me" })).toBeVisible();
+  });
+
+  it("keeps a touched choice mounted when the trigger blurs before its click", async () => {
+    await openSwitcher();
+    const trigger = screen.getByRole("button", { name: "Choose a journal" });
+    trigger.focus();
+    const choice = screen.getByRole("link", { name: "Just me" });
+    fireEvent.pointerDown(choice, { pointerType: "touch", pointerId: 1 });
+    // iOS can blur the trigger without focusing the tapped anchor.
+    fireEvent.blur(trigger, { relatedTarget: null });
+    expect(choice).toBeInTheDocument();
+    fireEvent.pointerUp(choice, { pointerType: "touch", pointerId: 1 });
+    fireEvent.click(choice);
+    expect(navigation.push).toHaveBeenCalledExactlyOnceWith("/people/brian");
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 
   it("closes when the server destination changes", async () => {

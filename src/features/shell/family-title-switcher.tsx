@@ -123,7 +123,14 @@ export function FamilyTitleSwitcher({
       ref={rootRef}
       className={`title-switcher${open ? " is-open" : ""}`}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+        // Safari may blur the trigger to no focus target while a menu link
+        // is being tapped. Removing the link here would swallow its click.
+        // Outside taps already dismiss through the pointerdown listener.
+        if (
+          event.relatedTarget &&
+          !event.currentTarget.contains(event.relatedTarget)
+        )
+          setOpen(false);
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
