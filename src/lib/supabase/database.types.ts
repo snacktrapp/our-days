@@ -1443,6 +1443,10 @@ export type Database = {
         Args: { auth: string; endpoint: string; p256dh: string };
         Returns: string;
       };
+      set_my_profile_color: {
+        Args: { color: string };
+        Returns: boolean;
+      };
       set_moment_audience: {
         Args: {
           audience: string;

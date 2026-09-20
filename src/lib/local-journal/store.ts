@@ -1,4 +1,5 @@
 import "server-only";
+import type { ProfileColorToken } from "@/features/profile-color";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -198,6 +199,34 @@ export function sha256Hex(bytes: Uint8Array | Buffer) {
 
 export async function readLocalJournal() {
   return withStoreLock(() => readDocumentUnlocked());
+}
+
+export async function saveLocalProfileColor(
+  access: LocalAccess,
+  color: ProfileColorToken,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    // Extra circles in the local fixture belong to its primary account.
+    const account = extraCircleForAccess(document, access)
+      ? document.accounts[0]
+      : document.accounts.find((item) => item.personId === access.personId);
+    if (!account) throw new Error("Your profile could not be found.");
+    writeDocumentUnlocked({
+      ...document,
+      people: document.people.map((person) =>
+        person.id === account.personId
+          ? { ...person, accentToken: color }
+          : person,
+      ),
+      extraCircles: (document.extraCircles ?? []).map((circle) =>
+        account.personId === document.accounts[0]?.personId
+          ? { ...circle, accentToken: color }
+          : circle,
+      ),
+    });
+  });
 }
 
 export async function createLocalCircle(

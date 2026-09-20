@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import {
+  storedProfileColors,
+  type StoredProfileColor,
+} from "@/features/profile-color";
 
 export const FAMILY_EXPORT_FORMAT = "our-days-family-export" as const;
 export const FAMILY_EXPORT_VERSION = 1 as const;
@@ -16,7 +20,7 @@ export type FamilyExportPerson = Readonly<{
   circleId: string;
   displayName: string;
   profileKind: "account" | "managed";
-  accentToken: "clay" | "sage" | "gold" | "sky" | "plum" | "rose";
+  accentToken: StoredProfileColor;
   createdByMembershipId: string;
   createdAt: string;
   updatedAt: string;
@@ -493,7 +497,7 @@ function parseRecords(value: unknown, snapshotAt: string): FamilyExportRecords {
         ),
         accentToken: enumeration(
           r.accentToken,
-          ["clay", "sage", "gold", "sky", "plum", "rose"] as const,
+          storedProfileColors,
           "Person accent token",
         ),
         createdByMembershipId: uuid(

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AccentToken } from "@/features/accent-token";
+import { profileColorAccent } from "@/features/profile-color";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { PostableCircle } from "@/features/composer/post-to";
 import {
@@ -31,17 +32,8 @@ import {
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 
-const accentMap: Readonly<Record<string, AccentToken>> = {
-  clay: "clay",
-  gold: "ochre",
-  plum: "clay",
-  rose: "ochre",
-  sage: "moss",
-  sky: "teal",
-};
-
 export function mapDatabaseAccent(value: string): AccentToken {
-  return accentMap[value] ?? "slate";
+  return profileColorAccent(value);
 }
 
 function initialFor(name: string) {

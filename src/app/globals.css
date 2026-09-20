@@ -157,11 +157,15 @@ html.composer-scroll-locked .phone-stage {
 button {
   font: inherit;
 }
-a:focus-visible,
-button:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
-  outline-offset: 2px;
+/* Product-wide policy: focusing a control or restoring focus after a sheet
+   closes must not paint a ring. Keep focus behavior and semantic states intact.
+   Important intentionally wins over older component-specific focus styles. */
+:focus,
+:focus-visible,
+.photo-input:has(input:focus-visible),
+.video-feasibility-input:has(input:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* Journal header / lightbox chrome: no focus ring at all, including
@@ -636,6 +640,127 @@ button:focus-visible,
 }
 .dot-moss {
   background: var(--moss);
+}
+.dot-turquoise {
+  background: #147d83;
+  color: #fff;
+}
+.dot-violet {
+  background: #7855b5;
+  color: #fff;
+}
+.dot-cyan {
+  background: #087ba1;
+  color: #fff;
+}
+.dot-emerald {
+  background: #287952;
+  color: #fff;
+}
+.dot-lime {
+  background: #577522;
+  color: #fff;
+}
+.dot-coral {
+  background: #ba504e;
+  color: #fff;
+}
+.dot-orange {
+  background: #b45b20;
+  color: #fff;
+}
+.dot-indigo {
+  background: #5356a6;
+  color: #fff;
+}
+[class].dot-teal,
+[class].dot-clay,
+[class].dot-ochre,
+[class].dot-slate,
+[class].dot-moss {
+  color: #101216;
+}
+:root[data-theme="light"]
+  :is(.dot-teal, .dot-clay, .dot-ochre, .dot-slate, .dot-moss) {
+  color: #fff;
+}
+
+.profile-color-settings {
+  margin: 0 16px 24px;
+  padding: 16px;
+}
+.profile-color-settings .settings-heading {
+  padding: 0;
+}
+.profile-color-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.profile-color-preview > span:last-child {
+  margin-left: auto;
+  color: var(--muted);
+  font: var(--chrome-meta);
+}
+.profile-color-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.profile-color-options label {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 4px;
+  font: var(--chrome-meta);
+  color: var(--muted);
+  cursor: pointer;
+}
+.profile-color-options input {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.profile-color-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font: 650 22px var(--font-interface);
+}
+.profile-color-options label:has(input:checked) {
+  color: var(--ink);
+}
+.profile-color-options:disabled {
+  opacity: 0.65;
+}
+.profile-color-save {
+  margin-top: 16px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--action);
+  color: var(--action-ink);
+  font: 600 13px var(--font-interface);
+  cursor: pointer;
+}
+.profile-color-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.profile-color-hint {
+  color: var(--muted);
+  font: var(--chrome-body);
+  margin: 10px 0 0;
 }
 .title-lockup {
   text-align: center;
