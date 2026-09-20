@@ -22,11 +22,24 @@ export function useScrollAwayHeader() {
         ),
       );
     let previous = position();
-    let travel = 0;
-    let direction = 0;
+    let offset = 0;
+    let distance = 0;
+    const paint = () => {
+      header.style.setProperty("--header-scroll-offset", `${-offset}px`);
+      header.dataset.scrollHidden = String(offset >= distance && distance > 0);
+    };
+    const measure = () => {
+      distance =
+        header.offsetHeight +
+        (parseFloat(getComputedStyle(header).top) || 0) +
+        24;
+      offset = Math.min(offset, distance);
+      paint();
+      previous = position();
+    };
     const show = () => {
-      header.dataset.scrollHidden = "false";
-      travel = 0;
+      offset = 0;
+      paint();
       previous = position();
     };
     const heldOpen = () =>
@@ -39,20 +52,16 @@ export function useScrollAwayHeader() {
       const y = position();
       const delta = y - previous;
       previous = y;
-      if (y < 96 || heldOpen()) {
+      if (y === 0 || heldOpen()) {
         show();
         return;
       }
       if (!delta) return;
-      const nextDirection = Math.sign(delta);
-      if (nextDirection !== direction) travel = 0;
-      direction = nextDirection;
-      travel += Math.abs(delta);
-      if (travel >= (direction > 0 ? 36 : 12)) {
-        header.dataset.scrollHidden = String(direction > 0);
-        travel = 0;
-      }
+      // No threshold or timed animation: reverse immediately, pixel for pixel.
+      offset = Math.max(0, Math.min(distance, y, offset + delta));
+      paint();
     };
+    measure();
     show();
     const observer = new MutationObserver(() => {
       if (heldOpen()) show();
@@ -67,14 +76,19 @@ export function useScrollAwayHeader() {
       attributeFilter: ["class"],
     });
     window.addEventListener("scroll", scroll, { passive: true });
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
     window.addEventListener("our-days:reveal-new-entry", show);
     header.addEventListener("focusin", show);
     return () => {
       observer.disconnect();
       window.removeEventListener("scroll", scroll);
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
       window.removeEventListener("our-days:reveal-new-entry", show);
       header.removeEventListener("focusin", show);
       delete header.dataset.scrollHidden;
+      header.style.removeProperty("--header-scroll-offset");
     };
   }, [pathname]);
   return ref;
