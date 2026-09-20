@@ -124,15 +124,14 @@ export async function verifySignInCode(
       };
     }
 
-    if (!data || data.length === 0) {
-      const accepted = await acceptPendingInvitationForSession(supabase);
-      if (!accepted) {
-        return {
-          status: "no-access",
-          email,
-          message: "This account does not have access to a family circle.",
-        };
-      }
+    // Existing members can also be invited to another circle.
+    const accepted = await acceptPendingInvitationForSession(supabase);
+    if ((!data || data.length === 0) && !accepted) {
+      return {
+        status: "no-access",
+        email,
+        message: "This account does not have access to a family circle.",
+      };
     }
   } catch {
     return {

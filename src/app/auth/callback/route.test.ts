@@ -118,6 +118,20 @@ describe("magic-link callback", () => {
     );
   });
 
+  it.each(["code=one-time", "token_hash=hashed-token&type=magiclink"])(
+    "accepts another circle invitation for an existing member (%s)",
+    async (query) => {
+      mocks.acceptPending.mockResolvedValueOnce(true);
+      const response = await GET(
+        new Request(`https://journal.example.com/auth/callback?${query}`),
+      );
+      expect(mocks.acceptPending).toHaveBeenCalledOnce();
+      expect(response.headers.get("location")).toBe(
+        "https://journal.example.com/family",
+      );
+    },
+  );
+
   it("clears the local session when membership verification fails", async () => {
     mocks.limit.mockResolvedValueOnce({
       data: null,
