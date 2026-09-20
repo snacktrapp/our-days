@@ -1581,8 +1581,7 @@ button:focus-visible,
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  border-radius: 13px;
-  background: rgba(107, 119, 93, 0.07);
+  background: transparent;
 }
 
 .inline-note-author strong {
@@ -5804,9 +5803,6 @@ html.overlay-open .bottom-nav {
 }
 
 .inline-note-summary li {
-  border-left: 2px solid var(--accent);
-  border-radius: 3px;
-  background: var(--surface-raised);
   color: var(--ink);
 }
 
@@ -7058,7 +7054,6 @@ html[data-theme].overlay-open .app-shell::before,
 :root[data-theme="light"] .view-switch summary,
 :root[data-theme="light"] .view-switch a.active,
 :root[data-theme="light"] .view-switch nav,
-:root[data-theme="light"] .inline-note-summary li,
 :root[data-theme="light"] .inline-reaction-picker,
 :root[data-theme="light"] .inline-note-form,
 :root[data-theme="light"] .inline-note-edit,
