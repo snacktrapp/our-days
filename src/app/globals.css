@@ -575,6 +575,15 @@ button:focus-visible,
   backdrop-filter: blur(var(--nav-pill-blur));
   -webkit-backdrop-filter: blur(var(--nav-pill-blur));
 }
+.topbar[data-scroll-hidden="true"] {
+  translate: 0
+    calc(
+      -100% - env(safe-area-inset-top) - var(--bottom-nav-float-gap) -
+        var(--vv-offset-top) - 24px
+    );
+  pointer-events: none;
+}
+
 .family-mark,
 .quiet-button {
   min-width: 44px;
@@ -8664,6 +8673,7 @@ iframe.composer-location-map {
 @media (prefers-reduced-motion: no-preference) {
   .topbar {
     transition:
+      translate 180ms ease,
       transform 180ms ease,
       height 180ms ease,
       padding 180ms ease;

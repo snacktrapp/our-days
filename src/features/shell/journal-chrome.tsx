@@ -38,6 +38,7 @@ import type {
 } from "./shell-view-model";
 import { currentHomeContext } from "./journal-switcher";
 import { sectionHeading } from "./journal-heading";
+import { useScrollAwayHeader } from "./use-scroll-away-header";
 
 export type { FamilyTimelineSwitcherItem };
 
@@ -67,6 +68,7 @@ function PrimaryJournalHeader({
   switcher?: readonly FamilyTimelineSwitcherItem[];
   onSelectGroup?: (circleId: string) => void;
 }>) {
+  const headerRef = useScrollAwayHeader();
   const title =
     !browsingCircle && switcher && switcher.length > 0 ? (
       <FamilyTitleSwitcher
@@ -79,7 +81,7 @@ function PrimaryJournalHeader({
     );
 
   return (
-    <header className="topbar">
+    <header ref={headerRef} className="topbar">
       <SettingsLink href={model.settingsHref} />
       {title}
       <div className="topbar-actions">
