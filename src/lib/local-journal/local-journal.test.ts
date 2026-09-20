@@ -25,6 +25,7 @@ import {
   findLocalAccount,
   readLocalJournal,
   renameLocalCircle,
+  saveLocalProfileColor,
   resetLocalJournalForTests,
   setLocalReaction,
   updateLocalMomentAudience,
@@ -64,6 +65,25 @@ describe("local journal happy path", () => {
     const account = await findLocalAccount(localFamilyEmail);
     expect(account?.personId).toBe(localAlexPersonId);
     expect(account).toBeDefined();
+  });
+
+  it("saves profile color across own circles without changing other people", async () => {
+    await createLocalCircle(access, "Color circle", localCircleId);
+    await saveLocalProfileColor(access, "violet");
+    const document = await readLocalJournal();
+    expect(
+      document.people.find((person) => person.id === localAlexPersonId)
+        ?.accentToken,
+    ).toBe("violet");
+    expect(
+      document.people.find((person) => person.id === localJordanPersonId)
+        ?.accentToken,
+    ).not.toBe("violet");
+    expect(document.extraCircles?.[0].accentToken).toBe("violet");
+    await createLocalCircle(access, "Another circle", localCircleId);
+    expect((await readLocalJournal()).extraCircles?.[1].accentToken).toBe(
+      "violet",
+    );
   });
 
   it("saves written moments on the generic path", async () => {

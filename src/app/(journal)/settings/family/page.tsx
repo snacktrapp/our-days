@@ -31,6 +31,30 @@ import { createGroupAction } from "@/features/groups/create-group-action";
 import { renameCircleAction } from "@/features/groups/rename-circle-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { countFamilyFacingPeople } from "@/lib/circle-roles";
+import { ProfileColorSelector } from "@/features/family-settings/profile-color-selector";
+import { saveProfileColorAction } from "@/features/family-settings/profile-color-action";
+import type { FamilySettingsPanelViewModel } from "@/features/family-settings/family-settings-view-model";
+
+function ProfileColorSettings({
+  model,
+}: {
+  model: FamilySettingsPanelViewModel;
+}) {
+  const person = model.groups
+    .flatMap((group) => group.members)
+    .find((member) => member.id === model.currentMemberId);
+  if (!person) return null;
+  return (
+    <ProfileColorSelector
+      key={`${person.id}-${person.accent}`}
+      name={person.name}
+      initial={person.initial}
+      accent={person.accent}
+      preview={model.mode === "preview"}
+      saveColor={saveProfileColorAction}
+    />
+  );
+}
 
 export default async function FamilySettingsPage({
   searchParams,
@@ -74,6 +98,7 @@ export default async function FamilySettingsPage({
     );
     return (
       <JournalChrome model={model.chrome} section="settings">
+        <ProfileColorSettings model={model.panel} />
         <FamilySettingsPanel
           model={model.panel}
           createGroupAction={createGroupAction}
@@ -167,6 +192,7 @@ export default async function FamilySettingsPage({
       section="settings"
       createMomentAction={createFamilyMomentAction}
     >
+      <ProfileColorSettings model={model.panel} />
       <FamilySettingsPanel
         model={model.panel}
         createGroupAction={createGroupAction}

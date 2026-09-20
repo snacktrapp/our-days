@@ -1,3 +1,5 @@
+import type { StoredProfileColor } from "@/features/profile-color";
+
 export type LocalMomentKind =
   "thought" | "milestone" | "location" | "photo" | "video" | "insight";
 
@@ -5,7 +7,7 @@ export type LocalPerson = Readonly<{
   id: string;
   displayName: string;
   profileKind: "account" | "managed";
-  accentToken: "clay" | "gold" | "sage" | "sky";
+  accentToken: StoredProfileColor;
   createdAt: string;
 }>;
 
