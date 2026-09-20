@@ -2918,6 +2918,50 @@ span.moment-place-line {
   border-bottom: 1px solid var(--hairline);
   padding: 12px 16px 14px;
 }
+.add-existing-member {
+  padding: 14px 16px;
+}
+.add-existing-member > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font: var(--chrome-body);
+}
+.add-existing-member .connected-invite-form {
+  padding: 14px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.add-existing-member label {
+  font: var(--chrome-meta);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.add-existing-member button {
+  min-height: 44px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--action);
+  color: var(--action-ink);
+  font: var(--chrome-body);
+  cursor: pointer;
+}
+.add-existing-member button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.add-existing-member select {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: var(--cream);
+  color: var(--ink);
+  font: var(--chrome-body);
+}
 .circle-invite-section .settings-heading h3,
 .circle-access-heading h3 {
   margin: 5px 0 7px;

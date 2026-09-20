@@ -10,6 +10,10 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import {
+  AddExistingMember,
+  type ExistingMemberActions,
+} from "./add-existing-member";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
@@ -41,6 +45,7 @@ type RenameCircleActionResult = Readonly<
 >;
 
 type ConnectedActions = Readonly<{
+  existingMembers?: ExistingMemberActions;
   requestInvitation?: (input: {
     displayName: string;
     email: string;
@@ -663,6 +668,12 @@ function PreviewFamilySettingsPanel({
                 </button>
               </aside>
             ) : null}
+            <AddExistingMember
+              key={circle.id}
+              circle={circle}
+              groups={model.groups}
+              preview
+            />
             <section
               className="invite-section circle-invite-section"
               id="invite"
@@ -1325,6 +1336,12 @@ function ConnectedFamilySettingsPanel({
                 </div>
               </aside>
             ) : null}
+            <AddExistingMember
+              key={circle.id}
+              circle={circle}
+              groups={model.groups}
+              actions={actions.existingMembers}
+            />
             <section
               className="invite-section circle-invite-section"
               id="invite"
