@@ -195,4 +195,16 @@ describe("passwordless email sign-in actions", () => {
       message: "This account does not have access to a family circle.",
     });
   });
+
+  it("accepts another circle invitation for an existing member after code verification", async () => {
+    mocks.acceptPending.mockResolvedValueOnce(true);
+    await expect(
+      verifySignInCode(
+        initialSignInActionState,
+        form({ email: "family@example.com", code: "123456" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.acceptPending).toHaveBeenCalledOnce();
+    expect(mocks.redirect).toHaveBeenCalledWith("/family");
+  });
 });

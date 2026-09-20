@@ -21,11 +21,10 @@ export async function completeInvitedSignIn() {
     redirect("/sign-in?link=unavailable");
   }
 
-  if (!data || data.length === 0) {
-    const accepted = await acceptPendingInvitationForSession(supabase);
-    if (!accepted) {
-      redirect("/access-unavailable");
-    }
+  // Existing members can also be invited to another circle.
+  const accepted = await acceptPendingInvitationForSession(supabase);
+  if ((!data || data.length === 0) && !accepted) {
+    redirect("/access-unavailable");
   }
 
   redirect("/family");

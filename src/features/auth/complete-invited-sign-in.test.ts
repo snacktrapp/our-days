@@ -46,12 +46,22 @@ describe("completeInvitedSignIn", () => {
   });
 
   it("keeps a signed-in member without a pending invite", async () => {
+    mocks.acceptPending.mockResolvedValueOnce(false);
     mocks.limit.mockResolvedValueOnce({
       data: [{ circle_id: "circle-a" }],
       error: null,
     });
     await expect(completeInvitedSignIn()).rejects.toThrow("REDIRECT:/family");
-    expect(mocks.acceptPending).not.toHaveBeenCalled();
+    expect(mocks.acceptPending).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a new circle invitation for an existing member", async () => {
+    mocks.limit.mockResolvedValueOnce({
+      data: [{ circle_id: "existing-circle" }],
+      error: null,
+    });
+    await expect(completeInvitedSignIn()).rejects.toThrow("REDIRECT:/family");
+    expect(mocks.acceptPending).toHaveBeenCalledOnce();
   });
 
   it("rejects a missing session", async () => {

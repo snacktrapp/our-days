@@ -40,11 +40,10 @@ export async function GET(request: Request) {
       return appRedirect(request, "/sign-in?link=unavailable");
     }
 
-    if (!data || data.length === 0) {
-      const accepted = await acceptPendingInvitationForSession(supabase);
-      if (!accepted) {
-        return appRedirect(request, "/access-unavailable");
-      }
+    // Existing members can also be invited to another circle.
+    const accepted = await acceptPendingInvitationForSession(supabase);
+    if ((!data || data.length === 0) && !accepted) {
+      return appRedirect(request, "/access-unavailable");
     }
 
     return appRedirect(request, "/family");
