@@ -188,7 +188,7 @@ test("reduced-motion preference removes entrance animations", async ({
   );
 });
 
-test("the graph-paper grid is painted by a viewport-fixed layer", async ({
+test("the journal uses a plain canvas and retains compact floating navigation", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -211,8 +211,8 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
   });
 
   expect(grid.position).toBe("fixed");
-  expect(grid.backgroundImage).toContain("linear-gradient");
-  expect(grid.rootBackgroundImage).toContain("linear-gradient");
+  expect(grid.backgroundImage).toBe("none");
+  expect(grid.rootBackgroundImage).toBe("none");
   expect(grid.phoneStageBackgroundImage).toBe("none");
   expect(grid).toMatchObject({
     bottom: "0px",
@@ -220,6 +220,8 @@ test("the graph-paper grid is painted by a viewport-fixed layer", async ({
     right: "0px",
     top: "0px",
   });
+  await expect(page.locator(".topbar")).toHaveCSS("height", "56px");
+  await expect(page.locator(".bottom-nav")).toHaveCSS("height", "56px");
 });
 
 async function expectComposerMatchesActivitySheet(page: Page) {
