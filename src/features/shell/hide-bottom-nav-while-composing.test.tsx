@@ -122,7 +122,7 @@ describe("bottom nav while composing", () => {
       screen.getByRole("textbox", { name: "Add a family note" }),
     ).toHaveFocus();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(document.querySelector(".inline-note-form")).toBeNull();
