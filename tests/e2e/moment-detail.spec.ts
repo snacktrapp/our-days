@@ -6,6 +6,24 @@ function firstPhoto(page: Page) {
   return page.locator('[data-moment-kind="photo"]').first();
 }
 
+test("inline comments stay unboxed in both themes", async ({ page }) => {
+  await page.goto("/family");
+  const comment = firstPhoto(page).locator(".inline-note-summary li").first();
+  await expect(comment).toBeVisible();
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await expect(comment).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    for (const side of ["top", "right", "bottom", "left"]) {
+      await expect(comment).toHaveCSS(`border-${side}-width`, "0px");
+    }
+    await expect(comment.locator(".note-avatar")).toBeVisible();
+    await expect(comment.locator("strong")).toBeVisible();
+    await expect(comment.locator("p")).toBeVisible();
+  }
+});
+
 async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   const trigger = card.getByRole("button", { name: /Add a note to/u });
   await page.evaluate(() => {
