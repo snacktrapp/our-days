@@ -29,6 +29,7 @@ type NotificationItem = NonNullable<
 const storageKey = "our-days:seen-notifications";
 const storageEvent = "our-days-notifications-seen";
 export const activityPageSize = 20;
+const emptyItems: readonly NotificationItem[] = [];
 
 function subscribeToSeenNotifications(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -48,11 +49,22 @@ function readSeenNotifications() {
 }
 
 export function NotificationCenter({
-  items = [],
-}: Readonly<{ items?: readonly NotificationItem[] }>) {
+  items: initialItems = emptyItems,
+  refreshOnOpen = false,
+}: Readonly<{ items?: readonly NotificationItem[]; refreshOnOpen?: boolean }>) {
   const panelId = useId();
   const titleId = useId();
   const [open, setOpen] = useState(false);
+  const [freshSnapshot, setFreshSnapshot] = useState<{
+    source: readonly NotificationItem[];
+    items: readonly NotificationItem[];
+  } | null>(null);
+  const [refreshAttempt, setRefreshAttempt] = useState(0);
+  const [refreshState, setRefreshState] = useState<
+    "idle" | "loading" | "error"
+  >("idle");
+  const items =
+    freshSnapshot?.source === initialItems ? freshSnapshot.items : initialItems;
   const [visibleCount, setVisibleCount] = useState(activityPageSize);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -115,6 +127,45 @@ export function NotificationCenter({
     [items, seenIds],
   );
 
+  useEffect(() => {
+    if (!open || !refreshOnOpen) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    let active = true;
+    fetch("/api/activity", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Activity unavailable");
+        const result = (await response.json()) as { items: NotificationItem[] };
+        if (!Array.isArray(result.items)) throw new Error("Invalid activity");
+        if (active) {
+          setFreshSnapshot({ source: initialItems, items: result.items });
+          setRefreshState("idle");
+        }
+      })
+      .catch(() => {
+        if (active) setRefreshState("error");
+      })
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [open, refreshOnOpen, refreshAttempt, initialItems]);
+
+  useEffect(() => {
+    if (!open || unseenIds.length === 0) return;
+    const nextSeen = Array.from(new Set([...seenIds, ...unseenIds])).slice(
+      -100,
+    );
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(nextSeen));
+      window.dispatchEvent(new Event(storageEvent));
+    } catch {
+      // Reading Activity still works when local storage is unavailable.
+    }
+  }, [open, seenIds, unseenIds]);
+
   const visibleItems = items.slice(0, visibleCount);
   const hasMore = visibleCount < items.length;
 
@@ -163,17 +214,8 @@ export function NotificationCenter({
     }
     cancel();
     setVisibleCount(activityPageSize);
+    setRefreshState(refreshOnOpen ? "loading" : "idle");
     setOpen(true);
-    if (unseenIds.length === 0) return;
-    const nextSeen = Array.from(new Set([...seenIds, ...unseenIds])).slice(
-      -100,
-    );
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(nextSeen));
-      window.dispatchEvent(new Event(storageEvent));
-    } catch {
-      // The activity panel remains usable when storage is unavailable.
-    }
   };
 
   const sheet = (
@@ -222,6 +264,23 @@ export function NotificationCenter({
           className="activity-sheet-list"
           onScroll={onListScroll}
         >
+          {refreshState === "loading" ? (
+            <p role="status">Checking for new activity…</p>
+          ) : null}
+          {refreshState === "error" ? (
+            <div role="status">
+              <p>Activity couldn’t be refreshed.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setRefreshState("loading");
+                  setRefreshAttempt((attempt) => attempt + 1);
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
           {items.length > 0 ? (
             <ol>
               {visibleItems.map((item) => (
@@ -242,9 +301,9 @@ export function NotificationCenter({
                 </li>
               ) : null}
             </ol>
-          ) : (
+          ) : refreshState === "idle" ? (
             <p>No new family activity.</p>
-          )}
+          ) : null}
         </div>
       </section>
     </dialog>

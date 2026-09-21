@@ -85,7 +85,15 @@ function PrimaryJournalHeader({
       <SettingsLink href={model.settingsHref} />
       {title}
       <div className="topbar-actions">
-        {activity ?? <NotificationCenter items={model.notifications} />}
+        {activity ?? (
+          <NotificationCenter
+            items={model.notifications}
+            refreshOnOpen={
+              model.composer.experience === "connected-family" ||
+              model.composer.experience === "connected-written"
+            }
+          />
+        )}
         <ThemeToggle />
       </div>
     </header>

@@ -348,9 +348,6 @@ export function buildActivityNotifications(
 
 type JournalClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
 
-/** Active-circle Activity scan — never dump every linked id across the roster. */
-const activityLinkScanLimit = 80;
-
 const emptyOptionalActivity = {
   notes: [] as ActivityNote[],
   reactions: [] as ActivityReaction[],
@@ -362,68 +359,46 @@ async function loadOptionalJournalActivity(
   supabase: JournalClient,
   access: AuthenticatedAccess,
   myMembershipIds: ReadonlySet<string>,
+  circleIds: readonly string[],
+  strict = false,
 ) {
   try {
-    const [ownedMomentsResult, familyLinksResult] = await Promise.all([
+    const [ownedMomentsResult, linkedMomentsResult] = await Promise.all([
       supabase
         .from("moments")
-        .select("id")
-        .eq("circle_id", access.circleId)
-        .eq("recorded_by_membership_id", access.membershipId)
+        .select("id, moment_circles(circle_id)")
+        .in("recorded_by_membership_id", [...myMembershipIds])
         .is("trashed_at", null),
       supabase
-        .from("moment_circles")
-        .select("moment_id, circle_id")
-        .eq("circle_id", access.circleId)
-        .limit(activityLinkScanLimit),
+        .from("moments")
+        .select(
+          "id, recorded_by_membership_id, kind, created_at, audience, moment_circles!inner(circle_id)",
+        )
+        .in("moment_circles.circle_id", [...circleIds])
+        .eq("audience", "family")
+        .neq("kind", "insight")
+        .not(
+          "recorded_by_membership_id",
+          "in",
+          `(${[...myMembershipIds].join(",")})`,
+        )
+        .is("trashed_at", null)
+        .order("created_at", { ascending: false })
+        .limit(40),
     ]);
-
-    const ownedFromCircle = ownedMomentsResult.error
-      ? []
-      : (ownedMomentsResult.data ?? []);
-    const familyLinks = familyLinksResult.error
-      ? []
-      : (familyLinksResult.data ?? []);
+    if (ownedMomentsResult.error) throw ownedMomentsResult.error;
+    if (linkedMomentsResult.error) throw linkedMomentsResult.error;
+    const ownedFromCircle = ownedMomentsResult.data ?? [];
+    const linkedMoments = linkedMomentsResult.data ?? [];
 
     const visibleCircleByMomentId = new Map<string, string>();
-    for (const row of familyLinks) {
-      const existing = visibleCircleByMomentId.get(row.moment_id);
-      if (!existing || row.circle_id === access.circleId) {
-        visibleCircleByMomentId.set(row.moment_id, row.circle_id);
-      }
+    for (const moment of [...ownedFromCircle, ...linkedMoments]) {
+      const links = moment.moment_circles ?? [];
+      const circle =
+        links.find((link) => link.circle_id === access.circleId) ?? links[0];
+      if (circle) visibleCircleByMomentId.set(moment.id, circle.circle_id);
     }
-    const linkedMomentIds = [...visibleCircleByMomentId.keys()];
-    const linkedMomentsResult =
-      linkedMomentIds.length === 0
-        ? {
-            data: [] as {
-              id: string;
-              recorded_by_membership_id: string;
-              kind: string;
-              created_at: string;
-              audience?: string;
-            }[],
-            error: null,
-          }
-        : await supabase
-            .from("moments")
-            .select("id, recorded_by_membership_id, kind, created_at, audience")
-            .in("id", linkedMomentIds)
-            .eq("audience", "family")
-            .is("trashed_at", null)
-            .order("created_at", { ascending: false })
-            .limit(40);
-    const linkedMoments = linkedMomentsResult.error
-      ? []
-      : (linkedMomentsResult.data ?? []);
-    const ownedMomentIds = new Set([
-      ...ownedFromCircle.map((moment) => moment.id),
-      ...linkedMoments
-        .filter((moment) =>
-          myMembershipIds.has(moment.recorded_by_membership_id),
-        )
-        .map((moment) => moment.id),
-    ]);
+    const ownedMomentIds = new Set(ownedFromCircle.map((moment) => moment.id));
     const conversationMomentIds = [...ownedMomentIds];
     const [notesResult, reactionsResult] =
       conversationMomentIds.length === 0
@@ -438,6 +413,11 @@ async function loadOptionalJournalActivity(
                 "id, moment_id, author_membership_id, created_at, circle_id",
               )
               .in("moment_id", conversationMomentIds)
+              .not(
+                "author_membership_id",
+                "in",
+                `(${[...myMembershipIds].join(",")})`,
+              )
               .is("trashed_at", null)
               .order("created_at", { ascending: false })
               .limit(40),
@@ -447,21 +427,26 @@ async function loadOptionalJournalActivity(
                 "id, moment_id, author_membership_id, reaction_type, created_at, circle_id",
               )
               .in("moment_id", conversationMomentIds)
+              .not(
+                "author_membership_id",
+                "in",
+                `(${[...myMembershipIds].join(",")})`,
+              )
               .is("removed_at", null)
               .order("created_at", { ascending: false })
               .limit(40),
           ]);
+    if (notesResult.error) throw notesResult.error;
+    if (reactionsResult.error) throw reactionsResult.error;
     const visibleCircleOf = (momentId: string, fallback?: string) =>
       visibleCircleByMomentId.get(momentId) ?? fallback;
-    const notes = (notesResult.error ? [] : (notesResult.data ?? []))
+    const notes = (notesResult.data ?? [])
       .filter((note) => !myMembershipIds.has(note.author_membership_id))
       .map((note) => ({
         ...note,
         circle_id: visibleCircleOf(note.moment_id, note.circle_id),
       }));
-    const reactions = (
-      reactionsResult.error ? [] : (reactionsResult.data ?? [])
-    )
+    const reactions = (reactionsResult.data ?? [])
       .filter((reaction) => !myMembershipIds.has(reaction.author_membership_id))
       .map((reaction) => ({
         ...reaction,
@@ -487,7 +472,8 @@ async function loadOptionalJournalActivity(
           circle_id: visibleCircleByMomentId.get(moment.id),
         })),
     };
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return emptyOptionalActivity;
   }
 }
@@ -495,6 +481,7 @@ async function loadOptionalJournalActivity(
 export async function loadJournalActivityNotifications(
   access: AuthenticatedAccess,
   memberNames: Readonly<Record<string, string>> = {},
+  options?: Readonly<{ strict?: boolean }>,
 ): Promise<NonNullable<JournalChromeViewModel["notifications"]>> {
   if (localJournalIsEnabled()) {
     const { loadLocalJournalContext } =
@@ -504,23 +491,50 @@ export async function loadJournalActivityNotifications(
   try {
     const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
     const circleMemberships = await readJournalCircleMemberships();
-    const myMembershipIds = new Set(
-      circleMemberships.map((membership) => membership.membershipId),
-    );
+    const myMembershipIds = new Set([
+      access.membershipId,
+      ...circleMemberships.map((membership) => membership.membershipId),
+    ]);
+    const circleIds = [
+      ...new Set([
+        access.circleId,
+        ...circleMemberships.map((membership) => membership.circleId),
+      ]),
+    ];
     const activity = await loadOptionalJournalActivity(
       supabase,
       access,
       myMembershipIds,
+      circleIds,
+      options?.strict,
     );
+    const names = new Map(Object.entries(memberNames));
+    const actorIds = [
+      ...new Set([
+        ...activity.notes.map((note) => note.author_membership_id),
+        ...activity.reactions.map((reaction) => reaction.author_membership_id),
+        ...activity.familyMoments.map((moment) => moment.author_membership_id),
+      ]),
+    ].filter((id) => !names.has(id));
+    if (actorIds.length > 0) {
+      const result = await supabase
+        .from("circle_memberships")
+        .select("id, people!circle_memberships_person_fkey!inner(display_name)")
+        .in("id", actorIds);
+      if (result.error) throw result.error;
+      for (const row of result.data ?? [])
+        names.set(row.id, row.people.display_name);
+    }
     return buildActivityNotifications(
       activity.notes,
       activity.reactions,
       activity.ownedMomentIds,
-      new Map(Object.entries(memberNames)),
+      names,
       activity.familyMoments,
       access.membershipId,
     );
-  } catch {
+  } catch (error) {
+    if (options?.strict) throw error;
     return [];
   }
 }
@@ -541,9 +555,10 @@ export async function loadConnectedJournalContext(
     circleMemberships.length > 0
       ? [...new Set(circleMemberships.map((membership) => membership.circleId))]
       : [access.circleId];
-  const myMembershipIds = new Set(
-    circleMemberships.map((membership) => membership.membershipId),
-  );
+  const myMembershipIds = new Set([
+    access.membershipId,
+    ...circleMemberships.map((membership) => membership.membershipId),
+  ]);
   const [
     circleResult,
     peopleResult,
@@ -581,7 +596,12 @@ export async function loadConnectedJournalContext(
         .is("revoked_at", null),
     ),
     includeActivity
-      ? loadOptionalJournalActivity(supabase, access, myMembershipIds)
+      ? loadOptionalJournalActivity(
+          supabase,
+          access,
+          myMembershipIds,
+          rosterCircleIds,
+        )
       : Promise.resolve(emptyOptionalActivity),
   ]);
 

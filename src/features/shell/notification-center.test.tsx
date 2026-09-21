@@ -1,6 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { activityPageSize, NotificationCenter } from "./notification-center";
 import { sheetDismissThresholdPx } from "./use-sheet-dismiss";
 
@@ -33,6 +39,121 @@ async function openActivity() {
 
 describe("NotificationCenter", () => {
   beforeEach(() => window.localStorage.clear());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("does not let an earlier refresh hide newer page-supplied activity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items }) }),
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <NotificationCenter items={items} refreshOnOpen />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("Checking for new activity…")).toBeNull(),
+    );
+    await user.click(screen.getByRole("link", { name: /Molly/u }));
+    rerender(
+      <NotificationCenter
+        items={[{ ...items[0], id: "new-page-activity" }]}
+        refreshOnOpen
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open notifications, 1 new" }),
+    ).toBeVisible();
+  });
+
+  it("fetches new activity on every open without reloading the page", async () => {
+    const fetchActivity = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ items }) });
+    vi.stubGlobal("fetch", fetchActivity);
+    const user = userEvent.setup();
+    render(<NotificationCenter refreshOnOpen />);
+    expect(fetchActivity).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    expect(await screen.findByRole("link", { name: /Molly/u })).toBeVisible();
+    expect(
+      window.localStorage.getItem("our-days:seen-notifications"),
+    ).toContain("note-one");
+    await user.click(screen.getByRole("link", { name: /Molly/u }));
+    fetchActivity.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{ ...items[0], id: "newer", actorName: "Heidi" }],
+      }),
+    });
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    expect(await screen.findByRole("link", { name: /Heidi/u })).toBeVisible();
+    expect(fetchActivity).toHaveBeenCalledTimes(2);
+    expect(fetchActivity).toHaveBeenLastCalledWith(
+      "/api/activity",
+      expect.objectContaining({
+        cache: "no-store",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it("distinguishes errors from empty activity and supports retry", async () => {
+    const fetchActivity = vi.fn().mockResolvedValue({ ok: false });
+    vi.stubGlobal("fetch", fetchActivity);
+    const user = userEvent.setup();
+    render(<NotificationCenter refreshOnOpen />);
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    expect(
+      await screen.findByText("Activity couldn’t be refreshed."),
+    ).toBeVisible();
+    expect(screen.queryByText("No new family activity.")).toBeNull();
+    fetchActivity.mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [] }),
+    });
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("No new family activity.")).toBeVisible();
+  });
+
+  it("aborts and ignores a response after closing the drawer", async () => {
+    let resolve!: (value: unknown) => void;
+    const fetchActivity = vi.fn().mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    vi.stubGlobal("fetch", fetchActivity);
+    const user = userEvent.setup();
+    render(<NotificationCenter items={items} refreshOnOpen />);
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Checking for new activity",
+    );
+    await user.click(screen.getByRole("link", { name: /Molly/u }));
+    await waitFor(() =>
+      expect(fetchActivity.mock.calls[0][1].signal.aborted).toBe(true),
+    );
+    await act(async () =>
+      resolve({
+        ok: true,
+        json: async () => ({ items: [{ ...items[0], id: "late" }] }),
+      }),
+    );
+    expect(
+      window.localStorage.getItem("our-days:seen-notifications"),
+    ).not.toContain("late");
+  });
 
   it("opens activity as a tall sheet and clears the unread indicator", async () => {
     const { user } = await openActivity();

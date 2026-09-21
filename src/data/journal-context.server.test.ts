@@ -47,6 +47,7 @@ function thenableQuery(
     eq: vi.fn(),
     in: vi.fn(),
     neq: vi.fn(),
+    not: vi.fn(),
     is: vi.fn(),
     order: vi.fn(),
     limit: vi.fn(),
@@ -60,6 +61,7 @@ function thenableQuery(
   query.eq.mockReturnValue(query);
   query.in.mockReturnValue(query);
   query.neq.mockReturnValue(query);
+  query.not.mockReturnValue(query);
   query.is.mockReturnValue(query);
   query.order.mockReturnValue(query);
   query.limit.mockReturnValue(query);
@@ -119,6 +121,7 @@ function connectedClient(
 ) {
   const rows = requiredRows();
   let momentsCalls = 0;
+  const momentQueries: ReturnType<typeof thenableQuery>[] = [];
   const momentCircles = thenableQuery(
     overrides.momentCircles ?? { data: [], error: null },
   );
@@ -155,13 +158,32 @@ function connectedClient(
     if (table === "moments") {
       momentsCalls += 1;
       if (momentsCalls === 1) {
-        return thenableQuery(
+        const query = thenableQuery(
           overrides.ownedMoments ?? { data: [], error: null },
         );
+        momentQueries.push(query);
+        return query;
       }
-      return thenableQuery(
-        overrides.linkedMoments ?? { data: [], error: null },
-      );
+      if (overrides.throwOn === "moment_circles")
+        throw new Error("Activity unavailable");
+      const result = overrides.linkedMoments ?? { data: [], error: null };
+      const links = (overrides.momentCircles?.data ?? []) as {
+        moment_id: string;
+        circle_id: string;
+      }[];
+      const query = thenableQuery({
+        data: Array.isArray(result.data)
+          ? result.data.map((row) => ({
+              ...row,
+              moment_circles: links
+                .filter((link) => link.moment_id === row.id)
+                .map(({ circle_id }) => ({ circle_id })),
+            }))
+          : result.data,
+        error: result.error ?? overrides.momentCircles?.error ?? null,
+      });
+      momentQueries.push(query);
+      return query;
     }
     if (table === "moment_circles") return momentCircles;
     if (table === "moment_notes") return notes;
@@ -169,7 +191,7 @@ function connectedClient(
     throw new Error(`Unexpected table: ${table}`);
   });
   vi.mocked(createOurDaysServerClient).mockResolvedValue({ from } as never);
-  return { from, momentCircles, notes, reactions };
+  return { from, momentCircles, momentQueries, notes, reactions };
 }
 
 describe("circle calendar date", () => {
@@ -185,6 +207,70 @@ describe("circle calendar date", () => {
 });
 
 describe("family activity notifications", () => {
+  it("refreshes across all joined circles and resolves actor names", async () => {
+    readMemberships.mockResolvedValue([
+      { membershipId: access.membershipId, circleId: "family" },
+      {
+        membershipId: "membership-brian-grandparents",
+        circleId: "grandparents",
+      },
+    ]);
+    const { momentQueries } = connectedClient({
+      linkedMoments: {
+        data: [
+          {
+            id: "new-grandparents-post",
+            recorded_by_membership_id: "membership-nana",
+            kind: "photo",
+            created_at: "2026-09-20T18:00:00Z",
+            audience: "family",
+          },
+        ],
+        error: null,
+      },
+      momentCircles: {
+        data: [
+          { moment_id: "new-grandparents-post", circle_id: "grandparents" },
+        ],
+        error: null,
+      },
+      memberships: {
+        data: [{ id: "membership-nana", people: { display_name: "Nana" } }],
+        error: null,
+      },
+    });
+    const items = await loadJournalActivityNotifications(
+      access,
+      {},
+      { strict: true },
+    );
+    expect(momentQueries[0].in).toHaveBeenCalledWith(
+      "recorded_by_membership_id",
+      ["membership-brian", "membership-brian-grandparents"],
+    );
+    expect(momentQueries[1].in).toHaveBeenCalledWith(
+      "moment_circles.circle_id",
+      ["family", "grandparents"],
+    );
+    expect(items).toEqual([
+      expect.objectContaining({
+        actorName: "Nana",
+        href: "/family?circle=grandparents#moment-new-grandparents-post",
+      }),
+    ]);
+  });
+
+  it("propagates Activity failures for explicit refresh but keeps page chrome optional", async () => {
+    readMemberships.mockResolvedValue([]);
+    const error = { message: "Query timed out" };
+    connectedClient({ linkedMoments: { data: null, error } });
+    await expect(
+      loadJournalActivityNotifications(access, {}, { strict: true }),
+    ).rejects.toEqual(error);
+    connectedClient({ linkedMoments: { data: null, error } });
+    await expect(loadJournalActivityNotifications(access)).resolves.toEqual([]);
+  });
+
   it("keeps only activity on the current member's entries and orders it newest first", () => {
     const notifications = buildActivityNotifications(
       [
@@ -652,9 +738,9 @@ describe("connected journal context load", () => {
     await expect(loadConnectedJournalContext(access)).rejects.toEqual(expired);
   });
 
-  it("bounds the Activity moment_circles scan to the active circle", async () => {
+  it("orders eligible posts before limiting the Activity scan", async () => {
     stubMemberships();
-    const { momentCircles, from } = connectedClient({
+    const { momentQueries, from } = connectedClient({
       momentCircles: {
         data: [{ moment_id: "italy-video", circle_id: "family" }],
         error: null,
@@ -675,9 +761,19 @@ describe("connected journal context load", () => {
 
     const context = await loadConnectedJournalContext(access);
 
-    expect(momentCircles.eq).toHaveBeenCalledWith("circle_id", "family");
-    expect(momentCircles.in).not.toHaveBeenCalled();
-    expect(momentCircles.limit).toHaveBeenCalledWith(80);
+    expect(momentQueries[1].in).toHaveBeenCalledWith(
+      "moment_circles.circle_id",
+      ["family"],
+    );
+    expect(momentQueries[1].order).toHaveBeenCalledWith("created_at", {
+      ascending: false,
+    });
+    expect(momentQueries[1].limit).toHaveBeenCalledWith(40);
+    expect(momentQueries[1].not).toHaveBeenCalledWith(
+      "recorded_by_membership_id",
+      "in",
+      "(membership-brian)",
+    );
     expect(
       from.mock.calls.filter(([table]) => table === "moments"),
     ).toHaveLength(2);
@@ -757,18 +853,11 @@ describe("connected journal context load", () => {
         ],
         error: null,
       },
-      momentCircles: {
-        data: [{ moment_id: "calvin-post", circle_id: "family" }],
-        error: null,
-      },
-      linkedMoments: {
+      ownedMoments: {
         data: [
           {
             id: "calvin-post",
-            recorded_by_membership_id: "membership-brian-gparents",
-            kind: "photo",
-            created_at: "2026-09-11T18:00:00.000Z",
-            audience: "family",
+            moment_circles: [{ circle_id: "family" }],
           },
         ],
         error: null,
