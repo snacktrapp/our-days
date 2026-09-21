@@ -29,6 +29,7 @@ type NotificationItem = NonNullable<
 const storageKey = "our-days:seen-notifications";
 const storageEvent = "our-days-notifications-seen";
 export const activityPageSize = 20;
+const emptyItems: readonly NotificationItem[] = [];
 
 function subscribeToSeenNotifications(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -48,20 +49,22 @@ function readSeenNotifications() {
 }
 
 export function NotificationCenter({
-  items: initialItems = [],
+  items: initialItems = emptyItems,
   refreshOnOpen = false,
 }: Readonly<{ items?: readonly NotificationItem[]; refreshOnOpen?: boolean }>) {
   const panelId = useId();
   const titleId = useId();
   const [open, setOpen] = useState(false);
-  const [freshItems, setFreshItems] = useState<
-    readonly NotificationItem[] | null
-  >(null);
+  const [freshSnapshot, setFreshSnapshot] = useState<{
+    source: readonly NotificationItem[];
+    items: readonly NotificationItem[];
+  } | null>(null);
   const [refreshAttempt, setRefreshAttempt] = useState(0);
   const [refreshState, setRefreshState] = useState<
     "idle" | "loading" | "error"
   >("idle");
-  const items = freshItems ?? initialItems;
+  const items =
+    freshSnapshot?.source === initialItems ? freshSnapshot.items : initialItems;
   const [visibleCount, setVisibleCount] = useState(activityPageSize);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -135,7 +138,7 @@ export function NotificationCenter({
         const result = (await response.json()) as { items: NotificationItem[] };
         if (!Array.isArray(result.items)) throw new Error("Invalid activity");
         if (active) {
-          setFreshItems(result.items);
+          setFreshSnapshot({ source: initialItems, items: result.items });
           setRefreshState("idle");
         }
       })
@@ -148,7 +151,7 @@ export function NotificationCenter({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [open, refreshOnOpen, refreshAttempt]);
+  }, [open, refreshOnOpen, refreshAttempt, initialItems]);
 
   useEffect(() => {
     if (!open || unseenIds.length === 0) return;

@@ -41,6 +41,33 @@ describe("NotificationCenter", () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => vi.unstubAllGlobals());
 
+  it("does not let an earlier refresh hide newer page-supplied activity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ items }) }),
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <NotificationCenter items={items} refreshOnOpen />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Open notifications/u }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("Checking for new activity…")).toBeNull(),
+    );
+    await user.click(screen.getByRole("link", { name: /Molly/u }));
+    rerender(
+      <NotificationCenter
+        items={[{ ...items[0], id: "new-page-activity" }]}
+        refreshOnOpen
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Open notifications, 1 new" }),
+    ).toBeVisible();
+  });
+
   it("fetches new activity on every open without reloading the page", async () => {
     const fetchActivity = vi
       .fn()
