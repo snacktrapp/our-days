@@ -7776,11 +7776,11 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .note-action-trigger svg {
-  width: 21px;
-  height: 21px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.45;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }

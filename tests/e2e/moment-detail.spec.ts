@@ -65,6 +65,28 @@ test("post location pin and conversation share the intended alignment", async ({
     });
     expect(edges.summary).toBeGreaterThan(edges.action + 22);
     expect(edges.action).toBeGreaterThan(edges.commentButton);
+    const icons = await card.evaluate((element) =>
+      [".note-action-trigger svg", ".quick-reaction-trigger svg"].map(
+        (selector) => {
+          const svg = element.querySelector<SVGSVGElement>(selector)!;
+          const path = svg.querySelector("path")!;
+          const box = path.getBBox();
+          const scale =
+            svg.getBoundingClientRect().height / svg.viewBox.baseVal.height;
+          return {
+            drawnHeight:
+              (box.height +
+                Number.parseFloat(getComputedStyle(svg).strokeWidth)) *
+              scale,
+            height: svg.getBoundingClientRect().height,
+          };
+        },
+      ),
+    );
+    expect(icons[0].height).toBeCloseTo(icons[1].height, 2);
+    expect(Math.abs(icons[0].drawnHeight - icons[1].drawnHeight)).toBeLessThan(
+      0.5,
+    );
     expect(Math.abs(edges.commentButton - edges.comments)).toBeLessThanOrEqual(
       1,
     );

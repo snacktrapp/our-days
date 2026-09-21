@@ -515,7 +515,7 @@ export function MomentConversationControl({
           onClick={() => void togglePanel("note")}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5.5 5.5h13a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
+            <path d="M5.5 4.25h13a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
             <path d="M8 10h8M8 13h5" />
           </svg>
           <span className="sr-only">{noteLabel}</span>
