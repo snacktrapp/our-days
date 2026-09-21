@@ -453,87 +453,73 @@ export function MomentConversationControl({
   );
   const olderNoteCount = hiddenConversationNoteCount(conversation.notes.length);
 
+  const reactionNames =
+    displayedReactions.length > 0 ? (
+      <ul className="inline-reaction-summary" aria-label="Family responses">
+        {displayedReactions.map((reaction, index) => {
+          const leaving = leavingReactions.some(
+            (item) => item.presenceKey === reaction.presenceKey,
+          );
+          const entering = enteringKeys.has(reaction.presenceKey);
+          return (
+            <li
+              key={reaction.presenceKey}
+              className={
+                leaving ? "is-closing" : entering ? "is-entering" : undefined
+              }
+              onAnimationEnd={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.animationName === "overlay-popover-in") {
+                  setEnteringKeys((current) => {
+                    if (!current.has(reaction.presenceKey)) return current;
+                    const next = new Set(current);
+                    next.delete(reaction.presenceKey);
+                    return next;
+                  });
+                  return;
+                }
+                if (event.animationName !== "overlay-popover-out") return;
+                setLeavingReactions((current) =>
+                  current.filter(
+                    (item) => item.presenceKey !== reaction.presenceKey,
+                  ),
+                );
+              }}
+            >
+              {reaction.reactionId !== "held-close" ? (
+                <span
+                  aria-label={reactionPresentation[reaction.reactionId].label}
+                >
+                  {reactionPresentation[reaction.reactionId].emoji}
+                </span>
+              ) : null}
+              <span>
+                {reaction.personName}
+                {index < displayedReactions.length - 1 ? "," : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
   return (
     <div id={conversationId} className="inline-conversation">
-      {loading &&
-      displayedReactions.length === 0 &&
-      conversation.notes.length === 0 ? (
-        <div
-          className="conversation-summary conversation-summary-pending"
-          aria-hidden="true"
-        >
-          <span className="inline-conversation-wait" />
-        </div>
-      ) : displayedReactions.length > 0 ? (
-        <div className="conversation-summary" aria-label="Family activity">
-          {displayedReactions.length > 0 ? (
-            <ul
-              className="inline-reaction-summary"
-              aria-label="Family responses"
-            >
-              {displayedReactions.map((reaction, index) => {
-                const leaving = leavingReactions.some(
-                  (item) => item.presenceKey === reaction.presenceKey,
-                );
-                const entering = enteringKeys.has(reaction.presenceKey);
-                return (
-                  <li
-                    key={reaction.presenceKey}
-                    className={
-                      leaving
-                        ? "is-closing"
-                        : entering
-                          ? "is-entering"
-                          : undefined
-                    }
-                    onAnimationEnd={(event) => {
-                      if (event.target !== event.currentTarget) return;
-                      if (event.animationName === "overlay-popover-in") {
-                        setEnteringKeys((current) => {
-                          if (!current.has(reaction.presenceKey))
-                            return current;
-                          const next = new Set(current);
-                          next.delete(reaction.presenceKey);
-                          return next;
-                        });
-                        return;
-                      }
-                      if (event.animationName !== "overlay-popover-out") return;
-                      setLeavingReactions((current) =>
-                        current.filter(
-                          (item) => item.presenceKey !== reaction.presenceKey,
-                        ),
-                      );
-                    }}
-                  >
-                    {reaction.reactionId === "held-close" ? (
-                      index === 0 ||
-                      displayedReactions[index - 1].reactionId !==
-                        "held-close" ? (
-                        <HeartGlyph filled />
-                      ) : null
-                    ) : (
-                      <span
-                        aria-label={
-                          reactionPresentation[reaction.reactionId].label
-                        }
-                      >
-                        {reactionPresentation[reaction.reactionId].emoji}
-                      </span>
-                    )}
-                    <span>
-                      {reaction.personName}
-                      {index < displayedReactions.length - 1 ? "," : ""}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="soft-actions">
+        <button
+          ref={noteTriggerRef}
+          className="note-action-trigger"
+          type="button"
+          aria-expanded={panel === "note"}
+          aria-controls={`${panelId}-note`}
+          aria-label={`Add a note to ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
+          onClick={() => void togglePanel("note")}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5.5 5.5h13a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
+            <path d="M8 10h8M8 13h5" />
+          </svg>
+          <span className="sr-only">{noteLabel}</span>
+        </button>
         <div className="quick-reaction-control">
           <button
             className="quick-reaction-trigger"
@@ -553,21 +539,7 @@ export function MomentConversationControl({
             </span>
           </button>
         </div>
-        <button
-          ref={noteTriggerRef}
-          className="note-action-trigger"
-          type="button"
-          aria-expanded={panel === "note"}
-          aria-controls={`${panelId}-note`}
-          aria-label={`Add a note to ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
-          onClick={() => void togglePanel("note")}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5.5 5.5h13a2 2 0 0 1 2 2v7.75a2 2 0 0 1-2 2h-7L7 20v-2.75H5.5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2Z" />
-            <path d="M8 10h8M8 13h5" />
-          </svg>
-          <span className="sr-only">{noteLabel}</span>
-        </button>
+        <div className="reaction-names">{reactionNames}</div>
         {trailing}
       </div>
 

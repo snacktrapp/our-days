@@ -219,7 +219,7 @@ describe("MomentConversationControl", () => {
       screen
         .getByRole("list", { name: "Family responses" })
         .querySelectorAll(".heart-glyph"),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     await user.click(heart);
     expect(actions.setReaction).toHaveBeenLastCalledWith({
       momentId: model.id,
@@ -292,15 +292,17 @@ describe("MomentConversationControl", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("orders reaction names, shared actions, then comments without avatars", () => {
+  it("orders comment, heart, reaction names, then comments without avatars", () => {
     const { container } = renderControl();
     const reactions = screen.getByRole("list", { name: "Family responses" });
     const actions = container.querySelector(".soft-actions")!;
     const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(
-      reactions.compareDocumentPosition(actions) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      container
+        .querySelector(".quick-reaction-trigger")!
+        .compareDocumentPosition(reactions) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    expect(actions.firstElementChild).toHaveClass("note-action-trigger");
     expect(
       actions.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
