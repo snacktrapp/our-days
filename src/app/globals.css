@@ -9217,7 +9217,8 @@ iframe.composer-location-map {
   text-decoration: none;
 }
 .inline-conversation .inline-reaction-summary {
-  padding-inline-start: 11px;
+  padding: 0;
+  margin: 0;
   gap: 4px;
   align-items: center;
 }
@@ -9241,9 +9242,25 @@ iframe.composer-location-map {
   margin-right: 2px;
 }
 .inline-conversation .soft-actions {
+  display: grid;
+  grid-template-columns: 44px 44px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px;
   margin-top: 6px;
   padding-top: 0;
   border: 0;
+}
+.inline-conversation .reaction-names {
+  min-width: 0;
+  padding-top: 12px;
+  overflow-wrap: anywhere;
+}
+.inline-conversation .inline-reaction-summary li {
+  min-width: 0;
+  max-width: 100%;
+}
+.inline-conversation:has(> .inline-note-summary) {
+  padding-bottom: 16px;
 }
 .inline-conversation > .inline-note-summary {
   padding-inline-start: 11px;

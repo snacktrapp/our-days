@@ -58,12 +58,20 @@ test("post location pin and conversation share the intended alignment", async ({
         element.querySelector(selector)!.getBoundingClientRect().left;
       return {
         action: left(".quick-reaction-trigger .heart-glyph"),
-        summary: left(".inline-reaction-summary .heart-glyph"),
+        summary: left(".inline-reaction-summary"),
+        commentButton: left(".note-action-trigger svg"),
         comments: left(".inline-note-summary li"),
       };
     });
-    expect(Math.abs(edges.action - edges.summary)).toBeLessThanOrEqual(1);
-    expect(Math.abs(edges.action - edges.comments)).toBeLessThanOrEqual(1);
+    expect(edges.summary).toBeGreaterThan(edges.action + 22);
+    expect(edges.action).toBeGreaterThan(edges.commentButton);
+    expect(Math.abs(edges.commentButton - edges.comments)).toBeLessThanOrEqual(
+      1,
+    );
+    await expect(card.locator(".inline-conversation")).toHaveCSS(
+      "padding-bottom",
+      "16px",
+    );
     await card
       .locator(".card-copy")
       .screenshot({ path: testInfo.outputPath(`post-inset-${theme}.png`) });
@@ -80,6 +88,34 @@ test("post location pin and conversation share the intended alignment", async ({
       path: testInfo.outputPath(`post-context-${theme}.png`),
     });
   }
+});
+
+test("long reaction names wrap without moving the buttons", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const comment = card.locator(".note-action-trigger");
+  const heart = card.locator(".quick-reaction-trigger");
+  const before = [await comment.boundingBox(), await heart.boundingBox()];
+  await card
+    .locator(".inline-reaction-summary li span")
+    .last()
+    .evaluate((element) => {
+      element.textContent =
+        "Alexandria, Christopher, Charlotte, Benjamin, Eleanor, Theodore, Elizabeth, Nathaniel";
+    });
+  expect([await comment.boundingBox(), await heart.boundingBox()]).toEqual(
+    before,
+  );
+  const overflow = await card
+    .locator(".soft-actions")
+    .evaluate((element) => element.scrollWidth > element.clientWidth);
+  expect(overflow).toBe(false);
+  await expect(
+    card.locator(".inline-reaction-summary .heart-glyph"),
+  ).toHaveCount(0);
 });
 
 test("inline comments stay unboxed in both themes", async ({ page }) => {
@@ -125,7 +161,7 @@ async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   return { form, trigger };
 }
 
-test("one-tap love is salmon, names precede actions, comments follow", async ({
+test("one-tap love is salmon, names share actions, comments follow", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -142,7 +178,9 @@ test("one-tap love is salmon, names precede actions, comments follow", async ({
     return {
       order:
         Boolean(
-          summary.compareDocumentPosition(actions) &
+          el
+            .querySelector(".quick-reaction-trigger")!
+            .compareDocumentPosition(summary) &
           Node.DOCUMENT_POSITION_FOLLOWING,
         ) &&
         Boolean(
