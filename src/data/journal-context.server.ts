@@ -289,6 +289,7 @@ export function buildActivityNotifications(
   memberNames: ReadonlyMap<string, string>,
   familyMoments: readonly ActivityMoment[] = [],
   viewerMembershipId?: string,
+  commentedSince: ReadonlyMap<string, string> = new Map(),
 ): NonNullable<JournalChromeViewModel["notifications"]> {
   const displayDate = (createdAt: string) =>
     new Intl.DateTimeFormat("en-US", {
@@ -315,17 +316,29 @@ export function buildActivityNotifications(
         createdAt: moment.created_at,
       })),
     ...notes
-      .filter((note) => ownedMomentIds.has(note.moment_id))
+      .filter(
+        (note) =>
+          note.author_membership_id !== viewerMembershipId &&
+          (ownedMomentIds.has(note.moment_id) ||
+            (commentedSince.has(note.moment_id) &&
+              note.created_at > commentedSince.get(note.moment_id)!)),
+      )
       .map((note) => ({
         id: `note:${note.id}`,
         actorName: memberNames.get(note.author_membership_id) ?? "Family",
-        message: entryCommentMessage,
+        message: ownedMomentIds.has(note.moment_id)
+          ? entryCommentMessage
+          : "also commented on an entry you commented on.",
         displayDate: displayDate(note.created_at),
         href: activityMomentHref(note.moment_id, note.circle_id),
         createdAt: note.created_at,
       })),
     ...reactions
-      .filter((reaction) => ownedMomentIds.has(reaction.moment_id))
+      .filter(
+        (reaction) =>
+          ownedMomentIds.has(reaction.moment_id) &&
+          reaction.author_membership_id !== viewerMembershipId,
+      )
       .map((reaction) => ({
         id: `reaction:${reaction.id}:${reaction.reaction_type}`,
         actorName: memberNames.get(reaction.author_membership_id) ?? "Family",
@@ -343,6 +356,7 @@ export function buildActivityNotifications(
       message: notification.message,
       displayDate: notification.displayDate,
       href: notification.href,
+      createdAt: notification.createdAt,
     }));
 }
 
@@ -352,6 +366,7 @@ const emptyOptionalActivity = {
   notes: [] as ActivityNote[],
   reactions: [] as ActivityReaction[],
   ownedMomentIds: new Set<string>(),
+  commentedSince: new Map<string, string>(),
   familyMoments: [] as ActivityMoment[],
 };
 
@@ -363,43 +378,65 @@ async function loadOptionalJournalActivity(
   strict = false,
 ) {
   try {
-    const [ownedMomentsResult, linkedMomentsResult] = await Promise.all([
-      supabase
-        .from("moments")
-        .select("id, moment_circles(circle_id)")
-        .in("recorded_by_membership_id", [...myMembershipIds])
-        .is("trashed_at", null),
-      supabase
-        .from("moments")
-        .select(
-          "id, recorded_by_membership_id, kind, created_at, audience, moment_circles!inner(circle_id)",
-        )
-        .in("moment_circles.circle_id", [...circleIds])
-        .eq("audience", "family")
-        .neq("kind", "insight")
-        .not(
-          "recorded_by_membership_id",
-          "in",
-          `(${[...myMembershipIds].join(",")})`,
-        )
-        .is("trashed_at", null)
-        .order("created_at", { ascending: false })
-        .limit(40),
-    ]);
+    const [ownedMomentsResult, linkedMomentsResult, ownNotesResult] =
+      await Promise.all([
+        supabase
+          .from("moments")
+          .select("id, moment_circles(circle_id)")
+          .in("recorded_by_membership_id", [...myMembershipIds])
+          .is("trashed_at", null),
+        supabase
+          .from("moments")
+          .select(
+            "id, recorded_by_membership_id, kind, created_at, audience, moment_circles!inner(circle_id)",
+          )
+          .in("moment_circles.circle_id", [...circleIds])
+          .eq("audience", "family")
+          .neq("kind", "insight")
+          .not(
+            "recorded_by_membership_id",
+            "in",
+            `(${[...myMembershipIds].join(",")})`,
+          )
+          .is("trashed_at", null)
+          .order("created_at", { ascending: false })
+          .limit(40),
+        supabase
+          .from("moment_notes")
+          .select(
+            "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, moment_circles(circle_id))",
+          )
+          .in("author_membership_id", [...myMembershipIds])
+          .is("trashed_at", null),
+      ]);
     if (ownedMomentsResult.error) throw ownedMomentsResult.error;
     if (linkedMomentsResult.error) throw linkedMomentsResult.error;
+    if (ownNotesResult.error) throw ownNotesResult.error;
     const ownedFromCircle = ownedMomentsResult.data ?? [];
     const linkedMoments = linkedMomentsResult.data ?? [];
 
     const visibleCircleByMomentId = new Map<string, string>();
-    for (const moment of [...ownedFromCircle, ...linkedMoments]) {
+    const commentedSince = new Map<string, string>();
+    for (const note of ownNotesResult.data ?? []) {
+      const first = commentedSince.get(note.moment_id);
+      if (!first || note.created_at < first)
+        commentedSince.set(note.moment_id, note.created_at);
+    }
+    for (const moment of [
+      ...ownedFromCircle,
+      ...linkedMoments,
+      ...(ownNotesResult.data ?? []).map((note) => note.moments),
+    ]) {
       const links = moment.moment_circles ?? [];
       const circle =
-        links.find((link) => link.circle_id === access.circleId) ?? links[0];
+        links.find((link) => link.circle_id === access.circleId) ??
+        links.find((link) => circleIds.includes(link.circle_id));
       if (circle) visibleCircleByMomentId.set(moment.id, circle.circle_id);
     }
     const ownedMomentIds = new Set(ownedFromCircle.map((moment) => moment.id));
-    const conversationMomentIds = [...ownedMomentIds];
+    const conversationMomentIds = [
+      ...new Set([...ownedMomentIds, ...commentedSince.keys()]),
+    ];
     const [notesResult, reactionsResult] =
       conversationMomentIds.length === 0
         ? [
@@ -421,20 +458,22 @@ async function loadOptionalJournalActivity(
               .is("trashed_at", null)
               .order("created_at", { ascending: false })
               .limit(40),
-            supabase
-              .from("moment_reactions")
-              .select(
-                "id, moment_id, author_membership_id, reaction_type, created_at, circle_id",
-              )
-              .in("moment_id", conversationMomentIds)
-              .not(
-                "author_membership_id",
-                "in",
-                `(${[...myMembershipIds].join(",")})`,
-              )
-              .is("removed_at", null)
-              .order("created_at", { ascending: false })
-              .limit(40),
+            ownedMomentIds.size === 0
+              ? Promise.resolve({ data: [] as ActivityReaction[], error: null })
+              : supabase
+                  .from("moment_reactions")
+                  .select(
+                    "id, moment_id, author_membership_id, reaction_type, created_at, circle_id",
+                  )
+                  .in("moment_id", [...ownedMomentIds])
+                  .not(
+                    "author_membership_id",
+                    "in",
+                    `(${[...myMembershipIds].join(",")})`,
+                  )
+                  .is("removed_at", null)
+                  .order("created_at", { ascending: false })
+                  .limit(40),
           ]);
     if (notesResult.error) throw notesResult.error;
     if (reactionsResult.error) throw reactionsResult.error;
@@ -457,6 +496,7 @@ async function loadOptionalJournalActivity(
       notes,
       reactions,
       ownedMomentIds,
+      commentedSince,
       familyMoments: linkedMoments
         .filter(
           (moment) =>
@@ -532,6 +572,7 @@ export async function loadJournalActivityNotifications(
       names,
       activity.familyMoments,
       access.membershipId,
+      activity.commentedSince,
     );
   } catch (error) {
     if (options?.strict) throw error;
@@ -791,6 +832,7 @@ export async function loadConnectedJournalContext(
       memberNameById,
       activity.familyMoments,
       access.membershipId,
+      activity.commentedSince,
     ),
   };
 

@@ -31,7 +31,10 @@ describe("fresh Activity endpoint", () => {
     readAccess.mockResolvedValue(access);
     loadActivity.mockResolvedValue([{ id: "note:new" }]);
     const response = await GET();
-    expect(await response.json()).toEqual({ items: [{ id: "note:new" }] });
+    expect(await response.json()).toEqual({
+      items: [{ id: "note:new" }],
+      observedAt: expect.any(String),
+    });
     expect(loadActivity).toHaveBeenCalledWith(access, {}, { strict: true });
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   });

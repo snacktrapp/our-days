@@ -21,6 +21,7 @@ import {
   useOverlayPopoverClose,
 } from "./use-overlay-popover-close";
 import { useSheetDismiss } from "./use-sheet-dismiss";
+import { activityUpdatedEvent } from "./activity-banner";
 
 type NotificationItem = NonNullable<
   JournalChromeViewModel["notifications"]
@@ -126,6 +127,17 @@ export function NotificationCenter({
       items.filter((item) => !seenIds.includes(item.id)).map(({ id }) => id),
     [items, seenIds],
   );
+
+  useEffect(() => {
+    if (!refreshOnOpen) return;
+    const refresh = (event: Event) => {
+      const updated = (event as CustomEvent<NotificationItem[]>).detail;
+      if (Array.isArray(updated))
+        setFreshSnapshot({ source: initialItems, items: updated });
+    };
+    window.addEventListener(activityUpdatedEvent, refresh);
+    return () => window.removeEventListener(activityUpdatedEvent, refresh);
+  }, [initialItems, refreshOnOpen]);
 
   useEffect(() => {
     if (!open || !refreshOnOpen) return;
