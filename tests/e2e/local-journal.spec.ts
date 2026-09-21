@@ -9,6 +9,64 @@ import {
   localCircleId,
 } from "../../src/lib/local-journal/ids";
 
+test("fresh thread comments appear as a banner and in Activity without replaying history", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  let fresh = false;
+  let requests = 0;
+  await page.route("**/api/activity", async (route) => {
+    requests += 1;
+    await route.fulfill({
+      json: {
+        observedAt: fresh ? "2026-09-20T10:01:30Z" : "2026-09-20T10:01:00Z",
+        items: [
+          {
+            id: fresh ? "note:fresh" : "note:old",
+            actorName: "Molly",
+            message: "also commented on an entry you commented on.",
+            displayDate: "Today",
+            createdAt: fresh ? "2026-09-20T10:01:05Z" : "2026-09-19T10:00:00Z",
+            href: "/family#moment-thread",
+          },
+        ],
+      },
+    });
+  });
+  await page.clock.install();
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(
+    page.getByRole("button", { name: /Open notifications/ }),
+  ).toBeVisible();
+  await expect.poll(() => requests).toBeGreaterThan(0);
+  await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
+    0,
+  );
+  fresh = true;
+  await page.clock.fastForward(31000);
+  const banner = page.getByRole("status", { name: "New comment" });
+  await expect(banner).toBeVisible();
+  await expect(banner.getByRole("link")).toHaveAttribute(
+    "href",
+    "/family#moment-thread",
+  );
+  const box = await banner.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await page.screenshot({ path: "test-results/comment-banner.png" });
+  await banner.getByRole("button", { name: "Dismiss notification" }).click();
+  await page.getByRole("button", { name: /Open notifications/ }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Activity" })
+      .getByText("Molly also commented on an entry you commented on."),
+  ).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 async function jpegFixture(index = 0) {
   const directory = mkdtempSync(join(tmpdir(), "our-days-photo-"));
   const path = join(directory, `porch-${index}.jpg`);

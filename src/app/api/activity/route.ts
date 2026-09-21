@@ -4,6 +4,7 @@ import { loadJournalActivityNotifications } from "@/data/journal-context.server"
 const headers = { "Cache-Control": "private, no-store" };
 
 export async function GET() {
+  const observedAt = new Date().toISOString();
   try {
     const access = await readJournalAccessState();
     if (access.mode !== "authenticated") {
@@ -17,7 +18,7 @@ export async function GET() {
       {},
       { strict: true },
     );
-    return Response.json({ items }, { headers });
+    return Response.json({ items, observedAt }, { headers });
   } catch {
     return Response.json(
       { error: "Activity could not be refreshed." },

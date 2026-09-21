@@ -111,6 +111,7 @@ function connectedClient(
       | { data: unknown; error: unknown }
       | (() => { data: unknown; error: unknown });
     notes?: { data: unknown; error: unknown };
+    ownNotes?: { data: unknown; error: unknown };
     reactions?: { data: unknown; error: unknown };
     momentCircles?: { data: unknown; error: unknown };
     ownedMoments?: { data: unknown; error: unknown };
@@ -121,6 +122,7 @@ function connectedClient(
 ) {
   const rows = requiredRows();
   let momentsCalls = 0;
+  let notesCalls = 0;
   const momentQueries: ReturnType<typeof thenableQuery>[] = [];
   const momentCircles = thenableQuery(
     overrides.momentCircles ?? { data: [], error: null },
@@ -186,7 +188,12 @@ function connectedClient(
       return query;
     }
     if (table === "moment_circles") return momentCircles;
-    if (table === "moment_notes") return notes;
+    if (table === "moment_notes") {
+      notesCalls += 1;
+      return notesCalls === 1
+        ? thenableQuery(overrides.ownNotes ?? { data: [], error: null })
+        : notes;
+    }
     if (table === "moment_reactions") return reactions;
     throw new Error(`Unexpected table: ${table}`);
   });
@@ -195,6 +202,104 @@ function connectedClient(
 }
 
 describe("circle calendar date", () => {
+  it("includes only later thread replies, excludes self, and does not duplicate owners", () => {
+    const notes = [
+      {
+        id: "before",
+        moment_id: "thread",
+        author_membership_id: "molly",
+        created_at: "2026-09-20T10:00:00Z",
+      },
+      {
+        id: "after",
+        moment_id: "thread",
+        author_membership_id: "molly",
+        created_at: "2026-09-20T12:00:00Z",
+      },
+      {
+        id: "self",
+        moment_id: "thread",
+        author_membership_id: "brian",
+        created_at: "2026-09-20T12:01:00Z",
+      },
+      {
+        id: "owned",
+        moment_id: "owned",
+        author_membership_id: "molly",
+        created_at: "2026-09-20T12:02:00Z",
+      },
+      {
+        id: "unrelated",
+        moment_id: "other",
+        author_membership_id: "molly",
+        created_at: "2026-09-20T12:03:00Z",
+      },
+    ];
+    const result = buildActivityNotifications(
+      notes,
+      [],
+      new Set(["owned"]),
+      new Map([["molly", "Molly"]]),
+      [],
+      "brian",
+      new Map([
+        ["thread", "2026-09-20T11:00:00Z"],
+        ["owned", "2026-09-20T11:00:00Z"],
+      ]),
+    );
+    expect(result.map((item) => item.id)).toEqual(["note:owned", "note:after"]);
+    expect(result[1].message).toBe(
+      "also commented on an entry you commented on.",
+    );
+    expect(result[1].createdAt).toBe(notes[1].created_at);
+  });
+
+  it("loads older participated threads and links to a currently joined circle", async () => {
+    readMemberships.mockResolvedValue([]);
+    const client = connectedClient({
+      ownNotes: {
+        data: [
+          {
+            moment_id: "old-thread",
+            created_at: "2026-09-01T10:00:00Z",
+            moments: {
+              id: "old-thread",
+              moment_circles: [
+                { circle_id: "not-joined" },
+                { circle_id: "family" },
+              ],
+            },
+          },
+        ],
+        error: null,
+      },
+      notes: {
+        data: [
+          {
+            id: "reply",
+            moment_id: "old-thread",
+            author_membership_id: "molly",
+            created_at: "2026-09-20T10:00:00Z",
+            circle_id: "not-joined",
+          },
+        ],
+        error: null,
+      },
+    });
+    const result = await loadJournalActivityNotifications(
+      access,
+      { molly: "Molly" },
+      { strict: true },
+    );
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "note:reply",
+        href: "/family?circle=family#moment-old-thread",
+      }),
+    ]);
+    expect(client.notes.in).toHaveBeenCalledWith("moment_id", ["old-thread"]);
+    expect(client.reactions.in).not.toHaveBeenCalled();
+  });
   it("uses the circle timezone when one instant spans two local dates", () => {
     const instant = new Date("2026-08-30T07:30:00.000Z");
     expect(plainToday("America/Los_Angeles", instant)).toBe("2026-08-30");

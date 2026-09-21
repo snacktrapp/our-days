@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+.activity-banner {
+  position: fixed;
+  z-index: 170;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 22%);
+  font: 400 14px / 1.45 var(--font-interface);
+}
+.activity-banner a {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.activity-banner button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 24px var(--font-interface);
+}
+
 :root {
   --grid-surface: #101216;
   --paper: #101216;

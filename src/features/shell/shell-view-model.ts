@@ -22,6 +22,7 @@ export type JournalChromeViewModel = Readonly<{
     actorName: string;
     message: string;
     displayDate: string;
+    createdAt?: string;
     href: string;
   }>[];
 }>;

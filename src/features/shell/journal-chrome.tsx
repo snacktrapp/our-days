@@ -21,6 +21,7 @@ import { PrimaryNavigation } from "./primary-navigation";
 import { SettingsLink } from "./settings-link";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationCenter } from "./notification-center";
+import { ActivityBanner } from "./activity-banner";
 import {
   FamilyTitleSwitcher,
   StaticJournalTitle,
@@ -82,6 +83,10 @@ function PrimaryJournalHeader({
 
   return (
     <header ref={headerRef} className="topbar">
+      {(model.composer.experience === "connected-family" ||
+        model.composer.experience === "connected-written") && (
+        <ActivityBanner />
+      )}
       <SettingsLink href={model.settingsHref} />
       {title}
       <div className="topbar-actions">

@@ -538,6 +538,26 @@ export async function loadLocalJournalContext(
     document.circle.id,
     ...(document.extraCircles ?? []).map((circle) => circle.id),
   ]);
+  const commentedSince = new Map<string, string>();
+  for (const note of document.notes) {
+    if (
+      note.trashedAt !== null ||
+      !viewerMembershipIds.includes(note.authorMembershipId)
+    )
+      continue;
+    const moment = document.moments.find((item) => item.id === note.momentId);
+    if (
+      !moment ||
+      moment.trashedAt !== null ||
+      !momentLinkedCircleIds(moment, document.circle.id).some((id) =>
+        viewerCircleIds.has(id),
+      )
+    )
+      continue;
+    const first = commentedSince.get(note.momentId);
+    if (!first || note.createdAt < first)
+      commentedSince.set(note.momentId, note.createdAt);
+  }
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: document.circle.name,
@@ -549,7 +569,11 @@ export async function loadLocalJournalContext(
     memoriesHref: "/memories",
     notifications: buildActivityNotifications(
       document.notes
-        .filter((note) => note.trashedAt === null)
+        .filter(
+          (note) =>
+            note.trashedAt === null &&
+            !viewerMembershipIds.includes(note.authorMembershipId),
+        )
         .map((note) => ({
           id: note.id,
           moment_id: note.momentId,
@@ -600,6 +624,7 @@ export async function loadLocalJournalContext(
           };
         }),
       access.membershipId,
+      commentedSince,
     ),
   };
   return {
