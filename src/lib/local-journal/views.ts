@@ -539,6 +539,7 @@ export async function loadLocalJournalContext(
     ...(document.extraCircles ?? []).map((circle) => circle.id),
   ]);
   const commentedSince = new Map<string, string>();
+  const postAuthorNames = new Map<string, string>();
   for (const note of document.notes) {
     if (
       note.trashedAt !== null ||
@@ -555,6 +556,8 @@ export async function loadLocalJournalContext(
     )
       continue;
     const first = commentedSince.get(note.momentId);
+    const authorName = memberNames.get(moment.recordedByMembershipId);
+    if (authorName) postAuthorNames.set(note.momentId, authorName);
     if (!first || note.createdAt < first)
       commentedSince.set(note.momentId, note.createdAt);
   }
@@ -625,6 +628,7 @@ export async function loadLocalJournalContext(
         }),
       access.membershipId,
       commentedSince,
+      postAuthorNames,
     ),
   };
   return {

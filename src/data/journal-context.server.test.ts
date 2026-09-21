@@ -246,12 +246,12 @@ describe("circle calendar date", () => {
         ["thread", "2026-09-20T11:00:00Z"],
         ["owned", "2026-09-20T11:00:00Z"],
       ]),
+      new Map([["thread", "Calvin"]]),
     );
     expect(result.map((item) => item.id)).toEqual(["note:owned", "note:after"]);
-    expect(result[1].message).toBe(
-      "also commented on an entry you commented on.",
-    );
+    expect(result[1].message).toBe("also commented on Calvin’s post.");
     expect(result[1].createdAt).toBe(notes[1].created_at);
+    expect(result[0].message).toBe("commented on your entry.");
   });
 
   it("loads older participated threads and links to a currently joined circle", async () => {
@@ -264,6 +264,7 @@ describe("circle calendar date", () => {
             created_at: "2026-09-01T10:00:00Z",
             moments: {
               id: "old-thread",
+              author: { people: { display_name: "Brian" } },
               moment_circles: [
                 { circle_id: "not-joined" },
                 { circle_id: "family" },
@@ -294,6 +295,7 @@ describe("circle calendar date", () => {
     expect(result).toEqual([
       expect.objectContaining({
         id: "note:reply",
+        message: "also commented on Brian’s post.",
         href: "/family?circle=family#moment-old-thread",
       }),
     ]);

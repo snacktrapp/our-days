@@ -290,6 +290,7 @@ export function buildActivityNotifications(
   familyMoments: readonly ActivityMoment[] = [],
   viewerMembershipId?: string,
   commentedSince: ReadonlyMap<string, string> = new Map(),
+  postAuthorNames: ReadonlyMap<string, string> = new Map(),
 ): NonNullable<JournalChromeViewModel["notifications"]> {
   const displayDate = (createdAt: string) =>
     new Intl.DateTimeFormat("en-US", {
@@ -328,7 +329,9 @@ export function buildActivityNotifications(
         actorName: memberNames.get(note.author_membership_id) ?? "Family",
         message: ownedMomentIds.has(note.moment_id)
           ? entryCommentMessage
-          : "also commented on an entry you commented on.",
+          : postAuthorNames.get(note.moment_id)
+            ? `also commented on ${postAuthorNames.get(note.moment_id)}’s post.`
+            : "also commented on a post.",
         displayDate: displayDate(note.created_at),
         href: activityMomentHref(note.moment_id, note.circle_id),
         createdAt: note.created_at,
@@ -367,6 +370,7 @@ const emptyOptionalActivity = {
   reactions: [] as ActivityReaction[],
   ownedMomentIds: new Set<string>(),
   commentedSince: new Map<string, string>(),
+  postAuthorNames: new Map<string, string>(),
   familyMoments: [] as ActivityMoment[],
 };
 
@@ -404,7 +408,7 @@ async function loadOptionalJournalActivity(
         supabase
           .from("moment_notes")
           .select(
-            "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, moment_circles(circle_id))",
+            "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, moment_circles(circle_id), author:circle_memberships!moments_recorded_by_membership_fkey(people!circle_memberships_person_fkey(display_name)))",
           )
           .in("author_membership_id", [...myMembershipIds])
           .is("trashed_at", null),
@@ -417,7 +421,10 @@ async function loadOptionalJournalActivity(
 
     const visibleCircleByMomentId = new Map<string, string>();
     const commentedSince = new Map<string, string>();
+    const postAuthorNames = new Map<string, string>();
     for (const note of ownNotesResult.data ?? []) {
+      const authorName = note.moments.author?.people?.display_name;
+      if (authorName) postAuthorNames.set(note.moment_id, authorName);
       const first = commentedSince.get(note.moment_id);
       if (!first || note.created_at < first)
         commentedSince.set(note.moment_id, note.created_at);
@@ -497,6 +504,7 @@ async function loadOptionalJournalActivity(
       reactions,
       ownedMomentIds,
       commentedSince,
+      postAuthorNames,
       familyMoments: linkedMoments
         .filter(
           (moment) =>
@@ -573,6 +581,7 @@ export async function loadJournalActivityNotifications(
       activity.familyMoments,
       access.membershipId,
       activity.commentedSince,
+      activity.postAuthorNames,
     );
   } catch (error) {
     if (options?.strict) throw error;
@@ -833,6 +842,7 @@ export async function loadConnectedJournalContext(
       activity.familyMoments,
       access.membershipId,
       activity.commentedSince,
+      activity.postAuthorNames,
     ),
   };
 
