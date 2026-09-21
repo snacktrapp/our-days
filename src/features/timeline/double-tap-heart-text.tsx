@@ -1,7 +1,8 @@
 "use client";
 
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useState, type ReactNode } from "react";
 import { dispatchMomentHeart, usePairedTap } from "./double-tap-heart";
+import { HeartGlyph } from "./heart-glyph";
 
 export const DoubleTapHeartText = forwardRef<
   HTMLQuoteElement,
@@ -15,18 +16,34 @@ export const DoubleTapHeartText = forwardRef<
   { momentId, className, children, onSingleTap },
   ref,
 ) {
+  const [burst, setBurst] = useState(0);
   const onTap = usePairedTap({
-    onDoubleTap: () => dispatchMomentHeart(momentId),
+    onDoubleTap: () => {
+      if (dispatchMomentHeart(momentId)) setBurst((current) => current + 1);
+    },
     onSingleTap,
   });
 
   return (
     <blockquote
       ref={ref}
-      className={className}
-      onClick={(event) => onTap(event.detail)}
+      className={["double-tap-note", className].filter(Boolean).join(" ")}
+      onClick={(event) => {
+        if ((event.target as Element).closest("a, button, input, textarea"))
+          return;
+        onTap(event.detail);
+      }}
     >
       {children}
+      {burst > 0 ? (
+        <span
+          key={burst}
+          className="post-love-burst"
+          onAnimationEnd={() => setBurst(0)}
+        >
+          <HeartGlyph filled />
+        </span>
+      ) : null}
     </blockquote>
   );
 });

@@ -23,7 +23,7 @@ describe("timeline place meta", () => {
     resetOverlayChromeForTests();
   });
 
-  it("shows NOTE · pin and short name linking to system Maps", () => {
+  it("shows author and short location linking to system Maps", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -35,7 +35,10 @@ describe("timeline place meta", () => {
       />,
     );
 
-    expect(screen.getByText("Note")).toBeVisible();
+    expect(screen.getByText("Molly")).toBeVisible();
+    expect(
+      container.querySelector(".post-author-place .moment-place-pin"),
+    ).not.toBeNull();
     const placeLink = screen.getByRole("link", {
       name: "Open Sand Harbor in Maps",
     });
@@ -49,7 +52,9 @@ describe("timeline place meta", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(container.querySelector(".memory-map")).toBeNull();
     expect(container.querySelector(".map-water")).toBeNull();
-    expect(container.querySelector(".moment-place-pin")).not.toBeNull();
+    expect(container.querySelector(".post-author")?.contains(placeLink)).toBe(
+      true,
+    );
   });
 
   it("does not open an in-app map sheet", () => {

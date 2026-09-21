@@ -6,6 +6,82 @@ function firstPhoto(page: Page) {
   return page.locator('[data-moment-kind="photo"]').first();
 }
 
+test("post location pin and conversation share the intended alignment", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const circle = card.locator(".connection .audience-chip");
+  await expect(circle).toBeVisible();
+  await expect(card.locator(".card-top-chrome .post-participants")).toHaveText(
+    "with Molly + 3",
+  );
+  await expect(card.locator(".soft-actions .tagged")).toHaveCount(0);
+  const chipBox = (await circle.boundingBox())!;
+  const avatarBox = (await card
+    .locator(".connection .avatar-node")
+    .boundingBox())!;
+  expect(chipBox.x + chipBox.width).toBeLessThan(avatarBox.x);
+  expect(
+    Math.abs(
+      chipBox.y + chipBox.height / 2 - (avatarBox.y + avatarBox.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
+  const typography = await card.evaluate((element) =>
+    [".post-author > strong", ".post-author-place", ".post-participants"].map(
+      (selector) => {
+        const style = getComputedStyle(element.querySelector(selector)!);
+        return {
+          family: style.fontFamily,
+          size: style.fontSize,
+          weight: style.fontWeight,
+        };
+      },
+    ),
+  );
+  expect(new Set(typography.map((style) => style.family)).size).toBe(1);
+  expect(new Set(typography.map((style) => style.size)).size).toBe(1);
+  expect(typography.map((style) => style.weight)).toEqual([
+    "500",
+    "400",
+    "400",
+  ]);
+  await expect(
+    card.locator(".post-author-place .moment-place-pin"),
+  ).toBeVisible();
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const edges = await card.evaluate((element) => {
+      const left = (selector: string) =>
+        element.querySelector(selector)!.getBoundingClientRect().left;
+      return {
+        action: left(".quick-reaction-trigger .heart-glyph"),
+        summary: left(".inline-reaction-summary .heart-glyph"),
+        comments: left(".inline-note-summary li"),
+      };
+    });
+    expect(Math.abs(edges.action - edges.summary)).toBeLessThanOrEqual(1);
+    expect(Math.abs(edges.action - edges.comments)).toBeLessThanOrEqual(1);
+    await card
+      .locator(".card-copy")
+      .screenshot({ path: testInfo.outputPath(`post-inset-${theme}.png`) });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const clip = await card.evaluate((element) => ({
+      x: 0,
+      y: element.getBoundingClientRect().top + window.scrollY,
+      width: window.innerWidth,
+      height: element.getBoundingClientRect().height,
+    }));
+    await page.screenshot({
+      fullPage: true,
+      clip,
+      path: testInfo.outputPath(`post-context-${theme}.png`),
+    });
+  }
+});
+
 test("inline comments stay unboxed in both themes", async ({ page }) => {
   await page.goto("/family");
   const comment = firstPhoto(page).locator(".inline-note-summary li").first();
@@ -18,7 +94,7 @@ test("inline comments stay unboxed in both themes", async ({ page }) => {
     for (const side of ["top", "right", "bottom", "left"]) {
       await expect(comment).toHaveCSS(`border-${side}-width`, "0px");
     }
-    await expect(comment.locator(".note-avatar")).toBeVisible();
+    await expect(comment.locator(".note-avatar")).toHaveCount(0);
     await expect(comment.locator("strong")).toBeVisible();
     await expect(comment.locator("p")).toBeVisible();
   }
@@ -49,76 +125,111 @@ async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   return { form, trigger };
 }
 
-test("family activity is visible inline and reactions open as a picker", async ({
+test("one-tap love is salmon, names precede actions, comments follow", async ({
   page,
 }) => {
   await page.goto("/family");
-  await expect(
-    page.getByText("The quiet ride home was my favorite part.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-
   const card = firstPhoto(page);
-  const trigger = card.getByRole("button", {
-    name: /Choose a reaction for photo/u,
-  });
-  await expect(trigger).toHaveText("♡");
+  const trigger = card.getByRole("button", { name: /Love photo/u });
+  await expect(trigger).toHaveAttribute("aria-pressed", "false");
   await trigger.click();
-
-  const picker = card.getByRole("menu", { name: "Choose a reaction" });
-  await expect(picker).toBeVisible();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  await expect(picker).toHaveCSS("position", "absolute");
-  const pickerBox = await picker.boundingBox();
-  const triggerBox = await trigger.boundingBox();
-  expect(pickerBox).toBeTruthy();
-  expect(triggerBox).toBeTruthy();
-  expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(
-    triggerBox!.y + 2,
-  );
-  expect(pickerBox!.height).toBeLessThan(120);
-  const motion = await picker.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const originY = Number.parseFloat(
-      style.transformOrigin.split(" ")[1] ?? "",
-    );
+  await expect(trigger).toHaveAttribute("aria-pressed", "true");
+  await expect(card.getByRole("menu")).toHaveCount(0);
+  const rows = await card.evaluate((el) => {
+    const summary = el.querySelector(".inline-reaction-summary")!;
+    const actions = el.querySelector(".soft-actions")!;
+    const notes = el.querySelector(".inline-note-summary")!;
     return {
-      animationName: style.animationName,
-      animationDuration: style.animationDuration,
-      originY,
-      height: element.getBoundingClientRect().height,
+      order:
+        Boolean(
+          summary.compareDocumentPosition(actions) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ) &&
+        Boolean(
+          actions.compareDocumentPosition(notes) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      heart: getComputedStyle(el.querySelector(".heart-glyph")!).color,
+      salmon: getComputedStyle(el).getPropertyValue("--clay").trim(),
     };
   });
-  expect(motion.animationName).toContain("overlay-popover-in");
-  expect(Number.parseFloat(motion.animationDuration)).toBeCloseTo(0.18, 2);
-  expect(motion.originY).toBeGreaterThan(motion.height);
-  await expect(picker.getByRole("menuitemradio")).toHaveCount(3);
-  await picker.getByRole("menuitemradio", { name: "Laugh" }).click();
-  await expect(picker).toBeHidden();
-  await expect(trigger).toHaveText("😂");
-
+  expect(rows.order).toBe(true);
+  const expectedColor = await trigger.evaluate((el) => {
+    const span = document.createElement("span");
+    span.style.color = "var(--clay)";
+    el.append(span);
+    const color = getComputedStyle(span).color;
+    span.remove();
+    return color;
+  });
+  expect(rows.heart).toBe(expectedColor);
   await trigger.click();
-  await picker.getByRole("menuitemradio", { name: "Heart" }).click();
-  await expect(trigger).toHaveText("❤️");
+  await expect(trigger).toHaveAttribute("aria-pressed", "false");
 });
 
-test("reduced motion opens the heart picker without scale or fade", async ({
+test("photo double-tap loves without opening media and never toggles off", async ({
   page,
 }) => {
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const photo = card.locator(".double-tap-photo");
+  const trigger = card.getByRole("button", { name: /Love photo/u });
+  await photo.scrollIntoViewIfNeeded();
+  const box = (await photo.boundingBox())!;
+  const tap = () => page.touchscreen.tap(box.x + 100, box.y + 100);
+  await tap();
+  await tap();
+  await expect(trigger).toHaveAttribute("aria-pressed", "true");
+  await tap();
+  await tap();
+  await expect(trigger).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("carousel swipes still change photos without loving the post", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const pager = card.locator(".photo-card-pager");
+  await pager.scrollIntoViewIfNeeded();
+  await pager.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    for (const [type, clientX] of [
+      ["pointerdown", x],
+      ["pointermove", x - 90],
+      ["pointerup", x - 90],
+    ] as const) {
+      node.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          isPrimary: true,
+          pointerId: 7,
+          pointerType: "touch",
+          clientX,
+          clientY: box.top + 30,
+        }),
+      );
+    }
+  });
+  await expect(pager.getByText("Photo 2 of 3")).toHaveCount(1);
+  await expect(
+    card.getByRole("button", { name: /Love photo/u }),
+  ).toHaveAttribute("aria-pressed", "false");
+});
+
+test("reduced motion suppresses the heart animation", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/family");
   const card = firstPhoto(page);
-  const trigger = card.getByRole("button", {
-    name: /Choose a reaction for photo/u,
-  });
-  await trigger.click();
-  const picker = card.getByRole("menu", { name: "Choose a reaction" });
-  await expect(picker).toBeVisible();
-  await expect(picker).toHaveCSS("position", "absolute");
-  await expect(picker).toHaveCSS("animation-name", "none");
-  await picker.getByRole("menuitemradio", { name: "Laugh" }).click();
-  await expect(picker).toBeHidden();
+  await card
+    .locator(".double-tap-photo")
+    .dblclick({ position: { x: 100, y: 100 } });
+  await expect(
+    card.getByRole("button", { name: /Love photo/u }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(card.locator(".post-love-burst")).toBeHidden();
 });
 
 test("comment drawer drafts save safely and remain reversible", async ({
@@ -259,10 +370,7 @@ test("preview interactions do not navigate, persist, or make requests", async ({
   });
 
   const card = firstPhoto(page);
-  await card
-    .getByRole("button", { name: /Choose a reaction for photo/u })
-    .click();
-  await card.getByRole("menuitemradio", { name: "Meaningful" }).click();
+  await card.getByRole("button", { name: /Love photo/u }).click();
   const { form } = await openNoteForm(page, card);
   await form
     .getByRole("textbox", { name: "Add a family note" })
@@ -297,11 +405,8 @@ test("inline reaction and note states have no serious accessibility findings", a
     ).toEqual([]);
   };
 
-  await card
-    .getByRole("button", { name: /Choose a reaction for photo/u })
-    .click();
+  await card.getByRole("button", { name: /Love photo/u }).click();
   await scan();
-  await card.getByRole("menuitemradio", { name: "Heart" }).click();
   await openNoteForm(page, card);
   await scan();
 });
@@ -335,7 +440,7 @@ test("personal and memory timelines use inline conversation without navigation d
   ] as const) {
     await page.goto(path);
     const card = page.locator("[data-moment-kind]").first();
-    const trigger = card.getByRole("button", { name: /Choose a reaction/u });
+    const trigger = card.getByRole("button", { name: /Love /u });
     await trigger.scrollIntoViewIfNeeded();
     const before = await page.evaluate(() => ({
       url: location.href,
@@ -343,9 +448,7 @@ test("personal and memory timelines use inline conversation without navigation d
       historyState: JSON.stringify(history.state),
     }));
     await trigger.click();
-    await expect(
-      card.getByRole("menu", { name: "Choose a reaction" }),
-    ).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-pressed", "true");
     expect(
       await page.evaluate(() => ({
         url: location.href,

@@ -3,9 +3,11 @@
 import { useEffect, useRef } from "react";
 
 export function dispatchMomentHeart(momentId: string) {
-  document
-    .getElementById(`moment-conversation-${momentId}`)
-    ?.dispatchEvent(new Event("our-days:heart", { bubbles: false }));
+  const target = document.getElementById(`moment-conversation-${momentId}`);
+  // The conversation cancels this event only when it accepts a new love.
+  return target
+    ? !target.dispatchEvent(new Event("our-days:heart", { cancelable: true }))
+    : false;
 }
 
 export function usePairedTap({

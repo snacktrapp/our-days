@@ -14,12 +14,17 @@ import type {
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
+import { AudienceChip } from "./audience-chip";
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   const dateAndTime = timelineCardOccurredLabel(
     moment.occurredOn,
     moment.displayTime,
   );
+  const chipLabel =
+    moment.audienceChipLabel ??
+    (moment.showJustMeBadge ? "Just me" : undefined);
+  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
 
   if (moment.kind === "insight") {
     return (
@@ -34,16 +39,21 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
 
   return (
     <div className="connection">
+      {showChip && chipLabel ? (
+        <AudienceChip label={chipLabel} audience={moment.audience} />
+      ) : null}
       <span
         className={`avatar-node dot-${moment.personAccent}`}
         aria-hidden="true"
       >
         {moment.personInitial}
       </span>
-      <span className="moment-meta">
-        <strong>{moment.personName}</strong>
+      <div className="moment-meta">
+        <div className="timeline-author-row">
+          <strong>{moment.personName}</strong>
+        </div>
         <span>{dateAndTime}</span>
-      </span>
+      </div>
     </div>
   );
 }

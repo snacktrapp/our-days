@@ -445,7 +445,7 @@ describe("MomentCard timeline media", () => {
       "viewBox",
       "0 0 160 90",
     );
-    expect(screen.getByText("Video")).toBeVisible();
+    expect(screen.getByText("Molly")).toBeVisible();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /Open video full screen/u }),
@@ -673,7 +673,7 @@ describe("MomentCard insight treatment", () => {
 });
 
 describe("MomentCard audience chip", () => {
-  it("shows a decorative chip and leaves audience changes on Edit moment", () => {
+  it("leaves the chip to the timeline and audience changes on Edit moment", () => {
     render(
       <MomentCard
         moment={{
@@ -693,12 +693,10 @@ describe("MomentCard audience chip", () => {
       />,
     );
 
-    const chip = screen.getByLabelText("Audience, Our Days +1");
-    expect(chip).toHaveTextContent("Our Days +1");
+    expect(screen.queryByLabelText("Audience, Our Days +1")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Audience, Our Days +1" }),
     ).toBeNull();
-    fireEvent.click(chip);
     expect(screen.queryByText("Cousins")).toBeNull();
     expect(screen.queryByRole("list")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
@@ -728,8 +726,7 @@ describe("MomentCard audience chip", () => {
       />,
     );
 
-    const chip = screen.getByLabelText("Audience, Our Days");
-    fireEvent.click(chip);
+    expect(screen.queryByLabelText("Audience, Our Days")).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(
