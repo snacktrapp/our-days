@@ -25,10 +25,10 @@ function TitleCopy({
 }>) {
   return (
     <>
-      <span className="eyebrow">{model.eyebrow}</span>
+      <span className="our-days-wordmark" role="img" aria-label="Our Days" />
       <span className="title-switcher-heading">
         <h1 id="journal-focus-target" tabIndex={-1}>
-          {model.title}
+          {model.title === "Our Days" ? "Journal" : model.title}
         </h1>
         {chevron ? (
           <svg viewBox="0 0 16 16" aria-hidden="true">

@@ -205,6 +205,7 @@ describe("security proxy", () => {
 
   it.each([
     "apple-touch-icon.png",
+    "our-days-wordmark.svg",
     "icon-192.png",
     "icon-512.png",
     "icon-1024.png",

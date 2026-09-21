@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <title>Our Days</title>
-  <rect width="1024" height="1024" fill="#0b1712"/>
-  <path d="M512 192V832" fill="none" stroke="#2d433a" stroke-width="12" stroke-linecap="round"/>
-  <rect x="432" y="192" width="160" height="160" rx="48" fill="#79aaa4"/>
-  <rect x="432" y="432" width="160" height="160" rx="48" fill="#c77c80"/>
-  <rect x="432" y="672" width="160" height="160" rx="48" fill="#b88b42"/>
+  <rect width="1024" height="1024" fill="#1b2028"/>
+  <g fill="#edf0f5">
+    <path fill-rule="evenodd" d="M512 176a174 174 0 1 1 0 348 174 174 0 0 1 0-348Zm0 90a84 84 0 1 0 0 168 84 84 0 0 0 0-168Z"/>
+    <path d="M468 503h88v47h-88z"/>
+    <path fill-rule="evenodd" d="M372 534h166a154 154 0 0 1 0 308H372q-20 0-20-20V554q0-20 20-20Zm74 78v152h86a76 76 0 0 0 0-152Z"/>
+  </g>
 </svg>
