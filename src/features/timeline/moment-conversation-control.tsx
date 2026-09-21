@@ -566,7 +566,13 @@ export function MomentConversationControl({
               <li key={note.id}>
                 <div>
                   <span className="inline-note-author">
-                    <strong>{note.authorName}</strong>
+                    <strong>
+                      <span
+                        className={`comment-color-dot dot-${note.authorAccent}`}
+                        aria-hidden="true"
+                      />
+                      {note.authorName}
+                    </strong>
                     {note.createdAt ? (
                       <time
                         className="inline-note-when"

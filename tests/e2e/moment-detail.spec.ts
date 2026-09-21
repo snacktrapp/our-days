@@ -153,6 +153,18 @@ test("inline comments stay unboxed in both themes", async ({ page }) => {
       await expect(comment).toHaveCSS(`border-${side}-width`, "0px");
     }
     await expect(comment.locator(".note-avatar")).toHaveCount(0);
+    const dot = comment.locator(".comment-color-dot");
+    await expect(dot).toHaveCSS("width", "8px");
+    await expect(dot).toHaveCSS("height", "8px");
+    await expect(dot).toHaveCSS("border-radius", "50%");
+    await expect(dot).toBeEmpty();
+    await expect(dot).toHaveAttribute("aria-hidden", "true");
+    await expect(dot).toHaveCSS(
+      "background-color",
+      await firstPhoto(page)
+        .locator(".post-author-avatar")
+        .evaluate((element) => getComputedStyle(element).backgroundColor),
+    );
     await expect(comment.locator("strong")).toBeVisible();
     await expect(comment.locator("p")).toBeVisible();
   }

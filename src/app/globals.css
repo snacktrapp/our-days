@@ -9276,6 +9276,14 @@ iframe.composer-location-map {
 .inline-note-author {
   flex-wrap: wrap;
 }
+.comment-color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+}
 .double-tap-photo,
 .double-tap-note {
   position: relative;
