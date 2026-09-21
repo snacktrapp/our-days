@@ -184,9 +184,22 @@ describe("MomentConversationControl", () => {
     expect(collapsed[0]).toHaveTextContent("Nana");
     expect(collapsed[0]).toHaveTextContent("Nana just replied.");
     expect(collapsed[0].querySelector(".note-avatar")).toBeNull();
+    expect(collapsed[0].querySelector(".comment-color-dot")).toHaveClass(
+      "dot-clay",
+    );
+    expect(
+      collapsed[0].querySelector(".comment-color-dot"),
+    ).toBeEmptyDOMElement();
+    expect(collapsed[0].querySelector(".comment-color-dot")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
     expect(collapsed[1]).toHaveTextContent("Brian");
     expect(collapsed[1]).toHaveTextContent("A middle note.");
     expect(collapsed[1].querySelector(".note-avatar")).toBeNull();
+    expect(collapsed[1].querySelector(".comment-color-dot")).toHaveClass(
+      "dot-teal",
+    );
     expect(screen.queryByText("Oldest family note.")).toBeNull();
 
     await user.click(screen.getByText("Nana just replied."));
@@ -198,6 +211,9 @@ describe("MomentConversationControl", () => {
       expect.stringContaining("Oldest family note."),
     ]);
     expect(expanded[2].querySelector(".note-avatar")).toBeNull();
+    expect(expanded[2].querySelector(".comment-color-dot")).toHaveClass(
+      "dot-ochre",
+    );
     await user.click(screen.getByText("Nana just replied."));
     expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
 
