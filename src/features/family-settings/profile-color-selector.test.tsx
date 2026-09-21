@@ -41,6 +41,8 @@ describe("profile color selector", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save color" }));
     await screen.findByRole("alert");
     expect(screen.getByRole("radio", { name: "Cyan" })).toBeChecked();
-    expect(screen.getByRole("button", { name: "Save color" })).toBeEnabled();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save color" })).toBeEnabled(),
+    );
   });
 });

@@ -2159,6 +2159,11 @@ export function MomentComposer({
                   <span>{copy.bodyLabel}</span>
                   <textarea
                     ref={bodyTextareaRef}
+                    className={
+                      mode === "photo" || mode === "video"
+                        ? "media-caption-field"
+                        : undefined
+                    }
                     placeholder={copy.bodyPlaceholder}
                     value={body}
                     required={copy.bodyRequired}

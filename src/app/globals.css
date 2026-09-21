@@ -843,6 +843,21 @@ button {
   max-width: 100%;
   width: fit-content;
 }
+.topbar .title-lockup h1 {
+  font: var(--chrome-meta);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1.3;
+}
+.our-days-wordmark {
+  display: block;
+  width: 104px;
+  max-width: 100%;
+  height: 20px;
+  margin: 0 auto 4px;
+  background: var(--ink);
+  mask: url("/our-days-wordmark.svg") center / contain no-repeat;
+}
 .title-switcher-heading svg {
   width: 14px;
   height: 14px;
@@ -6724,9 +6739,17 @@ html.overlay-open .bottom-nav {
 }
 
 .inline-note-summary li p {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-interface);
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* Conversation uses interface type; journal prose and scripture retain serif. */
+.photo-card .card-copy > p:not(.moment-kicker),
+.inline-note-form textarea,
+.inline-note-edit textarea,
+.composer-field textarea.media-caption-field {
+  font-family: var(--font-interface);
 }
 
 .app-shell {

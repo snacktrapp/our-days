@@ -15,7 +15,7 @@ const iconFiles = [
   { file: "icon-1024.png", size: 1024 },
 ] as const;
 
-const canvas = { r: 0x0b, g: 0x17, b: 0x12 };
+const canvas = { r: 0x1b, g: 0x20, b: 0x28 };
 
 function channelDelta(
   actual: { r: number; g: number; b: number },
@@ -29,13 +29,10 @@ function channelDelta(
 }
 
 describe("installed app icons", () => {
-  it("uses the dark login-page mark for PWA and home-screen chrome", async () => {
+  it("uses the cloud-gray OD mark on blue-gray for PWA icons", async () => {
     const source = await readFile(`${publicDir}icon-source.svg`, "utf8");
-    expect(source).toContain('fill="#0b1712"');
-    expect(source).toContain('stroke="#2d433a"');
-    expect(source).toContain('fill="#79aaa4"');
-    expect(source).toContain('fill="#c77c80"');
-    expect(source).toContain('fill="#b88b42"');
+    expect(source).toContain('fill="#1b2028"');
+    expect(source).toContain('fill="#edf0f5"');
     expect(source).not.toContain("paper");
     expect(source).not.toContain("#fffaf0");
     expect(source).not.toContain("#f3eee4");
@@ -85,7 +82,7 @@ describe("installed app icons", () => {
         g: data[centerIndex + 1],
         b: data[centerIndex + 2],
       };
-      expect(channelDelta(center, { r: 0xc7, g: 0x7c, b: 0x80 })).toBeLessThan(
+      expect(channelDelta(center, { r: 0xed, g: 0xf0, b: 0xf5 })).toBeLessThan(
         24,
       );
     }

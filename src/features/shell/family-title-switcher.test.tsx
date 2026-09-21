@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FamilyTitleSwitcher } from "./family-title-switcher";
+import {
+  FamilyTitleSwitcher,
+  StaticJournalTitle,
+} from "./family-title-switcher";
 import type { JournalChromeViewModel } from "./shell-view-model";
 
 const navigation = vi.hoisted(() => ({
@@ -37,6 +40,19 @@ async function openSwitcher() {
 }
 
 describe("FamilyTitleSwitcher", () => {
+  it("shows the brand above the feed label without the old eyebrow", () => {
+    render(<FamilyTitleSwitcher model={model} switcher={switcher} />);
+    expect(screen.getByRole("img", { name: "Our Days" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "All circles" })).toBeVisible();
+    expect(document.querySelector(".eyebrow")).toBeNull();
+  });
+
+  it("uses the same branding for static pages without a selector", () => {
+    render(<StaticJournalTitle model={{ ...model, title: "Account" }} />);
+    expect(screen.getByRole("img", { name: "Our Days" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
   afterEach(() => {
     navigation.push.mockClear();
     sessionStorage.clear();
