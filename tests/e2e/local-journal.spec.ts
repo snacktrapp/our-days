@@ -25,7 +25,7 @@ test("fresh thread comments appear as a banner and in Activity without replaying
           {
             id: fresh ? "note:fresh" : "note:old",
             actorName: "Molly",
-            message: "also commented on an entry you commented on.",
+            message: "also commented on Brian’s post.",
             displayDate: "Today",
             createdAt: fresh ? "2026-09-20T10:01:05Z" : "2026-09-19T10:00:00Z",
             href: "/family#moment-thread",
@@ -62,7 +62,7 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   await expect(
     page
       .getByRole("dialog", { name: "Activity" })
-      .getByText("Molly also commented on an entry you commented on."),
+      .getByText("Molly also commented on Brian’s post."),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
