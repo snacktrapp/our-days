@@ -545,7 +545,23 @@ export function MomentConversationControl({
 
       {conversation.notes.length > 0 ? (
         <>
-          <ol className="inline-note-summary" aria-label="Notes from family">
+          <ol
+            id={`${panelId}-comments`}
+            className="inline-note-summary"
+            aria-label="Notes from family"
+            onClick={(event) => {
+              if (showAllNotes || olderNoteCount === 0) return;
+              if (
+                event.target instanceof Element &&
+                event.target.closest(
+                  "button, a, input, textarea, select, [role='button']",
+                )
+              )
+                return;
+              if (window.getSelection()?.toString()) return;
+              setShowAllNotes(true);
+            }}
+          >
             {visibleNotes.map((note) => (
               <li key={note.id}>
                 <div>
@@ -626,6 +642,8 @@ export function MomentConversationControl({
             <button
               className="inline-notes-more"
               type="button"
+              aria-expanded={showAllNotes}
+              aria-controls={`${panelId}-comments`}
               onClick={() => setShowAllNotes((current) => !current)}
             >
               {showAllNotes
