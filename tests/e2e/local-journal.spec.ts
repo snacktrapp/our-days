@@ -28,6 +28,80 @@ async function jpegFixture(index = 0) {
   return path;
 }
 
+test("Activity refreshes on each open and recovers from a failed refresh", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await expect(
+    page.getByRole("button", { name: /Open notifications/ }),
+  ).toBeVisible();
+  const api = await page.evaluate(async () => {
+    const response = await fetch("/api/activity", { cache: "no-store" });
+    return {
+      status: response.status,
+      cache: response.headers.get("cache-control"),
+      body: await response.json(),
+    };
+  });
+  expect(api.status).toBe(200);
+  expect(api.cache).toBe("private, no-store");
+  expect(Array.isArray(api.body.items)).toBe(true);
+
+  let fail = false;
+  let actor = "Jordan";
+  let requests = 0;
+  await page.route("**/api/activity", async (route) => {
+    requests += 1;
+    await route.fulfill({
+      status: fail ? 503 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        fail
+          ? { error: "unavailable" }
+          : {
+              items: [
+                {
+                  id: `new-${requests}`,
+                  actorName: actor,
+                  message: "posted a photo.",
+                  displayDate: "Today",
+                  href: "/family#moment-test",
+                },
+              ],
+            },
+      ),
+    });
+  });
+  const trigger = page.getByRole("button", { name: /Open notifications/ });
+  const dialog = page.getByRole("dialog", { name: "Activity" });
+  await trigger.click();
+  await expect(dialog.getByText("Jordan posted a photo.")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  actor = "New family activity";
+  await trigger.click();
+  await expect(
+    dialog.getByText("New family activity posted a photo."),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  fail = true;
+  await trigger.click();
+  await expect(
+    dialog.getByText("Activity couldn’t be refreshed."),
+  ).toBeVisible();
+  await expect(dialog.getByText("No new family activity.")).toHaveCount(0);
+  fail = false;
+  await dialog.getByRole("button", { name: "Try again" }).click();
+  await expect(dialog.getByText("Activity couldn’t be refreshed.")).toHaveCount(
+    0,
+  );
+  expect(requests).toBe(4);
+  await page.screenshot({ path: "test-results/activity-refresh.png" });
+});
+
 test("Circles browsing retains the personal Journal and posts as the signed-in author", async ({
   page,
 }) => {

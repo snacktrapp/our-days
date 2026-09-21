@@ -60,7 +60,7 @@ async function FamilyActivity({
   memberNames?: Readonly<Record<string, string>>;
 }>) {
   const items = await loadJournalActivityNotifications(access, memberNames);
-  return <NotificationCenter items={items} />;
+  return <NotificationCenter items={items} refreshOnOpen />;
 }
 
 async function FamilyTimelineRest({
@@ -159,7 +159,7 @@ async function ConnectedFamilyHome({
       switcher={model.switcher}
       onSelectGroup={selectActiveGroupAction}
       activity={
-        <Suspense fallback={<NotificationCenter items={[]} />}>
+        <Suspense fallback={<NotificationCenter items={[]} refreshOnOpen />}>
           <FamilyActivity access={access} memberNames={context.memberNames} />
         </Suspense>
       }
