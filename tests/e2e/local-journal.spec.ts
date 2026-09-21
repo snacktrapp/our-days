@@ -127,7 +127,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
     Object.assign(window, { transitionEvidence: evidence });
     const observer = new MutationObserver(() => {
       evidence.titles.push(
-        `${document.querySelector(".topbar .eyebrow")?.textContent}|${document.querySelector(".topbar h1")?.textContent}`,
+        `${document.querySelector(".topbar .our-days-wordmark")?.getAttribute("aria-label")}|${document.querySelector(".topbar h1")?.textContent}`,
       );
       if (
         document.querySelector(".bottom-nav") !== nav ||
@@ -168,20 +168,20 @@ test("navigation keeps the same controls and chosen title through a delayed feed
       ).transitionEvidence,
   );
   expect(evidence.lostControls).toBe(false);
-  const selected = evidence.titles.indexOf("Just me|Just me");
+  const selected = evidence.titles.indexOf("Our Days|Just me");
   expect(selected).toBeGreaterThanOrEqual(0);
   expect(
     evidence.titles
       .slice(selected)
-      .every((title) => title === "Just me|Just me"),
+      .every((title) => title === "Our Days|Just me"),
   ).toBe(true);
   for (const destination of [
-    { href: "/circles", link: "Circles", pair: "Journals|Circles" },
-    { href: "/settings/family", link: "Settings", pair: "Our family|Account" },
+    { href: "/circles", link: "Circles", pair: "Our Days|Circles" },
+    { href: "/settings/family", link: "Settings", pair: "Our Days|Account" },
     {
       href: `/people/${localAlexPersonId}`,
       link: "Journal",
-      pair: "Just me|Just me",
+      pair: "Our Days|Just me",
     },
   ]) {
     await page.evaluate(() => {
@@ -205,7 +205,8 @@ test("navigation keeps the same controls and chosen title through a delayed feed
       await expect(page.locator(".topbar h1")).toHaveText(
         destination.pair.split("|")[1],
       );
-      await expect(page.locator(".topbar .eyebrow")).toHaveText(
+      await expect(page.locator(".topbar .our-days-wordmark")).toHaveAttribute(
+        "aria-label",
         destination.pair.split("|")[0],
       );
     } finally {
