@@ -6,6 +6,14 @@ import type {
 } from "./shell-view-model";
 import { JournalChrome, PersistentJournalShell } from "./journal-chrome";
 import { OpeningJournalShell } from "./opening-journal-shell";
+import {
+  anonymousJournalAccess,
+  fallbackJournalChrome,
+} from "@/data/journal-chrome-fallback";
+
+vi.mock("./activity-banner", () => ({
+  ActivityBanner: () => <span data-testid="activity-monitor" />,
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
@@ -51,6 +59,34 @@ const model = {
 } as unknown as JournalChromeViewModel;
 
 describe("JournalChrome", () => {
+  it("does not start Activity for the anonymous fallback; waits for a real viewer", () => {
+    const fallback = fallbackJournalChrome(anonymousJournalAccess(), {
+      title: "Journal",
+      eyebrow: "Our days",
+    });
+    const view = render(
+      <JournalChrome model={fallback} section="timeline">
+        <p>Loading</p>
+      </JournalChrome>,
+    );
+    expect(screen.queryByTestId("activity-monitor")).toBeNull();
+    view.rerender(
+      <JournalChrome
+        model={{
+          ...fallback,
+          composer: {
+            ...fallback.composer,
+            recorderPersonId: "viewer",
+            circleId: "home",
+          },
+        }}
+        section="timeline"
+      >
+        <p>Ready</p>
+      </JournalChrome>,
+    );
+    expect(screen.getByTestId("activity-monitor")).toBeInTheDocument();
+  });
   it.each(["group", "person"] as const)(
     "shows a named %s feed with Back to Circles instead of the main selector",
     (kind) => {
