@@ -89,4 +89,31 @@ test("reduced motion and keyboard focus can reveal the header", async ({
   await expect(header).toHaveCSS("transition-duration", "0s");
   await header.locator("a").first().focus();
   await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+  // Focus must reveal, not permanently pin, the header after restoration.
+  await page.evaluate(() => scrollTo(0, 750));
+  await expect(header).toHaveAttribute("data-scroll-hidden", "true");
+});
+
+test("header resumes scrolling after background and page-cache restoration", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const header = page.locator(".topbar");
+  await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+  await page.evaluate(() => scrollTo(0, 500));
+  await expect(header).toHaveAttribute("data-scroll-hidden", "true");
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+  await page.evaluate(() => scrollTo(0, 650));
+  await expect(header).toHaveAttribute("data-scroll-hidden", "true");
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new PageTransitionEvent("pageshow", { persisted: true }),
+    ),
+  );
+  await expect(header).toHaveAttribute("data-scroll-hidden", "false");
+  await page.evaluate(() => scrollTo(0, 800));
+  await expect(header).toHaveAttribute("data-scroll-hidden", "true");
 });

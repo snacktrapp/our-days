@@ -45,9 +45,18 @@ export function useScrollAwayHeader() {
     const heldOpen = () =>
       Boolean(
         header.querySelector('[aria-expanded="true"], details[open]') ||
-        document.documentElement.classList.contains("overlay-open") ||
-        header.querySelector(":focus-visible"),
+        document.documentElement.classList.contains("overlay-open"),
       );
+    // Restored/programmatic focus can remain :focus-visible after a phone
+    // resumes. Focus reveals the header once; it must not veto later scrolling.
+    const resume = () => {
+      if (document.visibilityState !== "visible") return;
+      measure();
+      show();
+    };
+    const pageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resume();
+    };
     const scroll = () => {
       const y = position();
       const delta = y - previous;
@@ -77,6 +86,8 @@ export function useScrollAwayHeader() {
     });
     window.addEventListener("scroll", scroll, { passive: true });
     window.addEventListener("resize", measure);
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", pageShow);
     window.visualViewport?.addEventListener("resize", measure);
     window.addEventListener("our-days:reveal-new-entry", show);
     header.addEventListener("focusin", show);
@@ -84,6 +95,8 @@ export function useScrollAwayHeader() {
       observer.disconnect();
       window.removeEventListener("scroll", scroll);
       window.removeEventListener("resize", measure);
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("pageshow", pageShow);
       window.visualViewport?.removeEventListener("resize", measure);
       window.removeEventListener("our-days:reveal-new-entry", show);
       header.removeEventListener("focusin", show);
