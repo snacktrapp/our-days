@@ -70,6 +70,14 @@ function PrimaryJournalHeader({
   onSelectGroup?: (circleId: string) => void;
 }>) {
   const headerRef = useScrollAwayHeader();
+  // The persistent shell paints before page registration, with empty identity.
+  // Composer mode alone does not mean the shell has an authenticated viewer.
+  const activityEnabled = Boolean(
+    model.composer.recorderPersonId &&
+    model.composer.circleId &&
+    (model.composer.experience === "connected-family" ||
+      model.composer.experience === "connected-written"),
+  );
   const title =
     !browsingCircle && switcher && switcher.length > 0 ? (
       <FamilyTitleSwitcher
@@ -83,20 +91,14 @@ function PrimaryJournalHeader({
 
   return (
     <header ref={headerRef} className="topbar">
-      {(model.composer.experience === "connected-family" ||
-        model.composer.experience === "connected-written") && (
-        <ActivityBanner />
-      )}
+      {activityEnabled && <ActivityBanner />}
       <SettingsLink href={model.settingsHref} />
       {title}
       <div className="topbar-actions">
         {activity ?? (
           <NotificationCenter
             items={model.notifications}
-            refreshOnOpen={
-              model.composer.experience === "connected-family" ||
-              model.composer.experience === "connected-written"
-            }
+            refreshOnOpen={activityEnabled}
           />
         )}
         <ThemeToggle />
