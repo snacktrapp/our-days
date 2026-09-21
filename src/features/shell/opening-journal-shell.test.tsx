@@ -16,7 +16,8 @@ describe("OpeningJournalShell", () => {
       </PersistentJournalShell>,
     );
 
-    expect(screen.getByRole("heading", { name: "Our Days" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Our Days" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Journal" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
     expect(
       screen.getByRole("navigation", { name: "Primary navigation" }),
