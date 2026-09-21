@@ -183,6 +183,27 @@ async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   return { form, trigger };
 }
 
+test("tapping comments expands inline without opening the composer", async ({
+  page,
+}) => {
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const { form } = await openNoteForm(page, card);
+  await form.getByRole("textbox").fill("Another memory from this day.");
+  await form.getByRole("button", { name: "Post", exact: true }).click();
+  const comments = card.getByRole("list", { name: "Notes from family" });
+  await expect(comments.locator("li")).toHaveCount(2);
+  await comments.locator("p").first().tap();
+  await expect(comments.locator("li")).toHaveCount(3);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await comments.locator("p").first().tap();
+  await expect(comments.locator("li")).toHaveCount(3);
+  await card.getByRole("button", { name: "Show fewer notes" }).click();
+  await expect(comments.locator("li")).toHaveCount(2);
+  await comments.tap({ position: { x: 2, y: 2 } });
+  await expect(comments.locator("li")).toHaveCount(3);
+});
+
 test("one-tap love is salmon, names share actions, comments follow", async ({
   page,
 }) => {

@@ -189,7 +189,8 @@ describe("MomentConversationControl", () => {
     expect(collapsed[1].querySelector(".note-avatar")).toBeNull();
     expect(screen.queryByText("Oldest family note.")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Show 1 more" }));
+    await user.click(screen.getByText("Nana just replied."));
+    expect(screen.queryByRole("dialog")).toBeNull();
     const expanded = within(notes).getAllByRole("listitem");
     expect(expanded.map((item) => item.textContent)).toEqual([
       expect.stringContaining("Nana just replied."),
@@ -197,10 +198,17 @@ describe("MomentConversationControl", () => {
       expect.stringContaining("Oldest family note."),
     ]);
     expect(expanded[2].querySelector(".note-avatar")).toBeNull();
+    await user.click(screen.getByText("Nana just replied."));
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
 
     await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
     expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText("Oldest family note.")).toBeNull();
+    await user.click(notes);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
+    await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
+    await user.click(screen.getByRole("button", { name: "Show 1 more" }));
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
   });
 
   it("loves immediately with one tap, no picker, and undoes with another", async () => {
