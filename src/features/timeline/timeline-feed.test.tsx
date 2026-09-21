@@ -303,9 +303,9 @@ describe("TimelineFeed", () => {
     const pill = screen.getByLabelText("Audience, Just me");
     expect(pill).toBeVisible();
     expect(pill).toHaveTextContent("Just me");
-    expect(card?.contains(pill)).toBe(true);
-    expect(chrome?.contains(pill)).toBe(true);
-    expect(container.querySelector(".connection")?.contains(pill)).toBe(false);
+    expect(card?.contains(pill)).toBe(false);
+    expect(container.querySelector(".connection")?.contains(pill)).toBe(true);
+    expect(chrome?.contains(pill)).toBe(false);
     expect(container.querySelector(".soft-actions")?.contains(pill)).toBe(
       false,
     );
@@ -357,10 +357,9 @@ describe("TimelineFeed", () => {
     const options = screen.getByRole("button", {
       name: /Moment options —/u,
     });
-    expect(chrome?.contains(pill)).toBe(true);
-    expect(
-      chrome?.querySelector(".thought-label, .moment-kicker"),
-    ).not.toBeNull();
+    expect(container.querySelector(".connection")?.contains(pill)).toBe(true);
+    expect(chrome?.contains(pill)).toBe(false);
+    expect(chrome?.querySelector(".post-author")).not.toBeNull();
     expect(actions?.contains(options)).toBe(true);
     expect(chrome?.contains(options)).toBe(false);
     expect(actions?.contains(pill)).toBe(false);
@@ -602,13 +601,11 @@ describe("TimelineFeed", () => {
     expect(screen.queryByText(/2 notes/u)).toBeNull();
 
     const respond = screen.getAllByRole("button", {
-      name: /Choose a reaction .* by Person on Aug 1, 2026/u,
+      name: /Love .* by Person on Aug 1, 2026/u,
     })[0];
-    fireEvent.keyDown(respond, { key: "ArrowUp" });
+    fireEvent.click(respond);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(
-      screen.getByRole("menu", { name: "Choose a reaction" }),
-    ).toBeVisible();
+    expect(respond).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText(/Notes and reactions are not saved/u)).toBeNull();
   });
 

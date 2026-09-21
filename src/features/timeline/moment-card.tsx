@@ -18,8 +18,9 @@ import type {
   TimelineMomentViewModel,
 } from "./timeline-view-model";
 import { VideoMomentMedia } from "./video-moment-media";
-import { MomentPlaceButton, MomentPlaceMeta } from "./moment-place-meta";
-import { AudienceChip } from "./audience-chip";
+import { MomentPlaceButton } from "./moment-place-meta";
+import { PostAuthor } from "./post-author";
+import { DoubleTapPhoto } from "./double-tap-photo";
 
 function PhotoFrameSizer({
   width,
@@ -71,28 +72,17 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
   return { ...base, kind: moment.kind };
 }
 
-function CardAudience({
-  moment,
-}: Readonly<{ moment: TimelineMomentViewModel }>) {
-  const chipLabel =
-    moment.audienceChipLabel ??
-    (moment.showJustMeBadge ? "Just me" : undefined);
-  const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
-  if (moment.kind === "insight" || !showChip || !chipLabel) return null;
-  return <AudienceChip label={chipLabel} audience={moment.audience} />;
-}
-
 function CardTopChrome({
   children,
-  audience,
+  participants,
 }: Readonly<{
   children: ReactNode;
-  audience: ReactNode;
+  participants: ReactNode;
 }>) {
   return (
     <div className="card-top-chrome">
       {children}
-      {audience}
+      {participants}
     </div>
   );
 }
@@ -171,19 +161,6 @@ export function MomentCard({
   const bibleVerse = bibleVerseMatch
     ? { verse: bibleVerseMatch.text, reference: bibleVerseMatch.reference }
     : null;
-  const typeLabel =
-    moment.kind === "thought"
-      ? "Note"
-      : moment.kind === "video"
-        ? "Video"
-        : moment.kind === "location"
-          ? "Location"
-          : moment.kind === "milestone"
-            ? "Milestone"
-            : moment.kind === "insight"
-              ? "Insight"
-              : "Photo";
-
   if (moment.kind === "photo" || moment.kind === "video") {
     const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
@@ -199,49 +176,53 @@ export function MomentCard({
             label={`Video in ${moment.personName}’s journal from ${moment.displayDate}`}
           />
         ) : (
-          <div
-            className={`photo-frame has-reserved-frame${
-              knownRatio ? " has-known-ratio" : ""
-            }`}
-          >
-            <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
-            <PhotoCardPager
-              moment={moment}
-              images={photoAlbum(moment).map((photo, photoIndex) =>
-                moment.image.delivery === "private" ? (
-                  <PrivatePhotoImage
-                    key={photo.id}
-                    src={photo.src}
-                    alt={photo.alt}
-                    width={photo.width}
-                    height={photo.height}
-                    highPriority={preload && photoIndex === 0}
-                  />
-                ) : (
-                  <CspPublicImage
-                    key={photo.id}
-                    src={photo.src}
-                    alt={photo.alt}
-                    width={photo.width ?? 1200}
-                    height={photo.height ?? 801}
-                    highPriority={preload && photoIndex === 0}
-                    eager={photoIndex > 0}
-                    sizes="(max-width: 520px) 92vw, 410px"
-                  />
-                ),
-              )}
-            />
-          </div>
+          <DoubleTapPhoto momentId={moment.id}>
+            <div
+              className={`photo-frame has-reserved-frame${
+                knownRatio ? " has-known-ratio" : ""
+              }`}
+            >
+              <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
+              <PhotoCardPager
+                moment={moment}
+                images={photoAlbum(moment).map((photo, photoIndex) =>
+                  moment.image.delivery === "private" ? (
+                    <PrivatePhotoImage
+                      key={photo.id}
+                      src={photo.src}
+                      alt={photo.alt}
+                      width={photo.width}
+                      height={photo.height}
+                      highPriority={preload && photoIndex === 0}
+                    />
+                  ) : (
+                    <CspPublicImage
+                      key={photo.id}
+                      src={photo.src}
+                      alt={photo.alt}
+                      width={photo.width ?? 1200}
+                      height={photo.height ?? 801}
+                      highPriority={preload && photoIndex === 0}
+                      eager={photoIndex > 0}
+                      sizes="(max-width: 520px) 92vw, 410px"
+                    />
+                  ),
+                )}
+              />
+            </div>
+          </DoubleTapPhoto>
         )}
         <div className="card-copy">
-          <CardTopChrome audience={<CardAudience moment={moment} />}>
-            <MomentPlaceMeta
-              heading
-              typeLabel={typeLabel}
-              placeName={moment.placeName}
-              latitude={moment.latitude}
-              longitude={moment.longitude}
-            />
+          <CardTopChrome
+            participants={
+              moment.taggedPeopleLabel ? (
+                <span className="post-participants">
+                  with {moment.taggedPeopleLabel}
+                </span>
+              ) : null
+            }
+          >
+            <PostAuthor moment={moment} />
           </CardTopChrome>
           <p>{moment.text}</p>
           <CardActions
@@ -268,13 +249,16 @@ export function MomentCard({
       <div
         className={`moment-card thought-card ${bibleVerse ? "bible-verse-card" : ""}`}
       >
-        <CardTopChrome audience={<CardAudience moment={moment} />}>
-          <MomentPlaceMeta
-            typeLabel={bibleVerse ? "Verse" : typeLabel}
-            placeName={moment.placeName}
-            latitude={moment.latitude}
-            longitude={moment.longitude}
-          />
+        <CardTopChrome
+          participants={
+            moment.taggedPeopleLabel ? (
+              <span className="post-participants">
+                with {moment.taggedPeopleLabel}
+              </span>
+            ) : null
+          }
+        >
+          <PostAuthor moment={moment} />
         </CardTopChrome>
         {bibleVerse ? (
           <ExpandableThoughtCopy
@@ -314,7 +298,7 @@ export function MomentCard({
       (sourceHref ? insightSourceLabel(sourceHref) : undefined);
     return (
       <div className="moment-card thought-card bible-verse-card insight-card">
-        <CardTopChrome audience={null}>
+        <CardTopChrome participants={null}>
           <span className="thought-label">Insight</span>
         </CardTopChrome>
         <ExpandableThoughtCopy
@@ -361,8 +345,16 @@ export function MomentCard({
     return (
       <div className="moment-card location-card">
         <div className="card-copy">
-          <CardTopChrome audience={<CardAudience moment={moment} />}>
-            <p className="moment-kicker">{typeLabel}</p>
+          <CardTopChrome
+            participants={
+              moment.taggedPeopleLabel ? (
+                <span className="post-participants">
+                  with {moment.taggedPeopleLabel}
+                </span>
+              ) : null
+            }
+          >
+            <PostAuthor moment={moment} />
           </CardTopChrome>
           <h3>
             <MomentPlaceButton
@@ -402,13 +394,16 @@ export function MomentCard({
         {moment.yearLabel ? <span>{moment.yearLabel}</span> : null}
       </div>
       <div className="milestone-copy">
-        <CardTopChrome audience={<CardAudience moment={moment} />}>
-          <MomentPlaceMeta
-            typeLabel={typeLabel}
-            placeName={moment.placeName}
-            latitude={moment.latitude}
-            longitude={moment.longitude}
-          />
+        <CardTopChrome
+          participants={
+            moment.taggedPeopleLabel ? (
+              <span className="post-participants">
+                with {moment.taggedPeopleLabel}
+              </span>
+            ) : null
+          }
+        >
+          <PostAuthor moment={moment} />
         </CardTopChrome>
         <h3>{moment.milestone}</h3>
         <p>{moment.text}</p>

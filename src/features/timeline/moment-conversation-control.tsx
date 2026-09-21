@@ -15,7 +15,6 @@ import { notifyInlineNotePanelChanged } from "@/features/shell/hide-bottom-nav-w
 import {
   overlayMotionReduced,
   overlayPopoverCloseMs,
-  useOverlayPopoverClose,
 } from "@/features/shell/use-overlay-popover-close";
 import type { MomentConversationActions } from "@/features/moments/moment-action-types";
 import {
@@ -24,6 +23,7 @@ import {
 } from "./moment-conversation-notes";
 import { displayConversationDate } from "./display-conversation-date";
 import { CommentDrawer } from "./comment-drawer";
+import { HeartGlyph } from "./heart-glyph";
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -31,7 +31,7 @@ import type {
   MomentReactionId,
 } from "./timeline-view-model";
 
-type InlinePanel = "note" | "reactions" | null;
+type InlinePanel = "note" | null;
 
 const reactionPresentation: Readonly<
   Record<MomentReactionId, { emoji: string; label: string }>
@@ -138,8 +138,6 @@ export function MomentConversationControl({
   const panelId = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
-  const reactionControlRef = useRef<HTMLDivElement>(null);
-  const reactionTriggerRef = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<InlinePanel>(null);
   const [conversation, setConversation] = useState<MomentConversationViewModel>(
     model.conversation,
@@ -156,14 +154,6 @@ export function MomentConversationControl({
       currentReaction(model.conversation),
     );
   const reactionWriteGen = useRef(0);
-  const {
-    closing: reactionsClosing,
-    closingRef: reactionsClosingRef,
-    requestClose: requestOverlayClose,
-    cancel: cancelReactionPickerClose,
-    onAnimationEnd: onReactionPickerAnimationEnd,
-  } = useOverlayPopoverClose();
-
   const reactionOptions = useMemo(
     () =>
       new Map(interaction.reactionOptions.map((option) => [option.id, option])),
@@ -262,7 +252,11 @@ export function MomentConversationControl({
       ...leavingReactions.filter(
         (reaction) => !visibleKeys.has(reaction.presenceKey),
       ),
-    ];
+    ].sort(
+      (a, b) =>
+        Number(b.reactionId === "held-close") -
+        Number(a.reactionId === "held-close"),
+    );
   }, [leavingReactions, visibleReactions]);
 
   const popHeart = useCallback(() => {
@@ -270,52 +264,10 @@ export function MomentConversationControl({
     setHeartPopGeneration((current) => current + 1);
   }, []);
 
-  const requestReactionPickerClose = useCallback(
-    (restoreFocus = false) => {
-      const restoreTriggerFocus = () => {
-        if (!restoreFocus) return;
-        window.requestAnimationFrame(() =>
-          reactionTriggerRef.current?.focus({ preventScroll: true }),
-        );
-      };
-      if (panel !== "reactions") {
-        restoreTriggerFocus();
-        return;
-      }
-      requestOverlayClose(() => {
-        setPanel((current) => (current === "reactions" ? null : current));
-      });
-      restoreTriggerFocus();
-    },
-    [panel, requestOverlayClose, setPanel],
-  );
-
   useLayoutEffect(() => {
     notifyInlineNotePanelChanged();
     return () => notifyInlineNotePanelChanged();
   }, [panel]);
-
-  useEffect(() => {
-    if (panel !== "reactions") return;
-    const closeOnOutsidePress = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !reactionControlRef.current?.contains(event.target)
-      ) {
-        requestReactionPickerClose();
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      requestReactionPickerClose(true);
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePress);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutsidePress);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [panel, requestReactionPickerClose]);
 
   const applyLoadedConversation = useCallback(
     (next: MomentConversationViewModel, startedWriteGen: number) => {
@@ -354,37 +306,16 @@ export function MomentConversationControl({
     }
   };
 
-  const togglePanel = async (nextPanel: Exclude<InlinePanel, null>) => {
+  const togglePanel = async (nextPanel: "note") => {
     setError(null);
-    if (nextPanel === "reactions" && panel === "reactions") {
-      if (reactionsClosingRef.current) {
-        cancelReactionPickerClose();
-        return;
-      }
-      requestReactionPickerClose();
-      return;
-    }
     if (panel === nextPanel) {
       setPanel(null);
       return;
     }
-    cancelReactionPickerClose();
-    if (nextPanel === "note") {
-      // iOS only opens its keyboard while focus is still part of the tap.
-      // Mount/show the modal before focusing; never defer this to an effect.
-      flushSync(() => setPanel("note"));
-      noteRef.current?.focus({ preventScroll: true });
-    } else {
-      setPanel(nextPanel);
-    }
+    // Focus during the original tap so iOS opens the keyboard immediately.
+    flushSync(() => setPanel("note"));
+    noteRef.current?.focus({ preventScroll: true });
     await loadConversation();
-  };
-
-  const openReactionPicker = () => {
-    setError(null);
-    cancelReactionPickerClose();
-    setPanel("reactions");
-    void loadConversation();
   };
 
   const chooseReaction = async (reactionId: MomentReactionId) => {
@@ -399,7 +330,6 @@ export function MomentConversationControl({
     );
     if (next) popHeart();
     setError(null);
-    requestReactionPickerClose(true);
     if (!actions) {
       return;
     }
@@ -432,7 +362,12 @@ export function MomentConversationControl({
   useEffect(() => {
     const element = document.getElementById(conversationId);
     if (!element) return;
-    const heart = () => void chooseReaction("held-close");
+    const heart = (event: Event) => {
+      if (selectedReactionId !== "held-close" && !pending) {
+        event.preventDefault();
+        void chooseReaction("held-close");
+      }
+    };
     element.addEventListener("our-days:heart", heart);
     return () => element.removeEventListener("our-days:heart", heart);
   });
@@ -529,14 +464,14 @@ export function MomentConversationControl({
         >
           <span className="inline-conversation-wait" />
         </div>
-      ) : displayedReactions.length > 0 || conversation.notes.length > 0 ? (
+      ) : displayedReactions.length > 0 ? (
         <div className="conversation-summary" aria-label="Family activity">
           {displayedReactions.length > 0 ? (
             <ul
               className="inline-reaction-summary"
               aria-label="Family responses"
             >
-              {displayedReactions.map((reaction) => {
+              {displayedReactions.map((reaction, index) => {
                 const leaving = leavingReactions.some(
                   (item) => item.presenceKey === reaction.presenceKey,
                 );
@@ -571,184 +506,52 @@ export function MomentConversationControl({
                       );
                     }}
                   >
-                    <span aria-hidden="true">
-                      {reactionPresentation[reaction.reactionId].emoji}
+                    {reaction.reactionId === "held-close" ? (
+                      index === 0 ||
+                      displayedReactions[index - 1].reactionId !==
+                        "held-close" ? (
+                        <HeartGlyph filled />
+                      ) : null
+                    ) : (
+                      <span
+                        aria-label={
+                          reactionPresentation[reaction.reactionId].label
+                        }
+                      >
+                        {reactionPresentation[reaction.reactionId].emoji}
+                      </span>
+                    )}
+                    <span>
+                      {reaction.personName}
+                      {index < displayedReactions.length - 1 ? "," : ""}
                     </span>
-                    <span>{reaction.personName}</span>
                   </li>
                 );
               })}
             </ul>
           ) : null}
-          {conversation.notes.length > 0 ? (
-            <>
-              <ol
-                className="inline-note-summary"
-                aria-label="Notes from family"
-              >
-                {visibleNotes.map((note) => (
-                  <li key={note.id}>
-                    <span
-                      className={`note-avatar dot-${note.authorAccent}`}
-                      aria-hidden="true"
-                    >
-                      {note.authorInitial}
-                    </span>
-                    <div>
-                      <span className="inline-note-author">
-                        <strong>{note.authorName}</strong>
-                        {note.createdAt ? (
-                          <time
-                            className="inline-note-when"
-                            dateTime={note.createdAt}
-                            suppressHydrationWarning
-                          >
-                            {displayConversationDate(note.createdAt)}
-                          </time>
-                        ) : (
-                          <span className="inline-note-when">
-                            {note.displayDate}
-                          </span>
-                        )}
-                        {actions && note.canChange && note.revision ? (
-                          <span className="inline-note-actions">
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => {
-                                flushSync(() => {
-                                  setEditingNoteId(note.id);
-                                  setNoteDraft(note.body);
-                                  setPanel("note");
-                                  setError(null);
-                                });
-                                noteRef.current?.focus({ preventScroll: true });
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    "Remove this note from the family conversation?",
-                                  )
-                                )
-                                  return;
-                                setPending(true);
-                                setError(null);
-                                try {
-                                  const result = await actions.trashNote({
-                                    noteId: note.id,
-                                    revision: note.revision!,
-                                  });
-                                  if (!result.ok) {
-                                    setError(result.message);
-                                    return;
-                                  }
-                                  await loadConversation(true);
-                                } catch {
-                                  setError(
-                                    "That note could not be removed. Try again.",
-                                  );
-                                } finally {
-                                  setPending(false);
-                                }
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </span>
-                        ) : null}
-                      </span>
-                      <p>{note.body}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              {olderNoteCount > 0 ? (
-                <button
-                  className="inline-notes-more"
-                  type="button"
-                  onClick={() => setShowAllNotes((current) => !current)}
-                >
-                  {showAllNotes
-                    ? "Show fewer notes"
-                    : `Show ${olderNoteCount} more`}
-                </button>
-              ) : null}
-            </>
-          ) : null}
         </div>
       ) : null}
 
       <div className="soft-actions">
-        <div ref={reactionControlRef} className="quick-reaction-control">
+        <div className="quick-reaction-control">
           <button
-            ref={reactionTriggerRef}
-            className={`quick-reaction-trigger${
-              heartPopGeneration > 0 ? " is-popping" : ""
-            }`}
+            className="quick-reaction-trigger"
             type="button"
-            aria-expanded={panel === "reactions" && !reactionsClosing}
-            aria-haspopup="menu"
-            aria-controls={`${panelId}-reactions`}
-            aria-label={`Choose a reaction for ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
-            title="Choose a reaction"
-            onContextMenu={(event) => {
-              event.preventDefault();
-              openReactionPicker();
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== "ArrowUp") return;
-              event.preventDefault();
-              openReactionPicker();
-            }}
-            onClick={() => void togglePanel("reactions")}
+            aria-pressed={selectedReactionId === "held-close"}
+            aria-label={`Love ${kindLabel} “${controlLabel}” by ${model.personName} on ${model.displayDate} — entry ${position} of ${total}`}
+            title={selectedReactionId === "held-close" ? "Undo love" : "Love"}
+            disabled={pending}
+            onClick={() => void chooseReaction("held-close")}
           >
             <span
               key={heartPopGeneration}
-              className={`quick-reaction-glyph${
-                heartPopGeneration > 0 ? " is-popping" : ""
-              }`}
+              className={`quick-reaction-glyph${heartPopGeneration > 0 ? " is-popping" : ""}`}
               aria-hidden="true"
             >
-              {selectedReactionId
-                ? reactionPresentation[selectedReactionId].emoji
-                : "♡"}
+              <HeartGlyph filled={selectedReactionId === "held-close"} />
             </span>
           </button>
-          {panel === "reactions" ? (
-            <div
-              id={`${panelId}-reactions`}
-              className={`inline-reaction-picker overlay-popover${
-                reactionsClosing ? " is-closing" : ""
-              }`}
-              role="menu"
-              aria-label="Choose a reaction"
-              aria-hidden={reactionsClosing ? true : undefined}
-              onAnimationEnd={onReactionPickerAnimationEnd}
-            >
-              {interaction.reactionOptions.map((option) => {
-                const presentation = reactionPresentation[option.id];
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-label={presentation.label}
-                    aria-checked={selectedReactionId === option.id}
-                    disabled={pending}
-                    onClick={() => void chooseReaction(option.id)}
-                  >
-                    <span aria-hidden="true">{presentation.emoji}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
         </div>
         <button
           ref={noteTriggerRef}
@@ -765,11 +568,101 @@ export function MomentConversationControl({
           </svg>
           <span className="sr-only">{noteLabel}</span>
         </button>
-        {model.taggedPeopleLabel ? (
-          <span className="tagged">with {model.taggedPeopleLabel}</span>
-        ) : null}
         {trailing}
       </div>
+
+      {conversation.notes.length > 0 ? (
+        <>
+          <ol className="inline-note-summary" aria-label="Notes from family">
+            {visibleNotes.map((note) => (
+              <li key={note.id}>
+                <div>
+                  <span className="inline-note-author">
+                    <strong>{note.authorName}</strong>
+                    {note.createdAt ? (
+                      <time
+                        className="inline-note-when"
+                        dateTime={note.createdAt}
+                        suppressHydrationWarning
+                      >
+                        {displayConversationDate(note.createdAt)}
+                      </time>
+                    ) : (
+                      <span className="inline-note-when">
+                        {note.displayDate}
+                      </span>
+                    )}
+                    {actions && note.canChange && note.revision ? (
+                      <span className="inline-note-actions">
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => {
+                            flushSync(() => {
+                              setEditingNoteId(note.id);
+                              setNoteDraft(note.body);
+                              setPanel("note");
+                              setError(null);
+                            });
+                            noteRef.current?.focus({ preventScroll: true });
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                "Remove this note from the family conversation?",
+                              )
+                            )
+                              return;
+                            setPending(true);
+                            setError(null);
+                            try {
+                              const result = await actions.trashNote({
+                                noteId: note.id,
+                                revision: note.revision!,
+                              });
+                              if (!result.ok) {
+                                setError(result.message);
+                                return;
+                              }
+                              await loadConversation(true);
+                            } catch {
+                              setError(
+                                "That note could not be removed. Try again.",
+                              );
+                            } finally {
+                              setPending(false);
+                            }
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </span>
+                    ) : null}
+                  </span>
+                  <p>{note.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {olderNoteCount > 0 ? (
+            <button
+              className="inline-notes-more"
+              type="button"
+              onClick={() => setShowAllNotes((current) => !current)}
+            >
+              {showAllNotes
+                ? "Show fewer notes"
+                : `Show ${olderNoteCount} more`}
+            </button>
+          ) : null}
+        </>
+      ) : null}
 
       {panel === "note" ? (
         <CommentDrawer

@@ -587,7 +587,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   });
   const videoCard = page.locator('[data-moment-kind="video"]').first();
   await expect(videoCard).toBeVisible();
-  await expect(videoCard.getByText("Video", { exact: true })).toBeVisible();
+  await expect(videoCard.locator(".post-author > strong")).toHaveText("Alex");
   const timelineVideo = videoCard.locator("video");
   await expect(timelineVideo).toHaveCount(1);
   await expect(timelineVideo).toHaveAttribute("controls");
@@ -661,9 +661,9 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
   ).toBeVisible({ timeout: 15_000 });
   await expect(
     page
-      .locator(".moment-card")
+      .locator("article[data-moment-kind]")
       .filter({ hasText: "A porch thought just for me." })
-      .locator(".just-me-pill"),
+      .locator(".connection .just-me-pill"),
   ).toHaveText("Just me");
 
   await page.goto("/family");

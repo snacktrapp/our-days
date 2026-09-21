@@ -96,7 +96,7 @@ describe("MomentConversationControl", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(
       screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Molly");
+    ).toHaveTextContent("Molly");
     expect(
       screen.getByRole("list", { name: "Notes from family" }),
     ).toHaveTextContent(
@@ -183,10 +183,10 @@ describe("MomentConversationControl", () => {
     expect(collapsed).toHaveLength(2);
     expect(collapsed[0]).toHaveTextContent("Nana");
     expect(collapsed[0]).toHaveTextContent("Nana just replied.");
-    expect(collapsed[0].querySelector(".note-avatar")).toHaveClass("dot-clay");
+    expect(collapsed[0].querySelector(".note-avatar")).toBeNull();
     expect(collapsed[1]).toHaveTextContent("Brian");
     expect(collapsed[1]).toHaveTextContent("A middle note.");
-    expect(collapsed[1].querySelector(".note-avatar")).toHaveClass("dot-teal");
+    expect(collapsed[1].querySelector(".note-avatar")).toBeNull();
     expect(screen.queryByText("Oldest family note.")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
@@ -196,408 +196,115 @@ describe("MomentConversationControl", () => {
       expect.stringContaining("A middle note."),
       expect.stringContaining("Oldest family note."),
     ]);
-    expect(expanded[2].querySelector(".note-avatar")).toHaveClass("dot-ochre");
+    expect(expanded[2].querySelector(".note-avatar")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
     expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText("Oldest family note.")).toBeNull();
   });
 
-  it("opens emoji choices on one tap and saves only the chosen response", async () => {
-    const refreshedConversation = {
-      notes: [],
-      reactions: [
-        {
-          id: "reaction-brian",
-          personName: "Brian",
-          personInitial: "B",
-          personAccent: "teal",
-          reactionId: "held-close",
-          isCurrentMember: true,
-        },
-      ],
-    } as const satisfies MomentConversationViewModel;
-    const emptyConversation = { notes: [], reactions: [] } as const;
-    const actions = connectedActions(emptyConversation);
-    actions.load
-      .mockResolvedValueOnce({ ok: true, conversation: emptyConversation })
-      .mockResolvedValue({
-        ok: true,
-        conversation: refreshedConversation,
-      });
+  it("loves immediately with one tap, no picker, and undoes with another", async () => {
     const user = userEvent.setup();
+    const actions = connectedActions();
     renderControl(actions);
-
-    await user.click(
-      screen.getByRole("button", {
-        name: /Choose a reaction for photo .* entry 2 of 5/u,
-      }),
-    );
-    expect(actions.setReaction).not.toHaveBeenCalled();
-    const choices = screen.getByRole("menu", { name: "Choose a reaction" });
-    await user.click(
-      within(choices).getByRole("menuitemradio", { name: "Heart" }),
-    );
-    await waitFor(() =>
-      expect(actions.setReaction).toHaveBeenCalledWith({
-        momentId: "moment-one",
-        reactionId: "held-close",
-      }),
-    );
+    const heart = screen.getByRole("button", { name: /Love photo/u });
+    await user.click(heart);
+    expect(heart).toHaveAttribute("aria-pressed", "true");
+    expect(actions.setReaction).toHaveBeenLastCalledWith({
+      momentId: model.id,
+      reactionId: "held-close",
+    });
+    expect(screen.queryByRole("menu")).toBeNull();
     expect(
-      screen.getByRole("button", { name: /Choose a reaction/u }),
-    ).toHaveTextContent("❤️");
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Brian");
+      screen
+        .getByRole("list", { name: "Family responses" })
+        .querySelectorAll(".heart-glyph"),
+    ).toHaveLength(1);
+    await user.click(heart);
+    expect(actions.setReaction).toHaveBeenLastCalledWith({
+      momentId: model.id,
+      reactionId: null,
+    });
+    expect(heart).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("shows the chosen extra reaction on the card before saving finishes", async () => {
-    let finishSave: (value: { ok: true; message: string }) => void = () => {};
-    const actions = connectedActions({ notes: [], reactions: [] });
-    actions.load.mockResolvedValue({
-      ok: true,
-      conversation: { notes: [], reactions: [] },
-    });
+  it("shows love optimistically while saving and prevents competing writes", async () => {
+    const actions = connectedActions();
+    let finish!: (result: { ok: true; message: string }) => void;
     actions.setReaction.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finishSave = resolve;
+          finish = resolve;
         }),
     );
-    const user = userEvent.setup();
     renderControl(actions, { notes: [], reactions: [] });
-
-    await user.click(
-      screen.getByRole("button", {
-        name: /Choose a reaction for photo .* entry 2 of 5/u,
-      }),
-    );
-    await user.click(
-      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
-        "menuitemradio",
-        { name: "Laugh" },
-      ),
-    );
-
-    expect(actions.setReaction).toHaveBeenCalledWith({
-      momentId: "moment-one",
-      reactionId: "made-me-smile",
-    });
-    expect(
-      screen.getByRole("button", { name: /Choose a reaction/u }),
-    ).toHaveTextContent("😂");
+    const heart = screen.getByRole("button", { name: /Love photo/u });
+    fireEvent.click(heart);
+    expect(heart).toHaveAttribute("aria-pressed", "true");
+    expect(heart).toBeDisabled();
     expect(
       screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("😂Brian");
-
-    finishSave({ ok: true, message: "Saved" });
-    await waitFor(() =>
-      expect(
-        screen.getByRole("list", { name: "Family responses" }),
-      ).toHaveTextContent("😂Brian"),
-    );
+    ).toHaveTextContent("Brian");
+    finish({ ok: true, message: "Saved" });
+    await waitFor(() => expect(heart).not.toBeDisabled());
   });
 
-  it("keeps the chosen reaction when a slow conversation load finishes later", async () => {
-    let finishLoad: (value: {
-      ok: true;
-      conversation: MomentConversationViewModel;
-    }) => void = () => {};
-    const actions = connectedActions({ notes: [], reactions: [] });
-    actions.load.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finishLoad = resolve;
-        }),
-    );
-    const user = userEvent.setup();
+  it("double-tap adds love but never removes it", async () => {
+    const actions = connectedActions();
     renderControl(actions, { notes: [], reactions: [] });
-
-    await user.click(
-      screen.getByRole("button", {
-        name: /Choose a reaction for photo/u,
-      }),
-    );
-    await user.click(
-      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
-        "menuitemradio",
-        { name: "Meaningful" },
-      ),
-    );
-
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("✨Brian");
-
-    finishLoad({
-      ok: true,
-      conversation: { notes: [], reactions: [] },
-    });
-
-    await waitFor(() =>
-      expect(actions.setReaction).toHaveBeenCalledWith({
-        momentId: "moment-one",
-        reactionId: "remember-this",
-      }),
-    );
-    expect(
-      screen.getByRole("button", { name: /Choose a reaction/u }),
-    ).toHaveTextContent("✨");
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("✨Brian");
-  });
-
-  it("shows the chosen response on the card immediately without a network action", async () => {
-    const user = userEvent.setup();
-    renderControl();
-
-    await user.click(
-      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
-    );
-    await user.click(
-      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
-        "menuitemradio",
-        { name: "Laugh" },
-      ),
-    );
-
-    expect(
-      screen.getByRole("button", { name: /Choose a reaction/u }),
-    ).toHaveTextContent("😂");
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Molly");
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("😂Brian");
-    expect(document.querySelector(".quick-reaction-glyph")).toHaveClass(
-      "is-popping",
-    );
-    const responses = within(
-      screen.getByRole("list", { name: "Family responses" }),
-    );
-    expect(responses.getByText("Molly").closest("li")).not.toHaveClass(
-      "is-entering",
-    );
-    expect(responses.getByText("Brian").closest("li")).toHaveClass(
-      "is-entering",
+    const target = document.getElementById("moment-conversation-moment-one")!;
+    fireEvent(target, new Event("our-days:heart"));
+    await waitFor(() => expect(actions.setReaction).toHaveBeenCalledTimes(1));
+    fireEvent(target, new Event("our-days:heart"));
+    expect(actions.setReaction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: /Love photo/u })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
   });
 
-  it("pops the heart from a double-tap and eases the name pill in", () => {
-    renderControl(undefined, { notes: [], reactions: [] });
-    fireEvent(
-      document.getElementById("moment-conversation-moment-one")!,
-      new Event("our-days:heart"),
-    );
-    expect(document.querySelector(".quick-reaction-glyph")).toHaveClass(
-      "is-popping",
-    );
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Brian");
-    expect(screen.getByText("Brian").closest("li")).toHaveClass("is-entering");
-  });
-
-  it("reverses the name pill out when the current reaction is removed", async () => {
-    const user = userEvent.setup();
-    renderControl(undefined, {
-      notes: [],
-      reactions: [
-        {
-          id: "reaction-brian",
-          personName: "Brian",
-          personInitial: "B",
-          personAccent: "teal",
-          reactionId: "held-close",
-          isCurrentMember: true,
-        },
-      ],
-    });
-    expect(screen.getByText("Brian").closest("li")).not.toHaveClass(
-      "is-entering",
-    );
-    await user.click(
-      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
-    );
-    await user.click(
-      within(screen.getByRole("menu", { name: "Choose a reaction" })).getByRole(
-        "menuitemradio",
-        { name: "Heart" },
-      ),
-    );
-    expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Brian");
-    expect(screen.getByText("Brian").closest("li")).toHaveClass("is-closing");
-  });
-
-  it("skips heart and pill motion when the user prefers reduced motion", async () => {
-    const media = vi.mocked(window.matchMedia);
-    media.mockImplementation((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
-    try {
-      const user = userEvent.setup();
-      renderControl(undefined, { notes: [], reactions: [] });
-      fireEvent(
-        document.getElementById("moment-conversation-moment-one")!,
-        new Event("our-days:heart"),
-      );
-      expect(document.querySelector(".quick-reaction-glyph")).not.toHaveClass(
-        "is-popping",
-      );
-      expect(screen.getByText("Brian").closest("li")).not.toHaveClass(
-        "is-entering",
-      );
-      await user.click(
-        screen.getByRole("button", { name: /Choose a reaction for photo/u }),
-      );
-      await user.click(
-        within(
-          screen.getByRole("menu", { name: "Choose a reaction" }),
-        ).getByRole("menuitemradio", { name: "Heart" }),
-      );
-      expect(
-        screen.queryByRole("list", { name: "Family responses" }),
-      ).toBeNull();
-    } finally {
-      media.mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }));
-    }
-  });
-
-  it("shows standard emoji choices without relying on a long press", async () => {
-    const user = userEvent.setup();
-    renderControl();
-    await user.click(
-      screen.getByRole("button", { name: /Choose a reaction for photo/u }),
-    );
-
-    const choices = screen.getByRole("menu", { name: "Choose a reaction" });
-    expect(within(choices).getAllByRole("menuitemradio")).toHaveLength(3);
-    expect(
-      within(choices).getByRole("menuitemradio", { name: "Heart" }),
-    ).toHaveTextContent("❤️");
-    expect(
-      within(choices).getByRole("menuitemradio", { name: "Laugh" }),
-    ).toHaveTextContent("😂");
-    expect(
-      within(choices).getByRole("menuitemradio", { name: "Meaningful" }),
-    ).toHaveTextContent("✨");
-  });
-
-  it("hides the reaction menu as soon as the picker starts closing", async () => {
-    const user = userEvent.setup();
-    renderControl();
-    const trigger = screen.getByRole("button", {
-      name: /Choose a reaction for photo/u,
-    });
-    await user.click(trigger);
-    expect(screen.getByRole("menu", { name: "Choose a reaction" })).toHaveClass(
-      "overlay-popover",
-    );
-    expect(
-      screen.getByRole("menu", { name: "Choose a reaction" }),
-    ).toBeVisible();
-
-    await user.click(trigger);
-
-    expect(
-      screen.queryByRole("menu", { name: "Choose a reaction" }),
-    ).toBeNull();
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(document.querySelector(".inline-reaction-picker")).toHaveClass(
-      "is-closing",
-    );
-  });
-
-  it("closes the reaction picker immediately when motion is reduced", async () => {
-    const media = vi.mocked(window.matchMedia);
-    media.mockImplementation((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
-    try {
-      const user = userEvent.setup();
-      renderControl();
-      const trigger = screen.getByRole("button", {
-        name: /Choose a reaction for photo/u,
-      });
-      await user.click(trigger);
-      await user.click(trigger);
-
-      expect(document.querySelector(".inline-reaction-picker")).toBeNull();
-      expect(trigger).toHaveAttribute("aria-expanded", "false");
-    } finally {
-      media.mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }));
-    }
-  });
-
-  it("closes the picker and restores the prior response when saving fails", async () => {
+  it("restores the prior reaction and reports a failed save", async () => {
     const actions = connectedActions();
     actions.setReaction.mockResolvedValue({
       ok: false,
-      message: "That response could not be saved.",
+      message: "Please try again.",
     });
-    const user = userEvent.setup();
-    renderControl(actions);
-
-    const trigger = screen.getByRole("button", {
-      name: /Choose a reaction for photo/u,
-    });
-    fireEvent.keyDown(trigger, { key: "ArrowUp" });
-    const choice = await screen.findByRole("menuitemradio", {
-      name: "Meaningful",
-    });
-    await user.click(choice);
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "That response could not be saved.",
+    renderControl(actions, { notes: [], reactions: [] });
+    fireEvent.click(screen.getByRole("button", { name: /Love photo/u }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: /Love photo/u })).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
-    expect(
-      screen.queryByRole("menu", { name: "Choose a reaction" }),
-    ).toBeNull();
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(trigger).toHaveTextContent("♡");
+    expect(screen.getByRole("alert")).toHaveTextContent("Please try again.");
+  });
+
+  it("preserves old non-heart reactions without offering new emoji choices", () => {
+    renderControl(undefined, {
+      notes: [],
+      reactions: [
+        { ...initialConversation.reactions[0], reactionId: "remember-this" },
+      ],
+    });
     expect(
       screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Molly");
+    ).toHaveTextContent("✨Molly");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("orders reaction names, shared actions, then comments without avatars", () => {
+    const { container } = renderControl();
+    const reactions = screen.getByRole("list", { name: "Family responses" });
+    const actions = container.querySelector(".soft-actions")!;
+    const notes = screen.getByRole("list", { name: "Notes from family" });
     expect(
-      screen.getByRole("list", { name: "Family responses" }),
-    ).not.toHaveTextContent("Brian");
+      reactions.compareDocumentPosition(actions) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      actions.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelector(".note-avatar")).toBeNull();
   });
 
   it("renders feed-payload comments on first paint without a follow-up load", () => {
@@ -609,7 +316,7 @@ describe("MomentConversationControl", () => {
     ).toHaveTextContent("The quiet ride home was my favorite part.");
     expect(
       screen.getByRole("list", { name: "Family responses" }),
-    ).toHaveTextContent("❤️Molly");
+    ).toHaveTextContent("Molly");
     expect(actions.load).not.toHaveBeenCalled();
   });
 
