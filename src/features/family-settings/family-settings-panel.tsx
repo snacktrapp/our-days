@@ -1,5 +1,8 @@
 "use client";
 
+import { DeleteCircleControl } from "@/features/groups/delete-circle-control";
+import { SettingsDisclosure } from "./settings-disclosure";
+
 import {
   type FormEvent,
   type MutableRefObject,
@@ -16,13 +19,7 @@ import {
 } from "./add-existing-member";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
-import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
-import {
-  defaultWiderCircleSourceId,
-  formatWiderCircleIncludes,
-  isWiderCircleNameSuggestion,
-  suggestWiderCircleName,
-} from "@/features/groups/wider-circle";
+import { countFamilyFacingMembers } from "@/lib/circle-roles";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
@@ -361,32 +358,21 @@ function CreateGroupCard({
   groups: readonly FamilyCircleViewModel[];
   defaultCircleId?: string;
 }) {
-  const initialSourceId = defaultWiderCircleSourceId(groups, defaultCircleId);
+  const initialSourceId =
+    groups.find((group) => group.id === defaultCircleId)?.id ??
+    groups[0]?.id ??
+    "";
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [sourceCircleId, setSourceCircleId] = useState(initialSourceId);
-  const sourceCircle =
-    groups.find((group) => group.id === sourceCircleId) ?? groups[0] ?? null;
-  const inviteCandidates = (sourceCircle?.members ?? []).filter(
-    (member) => !isOperationsRole(member.role),
-  );
-  const sourceName = sourceCircle?.name.trim() || "this family";
-  const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
-  const includesLine = formatWiderCircleIncludes(
-    inviteCandidates.map((member) => member.name),
-  );
-  const [name, setName] = useState(suggestedName);
+  const sourceCircleId = initialSourceId;
+  const [name, setName] = useState("");
   if (!createGroupAction) return null;
 
   return (
-    <section
+    <SettingsDisclosure
       className="settings-section circles-create-section"
-      aria-labelledby="create-group-heading"
+      label="Create a circle"
     >
-      <div className="settings-heading">
-        <h2 id="create-group-heading">Add a wider circle</h2>
-        <p>Everyone in {sourceName}, plus a few more people you invite next.</p>
-      </div>
       <form
         className="wider-circle-form"
         action={(formData) => {
@@ -397,33 +383,6 @@ function CreateGroupCard({
         }}
       >
         <input type="hidden" name="sourceCircleId" value={sourceCircleId} />
-
-        <label htmlFor="wider-circle-source">Starts with</label>
-        <select
-          id="wider-circle-source"
-          value={sourceCircleId}
-          required
-          onChange={(event) => {
-            const nextId = event.target.value;
-            const nextCircle = groups.find((group) => group.id === nextId);
-            setSourceCircleId(nextId);
-            setName((current) =>
-              current.trim() === "" ||
-              isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
-                ? suggestWiderCircleName(nextCircle?.name ?? "")
-                : current,
-            );
-          }}
-        >
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-        {includesLine ? (
-          <p className="wider-circle-includes">{includesLine}</p>
-        ) : null}
 
         <label htmlFor="create-group-name">Name</label>
         <input
@@ -439,14 +398,12 @@ function CreateGroupCard({
           <p className="field-error" role="alert">
             {error}
           </p>
-        ) : (
-          <p>Name it for who can see it.</p>
-        )}
+        ) : null}
         <button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? "Creating…" : "Create circle"}
         </button>
       </form>
-    </section>
+    </SettingsDisclosure>
   );
 }
 
@@ -501,6 +458,12 @@ function CirclesAccordion({
               {open ? (
                 <div className="circle-accordion-panel" id={panelId}>
                   {renderOpenCircle(group)}
+                  {group.canRename ? (
+                    <DeleteCircleControl
+                      circleId={group.id}
+                      name={group.name}
+                    />
+                  ) : null}
                 </div>
               ) : null}
             </li>

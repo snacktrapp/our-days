@@ -361,7 +361,7 @@ test(
   { tag: "@visual" },
   async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium-mobile");
-    await page.goto("/settings/family");
+    await page.goto("/circles/manage");
     await page.evaluate(() => document.fonts.ready);
     await expect(page).toHaveScreenshot("family-settings-chromium-mobile.png", {
       fullPage: true,
@@ -369,6 +369,7 @@ test(
       caret: "hide",
     });
 
+    await page.getByRole("button", { name: /All our days/u }).click();
     await page.getByRole("button", { name: "Review access for Molly" }).click();
     await expect(page).toHaveScreenshot(
       "family-settings-access-review-chromium-mobile.png",
@@ -413,7 +414,8 @@ test(
   async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium-short");
     await page.setViewportSize({ width: 320, height: 350 });
-    await page.goto("/settings/family#invite");
+    await page.goto("/circles/manage#invite");
+    await page.getByRole("button", { name: /All our days/u }).click();
     await page.evaluate(() => document.fonts.ready);
     const input = page.getByRole("textbox", { name: "Email address" });
     await input.scrollIntoViewIfNeeded();

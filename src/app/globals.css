@@ -723,6 +723,55 @@ button {
   margin: 0 16px 24px;
   padding: 16px;
 }
+.settings-disclosure > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  min-height: 44px;
+  padding: 12px 0;
+  font: var(--chrome-meta);
+  color: var(--ink);
+}
+.settings-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-disclosure > summary::marker {
+  content: "";
+}
+.settings-disclosure[open] > summary .circle-accordion-chevron svg {
+  transform: rotate(180deg);
+}
+.circle-directory-tools a {
+  font: var(--chrome-meta);
+  color: var(--accent);
+}
+.circle-people-disclosure,
+.circle-manage-link {
+  margin: 0 16px 16px;
+}
+.circle-manage-link {
+  display: inline-block;
+  font: var(--chrome-meta);
+}
+.circle-back-link {
+  display: inline-block;
+  margin: 12px 18px;
+  font: var(--chrome-meta);
+  color: var(--muted);
+}
+.circle-delete-control {
+  margin-top: 24px;
+  font: var(--chrome-body);
+}
+.circle-delete-control button {
+  margin: 8px 8px 0 0;
+}
+.circles-create-section > summary {
+  margin: 0 16px;
+}
 .profile-color-settings .settings-heading {
   padding: 0;
 }

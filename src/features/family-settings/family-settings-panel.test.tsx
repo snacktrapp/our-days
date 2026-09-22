@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilySettingsPanel } from "./family-settings-panel";
 
 const refresh = vi.fn();
+vi.mock("@/features/groups/delete-circle-action", () => ({
+  deleteCircleAction: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
@@ -212,29 +215,17 @@ describe("FamilySettingsPanel", () => {
     expect(screen.getAllByText("All our days").length).toBeGreaterThan(0);
     expect(screen.getByText("3 people")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        "Everyone in All our days, plus a few more people you invite next.",
-      ),
-    ).toBeVisible();
-    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
+      document.querySelector(".circles-create-section"),
+    ).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Create a circle"));
     expect(screen.getByLabelText("Name")).toBeRequired();
-    expect(screen.getByLabelText("Name")).toHaveValue(
-      "All our days + grandparents",
-    );
-    expect(screen.getByText("Name it for who can see it.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByText("Name it for who can see it.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Create circle" })).toBeVisible();
 
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Cousins");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Create circle" }));
     await waitFor(() => {
       expect(createGroupAction).toHaveBeenCalled();
     });
@@ -259,15 +250,8 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getByText("3 people")).toBeVisible();
     expect(screen.queryByText("4 people")).toBeNull();
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
     expect(screen.queryByText(/Includes.*TARS/u)).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
+    expect(screen.getByText("Create a circle")).toBeVisible();
   });
 
   it("defaults Starts with to the circle with the most members", () => {
@@ -291,21 +275,17 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
-    expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
+    expect(document.querySelector('input[name="sourceCircleId"]')).toHaveValue(
+      "cousins",
+    );
+    expect(screen.getByText("Create a circle")).toBeVisible();
   });
 
   it("lists included people from the start-from circle as read-only text", () => {
     render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
 
     expect(screen.queryByRole("group", { name: "Who else?" })).toBeNull();
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
+    expect(screen.queryByText(/Includes Current person/u)).toBeNull();
     expect(screen.queryByLabelText("Person’s name")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Add person" }),

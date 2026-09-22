@@ -88,6 +88,7 @@ export async function renameCircleAction(
     revalidatePath("/family");
     revalidatePath("/people");
     revalidatePath("/settings/family");
+    revalidatePath("/circles", "layout");
     return { ok: true, message: "Circle renamed." };
   }
 
@@ -102,5 +103,6 @@ export async function renameCircleAction(
   revalidatePath("/family");
   revalidatePath("/people");
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   return { ok: true, message: "Circle renamed." };
 }

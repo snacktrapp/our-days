@@ -27,6 +27,7 @@ export function sectionFromPathname(
   );
   if (
     path === "/circles" ||
+    path.startsWith("/circles/") ||
     path === "/people" ||
     query.has("fromCircle") ||
     (path === "/family" && query.has("circle"))
@@ -48,7 +49,8 @@ export function skeletonKindFromPathname(
   pathname: string | null,
 ): JournalSkeletonKind | null {
   const path = pathWithoutSearch(pathname ?? "");
-  if (path === "/people" || path === "/circles") return "people";
+  if (path === "/people" || path === "/circles" || path.startsWith("/circles/"))
+    return "people";
   if (
     path === "/family" ||
     path.startsWith("/journal") ||

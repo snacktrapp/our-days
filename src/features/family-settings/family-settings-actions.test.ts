@@ -334,6 +334,7 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -366,9 +367,10 @@ describe("family settings actions", () => {
         email_request_id: emailRequestId,
       },
     );
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("normalizes and requests an invitation with the caller's stable request key", async () => {
@@ -408,9 +410,10 @@ describe("family settings actions", () => {
         shouldCreateUser: false,
       },
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("requests an invitation into a named circle the organizer belongs to", async () => {
@@ -509,9 +512,10 @@ describe("family settings actions", () => {
         shouldCreateUser: false,
       },
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("keeps a queued invitation after the magic-link vendor fails to send", async () => {
@@ -530,9 +534,10 @@ describe("family settings actions", () => {
       ok: true,
       message: "Private invitation requested.",
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("keeps invitation creation disabled unless the private worker capability is explicit", async () => {
@@ -598,6 +603,7 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -654,6 +660,7 @@ describe("family settings actions", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -696,6 +703,7 @@ describe("family settings actions", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -722,6 +730,7 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       [`/people/${managedPersonId}`],

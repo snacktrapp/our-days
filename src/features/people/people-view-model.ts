@@ -27,7 +27,7 @@ export const peopleIntro = "Choose a circle or a person’s journal.";
 
 export function peopleInviteHref(circleId: string) {
   const params = new URLSearchParams({ inviteCircle: circleId });
-  return `/settings/family?${params.toString()}#invite`;
+  return `/circles/manage?${params.toString()}#invite`;
 }
 
 export function peopleCountLabel(count: number) {

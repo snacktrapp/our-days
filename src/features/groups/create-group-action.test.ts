@@ -87,7 +87,7 @@ describe("create circle action", () => {
 
     expect(mocks.writeCookie).toHaveBeenCalledWith("created", "Cousins");
     expect(mocks.redirect).toHaveBeenCalledWith(
-      "/settings/family?inviteCircle=created&name=Cousins#invite",
+      "/circles/manage?inviteCircle=created&name=Cousins#invite",
     );
     expect(mocks.redirect).not.toHaveBeenCalledWith(
       expect.stringContaining("/family?circle="),
@@ -106,7 +106,7 @@ describe("create circle action", () => {
     expect(mocks.writeCookie).toHaveBeenCalledWith(circleId);
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/settings/family");
     expect(mocks.redirect).toHaveBeenCalledWith(
-      `/settings/family?inviteCircle=${circleId}#invite`,
+      `/circles/manage?inviteCircle=${circleId}#invite`,
     );
   });
 
@@ -124,7 +124,7 @@ describe("create circle action", () => {
     );
     expect(mocks.writeCookie).toHaveBeenCalledWith(circleId);
     expect(mocks.redirect).toHaveBeenCalledWith(
-      `/settings/family?inviteCircle=${circleId}#invite`,
+      `/circles/manage?inviteCircle=${circleId}#invite`,
     );
   });
 

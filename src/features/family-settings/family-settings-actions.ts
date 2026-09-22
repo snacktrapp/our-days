@@ -90,6 +90,7 @@ async function requireOrganizer(circleId?: string | null) {
 
 function refreshFamilyAccessSurfaces(personId?: string) {
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   revalidatePath("/people");
   revalidatePath("/family");
   if (personId) revalidatePath(`/people/${personId}`);
@@ -353,6 +354,7 @@ export async function requestFamilyInvitationAction(
   }
   await sendInvitedMagicLink(email);
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   return { ok: true, message: "Private invitation requested." };
 }
 
@@ -410,5 +412,6 @@ export async function withdrawFamilyInvitationEmailRequestAction(
     };
   }
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   return { ok: true, message: "Invitation withdrawn." };
 }

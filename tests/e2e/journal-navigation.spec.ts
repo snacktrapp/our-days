@@ -322,11 +322,13 @@ test("the family feed scrolls beneath the sticky title selector", async ({
   await context.close();
 });
 
-test("members can create a wider circle from Account and filter Home without costume family rows", async ({
+test("members can create a circle from Circles and filter Home without duplicate family rows", async ({
   page,
 }) => {
-  await page.goto("/settings/family");
-  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await page.goto("/circles/manage");
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Your circles" }),
@@ -334,12 +336,14 @@ test("members can create a wider circle from Account and filter Home without cos
   await expect(
     page.locator(".circles-section").getByText("All our days", { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Add a wider circle" }),
-  ).toBeVisible();
+  await page.getByText("Create a circle", { exact: true }).click();
   await page.getByLabel("Name").fill("Cousins");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await page
+    .getByRole("button", { name: "Create circle", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
   await expect(page).toHaveURL(/inviteCircle=created/);
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   const cousinsTrigger = page.getByRole("button", { name: /Cousins/u });

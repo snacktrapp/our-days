@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { PeoplePanel } from "./people-panel";
 import { buildPeopleViewModel } from "./people-view-model";
@@ -66,6 +66,8 @@ const model = buildPeopleViewModel({
 describe("PeoplePanel", () => {
   it("lists each circle with its members and the Account invite path", () => {
     render(<PeoplePanel model={model} />);
+    for (const summary of screen.getAllByText("People", { exact: true }))
+      fireEvent.click(summary);
 
     expect(
       screen.getByRole("link", { name: "Open All our days circle feed" }),
