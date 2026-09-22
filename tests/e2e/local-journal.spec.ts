@@ -111,14 +111,12 @@ test("private post shares to one circle through the editor and survives reload",
   await page.getByRole("button", { name: /^Edit —/ }).click();
   const destination = page.getByLabel("Share to a circle");
   await expect(destination).toHaveValue("");
-  const choices = await destination
-    .locator("option")
-    .evaluateAll((options) =>
-      options.map((option) => ({
-        value: (option as HTMLOptionElement).value,
-        label: option.textContent ?? "",
-      })),
-    );
+  const choices = await destination.locator("option").evaluateAll((options) =>
+    options.map((option) => ({
+      value: (option as HTMLOptionElement).value,
+      label: option.textContent ?? "",
+    })),
+  );
   const circle = choices.find((option) => option.value !== "")!;
   expect(circle).toBeTruthy();
   await destination.selectOption(circle.value);
