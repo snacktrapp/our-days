@@ -1,7 +1,7 @@
 import { expect, test } from "./test";
 
 for (const theme of ["dark", "light"]) {
-  test(`${theme} entry chooser has four large cards without scrolling`, async ({
+  test(`${theme} entry chooser has four compact cards without scrolling`, async ({
     page,
   }) => {
     await page.addInitScript(
@@ -13,6 +13,16 @@ for (const theme of ["dark", "light"]) {
     const choices = page.locator(".moment-choices");
     const cards = choices.locator("button");
     await expect(cards).toHaveCount(4);
+    await expect(choices.locator("svg")).toHaveCount(0);
+    for (const byline of [
+      "Media with date and note",
+      "Text, date, and details",
+      "Choose a passage",
+      "Unfinished entries",
+    ]) {
+      await expect(choices.getByText(byline, { exact: true })).toBeVisible();
+    }
+    await expect(cards.first()).toHaveCSS("text-align", "left");
     const bounds = await cards.evaluateAll((nodes) =>
       nodes.map((node) => {
         const r = node.getBoundingClientRect();
@@ -31,7 +41,8 @@ for (const theme of ["dark", "light"]) {
     expect(bounds[2].y).toBeGreaterThan(bounds[0].bottom);
     for (const card of bounds) {
       // Fractional pixels can result from the sheet's transform.
-      expect(card.height).toBeGreaterThanOrEqual(99.5);
+      expect(card.height).toBeGreaterThanOrEqual(67.5);
+      expect(card.height).toBeLessThanOrEqual(80);
       expect(card.width).toBeGreaterThanOrEqual(120);
       expect(card.right).toBeLessThanOrEqual(page.viewportSize()!.width);
     }
