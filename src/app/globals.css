@@ -744,6 +744,28 @@ button {
 .circles-create-section > summary {
   margin: 0 16px;
 }
+.circles-archived-section {
+  margin-inline: 16px;
+}
+.archived-circle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+}
+.archived-circle-row h3 {
+  margin: 0;
+  font: var(--chrome-body);
+  overflow-wrap: anywhere;
+}
+.archived-circle-row .circle-delete-control {
+  margin: 0;
+}
+.archived-circle-row .circle-delete-trigger {
+  color: var(--ink);
+  white-space: nowrap;
+}
 .profile-color-settings .settings-heading {
   padding: 0;
 }

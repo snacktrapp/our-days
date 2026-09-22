@@ -34,6 +34,7 @@ export type PendingFamilyInvitationViewModel = Readonly<{
 }>;
 
 export type FamilyCircleViewModel = Readonly<{
+  archivedAt?: string | null;
   id: string;
   name: string;
   memberCount: number;

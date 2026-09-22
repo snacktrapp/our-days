@@ -4,7 +4,7 @@ import Link from "next/link";
 import { groupHomeHref } from "@/features/shell/journal-switcher";
 import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 
-import { DeleteCircleControl } from "@/features/groups/delete-circle-control";
+import { ArchiveCircleControl } from "@/features/groups/archive-circle-control";
 import { SettingsDisclosure } from "./settings-disclosure";
 import { CircleManagementSheet } from "./circle-management-sheet";
 
@@ -318,7 +318,7 @@ function RenameCircleForm({
   const [pending, startTransition] = useTransition();
   const nameId = `rename-circle-name-${circle.id}`;
 
-  if (!circle.canRename) return null;
+  if (!circle.canManageAccess) return null;
 
   return (
     <SettingsDisclosure
@@ -326,7 +326,7 @@ function RenameCircleForm({
       className="circle-settings-disclosure"
     >
       <section className="circle-rename-section" aria-label="Circle settings">
-        {renameCircleAction ? (
+        {circle.canRename && renameCircleAction ? (
           <form
             action={(formData) => {
               startTransition(async () => {
@@ -367,7 +367,7 @@ function RenameCircleForm({
             </button>
           </form>
         ) : null}
-        <DeleteCircleControl
+        <ArchiveCircleControl
           circleId={circle.id}
           name={circle.name}
           disabled={disabled || pending}
@@ -460,53 +460,85 @@ function CirclesAccordion({
         <h2 id="your-groups-heading">Your circles</h2>
       </div>
       <ul className="circle-accordion">
-        {groups.map((group) => {
-          const open = openCircleId === group.id;
-          const panelId = `circle-panel-${group.id}`;
-          return (
-            <li
-              key={group.id}
-              className={`circle-accordion-item${open ? " is-open" : ""}`}
-            >
-              <div className="settings-heading circle-directory-heading">
-                <div className="circle-directory-copy">
-                  <h2>{group.name}</h2>
-                  <small>
-                    {peopleCountLabel(countFamilyFacingMembers(group.members))}
-                  </small>
+        {groups
+          .filter((group) => !group.archivedAt)
+          .map((group) => {
+            const open = openCircleId === group.id;
+            const panelId = `circle-panel-${group.id}`;
+            return (
+              <li
+                key={group.id}
+                className={`circle-accordion-item${open ? " is-open" : ""}`}
+              >
+                <div className="settings-heading circle-directory-heading">
+                  <div className="circle-directory-copy">
+                    <h2>{group.name}</h2>
+                    <small>
+                      {peopleCountLabel(
+                        countFamilyFacingMembers(group.members),
+                      )}
+                    </small>
+                  </div>
+                  <Link
+                    className="person-arrow circle-journal-link"
+                    href={groupHomeHref(group.id)}
+                    prefetch={false}
+                    aria-label={`Open ${group.name} circle feed`}
+                  >
+                    View journal
+                  </Link>
+                  <button
+                    type="button"
+                    className="circle-accordion-trigger"
+                    aria-expanded={open}
+                    aria-controls={panelId}
+                    aria-label={`${group.name}, ${peopleCountLabel(countFamilyFacingMembers(group.members))}`}
+                    onClick={() => onToggle(group.id)}
+                  >
+                    <span
+                      className="circle-accordion-chevron"
+                      aria-hidden="true"
+                    >
+                      <svg viewBox="0 0 16 16">
+                        <path d="m4.5 6 3.5 3.5L11.5 6" />
+                      </svg>
+                    </span>
+                  </button>
                 </div>
-                <Link
-                  className="person-arrow circle-journal-link"
-                  href={groupHomeHref(group.id)}
-                  prefetch={false}
-                  aria-label={`Open ${group.name} circle feed`}
-                >
-                  View journal
-                </Link>
-                <button
-                  type="button"
-                  className="circle-accordion-trigger"
-                  aria-expanded={open}
-                  aria-controls={panelId}
-                  aria-label={`${group.name}, ${peopleCountLabel(countFamilyFacingMembers(group.members))}`}
-                  onClick={() => onToggle(group.id)}
-                >
-                  <span className="circle-accordion-chevron" aria-hidden="true">
-                    <svg viewBox="0 0 16 16">
-                      <path d="m4.5 6 3.5 3.5L11.5 6" />
-                    </svg>
-                  </span>
-                </button>
-              </div>
-              {open ? (
-                <div className="circle-accordion-panel" id={panelId}>
-                  {renderOpenCircle(group)}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
+                {open ? (
+                  <div className="circle-accordion-panel" id={panelId}>
+                    {renderOpenCircle(group)}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
       </ul>
+      {groups.some((group) => group.archivedAt) ? (
+        <SettingsDisclosure
+          label="Archived circles"
+          className="circles-archived-section"
+        >
+          <ul className="circle-accordion">
+            {groups
+              .filter((group) => group.archivedAt)
+              .map((group) => (
+                <li key={group.id} className="circle-accordion-item">
+                  <div className="settings-heading archived-circle-row">
+                    <h3>{group.name}</h3>
+                    {group.canManageAccess ? (
+                      <ArchiveCircleControl
+                        circleId={group.id}
+                        name={group.name}
+                        archived
+                      />
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+          </ul>
+        </SettingsDisclosure>
+      ) : null}
     </section>
   );
 }

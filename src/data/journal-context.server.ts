@@ -153,6 +153,7 @@ export type ConnectedJournalContext = Readonly<{
     id: string;
     name: string;
     createdByMembershipId?: string;
+    archivedAt?: string | null;
     memberCount?: number;
   }>[];
   viewerMembershipIds?: readonly string[];
@@ -700,13 +701,14 @@ export async function loadConnectedJournalContext(
             id: string;
             name: string;
             created_by_membership_id?: string;
+            archived_at?: string | null;
           }[],
           error: null,
         }
       : await retryTransientFamilySessionQuery(() =>
           supabase
             .from("circles")
-            .select("id, name, created_by_membership_id")
+            .select("id, name, created_by_membership_id, archived_at")
             .in("id", groupIds),
         );
   if (groupsResult.error) throw groupsResult.error;
@@ -731,6 +733,9 @@ export async function loadConnectedJournalContext(
         ? circleResult.data.name
         : "Circle"),
     createdByMembershipId: createdByById.get(membership.circleId),
+    archivedAt: groupsResult.data?.find(
+      (circle) => circle.id === membership.circleId,
+    )?.archived_at,
   }));
 
   const allPeople = peopleResult.data ?? [];
@@ -798,16 +803,21 @@ export async function loadConnectedJournalContext(
     circleMemberships.length > 0
       ? circleMemberships
       : [{ circleId: access.circleId, personId: access.personId }]
-  ).map((membership) => ({
-    id: membership.circleId,
-    name:
-      groups.find((group) => group.id === membership.circleId)?.name ??
-      (membership.circleId === access.circleId
-        ? circleResult.data.name
-        : "Circle"),
-    personId: membership.personId,
-    memberCount: memberCountByCircle.get(membership.circleId),
-  }));
+  )
+    .filter(
+      (membership) =>
+        !groups.find((group) => group.id === membership.circleId)?.archivedAt,
+    )
+    .map((membership) => ({
+      id: membership.circleId,
+      name:
+        groups.find((group) => group.id === membership.circleId)?.name ??
+        (membership.circleId === access.circleId
+          ? circleResult.data.name
+          : "Circle"),
+      personId: membership.personId,
+      memberCount: memberCountByCircle.get(membership.circleId),
+    }));
   const composer: MomentComposerViewModel = {
     experience: "connected-family",
     circleId: access.circleId,

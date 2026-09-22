@@ -107,6 +107,7 @@ function requiredRows() {
 
 function connectedClient(
   overrides: {
+    groups?: { id: string; name: string; archived_at?: string | null }[];
     people?:
       | { data: unknown; error: unknown }
       | (() => { data: unknown; error: unknown });
@@ -136,7 +137,10 @@ function connectedClient(
       throw { code: "PGRST301", message: "JWT expired" };
     }
     if (table === "circles") {
-      const query = thenableQuery({ data: rows.groups, error: null });
+      const query = thenableQuery({
+        data: overrides.groups ?? rows.groups,
+        error: null,
+      });
       query.single.mockImplementation(() =>
         Promise.resolve({ data: rows.circle, error: null }),
       );
@@ -202,6 +206,27 @@ function connectedClient(
 }
 
 describe("circle calendar date", () => {
+  it("keeps archived groups available for restore but excludes them from posting choices", async () => {
+    readMemberships.mockResolvedValue([
+      {
+        circleId: "family",
+        personId: "brian",
+        membershipId: "membership-brian",
+        role: "organizer",
+      },
+    ]);
+    connectedClient({
+      groups: [
+        { id: "family", name: "Archived", archived_at: "2026-09-22T00:00:00Z" },
+      ],
+    });
+    const context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
+    expect(context.groups?.[0].archivedAt).toBeTruthy();
+    expect(context.chrome.composer?.postableCircles).toEqual([]);
+    expect(context.chrome.composer?.recorderPersonId).toBe("brian");
+  });
   it("includes only later thread replies, excludes self, and does not duplicate owners", () => {
     const notes = [
       {

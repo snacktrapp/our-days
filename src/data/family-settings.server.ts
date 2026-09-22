@@ -496,6 +496,7 @@ export function buildConnectedFamilySettingsModel(
     return {
       id: group.id,
       name: group.name,
+      archivedAt: "archivedAt" in group ? group.archivedAt : null,
       memberCount:
         memberCounts.get(group.id) ?? countFamilyFacingMembers(members),
       currentMemberId: viewer?.personId ?? access.personId,

@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilySettingsPanel } from "./family-settings-panel";
 
 const refresh = vi.fn();
-vi.mock("@/features/groups/delete-circle-action", () => ({
-  deleteCircleAction: vi.fn(),
+vi.mock("@/features/groups/archive-circle-action", () => ({
+  archiveCircleAction: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -201,6 +201,36 @@ const connectedOperationsModel = {
 };
 
 describe("FamilySettingsPanel", () => {
+  it("keeps archived circles out of the directory and offers restore in a collapsed section", async () => {
+    const user = userEvent.setup();
+    render(
+      <FamilySettingsPanel
+        model={{
+          ...model,
+          groups: [
+            connectedOrganizerModel.groups[0],
+            {
+              ...connectedOrganizerModel.groups[0],
+              id: "empty",
+              name: "Empty",
+              archivedAt: "2026-09-22T00:00:00Z",
+            },
+          ],
+        }}
+      />,
+    );
+    expect(
+      screen.queryByRole("link", { name: "Open Empty circle feed" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Restore circle" }),
+    ).not.toBeVisible();
+    await user.click(screen.getByText("Archived circles", { exact: true }));
+    expect(
+      screen.getByRole("button", { name: "Restore circle" }),
+    ).toBeVisible();
+    expect(screen.getByText("Empty", { exact: true })).toBeVisible();
+  });
   it("combines journal links and circle controls without a management page", async () => {
     const user = userEvent.setup();
     render(<FamilySettingsPanel model={model} renameCircleAction={vi.fn()} />);
@@ -219,10 +249,12 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("link", { name: "Child profile View journal" }),
     ).toHaveAttribute("href", "/people/child?fromCircle=family");
     expect(
-      screen.getByRole("button", { name: "Delete circle" }),
+      screen.getByRole("button", { name: "Archive circle" }),
     ).not.toBeVisible();
     await user.click(screen.getByText("Circle settings", { exact: true }));
-    expect(screen.getByRole("button", { name: "Delete circle" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Archive circle" }),
+    ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Review access for Other organizer" }),
     ).toBeVisible();
