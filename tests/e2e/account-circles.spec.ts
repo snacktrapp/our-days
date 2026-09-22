@@ -1,5 +1,41 @@
 import { expect, test } from "./test";
 
+test("compact directory keeps circle and member actions aligned", async ({
+  page,
+}, testInfo) => {
+  for (const theme of ["dark", "light"]) {
+    await page.goto("/circles?name=Friends");
+    await expect(page.locator(".circle-directory-heading")).toHaveCount(2);
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await page.screenshot({
+      path: `/tmp/circles-compact-${theme}-${testInfo.project.name}.png`,
+    });
+    const heading = page.locator(".circle-directory-heading").first();
+    expect((await heading.boundingBox())!.height).toBeLessThan(100);
+    await page.getByRole("button", { name: /All our days/ }).click();
+    for (const row of await page.locator(".access-list > li").all()) {
+      expect((await row.boundingBox())!.height).toBeLessThan(90);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `/tmp/circles-compact-expanded-${theme}-${testInfo.project.name}.png`,
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Review access for Molly" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.screenshot({
+      path: `/tmp/circles-compact-sheet-${theme}-${testInfo.project.name}.png`,
+    });
+    await page.getByRole("button", { name: "Close management" }).click();
+  }
+});
+
 test("Account and Circles share the Journal's flat surfaces in both themes", async ({
   page,
 }, testInfo) => {

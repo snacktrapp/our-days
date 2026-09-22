@@ -257,11 +257,7 @@ function MemberList({
                   setReviewId(reviewId === member.id ? null : member.id);
                 }}
               >
-                {mode === "connected"
-                  ? member.profileKind === "managed"
-                    ? "Manage journal"
-                    : "Manage"
-                  : "Review access"}
+                <span aria-hidden="true">···</span>
               </button>
             ) : null}
           </span>
@@ -473,7 +469,12 @@ function CirclesAccordion({
               className={`circle-accordion-item${open ? " is-open" : ""}`}
             >
               <div className="settings-heading circle-directory-heading">
-                <h2>{group.name}</h2>
+                <div className="circle-directory-copy">
+                  <h2>{group.name}</h2>
+                  <small>
+                    {peopleCountLabel(countFamilyFacingMembers(group.members))}
+                  </small>
+                </div>
                 <Link
                   className="person-arrow circle-journal-link"
                   href={groupHomeHref(group.id)}
@@ -482,26 +483,21 @@ function CirclesAccordion({
                 >
                   View journal
                 </Link>
+                <button
+                  type="button"
+                  className="circle-accordion-trigger"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  aria-label={`${group.name}, ${peopleCountLabel(countFamilyFacingMembers(group.members))}`}
+                  onClick={() => onToggle(group.id)}
+                >
+                  <span className="circle-accordion-chevron" aria-hidden="true">
+                    <svg viewBox="0 0 16 16">
+                      <path d="m4.5 6 3.5 3.5L11.5 6" />
+                    </svg>
+                  </span>
+                </button>
               </div>
-              <button
-                type="button"
-                className="circle-accordion-trigger"
-                aria-expanded={open}
-                aria-controls={panelId}
-                aria-label={`${group.name}, ${peopleCountLabel(countFamilyFacingMembers(group.members))}`}
-                onClick={() => onToggle(group.id)}
-              >
-                <span className="access-member-copy">
-                  <small>
-                    {peopleCountLabel(countFamilyFacingMembers(group.members))}
-                  </small>
-                </span>
-                <span className="circle-accordion-chevron" aria-hidden="true">
-                  <svg viewBox="0 0 16 16">
-                    <path d="m4.5 6 3.5 3.5L11.5 6" />
-                  </svg>
-                </span>
-              </button>
               {open ? (
                 <div className="circle-accordion-panel" id={panelId}>
                   {renderOpenCircle(group)}

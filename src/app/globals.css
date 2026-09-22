@@ -2930,23 +2930,40 @@ span.moment-place-line {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 20px;
+  gap: 0;
   list-style: none;
 }
 .circle-accordion-item {
-  padding: 8px 0;
-  background: var(--paper);
+  padding: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--hairline);
 }
 .circle-accordion-item > .circle-directory-heading {
-  padding: 8px 16px 0;
+  padding: 16px 12px 16px 16px;
+  grid-template-columns: minmax(0, 1fr) auto 44px;
+  gap: 8px;
+}
+.circle-directory-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.circle-directory-copy h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: var(--chrome-title);
+}
+.circle-directory-copy small {
+  font: var(--chrome-meta);
+  color: var(--muted);
 }
 .circle-accordion-item:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--hairline);
 }
 .circle-accordion-trigger {
-  width: 100%;
+  width: 44px;
   min-height: 44px;
-  padding: 10px 13px;
+  padding: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2960,7 +2977,8 @@ span.moment-place-line {
   margin-left: auto;
   flex: 0 0 auto;
   display: grid;
-  justify-items: end;
+  grid-template-columns: 80px 44px;
+  align-items: center;
   gap: 8px;
 }
 .access-list li:has(.circle-member-actions) {
@@ -2969,12 +2987,23 @@ span.moment-place-line {
   gap: 10px;
 }
 .circle-member-actions a {
+  grid-column: 1;
   display: flex;
   align-items: center;
   min-height: 44px;
   color: var(--muted);
   font: var(--chrome-meta);
   text-decoration: none;
+}
+.access-list .circle-member-actions button {
+  grid-column: 2;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
 }
 .circle-accordion-trigger .access-member-copy {
   flex: 1;
@@ -3004,7 +3033,9 @@ span.moment-place-line {
   padding: 8px 16px 0;
 }
 .circle-accordion-panel .access-list li {
-  padding: 16px 0;
+  padding: 10px 0;
+  min-height: 64px;
+  border: 0;
 }
 .circle-accordion-panel > .settings-disclosure {
   margin-top: 16px;
@@ -9005,6 +9036,26 @@ iframe.composer-location-map {
 
 .circle-directory-tools {
   padding: 0 16px;
+}
+
+/* A directory is one continuous surface, not alternating full-width cards. */
+.family-settings-panel:has(.circles-section) {
+  gap: 0;
+  padding-top: 0;
+  background: var(--cream);
+}
+.family-settings-panel .circles-create-section {
+  background: transparent;
+  margin: 0 16px;
+}
+.circles-create-section > summary {
+  margin: 0;
+  min-height: 56px;
+}
+.circle-directory-heading .circle-journal-link,
+.circle-member-actions a {
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .profile-color-preview strong,
