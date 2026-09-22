@@ -115,13 +115,13 @@ describe("NotificationCenter", () => {
     expect(
       await screen.findByText("Activity couldn’t be refreshed."),
     ).toBeVisible();
-    expect(screen.queryByText("No new family activity.")).toBeNull();
+    expect(screen.queryByText("No new activity.")).toBeNull();
     fetchActivity.mockResolvedValue({
       ok: true,
       json: async () => ({ items: [] }),
     });
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("No new family activity.")).toBeVisible();
+    expect(await screen.findByText("No new activity.")).toBeVisible();
   });
 
   it("aborts and ignores a response after closing the drawer", async () => {

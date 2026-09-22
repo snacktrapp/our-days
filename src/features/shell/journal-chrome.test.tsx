@@ -52,7 +52,7 @@ afterEach(cleanup);
 
 const model = {
   accent: "teal",
-  eyebrow: "Our family",
+  eyebrow: "Our Days",
   title: "Account",
   composer: { photoPostingEnabled: false },
   familyMark: [],
@@ -257,7 +257,7 @@ describe("JournalChrome", () => {
 
     expect(switcher).toHaveClass("is-open");
     expect(
-      screen.getByRole("navigation", { name: "Choose a family timeline" }),
+      screen.getByRole("navigation", { name: "Choose a journal" }),
     ).toBeVisible();
     expect(screen.getByRole("link", { name: "All circles" })).toHaveAttribute(
       "aria-current",
@@ -273,7 +273,7 @@ describe("JournalChrome", () => {
     );
     expect(document.querySelector(".title-switcher-sheet")).toBeNull();
     expect(
-      screen.queryByRole("navigation", { name: "Choose a family timeline" }),
+      screen.queryByRole("navigation", { name: "Choose a journal" }),
     ).toBeNull();
   });
 
@@ -286,7 +286,7 @@ describe("JournalChrome", () => {
 
     expect(container.querySelector(".title-switcher")).toBeNull();
     expect(
-      screen.queryByRole("navigation", { name: "Choose a family timeline" }),
+      screen.queryByRole("navigation", { name: "Choose a journal" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
     expect(
@@ -308,7 +308,7 @@ describe("JournalChrome", () => {
 
     rerender(
       <JournalChrome
-        model={{ ...model, title: "Our Days", eyebrow: "Our family" }}
+        model={{ ...model, title: "Our Days", eyebrow: "Our Days" }}
         section="timeline"
         preserveChrome
       >

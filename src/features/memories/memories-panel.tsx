@@ -88,7 +88,7 @@ export function MemoriesPanel({ model }: { model: MemoriesViewModel }) {
         ) : (
           <p>
             {model.yearsEmptyMessage ??
-              "Years will gather here as your family journal grows."}
+              "Years will gather here as your journal grows."}
           </p>
         )}
         {model.yearNavigation ? (

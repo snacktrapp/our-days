@@ -270,7 +270,7 @@ export function TimelineFeed({
 
         <section
           className="timeline"
-          aria-label={model.timelineLabel ?? "Chronological family moments"}
+          aria-label={model.timelineLabel ?? "Chronological moments"}
           tabIndex={-1}
         >
           <div className="time-rail" aria-hidden="true" />

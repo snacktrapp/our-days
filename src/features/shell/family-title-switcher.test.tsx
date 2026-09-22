@@ -61,7 +61,7 @@ describe("FamilyTitleSwitcher", () => {
   it("opens a compact inline selector with only two choices", async () => {
     await openSwitcher();
     const menu = screen.getByRole("navigation", {
-      name: "Choose a family timeline",
+      name: "Choose a journal",
     });
     expect(menu.parentElement).toHaveClass("title-switcher");
     expect(screen.queryByRole("dialog")).toBeNull();

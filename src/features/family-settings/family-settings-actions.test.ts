@@ -327,13 +327,14 @@ describe("family settings actions", () => {
   it("revokes membership through the narrow RPC and refreshes every access surface", async () => {
     await expect(
       revokeFamilyMembershipAction({ membershipId: otherMembershipId }),
-    ).resolves.toEqual({ ok: true, message: "Family access removed." });
+    ).resolves.toEqual({ ok: true, message: "Circle access removed." });
 
     expect(mocks.rpc).toHaveBeenCalledWith("revoke_membership", {
       membership_id: otherMembershipId,
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -366,9 +367,10 @@ describe("family settings actions", () => {
         email_request_id: emailRequestId,
       },
     );
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("normalizes and requests an invitation with the caller's stable request key", async () => {
@@ -408,9 +410,10 @@ describe("family settings actions", () => {
         shouldCreateUser: false,
       },
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("requests an invitation into a named circle the organizer belongs to", async () => {
@@ -509,9 +512,10 @@ describe("family settings actions", () => {
         shouldCreateUser: false,
       },
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("keeps a queued invitation after the magic-link vendor fails to send", async () => {
@@ -530,9 +534,10 @@ describe("family settings actions", () => {
       ok: true,
       message: "Private invitation requested.",
     });
-    expect(mocks.revalidatePath).toHaveBeenCalledExactlyOnceWith(
-      "/settings/family",
-    );
+    expect(mocks.revalidatePath.mock.calls).toEqual([
+      ["/settings/family"],
+      ["/circles", "layout"],
+    ]);
   });
 
   it("keeps invitation creation disabled unless the private worker capability is explicit", async () => {
@@ -598,6 +603,7 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -649,11 +655,12 @@ describe("family settings actions", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      message: "That person is already a family member.",
+      message: "That person is already a member.",
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -691,11 +698,12 @@ describe("family settings actions", () => {
       revokeFamilyMembershipAction({ membershipId: otherMembershipId }),
     ).resolves.toEqual({
       ok: true,
-      message: "Family access was already removed.",
+      message: "Circle access was already removed.",
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       ["/people/30000000-0000-4000-8000-000000000002"],
@@ -711,7 +719,7 @@ describe("family settings actions", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      message: "Journal guardian assigned.",
+      message: "Journal caregiver assigned.",
     });
     expect(mocks.from).toHaveBeenCalledWith("people");
     expect(mocks.from).toHaveBeenCalledWith("circle_memberships");
@@ -722,6 +730,7 @@ describe("family settings actions", () => {
     });
     expect(mocks.revalidatePath.mock.calls).toEqual([
       ["/settings/family"],
+      ["/circles", "layout"],
       ["/people"],
       ["/family"],
       [`/people/${managedPersonId}`],

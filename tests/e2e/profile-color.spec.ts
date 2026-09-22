@@ -4,7 +4,9 @@ test("twelve profile colors preview in a compact grid in both themes", async ({
   page,
 }) => {
   await page.goto("/settings/family");
-  const section = page.getByRole("region", { name: "Your color" });
+  const section = page.getByRole("region", { name: "Your profile" });
+  await expect(section.locator("details")).not.toHaveAttribute("open");
+  await section.getByText("Change color", { exact: true }).click();
   await expect(section.getByRole("radio")).toHaveCount(12);
   for (const theme of ["dark", "light"]) {
     await page.evaluate((value) => {

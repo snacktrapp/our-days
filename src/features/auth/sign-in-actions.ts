@@ -130,7 +130,7 @@ export async function verifySignInCode(
       return {
         status: "no-access",
         email,
-        message: "This account does not have access to a family circle.",
+        message: "This account does not have access to a circle.",
       };
     }
   } catch {

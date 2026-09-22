@@ -35,15 +35,17 @@ async function browserState(page: Page) {
 test("family settings makes access and invitation boundaries explicit", async ({
   page,
 }) => {
-  await page.goto("/settings/family");
-  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await page.goto("/circles/manage");
+  await expect(
+    page.getByRole("heading", { name: "Circles", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /All our days/u }).click();
   await expect(
     page.getByRole("heading", { name: "Invite into All our days" }),
   ).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
-    page.getByRole("navigation", { name: "Choose a family timeline" }),
+    page.getByRole("navigation", { name: "Choose a journal" }),
   ).toHaveCount(0);
   await expect(page.locator(".family-settings-panel")).toHaveCSS(
     "min-height",
@@ -54,7 +56,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await expect(page.getByText("Operations")).toBeVisible();
   await expect(page.getByText("TARS")).toBeVisible();
   await expect(
-    page.getByText(/no accounts or permissions are active/u),
+    page.getByText(/No accounts or access are changed/u),
   ).toBeVisible();
 
   const input = page.getByRole("textbox", { name: "Email address" });
@@ -76,9 +78,10 @@ test("family settings makes access and invitation boundaries explicit", async ({
     const action = page.getByRole("button", { name });
     await action.scrollIntoViewIfNeeded();
     await expect(action).toBeInViewport();
+    await action.click({ trial: true });
   }
   await expect(
-    page.getByText(/see its family moments, photos, notes, people/u),
+    page.getByText(/see and contribute to this circle/u),
   ).toBeVisible();
   await expect(
     page.getByText(/Our Days did not send email or create an invite/u),
@@ -102,7 +105,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await expect(accessHeading).toBeFocused();
   await expect(accessHeading).toBeInViewport();
   await expect(
-    page.getByText(/Access removal does not delete their account or content/u),
+    page.getByText(/Their account and existing posts would remain/u),
   ).toBeVisible();
   await expect(page.getByText(/No access is changed/u)).toBeVisible();
   await expect(page.getByRole("button", { name: /remove/u })).toHaveCount(0);
@@ -111,7 +114,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
 test("family-setting previews are ephemeral and make no browser-side request", async ({
   page,
 }) => {
-  await page.goto("/settings/family");
+  await page.goto("/circles/manage");
   await page.getByRole("button", { name: /All our days/u }).click();
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
@@ -142,7 +145,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
 
 test("family settings remains usable at keyboard height", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 350 });
-  await page.goto("/settings/family#invite");
+  await page.goto("/circles/manage#invite");
   await page.getByRole("button", { name: /All our days/u }).click();
   const input = page.getByRole("textbox", { name: "Email address" });
   await input.scrollIntoViewIfNeeded();
@@ -201,7 +204,7 @@ test("the shared Account navigation opens settings and returns through the prima
 }) => {
   await page.goto("/family");
   await expect(
-    page.getByRole("heading", { name: "All our days" }),
+    page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/family$/u);
@@ -211,7 +214,7 @@ test("the shared Account navigation opens settings and returns through the prima
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Journal tools" }),
+    page.getByRole("link", { name: "Recently removed" }),
   ).toBeVisible();
   await expect(
     page

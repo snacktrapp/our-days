@@ -73,7 +73,7 @@ function requiredRows() {
   return {
     circle: {
       id: "family",
-      name: "Our family",
+      name: "Our Days",
       time_zone: "America/Los_Angeles",
     },
     people: [
@@ -98,7 +98,7 @@ function requiredRows() {
     groups: [
       {
         id: "family",
-        name: "Our family",
+        name: "Our Days",
         created_by_membership_id: "membership-brian",
       },
     ],
@@ -740,7 +740,7 @@ describe("connected journal context load", () => {
     expect(from).not.toHaveBeenCalledWith("moment_circles");
     expect(momentCircles.eq).not.toHaveBeenCalled();
     expect(context.chrome.notifications).toEqual([]);
-    expect(context.circleName).toBe("Our family");
+    expect(context.circleName).toBe("Our Days");
   });
 
   it("loads deferred Activity after chrome without trapping the journal", async () => {
@@ -794,7 +794,7 @@ describe("connected journal context load", () => {
 
     const context = await loadConnectedJournalContext(access);
 
-    expect(context.circleName).toBe("Our family");
+    expect(context.circleName).toBe("Our Days");
     expect(context.people.map((person) => person.id)).toEqual(["brian"]);
     expect(context.chrome.notifications).toEqual([]);
   });
@@ -805,7 +805,7 @@ describe("connected journal context load", () => {
 
     const context = await loadConnectedJournalContext(access);
 
-    expect(context.circleName).toBe("Our family");
+    expect(context.circleName).toBe("Our Days");
     expect(context.chrome.notifications).toEqual([]);
   });
 

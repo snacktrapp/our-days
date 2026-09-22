@@ -50,7 +50,7 @@ export async function saveWebPushSubscriptionAction(input: {
   if (access.mode !== "authenticated") {
     return {
       ok: false,
-      message: "Notifications need a signed-in family journal.",
+      message: "Notifications need a signed-in journal.",
     };
   }
   if (localJournalIsEnabled() || !webPushIsConfigured()) {

@@ -111,7 +111,7 @@ function memoryJourneyCopy(options: MemoryJourneyRequest) {
   if (options.mode === "milestones") {
     return {
       href: "/memories/milestones",
-      eyebrow: "Family milestones",
+      eyebrow: "Circle milestones",
       title: "Milestones",
       description: "Milestone entries in chronological order.",
     };

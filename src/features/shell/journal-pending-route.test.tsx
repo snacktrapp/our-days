@@ -43,7 +43,7 @@ it("does not revive an old loading state after navigating back", () => {
 
 const model = {
   accent: "teal",
-  eyebrow: "Our family",
+  eyebrow: "Our Days",
   title: "All our days",
 } as JournalChromeViewModel;
 

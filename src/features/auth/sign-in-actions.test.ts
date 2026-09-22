@@ -192,7 +192,7 @@ describe("passwordless email sign-in actions", () => {
     ).resolves.toEqual({
       status: "no-access",
       email: "family@example.com",
-      message: "This account does not have access to a family circle.",
+      message: "This account does not have access to a circle.",
     });
   });
 

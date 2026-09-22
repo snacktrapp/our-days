@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FamilySettingsPanel } from "./family-settings-panel";
 
 const refresh = vi.fn();
+vi.mock("@/features/groups/delete-circle-action", () => ({
+  deleteCircleAction: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
@@ -48,7 +51,7 @@ const previewMembers = [
     name: "Child profile",
     initial: "C",
     accent: "ochre" as const,
-    relationshipLabel: "Child journal",
+    relationshipLabel: "Managed journal",
     accessLabel: "Managed profile · No sign-in",
     guardianMembershipIds: [] as string[],
     canManageRole: false,
@@ -212,29 +215,17 @@ describe("FamilySettingsPanel", () => {
     expect(screen.getAllByText("All our days").length).toBeGreaterThan(0);
     expect(screen.getByText("3 people")).toBeVisible();
     expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        "Everyone in All our days, plus a few more people you invite next.",
-      ),
-    ).toBeVisible();
-    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
+      document.querySelector(".circles-create-section"),
+    ).not.toHaveAttribute("open");
+    await user.click(screen.getByText("Create a circle"));
     expect(screen.getByLabelText("Name")).toBeRequired();
-    expect(screen.getByLabelText("Name")).toHaveValue(
-      "All our days + grandparents",
-    );
-    expect(screen.getByText("Name it for who can see it.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByText("Name it for who can see it.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Create circle" })).toBeVisible();
 
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Cousins");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Create circle" }));
     await waitFor(() => {
       expect(createGroupAction).toHaveBeenCalled();
     });
@@ -259,15 +250,8 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getByText("3 people")).toBeVisible();
     expect(screen.queryByText("4 people")).toBeNull();
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
     expect(screen.queryByText(/Includes.*TARS/u)).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
+    expect(screen.getByText("Create a circle")).toBeVisible();
   });
 
   it("defaults Starts with to the circle with the most members", () => {
@@ -291,21 +275,17 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Starts with")).toHaveValue("family");
-    expect(
-      screen.getByRole("heading", { name: "Add a wider circle" }),
-    ).toBeVisible();
+    expect(document.querySelector('input[name="sourceCircleId"]')).toHaveValue(
+      "cousins",
+    );
+    expect(screen.getByText("Create a circle")).toBeVisible();
   });
 
   it("lists included people from the start-from circle as read-only text", () => {
     render(<FamilySettingsPanel model={model} createGroupAction={vi.fn()} />);
 
     expect(screen.queryByRole("group", { name: "Who else?" })).toBeNull();
-    expect(
-      screen.getByText(
-        "Includes Current person, Other organizer, Child profile…",
-      ),
-    ).toBeVisible();
+    expect(screen.queryByText(/Includes Current person/u)).toBeNull();
     expect(screen.queryByLabelText("Person’s name")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Add person" }),
@@ -395,7 +375,7 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("heading", { name: "Invite into Cousins" }),
     ).toBeVisible();
     expect(
-      screen.getByRole("textbox", { name: "Family member’s name" }),
+      screen.getByRole("textbox", { name: "Member’s name" }),
     ).toBeVisible();
     expect(
       screen.getByRole("textbox", { name: "Email address" }),
@@ -470,9 +450,9 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.getByRole("heading", { name: "People and access" }),
     ).toBeVisible();
-    expect(screen.queryByText(/Child journals have no sign-in/u)).toBeNull();
+    expect(screen.queryByText(/Managed journals have no sign-in/u)).toBeNull();
     expect(
-      screen.getByText(/no accounts or permissions are active/u),
+      screen.getByText(/No accounts or access are changed/u),
     ).toBeVisible();
     expect(
       screen.getAllByRole("button", {
@@ -504,13 +484,16 @@ describe("FamilySettingsPanel", () => {
       }),
     );
     expect(screen.getByText("Current role: Operations")).toBeVisible();
-    expect(screen.getByText(/full organizer access/u)).toBeVisible();
-    expect(screen.getByText(/not a family journal person/u)).toBeVisible();
+    expect(
+      screen.getByText(
+        /has organizer access and does not appear in the journal/u,
+      ),
+    ).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Make organizer: TARS" }),
     ).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Change to family member: TARS" }),
+      screen.queryByRole("button", { name: "Change to member: TARS" }),
     ).toBeNull();
     expect(
       screen.getByRole("button", { name: "Remove access for TARS" }),
@@ -547,7 +530,7 @@ describe("FamilySettingsPanel", () => {
     expect(inviteHeading).toBeVisible();
     expect(inviteHeading).toHaveFocus();
     expect(
-      screen.getByText(/see its family moments, photos, notes, people/u),
+      screen.getByText(/see and contribute to this circle/u),
     ).toBeVisible();
     expect(
       screen.getByText(/Our Days did not send email or create an invite/u),
@@ -624,9 +607,7 @@ describe("FamilySettingsPanel", () => {
     expect(reviewHeading).toBeVisible();
     expect(reviewHeading).toHaveFocus();
     expect(
-      screen.getByText(
-        /Access removal does not delete their account or content/u,
-      ),
+      screen.getByText(/Their account and existing posts would remain/u),
     ).toBeVisible();
     expect(screen.queryByText(/organizer separately deletes/u)).toBeNull();
     expect(screen.getByText(/No access is changed/u)).toBeVisible();
@@ -662,7 +643,7 @@ describe("FamilySettingsPanel", () => {
     const revokeMembership = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, message: "Try again." })
-      .mockResolvedValueOnce({ ok: true, message: "Family access removed." });
+      .mockResolvedValueOnce({ ok: true, message: "Circle access removed." });
     render(
       <FamilySettingsPanel
         model={connectedOrganizerModel}
@@ -687,7 +668,9 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.getByRole("heading", { name: "Manage Other organizer" }),
     ).toHaveFocus();
-    expect(screen.getByText(/guardian authority/u)).toBeVisible();
+    expect(
+      screen.getByText(/including access to managed journals in this circle/u),
+    ).toBeVisible();
 
     await user.click(
       screen.getByRole("button", { name: "Remove access for Other organizer" }),
@@ -708,7 +691,7 @@ describe("FamilySettingsPanel", () => {
     );
     const success = await screen.findByRole("status");
     expect(success).toHaveTextContent(
-      "Other organizer can no longer open this family.",
+      "Other organizer can no longer open this circle.",
     );
     expect(success).toHaveFocus();
     expect(
@@ -742,7 +725,7 @@ describe("FamilySettingsPanel", () => {
       screen.queryByRole("button", { name: /send|create invitation/u }),
     ).toBeNull();
     expect(
-      screen.getByText(/New invitations are not connected yet/u),
+      screen.getByText(/Invitations are unavailable right now/u),
     ).toBeVisible();
     await user.click(
       screen.getByRole("button", { name: "Review invite for Grandma" }),
@@ -797,7 +780,7 @@ describe("FamilySettingsPanel", () => {
     expect(screen.queryByText("Sent")).toBeNull();
     expect(screen.queryByText("No pending invitations.")).toBeNull();
     const name = screen.getByRole("textbox", {
-      name: "Family member’s name",
+      name: "Member’s name",
     });
     const email = screen.getByRole("textbox", { name: "Email address" });
     await user.type(name, "  Aunt June  ");
@@ -836,9 +819,9 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.queryByRole("button", { name: "Send private invitation" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: "Family member’s name" }),
-    ).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Member’s name" })).toHaveValue(
+      "",
+    );
     expect(screen.getByRole("textbox", { name: "Email address" })).toHaveValue(
       "",
     );
@@ -871,7 +854,7 @@ describe("FamilySettingsPanel", () => {
     );
 
     await user.type(
-      screen.getByRole("textbox", { name: "Family member’s name" }),
+      screen.getByRole("textbox", { name: "Member’s name" }),
       "Grandma",
     );
     await user.type(
@@ -886,9 +869,9 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.queryByRole("heading", { name: "Invite Grandma" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("textbox", { name: "Family member’s name" }),
-    ).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Member’s name" })).toHaveValue(
+      "",
+    );
     expect(screen.getByText("Grandma")).toBeVisible();
     expect(screen.getByText("Pending invite")).toBeVisible();
     expect(
@@ -923,7 +906,7 @@ describe("FamilySettingsPanel", () => {
     );
 
     const name = screen.getByRole("textbox", {
-      name: "Family member’s name",
+      name: "Member’s name",
     });
     await user.type(name, "Aunt June");
     await user.type(
@@ -938,7 +921,7 @@ describe("FamilySettingsPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Back to edit" }));
     const editedName = screen.getByRole("textbox", {
-      name: "Family member’s name",
+      name: "Member’s name",
     });
     await user.clear(editedName);
     await user.type(editedName, "Uncle Theo");
@@ -1023,11 +1006,11 @@ describe("FamilySettingsPanel", () => {
     );
     expect(screen.getByText(/Current role: Organizer/u)).toBeVisible();
     expect(
-      screen.getByText(/Explicit care for Child profile will remain/u),
+      screen.getByText(/Assigned access to Child profile will remain/u),
     ).toBeVisible();
     await user.click(
       screen.getByRole("button", {
-        name: "Change to family member: Other organizer",
+        name: "Change to member: Other organizer",
       }),
     );
     expect(setMembershipRole).toHaveBeenLastCalledWith({
@@ -1041,11 +1024,11 @@ describe("FamilySettingsPanel", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Change to family member: Other organizer",
+        name: "Change to member: Other organizer",
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Other organizer is now a family member.",
+      "Other organizer is now a member.",
     );
     expect(
       screen.queryByRole("heading", { name: "Manage Other organizer" }),
@@ -1064,7 +1047,7 @@ describe("FamilySettingsPanel", () => {
               ? {
                   ...member,
                   role: "member" as const,
-                  relationshipLabel: "Family member",
+                  relationshipLabel: "Member",
                 }
               : member,
           ),
@@ -1093,7 +1076,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(
       screen.getByText(
-        /They will manage family exports once private archive delivery is connected/u,
+        /Organizers manage members and access to managed journals/u,
       ),
     ).toBeVisible();
     expect(screen.queryByText(/export the family archive/u)).toBeNull();
@@ -1103,7 +1086,7 @@ describe("FamilySettingsPanel", () => {
     const user = userEvent.setup();
     const setGuardian = vi.fn().mockResolvedValue({
       ok: true,
-      message: "Journal guardian removed.",
+      message: "Journal caregiver removed.",
     });
     render(
       <FamilySettingsPanel
@@ -1127,14 +1110,14 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("heading", { name: "Care for Child profile’s journal" }),
     ).toHaveFocus();
     expect(
-      screen.getByText(/Organizers can care for every child journal/u),
+      screen.getByText(/Organizers have access to all managed journals/u),
     ).toBeVisible();
     expect(
-      screen.getByRole("group", { name: "Assigned guardians" }),
+      screen.getByRole("group", { name: "Assigned caregivers" }),
     ).toBeVisible();
     await user.click(
       screen.getByRole("button", {
-        name: "Remove Other organizer as guardian for Child profile",
+        name: "Remove Other organizer as caregiver for Child profile",
       }),
     );
     expect(setGuardian).toHaveBeenCalledWith({
@@ -1173,7 +1156,7 @@ describe("FamilySettingsPanel", () => {
       }),
     );
     const retry = screen.getByRole("button", {
-      name: "Remove Other organizer as guardian for Child profile",
+      name: "Remove Other organizer as caregiver for Child profile",
     });
     await user.click(retry);
 
@@ -1212,7 +1195,7 @@ describe("FamilySettingsPanel", () => {
       screen.queryByRole("button", { name: /Review invite for/u }),
     ).toBeNull();
     expect(
-      screen.getByText(/An organizer can withdraw pending invitations/u),
+      screen.getByText(/Ask an organizer to manage invitations/u),
     ).toBeVisible();
     expect(screen.queryByText("Grandma")).toBeNull();
   });
@@ -1259,7 +1242,9 @@ describe("FamilySettingsPanel", () => {
     );
 
     await openFamilyCircle(user);
-    expect(screen.getByRole("region", { name: "Rename circle" })).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Circle settings" }),
+    ).toBeVisible();
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Home");
@@ -1337,7 +1322,9 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.queryByRole("region", { name: "Rename circle" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Circle settings" }),
+    ).toBeNull();
     expect(screen.queryByLabelText("Circle name")).toBeNull();
   });
 });

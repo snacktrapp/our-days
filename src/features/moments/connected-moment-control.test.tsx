@@ -313,7 +313,7 @@ describe("ConnectedMomentControl", () => {
       <>
         <p id="journal-live-region" aria-live="assertive" />
         <h1 id="journal-focus-target" tabIndex={-1}>
-          Our family
+          Our Days
         </h1>
         <ConnectedMomentControl moment={moment} actions={actions} />
       </>,
@@ -326,7 +326,7 @@ describe("ConnectedMomentControl", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("heading", { name: "Our family" })).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Our Days" })).toHaveFocus();
     expect(document.getElementById("journal-live-region")).toHaveTextContent(
       "Changes to this moment were saved.",
     );

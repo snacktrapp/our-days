@@ -314,7 +314,7 @@ export function NotificationCenter({
               ) : null}
             </ol>
           ) : refreshState === "idle" ? (
-            <p>No new family activity.</p>
+            <p>No new activity.</p>
           ) : null}
         </div>
       </section>

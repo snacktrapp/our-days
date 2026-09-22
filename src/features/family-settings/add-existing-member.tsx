@@ -2,6 +2,7 @@
 
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { SettingsDisclosure } from "./settings-disclosure";
 import type { FamilyCircleViewModel } from "./family-settings-view-model";
 import type {
   addExistingCircleMemberAction,
@@ -87,8 +88,10 @@ export function AddExistingMember({
   }
 
   return (
-    <details className="add-existing-member">
-      <summary>Add from an existing circle</summary>
+    <SettingsDisclosure
+      className="add-existing-member"
+      label="Add from an existing circle"
+    >
       <form
         className="connected-invite-form"
         onSubmit={(event) => {
@@ -122,8 +125,7 @@ export function AddExistingMember({
         }}
       >
         <p className="chrome-body">
-          Add someone who already uses Our Days. They can see posts shared with{" "}
-          {circle.name}; their other circles stay unchanged.
+          Add a member from another circle you manage.
         </p>
         <label htmlFor={`${id}-source`}>From circle</label>
         <select
@@ -165,8 +167,8 @@ export function AddExistingMember({
         ) : null}
         {loaded && members.length === 0 ? (
           <p className="chrome-body">
-            No eligible members to add. Members already in this circle are
-            excluded; previously removed members need a new invitation.
+            No members available to add. To invite someone else, use their email
+            below.
           </p>
         ) : null}
         {pending && !loaded ? <p role="status">Loading members…</p> : null}
@@ -188,6 +190,6 @@ export function AddExistingMember({
           </button>
         ) : null}
       </form>
-    </details>
+    </SettingsDisclosure>
   );
 }

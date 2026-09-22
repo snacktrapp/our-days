@@ -1,4 +1,5 @@
 "use client";
+import { OurDaysWordmark } from "@/components/our-days-wordmark";
 
 import Link from "next/link";
 import {
@@ -122,13 +123,9 @@ export function InviteEntry({
         className="private-entry-card"
         aria-labelledby="invite-entry-title"
       >
-        <span className="private-entry-mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <p>Private family invitation</p>
-        <h1 id="invite-entry-title">Join your family journal.</h1>
+        <OurDaysWordmark className="private-entry-wordmark" />
+        <p>Circle invitation</p>
+        <h1 id="invite-entry-title">Join your circle.</h1>
         <div className="private-entry-content">
           {intentState === "opening" ? (
             <p role="status">Opening your private invitation…</p>
@@ -204,7 +201,7 @@ export function InviteEntry({
                   onChange={() => setCodeRevision((revision) => revision + 1)}
                 />
                 <button type="submit" disabled={busy}>
-                  {verifyPending ? "Joining…" : "Join family journal"}
+                  {verifyPending ? "Joining…" : "Join circle"}
                 </button>
                 {verifyState.revision === codeRevision &&
                 verifyState.message ? (

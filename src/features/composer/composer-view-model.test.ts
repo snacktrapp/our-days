@@ -27,7 +27,7 @@ const calvin = {
   name: "Calvin",
   initial: "C",
   accent: "ochre" as const,
-  contextLabel: "Child journal",
+  contextLabel: "Managed journal",
 };
 
 const byCircle = {

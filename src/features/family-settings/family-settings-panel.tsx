@@ -1,5 +1,8 @@
 "use client";
 
+import { DeleteCircleControl } from "@/features/groups/delete-circle-control";
+import { SettingsDisclosure } from "./settings-disclosure";
+
 import {
   type FormEvent,
   type MutableRefObject,
@@ -16,13 +19,7 @@ import {
 } from "./add-existing-member";
 import type { FamilySettingsActionResult } from "./family-settings-actions";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
-import { countFamilyFacingMembers, isOperationsRole } from "@/lib/circle-roles";
-import {
-  defaultWiderCircleSourceId,
-  formatWiderCircleIncludes,
-  isWiderCircleNameSuggestion,
-  suggestWiderCircleName,
-} from "@/features/groups/wider-circle";
+import { countFamilyFacingMembers } from "@/lib/circle-roles";
 import type {
   ConnectedFamilySettingsPanelViewModel,
   FamilyAccessMemberViewModel,
@@ -305,49 +302,56 @@ function RenameCircleForm({
   const [pending, startTransition] = useTransition();
   const nameId = `rename-circle-name-${circle.id}`;
 
-  if (!circle.canRename || !renameCircleAction) return null;
+  if (!circle.canRename) return null;
 
   return (
-    <section className="circle-rename-section" aria-label="Rename circle">
-      <form
-        action={(formData) => {
-          startTransition(async () => {
-            const result = await renameCircleAction(formData);
-            if (!result.ok) {
-              setError(result.message);
+    <section className="circle-rename-section" aria-label="Circle settings">
+      {renameCircleAction ? (
+        <form
+          action={(formData) => {
+            startTransition(async () => {
+              const result = await renameCircleAction(formData);
+              if (!result.ok) {
+                setError(result.message);
+                onResult?.(result);
+                return;
+              }
+              setError("");
               onResult?.(result);
-              return;
-            }
-            setError("");
-            onResult?.(result);
-            router.refresh();
-          });
-        }}
-      >
-        <input type="hidden" name="circleId" value={circle.id} />
-        <label htmlFor={nameId}>Circle name</label>
-        <input
-          id={nameId}
-          name="name"
-          required
-          maxLength={80}
-          autoComplete="off"
-          value={name}
-          disabled={disabled || pending}
-          onChange={(event) => {
-            setName(event.target.value);
-            if (error) setError("");
+              router.refresh();
+            });
           }}
-        />
-        {error ? (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={disabled || pending}>
-          {pending ? "Saving…" : "Save name"}
-        </button>
-      </form>
+        >
+          <input type="hidden" name="circleId" value={circle.id} />
+          <label htmlFor={nameId}>Circle name</label>
+          <input
+            id={nameId}
+            name="name"
+            required
+            maxLength={80}
+            autoComplete="off"
+            value={name}
+            disabled={disabled || pending}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (error) setError("");
+            }}
+          />
+          {error ? (
+            <p className="field-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button type="submit" disabled={disabled || pending}>
+            {pending ? "Saving…" : "Save name"}
+          </button>
+        </form>
+      ) : null}
+      <DeleteCircleControl
+        circleId={circle.id}
+        name={circle.name}
+        disabled={disabled || pending}
+      />
     </section>
   );
 }
@@ -361,69 +365,32 @@ function CreateGroupCard({
   groups: readonly FamilyCircleViewModel[];
   defaultCircleId?: string;
 }) {
-  const initialSourceId = defaultWiderCircleSourceId(groups, defaultCircleId);
+  const initialSourceId =
+    groups.find((group) => group.id === defaultCircleId)?.id ??
+    groups[0]?.id ??
+    "";
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [sourceCircleId, setSourceCircleId] = useState(initialSourceId);
-  const sourceCircle =
-    groups.find((group) => group.id === sourceCircleId) ?? groups[0] ?? null;
-  const inviteCandidates = (sourceCircle?.members ?? []).filter(
-    (member) => !isOperationsRole(member.role),
-  );
-  const sourceName = sourceCircle?.name.trim() || "this family";
-  const suggestedName = suggestWiderCircleName(sourceCircle?.name ?? "");
-  const includesLine = formatWiderCircleIncludes(
-    inviteCandidates.map((member) => member.name),
-  );
-  const [name, setName] = useState(suggestedName);
+  const sourceCircleId = initialSourceId;
+  const [name, setName] = useState("");
   if (!createGroupAction) return null;
 
   return (
-    <section
+    <SettingsDisclosure
       className="settings-section circles-create-section"
-      aria-labelledby="create-group-heading"
+      label="Create a circle"
     >
-      <div className="settings-heading">
-        <h2 id="create-group-heading">Add a wider circle</h2>
-        <p>Everyone in {sourceName}, plus a few more people you invite next.</p>
-      </div>
       <form
         className="wider-circle-form"
         action={(formData) => {
           startTransition(async () => {
+            setError(null);
             const result = await createGroupAction(formData);
             if (result && !result.ok) setError(result.message);
           });
         }}
       >
         <input type="hidden" name="sourceCircleId" value={sourceCircleId} />
-
-        <label htmlFor="wider-circle-source">Starts with</label>
-        <select
-          id="wider-circle-source"
-          value={sourceCircleId}
-          required
-          onChange={(event) => {
-            const nextId = event.target.value;
-            const nextCircle = groups.find((group) => group.id === nextId);
-            setSourceCircleId(nextId);
-            setName((current) =>
-              current.trim() === "" ||
-              isWiderCircleNameSuggestion(current, sourceCircle?.name ?? "")
-                ? suggestWiderCircleName(nextCircle?.name ?? "")
-                : current,
-            );
-          }}
-        >
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-        {includesLine ? (
-          <p className="wider-circle-includes">{includesLine}</p>
-        ) : null}
 
         <label htmlFor="create-group-name">Name</label>
         <input
@@ -433,20 +400,22 @@ function CreateGroupCard({
           maxLength={80}
           autoComplete="off"
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          disabled={pending}
+          onChange={(event) => {
+            setName(event.target.value);
+            setError(null);
+          }}
         />
         {error ? (
           <p className="field-error" role="alert">
             {error}
           </p>
-        ) : (
-          <p>Name it for who can see it.</p>
-        )}
+        ) : null}
         <button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
+          {pending ? "Creating…" : "Create circle"}
         </button>
       </form>
-    </section>
+    </SettingsDisclosure>
   );
 }
 
@@ -467,7 +436,6 @@ function CirclesAccordion({
       aria-labelledby="your-groups-heading"
     >
       <div className="settings-heading">
-        <span>Membership</span>
         <h2 id="your-groups-heading">Your circles</h2>
       </div>
       <ul className="circle-accordion">
@@ -612,8 +580,7 @@ function PreviewFamilySettingsPanel({
   return (
     <section className="family-settings-panel">
       <p className="settings-preview-banner">
-        Local design preview · Access labels are illustrative; no accounts or
-        permissions are active
+        Preview only · No accounts or access are changed.
       </p>
 
       <CirclesAccordion
@@ -628,7 +595,6 @@ function PreviewFamilySettingsPanel({
               renameCircleAction={renameCircleAction}
             />
             <div className="settings-heading circle-access-heading">
-              <span>Private circle</span>
               <h3 id="access-heading">People and access</h3>
             </div>
             <MemberList
@@ -688,11 +654,10 @@ function PreviewFamilySettingsPanel({
               ) : (
                 <>
                   <div className="settings-heading">
-                    <span>Invitation only</span>
                     <h3 id="invite-heading">Invite into {circle.name}</h3>
                     <p>
-                      New relatives will join only after accepting a secure
-                      invitation sent to their email address.
+                      People join after accepting an invitation sent to their
+                      email address.
                     </p>
                   </div>
                   {reviewEmail ? (
@@ -918,7 +883,7 @@ function ConnectedFamilySettingsPanel({
       Array.from(displayName).length > 80 ||
       CONTROL_CHARACTER.test(displayName)
     ) {
-      setInviteFormError("Enter the family member’s name.");
+      setInviteFormError("Enter the member’s name.");
       setInviteFormErrorField("name");
       inviteNameRef.current?.focus();
       return;
@@ -1033,7 +998,7 @@ function ConnectedFamilySettingsPanel({
           nextResult.ok
             ? {
                 ok: true,
-                message: `${accessReviewMember.name} can no longer open this family.`,
+                message: `${accessReviewMember.name} can no longer open this circle.`,
               }
             : nextResult,
         );
@@ -1065,7 +1030,7 @@ function ConnectedFamilySettingsPanel({
                 message:
                   role === "organizer"
                     ? `${accessReviewMember.name} is now an organizer.`
-                    : `${accessReviewMember.name} is now a family member.`,
+                    : `${accessReviewMember.name} is now a member.`,
               }
             : nextResult,
         );
@@ -1174,7 +1139,6 @@ function ConnectedFamilySettingsPanel({
               onResult={setResult}
             />
             <div className="settings-heading circle-access-heading">
-              <span>Private circle</span>
               <h3 id="access-heading">People and access</h3>
             </div>
             <MemberList
@@ -1208,7 +1172,7 @@ function ConnectedFamilySettingsPanel({
               >
                 <span>
                   {accessReviewMember.profileKind === "managed"
-                    ? "Child journal care"
+                    ? "Journal care"
                     : "Role and access"}
                 </span>
                 <h3
@@ -1261,8 +1225,8 @@ function ConnectedFamilySettingsPanel({
                   <div className="settings-removal-zone">
                     <RemovalConsequences />
                     <p className="settings-confirmation-copy">
-                      This change is immediate and will also end any guardian
-                      authority tied to this account.
+                      This takes effect immediately, including access to managed
+                      journals in this circle.
                     </p>
                     <button
                       type="button"
@@ -1356,13 +1320,8 @@ function ConnectedFamilySettingsPanel({
               ) : (
                 <>
                   <div className="settings-heading">
-                    <span>Invitation only</span>
                     <h3 id="invite-heading">Invite into {circle.name}</h3>
-                    <p>
-                      Only organizers can manage invitations. Addresses are used
-                      for private delivery and are not shown again after a
-                      request is sent.
-                    </p>
+                    <p>They’ll receive an invitation by email.</p>
                   </div>
                   {circle.canManageAccess ? (
                     <>
@@ -1421,7 +1380,7 @@ function ConnectedFamilySettingsPanel({
                             onSubmit={reviewInvitationRequest}
                           >
                             <label htmlFor="connected-family-invite-name">
-                              Family member’s name
+                              Member’s name
                             </label>
                             <input
                               ref={inviteNameRef}
@@ -1501,21 +1460,15 @@ function ConnectedFamilySettingsPanel({
                       ) : null}
                       {model.invitationDelivery === "disabled" ? (
                         <div className="settings-delivery-boundary">
-                          <strong>New invitations are not connected yet</strong>
-                          <p>
-                            Our Days will enable sending after its private email
-                            worker can provision the account and deliver a
-                            short-lived link safely. No invitation is created
-                            from this screen today.
-                          </p>
+                          <strong>
+                            Invitations are unavailable right now.
+                          </strong>
                         </div>
                       ) : null}
                     </>
                   ) : (
                     <p className="settings-empty-copy">
-                      An organizer can withdraw pending invitations. Sending new
-                      invitations will appear after private delivery is
-                      connected.
+                      Ask an organizer to manage invitations.
                     </p>
                   )}
                 </>
@@ -1556,9 +1509,7 @@ function AccountRoleReview({
       <div className="settings-role-card">
         <strong>Current role: Operations</strong>
         <p>
-          Operations has full organizer access — invites, membership, journal
-          care, and Insights. They are not a family journal person and do not
-          appear in Family.
+          Operations has organizer access and does not appear in the journal.
         </p>
       </div>
     );
@@ -1568,23 +1519,20 @@ function AccountRoleReview({
   return (
     <div className="settings-role-card">
       <strong>
-        Current role:{" "}
-        {member.role === "organizer" ? "Organizer" : "Family member"}
+        Current role: {member.role === "organizer" ? "Organizer" : "Member"}
       </strong>
       {nextRole === "organizer" ? (
         <p>
-          Organizers can invite and remove people, change roles and journal
-          care, and care for every child journal. They will manage family
-          exports once private archive delivery is connected. This does not let
-          them edit another adult’s moments.
+          Organizers manage members and access to managed journals. They cannot
+          edit another account’s posts.
         </p>
       ) : (
         <p>
-          As a family member, {member.name} will keep sign-in access but lose
-          organizer controls and automatic care access for every child journal.
+          {member.name} will keep circle access but lose organizer controls and
+          automatic access to managed journals.
           {assignedJournals.length
-            ? ` Explicit care for ${assignedJournals.map((profile) => profile.name).join(", ")} will remain.`
-            : " They do not have an explicit assignment, so they will lose care access to every child journal."}
+            ? ` Assigned access to ${assignedJournals.map((profile) => profile.name).join(", ")} will remain.`
+            : ""}
         </p>
       )}
       <button
@@ -1592,15 +1540,13 @@ function AccountRoleReview({
         aria-label={
           nextRole === "organizer"
             ? `Make organizer: ${member.name}`
-            : `Change to family member: ${member.name}`
+            : `Change to member: ${member.name}`
         }
         aria-busy={disabled || undefined}
         disabled={disabled}
         onClick={() => onChangeRole(nextRole)}
       >
-        {nextRole === "organizer"
-          ? "Make organizer"
-          : "Change to family member"}
+        {nextRole === "organizer" ? "Make organizer" : "Change to member"}
       </button>
     </div>
   );
@@ -1620,11 +1566,11 @@ function JournalCareReview({
   return (
     <>
       <p className="settings-confirmation-copy">
-        Organizers can care for every child journal. An assigned guardian keeps
-        care access as a family member, even without organizer controls.
+        Organizers have access to all managed journals. Assigned caregivers
+        retain access even without organizer controls.
       </p>
       <fieldset className="guardian-options">
-        <legend>Assigned guardians</legend>
+        <legend>Assigned caregivers</legend>
         <ul>
           {guardianOptions.map((guardian) => {
             const assigned = member.guardianMembershipIds.includes(
@@ -1640,13 +1586,13 @@ function JournalCareReview({
                         ? "Organizer · assignment stays if their role changes"
                         : "Organizer · already has care access"
                       : assigned
-                        ? "Family member · assigned guardian"
-                        : "Family member · no care access"}
+                        ? "Member · assigned caregiver"
+                        : "Member · no care access"}
                   </small>
                 </span>
                 <button
                   type="button"
-                  aria-label={`${assigned ? "Remove" : "Assign"} ${guardian.name} as guardian for ${member.name}`}
+                  aria-label={`${assigned ? "Remove" : "Assign"} ${guardian.name} as caregiver for ${member.name}`}
                   aria-busy={disabled || undefined}
                   disabled={disabled}
                   onClick={() => onChange(guardian.membershipId, !assigned)}
@@ -1666,19 +1612,15 @@ function RemovalConsequences({ preview = false }: { preview?: boolean }) {
   if (preview) {
     return (
       <p>
-        Removing access would end sign-in to this family circle. Their authored
-        moments would remain part of the family history. Access removal does not
-        delete their account or content; any later deletion follows a separate
-        ownership policy.
+        This person would lose access to this circle. Their account and existing
+        posts would remain.
       </p>
     );
   }
   return (
     <p>
-      Removing access ends sign-in to this family circle. Their authored moments
-      remain part of the family history. Access removal does not delete their
-      account or content; any later deletion follows a separate ownership
-      policy.
+      This person will lose access to this circle. Their account and existing
+      posts will remain.
     </p>
   );
 }
@@ -1686,9 +1628,8 @@ function RemovalConsequences({ preview = false }: { preview?: boolean }) {
 function InvitationConsequences() {
   return (
     <p>
-      This person would be able to open the circle and see its family moments,
-      photos, notes, people, and saved places. Organizer access would always
-      require a separate, deliberate change.
+      They’ll be able to see and contribute to this circle. They won’t have
+      organizer controls.
     </p>
   );
 }

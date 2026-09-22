@@ -1,4 +1,5 @@
 "use client";
+import { OurDaysWordmark } from "@/components/our-days-wordmark";
 
 import { useActionState, useEffect, useState } from "react";
 import { purgeOurDaysBrowserState } from "@/lib/auth/browser-private-state";
@@ -10,9 +11,9 @@ const oauthIssueCopy = {
   unavailable: "That sign-in method is unavailable right now.",
   invalid:
     "That sign-in did not finish. Try Google, X, or email a private link.",
-  "no-access": "This account does not have access to a family circle.",
+  "no-access": "This account does not have access to a circle.",
   "no-email":
-    "That account did not share an email we can match to a family invitation.",
+    "That account did not share an email we can match to an invitation.",
 } as const;
 
 export function PrivateEntry({
@@ -61,16 +62,9 @@ export function PrivateEntry({
         className="private-entry-card"
         aria-labelledby="private-entry-title"
       >
-        <span className="private-entry-mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="eyebrow">Our Days</span>
+        <OurDaysWordmark className="private-entry-wordmark" />
         <h1 id="private-entry-title">
-          {connected
-            ? "Open your family journal."
-            : "Our Days is invitation only."}
+          {connected ? "Open your journal." : "Our Days is invitation only."}
         </h1>
         {cleanupState !== "ready" ? (
           <div className="private-entry-content">
@@ -85,7 +79,7 @@ export function PrivateEntry({
           </div>
         ) : connected ? (
           <div className="private-entry-content">
-            <p>Use the Google or X account your family invited.</p>
+            <p>Use the Google or X account that received your invitation.</p>
             {oauthIssue ? (
               <p className="auth-error" role="alert">
                 {oauthIssueCopy[oauthIssue]}
@@ -111,7 +105,7 @@ export function PrivateEntry({
             ) : (
               <div className="private-entry-backup">
                 <p>Or email a private sign-in link</p>
-                <p>Enter the email address your family invited.</p>
+                <p>Enter the email address that received your invitation.</p>
                 {linkIssue ? (
                   <p className="auth-error" role="alert">
                     {linkIssue === "invalid"
@@ -163,9 +157,7 @@ export function PrivateEntry({
             )}
           </div>
         ) : (
-          <span>
-            Sign-in opens only after the private circle boundary is connected.
-          </span>
+          <span>Sign-in is currently unavailable.</span>
         )}
       </section>
     </main>

@@ -1523,6 +1523,10 @@ export type Database = {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
       };
+      delete_empty_circle: {
+        Args: { target_circle_id: string; expected_name: string };
+        Returns: undefined;
+      };
       update_circle: {
         Args: { circle_id: string; circle_name: string };
         Returns: string;

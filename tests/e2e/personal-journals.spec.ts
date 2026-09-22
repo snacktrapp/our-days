@@ -144,8 +144,6 @@ test("unknown people use a generic private soft-not-found without enumeration", 
   await expect(
     page.getByRole("heading", { name: "That page isn’t here." }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Your family journal remains private."),
-  ).toBeVisible();
+  await expect(page.getByText("Your journal remains private.")).toBeVisible();
   await expect(page.getByText(/Brian|Molly|Avery|Sam|June/u)).toHaveCount(0);
 });

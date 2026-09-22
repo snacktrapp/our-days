@@ -1,4 +1,5 @@
 "use client";
+import { OurDaysWordmark } from "@/components/our-days-wordmark";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -25,7 +26,7 @@ function TitleCopy({
 }>) {
   return (
     <>
-      <span className="our-days-wordmark" role="img" aria-label="Our Days" />
+      <OurDaysWordmark />
       <span className="title-switcher-heading">
         <h1 id="journal-focus-target" tabIndex={-1}>
           {model.title === "Our Days" ? "Journal" : model.title}
@@ -177,7 +178,7 @@ export function FamilyTitleSwitcher({
         <TitleCopy model={displayModel} chevron />
       </button>
       {open ? (
-        <nav id={panelId} aria-label="Choose a family timeline">
+        <nav id={panelId} aria-label="Choose a journal">
           {items.map((item) => (
             <Link
               key={item.href}

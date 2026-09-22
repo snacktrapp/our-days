@@ -412,7 +412,7 @@ describe("connected timeline mapping", () => {
       {
         viewerPersonId: "parent",
         viewingJournalPersonId: "parent",
-        circleNames: { circle: "Our family" },
+        circleNames: { circle: "Our Days" },
       },
     );
     const twoGroups = mapTimelineRow(
@@ -424,7 +424,7 @@ describe("connected timeline mapping", () => {
       "2026-08-30",
       {
         viewerPersonId: "parent",
-        circleNames: { circle: "Our family", harbor: "Harbor" },
+        circleNames: { circle: "Our Days", harbor: "Harbor" },
       },
     );
     const alsoShared = mapTimelineRow(
@@ -437,12 +437,12 @@ describe("connected timeline mapping", () => {
       {
         viewerPersonId: "parent",
         feedCircleId: "circle",
-        circleNames: { circle: "Our family", harbor: "Harbor" },
+        circleNames: { circle: "Our Days", harbor: "Harbor" },
       },
     );
     expect(oneGroup.showAudienceChip).toBe(true);
-    expect(oneGroup.audienceChipLabel).toBe("Our family");
-    expect(twoGroups.audienceChipLabel).toBe("Our family +1");
+    expect(oneGroup.audienceChipLabel).toBe("Our Days");
+    expect(twoGroups.audienceChipLabel).toBe("Our Days +1");
     expect(alsoShared.audienceChipLabel).toBe("Also · Harbor");
   });
 
@@ -629,13 +629,13 @@ describe("connected timeline mapping", () => {
         role: "organizer",
       },
       {
-        circleName: "Our family",
+        circleName: "Our Days",
         circleTimeZone: "America/Los_Angeles",
         today: "2026-08-30",
         chrome: {
           accent: "teal",
-          title: "Our family",
-          eyebrow: "Our family",
+          title: "Our Days",
+          eyebrow: "Our Days",
           familyMark: [],
           composer: {
             experience: "connected-written",
@@ -684,13 +684,13 @@ describe("connected timeline mapping", () => {
         role: "organizer",
       },
       {
-        circleName: "Our family",
+        circleName: "Our Days",
         circleTimeZone: "America/Los_Angeles",
         today: "2026-08-30",
         chrome: {
           accent: "teal",
-          title: "Our family",
-          eyebrow: "Our family",
+          title: "Our Days",
+          eyebrow: "Our Days",
           familyMark: [],
           composer: {
             experience: "connected-written",
@@ -742,7 +742,7 @@ describe("connected timeline mapping", () => {
       },
       {
         kind: "group",
-        label: "Our family",
+        label: "Our Days",
         href: "/family?circle=circle",
         current: false,
         circleId: "circle",
@@ -774,13 +774,13 @@ describe("connected timeline mapping", () => {
         role: "organizer",
       },
       {
-        circleName: "Our family",
+        circleName: "Our Days",
         circleTimeZone: "America/Los_Angeles",
         today: "2026-08-30",
         chrome: {
           accent: "teal",
-          title: "Our family",
-          eyebrow: "Our family",
+          title: "Our Days",
+          eyebrow: "Our Days",
           familyMark: [],
           composer: {
             experience: "connected-written",
@@ -804,13 +804,13 @@ describe("connected timeline mapping", () => {
   });
 
   const familyContext = {
-    circleName: "Our family",
+    circleName: "Our Days",
     circleTimeZone: "America/Los_Angeles",
     today: "2026-08-30",
     chrome: {
       accent: "teal" as const,
-      title: "Our family",
-      eyebrow: "Our family",
+      title: "Our Days",
+      eyebrow: "Our Days",
       familyMark: [],
       composer: {
         experience: "connected-written" as const,

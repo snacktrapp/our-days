@@ -36,13 +36,13 @@ export function JournalInterrupted({
 
   return (
     <main className="app-shell journal-error-shell">
-      <section className="phone-stage" aria-label="Family journal">
+      <section className="phone-stage" aria-label="Journal">
         <header className="topbar journal-error-topbar">
           <span className="family-mark" aria-hidden="true">
             <span className="family-mark-dot dot-teal">O</span>
           </span>
           <div className="title-lockup">
-            <span className="eyebrow">Our family</span>
+            <span className="eyebrow">Our Days</span>
             <h1 id="journal-error-title">Our Days</h1>
           </div>
           <span className="quiet-button" aria-hidden="true" />
@@ -64,7 +64,7 @@ export function JournalInterrupted({
               </button>
             ) : null}
             <a className="journal-error-back" href="/family">
-              Back to Family
+              Back to Journal
             </a>
           </div>
         </section>
@@ -86,13 +86,13 @@ export function JournalOpenUnavailable({
 
   return (
     <main className="app-shell journal-error-shell">
-      <section className="phone-stage" aria-label="Family journal">
+      <section className="phone-stage" aria-label="Journal">
         <header className="topbar journal-error-topbar">
           <span className="family-mark" aria-hidden="true">
             <span className="family-mark-dot dot-teal">O</span>
           </span>
           <div className="title-lockup">
-            <span className="eyebrow">Our family</span>
+            <span className="eyebrow">Our Days</span>
             <h1 id="journal-unavailable-title">Our Days</h1>
           </div>
           <span className="quiet-button" aria-hidden="true" />
@@ -147,7 +147,7 @@ export function JournalPanelInterrupted({
           Try again
         </button>
         <a className="journal-error-back" href="/family">
-          Back to Family
+          Back to Journal
         </a>
       </div>
       {children}

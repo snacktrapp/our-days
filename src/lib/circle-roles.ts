@@ -91,10 +91,10 @@ export function canCreateInsight(role: string | null | undefined) {
 
 export function familyMembershipRoleLabel(
   role: string | null | undefined,
-): "Organizer" | "Operations" | "Family member" {
+): "Organizer" | "Operations" | "Member" {
   if (role === "organizer") return "Organizer";
   if (role === OPERATIONS_ROLE) return "Operations";
-  return "Family member";
+  return "Member";
 }
 
 export function journalDirectoryRoleLabel(

@@ -1,4 +1,5 @@
 import { CompleteInvitedSession } from "./complete-invited-session";
+import { OurDaysWordmark } from "@/components/our-days-wordmark";
 
 export default function AuthCompletePage() {
   return (
@@ -7,13 +8,8 @@ export default function AuthCompletePage() {
         className="private-entry-card"
         aria-labelledby="auth-complete-title"
       >
-        <span className="private-entry-mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="eyebrow">Our Days</span>
-        <h1 id="auth-complete-title">Opening your family journal.</h1>
+        <OurDaysWordmark className="private-entry-wordmark" />
+        <h1 id="auth-complete-title">Opening your journal.</h1>
         <div className="private-entry-content">
           <CompleteInvitedSession />
         </div>

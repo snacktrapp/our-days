@@ -237,7 +237,7 @@ export async function exchangeAuthorizationCode(
   if (!email) {
     throw new OAuthIdentityError(
       "no-email",
-      "X did not share an email we can match to a family invitation.",
+      "X did not share an email we can match to an invitation.",
     );
   }
   return email;

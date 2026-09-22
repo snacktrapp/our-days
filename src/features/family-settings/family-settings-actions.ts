@@ -90,6 +90,7 @@ async function requireOrganizer(circleId?: string | null) {
 
 function refreshFamilyAccessSurfaces(personId?: string) {
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   revalidatePath("/people");
   revalidatePath("/family");
   if (personId) revalidatePath(`/people/${personId}`);
@@ -182,7 +183,7 @@ export async function setFamilyMembershipRoleAction(
       message:
         role === "organizer"
           ? "That person is already an organizer."
-          : "That person is already a family member.",
+          : "That person is already a member.",
     };
   }
   const { error } = await supabase.rpc("set_membership_role", {
@@ -263,8 +264,8 @@ export async function setManagedProfileGuardianAction(
   return {
     ok: true,
     message: grantAccess
-      ? "Journal guardian assigned."
-      : "Journal guardian removed.",
+      ? "Journal caregiver assigned."
+      : "Journal caregiver removed.",
   };
 }
 
@@ -291,7 +292,7 @@ export async function revokeFamilyMembershipAction(
   }
   if (membershipResult.data.status === "revoked") {
     refreshFamilyAccessSurfaces(membershipResult.data.person_id);
-    return { ok: true, message: "Family access was already removed." };
+    return { ok: true, message: "Circle access was already removed." };
   }
   if (membershipResult.data.status !== "active") {
     return { ok: false, message: "That access change was not allowed." };
@@ -309,7 +310,7 @@ export async function revokeFamilyMembershipAction(
     };
   }
   refreshFamilyAccessSurfaces(membershipResult.data.person_id);
-  return { ok: true, message: "Family access removed." };
+  return { ok: true, message: "Circle access removed." };
 }
 
 export async function requestFamilyInvitationAction(
@@ -353,6 +354,7 @@ export async function requestFamilyInvitationAction(
   }
   await sendInvitedMagicLink(email);
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   return { ok: true, message: "Private invitation requested." };
 }
 
@@ -410,5 +412,6 @@ export async function withdrawFamilyInvitationEmailRequestAction(
     };
   }
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   return { ok: true, message: "Invitation withdrawn." };
 }

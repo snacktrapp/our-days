@@ -453,7 +453,7 @@ export function buildTimelineEntries(
         entryType: "empty-state",
         title: personalName
           ? "A story ready to begin"
-          : "Your family story starts here",
+          : "Your circle’s story starts here",
         message: personalName
           ? `The first moment in ${personalName}’s journal will appear on this line.`
           : "Write a small moment and it will find its place on this line.",
@@ -873,7 +873,7 @@ export async function loadConnectedTimeline(
     switcher,
     timelineLabel: personal
       ? `Chronological moments for ${personal.name}`
-      : "Chronological family moments",
+      : "Chronological moments",
     personalIntro: personal
       ? {
           initial: personal.initial,
@@ -896,7 +896,7 @@ export async function loadConnectedTimeline(
           {
             chrome,
             switcher,
-            timelineLabel: "Chronological family moments",
+            timelineLabel: "Chronological moments",
             interaction: connectedTimelineInteraction(access, context),
             entries: buildTimelineEntries(
               mappedMoments,

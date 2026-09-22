@@ -37,7 +37,7 @@ describe("JournalInterrupted", () => {
     screen.getByRole("button", { name: "Try again" }).click();
     expect(retry).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("link", { name: "Back to Family" }),
+      screen.getByRole("link", { name: "Back to Journal" }),
     ).toHaveAttribute("href", "/family");
   });
 

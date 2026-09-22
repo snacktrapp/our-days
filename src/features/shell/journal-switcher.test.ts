@@ -103,7 +103,7 @@ describe("journal switcher grammar", () => {
   it("does not invent a Just me row when the viewer is not in the list", () => {
     expect(
       buildJournalSwitcher({
-        groupLabel: "Our family",
+        groupLabel: "Our Days",
         people: [{ id: "child", name: "Child" }],
         viewerPersonId: "parent",
         currentHref: "/people/child",
@@ -117,7 +117,7 @@ describe("journal switcher grammar", () => {
       },
       {
         kind: "group",
-        label: "Our family",
+        label: "Our Days",
         href: "/family?circle=family",
         current: false,
         circleId: "family",

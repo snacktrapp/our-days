@@ -104,7 +104,7 @@ function chrome(
   accent: AccentToken,
   title: string,
   defaultJournalPersonId = "brian",
-  eyebrow = "Our family",
+  eyebrow = "Our Days",
 ): JournalChromeViewModel {
   return {
     accent,
@@ -852,7 +852,7 @@ export function getFamilySettingsFixture(
       name: "Avery",
       initial: "A",
       accent: "ochre" as const,
-      relationshipLabel: "Child journal",
+      relationshipLabel: "Managed journal",
       accessLabel: "Managed profile · No sign-in",
       guardianMembershipIds: [],
       canManageRole: false,
@@ -867,7 +867,7 @@ export function getFamilySettingsFixture(
       name: "Sam",
       initial: "S",
       accent: "slate" as const,
-      relationshipLabel: "Child journal",
+      relationshipLabel: "Managed journal",
       accessLabel: "Managed profile · No sign-in",
       guardianMembershipIds: [],
       canManageRole: false,
@@ -882,7 +882,7 @@ export function getFamilySettingsFixture(
       name: "June",
       initial: "J",
       accent: "moss" as const,
-      relationshipLabel: "Child journal",
+      relationshipLabel: "Managed journal",
       accessLabel: "Managed profile · No sign-in",
       guardianMembershipIds: [],
       canManageRole: false,
@@ -1054,7 +1054,7 @@ export function getMilestoneMemoriesFixture(): MemoryJourneyViewModel {
     chrome: memoriesChrome,
     returnHref: "/memories",
     returnLabel: "All memories",
-    eyebrow: "Family milestones",
+    eyebrow: "Circle milestones",
     title: "Milestones",
     description: "Firsts, changes, and new chapters, held in their true order.",
   } as const;
@@ -1066,7 +1066,7 @@ export function getMilestoneMemoriesFixture(): MemoryJourneyViewModel {
       emptyState: {
         title: "No milestones have been marked yet",
         description:
-          "Milestones added to the family journal will gather here in their true order.",
+          "Milestones added to the journal will gather here in their true order.",
       },
     };
   }
@@ -1104,7 +1104,7 @@ export function getMilestoneMemoriesFixture(): MemoryJourneyViewModel {
       chrome: memoriesChrome,
       interaction: timelineInteraction,
       switcher: [],
-      timelineLabel: "Family milestones in reverse chronological order",
+      timelineLabel: "Circle milestones in reverse chronological order",
       entries,
     },
   };
@@ -1140,7 +1140,7 @@ export function getYearMemoriesFixture(
     id: `${year}-end`,
     entryType: "end-message",
     markerLabel: `End of ${year}`,
-    message: "Every year becomes a chapter in the family’s story.",
+    message: "Every year becomes a chapter in your story.",
   });
 
   const momentWord = moments.length === 1 ? "moment" : "moments";

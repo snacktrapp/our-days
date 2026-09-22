@@ -25,13 +25,13 @@ const access = {
 } as const;
 
 const context: ConnectedJournalContext = {
-  circleName: "Our family",
+  circleName: "Our Days",
   circleTimeZone: "America/Los_Angeles",
   today: "2026-08-30",
   chrome: {
     accent: "teal",
-    title: "Our family",
-    eyebrow: "Our family",
+    title: "Our Days",
+    eyebrow: "Our Days",
     familyMark: [],
     memoriesHref: "/memories",
     composer: {
@@ -313,12 +313,12 @@ describe("connected Memories data", () => {
     );
     expect(model).toMatchObject({
       state: "moments",
-      eyebrow: "Family milestones",
+      eyebrow: "Circle milestones",
       title: "Milestones",
     });
     if (model.state !== "moments") throw new Error("Expected milestones");
     expect(model.timeline.timelineLabel).toBe(
-      "Family milestones in reverse chronological order",
+      "Circle milestones in reverse chronological order",
     );
     expect(model.timeline.pagination).toEqual({
       nextHref:

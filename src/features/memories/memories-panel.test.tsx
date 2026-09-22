@@ -32,7 +32,7 @@ const composer = {
 const chrome = {
   accent: "teal",
   title: "Memories",
-  eyebrow: "Our family",
+  eyebrow: "Our Days",
   composer,
   familyMark: [{ id: "person", initial: "P", accent: "teal" }],
 } as const;
@@ -174,9 +174,7 @@ describe("Memories browsing", () => {
       "href",
       "/memories",
     );
-    expect(
-      screen.getByLabelText("Chronological family moments"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Chronological moments")).toBeInTheDocument();
     expect(container.querySelector(".time-rail")).toBeInTheDocument();
     expect(container.querySelector("#moment-thought")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Timeline view" })).toBeNull();
@@ -204,6 +202,6 @@ describe("Memories browsing", () => {
     expect(
       screen.getByRole("heading", { name: "Nothing from this day yet" }),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Chronological family moments")).toBeNull();
+    expect(screen.queryByLabelText("Chronological moments")).toBeNull();
   });
 });

@@ -35,7 +35,7 @@ async function hasExpectedOrigin() {
 function createdGroupHref(circleId: string, name?: string) {
   const params = new URLSearchParams({ inviteCircle: circleId });
   if (name) params.set("name", name);
-  return `/settings/family?${params.toString()}#invite`;
+  return `/circles/manage?${params.toString()}#invite`;
 }
 
 async function actorBelongsToCircle(
@@ -93,6 +93,7 @@ export async function createGroupAction(
     revalidatePath("/family");
     revalidatePath("/people");
     revalidatePath("/settings/family");
+    revalidatePath("/circles", "layout");
     redirect(createdGroupHref(created.circleId));
   }
 
@@ -108,6 +109,7 @@ export async function createGroupAction(
   revalidatePath("/family");
   revalidatePath("/people");
   revalidatePath("/settings/family");
+  revalidatePath("/circles", "layout");
   redirect(createdGroupHref(data));
 }
 

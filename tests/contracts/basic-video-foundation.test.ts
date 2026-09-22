@@ -78,7 +78,7 @@ describe("basic private video foundation", () => {
     expect(finalize).toContain("insert into public.moment_videos");
   });
 
-  it("delivers only published, untrashed videos to active family members", () => {
+  it("delivers only published, untrashed videos to active members", () => {
     const delivery = between(
       "create function private.get_video_moment_delivery(",
       "create function private.video_object_path_is_readable(",
