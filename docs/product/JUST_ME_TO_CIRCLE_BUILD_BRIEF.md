@@ -1,6 +1,10 @@
 # Share a private post to one circle
 
-Status: implemented locally on `codex/share-private-post`, including the user-approved cross-circle conversation prerequisite. Not deployed. Connected-preview media verification remains a release gate.
+Status: implemented on `codex/share-private-post`. Shared-database migration applied with explicit approval. Preview `dpl_36kMwDYBnT1y8qrvrotRuBrstj9s` deployed from `0bd35ee`. Brian confirmed private-to-Home sharing in Safari, including the Home chip, and explicitly approved production deployment before recipient-side confirmation.
+
+Release follow-up: another Home member must still confirm visibility and comment/reaction behavior. Connected media-sharing and installed-iPhone checks are not yet fully verified. Previous production rollback candidate: `dpl_8QwDAt82shh3YXVjK1yfFQS5zANM`.
+
+Live-schema preflight found a nine-column notification contract, including `circle_name`, absent locally. The migration preserves that contract; the remote transaction dry run and 24 local notification assertions passed before applying it.
 
 ## Implementation and verification — 2026-09-21
 
