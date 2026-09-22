@@ -304,6 +304,7 @@ export async function createFamilyMomentAction(input: {
 }
 
 export async function updateFamilyMomentAction(input: {
+  shareToCircleId?: string;
   momentId: string;
   revision: number;
   title: string;
@@ -352,6 +353,16 @@ export async function updateFamilyMomentAction(input: {
   }
   const audience = normalizeMomentAudience(input.audience);
   let circleIds: string[] | undefined;
+  const sharing = input.shareToCircleId !== undefined;
+  if (sharing) {
+    const memberships = await readJournalCircleMemberships();
+    if (
+      !uuidPattern.test(input.shareToCircleId!) ||
+      !memberships.some((member) => member.circleId === input.shareToCircleId)
+    ) {
+      return { ok: false, message: "Choose a circle you belong to." };
+    }
+  }
   if (input.circleIds !== undefined) {
     const memberships = await readJournalCircleMemberships();
     const allowed = new Set(
@@ -374,6 +385,7 @@ export async function updateFamilyMomentAction(input: {
     try {
       const { updateLocalWrittenMoment } = await localStore();
       const revision = await updateLocalWrittenMoment(access, {
+        shareToCircleId: input.shareToCircleId,
         momentId: input.momentId,
         revision: input.revision,
         title: input.title.trim(),
@@ -421,8 +433,22 @@ export async function updateFamilyMomentAction(input: {
     audience,
     ...coordinates,
   };
-  let { data, error } = await supabase.rpc("update_family_moment", payload);
-  if (error && missingRpc(error)) {
+  let { data, error } = sharing
+    ? await supabase.rpc("share_private_moment", {
+        moment_id: input.momentId,
+        expected_revision: input.revision,
+        destination_circle_id: input.shareToCircleId!,
+        moment_title: payload.moment_title,
+        moment_body: payload.moment_body,
+        place_name: payload.place_name,
+        tagged_person_ids: payload.tagged_person_ids,
+        occurred_on: payload.occurred_on,
+        occurred_at: payload.occurred_at,
+        occurred_timezone: payload.occurred_timezone,
+        ...coordinates,
+      })
+    : await supabase.rpc("update_family_moment", payload);
+  if (error && !sharing && missingRpc(error)) {
     const fallback = { ...payload };
     delete (fallback as { latitude?: number | null }).latitude;
     delete (fallback as { longitude?: number | null }).longitude;
@@ -438,7 +464,7 @@ export async function updateFamilyMomentAction(input: {
           : "That moment could not be changed.",
     };
   }
-  if (circleIds !== undefined) {
+  if (!sharing && circleIds !== undefined) {
     return setMomentAudienceAction({
       momentId: input.momentId,
       revision: data ?? input.revision,

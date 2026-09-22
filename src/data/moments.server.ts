@@ -193,6 +193,23 @@ export async function loadMomentConversationsByMomentId(
     }),
   );
 
+  // A visible conversation can include authors outside the viewer's roster.
+  // Fetch display-only attribution, never broaden roster access to find names.
+  const missingAuthorIds = membershipIds.filter(
+    (id) => !authorByMembership.has(id),
+  );
+  if (missingAuthorIds.length > 0) {
+    const result = await supabase.rpc("visible_moment_authors", {
+      membership_ids: missingAuthorIds,
+    });
+    for (const author of result.data ?? []) {
+      authorByMembership.set(author.membership_id, {
+        name: author.display_name,
+        accent: mapDatabaseAccent(author.accent_token),
+      });
+    }
+  }
+
   const notesByMoment = new Map<
     string,
     MomentConversationViewModel["notes"][number][]

@@ -86,6 +86,55 @@ async function jpegFixture(index = 0) {
   return path;
 }
 
+test("private post shares to one circle through the editor and survives reload", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Written entry Text, date, and details" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Entry", exact: true })
+    .fill("Private sharing browser check.");
+  await page.getByRole("checkbox", { name: "Just me" }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+  const post = page
+    .locator("article[data-moment-kind]")
+    .filter({ hasText: "Private sharing browser check." });
+  await expect(post).toBeVisible({ timeout: 15000 });
+  await post.getByRole("button", { name: /Moment options/ }).click();
+  await page.getByRole("button", { name: /^Edit —/ }).click();
+  const destination = page.getByLabel("Share to a circle");
+  await expect(destination).toHaveValue("");
+  const choices = await destination
+    .locator("option")
+    .evaluateAll((options) =>
+      options.map((option) => ({
+        value: (option as HTMLOptionElement).value,
+        label: option.textContent ?? "",
+      })),
+    );
+  const circle = choices.find((option) => option.value !== "")!;
+  expect(circle).toBeTruthy();
+  await destination.selectOption(circle.value);
+  await page.screenshot({ path: "test-results/share-private-editor.png" });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(destination).toHaveCount(0);
+  await page.reload();
+  await expect(post).toHaveCount(1);
+  await expect(post.locator(".just-me-pill")).toHaveCount(0);
+  await post.getByRole("button", { name: /Moment options/ }).click();
+  await page.getByRole("button", { name: /^Edit —/ }).click();
+  await expect(destination).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("Activity refreshes on each open and recovers from a failed refresh", async ({
   page,
 }) => {

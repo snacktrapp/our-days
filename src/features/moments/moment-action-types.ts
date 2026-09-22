@@ -36,6 +36,7 @@ export type SaveWrittenMomentAction = (input: {
 }) => Promise<MomentActionResult>;
 
 export type UpdateFamilyMomentAction = (input: {
+  shareToCircleId?: string;
   momentId: string;
   revision: number;
   title: string;

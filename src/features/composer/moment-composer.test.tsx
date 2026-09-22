@@ -1977,7 +1977,7 @@ describe("MomentComposer", () => {
     expect(onRequestClose).toHaveBeenCalledOnce();
   });
 
-  it("prefills Post to chips on edit and saves circle ids", async () => {
+  it("does not offer audience changes for an already shared post", async () => {
     const update = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
     const user = userEvent.setup();
     render(
@@ -2019,31 +2019,99 @@ describe("MomentComposer", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("checkbox", { name: "Trapp Family" }),
-    ).toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "Trapp Family" }),
-    ).toBeDisabled();
+    expect(screen.queryByLabelText("Share to a circle")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /^Journal,/u }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Cousins" })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "Cousins" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
-    expect(screen.getByRole("checkbox", { name: "Just me" })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "Just me" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: /Share to more than one/u }),
     ).toBeNull();
-    expect(screen.getByRole("checkbox", { name: "Cousins" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(
         expect.objectContaining({
           audience: "family",
-          circleIds: ["family"],
+          shareToCircleId: undefined,
         }),
       ),
     );
+  });
+
+  it("confirms one-circle sharing and keeps a failed edit open", async () => {
+    const update = vi
+      .fn()
+      .mockResolvedValue({ ok: false, message: "Try again." });
+    const close = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = userEvent.setup();
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          postableCircles: [
+            { id: "family", name: "Home", personId: "brian" },
+            {
+              id: "grandparents",
+              name: "Grandparents",
+              personId: "brian-other",
+            },
+          ],
+        }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={close}
+        editDraft={{
+          momentId: "private-note",
+          revision: 1,
+          mode: "thought",
+          journalPersonId: "brian",
+          occurredOn: "2026-08-28",
+          maxOccurredOn: "2026-08-30",
+          occurredTime: "",
+          occurredAt: null,
+          occurredTimezone: null,
+          taggedPersonIds: [],
+          place: emptyPlaceSelection(),
+          verseSelection: emptyBibleVerseSelection,
+          title: "",
+          body: "My private words.",
+          audience: "just_me",
+          circleId: "family",
+          linkedCircleIds: [],
+          save: update,
+        }}
+      />,
+    );
+    expect(screen.getByLabelText("Share to a circle")).toHaveValue("");
+    await user.selectOptions(
+      screen.getByLabelText("Share to a circle"),
+      "grandparents",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(update).not.toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining("Everyone in Grandparents"),
+    );
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(update).toHaveBeenCalledOnce());
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shareToCircleId: "grandparents",
+        body: "My private words.",
+        audience: "just_me",
+      }),
+    );
+    expect(update.mock.calls[0][0]).not.toHaveProperty("circleIds");
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Entry")).toHaveValue("My private words.");
+    expect(await screen.findByText("Try again.")).toBeVisible();
+    confirm.mockRestore();
   });
 
   it("edits a saved photo with the existing picture and no file picker", async () => {

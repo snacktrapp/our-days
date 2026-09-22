@@ -175,10 +175,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "moment_notes_author_fkey";
-            columns: ["circle_id", "author_membership_id"];
+            columns: ["author_membership_id"];
             isOneToOne: false;
             referencedRelation: "circle_memberships";
-            referencedColumns: ["circle_id", "id"];
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "moment_notes_moment_fkey";
@@ -422,10 +422,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "moment_reactions_author_fkey";
-            columns: ["circle_id", "author_membership_id"];
+            columns: ["author_membership_id"];
             isOneToOne: false;
             referencedRelation: "circle_memberships";
-            referencedColumns: ["circle_id", "id"];
+            referencedColumns: ["id"];
           },
           {
             foreignKeyName: "moment_reactions_moment_fkey";
@@ -652,6 +652,32 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      visible_moment_authors: {
+        Args: { membership_ids: string[] };
+        Returns: {
+          accent_token: string;
+          display_name: string;
+          membership_id: string;
+          person_id: string;
+        }[];
+      };
+      share_private_moment: {
+        Args: {
+          destination_circle_id: string;
+          expected_revision: number;
+          latitude?: number | null;
+          longitude?: number | null;
+          moment_body: string;
+          moment_id: string;
+          moment_title: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          tagged_person_ids: string[];
+        };
+        Returns: number;
+      };
       list_existing_circle_members: {
         Args: { source_circle_id: string; target_circle_id: string };
         Returns: { membership_id: string; display_name: string }[];
@@ -1213,6 +1239,7 @@ export type Database = {
         Returns: {
           actor_name: string;
           auth: string;
+          circle_name: string;
           endpoint: string;
           moment_id: string;
           moment_kind: string;

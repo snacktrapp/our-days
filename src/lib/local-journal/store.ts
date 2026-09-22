@@ -586,6 +586,7 @@ export async function createLocalInsightMoment(
 export async function updateLocalWrittenMoment(
   access: LocalAccess,
   input: Readonly<{
+    shareToCircleId?: string;
     momentId: string;
     revision: number;
     title: string;
@@ -619,23 +620,32 @@ export async function updateLocalWrittenMoment(
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
+    const sharing = input.shareToCircleId !== undefined;
+    if (
+      sharing &&
+      (current.audience !== "just_me" ||
+        current.recordedByMembershipId !== access.membershipId)
+    ) {
+      throw new Error("That moment could not be shared.");
+    }
     const audience = resolvedAudience(
       access,
       current.journalPersonId,
-      input.audience ?? current.audience,
+      sharing ? "family" : (input.audience ?? current.audience),
     );
     const primaryCircleId = current.circleId ?? document.circle.id;
     const allowed = postableCircleIdsForAccess(document, access);
-    const nextCircleIds =
-      input.circleIds === undefined
+    const nextCircleIds = sharing
+      ? [input.shareToCircleId!]
+      : input.circleIds === undefined
         ? current.circleIds
         : audience === "just_me"
           ? undefined
           : [...new Set(input.circleIds)];
-    if (audience === "family" && input.circleIds !== undefined) {
+    if (audience === "family" && (sharing || input.circleIds !== undefined)) {
       if (
         !nextCircleIds?.length ||
-        !nextCircleIds.includes(primaryCircleId) ||
+        (!sharing && !nextCircleIds.includes(primaryCircleId)) ||
         nextCircleIds.some((id) => !allowed.has(id))
       ) {
         throw new Error("That moment could not be changed.");
