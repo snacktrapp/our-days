@@ -314,6 +314,7 @@ export function MomentComposer({
   const router = useRouter();
   const pathname = usePathname();
   const [savingEdit, setSavingEdit] = useState(false);
+  const [shareToCircleId, setShareToCircleId] = useState("");
   const saving = savingEdit;
   const [mode, setMode] = useState<ComposerMode | null>(
     editDraft?.mode ?? null,
@@ -466,7 +467,8 @@ export function MomentComposer({
     .map((item) => item.existingPhotoId ?? item.file?.name ?? item.key)
     .join(",");
   const isDirty = editDraft
-    ? body !== editDraft.body ||
+    ? Boolean(shareToCircleId) ||
+      body !== editDraft.body ||
       title !== editDraft.title ||
       verseSelection.book !== editDraft.verseSelection.book ||
       verseSelection.chapter !== editDraft.verseSelection.chapter ||
@@ -572,6 +574,7 @@ export function MomentComposer({
       setChoosingMode(false);
       setReviewing(false);
       setBody("");
+      setShareToCircleId("");
       setTitle("");
       setVerseSelection(emptyBibleVerseSelection);
       setOccurredOn(model.previewToday);
@@ -1230,6 +1233,27 @@ export function MomentComposer({
 
     if (editDraft) {
       const savedMode = mode;
+      if (shareToCircleId) {
+        if (
+          editDraft.existingMedia?.kind === "photo" &&
+          currentPhotoSignature !== existingPhotoSignature
+        ) {
+          setSaveError(
+            "Save your photo changes first, then reopen Edit to share this post.",
+          );
+          return;
+        }
+        const circle = postableCircles.find(
+          (item) => item.id === shareToCircleId,
+        );
+        if (
+          !circle ||
+          !window.confirm(
+            `Everyone in ${circle.name} will be able to see this post, including your comments and reactions. Share it?`,
+          )
+        )
+          return;
+      }
       const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
       const savedTitle = title.trim();
       const savedBody =
@@ -1254,7 +1278,7 @@ export function MomentComposer({
           occurredAt,
           occurredTimezone,
           audience,
-          circleIds: postableCircles.length ? saveCircleIds : undefined,
+          shareToCircleId: shareToCircleId || undefined,
         });
         if (!result.ok) {
           setSaveError(result.message);
@@ -2204,14 +2228,43 @@ export function MomentComposer({
                   onDateChange={setOccurredOn}
                   onTimeChange={setOccurredTime}
                 />
-                {postableCircles.length === 0 ? null : (
+                {editDraft ? (
+                  editDraft.audience === "just_me" &&
+                  postableCircles.length > 0 ? (
+                    <div className="composer-select-field">
+                      <label htmlFor="share-private-circle">
+                        Share to a circle
+                      </label>
+                      <select
+                        id="share-private-circle"
+                        value={shareToCircleId}
+                        disabled={saving}
+                        onChange={(event) =>
+                          setShareToCircleId(event.target.value)
+                        }
+                      >
+                        <option value="">Keep Just me</option>
+                        {postableCircles.map((circle) => (
+                          <option key={circle.id} value={circle.id}>
+                            {circle.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span
+                        className="composer-select-arrow"
+                        aria-hidden="true"
+                      >
+                        ⌄
+                      </span>
+                    </div>
+                  ) : null
+                ) : postableCircles.length === 0 ? null : (
                   <PostToField
                     circles={postableCircles}
                     selectedIds={orderedCircleIds}
                     justMe={audience === "just_me"}
                     justMeAllowed={justMeAllowed}
                     currentCircleId={model.circleId}
-                    lockedCircleId={editDraft?.circleId}
                     onChange={choosePostTo}
                   />
                 )}

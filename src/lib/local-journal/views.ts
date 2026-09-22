@@ -782,7 +782,10 @@ function visibleMoments(
         return false;
       }
       if (moment.journalPersonId !== journalPersonId) return false;
-      if (moment.audience !== "just_me") return true;
+      if (moment.audience !== "just_me")
+        return momentLinkedCircleIds(moment, document.circle.id).some(
+          (circleId) => viewerCircleIds.has(circleId),
+        );
       return (
         moment.recordedByMembershipId === access.membershipId &&
         moment.journalPersonId === access.personId

@@ -151,12 +151,14 @@ select is(
     'set_my_profile_color(color text)',
     'set_person_guardian(managed_person_id uuid, guardian_membership_id uuid, grant_access boolean)',
     'set_written_moment_trashed(moment_id uuid, expected_revision bigint, trashed boolean)',
+    'share_private_moment(moment_id uuid, expected_revision bigint, destination_circle_id uuid, moment_title text, moment_body text, place_name text, tagged_person_ids uuid[], occurred_on date, occurred_at timestamp with time zone, occurred_timezone text, latitude double precision, longitude double precision)',
     'sweep_expired_invitation_email_requests(batch_limit integer)',
     'trash_moment_note(note_id uuid, expected_revision bigint)',
     'update_circle(circle_id uuid, circle_name text)',
     'update_family_moment(moment_id uuid, expected_revision bigint, moment_title text, moment_body text, place_name text, tagged_person_ids uuid[], occurred_on date, occurred_at timestamp with time zone, occurred_timezone text, latitude double precision, longitude double precision, audience text)',
     'update_moment_note(note_id uuid, expected_revision bigint, body text)',
     'update_written_moment(moment_id uuid, expected_revision bigint, body text, occurred_on date, occurred_at timestamp with time zone, occurred_timezone text)',
+    'visible_moment_authors(membership_ids uuid[])',
     'withdraw_invitation_email_request(email_request_id uuid)'
   ]::text[],
   'the public RPC catalog exactly matches the reviewed signatures'
@@ -240,12 +242,14 @@ select is(
     'set_my_profile_color:authenticated:EXECUTE',
     'set_person_guardian:authenticated:EXECUTE',
     'set_written_moment_trashed:authenticated:EXECUTE',
+    'share_private_moment:authenticated:EXECUTE',
     'sweep_expired_invitation_email_requests:authenticated:EXECUTE',
     'trash_moment_note:authenticated:EXECUTE',
     'update_circle:authenticated:EXECUTE',
     'update_family_moment:authenticated:EXECUTE',
     'update_moment_note:authenticated:EXECUTE',
     'update_written_moment:authenticated:EXECUTE',
+    'visible_moment_authors:authenticated:EXECUTE',
     'withdraw_invitation_email_request:authenticated:EXECUTE'
   ]::text[],
   'browser-facing public RPC ACLs exactly match the reviewed allowlist'
@@ -365,6 +369,7 @@ select is(
     'lock_photo_validator_if_allowed(requested_auth_user_id uuid)',
     'materialize_invitation_delivery_job(requested_invitation_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
     'materialize_target_bound_invitation_job(requested_job_id uuid, requested_delivery_version integer, requested_token_sha256_hex text)',
+    'moment_actor_membership(target_moment_id uuid)',
     'moment_tagged_people(requested_moment_id uuid)',
     'photo_capability_is_enabled(requested_capability text)',
     'photo_derivative_source_is_readable(requested_object_path text, requested_storage_object_id uuid, requested_storage_object_version text)',
@@ -406,6 +411,7 @@ select is(
     'set_my_profile_color(color text)',
     'set_person_guardian(requested_managed_person_id uuid, requested_guardian_membership_id uuid, grant_access boolean)',
     'set_written_moment_trashed(target_moment_id uuid, expected_revision bigint, requested_trashed boolean)',
+    'share_private_moment(moment_id uuid, expected_revision bigint, destination_circle_id uuid, moment_title text, moment_body text, place_name text, tagged_person_ids uuid[], occurred_on date, occurred_at timestamp with time zone, occurred_timezone text, latitude double precision, longitude double precision)',
     'store_media_request_circle_ids(requested_kind text, requested_request_id uuid, requested_circle_ids uuid[])',
     'sweep_expired_invitation_email_requests(requested_limit integer)',
     'sync_invitation_email_request_after_job_invalidation()',
@@ -420,6 +426,7 @@ select is(
     'video_poster_path_is_uploadable(requested_object_path text, requested_owner_id text)',
     'video_requester_is_authorized(requested_request_id uuid)',
     'video_upload_path_is_uploadable(requested_object_path text, requested_owner_id text, requested_user_metadata jsonb)',
+    'visible_moment_authors(membership_ids uuid[])',
     'withdraw_invitation_email_request(requested_email_request_id uuid)'
   ]::text[],
   'the private security-definer catalog exactly matches the reviewed signatures'

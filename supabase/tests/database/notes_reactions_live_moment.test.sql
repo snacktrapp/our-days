@@ -84,14 +84,12 @@ select is(
   'a Harbor-only member cannot read notes on a Cedar-only moment'
 );
 
-select throws_ok(
+select lives_ok(
   $$select public.create_moment_note(
     (select id from public.moments where body = 'A porch note for both circles.'),
-    'Harbor cannot write without a Cedar membership.'
+    'Harbor can participate through its shared audience.'
   )$$,
-  '42501',
-  'Note could not be saved',
-  'a Harbor-only member still cannot write a note on a Cedar-primary moment'
+  'a Harbor-only member can now write a note on a linked moment'
 );
 
 select * from finish();

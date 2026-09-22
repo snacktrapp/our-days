@@ -408,7 +408,7 @@ async function loadOptionalJournalActivity(
         supabase
           .from("moment_notes")
           .select(
-            "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, moment_circles(circle_id), author:circle_memberships!moments_recorded_by_membership_fkey(people!circle_memberships_person_fkey(display_name)))",
+            "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, recorded_by_membership_id, moment_circles(circle_id), author:circle_memberships!moments_recorded_by_membership_fkey(people!circle_memberships_person_fkey(display_name)))",
           )
           .in("author_membership_id", [...myMembershipIds])
           .is("trashed_at", null),
@@ -422,8 +422,28 @@ async function loadOptionalJournalActivity(
     const visibleCircleByMomentId = new Map<string, string>();
     const commentedSince = new Map<string, string>();
     const postAuthorNames = new Map<string, string>();
+    const missingPostAuthorIds = [
+      ...new Set(
+        (ownNotesResult.data ?? [])
+          .filter((note) => !note.moments.author?.people?.display_name)
+          .map((note) => note.moments.recorded_by_membership_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const resolvedPostAuthorNames = new Map<string, string>();
+    if (missingPostAuthorIds.length > 0) {
+      const result = await supabase.rpc("visible_moment_authors", {
+        membership_ids: missingPostAuthorIds,
+      });
+      if (result.error) throw result.error;
+      for (const author of result.data ?? []) {
+        resolvedPostAuthorNames.set(author.membership_id, author.display_name);
+      }
+    }
     for (const note of ownNotesResult.data ?? []) {
-      const authorName = note.moments.author?.people?.display_name;
+      const authorName =
+        note.moments.author?.people?.display_name ??
+        resolvedPostAuthorNames.get(note.moments.recorded_by_membership_id);
       if (authorName) postAuthorNames.set(note.moment_id, authorName);
       const first = commentedSince.get(note.moment_id);
       if (!first || note.created_at < first)
@@ -572,6 +592,15 @@ export async function loadJournalActivityNotifications(
       if (result.error) throw result.error;
       for (const row of result.data ?? [])
         names.set(row.id, row.people.display_name);
+      const missingIds = actorIds.filter((id) => !names.has(id));
+      if (missingIds.length > 0) {
+        const visible = await supabase.rpc("visible_moment_authors", {
+          membership_ids: missingIds,
+        });
+        if (visible.error) throw visible.error;
+        for (const author of visible.data ?? [])
+          names.set(author.membership_id, author.display_name);
+      }
     }
     return buildActivityNotifications(
       activity.notes,

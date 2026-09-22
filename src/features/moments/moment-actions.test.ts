@@ -58,6 +58,48 @@ const personId = "30000000-0000-4000-8000-000000000001";
 const momentId = "60000000-0000-4000-8000-000000000001";
 
 describe("written moment actions", () => {
+  it("shares content through one atomic RPC and never falls back on failure", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: 3, error: null });
+    const input = {
+      momentId,
+      revision: 1,
+      title: "",
+      body: "Private words",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-28",
+      occurredAt: null,
+      occurredTimezone: null,
+      audience: "just_me" as const,
+      shareToCircleId: "20000000-0000-4000-8000-000000000002",
+    };
+    expect(await updateFamilyMomentAction(input)).toMatchObject({
+      ok: true,
+      revision: 3,
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "share_private_moment",
+      expect.objectContaining({
+        destination_circle_id: input.shareToCircleId,
+        moment_body: "Private words",
+      }),
+    );
+    mocks.rpc
+      .mockClear()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } });
+    expect(await updateFamilyMomentAction(input)).toMatchObject({ ok: false });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.deliver).not.toHaveBeenCalled();
+    mocks.rpc.mockClear();
+    expect(
+      await updateFamilyMomentAction({
+        ...input,
+        shareToCircleId: "20000000-0000-4000-8000-000000000099",
+      }),
+    ).toMatchObject({ ok: false });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://journal.example.com");
     mocks.getHeaders.mockResolvedValue(
