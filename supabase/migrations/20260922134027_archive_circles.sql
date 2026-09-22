@@ -1,7 +1,7 @@
 -- Archive is reversible and leaves identity, subscriptions and history intact.
 alter table public.circles add column archived_at timestamptz;
 
-create function public.set_circle_archived(target_circle_id uuid, archive boolean)
+create function private.set_circle_archived(target_circle_id uuid, archive boolean)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
   if auth.uid() is null or private.account_closure_is_blocking(auth.uid()) or archive is null or not exists (
@@ -14,6 +14,12 @@ begin
   update public.circles set archived_at = case when archive then coalesce(archived_at, now()) else null end
     where id = target_circle_id;
 end;
+$$;
+revoke all on function private.set_circle_archived(uuid, boolean) from public, anon;
+grant execute on function private.set_circle_archived(uuid, boolean) to authenticated;
+create function public.set_circle_archived(target_circle_id uuid, archive boolean)
+returns void language sql security invoker set search_path = '' as $$
+  select private.set_circle_archived(target_circle_id, archive);
 $$;
 revoke all on function public.set_circle_archived(uuid, boolean) from public, anon;
 grant execute on function public.set_circle_archived(uuid, boolean) to authenticated;
