@@ -1662,34 +1662,16 @@ export function MomentComposer({
               <div className="moment-choices">
                 {!connectedExperience || connectedPhotoAvailable ? (
                   <button onClick={() => chooseMode("photo")}>
-                    <span
-                      className="choice-icon photo-choice"
-                      aria-hidden="true"
-                    >
-                      ▣
-                    </span>
                     <strong>Photo or video</strong>
                     <small>Media with date and note</small>
                   </button>
                 ) : null}
                 <button onClick={() => chooseMode("thought")}>
-                  <span
-                    className="choice-icon thought-choice"
-                    aria-hidden="true"
-                  >
-                    “
-                  </span>
                   <strong>Written entry</strong>
                   <small>Text, date, and details</small>
                 </button>
                 {!connectedExperience || connectedFamily ? (
                   <button onClick={() => chooseMode("bible-verse")}>
-                    <span
-                      className="choice-icon bible-choice"
-                      aria-hidden="true"
-                    >
-                      †
-                    </span>
                     <strong>Bible verse</strong>
                     <small>Choose a passage</small>
                   </button>
@@ -1701,12 +1683,6 @@ export function MomentComposer({
                     void refreshDrafts();
                   }}
                 >
-                  <span
-                    className="choice-icon drafts-choice"
-                    aria-hidden="true"
-                  >
-                    ≡
-                  </span>
                   <span className="composer-drafts-choice-label">
                     <strong>Drafts</strong>
                     {drafts.length > 0 ? (
