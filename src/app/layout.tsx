@@ -10,9 +10,9 @@ const metadataBase = resolveMetadataBase();
 
 export const metadata: Metadata = {
   metadataBase,
-  title: "Our Days — Private Family Journal",
+  title: "Our Days — Private Journal",
   description:
-    "A quiet, private place for a family to keep the story of its life.",
+    "A private journal for your life and the people you share it with.",
   robots: { index: false, follow: false },
   icons: {
     icon: [
@@ -32,13 +32,13 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Our Days",
-    description: "A quiet, private family journal.",
+    description: "A quiet, private journal.",
     images: ["/og.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "Our Days",
-    description: "A quiet, private family journal.",
+    description: "A quiet, private journal.",
     images: ["/og.png"],
   },
 };

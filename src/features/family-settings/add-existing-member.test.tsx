@@ -37,6 +37,13 @@ describe("add an existing member", () => {
         actions={actions}
       />,
     );
+    const summary = screen
+      .getByText("Add from an existing circle")
+      .closest("summary");
+    expect(
+      summary?.querySelector(".circle-accordion-chevron svg"),
+    ).not.toBeNull();
+    expect(summary?.parentElement).toHaveClass("settings-disclosure");
     await user.click(screen.getByText("Add from an existing circle"));
     await user.selectOptions(screen.getByLabelText("From circle"), "home");
     await user.selectOptions(await screen.findByLabelText("Person"), "heidi");

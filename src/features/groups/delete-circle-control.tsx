@@ -25,7 +25,10 @@ export function DeleteCircleControl({
           <button
             type="button"
             disabled={pending}
-            onClick={() => setConfirming(false)}
+            onClick={() => {
+              setConfirming(false);
+              setMessage("");
+            }}
           >
             Cancel
           </button>
@@ -53,7 +56,13 @@ export function DeleteCircleControl({
           </button>
         </>
       ) : (
-        <button type="button" onClick={() => setConfirming(true)}>
+        <button
+          type="button"
+          onClick={() => {
+            setConfirming(true);
+            setMessage("");
+          }}
+        >
           Delete unused circle
         </button>
       )}

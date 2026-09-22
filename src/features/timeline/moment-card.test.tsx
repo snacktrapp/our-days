@@ -66,7 +66,7 @@ function doubleTap(target: Element) {
 }
 
 describe("MomentCard double-tap heart", () => {
-  it("hearts another family member's note with the existing heart reaction", async () => {
+  it("hearts another member's note with the existing heart reaction", async () => {
     const actions = conversationActions();
     render(
       <MomentCard

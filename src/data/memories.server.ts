@@ -354,7 +354,7 @@ export async function loadConnectedMemoryJourney(
       options.mode === "year"
         ? "Browse by year"
         : options.mode === "milestones"
-          ? "Family milestones"
+          ? "Circle milestones"
           : "On this day · Across the years",
     title,
     description:
@@ -387,7 +387,7 @@ export async function loadConnectedMemoryJourney(
             ? {
                 title: "No milestones have been marked yet",
                 description:
-                  "Milestones added to the family journal will gather here in their true order.",
+                  "Milestones added to the journal will gather here in their true order.",
               }
             : {
                 title: "No entries for this date",
@@ -412,7 +412,7 @@ export async function loadConnectedMemoryJourney(
         options.mode === "year"
           ? `Family moments from ${options.year}`
           : options.mode === "milestones"
-            ? "Family milestones in reverse chronological order"
+            ? "Circle milestones in reverse chronological order"
             : `Family moments from ${title} across the years`,
       interaction: connectedTimelineInteraction(access, context),
       entries: buildTimelineEntries(
@@ -423,7 +423,7 @@ export async function loadConnectedMemoryJourney(
         options.mode === "year"
           ? {
               markerLabel: `End of ${options.year}`,
-              message: "Every year becomes a chapter in the family’s story.",
+              message: "Every year becomes a chapter in your story.",
             }
           : options.mode === "milestones"
             ? {

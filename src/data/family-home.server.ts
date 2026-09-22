@@ -72,7 +72,7 @@ function familyHomeFrame(
       notifications: [],
     },
     switcher,
-    timelineLabel: "Chronological family moments",
+    timelineLabel: "Chronological moments",
     interaction: context
       ? connectedTimelineInteraction(access, context)
       : {

@@ -39,7 +39,7 @@ const context: ConnectedJournalContext = {
   chrome: {
     accent: "teal",
     title: "Cedar Circle",
-    eyebrow: "Our family",
+    eyebrow: "Our Days",
     familyMark: [],
     settingsHref: "/settings/family",
     memoriesHref: "/memories",
@@ -273,7 +273,7 @@ describe("connected family settings data", () => {
       expect.objectContaining({
         id: memberAccess.personId,
         membershipId: memberAccess.membershipId,
-        relationshipLabel: "Family member",
+        relationshipLabel: "Member",
         canManageRole: true,
         canReviewRemoval: true,
       }),

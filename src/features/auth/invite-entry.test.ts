@@ -36,9 +36,7 @@ describe("invitation entry recovery", () => {
     ).toBeVisible();
     expect(screen.getByLabelText("Email address")).toBeVisible();
     expect(screen.getByLabelText("Six-digit invitation code")).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Join family journal" }),
-    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Join circle" })).toBeEnabled();
     expect(screen.queryByText("Email me a code")).not.toBeInTheDocument();
   });
 

@@ -718,7 +718,7 @@ test("family title is tappable and optically centered in the top pill", async ({
     await summary.click();
     await expect(page.locator(".title-switcher")).toHaveAttribute("open", "");
     await expect(
-      page.getByRole("navigation", { name: "Choose a family timeline" }),
+      page.getByRole("navigation", { name: "Choose a journal" }),
     ).toBeVisible();
     await heading.click();
     await expect(page.locator(".title-switcher")).not.toHaveAttribute("open");

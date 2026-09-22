@@ -45,7 +45,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   ).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
-    page.getByRole("navigation", { name: "Choose a family timeline" }),
+    page.getByRole("navigation", { name: "Choose a journal" }),
   ).toHaveCount(0);
   await expect(page.locator(".family-settings-panel")).toHaveCSS(
     "min-height",
@@ -56,7 +56,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await expect(page.getByText("Operations")).toBeVisible();
   await expect(page.getByText("TARS")).toBeVisible();
   await expect(
-    page.getByText(/no accounts or permissions are active/u),
+    page.getByText(/No accounts or access are changed/u),
   ).toBeVisible();
 
   const input = page.getByRole("textbox", { name: "Email address" });
@@ -78,9 +78,10 @@ test("family settings makes access and invitation boundaries explicit", async ({
     const action = page.getByRole("button", { name });
     await action.scrollIntoViewIfNeeded();
     await expect(action).toBeInViewport();
+    await action.click({ trial: true });
   }
   await expect(
-    page.getByText(/see its family moments, photos, notes, people/u),
+    page.getByText(/see and contribute to this circle/u),
   ).toBeVisible();
   await expect(
     page.getByText(/Our Days did not send email or create an invite/u),
@@ -104,7 +105,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
   await expect(accessHeading).toBeFocused();
   await expect(accessHeading).toBeInViewport();
   await expect(
-    page.getByText(/Access removal does not delete their account or content/u),
+    page.getByText(/Their account and existing posts would remain/u),
   ).toBeVisible();
   await expect(page.getByText(/No access is changed/u)).toBeVisible();
   await expect(page.getByRole("button", { name: /remove/u })).toHaveCount(0);

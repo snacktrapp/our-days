@@ -44,9 +44,10 @@ describe("sign-in cleanup gate", () => {
   it("shows Google and X first, with the email magic link as backup", () => {
     render(createElement(PrivateEntry, { connected: true }));
 
-    expect(screen.getByText("Our Days")).toBeVisible();
+    expect(screen.getByRole("img", { name: "Our Days" })).toBeVisible();
+    expect(document.querySelector(".private-entry-mark")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Open your family journal." }),
+      screen.getByRole("heading", { name: "Open your journal." }),
     ).toBeVisible();
     const google = screen.getByRole("link", { name: "Sign in with Google" });
     const x = screen.getByRole("link", { name: "Sign in with X" });
@@ -60,7 +61,9 @@ describe("sign-in cleanup gate", () => {
       screen.getByRole("button", { name: "Email me a sign-in link" }),
     ).toBeVisible();
     expect(
-      screen.getByText("Use the Google or X account your family invited."),
+      screen.getByText(
+        "Use the Google or X account that received your invitation.",
+      ),
     ).toBeVisible();
     expect(screen.getByText("Or email a private sign-in link")).toBeVisible();
   });

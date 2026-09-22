@@ -12,7 +12,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await page.getByRole("button", { name: "Choose a journal" }).click();
   await expect(
     page
-      .getByRole("navigation", { name: "Choose a family timeline" })
+      .getByRole("navigation", { name: "Choose a journal" })
       .getByRole("link"),
   ).toHaveText(["Just me", "All circles"]);
   await page.keyboard.press("Escape");

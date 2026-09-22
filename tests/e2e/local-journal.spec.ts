@@ -197,7 +197,7 @@ test("Activity refreshes on each open and recovers from a failed refresh", async
   await expect(
     dialog.getByText("Activity couldn’t be refreshed."),
   ).toBeVisible();
-  await expect(dialog.getByText("No new family activity.")).toHaveCount(0);
+  await expect(dialog.getByText("No new activity.")).toHaveCount(0);
   fail = false;
   await dialog.getByRole("button", { name: "Try again" }).click();
   await expect(dialog.getByText("Activity couldn’t be refreshed.")).toHaveCount(
@@ -287,7 +287,7 @@ test("header touch selection survives a focusless blur and opens the signed-in j
   await trigger.tap();
   await page.getByRole("link", { name: "All circles", exact: true }).tap();
   await expect(page).toHaveURL(/\/family$/);
-  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await expect(page.getByLabel("Chronological moments")).toBeVisible();
 });
 
 test("navigation keeps the same controls and chosen title through a delayed feed", async ({
@@ -298,7 +298,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await expect(page.getByLabel("Chronological moments")).toBeVisible();
   await page.evaluate(() => {
     const nav = document.querySelector(".bottom-nav");
     const header = document.querySelector(".topbar");
@@ -421,7 +421,7 @@ test("cold open paints usable Family content after sign-in", async ({
   await expect(
     page.getByRole("button", { name: "Add", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("Chronological family moments")).toBeVisible();
+  await expect(page.getByLabel("Chronological moments")).toBeVisible();
   await expect(page.getByLabel("Opening this journal")).toHaveCount(0);
   // The first nav in the streamed HTML is the loading shell, before client
   // hydration or feed data. Its icons must not be empty placeholder spans.
@@ -562,7 +562,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
 }) => {
   await page.goto("/sign-in");
   await expect(
-    page.getByRole("heading", { name: "Open your family journal." }),
+    page.getByRole("heading", { name: "Open your journal." }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Sign in with Google" }),
@@ -586,7 +586,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
     page
-      .getByLabel("Chronological family moments")
+      .getByLabel("Chronological moments")
       .getByText("Casey left a pebble on the porch."),
   ).toBeVisible({
     timeout: 15_000,
@@ -603,9 +603,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await page.getByRole("textbox", { name: "Note" }).fill("The last warm hour.");
   await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
-    page
-      .getByLabel("Chronological family moments")
-      .getByText("The last warm hour."),
+    page.getByLabel("Chronological moments").getByText("The last warm hour."),
   ).toBeVisible({
     timeout: 20_000,
   });
@@ -626,9 +624,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await page.getByRole("textbox", { name: "Note" }).fill("A one-second wave.");
   await page.getByRole("button", { name: "Post", exact: true }).click();
   await expect(
-    page
-      .getByLabel("Chronological family moments")
-      .getByText("A one-second wave."),
+    page.getByLabel("Chronological moments").getByText("A one-second wave."),
   ).toBeVisible({
     timeout: 20_000,
   });
@@ -714,12 +710,12 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
   ).toHaveText("Just me");
 
   await page.goto("/family");
-  await expect(page.getByLabel("Chronological family moments")).toBeVisible({
+  await expect(page.getByLabel("Chronological moments")).toBeVisible({
     timeout: 15_000,
   });
   await expect(
     page
-      .getByLabel("Chronological family moments")
+      .getByLabel("Chronological moments")
       .getByText("A porch thought just for me."),
   ).toBeVisible();
 

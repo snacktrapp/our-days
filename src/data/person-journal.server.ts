@@ -89,7 +89,7 @@ function remountSoftFailTimeline(
     switcher,
     timelineLabel: person
       ? `Chronological moments for ${person.name}`
-      : "Chronological family moments",
+      : "Chronological moments",
     personalIntro: person
       ? {
           initial: person.initial,

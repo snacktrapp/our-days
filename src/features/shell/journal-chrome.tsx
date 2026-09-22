@@ -114,7 +114,7 @@ function TrashHeader({ model }: Readonly<{ model: JournalChromeViewModel }>) {
       <StaticJournalTitle model={model} />
       <Link
         className="quiet-button settings-close-link"
-        aria-label="Back to Family"
+        aria-label="Back to Journal"
         href="/family"
         prefetch={false}
       >
@@ -173,7 +173,7 @@ function JournalStage({
       <main className={`app-shell theme-${model.accent}`}>
         <div className="ambient ambient-one" />
         <div className="ambient ambient-two" />
-        <section className="phone-stage" aria-label="Family journal">
+        <section className="phone-stage" aria-label="Journal">
           <p
             id="journal-live-region"
             className="sr-only"

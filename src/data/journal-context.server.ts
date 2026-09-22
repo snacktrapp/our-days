@@ -857,7 +857,7 @@ export async function loadConnectedJournalContext(
   const chrome: JournalChromeViewModel = {
     accent: recorder.accent,
     title: circleResult.data.name,
-    eyebrow: "Our family",
+    eyebrow: "Our Days",
     familyMark: surface.familyMark,
     composer,
     timelineOptionsHref: "/trash",

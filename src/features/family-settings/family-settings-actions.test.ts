@@ -327,7 +327,7 @@ describe("family settings actions", () => {
   it("revokes membership through the narrow RPC and refreshes every access surface", async () => {
     await expect(
       revokeFamilyMembershipAction({ membershipId: otherMembershipId }),
-    ).resolves.toEqual({ ok: true, message: "Family access removed." });
+    ).resolves.toEqual({ ok: true, message: "Circle access removed." });
 
     expect(mocks.rpc).toHaveBeenCalledWith("revoke_membership", {
       membership_id: otherMembershipId,
@@ -655,7 +655,7 @@ describe("family settings actions", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      message: "That person is already a family member.",
+      message: "That person is already a member.",
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
@@ -698,7 +698,7 @@ describe("family settings actions", () => {
       revokeFamilyMembershipAction({ membershipId: otherMembershipId }),
     ).resolves.toEqual({
       ok: true,
-      message: "Family access was already removed.",
+      message: "Circle access was already removed.",
     });
     expect(mocks.rpc).not.toHaveBeenCalled();
     expect(mocks.revalidatePath.mock.calls).toEqual([
@@ -719,7 +719,7 @@ describe("family settings actions", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      message: "Journal guardian assigned.",
+      message: "Journal caregiver assigned.",
     });
     expect(mocks.from).toHaveBeenCalledWith("people");
     expect(mocks.from).toHaveBeenCalledWith("circle_memberships");

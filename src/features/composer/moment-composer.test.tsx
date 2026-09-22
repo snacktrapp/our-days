@@ -85,7 +85,7 @@ const people = [
     name: "Avery",
     initial: "A",
     accent: "ochre",
-    contextLabel: "Child journal",
+    contextLabel: "Managed journal",
   },
 ] as const;
 
@@ -1918,7 +1918,7 @@ describe("MomentComposer", () => {
       <>
         <p id="journal-live-region" aria-live="assertive" />
         <h1 id="journal-focus-target" tabIndex={-1}>
-          Our family
+          Our Days
         </h1>
         <MomentComposer
           model={{

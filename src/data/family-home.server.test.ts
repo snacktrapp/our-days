@@ -41,13 +41,13 @@ const access = {
 };
 
 const context = {
-  circleName: "Our family",
+  circleName: "Our Days",
   circleTimeZone: "America/Los_Angeles",
   today: "2026-09-13",
   chrome: {
     accent: "teal" as const,
-    title: "Our family",
-    eyebrow: "Our family",
+    title: "Our Days",
+    eyebrow: "Our Days",
     familyMark: [],
     composer: {
       experience: "connected-family" as const,
@@ -87,7 +87,7 @@ const timeline = {
       current: true,
     },
   ],
-  timelineLabel: "Chronological family moments",
+  timelineLabel: "Chronological moments",
   entries: [
     {
       id: "moment-1",

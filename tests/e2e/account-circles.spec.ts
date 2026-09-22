@@ -12,6 +12,11 @@ test("Account and Circles share the Journal's flat surfaces in both themes", asy
     ]) {
       await page.goto(path);
       await expect(page.locator(ready).first()).toBeVisible();
+      if (name !== "journal") {
+        expect(await page.locator("main").innerText()).not.toMatch(
+          /\b(family|relatives?)\b/i,
+        );
+      }
       await page.evaluate((value) => {
         document.documentElement.dataset.theme = value;
       }, theme);

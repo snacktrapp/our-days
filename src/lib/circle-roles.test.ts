@@ -35,7 +35,7 @@ describe("circle membership roles", () => {
     expect(canCreateInsight("member")).toBe(false);
   });
 
-  it("labels Operations distinctly from family members", () => {
+  it("labels Operations distinctly from members", () => {
     expect(familyMembershipRoleLabel("operations")).toBe("Operations");
     expect(journalDirectoryRoleLabel("account", "operations")).toBe(
       "Operations",

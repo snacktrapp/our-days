@@ -39,7 +39,7 @@ test("family journal paints and opens its journal selector @critical", async ({
   await page.goto("/family");
 
   await expect(
-    page.getByRole("region", { name: "Chronological family moments" }),
+    page.getByRole("region", { name: "Chronological moments" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "All circles" }),
@@ -52,7 +52,7 @@ test("family journal paints and opens its journal selector @critical", async ({
   const trigger = page.getByRole("button", { name: "Choose a journal" });
   await trigger.click();
   const dialog = page.getByRole("navigation", {
-    name: "Choose a family timeline",
+    name: "Choose a journal",
   });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("link")).toHaveText(["Just me", "All circles"]);

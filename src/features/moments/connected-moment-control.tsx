@@ -151,7 +151,7 @@ function ChangeableMomentControl({
   const trash = async () => {
     if (
       !window.confirm(
-        "Move this moment to trash? It will leave both family and personal timelines until restored.",
+        "Move this moment to trash? It will leave your timelines until restored.",
       )
     ) {
       return;

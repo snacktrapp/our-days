@@ -10,13 +10,13 @@ export default async function AccessUnavailablePage() {
 
   return (
     <main className="app-shell journal-error-shell">
-      <section className="phone-stage" aria-label="Private family journal">
+      <section className="phone-stage" aria-label="Private journal">
         <header className="topbar journal-error-topbar">
           <span className="family-mark" aria-hidden="true">
             <span className="family-mark-dot dot-teal">O</span>
           </span>
           <div className="title-lockup">
-            <span className="eyebrow">Private family journal</span>
+            <span className="eyebrow">Private journal</span>
             <h1 id="access-unavailable-title">Our Days</h1>
           </div>
           <span className="quiet-button" aria-hidden="true" />
@@ -30,9 +30,9 @@ export default async function AccessUnavailablePage() {
             <span>Private boundary</span>
           </div>
           <div className="timeline-empty-state" role="alert">
-            <strong>This account does not have family access</strong>
+            <strong>This account does not have circle access</strong>
             <span>
-              Ask a family organizer for a current invitation if you should have
+              Ask a circle organizer for a current invitation if you should have
               access.
             </span>
             <SignOutButton />

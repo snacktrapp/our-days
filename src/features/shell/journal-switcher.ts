@@ -108,7 +108,7 @@ export function buildJournalSwitcher(input: {
       : [
           {
             id: input.activeGroupId ?? "family",
-            name: input.groupLabel ?? "Our family",
+            name: input.groupLabel ?? "Our Days",
           },
         ];
   const currentHref = input.currentHref;
