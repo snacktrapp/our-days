@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { FamilySettingsPanel } from "@/features/family-settings/family-settings-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
@@ -111,17 +110,11 @@ export default async function AccountScreen({
       <JournalChrome
         model={{
           ...model.chrome,
-          title: manageCircles ? "Manage circles" : "Account",
+          title: manageCircles ? "Circles" : "Account",
         }}
         section={manageCircles ? "circles" : "settings"}
       >
-        {manageCircles ? (
-          <Link className="circle-back-link" href="/circles">
-            Back to Circles
-          </Link>
-        ) : (
-          <ProfileColorSettings model={model.panel} />
-        )}
+        {!manageCircles ? <ProfileColorSettings model={model.panel} /> : null}
         {manageCircles ? (
           <FamilySettingsPanel
             model={model.panel}
@@ -215,18 +208,12 @@ export default async function AccountScreen({
     <JournalChrome
       model={{
         ...model.chrome,
-        title: manageCircles ? "Manage circles" : "Account",
+        title: manageCircles ? "Circles" : "Account",
       }}
       section={manageCircles ? "circles" : "settings"}
       createMomentAction={createFamilyMomentAction}
     >
-      {manageCircles ? (
-        <Link className="circle-back-link" href="/circles">
-          Back to Circles
-        </Link>
-      ) : (
-        <ProfileColorSettings model={model.panel} />
-      )}
+      {!manageCircles ? <ProfileColorSettings model={model.panel} /> : null}
       {manageCircles ? (
         <FamilySettingsPanel
           model={model.panel}

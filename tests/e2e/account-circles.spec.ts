@@ -8,7 +8,6 @@ test("Account and Circles share the Journal's flat surfaces in both themes", asy
       ["journal", "/family", ".moment-card"],
       ["account", "/settings/family", ".profile-color-preview"],
       ["circles", "/circles", ".circle-directory-heading"],
-      ["manage", "/circles/manage", ".circles-section"],
     ]) {
       await page.goto(path);
       await expect(page.locator(ready).first()).toBeVisible();
@@ -65,16 +64,27 @@ test("Account is personal; circle creation and management live under Circles", a
     .click();
   await expect(page).toHaveURL(/\/circles$/);
   await expect(
-    page.locator(".circle-people-disclosure").first(),
-  ).not.toHaveAttribute("open");
+    page.locator(".circle-accordion-trigger").first(),
+  ).toHaveAttribute("aria-expanded", "false");
   await page.screenshot({
     path: "/tmp/our-days-circles-directory.png",
     fullPage: true,
   });
-  await page.getByRole("link", { name: "Manage circles", exact: true }).click();
-  await expect(page).toHaveURL(/\/circles\/manage$/);
+  await expect(
+    page.getByRole("link", { name: "Manage circles", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Open All our days circle feed" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /All our days/ }).click();
+  await expect(
+    page.getByRole("link", { name: "Molly View journal" }),
+  ).toBeVisible();
   const settings = page.getByRole("region", { name: "Circle settings" });
+  await page.screenshot({
+    path: `/tmp/our-days-circles-expanded-${test.info().project.name}.png`,
+    fullPage: true,
+  });
   await expect(
     settings.getByRole("button", { name: "Delete circle" }),
   ).toBeVisible();
@@ -100,7 +110,7 @@ test("Account is personal; circle creation and management live under Circles", a
   await page
     .getByRole("button", { name: "Create circle", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/circles\/manage\?inviteCircle=created/);
+  await expect(page).toHaveURL(/\/circles\?inviteCircle=created/);
   await expect(
     page.getByRole("button", { name: /Friends.*1 person/ }),
   ).toHaveAttribute("aria-expanded", "true");
@@ -116,7 +126,17 @@ test("old circle invitation links reach circle management", async ({
   page,
 }) => {
   await page.goto("/settings/family?inviteCircle=created&name=Friends");
-  await expect(page).toHaveURL(/\/circles\/manage\?inviteCircle=created/);
+  await expect(page).toHaveURL(/\/circles\?inviteCircle=created/);
+  await expect(
+    page.getByRole("button", { name: /Friends.*1 person/ }),
+  ).toHaveAttribute("aria-expanded", "true");
+});
+
+test("old management links open the same circle on Circles", async ({
+  page,
+}) => {
+  await page.goto("/circles/manage?inviteCircle=created&name=Friends");
+  await expect(page).toHaveURL(/\/circles\?inviteCircle=created&name=Friends/);
   await expect(
     page.getByRole("button", { name: /Friends.*1 person/ }),
   ).toHaveAttribute("aria-expanded", "true");

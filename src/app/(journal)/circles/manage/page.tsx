@@ -1,16 +1,13 @@
-import AccountScreen from "@/features/family-settings/account-screen";
-import { getFamilySettingsFixture } from "@/fixtures/design-preview/timelines.server";
+import { redirect } from "next/navigation";
 
-export default function ManageCirclesPage({
+export default async function ManageCirclesPage({
   searchParams,
 }: {
   searchParams: Promise<{ inviteCircle?: string; name?: string }>;
 }) {
-  return (
-    <AccountScreen
-      searchParams={searchParams}
-      manageCircles
-      loadPreview={getFamilySettingsFixture}
-    />
-  );
+  const { inviteCircle, name } = await searchParams;
+  const params = new URLSearchParams();
+  if (inviteCircle) params.set("inviteCircle", inviteCircle);
+  if (name) params.set("name", name);
+  redirect(`/circles${params.size ? `?${params}` : ""}`);
 }

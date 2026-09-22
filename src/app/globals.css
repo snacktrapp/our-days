@@ -1101,7 +1101,8 @@ button {
   font-size: 12px;
   text-decoration: none;
 }
-.people-group > .circle-directory-heading {
+.people-group > .circle-directory-heading,
+.circle-accordion-item > .circle-directory-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -2939,7 +2940,7 @@ span.moment-place-line {
 }
 .circle-accordion-trigger {
   width: 100%;
-  min-height: 72px;
+  min-height: 44px;
   padding: 10px 13px;
   display: flex;
   align-items: center;
@@ -2949,6 +2950,25 @@ span.moment-place-line {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+.circle-member-actions {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+}
+.access-list li:has(.circle-member-actions) {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.circle-member-actions a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  font: var(--chrome-meta);
+  text-decoration: none;
 }
 .circle-accordion-trigger .access-member-copy {
   flex: 1;

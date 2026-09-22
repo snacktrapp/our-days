@@ -220,6 +220,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
+  await page.locator(".circle-accordion-trigger").first().click();
   await page
     .locator(
       `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,

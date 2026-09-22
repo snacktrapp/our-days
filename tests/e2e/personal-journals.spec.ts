@@ -42,7 +42,8 @@ test("Circles opens five distinct, owner-correct personal journals", async ({
   page,
 }) => {
   await page.goto("/circles");
-  const journalLinks = page.locator(".people-list a");
+  await page.locator(".circle-accordion-trigger").first().click();
+  const journalLinks = page.locator(".circle-member-actions a");
   await expect(journalLinks).toHaveCount(5);
   expect(
     await journalLinks.evaluateAll((links) =>
@@ -121,6 +122,7 @@ test("composer posts onto the recorder journal and hides the Journal picker", as
   await expect(page.getByRole("dialog")).toBeHidden();
 
   await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.locator(".circle-accordion-trigger").first().click();
   await page.getByRole("link", { name: /Sam.*View journal/ }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: /Written entry/u }).click();

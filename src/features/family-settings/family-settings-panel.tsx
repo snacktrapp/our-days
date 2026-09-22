@@ -1,5 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { groupHomeHref } from "@/features/shell/journal-switcher";
+import { withCircleBrowseContext } from "@/features/shell/journal-routes";
+
 import { DeleteCircleControl } from "@/features/groups/delete-circle-control";
 import { SettingsDisclosure } from "./settings-disclosure";
 
@@ -174,6 +178,7 @@ function FirstMembersInvitePrompt({
 }
 
 function MemberList({
+  circleId,
   members,
   currentMemberId,
   mode,
@@ -186,6 +191,7 @@ function MemberList({
   setInvitationReviewId,
   invitationTriggerRef,
 }: {
+  circleId: string;
   members: readonly FamilyAccessMemberViewModel[];
   currentMemberId: string;
   mode: "preview" | "connected";
@@ -216,34 +222,45 @@ function MemberList({
             <small>{member.relationshipLabel}</small>
             <span>{member.accessLabel}</span>
           </span>
-          {member.canReviewRemoval ||
-          (mode === "connected" &&
-            (member.canManageRole || member.canManageJournal)) ? (
-            <button
-              type="button"
-              aria-label={
-                mode === "connected"
+          <span className="circle-member-actions">
+            {member.role !== "operations" ? (
+              <Link
+                href={withCircleBrowseContext(`/people/${member.id}`, circleId)}
+                prefetch={false}
+                aria-label={`${member.name} View journal`}
+              >
+                View journal
+              </Link>
+            ) : null}
+            {member.canReviewRemoval ||
+            (mode === "connected" &&
+              (member.canManageRole || member.canManageJournal)) ? (
+              <button
+                type="button"
+                aria-label={
+                  mode === "connected"
+                    ? member.profileKind === "managed"
+                      ? `Manage journal for ${member.name}`
+                      : `Manage role and access for ${member.name}`
+                    : `Review access for ${member.name}`
+                }
+                disabled={disabled}
+                aria-expanded={reviewId === member.id}
+                aria-controls="access-review"
+                onClick={(event) => {
+                  triggerRef.current = event.currentTarget;
+                  setInvitationReviewId?.(null);
+                  setReviewId(reviewId === member.id ? null : member.id);
+                }}
+              >
+                {mode === "connected"
                   ? member.profileKind === "managed"
-                    ? `Manage journal for ${member.name}`
-                    : `Manage role and access for ${member.name}`
-                  : `Review access for ${member.name}`
-              }
-              disabled={disabled}
-              aria-expanded={reviewId === member.id}
-              aria-controls="access-review"
-              onClick={(event) => {
-                triggerRef.current = event.currentTarget;
-                setInvitationReviewId?.(null);
-                setReviewId(reviewId === member.id ? null : member.id);
-              }}
-            >
-              {mode === "connected"
-                ? member.profileKind === "managed"
-                  ? "Manage journal"
-                  : "Manage"
-                : "Review access"}
-            </button>
-          ) : null}
+                    ? "Manage journal"
+                    : "Manage"
+                  : "Review access"}
+              </button>
+            ) : null}
+          </span>
         </li>
       ))}
       {pendingInvitations.map((item) => {
@@ -435,7 +452,7 @@ function CirclesAccordion({
       className="settings-section circles-section"
       aria-labelledby="your-groups-heading"
     >
-      <div className="settings-heading">
+      <div className="settings-heading sr-only">
         <h2 id="your-groups-heading">Your circles</h2>
       </div>
       <ul className="circle-accordion">
@@ -447,15 +464,26 @@ function CirclesAccordion({
               key={group.id}
               className={`circle-accordion-item${open ? " is-open" : ""}`}
             >
+              <div className="settings-heading circle-directory-heading">
+                <h2>{group.name}</h2>
+                <Link
+                  className="person-arrow circle-journal-link"
+                  href={groupHomeHref(group.id)}
+                  prefetch={false}
+                  aria-label={`Open ${group.name} circle feed`}
+                >
+                  View journal
+                </Link>
+              </div>
               <button
                 type="button"
                 className="circle-accordion-trigger"
                 aria-expanded={open}
                 aria-controls={panelId}
+                aria-label={`${group.name}, ${peopleCountLabel(countFamilyFacingMembers(group.members))}`}
                 onClick={() => onToggle(group.id)}
               >
                 <span className="access-member-copy">
-                  <strong>{group.name}</strong>
                   <small>
                     {peopleCountLabel(countFamilyFacingMembers(group.members))}
                   </small>
@@ -589,21 +617,22 @@ function PreviewFamilySettingsPanel({
         onToggle={toggleCircle}
         renderOpenCircle={(circle) => (
           <>
-            <RenameCircleForm
-              key={`${circle.id}:${circle.name}`}
-              circle={circle}
-              renameCircleAction={renameCircleAction}
-            />
-            <div className="settings-heading circle-access-heading">
+            <div className="settings-heading circle-access-heading sr-only">
               <h3 id="access-heading">People and access</h3>
             </div>
             <MemberList
+              circleId={circle.id}
               members={circle.members}
               currentMemberId={circle.currentMemberId}
               mode="preview"
               reviewId={accessReviewId}
               setReviewId={setAccessReviewId}
               triggerRef={accessTriggerRef}
+            />
+            <RenameCircleForm
+              key={`${circle.id}:${circle.name}`}
+              circle={circle}
+              renameCircleAction={renameCircleAction}
             />
             {accessReviewMember ? (
               <aside
@@ -1131,17 +1160,11 @@ function ConnectedFamilySettingsPanel({
         onToggle={toggleCircle}
         renderOpenCircle={(circle) => (
           <>
-            <RenameCircleForm
-              key={`${circle.id}:${circle.name}`}
-              circle={circle}
-              renameCircleAction={renameCircleAction}
-              disabled={isPending}
-              onResult={setResult}
-            />
-            <div className="settings-heading circle-access-heading">
+            <div className="settings-heading circle-access-heading sr-only">
               <h3 id="access-heading">People and access</h3>
             </div>
             <MemberList
+              circleId={circle.id}
               members={circle.members}
               currentMemberId={circle.currentMemberId}
               mode="connected"
@@ -1163,6 +1186,13 @@ function ConnectedFamilySettingsPanel({
                 setInvitationReviewId(id);
               }}
               invitationTriggerRef={invitationTriggerRef}
+            />
+            <RenameCircleForm
+              key={`${circle.id}:${circle.name}`}
+              circle={circle}
+              renameCircleAction={renameCircleAction}
+              disabled={isPending}
+              onResult={setResult}
             />
             {accessReviewMember ? (
               <aside

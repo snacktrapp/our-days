@@ -201,6 +201,28 @@ const connectedOperationsModel = {
 };
 
 describe("FamilySettingsPanel", () => {
+  it("combines journal links and circle controls without a management page", async () => {
+    const user = userEvent.setup();
+    render(<FamilySettingsPanel model={model} renameCircleAction={vi.fn()} />);
+    expect(
+      screen.getByRole("link", { name: "Open All our days circle feed" }),
+    ).toHaveAttribute("href", "/family?circle=family");
+    expect(screen.queryByRole("link", { name: "Manage circles" })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Other organizer View journal" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("button", { name: /All our days/ }));
+    expect(
+      screen.getByRole("link", { name: "Other organizer View journal" }),
+    ).toHaveAttribute("href", "/people/other?fromCircle=family");
+    expect(
+      screen.getByRole("link", { name: "Child profile View journal" }),
+    ).toHaveAttribute("href", "/people/child?fromCircle=family");
+    expect(screen.getByRole("button", { name: "Delete circle" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Review access for Other organizer" }),
+    ).toBeVisible();
+  });
   it("lists circles and offers a required-name create form on Account", async () => {
     const user = userEvent.setup();
     const createGroupAction = vi.fn();
