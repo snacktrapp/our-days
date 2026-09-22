@@ -84,9 +84,7 @@ describe("account-scoped browser cleanup", () => {
     });
     render(createElement(SignOutButton));
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Sign out" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We could not sign out this device. Please try again.",
