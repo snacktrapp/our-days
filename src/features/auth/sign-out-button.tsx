@@ -30,7 +30,7 @@ export function SignOutButton() {
           });
         }}
       >
-        {pending ? "Signing out…" : "Sign out and use another email"}
+        {pending ? "Signing out…" : "Sign out"}
       </button>
       {error ? (
         <p className="auth-error" role="alert">

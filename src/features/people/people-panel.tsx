@@ -18,7 +18,6 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
           aria-labelledby={`people-group-${group.id}`}
         >
           <div className="settings-heading circle-directory-heading">
-            <span>Circle</span>
             <h2 id={`people-group-${group.id}`}>{group.name}</h2>
             <Link
               className="person-arrow circle-journal-link"
@@ -28,16 +27,10 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
             >
               View journal
             </Link>
-            <p>{peopleCountLabel(group.members.length)}</p>
           </div>
-          {group.inviteHref ? (
-            <Link className="circle-manage-link" href={group.inviteHref}>
-              Manage circle
-            </Link>
-          ) : null}
           <SettingsDisclosure
             className="circle-people-disclosure"
-            label="People"
+            label={peopleCountLabel(group.members.length)}
           >
             <div className="people-list">
               {group.members.map((person) => {
@@ -51,7 +44,6 @@ export function PeoplePanel({ model }: { model: PeopleViewModel }) {
                     </span>
                     <span className="person-copy">
                       <strong>{person.name}</strong>
-                      <small>{person.roleLabel}</small>
                     </span>
                     <span
                       className="person-arrow"

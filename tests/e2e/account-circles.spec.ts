@@ -1,14 +1,45 @@
 import { expect, test } from "./test";
 
+test("Account and Circles share the Journal's flat surfaces in both themes", async ({
+  page,
+}, testInfo) => {
+  for (const theme of ["dark", "light"]) {
+    for (const [name, path, ready] of [
+      ["journal", "/family", ".moment-card"],
+      ["account", "/settings/family", ".profile-color-preview"],
+      ["circles", "/circles", ".circle-directory-heading"],
+      ["manage", "/circles/manage", ".circles-section"],
+    ]) {
+      await page.goto(path);
+      await expect(page.locator(ready).first()).toBeVisible();
+      await page.evaluate((value) => {
+        document.documentElement.dataset.theme = value;
+      }, theme);
+      for (const surface of await page
+        .locator(".settings-section, .timeline .moment-card")
+        .all()) {
+        await expect(surface).toHaveCSS("border-top-width", "0px");
+        await expect(surface).toHaveCSS("border-top-left-radius", "0px");
+      }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: `/tmp/our-days-${name}-${theme}-${testInfo.project.name}.png`,
+      });
+    }
+  }
+});
+
 test("Account is personal; circle creation and management live under Circles", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/settings/family");
-  await expect(
-    page.getByRole("heading", { name: "Your profile" }),
-  ).toBeVisible();
+  await expect(page.locator(".profile-color-preview")).toBeVisible();
   await expect(page.locator(".profile-color-disclosure")).not.toHaveAttribute(
     "open",
   );

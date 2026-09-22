@@ -66,7 +66,7 @@ const model = buildPeopleViewModel({
 describe("PeoplePanel", () => {
   it("lists each circle with its members and the Account invite path", () => {
     render(<PeoplePanel model={model} />);
-    for (const summary of screen.getAllByText("People", { exact: true }))
+    for (const summary of screen.getAllByText(/^\d+ (people|person)$/))
       fireEvent.click(summary);
 
     expect(

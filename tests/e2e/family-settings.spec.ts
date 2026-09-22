@@ -213,7 +213,7 @@ test("the shared Account navigation opens settings and returns through the prima
   await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
   await expect(page.locator(".title-switcher")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Journal tools" }),
+    page.getByRole("link", { name: "Recently removed" }),
   ).toBeVisible();
   await expect(
     page

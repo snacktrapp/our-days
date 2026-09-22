@@ -85,7 +85,7 @@ describe("account-scoped browser cleanup", () => {
     render(createElement(SignOutButton));
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Sign out and use another email" }),
+      screen.getByRole("button", { name: "Sign out" }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

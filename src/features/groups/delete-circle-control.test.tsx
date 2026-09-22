@@ -18,7 +18,7 @@ it("requires a named confirmation and supports cancellation without deletion", (
   expect(mocks.remove).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(
-    screen.queryByRole("button", { name: "Delete circle", exact: true }),
+    screen.queryByRole("button", { name: "Delete circle" }),
   ).toBeNull();
   expect(mocks.remove).not.toHaveBeenCalled();
 });
@@ -30,7 +30,7 @@ it("keeps the confirmation and error visible when a populated circle cannot be d
   render(<DeleteCircleControl circleId="home" name="Home" />);
   fireEvent.click(screen.getByRole("button", { name: "Delete unused circle" }));
   fireEvent.click(
-    screen.getByRole("button", { name: "Delete circle", exact: true }),
+    screen.getByRole("button", { name: "Delete circle" }),
   );
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent(

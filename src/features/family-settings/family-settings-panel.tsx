@@ -424,7 +424,6 @@ function CirclesAccordion({
       aria-labelledby="your-groups-heading"
     >
       <div className="settings-heading">
-        <span>Membership</span>
         <h2 id="your-groups-heading">Your circles</h2>
       </div>
       <ul className="circle-accordion">

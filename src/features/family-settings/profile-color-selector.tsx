@@ -37,10 +37,9 @@ export function ProfileColorSelector({
       className="settings-section profile-color-settings"
       aria-labelledby="profile-color-heading"
     >
-      <div className="settings-heading">
-        <span>Profile</span>
-        <h2 id="profile-color-heading">Your profile</h2>
-      </div>
+      <h2 id="profile-color-heading" className="sr-only">
+        Your profile
+      </h2>
       <div className="profile-color-preview">
         <span
           className={`person-avatar dot-${color?.accent ?? accent}`}

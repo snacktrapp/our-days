@@ -720,7 +720,7 @@ button {
 }
 
 .profile-color-settings {
-  margin: 0 16px 24px;
+  margin: 0;
   padding: 16px;
 }
 .settings-disclosure > summary {
@@ -748,13 +748,8 @@ button {
   font: var(--chrome-meta);
   color: var(--accent);
 }
-.circle-people-disclosure,
-.circle-manage-link {
+.circle-people-disclosure {
   margin: 0 16px 16px;
-}
-.circle-manage-link {
-  display: inline-block;
-  font: var(--chrome-meta);
 }
 .circle-back-link {
   display: inline-block;
@@ -779,7 +774,7 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 16px 0;
+  margin: 0 0 12px;
 }
 .profile-color-preview > span:last-child {
   margin-left: auto;
@@ -1130,14 +1125,14 @@ button {
   text-decoration: none;
 }
 .people-group > .circle-directory-heading {
-  position: relative;
-  padding-right: 118px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
 }
 .circle-directory-heading .circle-journal-link {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  transform: none;
   text-decoration: none;
   min-height: 44px;
   display: flex;
@@ -8907,8 +8902,7 @@ iframe.composer-location-map {
   min-height: 44px;
 }
 
-/* Secondary destinations share the journal canvas; only their inner content
-   is card-shaped. This neutralizes the legacy full-page card treatment. */
+/* Secondary destinations use the journal's flat surfaces and grid intervals. */
 .people-panel,
 .memories-panel,
 .family-settings-panel {
@@ -8921,9 +8915,9 @@ iframe.composer-location-map {
 .people-panel {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 24px;
   min-height: 0;
-  padding: 18px 18px 24px;
+  padding: 18px 0 24px;
 }
 
 /* Account used to wrap everything in the leftover full-page section-panel card
@@ -8931,7 +8925,41 @@ iframe.composer-location-map {
    Journal tools after the inner cards. Size to content only. */
 .family-settings-panel {
   min-height: 0;
-  padding-bottom: 24px;
+  padding: 18px 0 24px;
+  gap: 24px;
+}
+
+.people-panel .settings-section,
+.family-settings-panel .settings-section,
+.settings-section.profile-color-settings {
+  border: 0;
+  border-radius: 0;
+  background: var(--cream);
+  box-shadow: none;
+}
+
+.circle-directory-tools {
+  padding: 0 16px;
+}
+
+.profile-color-preview strong,
+.people-panel .person-copy strong,
+.account-tools .notification-preference-row strong,
+.account-tools .account-tool-link strong,
+.account-tools .account-sign-out button {
+  font: var(--chrome-body);
+  font-weight: 600;
+}
+
+.account-tools .notification-preference-row,
+.account-tools .account-tool-link,
+.account-tools .account-sign-out button {
+  min-height: 56px;
+  padding-inline: 16px;
+}
+
+.account-tools .notification-preference-row {
+  border-top: 0;
 }
 
 /* Hard-coded dark-theme display colors need explicit light equivalents. */
