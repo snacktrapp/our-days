@@ -6,6 +6,7 @@ import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 
 import { DeleteCircleControl } from "@/features/groups/delete-circle-control";
 import { SettingsDisclosure } from "./settings-disclosure";
+import { CircleManagementSheet } from "./circle-management-sheet";
 
 import {
   type FormEvent,
@@ -219,8 +220,11 @@ function MemberList({
               {member.name}
               {member.id === currentMemberId ? " · You" : ""}
             </strong>
-            <small>{member.relationshipLabel}</small>
-            <span>{member.accessLabel}</span>
+            {member.role === "organizer" ||
+            member.role === "operations" ||
+            member.profileKind === "managed" ? (
+              <small>{member.relationshipLabel}</small>
+            ) : null}
           </span>
           <span className="circle-member-actions">
             {member.role !== "operations" ? (
@@ -273,7 +277,6 @@ function MemberList({
             <span className="access-member-copy">
               <strong>{item.displayName}</strong>
               <small>Pending invite</small>
-              <span>Pending</span>
             </span>
             {canReview && setInvitationReviewId && invitationTriggerRef ? (
               <button
@@ -322,54 +325,59 @@ function RenameCircleForm({
   if (!circle.canRename) return null;
 
   return (
-    <section className="circle-rename-section" aria-label="Circle settings">
-      {renameCircleAction ? (
-        <form
-          action={(formData) => {
-            startTransition(async () => {
-              const result = await renameCircleAction(formData);
-              if (!result.ok) {
-                setError(result.message);
+    <SettingsDisclosure
+      label="Circle settings"
+      className="circle-settings-disclosure"
+    >
+      <section className="circle-rename-section" aria-label="Circle settings">
+        {renameCircleAction ? (
+          <form
+            action={(formData) => {
+              startTransition(async () => {
+                const result = await renameCircleAction(formData);
+                if (!result.ok) {
+                  setError(result.message);
+                  onResult?.(result);
+                  return;
+                }
+                setError("");
                 onResult?.(result);
-                return;
-              }
-              setError("");
-              onResult?.(result);
-              router.refresh();
-            });
-          }}
-        >
-          <input type="hidden" name="circleId" value={circle.id} />
-          <label htmlFor={nameId}>Circle name</label>
-          <input
-            id={nameId}
-            name="name"
-            required
-            maxLength={80}
-            autoComplete="off"
-            value={name}
-            disabled={disabled || pending}
-            onChange={(event) => {
-              setName(event.target.value);
-              if (error) setError("");
+                router.refresh();
+              });
             }}
-          />
-          {error ? (
-            <p className="field-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <button type="submit" disabled={disabled || pending}>
-            {pending ? "Saving…" : "Save name"}
-          </button>
-        </form>
-      ) : null}
-      <DeleteCircleControl
-        circleId={circle.id}
-        name={circle.name}
-        disabled={disabled || pending}
-      />
-    </section>
+          >
+            <input type="hidden" name="circleId" value={circle.id} />
+            <label htmlFor={nameId}>Circle name</label>
+            <input
+              id={nameId}
+              name="name"
+              required
+              maxLength={80}
+              autoComplete="off"
+              value={name}
+              disabled={disabled || pending}
+              onChange={(event) => {
+                setName(event.target.value);
+                if (error) setError("");
+              }}
+            />
+            {error ? (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            <button type="submit" disabled={disabled || pending}>
+              {pending ? "Saving…" : "Save name"}
+            </button>
+          </form>
+        ) : null}
+        <DeleteCircleControl
+          circleId={circle.id}
+          name={circle.name}
+          disabled={disabled || pending}
+        />
+      </section>
+    </SettingsDisclosure>
   );
 }
 
@@ -629,132 +637,148 @@ function PreviewFamilySettingsPanel({
               setReviewId={setAccessReviewId}
               triggerRef={accessTriggerRef}
             />
+            {accessReviewMember ? (
+              <CircleManagementSheet
+                labelledBy="access-review-heading"
+                onClose={() => {
+                  setAccessReviewId(null);
+                  accessTriggerRef.current?.focus();
+                }}
+              >
+                <aside
+                  id="access-review"
+                  className="access-review"
+                  aria-labelledby="access-review-heading"
+                >
+                  <span>Removal preview</span>
+                  <h3
+                    ref={accessHeadingRef}
+                    id="access-review-heading"
+                    tabIndex={-1}
+                  >
+                    Review {accessReviewMember.name}’s access
+                  </h3>
+                  <RemovalConsequences preview />
+                  <p className="preview-honesty">
+                    Local design preview · No access is changed
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccessReviewId(null);
+                      accessTriggerRef.current?.focus();
+                    }}
+                  >
+                    Close review
+                  </button>
+                </aside>
+              </CircleManagementSheet>
+            ) : null}
+            <SettingsDisclosure
+              label="Invite people"
+              className="circle-invite-disclosure"
+              defaultOpen={circle.id === inviteCircleId}
+            >
+              <AddExistingMember
+                key={circle.id}
+                circle={circle}
+                groups={model.groups}
+                preview
+              />
+              <section
+                className="invite-section circle-invite-section"
+                id="invite"
+                aria-labelledby="invite-heading"
+              >
+                {!showInviteComposer ? (
+                  <FirstMembersInvitePrompt
+                    circleName={circle.name}
+                    onAdd={() => setInviteComposerOpen(true)}
+                    ctaRef={firstMembersCtaRef}
+                  />
+                ) : (
+                  <>
+                    <div className="settings-heading">
+                      <h3 id="invite-heading">Invite into {circle.name}</h3>
+                      <p>
+                        People join after accepting an invitation sent to their
+                        email address.
+                      </p>
+                    </div>
+                    {reviewEmail ? (
+                      <div className="invite-review">
+                        <span>Invitation preview</span>
+                        <h3 ref={inviteReviewHeadingRef} tabIndex={-1}>
+                          {reviewEmail}
+                        </h3>
+                        <InvitationConsequences />
+                        <p className="preview-honesty">
+                          Local design preview · Our Days did not send email or
+                          create an invite
+                        </p>
+                        <div>
+                          <button type="button" onClick={returnToInviteEdit}>
+                            Back to edit
+                          </button>
+                          <button type="button" onClick={clearInvitePreview}>
+                            Clear preview
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <form noValidate onSubmit={previewInvite}>
+                        <label htmlFor="family-invite-email">
+                          Email address
+                        </label>
+                        <input
+                          ref={emailRef}
+                          id="family-invite-email"
+                          name="email"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          maxLength={254}
+                          value={email}
+                          aria-invalid={emailError ? true : undefined}
+                          aria-describedby={
+                            emailError
+                              ? "family-invite-error"
+                              : "family-invite-help"
+                          }
+                          onChange={(event) => {
+                            setEmail(event.target.value);
+                            if (emailError) setEmailError("");
+                          }}
+                        />
+                        {emailError ? (
+                          <p
+                            id="family-invite-error"
+                            className="field-error"
+                            role="alert"
+                          >
+                            {emailError}
+                          </p>
+                        ) : (
+                          <p id="family-invite-help">
+                            You can review the address before anything is sent.
+                          </p>
+                        )}
+                        <button type="submit">Review invitation</button>
+                        <small>
+                          Local design preview · Our Days does not send or save
+                          this preview
+                        </small>
+                      </form>
+                    )}
+                  </>
+                )}
+              </section>
+            </SettingsDisclosure>
             <RenameCircleForm
               key={`${circle.id}:${circle.name}`}
               circle={circle}
               renameCircleAction={renameCircleAction}
             />
-            {accessReviewMember ? (
-              <aside
-                id="access-review"
-                className="access-review"
-                aria-labelledby="access-review-heading"
-              >
-                <span>Removal preview</span>
-                <h3
-                  ref={accessHeadingRef}
-                  id="access-review-heading"
-                  tabIndex={-1}
-                >
-                  Review {accessReviewMember.name}’s access
-                </h3>
-                <RemovalConsequences preview />
-                <p className="preview-honesty">
-                  Local design preview · No access is changed
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccessReviewId(null);
-                    accessTriggerRef.current?.focus();
-                  }}
-                >
-                  Close review
-                </button>
-              </aside>
-            ) : null}
-            <AddExistingMember
-              key={circle.id}
-              circle={circle}
-              groups={model.groups}
-              preview
-            />
-            <section
-              className="invite-section circle-invite-section"
-              id="invite"
-              aria-labelledby="invite-heading"
-            >
-              {!showInviteComposer ? (
-                <FirstMembersInvitePrompt
-                  circleName={circle.name}
-                  onAdd={() => setInviteComposerOpen(true)}
-                  ctaRef={firstMembersCtaRef}
-                />
-              ) : (
-                <>
-                  <div className="settings-heading">
-                    <h3 id="invite-heading">Invite into {circle.name}</h3>
-                    <p>
-                      People join after accepting an invitation sent to their
-                      email address.
-                    </p>
-                  </div>
-                  {reviewEmail ? (
-                    <div className="invite-review">
-                      <span>Invitation preview</span>
-                      <h3 ref={inviteReviewHeadingRef} tabIndex={-1}>
-                        {reviewEmail}
-                      </h3>
-                      <InvitationConsequences />
-                      <p className="preview-honesty">
-                        Local design preview · Our Days did not send email or
-                        create an invite
-                      </p>
-                      <div>
-                        <button type="button" onClick={returnToInviteEdit}>
-                          Back to edit
-                        </button>
-                        <button type="button" onClick={clearInvitePreview}>
-                          Clear preview
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <form noValidate onSubmit={previewInvite}>
-                      <label htmlFor="family-invite-email">Email address</label>
-                      <input
-                        ref={emailRef}
-                        id="family-invite-email"
-                        name="email"
-                        type="email"
-                        inputMode="email"
-                        autoComplete="email"
-                        maxLength={254}
-                        value={email}
-                        aria-invalid={emailError ? true : undefined}
-                        aria-describedby={
-                          emailError
-                            ? "family-invite-error"
-                            : "family-invite-help"
-                        }
-                        onChange={(event) => {
-                          setEmail(event.target.value);
-                          if (emailError) setEmailError("");
-                        }}
-                      />
-                      {emailError ? (
-                        <p
-                          id="family-invite-error"
-                          className="field-error"
-                          role="alert"
-                        >
-                          {emailError}
-                        </p>
-                      ) : (
-                        <p id="family-invite-help">
-                          You can review the address before anything is sent.
-                        </p>
-                      )}
-                      <button type="submit">Review invitation</button>
-                      <small>
-                        Local design preview · Our Days does not send or save
-                        this preview
-                      </small>
-                    </form>
-                  )}
-                </>
-              )}
-            </section>
           </>
         )}
       />
@@ -1187,6 +1211,334 @@ function ConnectedFamilySettingsPanel({
               }}
               invitationTriggerRef={invitationTriggerRef}
             />
+            {accessReviewMember ? (
+              <CircleManagementSheet
+                labelledBy="access-review-heading"
+                onClose={closeAccessReview}
+                busy={isPending}
+              >
+                <aside
+                  id="access-review"
+                  className="access-review"
+                  aria-labelledby="access-review-heading"
+                >
+                  <span>
+                    {accessReviewMember.profileKind === "managed"
+                      ? "Journal care"
+                      : "Role and access"}
+                  </span>
+                  <h3
+                    ref={accessHeadingRef}
+                    id="access-review-heading"
+                    tabIndex={-1}
+                  >
+                    {accessReviewMember.profileKind === "managed"
+                      ? `Care for ${accessReviewMember.name}’s journal`
+                      : `Manage ${accessReviewMember.name}`}
+                  </h3>
+                  {accessReviewMember.profileKind === "managed" ? (
+                    <JournalCareReview
+                      member={accessReviewMember}
+                      guardianOptions={circle.guardianOptions}
+                      disabled={isPending}
+                      onChange={changeGuardian}
+                    />
+                  ) : (
+                    <AccountRoleReview
+                      member={accessReviewMember}
+                      managedProfiles={circle.members.filter(
+                        (member) => member.profileKind === "managed",
+                      )}
+                      disabled={isPending}
+                      onChangeRole={changeRole}
+                    />
+                  )}
+                  {journalCareSuccess ? (
+                    <p
+                      ref={resultRef}
+                      className="settings-action-message settings-inline-message"
+                      role="status"
+                      tabIndex={-1}
+                    >
+                      {result.message}
+                    </p>
+                  ) : null}
+                  {result && !result.ok ? (
+                    <p
+                      ref={resultRef}
+                      className="settings-action-message settings-action-error"
+                      role="alert"
+                      tabIndex={-1}
+                    >
+                      {result.message}
+                    </p>
+                  ) : null}
+                  {accessReviewMember.profileKind === "account" ? (
+                    <div className="settings-removal-zone">
+                      <RemovalConsequences />
+                      <p className="settings-confirmation-copy">
+                        This takes effect immediately, including access to
+                        managed journals in this circle.
+                      </p>
+                      <button
+                        type="button"
+                        aria-label={`Remove access for ${accessReviewMember.name}`}
+                        aria-busy={isPending || undefined}
+                        className="settings-danger-button"
+                        disabled={isPending}
+                        onClick={removeAccess}
+                      >
+                        Remove access
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="settings-review-actions settings-review-close">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={closeAccessReview}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </aside>
+              </CircleManagementSheet>
+            ) : null}
+            {invitation ? (
+              <CircleManagementSheet
+                labelledBy="invitation-review-heading"
+                onClose={closeInvitationReview}
+                busy={isPending}
+              >
+                <aside
+                  id="invitation-review"
+                  className="invite-review connected-invite-review"
+                  aria-labelledby="invitation-review-heading"
+                >
+                  <span>Withdraw invitation</span>
+                  <h3
+                    ref={invitationHeadingRef}
+                    id="invitation-review-heading"
+                    tabIndex={-1}
+                  >
+                    Review {invitation.displayName}’s invitation
+                  </h3>
+                  <p>
+                    Withdrawing it prevents this invitation from being accepted.
+                    It does not change access for anyone already in the circle.
+                  </p>
+                  {result && !result.ok ? (
+                    <p
+                      ref={resultRef}
+                      className="settings-action-message settings-action-error"
+                      role="alert"
+                      tabIndex={-1}
+                    >
+                      {result.message}
+                    </p>
+                  ) : null}
+                  <div className="settings-review-actions">
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={closeInvitationReview}
+                    >
+                      Keep invitation
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Withdraw invitation for ${invitation.displayName}`}
+                      aria-busy={isPending || undefined}
+                      className="settings-danger-button"
+                      disabled={isPending}
+                      onClick={withdrawInvitation}
+                    >
+                      Withdraw invitation
+                    </button>
+                  </div>
+                </aside>
+              </CircleManagementSheet>
+            ) : null}
+            <SettingsDisclosure
+              label="Invite people"
+              className="circle-invite-disclosure"
+              defaultOpen={circle.id === inviteCircleId}
+            >
+              <AddExistingMember
+                key={circle.id}
+                circle={circle}
+                groups={model.groups}
+                actions={actions.existingMembers}
+              />
+              <section
+                className="invite-section circle-invite-section"
+                id="invite"
+                aria-labelledby="invite-heading"
+              >
+                {!showInviteComposer ? (
+                  <FirstMembersInvitePrompt
+                    circleName={circle.name}
+                    onAdd={() => setInviteComposerOpen(true)}
+                    ctaRef={firstMembersCtaRef}
+                  />
+                ) : (
+                  <>
+                    <div className="settings-heading">
+                      <h3 id="invite-heading">Invite into {circle.name}</h3>
+                      <p>They’ll receive an invitation by email.</p>
+                    </div>
+                    {circle.canManageAccess ? (
+                      <>
+                        {model.invitationDelivery === "enabled" ? (
+                          inviteDraft ? (
+                            <aside
+                              className="invite-review connected-invite-request-review"
+                              aria-labelledby="invitation-request-review-heading"
+                            >
+                              <span>Review invitation</span>
+                              <h3
+                                ref={inviteDraftHeadingRef}
+                                id="invitation-request-review-heading"
+                                tabIndex={-1}
+                              >
+                                Invite {inviteDraft.displayName}
+                              </h3>
+                              <p className="invite-review-email">
+                                {inviteDraft.email}
+                              </p>
+                              <InvitationConsequences />
+                              {result && !result.ok ? (
+                                <p
+                                  ref={resultRef}
+                                  className="settings-action-message settings-action-error settings-inline-message"
+                                  role="alert"
+                                  tabIndex={-1}
+                                >
+                                  {result.message}
+                                </p>
+                              ) : null}
+                              <div className="settings-review-actions">
+                                <button
+                                  type="button"
+                                  disabled={isPending}
+                                  onClick={editInvitationRequest}
+                                >
+                                  Back to edit
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-busy={isPending || undefined}
+                                  disabled={isPending}
+                                  onClick={sendInvitationRequest}
+                                >
+                                  {isPending
+                                    ? "Sending…"
+                                    : "Send private invitation"}
+                                </button>
+                              </div>
+                            </aside>
+                          ) : (
+                            <form
+                              className="connected-invite-form"
+                              noValidate
+                              onSubmit={reviewInvitationRequest}
+                            >
+                              <label htmlFor="connected-family-invite-name">
+                                Member’s name
+                              </label>
+                              <input
+                                ref={inviteNameRef}
+                                id="connected-family-invite-name"
+                                name="displayName"
+                                type="text"
+                                autoComplete="off"
+                                maxLength={80}
+                                required
+                                disabled={isPending}
+                                value={inviteName}
+                                aria-invalid={
+                                  inviteFormErrorField === "name"
+                                    ? true
+                                    : undefined
+                                }
+                                aria-describedby={
+                                  inviteFormErrorField === "name"
+                                    ? "connected-family-invite-error"
+                                    : undefined
+                                }
+                                onChange={(event) => {
+                                  setInviteName(event.target.value);
+                                  setInviteFormError("");
+                                  setInviteFormErrorField(null);
+                                }}
+                              />
+                              <label htmlFor="connected-family-invite-email">
+                                Email address
+                              </label>
+                              <input
+                                ref={inviteEmailRef}
+                                id="connected-family-invite-email"
+                                name="email"
+                                type="email"
+                                inputMode="email"
+                                autoComplete="email"
+                                maxLength={254}
+                                required
+                                disabled={isPending}
+                                value={inviteEmail}
+                                aria-invalid={
+                                  inviteFormErrorField === "email"
+                                    ? true
+                                    : undefined
+                                }
+                                aria-describedby={
+                                  inviteFormErrorField === "email"
+                                    ? "connected-family-invite-error"
+                                    : "connected-family-invite-help"
+                                }
+                                onChange={(event) => {
+                                  setInviteEmail(event.target.value);
+                                  setInviteFormError("");
+                                  setInviteFormErrorField(null);
+                                }}
+                              />
+                              {inviteFormError ? (
+                                <p
+                                  id="connected-family-invite-error"
+                                  className="field-error"
+                                  role="alert"
+                                >
+                                  {inviteFormError}
+                                </p>
+                              ) : (
+                                <p id="connected-family-invite-help">
+                                  You can review both details before anything is
+                                  sent.
+                                </p>
+                              )}
+                              <button type="submit" disabled={isPending}>
+                                Review invitation
+                              </button>
+                            </form>
+                          )
+                        ) : null}
+                        {model.invitationDelivery === "disabled" ? (
+                          <div className="settings-delivery-boundary">
+                            <strong>
+                              Invitations are unavailable right now.
+                            </strong>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="settings-empty-copy">
+                        Ask an organizer to manage invitations.
+                      </p>
+                    )}
+                  </>
+                )}
+              </section>
+            </SettingsDisclosure>
             <RenameCircleForm
               key={`${circle.id}:${circle.name}`}
               circle={circle}
@@ -1194,316 +1546,6 @@ function ConnectedFamilySettingsPanel({
               disabled={isPending}
               onResult={setResult}
             />
-            {accessReviewMember ? (
-              <aside
-                id="access-review"
-                className="access-review"
-                aria-labelledby="access-review-heading"
-              >
-                <span>
-                  {accessReviewMember.profileKind === "managed"
-                    ? "Journal care"
-                    : "Role and access"}
-                </span>
-                <h3
-                  ref={accessHeadingRef}
-                  id="access-review-heading"
-                  tabIndex={-1}
-                >
-                  {accessReviewMember.profileKind === "managed"
-                    ? `Care for ${accessReviewMember.name}’s journal`
-                    : `Manage ${accessReviewMember.name}`}
-                </h3>
-                {accessReviewMember.profileKind === "managed" ? (
-                  <JournalCareReview
-                    member={accessReviewMember}
-                    guardianOptions={circle.guardianOptions}
-                    disabled={isPending}
-                    onChange={changeGuardian}
-                  />
-                ) : (
-                  <AccountRoleReview
-                    member={accessReviewMember}
-                    managedProfiles={circle.members.filter(
-                      (member) => member.profileKind === "managed",
-                    )}
-                    disabled={isPending}
-                    onChangeRole={changeRole}
-                  />
-                )}
-                {journalCareSuccess ? (
-                  <p
-                    ref={resultRef}
-                    className="settings-action-message settings-inline-message"
-                    role="status"
-                    tabIndex={-1}
-                  >
-                    {result.message}
-                  </p>
-                ) : null}
-                {result && !result.ok ? (
-                  <p
-                    ref={resultRef}
-                    className="settings-action-message settings-action-error"
-                    role="alert"
-                    tabIndex={-1}
-                  >
-                    {result.message}
-                  </p>
-                ) : null}
-                {accessReviewMember.profileKind === "account" ? (
-                  <div className="settings-removal-zone">
-                    <RemovalConsequences />
-                    <p className="settings-confirmation-copy">
-                      This takes effect immediately, including access to managed
-                      journals in this circle.
-                    </p>
-                    <button
-                      type="button"
-                      aria-label={`Remove access for ${accessReviewMember.name}`}
-                      aria-busy={isPending || undefined}
-                      className="settings-danger-button"
-                      disabled={isPending}
-                      onClick={removeAccess}
-                    >
-                      Remove access
-                    </button>
-                  </div>
-                ) : null}
-                <div className="settings-review-actions settings-review-close">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={closeAccessReview}
-                  >
-                    Done
-                  </button>
-                </div>
-              </aside>
-            ) : null}
-            {invitation ? (
-              <aside
-                id="invitation-review"
-                className="invite-review connected-invite-review"
-                aria-labelledby="invitation-review-heading"
-              >
-                <span>Withdraw invitation</span>
-                <h3
-                  ref={invitationHeadingRef}
-                  id="invitation-review-heading"
-                  tabIndex={-1}
-                >
-                  Review {invitation.displayName}’s invitation
-                </h3>
-                <p>
-                  Withdrawing it prevents this invitation from being accepted.
-                  It does not change access for anyone already in the circle.
-                </p>
-                {result && !result.ok ? (
-                  <p
-                    ref={resultRef}
-                    className="settings-action-message settings-action-error"
-                    role="alert"
-                    tabIndex={-1}
-                  >
-                    {result.message}
-                  </p>
-                ) : null}
-                <div className="settings-review-actions">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={closeInvitationReview}
-                  >
-                    Keep invitation
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Withdraw invitation for ${invitation.displayName}`}
-                    aria-busy={isPending || undefined}
-                    className="settings-danger-button"
-                    disabled={isPending}
-                    onClick={withdrawInvitation}
-                  >
-                    Withdraw invitation
-                  </button>
-                </div>
-              </aside>
-            ) : null}
-            <AddExistingMember
-              key={circle.id}
-              circle={circle}
-              groups={model.groups}
-              actions={actions.existingMembers}
-            />
-            <section
-              className="invite-section circle-invite-section"
-              id="invite"
-              aria-labelledby="invite-heading"
-            >
-              {!showInviteComposer ? (
-                <FirstMembersInvitePrompt
-                  circleName={circle.name}
-                  onAdd={() => setInviteComposerOpen(true)}
-                  ctaRef={firstMembersCtaRef}
-                />
-              ) : (
-                <>
-                  <div className="settings-heading">
-                    <h3 id="invite-heading">Invite into {circle.name}</h3>
-                    <p>They’ll receive an invitation by email.</p>
-                  </div>
-                  {circle.canManageAccess ? (
-                    <>
-                      {model.invitationDelivery === "enabled" ? (
-                        inviteDraft ? (
-                          <aside
-                            className="invite-review connected-invite-request-review"
-                            aria-labelledby="invitation-request-review-heading"
-                          >
-                            <span>Review invitation</span>
-                            <h3
-                              ref={inviteDraftHeadingRef}
-                              id="invitation-request-review-heading"
-                              tabIndex={-1}
-                            >
-                              Invite {inviteDraft.displayName}
-                            </h3>
-                            <p className="invite-review-email">
-                              {inviteDraft.email}
-                            </p>
-                            <InvitationConsequences />
-                            {result && !result.ok ? (
-                              <p
-                                ref={resultRef}
-                                className="settings-action-message settings-action-error settings-inline-message"
-                                role="alert"
-                                tabIndex={-1}
-                              >
-                                {result.message}
-                              </p>
-                            ) : null}
-                            <div className="settings-review-actions">
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={editInvitationRequest}
-                              >
-                                Back to edit
-                              </button>
-                              <button
-                                type="button"
-                                aria-busy={isPending || undefined}
-                                disabled={isPending}
-                                onClick={sendInvitationRequest}
-                              >
-                                {isPending
-                                  ? "Sending…"
-                                  : "Send private invitation"}
-                              </button>
-                            </div>
-                          </aside>
-                        ) : (
-                          <form
-                            className="connected-invite-form"
-                            noValidate
-                            onSubmit={reviewInvitationRequest}
-                          >
-                            <label htmlFor="connected-family-invite-name">
-                              Member’s name
-                            </label>
-                            <input
-                              ref={inviteNameRef}
-                              id="connected-family-invite-name"
-                              name="displayName"
-                              type="text"
-                              autoComplete="off"
-                              maxLength={80}
-                              required
-                              disabled={isPending}
-                              value={inviteName}
-                              aria-invalid={
-                                inviteFormErrorField === "name"
-                                  ? true
-                                  : undefined
-                              }
-                              aria-describedby={
-                                inviteFormErrorField === "name"
-                                  ? "connected-family-invite-error"
-                                  : undefined
-                              }
-                              onChange={(event) => {
-                                setInviteName(event.target.value);
-                                setInviteFormError("");
-                                setInviteFormErrorField(null);
-                              }}
-                            />
-                            <label htmlFor="connected-family-invite-email">
-                              Email address
-                            </label>
-                            <input
-                              ref={inviteEmailRef}
-                              id="connected-family-invite-email"
-                              name="email"
-                              type="email"
-                              inputMode="email"
-                              autoComplete="email"
-                              maxLength={254}
-                              required
-                              disabled={isPending}
-                              value={inviteEmail}
-                              aria-invalid={
-                                inviteFormErrorField === "email"
-                                  ? true
-                                  : undefined
-                              }
-                              aria-describedby={
-                                inviteFormErrorField === "email"
-                                  ? "connected-family-invite-error"
-                                  : "connected-family-invite-help"
-                              }
-                              onChange={(event) => {
-                                setInviteEmail(event.target.value);
-                                setInviteFormError("");
-                                setInviteFormErrorField(null);
-                              }}
-                            />
-                            {inviteFormError ? (
-                              <p
-                                id="connected-family-invite-error"
-                                className="field-error"
-                                role="alert"
-                              >
-                                {inviteFormError}
-                              </p>
-                            ) : (
-                              <p id="connected-family-invite-help">
-                                You can review both details before anything is
-                                sent.
-                              </p>
-                            )}
-                            <button type="submit" disabled={isPending}>
-                              Review invitation
-                            </button>
-                          </form>
-                        )
-                      ) : null}
-                      {model.invitationDelivery === "disabled" ? (
-                        <div className="settings-delivery-boundary">
-                          <strong>
-                            Invitations are unavailable right now.
-                          </strong>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="settings-empty-copy">
-                      Ask an organizer to manage invitations.
-                    </p>
-                  )}
-                </>
-              )}
-            </section>
           </>
         )}
       />

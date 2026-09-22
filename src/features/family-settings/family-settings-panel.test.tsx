@@ -218,6 +218,10 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.getByRole("link", { name: "Child profile View journal" }),
     ).toHaveAttribute("href", "/people/child?fromCircle=family");
+    expect(
+      screen.getByRole("button", { name: "Delete circle" }),
+    ).not.toBeVisible();
+    await user.click(screen.getByText("Circle settings", { exact: true }));
     expect(screen.getByRole("button", { name: "Delete circle" })).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Review access for Other organizer" }),
@@ -439,10 +443,12 @@ describe("FamilySettingsPanel", () => {
     await openFamilyCircle(user);
     expect(familyTrigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/Current person/u)).toBeVisible();
+    await user.click(screen.getByText("Invite people", { exact: true }));
     expect(
       screen.getByRole("heading", { name: "Invite into All our days" }),
     ).toBeVisible();
     await user.click(screen.getByRole("button", { name: /Cousins/u }));
+    await user.click(screen.getByText("Invite people", { exact: true }));
     expect(screen.queryByText("Other organizer")).toBeNull();
     expect(
       screen.getByRole("heading", { name: "Invite into Cousins" }),
@@ -467,8 +473,8 @@ describe("FamilySettingsPanel", () => {
     render(<FamilySettingsPanel model={model} />);
     await openFamilyCircle(user);
 
-    expect(screen.getAllByText("Account · Can sign in")).toHaveLength(2);
-    expect(screen.getByText("Managed profile · No sign-in")).toBeVisible();
+    expect(screen.queryByText("Account · Can sign in")).toBeNull();
+    expect(screen.getByText("Managed journal")).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "People and access" }),
     ).toBeVisible();
@@ -798,7 +804,7 @@ describe("FamilySettingsPanel", () => {
 
     expect(screen.getByText("Grandma")).toBeVisible();
     expect(screen.getByText("Pending invite")).toBeVisible();
-    expect(screen.getByText("Pending")).toBeVisible();
+    expect(screen.queryByText("Pending", { exact: true })).toBeNull();
     expect(screen.queryByText("Sent")).toBeNull();
     expect(screen.queryByText("No pending invitations.")).toBeNull();
     const name = screen.getByRole("textbox", {
@@ -1266,7 +1272,8 @@ describe("FamilySettingsPanel", () => {
     await openFamilyCircle(user);
     expect(
       screen.getByRole("region", { name: "Circle settings" }),
-    ).toBeVisible();
+    ).not.toBeVisible();
+    await user.click(screen.getByText("Circle settings", { exact: true }));
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Home");

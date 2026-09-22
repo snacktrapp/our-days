@@ -2929,11 +2929,16 @@ span.moment-place-line {
 .circle-accordion {
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--hairline);
+  display: grid;
+  gap: 20px;
   list-style: none;
 }
 .circle-accordion-item {
-  border-bottom: 1px solid var(--hairline);
+  padding: 8px 0;
+  background: var(--paper);
+}
+.circle-accordion-item > .circle-directory-heading {
+  padding: 8px 16px 0;
 }
 .circle-accordion-item:last-child {
   border-bottom: 0;
@@ -2956,6 +2961,7 @@ span.moment-place-line {
   flex: 0 0 auto;
   display: grid;
   justify-items: end;
+  gap: 8px;
 }
 .access-list li:has(.circle-member-actions) {
   display: grid;
@@ -2995,7 +3001,75 @@ span.moment-place-line {
   transform: rotate(180deg);
 }
 .circle-accordion-panel {
+  padding: 8px 16px 0;
+}
+.circle-accordion-panel .access-list li {
+  padding: 16px 0;
+}
+.circle-accordion-panel > .settings-disclosure {
+  margin-top: 16px;
   border-top: 1px solid var(--hairline);
+}
+.circle-accordion-panel > .settings-disclosure > summary {
+  min-height: 56px;
+  padding: 12px 0;
+}
+.circle-accordion-panel .circle-rename-section {
+  padding: 8px 0 16px;
+  border: 0;
+}
+.circle-accordion-panel .circle-rename-section form {
+  display: grid;
+  gap: 12px;
+}
+.circle-accordion-panel .circle-delete-control {
+  margin-top: 24px;
+}
+.circle-delete-control > p {
+  margin-block: 16px;
+}
+.circle-management-sheet {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - max(20px, env(safe-area-inset-top)));
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 24px 24px 0 0;
+  overflow: hidden;
+}
+.circle-management-sheet-bar {
+  position: relative;
+  min-height: 52px;
+  flex-shrink: 0;
+}
+.circle-management-sheet-bar .sheet-handle {
+  margin: 12px auto;
+}
+.circle-management-sheet-bar button {
+  position: absolute;
+  right: 12px;
+  top: 4px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 28px;
+}
+.circle-management-sheet-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px max(24px, env(safe-area-inset-bottom));
+}
+:root[data-theme] .circle-management-sheet-body > aside {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.circle-management-sheet-body .settings-role-card {
+  margin-top: 20px;
 }
 .circle-access-heading,
 .circle-invite-section .settings-heading {
