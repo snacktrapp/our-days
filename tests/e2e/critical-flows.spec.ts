@@ -156,6 +156,7 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
     page.getByRole("button", { name: "Choose a journal" }),
   ).toHaveCount(0);
   await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page.locator(".circle-people-disclosure > summary").first().click();
   await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(
     page.getByRole("heading", { name: "Molly", exact: true }),
