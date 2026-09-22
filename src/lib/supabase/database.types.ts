@@ -75,6 +75,7 @@ export type Database = {
       };
       circles: {
         Row: {
+          archived_at: string | null;
           created_at: string;
           created_by_membership_id: string;
           id: string;
@@ -83,6 +84,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          archived_at?: string | null;
           created_at?: string;
           created_by_membership_id: string;
           id?: string;
@@ -91,6 +93,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          archived_at?: string | null;
           created_at?: string;
           created_by_membership_id?: string;
           id?: string;
@@ -1522,6 +1525,10 @@ export type Database = {
       trash_moment_note: {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
+      };
+      set_circle_archived: {
+        Args: { target_circle_id: string; archive: boolean };
+        Returns: undefined;
       };
       delete_empty_circle: {
         Args: { target_circle_id: string; expected_name: string };

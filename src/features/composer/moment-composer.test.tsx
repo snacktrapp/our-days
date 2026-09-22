@@ -543,6 +543,39 @@ describe("MomentComposer", () => {
     expect(navigation.replace).toHaveBeenCalledWith("/people/brian");
   });
 
+  it("saves privately when every circle is archived", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn().mockResolvedValue({ ok: true, message: "Saved" });
+    render(
+      <MomentComposer
+        model={{
+          ...model,
+          circleId: "family",
+          experience: "connected-family",
+          postableCircles: [],
+        }}
+        homeContext={{ kind: "all" }}
+        open
+        returnFocusRef={{ current: null }}
+        onRequestClose={() => undefined}
+        saveFamilyMoment={save}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Written entry/ }));
+    expect(screen.queryByRole("radio", { name: "Family" })).toBeNull();
+    await user.type(
+      screen.getByLabelText("Entry"),
+      "Private journal still works",
+    );
+    await setComposerDate(user, "2023-08-21");
+    await user.click(screen.getByRole("button", { name: "Post" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith(
+        expect.objectContaining({ audience: "just_me", circleIds: [] }),
+      ),
+    );
+  });
+
   it("defaults create Post to Just me from the YOU Home context", async () => {
     const user = userEvent.setup();
     render(

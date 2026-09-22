@@ -336,7 +336,9 @@ export function MomentComposer({
     postableCircles,
     homeContext,
     model.circleId,
-    createIntent,
+    model.postableCircles?.length === 0
+      ? { defaultAudience: "just_me" }
+      : createIntent,
   );
   const createJournalPersonId = model.recorderPersonId;
   const [audience, setAudience] = useState<MomentAudience>(
@@ -554,7 +556,10 @@ export function MomentComposer({
 
   const homeContextKind = homeContext?.kind;
   const homeContextCircleId = homeContext?.circleId;
-  const createIntentAudience = createIntent?.defaultAudience;
+  const createIntentAudience =
+    model.postableCircles?.length === 0
+      ? "just_me"
+      : createIntent?.defaultAudience;
   const resetDraft = useCallback(
     (nextMode: ComposerMode | null = null) => {
       const nextPostTo = createPostToDefault(
@@ -2274,7 +2279,7 @@ export function MomentComposer({
                 <LocationFields optional value={place} onChange={setPlace} />
               ) : null}
 
-              {editDraft || postableCircles.length > 0 ? null : (
+              {editDraft || model.postableCircles !== undefined ? null : (
                 <fieldset className="people-tags audience-choice">
                   <legend>Audience</legend>
                   <div>

@@ -123,9 +123,9 @@ test("Account is personal; circle creation and management live under Circles", a
   });
   await page.locator(".circle-settings-disclosure > summary").click();
   await expect(
-    settings.getByRole("button", { name: "Delete circle" }),
+    settings.getByRole("button", { name: "Archive circle" }),
   ).toBeVisible();
-  await settings.getByRole("button", { name: "Delete circle" }).click();
+  await settings.getByRole("button", { name: "Archive circle" }).click();
   await expect(settings.locator(".settings-review-actions")).toBeVisible();
   await settings.getByRole("button", { name: "Cancel" }).click();
   await settings.scrollIntoViewIfNeeded();
