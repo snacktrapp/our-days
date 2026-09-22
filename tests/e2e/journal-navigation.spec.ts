@@ -19,6 +19,7 @@ test("route-based journal navigation preserves the approved views", async ({
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(7);
   await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.locator(".circle-accordion-trigger").first().click();
   await page.getByRole("link", { name: /Molly.*View journal/ }).click();
   await expect(
     page.getByRole("heading", { name: "Molly", exact: true }),
@@ -325,7 +326,7 @@ test("the family feed scrolls beneath the sticky title selector", async ({
 test("members can create a circle from Circles and filter Home without duplicate family rows", async ({
   page,
 }) => {
-  await page.goto("/circles/manage");
+  await page.goto("/circles");
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();

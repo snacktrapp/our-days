@@ -15,7 +15,7 @@ export default async function AccountPage({
   if (query.inviteCircle) {
     const params = new URLSearchParams({ inviteCircle: query.inviteCircle });
     if (query.name) params.set("name", query.name);
-    redirect(`/circles/manage?${params}`);
+    redirect(`/circles?${params}`);
   }
   return (
     <AccountScreen

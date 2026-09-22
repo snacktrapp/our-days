@@ -361,7 +361,7 @@ test(
   { tag: "@visual" },
   async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium-mobile");
-    await page.goto("/circles/manage");
+    await page.goto("/circles");
     await page.evaluate(() => document.fonts.ready);
     await expect(page).toHaveScreenshot("family-settings-chromium-mobile.png", {
       fullPage: true,
@@ -414,7 +414,7 @@ test(
   async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "chromium-short");
     await page.setViewportSize({ width: 320, height: 350 });
-    await page.goto("/circles/manage#invite");
+    await page.goto("/circles#invite");
     await page.getByRole("button", { name: /All our days/u }).click();
     await page.evaluate(() => document.fonts.ready);
     const input = page.getByRole("textbox", { name: "Email address" });

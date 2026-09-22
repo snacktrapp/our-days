@@ -35,7 +35,7 @@ async function browserState(page: Page) {
 test("family settings makes access and invitation boundaries explicit", async ({
   page,
 }) => {
-  await page.goto("/circles/manage");
+  await page.goto("/circles");
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
@@ -114,7 +114,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
 test("family-setting previews are ephemeral and make no browser-side request", async ({
   page,
 }) => {
-  await page.goto("/circles/manage");
+  await page.goto("/circles");
   await page.getByRole("button", { name: /All our days/u }).click();
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
@@ -145,7 +145,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
 
 test("family settings remains usable at keyboard height", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 350 });
-  await page.goto("/circles/manage#invite");
+  await page.goto("/circles#invite");
   await page.getByRole("button", { name: /All our days/u }).click();
   const input = page.getByRole("textbox", { name: "Email address" });
   await input.scrollIntoViewIfNeeded();
