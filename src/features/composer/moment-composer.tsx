@@ -1666,10 +1666,14 @@ export function MomentComposer({
                       className="choice-icon photo-choice"
                       aria-hidden="true"
                     >
-                      ▣
+                      <svg viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <circle cx="8" cy="8" r="1.5" />
+                        <path d="m3 17 5-5 4 4 4-6 5 7" />
+                      </svg>
                     </span>
                     <strong>Photo or video</strong>
-                    <small>Media with date and note</small>
+                    <small className="sr-only">Media with date and note</small>
                   </button>
                 ) : null}
                 <button onClick={() => chooseMode("thought")}>
@@ -1677,10 +1681,12 @@ export function MomentComposer({
                     className="choice-icon thought-choice"
                     aria-hidden="true"
                   >
-                    “
+                    <svg viewBox="0 0 24 24">
+                      <path d="M13 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-8M15 3l6 6M10 14l1-5 6-6 4 4-6 6-5 1Z" />
+                    </svg>
                   </span>
                   <strong>Written entry</strong>
-                  <small>Text, date, and details</small>
+                  <small className="sr-only">Text, date, and details</small>
                 </button>
                 {!connectedExperience || connectedFamily ? (
                   <button onClick={() => chooseMode("bible-verse")}>
@@ -1688,10 +1694,12 @@ export function MomentComposer({
                       className="choice-icon bible-choice"
                       aria-hidden="true"
                     >
-                      †
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 5v16M12 5C9 3 5 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-3-1-7-1-10 1Z" />
+                      </svg>
                     </span>
                     <strong>Bible verse</strong>
-                    <small>Choose a passage</small>
+                    <small className="sr-only">Choose a passage</small>
                   </button>
                 ) : null}
                 <button
@@ -1705,7 +1713,9 @@ export function MomentComposer({
                     className="choice-icon drafts-choice"
                     aria-hidden="true"
                   >
-                    ≡
+                    <svg viewBox="0 0 24 24">
+                      <path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10l-7-7ZM14 3v7h7M7 14h10M7 17h7" />
+                    </svg>
                   </span>
                   <span className="composer-drafts-choice-label">
                     <strong>Drafts</strong>
@@ -1715,7 +1725,7 @@ export function MomentComposer({
                       </span>
                     ) : null}
                   </span>
-                  <small>Unfinished entries</small>
+                  <small className="sr-only">Unfinished entries</small>
                 </button>
               </div>
             </>
