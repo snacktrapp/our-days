@@ -302,49 +302,56 @@ function RenameCircleForm({
   const [pending, startTransition] = useTransition();
   const nameId = `rename-circle-name-${circle.id}`;
 
-  if (!circle.canRename || !renameCircleAction) return null;
+  if (!circle.canRename) return null;
 
   return (
-    <section className="circle-rename-section" aria-label="Rename circle">
-      <form
-        action={(formData) => {
-          startTransition(async () => {
-            const result = await renameCircleAction(formData);
-            if (!result.ok) {
-              setError(result.message);
+    <section className="circle-rename-section" aria-label="Circle settings">
+      {renameCircleAction ? (
+        <form
+          action={(formData) => {
+            startTransition(async () => {
+              const result = await renameCircleAction(formData);
+              if (!result.ok) {
+                setError(result.message);
+                onResult?.(result);
+                return;
+              }
+              setError("");
               onResult?.(result);
-              return;
-            }
-            setError("");
-            onResult?.(result);
-            router.refresh();
-          });
-        }}
-      >
-        <input type="hidden" name="circleId" value={circle.id} />
-        <label htmlFor={nameId}>Circle name</label>
-        <input
-          id={nameId}
-          name="name"
-          required
-          maxLength={80}
-          autoComplete="off"
-          value={name}
-          disabled={disabled || pending}
-          onChange={(event) => {
-            setName(event.target.value);
-            if (error) setError("");
+              router.refresh();
+            });
           }}
-        />
-        {error ? (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <button type="submit" disabled={disabled || pending}>
-          {pending ? "Saving…" : "Save name"}
-        </button>
-      </form>
+        >
+          <input type="hidden" name="circleId" value={circle.id} />
+          <label htmlFor={nameId}>Circle name</label>
+          <input
+            id={nameId}
+            name="name"
+            required
+            maxLength={80}
+            autoComplete="off"
+            value={name}
+            disabled={disabled || pending}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (error) setError("");
+            }}
+          />
+          {error ? (
+            <p className="field-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button type="submit" disabled={disabled || pending}>
+            {pending ? "Saving…" : "Save name"}
+          </button>
+        </form>
+      ) : null}
+      <DeleteCircleControl
+        circleId={circle.id}
+        name={circle.name}
+        disabled={disabled || pending}
+      />
     </section>
   );
 }
@@ -462,12 +469,6 @@ function CirclesAccordion({
               {open ? (
                 <div className="circle-accordion-panel" id={panelId}>
                   {renderOpenCircle(group)}
-                  {group.canRename ? (
-                    <DeleteCircleControl
-                      circleId={group.id}
-                      name={group.name}
-                    />
-                  ) : null}
                 </div>
               ) : null}
             </li>

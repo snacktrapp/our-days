@@ -6,9 +6,11 @@ import { deleteCircleAction } from "./delete-circle-action";
 export function DeleteCircleControl({
   circleId,
   name,
+  disabled = false,
 }: {
   circleId: string;
   name: string;
+  disabled?: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,48 +24,53 @@ export function DeleteCircleControl({
             Delete “{name}”? This only works for an unused circle with no other
             people, posts, or history. It cannot be undone.
           </p>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              setConfirming(false);
-              setMessage("");
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                try {
-                  const result = await deleteCircleAction(circleId, name);
-                  setMessage(result.message);
-                  if (result.ok) {
-                    router.replace("/circles");
-                    router.refresh();
+          <div className="settings-review-actions">
+            <button
+              type="button"
+              disabled={pending || disabled}
+              onClick={() => {
+                setConfirming(false);
+                setMessage("");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="settings-danger-button"
+              disabled={pending || disabled}
+              onClick={() =>
+                startTransition(async () => {
+                  try {
+                    const result = await deleteCircleAction(circleId, name);
+                    setMessage(result.message);
+                    if (result.ok) {
+                      router.replace("/circles");
+                      router.refresh();
+                    }
+                  } catch {
+                    setMessage(
+                      "The deletion couldn’t be confirmed. Refresh before trying again.",
+                    );
                   }
-                } catch {
-                  setMessage(
-                    "The deletion couldn’t be confirmed. Refresh before trying again.",
-                  );
-                }
-              })
-            }
-          >
-            {pending ? "Deleting…" : "Delete circle"}
-          </button>
+                })
+              }
+            >
+              {pending ? "Deleting…" : "Delete circle"}
+            </button>
+          </div>
         </>
       ) : (
         <button
           type="button"
+          className="circle-delete-trigger"
+          disabled={disabled}
           onClick={() => {
             setConfirming(true);
             setMessage("");
           }}
         >
-          Delete unused circle
+          Delete circle
         </button>
       )}
       {message ? <p role="status">{message}</p> : null}

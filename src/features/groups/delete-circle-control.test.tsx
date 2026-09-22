@@ -13,11 +13,11 @@ import { DeleteCircleControl } from "./delete-circle-control";
 beforeEach(() => vi.clearAllMocks());
 it("requires a named confirmation and supports cancellation without deletion", () => {
   render(<DeleteCircleControl circleId="empty" name="Empty" />);
-  fireEvent.click(screen.getByRole("button", { name: "Delete unused circle" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete circle" }));
   expect(screen.getByText(/Delete “Empty”/)).toBeVisible();
   expect(mocks.remove).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(screen.queryByRole("button", { name: "Delete circle" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
   expect(mocks.remove).not.toHaveBeenCalled();
 });
 it("keeps the confirmation and error visible when a populated circle cannot be deleted", async () => {
@@ -26,7 +26,7 @@ it("keeps the confirmation and error visible when a populated circle cannot be d
     message: "Circle contains posts.",
   });
   render(<DeleteCircleControl circleId="home" name="Home" />);
-  fireEvent.click(screen.getByRole("button", { name: "Delete unused circle" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete circle" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete circle" }));
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -36,6 +36,6 @@ it("keeps the confirmation and error visible when a populated circle cannot be d
   expect(mocks.replace).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("status")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Delete unused circle" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete circle" }));
   expect(screen.queryByRole("status")).toBeNull();
 });

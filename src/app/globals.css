@@ -721,11 +721,25 @@ button {
   color: var(--muted);
 }
 .circle-delete-control {
-  margin-top: 24px;
+  margin-top: 12px;
   font: var(--chrome-body);
 }
-.circle-delete-control button {
-  margin: 8px 8px 0 0;
+.circle-delete-control > p {
+  margin: 0 0 12px;
+}
+.circle-delete-trigger {
+  display: block;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--clay);
+  font: var(--chrome-body);
+  cursor: pointer;
+}
+.circle-delete-trigger:disabled {
+  opacity: 0.62;
+  cursor: default;
 }
 .circles-create-section > summary {
   margin: 0 16px;

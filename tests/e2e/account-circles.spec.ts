@@ -73,6 +73,19 @@ test("Account is personal; circle creation and management live under Circles", a
   });
   await page.getByRole("link", { name: "Manage circles", exact: true }).click();
   await expect(page).toHaveURL(/\/circles\/manage$/);
+  await page.getByRole("button", { name: /All our days/ }).click();
+  const settings = page.getByRole("region", { name: "Circle settings" });
+  await expect(
+    settings.getByRole("button", { name: "Delete circle" }),
+  ).toBeVisible();
+  await settings.getByRole("button", { name: "Delete circle" }).click();
+  await expect(settings.locator(".settings-review-actions")).toBeVisible();
+  await settings.getByRole("button", { name: "Cancel" }).click();
+  await settings.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: `/tmp/our-days-circle-settings-${test.info().project.name}.png`,
+  });
+  await page.getByRole("button", { name: /All our days/ }).click();
   await expect(
     page
       .getByRole("navigation", { name: "Primary navigation" })

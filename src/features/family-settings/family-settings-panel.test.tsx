@@ -1242,7 +1242,9 @@ describe("FamilySettingsPanel", () => {
     );
 
     await openFamilyCircle(user);
-    expect(screen.getByRole("region", { name: "Rename circle" })).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Circle settings" }),
+    ).toBeVisible();
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Home");
@@ -1320,7 +1322,9 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.queryByRole("region", { name: "Rename circle" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Circle settings" }),
+    ).toBeNull();
     expect(screen.queryByLabelText("Circle name")).toBeNull();
   });
 });
