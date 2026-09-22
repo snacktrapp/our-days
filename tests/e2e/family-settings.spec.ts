@@ -40,6 +40,7 @@ test("family settings makes access and invitation boundaries explicit", async ({
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: /All our days/u }).click();
+  await page.locator(".circle-invite-disclosure > summary").click();
   await expect(
     page.getByRole("heading", { name: "Invite into All our days" }),
   ).toBeVisible();
@@ -51,8 +52,10 @@ test("family settings makes access and invitation boundaries explicit", async ({
     "min-height",
     "0px",
   );
-  await expect(page.getByText("Managed profile · No sign-in")).toHaveCount(3);
-  await expect(page.getByText("Account · Can sign in")).toHaveCount(3);
+  await expect(page.getByText("Managed journal", { exact: true })).toHaveCount(
+    3,
+  );
+  await expect(page.getByText("Account · Can sign in")).toHaveCount(0);
   await expect(page.getByText("Operations")).toBeVisible();
   await expect(page.getByText("TARS")).toBeVisible();
   await expect(
@@ -116,6 +119,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
 }) => {
   await page.goto("/circles");
   await page.getByRole("button", { name: /All our days/u }).click();
+  await page.locator(".circle-invite-disclosure > summary").click();
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
   const before = await browserState(page);
@@ -137,6 +141,7 @@ test("family-setting previews are ephemeral and make no browser-side request", a
 
   await page.reload();
   await page.getByRole("button", { name: /All our days/u }).click();
+  await page.locator(".circle-invite-disclosure > summary").click();
   await expect(
     page.getByRole("textbox", { name: "Email address" }),
   ).toHaveValue("");
@@ -147,6 +152,7 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 350 });
   await page.goto("/circles#invite");
   await page.getByRole("button", { name: /All our days/u }).click();
+  await page.locator(".circle-invite-disclosure > summary").click();
   const input = page.getByRole("textbox", { name: "Email address" });
   await input.scrollIntoViewIfNeeded();
   await input.fill("relative@example.com");
@@ -180,6 +186,7 @@ test("family settings remains usable at keyboard height", async ({ page }) => {
 
   await page.reload();
   await page.getByRole("button", { name: /All our days/u }).click();
+  await page.locator(".circle-invite-disclosure > summary").click();
   const accessTrigger = page.getByRole("button", {
     name: "Review access for Molly",
   });

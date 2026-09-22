@@ -370,6 +370,7 @@ test(
     });
 
     await page.getByRole("button", { name: /All our days/u }).click();
+    await page.locator(".circle-invite-disclosure > summary").click();
     await page.getByRole("button", { name: "Review access for Molly" }).click();
     await expect(page).toHaveScreenshot(
       "family-settings-access-review-chromium-mobile.png",
@@ -416,6 +417,7 @@ test(
     await page.setViewportSize({ width: 320, height: 350 });
     await page.goto("/circles#invite");
     await page.getByRole("button", { name: /All our days/u }).click();
+    await page.locator(".circle-invite-disclosure > summary").click();
     await page.evaluate(() => document.fonts.ready);
     const input = page.getByRole("textbox", { name: "Email address" });
     await input.scrollIntoViewIfNeeded();

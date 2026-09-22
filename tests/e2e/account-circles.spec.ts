@@ -85,6 +85,7 @@ test("Account is personal; circle creation and management live under Circles", a
     path: `/tmp/our-days-circles-expanded-${test.info().project.name}.png`,
     fullPage: true,
   });
+  await page.locator(".circle-settings-disclosure > summary").click();
   await expect(
     settings.getByRole("button", { name: "Delete circle" }),
   ).toBeVisible();
@@ -130,6 +131,40 @@ test("old circle invitation links reach circle management", async ({
   await expect(
     page.getByRole("button", { name: /Friends.*1 person/ }),
   ).toHaveAttribute("aria-expanded", "true");
+});
+
+test("person management stays in a dismissible sheet without moving the circle", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/circles");
+  await page.getByRole("button", { name: /All our days/ }).click();
+  const trigger = page.getByRole("button", { name: "Review access for Molly" });
+  await trigger.scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => scrollY);
+  await trigger.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: /Molly/ })).toBeVisible();
+  const bounds = await page.locator(".circle-management-sheet").boundingBox();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(
+    page.viewportSize()!.height + 1,
+  );
+  await page.screenshot({
+    path: `/tmp/circles-person-sheet-${testInfo.project.name}.png`,
+  });
+  await dialog.getByRole("button", { name: "Close management" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect(Math.abs((await page.evaluate(() => scrollY)) - before)).toBeLessThan(
+    3,
+  );
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await trigger.click();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toHaveCount(0);
 });
 
 test("old management links open the same circle on Circles", async ({
