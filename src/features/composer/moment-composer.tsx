@@ -2397,9 +2397,7 @@ export function MomentComposer({
       }${mode && !choosingMode && !reviewing ? " composer-editor-open" : ""}`}
       aria-labelledby="composer-title"
       aria-describedby={
-        connectedExperience && reviewing
-          ? "composer-privacy"
-          : undefined
+        connectedExperience && reviewing ? "composer-privacy" : undefined
       }
       aria-hidden={overlayClosing ? true : undefined}
       onKeyDown={(event) => {
