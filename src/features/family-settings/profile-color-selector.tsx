@@ -8,7 +8,14 @@ import {
 } from "@/features/profile-color";
 import type { AccentToken } from "@/features/accent-token";
 import type { ProfileColorResult } from "./profile-color-action";
-import { SettingsDisclosure } from "./settings-disclosure";
+import {
+  SettingsAvatar,
+  SettingsChevron,
+  SettingsGroup,
+  SettingsRowCopy,
+  SettingsRowTrail,
+  SettingsSection,
+} from "./settings-directory";
 
 export function ProfileColorSelector({
   name,
@@ -32,89 +39,86 @@ export function ProfileColorSelector({
   const [failed, setFailed] = useState(false);
   const [pending, startTransition] = useTransition();
   const color = profileColors.find((item) => item.token === selected);
+  const colorName = color?.name ?? "Current color";
+
   return (
-    <section
-      className="settings-section profile-color-settings"
-      aria-labelledby="profile-color-heading"
-    >
-      <h2 id="profile-color-heading" className="sr-only">
-        Your profile
-      </h2>
-      <div className="profile-color-preview">
-        <span
-          className={`person-avatar dot-${color?.accent ?? accent}`}
-          aria-hidden="true"
-        >
-          {initial}
-        </span>
-        <strong>{name}</strong>
-        <span>{color?.name ?? "Current color"}</span>
-      </div>
-      <SettingsDisclosure
-        className="profile-color-disclosure"
-        label="Change color"
-      >
-        <fieldset className="profile-color-options" disabled={pending}>
-          <legend className="sr-only">Profile color</legend>
-          {profileColors.map((option) => (
-            <label key={option.token}>
-              <input
-                type="radio"
-                name="profile-color"
-                value={option.token}
-                checked={selected === option.token}
-                onChange={() => {
-                  setSelected(option.token);
-                  setMessage("");
-                }}
-              />
-              <span
-                className={`profile-color-swatch dot-${option.accent}`}
-                aria-hidden="true"
-              >
-                {selected === option.token ? "✓" : ""}
-              </span>
-              <span>{option.name}</span>
-            </label>
-          ))}
-        </fieldset>
-        {preview ? (
-          <p className="profile-color-hint">
-            Design preview only. Your account is unchanged.
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className="profile-color-save"
-          disabled={pending || !selected || selected === saved}
-          onClick={() => {
-            if (!selected) return;
-            const choice = selected;
-            setMessage("");
-            startTransition(async () => {
-              try {
-                const result = await saveColor(choice);
-                setFailed(!result.ok);
-                setMessage(result.message);
-                if (result.ok) {
-                  setSaved(choice);
-                  if (!preview) router.refresh();
-                }
-              } catch {
-                setFailed(true);
-                setMessage("Your color couldn’t be saved. Try again.");
-              }
-            });
-          }}
-        >
-          {pending ? "Saving…" : "Save color"}
-        </button>
-      </SettingsDisclosure>
+    <SettingsSection aria-label="Your profile">
+      <SettingsGroup>
+        <details className="profile-color-details">
+          <summary className="settings-row profile-color-summary">
+            <SettingsAvatar accent={color?.accent ?? accent} initial={initial} />
+            <SettingsRowCopy
+              title={name}
+              subtitle={`Your color · ${colorName}`}
+            />
+            <SettingsRowTrail>
+              <SettingsChevron />
+            </SettingsRowTrail>
+          </summary>
+          <div className="profile-color-expanded">
+            <fieldset className="profile-color-swatch-grid" disabled={pending}>
+              <legend className="sr-only">Profile color</legend>
+              {profileColors.map((option) => (
+                <label key={option.token} className="profile-color-swatch-label">
+                  <input
+                    type="radio"
+                    name="profile-color"
+                    value={option.token}
+                    checked={selected === option.token}
+                    aria-label={option.name}
+                    onChange={() => {
+                      setSelected(option.token);
+                      setMessage("");
+                    }}
+                  />
+                  <span
+                    className={`profile-color-swatch dot-${option.accent}${selected === option.token ? " is-selected" : ""}`}
+                    aria-hidden="true"
+                  >
+                    {selected === option.token ? "✓" : ""}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {preview ? (
+              <p className="profile-color-hint">
+                Design preview only. Your account is unchanged.
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className="profile-color-save"
+              disabled={pending || !selected || selected === saved}
+              onClick={() => {
+                if (!selected) return;
+                const choice = selected;
+                setMessage("");
+                startTransition(async () => {
+                  try {
+                    const result = await saveColor(choice);
+                    setFailed(!result.ok);
+                    setMessage(result.message);
+                    if (result.ok) {
+                      setSaved(choice);
+                      if (!preview) router.refresh();
+                    }
+                  } catch {
+                    setFailed(true);
+                    setMessage("Your color couldn’t be saved. Try again.");
+                  }
+                });
+              }}
+            >
+              {pending ? "Saving…" : "Save color"}
+            </button>
+          </div>
+        </details>
+      </SettingsGroup>
       {message ? (
         <p role={failed ? "alert" : "status"} className="profile-color-hint">
           {message}
         </p>
       ) : null}
-    </section>
+    </SettingsSection>
   );
 }

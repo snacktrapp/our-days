@@ -188,7 +188,10 @@ function JournalStage({
                 href={backHref}
                 prefetch={false}
               >
-                ← Back to Circles
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M10 4 6 8l4 4" />
+                </svg>
+                Circles
               </Link>
             ) : null}
             {children}

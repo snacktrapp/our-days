@@ -93,11 +93,11 @@ describe("route pending skeleton", () => {
   it("updates destination titles without inventing an empty journal", () => {
     expect(
       pendingChromeModel(model, { href: "/people", kind: "settings" }).title,
-    ).toBe("Account");
+    ).toBe("Settings");
     expect(
       pendingChromeModel(model, { href: "/settings/family", kind: "settings" })
         .title,
-    ).toBe("Account");
+    ).toBe("Settings");
     expect(
       pendingChromeModel(model, { href: "/people/molly", kind: "timeline" })
         .title,

@@ -53,7 +53,7 @@ afterEach(cleanup);
 const model = {
   accent: "teal",
   eyebrow: "Our Days",
-  title: "Account",
+  title: "Settings",
   composer: { photoPostingEnabled: false },
   familyMark: [],
 } as unknown as JournalChromeViewModel;
@@ -106,7 +106,7 @@ describe("JournalChrome", () => {
         screen.queryByRole("button", { name: "Choose a journal" }),
       ).toBeNull();
       expect(
-        screen.getByRole("link", { name: "← Back to Circles" }),
+        screen.getByRole("link", { name: "Circles" }),
       ).toHaveAttribute("href", "/circles");
     },
   );
@@ -129,7 +129,7 @@ describe("JournalChrome", () => {
       screen.queryByRole("button", { name: "Choose a journal" }),
     ).toBeNull();
     expect(
-      screen.getByRole("link", { name: "← Back to Circles" }),
+      screen.getByRole("link", { name: "Circles" }),
     ).toHaveAttribute("href", "/circles#circle-family");
   });
   it.each<JournalSection>(["timeline", "people", "memories", "settings"])(
@@ -288,10 +288,10 @@ describe("JournalChrome", () => {
     expect(
       screen.queryByRole("navigation", { name: "Choose a journal" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Account" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeVisible();
     expect(
       container.querySelector(".title-lockup .title-switcher-heading h1"),
-    ).toHaveTextContent("Account");
+    ).toHaveTextContent("Settings");
     expect(container.querySelector(".title-switcher-heading svg")).toBeNull();
   });
 
