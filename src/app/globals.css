@@ -2224,86 +2224,227 @@ span.moment-place-line {
   font-size: 0.82rem;
 }
 
-.phone-notifications-announcement {
+.journal-banner {
+  --banner-accent: var(--action);
   position: relative;
   z-index: 2;
-  width: min(calc(100% - 32px), 398px);
-  margin: 8px auto 2px;
-  padding: 13px 40px 13px 13px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 10px;
-  row-gap: 2px;
-  border: 1px solid color-mix(in srgb, var(--ochre) 34%, var(--hairline));
-  border-radius: 14px;
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--ochre) 20%, var(--cream)) 0%,
-    color-mix(in srgb, var(--ochre) 8%, var(--cream)) 52%,
-    color-mix(in srgb, var(--ochre) 4%, var(--cream)) 100%
+  width: min(
+    calc(100% - 2 * var(--bottom-nav-inline-gap)),
+    calc(430px - 2 * var(--bottom-nav-inline-gap))
   );
+  margin: 6px auto 10px;
+  padding: 14px 14px 10px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: var(--cream);
   box-shadow: none;
+  font-family: var(--font-interface);
+  overflow: hidden;
 }
 
-.phone-notifications-announcement-mark {
+.journal-banner[data-variant="tip"] {
+  --banner-accent: var(--slate);
+}
+
+.journal-banner[data-motion="enter"] {
+  opacity: 0;
+}
+
+.journal-banner[data-motion="visible"] {
+  opacity: 1;
+}
+
+.journal-banner[data-motion="fade"] {
+  opacity: 0;
+  height: var(--journal-banner-height, auto);
+  overflow: hidden;
+  transition: opacity 140ms ease-out;
+}
+
+.journal-banner[data-motion="collapse"] {
+  opacity: 0;
+  height: var(--journal-banner-height, 0px);
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  overflow: hidden;
+  transition:
+    height 160ms ease-out,
+    margin 160ms ease-out,
+    padding 160ms ease-out,
+    border-width 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .journal-banner[data-motion="enter"] {
+    transform: translateY(-4px);
+  }
+
+  .journal-banner[data-motion="visible"] {
+    transform: translateY(0);
+    transition:
+      opacity 180ms ease-out,
+      transform 180ms ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journal-banner[data-motion="visible"] {
+    transition: opacity 180ms ease-out;
+  }
+
+  .journal-banner[data-motion="fade"] {
+    transition: opacity 140ms ease-out;
+  }
+
+  .journal-banner[data-motion="collapse"] {
+    transition: none;
+  }
+}
+
+.journal-banner-badge {
   grid-row: 1 / span 2;
-  width: 26px;
-  height: 26px;
-  margin-top: 1px;
+  grid-column: 1;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ochre) 18%, transparent);
-  color: var(--ochre);
+  background: var(--selection-fill);
+  color: var(--banner-accent);
 }
 
-.phone-notifications-announcement-mark svg {
-  width: 14px;
-  height: 14px;
+.journal-banner-badge svg {
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.phone-notifications-announcement strong {
+.journal-banner-title {
   grid-column: 2;
+  grid-row: 1;
   margin: 0;
+  padding-right: 26px;
   color: var(--ink);
   font-size: 15px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   line-height: 1.25;
 }
 
-.phone-notifications-announcement p {
+.journal-banner-body {
   grid-column: 2;
+  grid-row: 2;
   margin: 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.4;
 }
 
-.phone-notifications-announcement-cta {
-  grid-column: 2;
-  justify-self: start;
-  min-height: 44px;
-  margin-top: 8px;
-  padding: 0 14px;
+.journal-banner-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.journal-banner-cta {
+  position: relative;
   border: 0;
-  border-radius: 7px;
-  background: var(--ochre);
-  color: var(--cream);
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.01em;
+  cursor: pointer;
+  font-family: inherit;
   text-decoration: none;
+}
+
+.journal-banner-cta-pill {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: 13px;
+  letter-spacing: 0.005em;
   display: inline-grid;
   place-items: center;
 }
 
-.phone-notifications-announcement-dismiss {
+.journal-banner-cta-pill-enablement {
+  font-weight: 600;
+}
+
+.journal-banner-cta-pill-feature {
+  font-weight: 650;
+}
+
+.journal-banner-cta-pill::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+}
+
+.journal-banner-cta-pill:hover,
+.journal-banner-cta-pill:focus-visible {
+  background: color-mix(in srgb, var(--action) 86%, var(--ink));
+}
+
+.journal-banner-cta-quiet {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--banner-accent);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+}
+
+.journal-banner-cta-quiet svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.journal-banner-cta-quiet:hover,
+.journal-banner-cta-quiet:focus-visible {
+  background: var(--selection-fill);
+}
+
+.journal-banner-not-now {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 13px / 1 var(--font-interface);
+  cursor: pointer;
+}
+
+.journal-banner-not-now:hover,
+.journal-banner-not-now:focus-visible {
+  color: var(--ink);
+}
+
+.journal-banner-dismiss {
   position: absolute;
   top: 0;
   right: 0;
@@ -2313,33 +2454,25 @@ span.moment-place-line {
   place-items: center;
   padding: 0;
   border: 0;
+  border-radius: 18px;
   background: transparent;
   color: var(--muted);
-  font: inherit;
-  font-size: 18px;
-  line-height: 1;
   cursor: pointer;
 }
 
-.phone-notifications-announcement-dismiss:hover,
-.phone-notifications-announcement-dismiss:focus-visible {
+.journal-banner-dismiss svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.journal-banner-dismiss:hover,
+.journal-banner-dismiss:focus-visible {
   color: var(--ink);
-}
-
-.phone-notifications-announcement-cta:hover,
-.phone-notifications-announcement-cta:focus-visible {
-  color: var(--cream);
-  background: color-mix(in srgb, var(--ochre) 86%, var(--ink));
-}
-
-:root[data-theme="dark"] .phone-notifications-announcement {
-  border-color: color-mix(in srgb, var(--ochre) 44%, var(--hairline));
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--ochre) 28%, var(--cream)) 0%,
-    color-mix(in srgb, var(--ochre) 12%, var(--cream)) 54%,
-    color-mix(in srgb, var(--ochre) 6%, var(--cream)) 100%
-  );
 }
 
 .journal-error-shell .phone-stage {
