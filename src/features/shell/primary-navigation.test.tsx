@@ -220,7 +220,7 @@ describe("PrimaryNavigation", () => {
     ).toBe("0px");
   });
 
-  it("compacts the tab bar while scrolling down and restores it at the top", () => {
+  it("keeps the tab bar full size while scrolling", () => {
     let scrollY = 0;
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -234,7 +234,7 @@ describe("PrimaryNavigation", () => {
     act(() => {
       window.dispatchEvent(new Event("scroll"));
     });
-    expect(nav).toHaveClass("is-compact");
+    expect(nav).not.toHaveClass("is-compact");
 
     scrollY = 8;
     act(() => {
@@ -243,7 +243,7 @@ describe("PrimaryNavigation", () => {
     expect(nav).not.toHaveClass("is-compact");
   });
 
-  it("restores the tab bar after scrolling goes idle", () => {
+  it("does not introduce an idle size animation", () => {
     vi.useFakeTimers();
     let scrollY = 0;
     Object.defineProperty(window, "scrollY", {
@@ -256,7 +256,7 @@ describe("PrimaryNavigation", () => {
     act(() => {
       window.dispatchEvent(new Event("scroll"));
     });
-    expect(nav).toHaveClass("is-compact");
+    expect(nav).not.toHaveClass("is-compact");
     act(() => {
       vi.advanceTimersByTime(900);
     });

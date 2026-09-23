@@ -381,20 +381,20 @@ describe("FamilySettingsPanel", () => {
     expect(addMembers).toBeVisible();
     expect(addMembers).toHaveFocus();
     expect(
-      screen.queryByRole("heading", { name: "Invite into Cousins" }),
+      screen.queryByRole("heading", { name: "Invite someone" }),
     ).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Email address" })).toBeNull();
 
     await user.click(addMembers);
     expect(
-      screen.getByRole("heading", { name: "Invite into Cousins" }),
+      screen.getByRole("heading", { name: "Invite someone" }),
     ).toBeVisible();
     const email = screen.getByRole("textbox", { name: "Email address" });
     expect(email).toBeVisible();
     await waitFor(() => expect(email).toHaveFocus());
     expect(
-      screen.queryByRole("button", { name: "Add your first members" }),
-    ).toBeNull();
+      screen.getByRole("dialog", { name: "Invite someone" }),
+    ).toBeVisible();
   });
 
   it("surfaces the connected invite form from the first-members prompt", async () => {
@@ -430,11 +430,34 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("button", { name: "Add your first members" }),
     );
     expect(
-      screen.getByRole("heading", { name: "Invite into Cousins" }),
+      screen.getByRole("heading", { name: "Invite someone" }),
     ).toBeVisible();
     expect(
       screen.getByRole("textbox", { name: "Member’s name" }),
     ).toBeVisible();
+    const name = screen.getByRole("textbox", { name: "Member’s name" });
+    expect(name).toHaveFocus();
+    await user.type(name, "Alex");
+    await user.type(
+      screen.getByRole("textbox", { name: "Email address" }),
+      "alex@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Invite someone" })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Add your first members" }),
+    );
+    expect(screen.getByRole("textbox", { name: "Member’s name" })).toHaveValue(
+      "Alex",
+    );
+    expect(screen.getByRole("textbox", { name: "Email address" })).toHaveValue(
+      "alex@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: "Review invitation" }));
+    await user.click(screen.getByRole("button", { name: "Back to edit" }));
+    expect(screen.getByRole("textbox", { name: "Member’s name" })).toHaveValue(
+      "Alex",
+    );
     expect(
       screen.getByRole("textbox", { name: "Email address" }),
     ).toBeVisible();
@@ -470,20 +493,23 @@ describe("FamilySettingsPanel", () => {
     ).not.toBeNull();
     expect(screen.queryByText(/Current person/u)).toBeNull();
     expect(
-      screen.queryByRole("heading", { name: "Invite into All our days" }),
+      screen.queryByRole("heading", { name: "Invite someone" }),
     ).toBeNull();
     await openFamilyCircle(user);
     expect(familyTrigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/Current person/u)).toBeVisible();
     await user.click(screen.getByText("Invite people", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "Invite someone" }));
     expect(
-      screen.getByRole("heading", { name: "Invite into All our days" }),
+      screen.getByRole("heading", { name: "Invite someone" }),
     ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByRole("button", { name: /Cousins/u }));
     await user.click(screen.getByText("Invite people", { exact: true }));
+    await user.click(screen.getByRole("button", { name: "Invite someone" }));
     expect(screen.queryByText("Other organizer")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Invite into Cousins" }),
+      screen.getByRole("heading", { name: "Invite someone" }),
     ).toBeVisible();
   });
 
@@ -496,7 +522,7 @@ describe("FamilySettingsPanel", () => {
       />,
     );
     expect(
-      screen.getByRole("heading", { name: "Invite into All our days" }),
+      screen.getByRole("heading", { name: "Invite someone" }),
     ).toBeVisible();
   });
 

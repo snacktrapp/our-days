@@ -2,14 +2,18 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { skeletonKindFromPathname } from "./journal-routes";
 
-/** Move only the fixed header; never change the document's geometry. */
+/** Move both journal bars pixel-for-pixel without changing document geometry. */
 export function useScrollAwayHeader() {
   const ref = useRef<HTMLElement>(null);
   const pathname = usePathname();
   useEffect(() => {
     const header = ref.current;
     if (!header) return;
+    const root = document.documentElement;
+    const journal = skeletonKindFromPathname(pathname) === "timeline";
+    const nav = document.querySelector<HTMLElement>(".bottom-nav");
     const position = () =>
       Math.max(
         0,
@@ -26,6 +30,10 @@ export function useScrollAwayHeader() {
     let distance = 0;
     const paint = () => {
       header.style.setProperty("--header-scroll-offset", `${-offset}px`);
+      root.style.setProperty(
+        "--journal-nav-scroll-offset",
+        `${journal ? offset : 0}px`,
+      );
       header.dataset.scrollHidden = String(offset >= distance && distance > 0);
     };
     const measure = () => {
@@ -33,6 +41,14 @@ export function useScrollAwayHeader() {
         header.offsetHeight +
         (parseFloat(getComputedStyle(header).top) || 0) +
         24;
+      if (journal && nav) {
+        distance = Math.max(
+          distance,
+          nav.offsetHeight +
+            (parseFloat(getComputedStyle(nav).bottom) || 0) +
+            24,
+        );
+      }
       offset = Math.min(offset, distance);
       paint();
       previous = position();
@@ -91,6 +107,7 @@ export function useScrollAwayHeader() {
     window.visualViewport?.addEventListener("resize", measure);
     window.addEventListener("our-days:reveal-new-entry", show);
     header.addEventListener("focusin", show);
+    nav?.addEventListener("focusin", show);
     return () => {
       observer.disconnect();
       window.removeEventListener("scroll", scroll);
@@ -100,6 +117,8 @@ export function useScrollAwayHeader() {
       window.visualViewport?.removeEventListener("resize", measure);
       window.removeEventListener("our-days:reveal-new-entry", show);
       header.removeEventListener("focusin", show);
+      nav?.removeEventListener("focusin", show);
+      root.style.removeProperty("--journal-nav-scroll-offset");
       delete header.dataset.scrollHidden;
       header.style.removeProperty("--header-scroll-offset");
     };

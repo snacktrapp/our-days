@@ -852,7 +852,8 @@ describe("MomentComposer", () => {
     await user.click(
       screen.getByRole("button", { name: "Open connected composer" }),
     );
-    expect(screen.getByText("Family only")).toBeVisible();
+    expect(screen.queryByText("Family only")).toBeNull();
+    expect(screen.getByRole("dialog")).not.toHaveAttribute("aria-describedby");
     expect(screen.getByRole("heading", { name: "New moment" })).toHaveFocus();
     expect(screen.queryByRole("button", { name: /Photo/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Milestone/ })).toBeNull();

@@ -243,6 +243,10 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
       .getByLabel("Chronological moments for Alex")
       .getByText("My own entry while browsing Jordan."),
   ).toBeVisible();
+  await page.evaluate(() => window.scrollBy(0, -400));
+  await expect(
+    page.getByRole("link", { name: "Circles", exact: true }),
+  ).toBeInViewport();
   await page.getByRole("link", { name: "Circles", exact: true }).click();
   await page.locator(`a[href="/family?circle=${localCircleId}"]`).click();
   await expect(
@@ -546,6 +550,10 @@ test("nearby album requests all photos before the cover finishes and retains the
     "src",
     firstSrc!,
   );
+  await page.evaluate(() => window.scrollBy(0, -400));
+  await expect(
+    page.getByRole("link", { name: "Circles", exact: true }),
+  ).toBeInViewport();
   await page.getByRole("link", { name: "Circles", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
@@ -593,6 +601,10 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     timeout: 15_000,
   });
 
+  await page.evaluate(() => window.scrollBy(0, -400));
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
@@ -612,6 +624,10 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.locator('[data-moment-kind="photo"]').first(),
   ).toBeVisible();
 
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await expect(
+    page.getByRole("button", { name: "Add", exact: true }),
+  ).toBeInViewport({ ratio: 1 });
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Photo or video Media with date and note" })
