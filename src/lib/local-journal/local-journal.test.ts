@@ -265,7 +265,9 @@ describe("local journal happy path", () => {
       journalPersonId: localAlexPersonId,
       pages: 1,
     });
-    const inTimeline = (timeline: Awaited<ReturnType<typeof loadLocalTimeline>>) =>
+    const inTimeline = (
+      timeline: Awaited<ReturnType<typeof loadLocalTimeline>>,
+    ) =>
       timeline.entries.flatMap((entry) =>
         entry.entryType === "moment" ? [entry.moment.text] : [],
       );
