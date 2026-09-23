@@ -670,6 +670,30 @@ describe("MomentCard insight treatment", () => {
     expect(container.querySelector(".avatar-node")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
   });
+
+  it("renders an attached clip inline when an Insight has video metadata", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...insight,
+          video: {
+            src: "/api/media/videos/insight-moment",
+            poster: "/api/media/videos/insight-moment/poster",
+            width: 1080,
+            height: 1920,
+          },
+        }}
+      />,
+    );
+
+    const clip = screen.getByLabelText(
+      "Clip attached to an Insight from Aug 28, 2026",
+    );
+    expect(clip).toHaveAttribute("controls");
+    expect(clip).toHaveAttribute("playsinline");
+    expect(clip).not.toHaveAttribute("autoplay");
+    expect(container.querySelector(".video-frame")).not.toBeNull();
+  });
 });
 
 describe("MomentCard audience chip", () => {

@@ -82,6 +82,66 @@ A later worker should authenticate as the circle’s Operations membership
 Operations label only hides it from Family and People. Do not put a
 service-role key in the web deployment.
 
+## Optional short clip attach (short-video v1 path)
+
+When an Insight should play a private clip inline, keep the Insight as
+`kind = insight` and attach one short video to the existing moment id.
+
+1. Create the Insight first (`create_insight_moment`) and capture `moment_id`.
+2. Reserve upload + target that existing Insight:
+
+```
+POST {NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/reserve_video_moment
+Authorization: Bearer <organizer or Operations access token>
+apikey: <publishable key>
+Content-Type: application/json
+```
+
+```json
+{
+  "circle_id": "<circle uuid>",
+  "journal_person_id": null,
+  "body": "",
+  "place_name": null,
+  "tagged_person_ids": [],
+  "occurred_on": "2026-09-23",
+  "expected_mime_type": "video/mp4",
+  "expected_size_bytes": 2280000,
+  "duration_ms": 17000,
+  "request_key": "<new uuid>",
+  "audience": null,
+  "circle_ids": null,
+  "existing_moment_id": "<insight moment uuid>"
+}
+```
+
+The response includes `request_id`, `object_path`, and `bucket_id` for the
+same private TUS upload contract used by short-video v1 (`our-days-videos`).
+
+3. Upload bytes with authenticated TUS to `object_path`.
+4. Finalize:
+
+```
+POST {NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/finalize_video_moment
+Authorization: Bearer <organizer or Operations access token>
+apikey: <publishable key>
+Content-Type: application/json
+```
+
+```json
+{ "request_id": "<reservation request_id>" }
+```
+
+5. Optional poster attach stays unchanged:
+   `attach_video_moment_poster(moment_id, width_px, height_px)`.
+
+Rules:
+
+- One clip max per Insight.
+- Same short-video limits apply (about 60s, <=100 MB, MP4/MOV/M4V/WebM).
+- Clip bytes stay private in `our-days-videos`.
+- `sourceUrl` remains attribution/listen text only; no iframe/embed players.
+
 ## Timeline behavior
 
 - Circle feeds include `audience = family` Insights on their linked circles.
