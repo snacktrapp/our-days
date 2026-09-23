@@ -29,6 +29,9 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   if (moment.kind === "insight") {
     return (
       <div className="connection connection-insight">
+        {showChip && chipLabel ? (
+          <AudienceChip label={chipLabel} audience={moment.audience} />
+        ) : null}
         <span className="insight-rail-node" aria-hidden="true" />
         <span className="moment-meta">
           <span>{dateAndTime}</span>

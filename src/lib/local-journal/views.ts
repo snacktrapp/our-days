@@ -729,6 +729,34 @@ function localViewerPersonIds(
   return ids;
 }
 
+function localViewerMembershipIds(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const ids = new Set<string>([access.membershipId]);
+  const homeMembershipId =
+    document.accounts[0]?.membershipId ?? document.memberships[0]?.id;
+  if (homeMembershipId) ids.add(homeMembershipId);
+  for (const extra of document.extraCircles ?? []) {
+    ids.add(extra.membershipId);
+  }
+  return ids;
+}
+
+function recorderPersonIdForMoment(
+  document: LocalJournalDocument,
+  moment: LocalMoment,
+) {
+  const homeMembership = document.memberships.find(
+    (membership) => membership.id === moment.recordedByMembershipId,
+  );
+  if (homeMembership?.personId) return homeMembership.personId;
+  const extraMembership = (document.extraCircles ?? []).find(
+    (circle) => circle.membershipId === moment.recordedByMembershipId,
+  );
+  return extraMembership?.personId ?? null;
+}
+
 function localViewerCircleIds(
   document: LocalJournalDocument,
   access: LocalAccess,
@@ -753,6 +781,10 @@ function visibleMoments(
     viewingOwnJournal || allCircles
       ? localViewerPersonIds(document, access)
       : null;
+  const ownMembershipIds =
+    viewingOwnJournal || allCircles
+      ? localViewerMembershipIds(document, access)
+      : null;
   const viewerCircleIds = new Set(localViewerCircleIds(document, access));
   return document.moments
     .filter((moment) => {
@@ -760,6 +792,11 @@ function visibleMoments(
       if (!journalPersonId) {
         if (allCircles) {
           if (moment.audience === "just_me") {
+            if (moment.kind === "insight") {
+              return Boolean(
+                ownMembershipIds?.has(moment.recordedByMembershipId),
+              );
+            }
             return Boolean(
               moment.journalPersonId &&
               ownPersonIds?.has(moment.journalPersonId),
@@ -774,6 +811,14 @@ function visibleMoments(
         );
       }
       if (viewingOwnJournal && ownPersonIds) {
+        if (moment.kind === "insight") {
+          if (moment.audience !== "just_me") return false;
+          const recorderPersonId = recorderPersonIdForMoment(document, moment);
+          return (
+            recorderPersonId === journalPersonId &&
+            Boolean(ownMembershipIds?.has(moment.recordedByMembershipId))
+          );
+        }
         return Boolean(
           moment.journalPersonId && ownPersonIds.has(moment.journalPersonId),
         );

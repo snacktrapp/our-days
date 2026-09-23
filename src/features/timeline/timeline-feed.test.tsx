@@ -246,6 +246,9 @@ describe("TimelineFeed", () => {
                 attribution: "Huberman Lab — Master Your Sleep",
                 sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
                 sourceLabel: "Listen",
+                audience: "family",
+                showAudienceChip: true,
+                audienceChipLabel: "Our Days",
               },
             },
           ],
@@ -257,6 +260,7 @@ describe("TimelineFeed", () => {
       container.querySelector("[data-moment-kind='insight']"),
     ).not.toBeNull();
     expect(container.querySelector(".avatar-node")).toBeNull();
+    expect(screen.getByLabelText("Audience, Our Days")).toBeVisible();
     expect(screen.queryByText("Just Me")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
     expect(screen.queryByText("Person")).toBeNull();

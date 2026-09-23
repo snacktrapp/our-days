@@ -546,20 +546,51 @@ export async function createLocalInsightMoment(
     occurredOn: string;
     occurredAt: string | null;
     occurredTimezone: string | null;
+    audience?: "family" | "just_me";
+    circleId?: string;
+    circleIds?: readonly string[];
   }>,
 ) {
   return withStoreLock(() => {
     const document = readDocumentUnlocked();
-    requireMembership(document, access);
-    if (!canCreateInsight(access.role)) {
+    const audience = input.audience === "just_me" ? "just_me" : "family";
+    const normalizedCircleIds =
+      audience === "family"
+        ? [
+            ...new Set(
+              (input.circleIds?.length
+                ? input.circleIds
+                : [input.circleId ?? access.circleId]
+              ).filter(Boolean),
+            ),
+          ]
+        : undefined;
+    const primaryCircleId =
+      audience === "family"
+        ? (normalizedCircleIds?.[0] ?? input.circleId ?? access.circleId)
+        : (input.circleId ?? access.circleId);
+    const writeAccess = writeAccessForCircle(document, access, primaryCircleId);
+    requireMembership(document, writeAccess);
+    if (!canCreateInsight(writeAccess.role)) {
       throw new Error("Only an organizer or Operations can create an Insight.");
+    }
+    if (audience === "family") {
+      const allowed = postableCircleIdsForAccess(document, writeAccess);
+      if (
+        !normalizedCircleIds?.length ||
+        normalizedCircleIds.some((circleId) => !allowed.has(circleId))
+      ) {
+        throw new Error("That circle could not be targeted.");
+      }
     }
     const createdAt = nowIso();
     const moment: LocalMoment = {
       id: randomUUID(),
-      circleId: access.circleId,
+      circleId: writeAccess.circleId,
+      circleIds: audience === "family" ? normalizedCircleIds : undefined,
       journalPersonId: null,
-      recordedByMembershipId: access.membershipId,
+      recordedByMembershipId: writeAccess.membershipId,
+      audience,
       kind: "insight",
       title: input.attribution,
       body: input.quote,

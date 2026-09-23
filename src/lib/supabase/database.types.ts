@@ -865,7 +865,9 @@ export type Database = {
       create_insight_moment: {
         Args: {
           attribution: string;
+          audience?: string;
           circle_id: string;
+          circle_ids?: string[];
           occurred_at?: string;
           occurred_on?: string;
           occurred_timezone?: string;

@@ -6,7 +6,10 @@ import {
   validInsightAttribution,
   validInsightQuote,
 } from "@/features/insights/insight-source";
-import { readJournalAccessState } from "@/lib/auth/journal-access";
+import {
+  readJournalAccessState,
+  readJournalCircleMemberships,
+} from "@/lib/auth/journal-access";
 import { canCreateInsight } from "@/lib/circle-roles";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -42,12 +45,36 @@ function sameOrigin(request: Request) {
   );
 }
 
-type InsightWriterAccess = Readonly<{
+type InsightWriterMembership = Readonly<{
   circleId: string;
   membershipId: string;
   personId: string;
   role: "organizer" | "operations";
 }>;
+
+type InsightWriterAccess = Readonly<{
+  primary: InsightWriterMembership;
+  memberships: readonly InsightWriterMembership[];
+}>;
+
+type InsightTarget = Readonly<{
+  audience: "family" | "just_me";
+  circleId: string;
+  circleIds: readonly string[];
+}>;
+
+function pickPrimaryMembership(
+  memberships: readonly InsightWriterMembership[],
+  preferredCircleId?: string,
+) {
+  if (preferredCircleId) {
+    const preferred = memberships.find(
+      (membership) => membership.circleId === preferredCircleId,
+    );
+    if (preferred) return preferred;
+  }
+  return memberships[0]!;
+}
 
 async function resolveInsightWriterAccess(
   request: Request,
@@ -76,9 +103,14 @@ async function resolveInsightWriterAccess(
     if (memberships.error) {
       return { ok: false, status: 401, message: "Sign in to continue." };
     }
-    const writers = (memberships.data ?? []).filter((membership) =>
-      canCreateInsight(membership.role),
-    );
+    const writers = (memberships.data ?? [])
+      .filter((membership) => canCreateInsight(membership.role))
+      .map<InsightWriterMembership>((membership) => ({
+        circleId: membership.circle_id,
+        membershipId: membership.id,
+        personId: membership.person_id,
+        role: membership.role === "operations" ? "operations" : "organizer",
+      }));
     if (writers.length === 0) {
       return {
         ok: false,
@@ -86,14 +118,12 @@ async function resolveInsightWriterAccess(
         message: "Only an organizer or Operations can create an Insight.",
       };
     }
-    const writer = writers[0]!;
+    const writer = pickPrimaryMembership(writers);
     return {
       ok: true,
       access: {
-        circleId: writer.circle_id,
-        membershipId: writer.id,
-        personId: writer.person_id,
-        role: writer.role === "operations" ? "operations" : "organizer",
+        primary: writer,
+        memberships: writers,
       },
     };
   }
@@ -124,13 +154,26 @@ async function resolveInsightWriterAccess(
       message: "Only an organizer or Operations can create an Insight.",
     };
   }
+  const memberships = (await readJournalCircleMemberships())
+    .filter((membership) => canCreateInsight(membership.role))
+    .map<InsightWriterMembership>((membership) => ({
+      circleId: membership.circleId,
+      membershipId: membership.membershipId,
+      personId: membership.personId,
+      role: membership.role === "operations" ? "operations" : "organizer",
+    }));
+  if (memberships.length === 0) {
+    return {
+      ok: false,
+      status: 403,
+      message: "Only an organizer or Operations can create an Insight.",
+    };
+  }
   return {
     ok: true,
     access: {
-      circleId: access.circleId,
-      membershipId: access.membershipId,
-      personId: access.personId,
-      role: access.role === "operations" ? "operations" : "organizer",
+      primary: pickPrimaryMembership(memberships, access.circleId),
+      memberships,
     },
   };
 }
@@ -153,6 +196,101 @@ function parseOccurrence(body: Record<string, unknown>) {
   }
   if ((occurredAt === null) !== (occurredTimezone === null)) return null;
   return { occurredOn, occurredAt, occurredTimezone };
+}
+
+function parseInsightTarget(
+  body: Record<string, unknown>,
+  access: InsightWriterAccess,
+):
+  | { ok: true; target: InsightTarget }
+  | { ok: false; status: number; message: string } {
+  const requestedAudience =
+    body.audience === undefined || body.audience === null
+      ? "family"
+      : String(body.audience);
+  if (requestedAudience !== "family" && requestedAudience !== "just_me") {
+    return {
+      ok: false,
+      status: 400,
+      message: "Check the Insight and try again.",
+    };
+  }
+
+  const allowedCircleIds = new Set(access.memberships.map((m) => m.circleId));
+  const requestedCircleId =
+    body.circleId === undefined || body.circleId === null
+      ? access.primary.circleId
+      : String(body.circleId);
+  if (
+    !uuidPattern.test(requestedCircleId) ||
+    !allowedCircleIds.has(requestedCircleId)
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      message: "That circle could not be targeted.",
+    };
+  }
+
+  if (requestedAudience === "just_me") {
+    return {
+      ok: true,
+      target: {
+        audience: "just_me",
+        circleId: requestedCircleId,
+        circleIds: [],
+      },
+    };
+  }
+
+  const requestedCircleIds = body.circleIds;
+  if (requestedCircleIds === undefined || requestedCircleIds === null) {
+    return {
+      ok: true,
+      target: {
+        audience: "family",
+        circleId: requestedCircleId,
+        circleIds: [requestedCircleId],
+      },
+    };
+  }
+  if (!Array.isArray(requestedCircleIds)) {
+    return {
+      ok: false,
+      status: 400,
+      message: "Check the Insight and try again.",
+    };
+  }
+  const normalized: string[] = [];
+  for (const candidate of requestedCircleIds) {
+    if (typeof candidate !== "string" || !uuidPattern.test(candidate)) {
+      return {
+        ok: false,
+        status: 400,
+        message: "Check the Insight and try again.",
+      };
+    }
+    if (!allowedCircleIds.has(candidate)) {
+      return {
+        ok: false,
+        status: 403,
+        message: "That circle could not be targeted.",
+      };
+    }
+    if (!normalized.includes(candidate)) normalized.push(candidate);
+  }
+  if (!normalized.includes(requestedCircleId)) {
+    normalized.unshift(requestedCircleId);
+  }
+  if (normalized.length === 0) normalized.push(requestedCircleId);
+  return {
+    ok: true,
+    target: {
+      audience: "family",
+      circleId: requestedCircleId,
+      circleIds: normalized,
+    },
+  };
 }
 
 export async function POST(request: Request) {
@@ -195,29 +333,22 @@ export async function POST(request: Request) {
   if (!resolved.ok) {
     return response({ ok: false, message: resolved.message }, resolved.status);
   }
-
-  const requestedCircleId =
-    body.circleId === undefined || body.circleId === null
-      ? resolved.access.circleId
-      : String(body.circleId);
-  if (
-    !uuidPattern.test(requestedCircleId) ||
-    requestedCircleId !== resolved.access.circleId
-  ) {
-    return response(
-      { ok: false, message: "That family could not be targeted." },
-      403,
-    );
+  const target = parseInsightTarget(body, resolved.access);
+  if (!target.ok) {
+    return response({ ok: false, message: target.message }, target.status);
   }
 
   if (localJournalIsEnabled()) {
     const { createLocalInsightMoment } =
       await import("@/lib/local-journal/store");
+    const targetMembership =
+      resolved.access.memberships.find(
+        (membership) => membership.circleId === target.target.circleId,
+      ) ?? resolved.access.primary;
     try {
       const momentId = await createLocalInsightMoment(
         {
-          ...resolved.access,
-          role: resolved.access.role,
+          ...targetMembership,
         },
         {
           quote: body.quote.trim(),
@@ -227,6 +358,9 @@ export async function POST(request: Request) {
             occurrence.occurredOn ?? new Date().toISOString().slice(0, 10),
           occurredAt: occurrence.occurredAt,
           occurredTimezone: occurrence.occurredTimezone,
+          audience: target.target.audience,
+          circleId: target.target.circleId,
+          circleIds: target.target.circleIds,
         },
       );
       revalidatePath("/family");
@@ -252,13 +386,18 @@ export async function POST(request: Request) {
     : await createOurDaysServerClient();
 
   const { data, error } = await supabase.rpc("create_insight_moment", {
-    circle_id: requestedCircleId,
+    circle_id: target.target.circleId,
     quote: body.quote.trim(),
     attribution: body.attribution.trim(),
     source_url: source.url,
     occurred_on: occurrence.occurredOn,
     occurred_at: occurrence.occurredAt ?? undefined,
     occurred_timezone: occurrence.occurredTimezone ?? undefined,
+    audience: target.target.audience,
+    circle_ids:
+      target.target.audience === "family"
+        ? [...target.target.circleIds]
+        : ([] as string[]),
   });
   if (error || typeof data !== "string") {
     const denied = error?.code === "42501";

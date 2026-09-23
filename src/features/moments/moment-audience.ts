@@ -19,7 +19,7 @@ export function showAudienceChip(_input?: {
   momentJournalPersonId?: string | null;
   momentKind?: string | null;
 }) {
-  return _input?.momentKind !== "insight";
+  return true;
 }
 
 export function audienceCircleIds(input: {

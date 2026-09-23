@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createServerClient: vi.fn(),
   createBearerClient: vi.fn(),
   readAccess: vi.fn(),
+  readMemberships: vi.fn(),
   revalidatePath: vi.fn(),
   rpc: vi.fn(),
   createLocalInsight: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/auth/journal-access", () => ({
   readJournalAccessState: mocks.readAccess,
+  readJournalCircleMemberships: mocks.readMemberships,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createServerClient,
@@ -41,6 +43,15 @@ const organizerAccess = {
   role: "organizer",
 };
 
+const organizerMemberships = [
+  {
+    membershipId: organizerAccess.membershipId,
+    circleId: organizerAccess.circleId,
+    personId: organizerAccess.personId,
+    role: "organizer",
+  },
+];
+
 const insightId = "60000000-0000-4000-8000-000000000008";
 
 function request(
@@ -61,6 +72,7 @@ describe("insight create route", () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://journal.example.com");
     vi.stubEnv("OUR_DAYS_LOCAL_JOURNAL_MODE", "disabled");
     mocks.readAccess.mockResolvedValue(organizerAccess);
+    mocks.readMemberships.mockResolvedValue(organizerMemberships);
     mocks.rpc.mockResolvedValue({ data: insightId, error: null });
     mocks.createServerClient.mockResolvedValue({ rpc: mocks.rpc });
   });
@@ -90,6 +102,8 @@ describe("insight create route", () => {
       occurred_on: "2026-08-28",
       occurred_at: undefined,
       occurred_timezone: undefined,
+      audience: "family",
+      circle_ids: [organizerAccess.circleId],
     });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/family");
   });
@@ -139,6 +153,57 @@ describe("insight create route", () => {
     });
     expect(response.status).toBe(403);
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("creates a Just me Insight target for the selected circle", async () => {
+    const response = await request({
+      quote: "A quote",
+      attribution: "A show",
+      audience: "just_me",
+    });
+    expect(response.status).toBe(201);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "create_insight_moment",
+      expect.objectContaining({
+        circle_id: organizerAccess.circleId,
+        audience: "just_me",
+        circle_ids: [],
+      }),
+    );
+  });
+
+  it("creates a family Insight for explicit circles", async () => {
+    mocks.readMemberships.mockResolvedValue([
+      ...organizerMemberships,
+      {
+        membershipId: "40000000-0000-4000-8000-000000000002",
+        circleId: "20000000-0000-4000-8000-000000000002",
+        personId: "30000000-0000-4000-8000-000000000002",
+        role: "organizer",
+      },
+    ]);
+    const response = await request({
+      quote: "A quote",
+      attribution: "A show",
+      audience: "family",
+      circleId: "20000000-0000-4000-8000-000000000002",
+      circleIds: [
+        "20000000-0000-4000-8000-000000000002",
+        "20000000-0000-4000-8000-000000000001",
+      ],
+    });
+    expect(response.status).toBe(201);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "create_insight_moment",
+      expect.objectContaining({
+        circle_id: "20000000-0000-4000-8000-000000000002",
+        audience: "family",
+        circle_ids: [
+          "20000000-0000-4000-8000-000000000002",
+          "20000000-0000-4000-8000-000000000001",
+        ],
+      }),
+    );
   });
 
   it("rejects javascript and http source URLs", async () => {
