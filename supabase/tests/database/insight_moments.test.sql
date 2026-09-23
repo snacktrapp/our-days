@@ -1,6 +1,6 @@
 begin;
 
-select plan(31);
+select plan(36);
 
 insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
 values (
@@ -138,6 +138,43 @@ select is(
     17000
   )::text,
   'Insight clips reuse private video delivery descriptors'
+);
+
+select set_config('storage.operation', 'object.upload', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  '73000000-0000-4000-8000-000000000002',
+  'our-days-videos',
+  'poster/' || :'clip_ready_insight_id',
+  '10000000-0000-4000-8000-000000000001',
+  '{"mimetype":"image/jpeg","size":"5549"}'::jsonb,
+  '{}'::jsonb
+);
+
+select ok(
+  public.attach_video_moment_poster(:'clip_ready_insight_id'::uuid, 1280, 720),
+  'attach_video_moment_poster accepts Insight clips'
+);
+
+select is(
+  (select row(bucket_id, object_path, mime_type, size_bytes, width_px, height_px)::text
+     from public.get_video_moment_poster_delivery(:'clip_ready_insight_id'::uuid)),
+  row(
+    'our-days-videos'::text,
+    ('poster/' || :'clip_ready_insight_id')::text,
+    'image/jpeg'::text,
+    5549::bigint,
+    1280,
+    720
+  )::text,
+  'Insight clips reuse private poster delivery descriptors'
+);
+
+select is(
+  private.video_object_path_is_readable(('poster/' || :'clip_ready_insight_id')::text),
+  true,
+  'Insight poster objects are readable for authorized viewers'
 );
 
 select is(
@@ -320,6 +357,22 @@ select is(
       and moment_title = 'Private operations note'),
   0::bigint,
   'an ordinary member cannot read another person''s Just me Insight'
+);
+
+select is(
+  (select count(*)::bigint from public.get_video_moment_delivery(
+    :'clip_ready_insight_id'::uuid
+  )),
+  0::bigint,
+  'an ordinary member cannot read another person''s Just me Insight clip'
+);
+
+select is(
+  (select count(*)::bigint from public.get_video_moment_poster_delivery(
+    :'clip_ready_insight_id'::uuid
+  )),
+  0::bigint,
+  'an ordinary member cannot read another person''s Just me Insight poster'
 );
 
 select throws_ok(

@@ -524,7 +524,7 @@ describe("MomentCard timeline media", () => {
     );
   });
 
-  it("falls back to a warmed poster when private poster delivery fails", async () => {
+  it("uses a warmed poster before private delivery fetches", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       blob: async () => new Blob(),
@@ -551,12 +551,51 @@ describe("MomentCard timeline media", () => {
     );
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalled();
-    });
-    await waitFor(() => {
       expect(
         screen.getByLabelText("Video in Molly’s journal from Aug 28, 2026"),
       ).toHaveAttribute("poster", cachedPoster);
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("prefers a warmed poster after private delivery succeeds", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["poster"], { type: "image/jpeg" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:server-poster");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "refresh-poster-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/refresh-poster-video",
+            poster: "/api/media/videos/refresh-poster-video/poster",
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    const timelineVideo = screen.getByLabelText(
+      "Video in Molly’s journal from Aug 28, 2026",
+    );
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+      expect(timelineVideo).toHaveAttribute("poster", "blob:server-poster");
+    });
+
+    const cachedPoster = "data:image/jpeg;base64,refreshed";
+    rememberVideoPoster("refresh-poster-video", cachedPoster);
+    await waitFor(() => {
+      expect(timelineVideo).toHaveAttribute("poster", cachedPoster);
     });
   });
 
