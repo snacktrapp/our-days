@@ -227,7 +227,7 @@ describe("TimelineFeed", () => {
     ).toBeNull();
   });
 
-  it("renders an Insight without a person byline", () => {
+  it("renders an Insight with the Our Days byline chrome", () => {
     const { container } = render(
       <TimelineFeed
         model={{
@@ -259,8 +259,15 @@ describe("TimelineFeed", () => {
     expect(
       container.querySelector("[data-moment-kind='insight']"),
     ).not.toBeNull();
-    expect(container.querySelector(".avatar-node")).toBeNull();
+    expect(container.querySelector(".insight-rail-node")).toBeNull();
     expect(screen.getByLabelText("Audience, Our Days")).toBeVisible();
+    expect(
+      container.querySelector(".timeline-author-row strong"),
+    ).toHaveTextContent("Our Days");
+    expect(container.querySelector(".avatar-node-image img")).toHaveAttribute(
+      "src",
+      "/brand/od-icon.png",
+    );
     expect(screen.queryByText("Just Me")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
     expect(screen.queryByText("Person")).toBeNull();

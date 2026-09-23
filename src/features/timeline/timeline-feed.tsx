@@ -16,6 +16,11 @@ import { TimelineScrollMemory } from "./timeline-scroll-memory";
 import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
 import { AudienceChip } from "./audience-chip";
 
+const insightSystemByline = {
+  name: "Our Days",
+  avatarSrc: "/brand/od-icon.png",
+} as const;
+
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
   const dateAndTime = timelineCardOccurredLabel(
     moment.occurredOn,
@@ -25,35 +30,29 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
     moment.audienceChipLabel ??
     (moment.showJustMeBadge ? "Just me" : undefined);
   const showChip = moment.showAudienceChip ?? moment.showJustMeBadge;
-
-  if (moment.kind === "insight") {
-    return (
-      <div className="connection connection-insight">
-        {showChip && chipLabel ? (
-          <AudienceChip label={chipLabel} audience={moment.audience} />
-        ) : null}
-        <span className="insight-rail-node" aria-hidden="true" />
-        <span className="moment-meta">
-          <span>{dateAndTime}</span>
-        </span>
-      </div>
-    );
-  }
+  const isInsight = moment.kind === "insight";
+  const bylineName = isInsight ? insightSystemByline.name : moment.personName;
 
   return (
     <div className="connection">
       {showChip && chipLabel ? (
         <AudienceChip label={chipLabel} audience={moment.audience} />
       ) : null}
-      <span
-        className={`avatar-node dot-${moment.personAccent}`}
-        aria-hidden="true"
-      >
-        {moment.personInitial}
-      </span>
+      {isInsight ? (
+        <span className="avatar-node avatar-node-image" aria-hidden="true">
+          <img src={insightSystemByline.avatarSrc} alt="" />
+        </span>
+      ) : (
+        <span
+          className={`avatar-node dot-${moment.personAccent}`}
+          aria-hidden="true"
+        >
+          {moment.personInitial}
+        </span>
+      )}
       <div className="moment-meta">
         <div className="timeline-author-row">
-          <strong>{moment.personName}</strong>
+          <strong>{bylineName}</strong>
         </div>
         <span>{dateAndTime}</span>
       </div>
