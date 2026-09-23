@@ -33,6 +33,7 @@ import { renameCircleAction } from "@/features/groups/rename-circle-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { countFamilyFacingPeople } from "@/lib/circle-roles";
 import { ProfileColorSelector } from "@/features/family-settings/profile-color-selector";
+import { SettingsPage } from "@/features/family-settings/settings-directory";
 import { saveProfileColorAction } from "@/features/family-settings/profile-color-action";
 import type {
   FamilySettingsPanelViewModel,
@@ -81,7 +82,7 @@ export default async function AccountScreen({
     return (
       <JournalChrome
         model={fallbackJournalChrome(anonymousJournalAccess(), {
-          title: manageCircles ? "Circles" : "Account",
+          title: manageCircles ? "Circles" : "Settings",
           eyebrow: "Account",
         })}
         section={manageCircles ? "circles" : "settings"}
@@ -110,11 +111,10 @@ export default async function AccountScreen({
       <JournalChrome
         model={{
           ...model.chrome,
-          title: manageCircles ? "Circles" : "Account",
+          title: manageCircles ? "Circles" : "Settings",
         }}
         section={manageCircles ? "circles" : "settings"}
       >
-        {!manageCircles ? <ProfileColorSettings model={model.panel} /> : null}
         {manageCircles ? (
           <FamilySettingsPanel
             model={model.panel}
@@ -125,7 +125,10 @@ export default async function AccountScreen({
             defaultCircleId={model.panel.groups[0]?.id}
           />
         ) : (
-          <AccountContents />
+          <SettingsPage>
+            <ProfileColorSettings model={model.panel} />
+            <AccountContents />
+          </SettingsPage>
         )}
       </JournalChrome>
     );
@@ -139,7 +142,7 @@ export default async function AccountScreen({
     return (
       <JournalChrome
         model={fallbackJournalChrome(access, {
-          title: manageCircles ? "Circles" : "Account",
+          title: manageCircles ? "Circles" : "Settings",
           eyebrow: "Account",
         })}
         section={manageCircles ? "circles" : "settings"}
@@ -173,7 +176,7 @@ export default async function AccountScreen({
       <JournalChrome
         model={{
           ...context.chrome,
-          title: manageCircles ? "Circles" : "Account",
+          title: manageCircles ? "Circles" : "Settings",
           settingsHref: "/settings/family",
         }}
         section={manageCircles ? "circles" : "settings"}
@@ -208,12 +211,11 @@ export default async function AccountScreen({
     <JournalChrome
       model={{
         ...model.chrome,
-        title: manageCircles ? "Circles" : "Account",
+        title: manageCircles ? "Circles" : "Settings",
       }}
       section={manageCircles ? "circles" : "settings"}
       createMomentAction={createFamilyMomentAction}
     >
-      {!manageCircles ? <ProfileColorSettings model={model.panel} /> : null}
       {manageCircles ? (
         <FamilySettingsPanel
           model={model.panel}
@@ -235,16 +237,15 @@ export default async function AccountScreen({
           }}
         />
       ) : (
-        <AccountContents />
+        <SettingsPage>
+          <ProfileColorSettings model={model.panel} />
+          <AccountContents />
+        </SettingsPage>
       )}
     </JournalChrome>
   );
 }
 
 function AccountContents() {
-  return (
-    <div className="family-settings-panel">
-      <AccountTools />
-    </div>
-  );
+  return <AccountTools />;
 }

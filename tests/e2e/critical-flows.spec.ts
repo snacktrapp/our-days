@@ -92,7 +92,10 @@ test("page transitions show only the plain background", async ({ page }) => {
     await route.continue();
   });
   try {
-    await page.getByRole("link", { name: "Circles", exact: true }).click();
+    await page
+      .getByLabel("Primary navigation")
+      .getByRole("link", { name: "Circles", exact: true })
+      .click();
     const pending = page.locator(".route-pending-field");
     await expect(pending).toBeVisible();
     const icons = page.locator(".bottom-nav .nav-symbol svg");
@@ -127,7 +130,10 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
   await expect(
     page.getByRole("link", { name: "Journal", exact: true }),
   ).toHaveAttribute("href", "/people/brian");
-  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page
+    .getByLabel("Primary navigation")
+    .getByRole("link", { name: "Circles", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
@@ -150,14 +156,15 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
     page.getByRole("link", { name: "Journal", exact: true }),
   ).toHaveAttribute("href", "/people/brian");
   await expect(
-    page.getByRole("link", { name: "Circles", exact: true }),
+    page
+      .getByLabel("Primary navigation")
+      .getByRole("link", { name: "Circles", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByRole("button", { name: "Choose a journal" }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "← Back to Circles" }).click();
-  await page.locator(".circle-accordion-trigger").first().click();
-  await page.getByRole("link", { name: /Molly.*View journal/ }).click();
+  await page.locator(".circle-back-link").click();
+  await page.getByRole("link", { name: "Molly — open journal" }).click();
   await expect(
     page.getByRole("heading", { name: "Molly", exact: true }),
   ).toBeVisible();
@@ -171,7 +178,7 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
   await expect(page.getByRole("dialog")).toBeHidden();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Account", exact: true }),
+    page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Journal", exact: true }),
@@ -180,7 +187,5 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
   await expect(
     page.getByRole("heading", { name: "Just me", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "← Back to Circles" }),
-  ).toHaveCount(0);
+  await expect(page.locator(".circle-back-link")).toHaveCount(0);
 });

@@ -175,7 +175,7 @@ describe("NotificationPreference", () => {
     expect(save).not.toHaveBeenCalled();
     expect(toggle).toHaveAttribute("aria-checked", "false");
     expect(toggle).toBeEnabled();
-    expect(note).toHaveFocus();
+    expect(toggle).toHaveFocus();
   });
 
   it("does not subscribe from an iPhone Safari tab even when push APIs exist", async () => {
@@ -190,11 +190,7 @@ describe("NotificationPreference", () => {
     await user.click(toggle);
     expect(save).not.toHaveBeenCalled();
     expect(toggle).toHaveAttribute("aria-checked", "false");
-    expect(
-      screen.getByText(
-        "On iPhone and iPad, add Our Days to your Home Screen first.",
-      ),
-    ).toHaveFocus();
+    expect(toggle).toHaveFocus();
   });
 
   it("subscribes from an iPhone Home Screen app", async () => {

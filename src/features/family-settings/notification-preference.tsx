@@ -5,6 +5,7 @@ import {
   deleteWebPushSubscriptionAction,
   saveWebPushSubscriptionAction,
 } from "./web-push-actions";
+import { SettingsRowCopy, SettingsRowTrail } from "./settings-directory";
 
 type PreferenceState = "loading" | "unsupported" | "blocked" | "off" | "on";
 
@@ -64,7 +65,6 @@ export function NotificationPreference() {
   const [state, setState] = useState<PreferenceState>("loading");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const helperRef = useRef<HTMLParagraphElement>(null);
   const rowRef = useRef<HTMLButtonElement>(null);
   const configured = vapidPublicKey().length > 0;
 
@@ -76,8 +76,6 @@ export function NotificationPreference() {
         return;
       }
       if (!pushApisAvailable()) {
-        // iOS Safari tabs lack PushManager. Keep the switch off — not
-        // unsupported — so tap can focus the Home Screen helper.
         if (!cancelled) {
           setState(isIosBrowserTab() ? "off" : "unsupported");
         }
@@ -102,10 +100,6 @@ export function NotificationPreference() {
       document
         .getElementById("notifications")
         ?.scrollIntoView?.({ block: "nearest" });
-      if (isIosBrowserTab()) {
-        helperRef.current?.focus();
-        return;
-      }
       rowRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
@@ -114,10 +108,6 @@ export function NotificationPreference() {
   const enable = async () => {
     setMessage(null);
     if (!configured) {
-      return;
-    }
-    if (isIosBrowserTab()) {
-      helperRef.current?.focus();
       return;
     }
     if (!pushApisAvailable()) {
@@ -205,34 +195,25 @@ export function NotificationPreference() {
     <div className="notification-preference" id="notifications">
       <button
         ref={rowRef}
-        className="notification-preference-row"
+        className="settings-row is-plain notification-preference-row"
         type="button"
         role="switch"
         aria-checked={on}
         aria-label="Notifications"
-        aria-describedby={helper ? "notification-preference-note" : undefined}
         disabled={!canToggle}
         onClick={() => {
           if (homeScreenHelp) {
-            helperRef.current?.focus();
+            rowRef.current?.focus();
             return;
           }
           void (on ? disable() : enable());
         }}
       >
-        <strong>Notifications</strong>
-        <span className="notification-switch" aria-hidden="true" />
+        <SettingsRowCopy title="Notifications" subtitle={helper} />
+        <SettingsRowTrail>
+          <span className="notification-switch" aria-hidden="true" />
+        </SettingsRowTrail>
       </button>
-      {helper ? (
-        <p
-          ref={helperRef}
-          id="notification-preference-note"
-          className="notification-preference-note"
-          tabIndex={homeScreenHelp ? -1 : undefined}
-        >
-          {helper}
-        </p>
-      ) : null}
       {message ? (
         <p className="notification-preference-message" role="status">
           {message}

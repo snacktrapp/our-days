@@ -5,7 +5,7 @@ export const journalHeadings = {
   you: { title: "Just me", eyebrow: "Just me" },
   all: { title: "All circles", eyebrow: "Circles" },
   circles: { title: "Circles", eyebrow: "Journals" },
-  settings: { title: "Account", eyebrow: "Our Days" },
+  settings: { title: "Settings", eyebrow: "Our Days" },
   memories: { title: "Memories", eyebrow: "Our Days" },
 } as const;
 

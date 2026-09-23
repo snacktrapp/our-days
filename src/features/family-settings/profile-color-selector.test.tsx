@@ -19,7 +19,7 @@ describe("profile color selector", () => {
       />,
     );
     expect(document.querySelector("details")).not.toHaveAttribute("open");
-    fireEvent.click(screen.getByText("Change color"));
+    fireEvent.click(screen.getByText("Your color · Blue"));
     expect(screen.getAllByRole("radio")).toHaveLength(12);
     expect(screen.getByRole("button", { name: "Save color" })).toBeDisabled();
     fireEvent.click(screen.getByRole("radio", { name: "Purple" }));
@@ -39,7 +39,7 @@ describe("profile color selector", () => {
         saveColor={save}
       />,
     );
-    fireEvent.click(screen.getByText("Change color"));
+    fireEvent.click(screen.getByText("Your color · Blue"));
     fireEvent.click(screen.getByRole("radio", { name: "Cyan" }));
     fireEvent.click(screen.getByRole("button", { name: "Save color" }));
     await screen.findByRole("alert");

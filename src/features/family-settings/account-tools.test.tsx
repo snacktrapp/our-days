@@ -30,20 +30,17 @@ vi.mock("./web-push-actions", () => ({
 }));
 
 describe("Account tools", () => {
-  it("keeps recently removed and sign out as Account card rows", () => {
+  it("keeps recently removed and sign out as Settings directory rows", () => {
     render(<AccountTools />);
 
-    expect(
-      screen.getByRole("heading", { name: "Journal tools" }),
-    ).toBeVisible();
     const notifications = screen.getByRole("switch", { name: "Notifications" });
     expect(notifications).toBeVisible();
     expect(notifications).toBeDisabled();
     expect(screen.getByText("Not available yet.")).toBeVisible();
     expect(screen.queryByText(/Home Screen/u)).toBeNull();
-    const trash = screen.getByRole("link", { name: /Recently removed/u });
+    const trash = screen.getByRole("link", { name: "Recently removed" });
     expect(trash).toHaveAttribute("href", "/trash");
-    expect(trash).toHaveClass("account-tool-link");
+    expect(screen.getByText("Moments you may want back")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Sign out and use another email" }),
     ).toBeVisible();
