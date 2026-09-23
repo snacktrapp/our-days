@@ -133,17 +133,19 @@ export type PhotoMomentViewModel = TimelineMomentBase &
 export type ThoughtMomentViewModel = TimelineMomentBase &
   Readonly<{ kind: "thought" }>;
 
+type TimelineVideoMedia = Readonly<{
+  src: string;
+  poster?: string;
+  mimeType?: string;
+  durationMs?: number;
+  width?: number;
+  height?: number;
+}>;
+
 export type VideoMomentViewModel = TimelineMomentBase &
   Readonly<{
     kind: "video";
-    video: Readonly<{
-      src: string;
-      poster?: string;
-      mimeType?: string;
-      durationMs?: number;
-      width?: number;
-      height?: number;
-    }>;
+    video: TimelineVideoMedia;
   }>;
 
 export type LocationMomentViewModel = TimelineMomentBase &
@@ -167,6 +169,7 @@ export type InsightMomentViewModel = TimelineMomentBase &
     attribution: string;
     sourceUrl?: string;
     sourceLabel?: string;
+    video?: TimelineVideoMedia;
   }>;
 
 export type TimelineMomentViewModel =

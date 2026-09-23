@@ -53,7 +53,7 @@ export function VideoMomentMedia({
   moment,
   label,
 }: Readonly<{
-  moment: VideoMomentViewModel;
+  moment: Pick<VideoMomentViewModel, "id" | "video">;
   label: string;
 }>) {
   const storedPoster = useVideoPoster(moment.id);

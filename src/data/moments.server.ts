@@ -431,6 +431,16 @@ export function mapTimelineRow(
       attribution: row.moment_title ?? "Insight",
       sourceUrl,
       sourceLabel: sourceUrl ? insightSourceLabel(sourceUrl) : undefined,
+      video: videoMeta
+        ? {
+            src: `/api/media/videos/${row.moment_id}`,
+            poster: videoMeta.poster,
+            mimeType: videoMeta.mimeType,
+            durationMs: videoMeta.durationMs,
+            width: videoMeta.width,
+            height: videoMeta.height,
+          }
+        : undefined,
     };
   }
   return { ...base, kind: "thought" };
@@ -791,7 +801,9 @@ export async function loadConnectedTimeline(
     .filter((row) => row.moment_kind === "photo")
     .map((row) => row.moment_id);
   const videoMomentIds = enrichRows
-    .filter((row) => row.moment_kind === "video")
+    .filter(
+      (row) => row.moment_kind === "video" || row.moment_kind === "insight",
+    )
     .map((row) => row.moment_id);
   const [photosByMoment, videoMetaByMoment, conversationsByMoment] =
     await Promise.all([

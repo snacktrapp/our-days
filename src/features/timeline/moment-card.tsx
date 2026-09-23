@@ -323,6 +323,12 @@ export function MomentCard({
             ) : null}
           </cite>
         </ExpandableThoughtCopy>
+        {moment.video ? (
+          <VideoMomentMedia
+            moment={{ id: moment.id, video: moment.video }}
+            label={`Clip attached to an Insight from ${moment.displayDate}`}
+          />
+        ) : null}
         <CardActions
           interaction={interaction}
           moment={moment}

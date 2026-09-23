@@ -1,8 +1,22 @@
 begin;
 
-select plan(24);
+select plan(31);
+
+insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+values (
+  '72000000-0000-4000-8000-000000000021',
+  '10000000-0000-4000-8000-000000000001',
+  statement_timestamp(),
+  statement_timestamp(),
+  statement_timestamp() + interval '1 day'
+);
 
 set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","session_id":"72000000-0000-4000-8000-000000000021"}',
+  true
+);
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 
 select throws_ok(
@@ -57,6 +71,164 @@ select is(
   ) where moment_kind = 'insight'),
   0::bigint,
   'family Insights never appear on a personal journal'
+);
+
+select id as clip_ready_insight_id
+  from public.moments
+ where kind = 'insight' and title = 'Huberman Lab — Circadian Toolkit'
+ order by created_at desc
+ limit 1 \gset
+
+select * from public.reserve_video_moment(
+  circle_id := '20000000-0000-4000-8000-000000000001',
+  journal_person_id := null,
+  body := '',
+  place_name := null,
+  tagged_person_ids := '{}'::uuid[],
+  occurred_on := '2026-08-28',
+  expected_mime_type := 'video/mp4',
+  expected_size_bytes := 2233445,
+  duration_ms := 17000,
+  occurred_at := null,
+  occurred_timezone := null,
+  request_key := '71000000-0000-4000-8000-000000000001',
+  audience := null,
+  circle_ids := null,
+  existing_moment_id := :'clip_ready_insight_id'
+) \gset clip_
+
+select is(
+  :'clip_moment_id'::uuid,
+  :'clip_ready_insight_id'::uuid,
+  'reserve_video_moment can target an existing Insight by moment id'
+);
+
+select set_config('storage.operation', 'storage.tus.upload.create', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  '73000000-0000-4000-8000-000000000001',
+  'our-days-videos',
+  :'clip_object_path',
+  '10000000-0000-4000-8000-000000000001',
+  '{"mimetype":"video/mp4","size":"2233445"}'::jsonb,
+  jsonb_build_object(
+    'video_request_id', :'clip_request_id',
+    'request_key', '71000000-0000-4000-8000-000000000001',
+    'expected_mime_type', 'video/mp4',
+    'expected_size_bytes', 2233445,
+    'duration_ms', 17000
+  )
+);
+
+select is(
+  public.finalize_video_moment(:'clip_request_id'::uuid),
+  :'clip_ready_insight_id'::uuid,
+  'finalize_video_moment attaches media to the existing Insight'
+);
+
+select is(
+  (select row(bucket_id, object_path, mime_type, size_bytes, duration_ms)::text
+     from public.get_video_moment_delivery(:'clip_ready_insight_id'::uuid)),
+  row(
+    'our-days-videos'::text,
+    :'clip_object_path'::text,
+    'video/mp4'::text,
+    2233445::bigint,
+    17000
+  )::text,
+  'Insight clips reuse private video delivery descriptors'
+);
+
+select is(
+  (select count(*)::bigint from public.moments
+    where id = :'clip_ready_insight_id'::uuid
+      and kind = 'insight'),
+  1::bigint,
+  'attaching a clip keeps the original moment kind as insight'
+);
+
+select throws_ok(
+  $$select * from public.reserve_video_moment(
+    circle_id := '20000000-0000-4000-8000-000000000001',
+    journal_person_id := null,
+    body := '',
+    place_name := null,
+    tagged_person_ids := '{}'::uuid[],
+    occurred_on := '2026-08-28',
+    expected_mime_type := 'video/mp4',
+    expected_size_bytes := 104857601,
+    duration_ms := 17000,
+    occurred_at := null,
+    occurred_timezone := null,
+    request_key := '71000000-0000-4000-8000-000000000002',
+    audience := null,
+    circle_ids := null,
+    existing_moment_id := '60000000-0000-4000-8000-000000000008'
+  )$$,
+  '22023', 'Video moment could not be prepared',
+  'oversized insight clips are rejected by reserve validation'
+);
+
+select public.create_family_moment(
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'thought',
+  null,
+  'A thought is not attachable video media.',
+  null,
+  '{}'::uuid[],
+  '2026-08-28'
+) as non_insight_moment_id \gset
+
+select throws_ok(
+  format(
+    $$select * from public.reserve_video_moment(
+      circle_id := '20000000-0000-4000-8000-000000000001',
+      journal_person_id := null,
+      body := '',
+      place_name := null,
+      tagged_person_ids := '{}'::uuid[],
+      occurred_on := '2026-08-28',
+      expected_mime_type := 'video/mp4',
+      expected_size_bytes := 2233445,
+      duration_ms := 17000,
+      occurred_at := null,
+      occurred_timezone := null,
+      request_key := '71000000-0000-4000-8000-000000000003',
+      audience := null,
+      circle_ids := null,
+      existing_moment_id := %L
+    )$$,
+    :'non_insight_moment_id'
+  ),
+  '42501', 'Video moment could not be prepared',
+  'reserve rejects attaching a clip to a non-insight moment kind'
+);
+
+select throws_ok(
+  format(
+    $$select * from public.reserve_video_moment(
+      circle_id := '20000000-0000-4000-8000-000000000001',
+      journal_person_id := null,
+      body := '',
+      place_name := null,
+      tagged_person_ids := '{}'::uuid[],
+      occurred_on := '2026-08-28',
+      expected_mime_type := 'video/mp4',
+      expected_size_bytes := 2233445,
+      duration_ms := 17000,
+      occurred_at := null,
+      occurred_timezone := null,
+      request_key := '71000000-0000-4000-8000-000000000004',
+      audience := null,
+      circle_ids := null,
+      existing_moment_id := %L
+    )$$,
+    :'clip_ready_insight_id'
+  ),
+  '22023', 'Video moment could not be prepared',
+  'an Insight can have only one attached clip'
 );
 
 select ok(

@@ -547,6 +547,44 @@ describe("connected timeline mapping", () => {
     });
   });
 
+  it("maps an Insight clip to the same-origin private byte-range route", () => {
+    const moment = mapTimelineRow(
+      row({
+        moment_id: "10000000-0000-4000-8000-000000000097",
+        moment_kind: "insight",
+        moment_title: "Huberman Lab — Master Your Sleep",
+        moment_journal_person_id: null,
+        journal_person_name: null,
+        journal_person_accent: null,
+        body: "Morning sunlight sets the clock.",
+        recorder_person_id: "parent",
+        recorder_person_name: "TARS",
+      }),
+      "2026-08-30",
+      undefined,
+      undefined,
+      undefined,
+      {
+        mimeType: "video/mp4",
+        durationMs: 17_000,
+        poster: "/api/media/videos/10000000-0000-4000-8000-000000000097/poster",
+        width: 1080,
+        height: 1920,
+      },
+    );
+    expect(moment).toMatchObject({
+      kind: "insight",
+      video: {
+        src: "/api/media/videos/10000000-0000-4000-8000-000000000097",
+        mimeType: "video/mp4",
+        durationMs: 17_000,
+        poster: "/api/media/videos/10000000-0000-4000-8000-000000000097/poster",
+        width: 1080,
+        height: 1920,
+      },
+    });
+  });
+
   it("maps a connected video to the same-origin private byte-range route", () => {
     const moment = mapTimelineRow(
       row({
