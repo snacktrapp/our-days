@@ -264,9 +264,10 @@ describe("TimelineFeed", () => {
     expect(
       container.querySelector(".timeline-author-row strong"),
     ).toHaveTextContent("Our Days");
-    expect(container.querySelector(".avatar-node-image")).toHaveStyle(
-      "background-image: url(/brand/od-icon.png)",
-    );
+    const insightAvatar = container.querySelector(".insight-byline-avatar");
+    expect(insightAvatar).not.toBeNull();
+    expect(insightAvatar).toHaveClass("avatar-node-image");
+    expect(insightAvatar).not.toHaveAttribute("style");
     expect(screen.queryByText("Just Me")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
     expect(screen.queryByText("Person")).toBeNull();
