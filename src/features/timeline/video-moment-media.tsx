@@ -59,7 +59,8 @@ export function VideoMomentMedia({
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
   const candidatePoster = storedPoster ?? moment.video.poster ?? undefined;
-  const { objectUrl: fetchedPoster } = usePrivateMediaObjectUrl(candidatePoster);
+  const { objectUrl: fetchedPoster } =
+    usePrivateMediaObjectUrl(candidatePoster);
   const poster = fetchedPoster ?? candidatePoster;
   const shouldWarmPoster = !storedPoster;
   const [videoNearViewport, setVideoNearViewport] = useState(false);
