@@ -1649,11 +1649,6 @@ export function MomentComposer({
             </div>
           ) : (
             <>
-              {connectedExperience ? (
-                <span id="composer-privacy" className="private-label">
-                  Family only
-                </span>
-              ) : null}
               {mode && isDirty ? (
                 <p className="composer-draft-held">
                   Your current draft is still here.
@@ -2402,7 +2397,7 @@ export function MomentComposer({
       }${mode && !choosingMode && !reviewing ? " composer-editor-open" : ""}`}
       aria-labelledby="composer-title"
       aria-describedby={
-        connectedExperience && (typePicker || reviewing)
+        connectedExperience && reviewing
           ? "composer-privacy"
           : undefined
       }

@@ -5473,6 +5473,7 @@ span.moment-place-line {
 }
 
 .bottom-nav {
+  translate: 0 var(--journal-nav-scroll-offset, 0px);
   height: 56px;
   position: fixed;
   z-index: 160;
@@ -5512,6 +5513,7 @@ span.moment-place-line {
 }
 
 :root:has(.inline-note-form) .bottom-nav,
+:root:has(#invitation-drawer[open]) .bottom-nav,
 :root:has(.new-moment-composer-dialog[open]) .bottom-nav,
 html.overlay-open .bottom-nav {
   opacity: 0;
@@ -7079,6 +7081,40 @@ html.overlay-open .bottom-nav {
 
 .comment-sheet {
   height: auto;
+}
+
+.invitation-drawer-content.invite-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.invitation-drawer-content.invite-section form {
+  padding: 0;
+  border: 0;
+  gap: 8px;
+}
+.invitation-drawer-content .invite-review {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.invitation-drawer-cancel {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.circle-invite-launch .first-members-prompt {
+  padding: 16px 0;
+}
+.circle-invite-launch .first-members-prompt > button {
+  min-height: 44px;
+  background: var(--action);
+  color: var(--action-ink);
+  border: 0;
 }
 
 .comment-sheet-body {

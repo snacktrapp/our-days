@@ -10,7 +10,6 @@ import { NavSymbol } from "./nav-symbol";
 import { usePendingJournalRoute } from "./journal-pending-route";
 import type { JournalSection } from "./shell-view-model";
 import { useHideBottomNavWhileComposing } from "./hide-bottom-nav-while-composing";
-import { useCompactBottomNavOnScroll } from "./use-compact-bottom-nav-on-scroll";
 import { usePinBottomNavToVisualViewport } from "./use-pin-bottom-nav-to-visual-viewport";
 
 type PrimarySection = Extract<
@@ -37,7 +36,6 @@ export function PrimaryNavigation({
 }) {
   const pathname = usePathname() ?? "";
   const pendingRoute = usePendingJournalRoute()?.pending;
-  const compact = useCompactBottomNavOnScroll();
   const pinToVisualViewport = usePinBottomNavToVisualViewport();
   const session = useComposerSession();
   const hidden = useHideBottomNavWhileComposing(session?.isOpen ?? false);
@@ -89,7 +87,7 @@ export function PrimaryNavigation({
 
   return (
     <nav
-      className={`bottom-nav${compact ? " is-compact" : ""}${hidden ? " is-hidden" : ""}`}
+      className={`bottom-nav${hidden ? " is-hidden" : ""}`}
       aria-label="Primary navigation"
       aria-hidden={hidden ? true : undefined}
       inert={hidden ? true : undefined}
