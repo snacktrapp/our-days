@@ -39,9 +39,11 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
         <AudienceChip label={chipLabel} audience={moment.audience} />
       ) : null}
       {isInsight ? (
-        <span className="avatar-node avatar-node-image" aria-hidden="true">
-          <img src={insightSystemByline.avatarSrc} alt="" />
-        </span>
+        <span
+          className="avatar-node avatar-node-image"
+          aria-hidden="true"
+          style={{ backgroundImage: `url(${insightSystemByline.avatarSrc})` }}
+        />
       ) : (
         <span
           className={`avatar-node dot-${moment.personAccent}`}

@@ -264,9 +264,8 @@ describe("TimelineFeed", () => {
     expect(
       container.querySelector(".timeline-author-row strong"),
     ).toHaveTextContent("Our Days");
-    expect(container.querySelector(".avatar-node-image img")).toHaveAttribute(
-      "src",
-      "/brand/od-icon.png",
+    expect(container.querySelector(".avatar-node-image")).toHaveStyle(
+      "background-image: url(/brand/od-icon.png)",
     );
     expect(screen.queryByText("Just Me")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
