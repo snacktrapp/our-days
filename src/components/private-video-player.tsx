@@ -20,7 +20,7 @@ export function PrivateVideoPlayer({
 }: Readonly<{
   src: string;
   label: string;
-  preload?: "none" | "metadata";
+  preload?: "none" | "metadata" | "auto";
   controls?: boolean;
   autoPlay?: boolean;
   poster?: string;

@@ -6,6 +6,10 @@ import {
   selectBiblePassage,
 } from "@/features/composer/bible-verse-catalog";
 import { resetOverlayChromeForTests } from "@/features/shell/overlay-chrome";
+import {
+  clearVideoPosters,
+  rememberVideoPoster,
+} from "@/features/video/video-poster-store";
 import { MomentCard } from "./moment-card";
 import { timelineCardOccurredLabel } from "./timeline-view-model";
 import { thoughtCopyOverflows } from "./thought-copy-overflow";
@@ -230,6 +234,7 @@ describe("MomentCard long thought copy", () => {
 describe("MomentCard timeline media", () => {
   afterEach(() => {
     resetOverlayChromeForTests();
+    clearVideoPosters();
     document.documentElement.classList.remove("overlay-open");
     document.body.classList.remove("overlay-open");
     vi.unstubAllGlobals();
@@ -481,7 +486,7 @@ describe("MomentCard timeline media", () => {
     );
   });
 
-  it("keeps the inline video available when its private poster fails", async () => {
+  it("keeps the inline video available when its private poster fetch fails", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       blob: async () => new Blob(),
@@ -513,7 +518,46 @@ describe("MomentCard timeline media", () => {
     );
     expect(timelineVideo).toHaveAttribute("controls");
     expect(timelineVideo).toHaveAttribute("playsinline");
-    expect(timelineVideo).not.toHaveAttribute("poster");
+    expect(timelineVideo).toHaveAttribute(
+      "poster",
+      "/api/media/videos/retry-poster-video/poster",
+    );
+  });
+
+  it("falls back to a warmed poster when private poster delivery fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      blob: async () => new Blob(),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const cachedPoster = "data:image/jpeg;base64,abc";
+    rememberVideoPoster("retry-poster-video", cachedPoster);
+
+    render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "retry-poster-video",
+          kind: "video",
+          kicker: "A video",
+          video: {
+            src: "/api/media/videos/retry-poster-video",
+            poster: "/api/media/videos/retry-poster-video/poster",
+            width: 160,
+            height: 90,
+          },
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Video in Molly’s journal from Aug 28, 2026"),
+      ).toHaveAttribute("poster", cachedPoster);
+    });
   });
 
   it("reserves a 16:9 inline player for videos with unknown dimensions", () => {

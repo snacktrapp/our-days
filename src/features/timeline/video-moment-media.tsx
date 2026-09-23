@@ -61,7 +61,13 @@ export function VideoMomentMedia({
   const candidatePoster = moment.video.poster ?? storedPoster ?? undefined;
   const { objectUrl: fetchedPoster, failed: posterFetchFailed } =
     usePrivateMediaObjectUrl(candidatePoster);
-  const poster = posterFetchFailed ? undefined : (fetchedPoster ?? undefined);
+  const poster =
+    fetchedPoster ??
+    (posterFetchFailed
+      ? (storedPoster ?? moment.video.poster ?? undefined)
+      : candidatePoster);
+  const shouldWarmPoster =
+    !storedPoster && (!moment.video.poster || posterFetchFailed);
   const [videoNearViewport, setVideoNearViewport] = useState(false);
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
@@ -81,7 +87,7 @@ export function VideoMomentMedia({
         if (!entries.some((entry) => entry.isIntersecting)) return;
         observer.disconnect();
         setVideoNearViewport(true);
-        if (!poster) {
+        if (shouldWarmPoster) {
           void warmVideoPoster({
             momentId: moment.id,
             src: moment.video.src,
@@ -95,7 +101,7 @@ export function VideoMomentMedia({
       cancelled = true;
       observer.disconnect();
     };
-  }, [moment.id, moment.video.src, poster]);
+  }, [moment.id, moment.video.src, shouldWarmPoster]);
   const knownRatio = Boolean(
     (moment.video.width ?? storedFrame?.width) &&
     (moment.video.height ?? storedFrame?.height),
@@ -113,7 +119,9 @@ export function VideoMomentMedia({
         src={moment.video.src}
         label={label}
         poster={poster}
-        preload={videoNearViewport ? "metadata" : "none"}
+        preload={
+          videoNearViewport ? (shouldWarmPoster ? "auto" : "metadata") : "none"
+        }
         controls
         playsInline
         width={width}
