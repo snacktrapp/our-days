@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { VideoUploadError } from "@/features/composer/video-upload";
 import { inspectVideoFile } from "./inspect-video-file";
 
-const posterDataUrl =
-  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIhwgMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGfAD//2Q==";
+const posterDataUrl = `data:image/jpeg;base64,${"A".repeat(25_000)}`;
 
 function stubInspectableVideo(options: {
   duration: number;

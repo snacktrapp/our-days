@@ -4,6 +4,7 @@ import {
   VideoUploadError,
   acceptedVideoMime,
 } from "@/features/composer/video-upload";
+import { captureVideoPoster } from "@/features/video/capture-video-poster";
 
 export type InspectedVideo = Readonly<{
   durationMs: number;
@@ -13,31 +14,11 @@ export type InspectedVideo = Readonly<{
 }>;
 
 const inspectionTimeoutMs = 15_000;
-const posterMaxWidth = 720;
 
 function throwIfAborted(signal?: AbortSignal) {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
   throw new DOMException("Video inspection was stopped.", "AbortError");
-}
-
-function capturePoster(video: HTMLVideoElement) {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  if (width < 1 || height < 1) return null;
-  const scale = Math.min(1, posterMaxWidth / width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  try {
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
-    return dataUrl.startsWith("data:image/jpeg") ? dataUrl : null;
-  } catch {
-    return null;
-  }
 }
 
 async function decodeCurrentFrame(video: HTMLVideoElement) {
@@ -168,12 +149,14 @@ export async function inspectVideoFile(
                 false,
               );
             }
+            const poster = await captureVideoPoster(video);
             finish(() =>
               resolve({
                 durationMs,
                 width: video.videoWidth,
                 height: video.videoHeight,
-                posterDataUrl: capturePoster(video),
+                posterDataUrl:
+                  poster && !poster.looksLikelyBlank ? poster.dataUrl : null,
               }),
             );
           } catch (error) {

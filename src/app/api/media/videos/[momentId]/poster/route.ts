@@ -40,7 +40,10 @@ export async function GET(
     const access = await readLocalJournalAccess();
     if (!access) return unavailable();
     const moment = await findLocalVisibleMoment(momentId);
-    if (moment?.kind !== "video" || !moment.media?.posterRelativePath) {
+    if (
+      (moment?.kind !== "video" && moment?.kind !== "insight") ||
+      !moment.media?.posterRelativePath
+    ) {
       return unavailable();
     }
     const bytes = readLocalMediaFile(moment.media.posterRelativePath);

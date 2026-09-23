@@ -18,7 +18,6 @@ import { AudienceChip } from "./audience-chip";
 
 const insightSystemByline = {
   name: "Our Days",
-  avatarSrc: "/brand/od-icon.png",
 } as const;
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
@@ -40,9 +39,8 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
       ) : null}
       {isInsight ? (
         <span
-          className="avatar-node avatar-node-image"
+          className="avatar-node avatar-node-image insight-byline-avatar"
           aria-hidden="true"
-          style={{ backgroundImage: `url(${insightSystemByline.avatarSrc})` }}
         />
       ) : (
         <span

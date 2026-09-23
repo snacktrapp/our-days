@@ -136,6 +136,7 @@ export type ThoughtMomentViewModel = TimelineMomentBase &
 type TimelineVideoMedia = Readonly<{
   src: string;
   poster?: string;
+  posterSizeBytes?: number;
   mimeType?: string;
   durationMs?: number;
   width?: number;

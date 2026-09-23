@@ -34,8 +34,10 @@ it("keeps the confirmation and error visible when a populated circle cannot be d
     ),
   );
   expect(mocks.replace).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-  expect(screen.queryByRole("status")).toBeNull();
+  const cancelButton = screen.getByRole("button", { name: "Cancel" });
+  await waitFor(() => expect(cancelButton).toBeEnabled());
+  fireEvent.click(cancelButton);
+  await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   fireEvent.click(screen.getByRole("button", { name: "Delete circle" }));
-  expect(screen.queryByRole("status")).toBeNull();
+  await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
 });
