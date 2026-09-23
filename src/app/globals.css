@@ -621,7 +621,7 @@ button {
   background-size: cover;
 }
 .avatar-node.avatar-node-image.insight-byline-avatar {
-  background-image: url("/brand/od-icon.png");
+  background-image: url("/brand/od-icon.svg");
 }
 .family-mark-dot {
   width: 27px;
