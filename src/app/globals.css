@@ -612,6 +612,14 @@ button {
     0 0 0 3px var(--paper),
     0 2px 8px rgba(51, 41, 31, 0.15);
 }
+.avatar-node.avatar-node-image {
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--ink);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
 .family-mark-dot {
   width: 27px;
   height: 27px;
@@ -6231,15 +6239,6 @@ html.overlay-open .bottom-nav {
   letter-spacing: 0.05em;
 }
 
-.insight-rail-node {
-  width: 10px;
-  height: 10px;
-  margin: 7px 0;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  background: var(--cream);
-}
-
 .insight-source {
   display: inline-flex;
   align-items: center;
@@ -9509,17 +9508,17 @@ iframe.composer-location-map {
 }
 
 /* Shared post hierarchy: author / words / reactions / actions / conversation. */
-.connection:not(.connection-insight) {
+.connection {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
   column-gap: 9px;
   align-items: start;
 }
-.connection:not(.connection-insight) > .avatar-node {
+.connection > .avatar-node {
   grid-column: 2;
   grid-row: 1;
 }
-.connection:not(.connection-insight) > .card-audience {
+.connection > .card-audience {
   grid-column: 1;
   grid-row: 1;
   justify-self: end;
@@ -9529,11 +9528,11 @@ iframe.composer-location-map {
   min-height: 24px;
   justify-content: center;
 }
-.connection:not(.connection-insight)::after {
+.connection::after {
   grid-column: 2;
   justify-self: center;
 }
-.connection:not(.connection-insight) .moment-meta {
+.connection .moment-meta {
   grid-column: 3;
   grid-row: 1;
   position: static;
