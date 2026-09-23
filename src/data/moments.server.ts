@@ -557,6 +557,7 @@ export async function loadVideoMetaByMomentId(
       mimeType: string;
       durationMs: number;
       poster?: string;
+      posterSizeBytes?: number;
       width?: number;
       height?: number;
     }>
@@ -584,7 +585,7 @@ export async function loadVideoMetaByMomentId(
 
   const { data: posters, error: posterError } = await supabase
     .from("moment_video_posters")
-    .select("moment_id, width_px, height_px")
+    .select("moment_id, size_bytes, width_px, height_px")
     .in("moment_id", uniqueIds);
   if (posterError || !posters) return metaByMoment;
   for (const row of posters) {
@@ -594,6 +595,14 @@ export async function loadVideoMetaByMomentId(
     metaByMoment.set(row.moment_id, {
       ...current,
       poster: `/api/media/videos/${row.moment_id}/poster`,
+      posterSizeBytes:
+        typeof row.size_bytes === "number" && row.size_bytes > 0
+          ? row.size_bytes
+          : typeof row.size_bytes === "string"
+            ? Number(row.size_bytes) > 0
+              ? Number(row.size_bytes)
+              : undefined
+            : undefined,
       width:
         typeof row.width_px === "number" && row.width_px > 0
           ? row.width_px

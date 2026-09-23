@@ -4,36 +4,15 @@ import {
   rememberVideoFrame,
   rememberVideoPoster,
 } from "@/features/video/video-poster-store";
+import { captureVideoPoster } from "@/features/video/capture-video-poster";
 import { persistVideoPoster } from "@/features/video/persist-video-poster";
 
-const posterMaxWidth = 720;
 const warmTimeoutMs = 20_000;
 const inFlight = new Set<string>();
 const failed = new Set<string>();
 let activeWarmups = 0;
 const maximumConcurrentWarmups = 1;
 const waiting: Array<() => void> = [];
-
-function capturePoster(video: HTMLVideoElement) {
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  if (width < 1 || height < 1) return null;
-  const scale = Math.min(1, posterMaxWidth / width);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(width * scale));
-  canvas.height = Math.max(1, Math.round(height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  try {
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
-    return dataUrl.startsWith("data:image/jpeg")
-      ? { dataUrl, width, height }
-      : null;
-  } catch {
-    return null;
-  }
-}
 
 async function decodeCurrentFrame(video: HTMLVideoElement) {
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
@@ -80,6 +59,7 @@ function releaseWarmupSlot() {
 export async function warmVideoPoster(input: {
   momentId: string;
   src: string;
+  replaceExistingPoster?: boolean;
 }) {
   const momentId = input.momentId.trim();
   const src = input.src.trim();
@@ -120,19 +100,22 @@ export async function warmVideoPoster(input: {
       video.load();
     });
     await decodeCurrentFrame(video);
-    const poster = capturePoster(video);
+    const poster = await captureVideoPoster(video);
     if (!poster) {
       failed.add(momentId);
       return false;
     }
     rememberVideoPoster(momentId, poster.dataUrl);
     rememberVideoFrame(momentId, poster.width, poster.height);
-    void persistVideoPoster({
-      momentId,
-      posterDataUrl: poster.dataUrl,
-      width: poster.width,
-      height: poster.height,
-    });
+    if (!poster.looksLikelyBlank) {
+      void persistVideoPoster({
+        momentId,
+        posterDataUrl: poster.dataUrl,
+        width: poster.width,
+        height: poster.height,
+        replaceExisting: input.replaceExistingPoster === true,
+      });
+    }
     return true;
   } catch {
     failed.add(momentId);

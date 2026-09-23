@@ -28,6 +28,7 @@ export async function persistVideoPoster(input: {
   posterDataUrl: string;
   width: number;
   height: number;
+  replaceExisting?: boolean;
 }) {
   const momentId = input.momentId.trim();
   if (!uuidPattern.test(momentId)) return false;
@@ -43,6 +44,7 @@ export async function persistVideoPoster(input: {
 
   const blob = dataUrlToJpegBlob(input.posterDataUrl);
   if (!blob) return false;
+  const replaceExisting = input.replaceExisting === true;
 
   pending.add(momentId);
   try {
@@ -53,7 +55,7 @@ export async function persistVideoPoster(input: {
       .upload(objectPath, blob, {
         cacheControl: "3600",
         contentType: "image/jpeg",
-        upsert: false,
+        upsert: replaceExisting,
       });
     if (
       uploadError &&
@@ -78,8 +80,4 @@ export async function persistVideoPoster(input: {
   } finally {
     pending.delete(momentId);
   }
-}
-
-export function markVideoPosterPersisted(momentId: string) {
-  if (uuidPattern.test(momentId)) completed.add(momentId);
 }

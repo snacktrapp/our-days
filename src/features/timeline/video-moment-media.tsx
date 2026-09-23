@@ -9,11 +9,12 @@ import {
   useVideoFrame,
   useVideoPoster,
 } from "@/features/video/video-poster-store";
-import {
-  markVideoPosterPersisted,
-  persistVideoPoster,
-} from "@/features/video/persist-video-poster";
+import { persistVideoPoster } from "@/features/video/persist-video-poster";
 import { warmVideoPoster } from "@/features/video/warm-video-poster";
+import {
+  posterDataUrlLooksLikelyBlank,
+  posterLooksLikelyBlankByBytes,
+} from "@/features/video/video-poster-quality";
 import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 import type { VideoMomentViewModel } from "./timeline-view-model";
 
@@ -38,14 +39,29 @@ function handleCapturedFrame(
     width: number;
     height: number;
   }>,
+  options: Readonly<{
+    hasServerPoster: boolean;
+    shouldPersist: boolean;
+    replaceExisting: boolean;
+  }>,
 ) {
+  const looksLikelyBlank = posterDataUrlLooksLikelyBlank(
+    frame.posterDataUrl,
+    frame.width,
+    frame.height,
+  );
+  if (options.hasServerPoster && looksLikelyBlank) {
+    return;
+  }
   rememberVideoPoster(momentId, frame.posterDataUrl);
   rememberVideoFrame(momentId, frame.width, frame.height);
+  if (!options.shouldPersist || looksLikelyBlank) return;
   void persistVideoPoster({
     momentId,
     posterDataUrl: frame.posterDataUrl,
     width: frame.width,
     height: frame.height,
+    replaceExisting: options.replaceExisting,
   });
 }
 
@@ -58,20 +74,22 @@ export function VideoMomentMedia({
 }>) {
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
+  const serverPosterLooksLikelyBlank = posterLooksLikelyBlankByBytes(
+    moment.video.posterSizeBytes,
+    moment.video.width,
+    moment.video.height,
+  );
   const candidatePoster = storedPoster ?? moment.video.poster ?? undefined;
   const { objectUrl: fetchedPoster } =
     usePrivateMediaObjectUrl(candidatePoster);
   const poster = fetchedPoster ?? candidatePoster;
-  const shouldWarmPoster = !storedPoster;
+  const shouldWarmPoster = !storedPoster || serverPosterLooksLikelyBlank;
+  const shouldPersistPoster =
+    !moment.video.poster || serverPosterLooksLikelyBlank;
   const [videoNearViewport, setVideoNearViewport] = useState(false);
   const width = moment.video.width ?? storedFrame?.width ?? 16;
   const height = moment.video.height ?? storedFrame?.height ?? 9;
   const rootRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (moment.video.poster?.startsWith("/api/media/videos/")) {
-      markVideoPosterPersisted(moment.id);
-    }
-  }, [moment.id, moment.video.poster]);
   useEffect(() => {
     const root = rootRef.current;
     if (!root || typeof IntersectionObserver === "undefined") return;
@@ -86,6 +104,8 @@ export function VideoMomentMedia({
           void warmVideoPoster({
             momentId: moment.id,
             src: moment.video.src,
+            replaceExistingPoster:
+              shouldPersistPoster && Boolean(moment.video.poster),
           });
         }
       },
@@ -96,7 +116,13 @@ export function VideoMomentMedia({
       cancelled = true;
       observer.disconnect();
     };
-  }, [moment.id, moment.video.src, shouldWarmPoster]);
+  }, [
+    moment.id,
+    moment.video.poster,
+    moment.video.src,
+    shouldPersistPoster,
+    shouldWarmPoster,
+  ]);
   const knownRatio = Boolean(
     (moment.video.width ?? storedFrame?.width) &&
     (moment.video.height ?? storedFrame?.height),
@@ -121,7 +147,13 @@ export function VideoMomentMedia({
         playsInline
         width={width}
         height={height}
-        onReadyFrame={(frame) => handleCapturedFrame(moment.id, frame)}
+        onReadyFrame={(frame) =>
+          handleCapturedFrame(moment.id, frame, {
+            hasServerPoster: Boolean(moment.video.poster),
+            shouldPersist: shouldPersistPoster,
+            replaceExisting: Boolean(moment.video.poster),
+          })
+        }
       />
     </div>
   );

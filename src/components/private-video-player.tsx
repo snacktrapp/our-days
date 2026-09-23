@@ -2,6 +2,7 @@
 
 import type { Ref } from "react";
 import { useState } from "react";
+import { posterDataUrlLooksLikelyBlank } from "@/features/video/video-poster-quality";
 import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 
 export function PrivateVideoPlayer({
@@ -101,6 +102,15 @@ export function PrivateVideoPlayer({
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           const posterDataUrl = canvas.toDataURL("image/jpeg", 0.72);
           if (!posterDataUrl.startsWith("data:image/jpeg")) return;
+          if (
+            posterDataUrlLooksLikelyBlank(
+              posterDataUrl,
+              video.videoWidth,
+              video.videoHeight,
+            )
+          ) {
+            return;
+          }
           onReadyFrame({
             posterDataUrl,
             width: video.videoWidth,

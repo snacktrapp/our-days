@@ -125,7 +125,10 @@ export async function GET(
     const access = await readLocalJournalAccess();
     if (!access) return unavailable();
     const moment = await findLocalVisibleMoment(momentId);
-    if (!moment?.media || moment.kind !== "video") return unavailable();
+    if (!moment?.media) return unavailable();
+    if (moment.kind !== "video" && moment.kind !== "insight") {
+      return unavailable();
+    }
     const bytes = readLocalMediaFile(moment.media.originalRelativePath);
     const headers = new Headers(privateHeaders);
     headers.set("Accept-Ranges", "bytes");
