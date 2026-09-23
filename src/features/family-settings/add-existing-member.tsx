@@ -13,9 +13,7 @@ export type ExistingMemberActions = {
   add: typeof addExistingCircleMemberAction;
 };
 
-export function addFromCircleLabel(
-  sources: readonly FamilyCircleViewModel[],
-) {
+export function addFromCircleLabel(sources: readonly FamilyCircleViewModel[]) {
   if (sources.length === 1) return `Add someone from ${sources[0].name}`;
   return "Add someone from another circle";
 }
@@ -34,7 +32,11 @@ export function AddExistingMember({
   const sources = groups.filter(
     (group) => group.id !== circle.id && group.canManageAccess,
   );
-  if (!circle.canManageAccess || sources.length === 0 || (!preview && !actions)) {
+  if (
+    !circle.canManageAccess ||
+    sources.length === 0 ||
+    (!preview && !actions)
+  ) {
     return null;
   }
   return (

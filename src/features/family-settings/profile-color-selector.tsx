@@ -46,7 +46,10 @@ export function ProfileColorSelector({
       <SettingsGroup>
         <details className="profile-color-details">
           <summary className="settings-row profile-color-summary">
-            <SettingsAvatar accent={color?.accent ?? accent} initial={initial} />
+            <SettingsAvatar
+              accent={color?.accent ?? accent}
+              initial={initial}
+            />
             <SettingsRowCopy
               title={name}
               subtitle={`Your color · ${colorName}`}
@@ -59,7 +62,10 @@ export function ProfileColorSelector({
             <fieldset className="profile-color-swatch-grid" disabled={pending}>
               <legend className="sr-only">Profile color</legend>
               {profileColors.map((option) => (
-                <label key={option.token} className="profile-color-swatch-label">
+                <label
+                  key={option.token}
+                  className="profile-color-swatch-label"
+                >
                   <input
                     type="radio"
                     name="profile-color"

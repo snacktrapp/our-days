@@ -321,11 +321,7 @@ function PreviewFamilySettingsPanel({
       const circle =
         model.groups.find((group) => group.id === inviteCircleId) ??
         model.groups[0];
-      if (
-        inviteCircleId &&
-        circle &&
-        !isFirstMembersEmptyCircle(circle)
-      ) {
+      if (inviteCircleId && circle && !isFirstMembersEmptyCircle(circle)) {
         return inviteCircleId;
       }
       return null;
@@ -341,8 +337,10 @@ function PreviewFamilySettingsPanel({
     model.groups.find((group) => group.id === inviteCircleIdState) ?? null;
   const inviteTargetCircle =
     model.groups.find((group) => group.id === inviteCircleId) ?? null;
-  const accessReviewMember = findMemberInGroups(model.groups, accessReviewId)
-    ?.member;
+  const accessReviewMember = findMemberInGroups(
+    model.groups,
+    accessReviewId,
+  )?.member;
   const promptFirstMembers = shouldPromptFirstMembers(
     inviteTargetCircle,
     inviteCircleId,
@@ -417,7 +415,9 @@ function PreviewFamilySettingsPanel({
         circleSettingsId={circleSettingsId}
         addExistingCircleId={addExistingCircleId}
         onManageMember={(memberId) =>
-          setAccessReviewId((current) => (current === memberId ? null : memberId))
+          setAccessReviewId((current) =>
+            current === memberId ? null : memberId,
+          )
         }
         onManageInvitation={() => undefined}
         onInvite={(circle) => {
@@ -474,11 +474,7 @@ function PreviewFamilySettingsPanel({
             aria-labelledby="access-review-heading"
           >
             <span>Removal preview</span>
-            <h3
-              ref={accessHeadingRef}
-              id="access-review-heading"
-              tabIndex={-1}
-            >
+            <h3 ref={accessHeadingRef} id="access-review-heading" tabIndex={-1}>
               Review {accessReviewMember.name}’s access
             </h3>
             <RemovalConsequences preview />
@@ -612,11 +608,7 @@ function ConnectedFamilySettingsPanel({
       const circle =
         model.groups.find((group) => group.id === inviteCircleId) ??
         model.groups[0];
-      if (
-        inviteCircleId &&
-        circle &&
-        !isFirstMembersEmptyCircle(circle)
-      ) {
+      if (inviteCircleId && circle && !isFirstMembersEmptyCircle(circle)) {
         return inviteCircleId;
       }
       return null;
@@ -662,8 +654,7 @@ function ConnectedFamilySettingsPanel({
     const extra =
       circle.id === inviteCircleIdState
         ? optimisticPending.filter(
-            (item) =>
-              !listedNames.has(item.displayName.trim().toLowerCase()),
+            (item) => !listedNames.has(item.displayName.trim().toLowerCase()),
           )
         : [];
     return {
@@ -1212,11 +1203,7 @@ function ConnectedFamilySettingsPanel({
                 ? "Journal care"
                 : "Role and access"}
             </span>
-            <h3
-              ref={accessHeadingRef}
-              id="access-review-heading"
-              tabIndex={-1}
-            >
+            <h3 ref={accessHeadingRef} id="access-review-heading" tabIndex={-1}>
               {accessReviewMember.profileKind === "managed"
                 ? `Care for ${accessReviewMember.name}’s journal`
                 : `Manage ${accessReviewMember.name}`}
@@ -1278,7 +1265,11 @@ function ConnectedFamilySettingsPanel({
               </div>
             ) : null}
             <div className="settings-review-actions settings-review-close">
-              <button type="button" disabled={isPending} onClick={closeAccessReview}>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={closeAccessReview}
+              >
                 Done
               </button>
             </div>

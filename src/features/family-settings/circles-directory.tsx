@@ -1,11 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  type MutableRefObject,
-  type ReactNode,
-  useState,
-} from "react";
+import { type MutableRefObject, type ReactNode, useState } from "react";
 import { groupHomeHref } from "@/features/shell/journal-switcher";
 import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 import { ArchiveCircleControl } from "@/features/groups/archive-circle-control";
@@ -64,8 +60,7 @@ function memberShowMore(
 ) {
   return (
     member.canReviewRemoval ||
-    (mode === "connected" &&
-      (member.canManageRole || member.canManageJournal))
+    (mode === "connected" && (member.canManageRole || member.canManageJournal))
   );
 }
 
@@ -193,10 +188,7 @@ export function PendingInviteRow({
   const canReview = !item.emailRequestId.startsWith("optimistic:");
   return (
     <SettingsRow>
-      <SettingsAvatar
-        initial={pendingInitial(item.displayName)}
-        pending
-      />
+      <SettingsAvatar initial={pendingInitial(item.displayName)} pending />
       <SettingsRowCopy
         title={item.displayName}
         subtitle="Invitation sent · waiting to accept"
@@ -275,10 +267,8 @@ export function CircleDirectory({
         const sources = groups.filter(
           (group) => group.id !== circle.id && group.canManageAccess,
         );
-        const showAddExisting =
-          circle.canManageAccess && sources.length > 0;
-        const firstMembers =
-          promptFirstMembers && inviteCircleId === circle.id;
+        const showAddExisting = circle.canManageAccess && sources.length > 0;
+        const firstMembers = promptFirstMembers && inviteCircleId === circle.id;
         return (
           <SettingsSection key={circle.id} id={`circle-${circle.id}`}>
             <SettingsSectionLabel
@@ -332,18 +322,14 @@ export function CircleDirectory({
                   action
                   buttonRef={firstMembers ? inviteCtaRef : undefined}
                   ariaLabel={
-                    firstMembers
-                      ? "Add your first members"
-                      : "Invite someone"
+                    firstMembers ? "Add your first members" : "Invite someone"
                   }
                   onClick={() => onInvite(circle)}
                 >
                   <SettingsAvatar add />
                   <SettingsRowCopy
                     title={
-                      firstMembers
-                        ? "Add your first members"
-                        : "Invite someone"
+                      firstMembers ? "Add your first members" : "Invite someone"
                     }
                     subtitle={
                       firstMembers
@@ -364,8 +350,12 @@ export function CircleDirectory({
                 </SettingsRowButton>
               ) : null}
             </SettingsGroup>
-            {circleSettingsId === circle.id ? renderCircleSettings(circle) : null}
-            {addExistingCircleId === circle.id ? renderAddExisting(circle) : null}
+            {circleSettingsId === circle.id
+              ? renderCircleSettings(circle)
+              : null}
+            {addExistingCircleId === circle.id
+              ? renderAddExisting(circle)
+              : null}
           </SettingsSection>
         );
       })}
@@ -426,11 +416,7 @@ function PageLevelActions({
   );
 }
 
-export function CreateCircleAddRow({
-  onClick,
-}: {
-  onClick: () => void;
-}) {
+export function CreateCircleAddRow({ onClick }: { onClick: () => void }) {
   return (
     <SettingsRowButton action ariaLabel="Create a circle" onClick={onClick}>
       <SettingsAvatar add />
@@ -489,10 +475,7 @@ export function AddExistingMemberSheet({
     (group) => group.id !== circle.id && group.canManageAccess,
   );
   return (
-    <CircleManagementSheet
-      labelledBy="add-existing-heading"
-      onClose={onClose}
-    >
+    <CircleManagementSheet labelledBy="add-existing-heading" onClose={onClose}>
       <section aria-labelledby="add-existing-heading">
         <span>Add from a circle</span>
         <h3 id="add-existing-heading" tabIndex={-1}>
@@ -517,10 +500,7 @@ export function CreateCircleSheet({
   children: ReactNode;
 }) {
   return (
-    <CircleManagementSheet
-      labelledBy="create-circle-heading"
-      onClose={onClose}
-    >
+    <CircleManagementSheet labelledBy="create-circle-heading" onClose={onClose}>
       <section aria-labelledby="create-circle-heading">
         <span>New circle</span>
         <h3 id="create-circle-heading" tabIndex={-1}>

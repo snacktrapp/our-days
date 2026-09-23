@@ -244,10 +244,10 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.getByRole("link", { name: "Child profile — open journal" }),
     ).toHaveAttribute("href", "/people/child?fromCircle=family");
-    expect(
-      screen.queryByRole("button", { name: "Archive circle" }),
-    ).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Circle settings for All our days" }));
+    expect(screen.queryByRole("button", { name: "Archive circle" })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Circle settings for All our days" }),
+    );
     expect(
       screen.getByRole("button", { name: "Archive circle" }),
     ).toBeVisible();
@@ -302,7 +302,9 @@ describe("FamilySettingsPanel", () => {
     expect(screen.getByText("3 people · the shared journal")).toBeVisible();
     expect(screen.queryByText("4 people")).toBeNull();
     expect(screen.queryByText(/Includes.*TARS/u)).toBeNull();
-    expect(screen.getByRole("button", { name: "Create a circle" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Create a circle" }),
+    ).toBeVisible();
   });
 
   it("defaults Starts with to the circle with the most members", () => {
@@ -326,7 +328,9 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Create a circle" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Create a circle" }),
+    ).toBeVisible();
   });
 
   it("lists included people from the start-from circle as read-only text", () => {
@@ -833,7 +837,9 @@ describe("FamilySettingsPanel", () => {
     );
 
     expect(screen.getByText("Grandma")).toBeVisible();
-    expect(screen.getByText("Invitation sent · waiting to accept")).toBeVisible();
+    expect(
+      screen.getByText("Invitation sent · waiting to accept"),
+    ).toBeVisible();
     expect(screen.queryByText("Pending", { exact: true })).toBeNull();
     expect(screen.queryByText("Sent")).toBeNull();
     expect(screen.queryByText("No pending invitations.")).toBeNull();
@@ -887,7 +893,9 @@ describe("FamilySettingsPanel", () => {
       screen.getByRole("button", { name: "Review invitation" }),
     ).toBeVisible();
     expect(screen.getByText("Aunt June")).toBeVisible();
-    expect(screen.getAllByText("Invitation sent · waiting to accept")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Invitation sent · waiting to accept"),
+    ).toHaveLength(2);
     expect(screen.getByText("Grandma")).toBeVisible();
   });
 
@@ -931,7 +939,9 @@ describe("FamilySettingsPanel", () => {
       "",
     );
     expect(screen.getByText("Grandma")).toBeVisible();
-    expect(screen.getByText("Invitation sent · waiting to accept")).toBeVisible();
+    expect(
+      screen.getByText("Invitation sent · waiting to accept"),
+    ).toBeVisible();
     expect(
       screen.queryByText("Private invitation requested for Grandma."),
     ).toBeNull();
@@ -1252,9 +1262,7 @@ describe("FamilySettingsPanel", () => {
     expect(
       screen.queryByRole("button", { name: /Review invite for/u }),
     ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Invite someone" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite someone" })).toBeNull();
     expect(screen.queryByText("Grandma")).toBeNull();
   });
 
@@ -1300,7 +1308,9 @@ describe("FamilySettingsPanel", () => {
     );
 
     expect(screen.queryByLabelText("Circle name")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Circle settings for All our days" }));
+    await user.click(
+      screen.getByRole("button", { name: "Circle settings for All our days" }),
+    );
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Home");
@@ -1349,7 +1359,9 @@ describe("FamilySettingsPanel", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Circle settings for All our days" }));
+    await user.click(
+      screen.getByRole("button", { name: "Circle settings for All our days" }),
+    );
     const field = screen.getByLabelText("Circle name");
     await user.clear(field);
     await user.type(field, "Home");

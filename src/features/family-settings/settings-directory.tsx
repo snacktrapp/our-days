@@ -23,11 +23,7 @@ export function SettingsSection({
   "aria-label"?: string;
 }) {
   return (
-    <section
-      className="settings-section-block"
-      id={id}
-      aria-label={ariaLabel}
-    >
+    <section className="settings-section-block" id={id} aria-label={ariaLabel}>
       {children}
     </section>
   );

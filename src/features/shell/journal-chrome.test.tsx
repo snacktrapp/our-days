@@ -105,9 +105,10 @@ describe("JournalChrome", () => {
       expect(
         screen.queryByRole("button", { name: "Choose a journal" }),
       ).toBeNull();
-      expect(
-        screen.getByRole("link", { name: "Circles" }),
-      ).toHaveAttribute("href", "/circles");
+      expect(screen.getByRole("link", { name: "Circles" })).toHaveAttribute(
+        "href",
+        "/circles",
+      );
     },
   );
 
@@ -128,9 +129,10 @@ describe("JournalChrome", () => {
     expect(
       screen.queryByRole("button", { name: "Choose a journal" }),
     ).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "Circles" }),
-    ).toHaveAttribute("href", "/circles#circle-family");
+    expect(screen.getByRole("link", { name: "Circles" })).toHaveAttribute(
+      "href",
+      "/circles#circle-family",
+    );
   });
   it.each<JournalSection>(["timeline", "people", "memories", "settings"])(
     "uses the identical primary header controls for %s",
