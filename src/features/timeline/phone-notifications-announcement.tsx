@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { JournalBanner } from "./journal-banner";
 
 const STORAGE_KEY = "our-days:phone-notifications-announcement";
 const DISMISSED = "dismissed";
@@ -60,34 +60,18 @@ export function PhoneNotificationsAnnouncement() {
   };
 
   return (
-    <aside className="phone-notifications-announcement" role="status">
-      <button
-        type="button"
-        className="phone-notifications-announcement-dismiss"
-        aria-label="Dismiss"
-        onClick={dismiss}
-      >
-        ×
-      </button>
-      <span
-        className="phone-notifications-announcement-mark"
-        aria-hidden="true"
-      >
-        <svg viewBox="0 0 24 24">
-          <path d="M6.2 16.4h11.6s-1.3-1.5-1.3-5.1a4.5 4.5 0 1 0-9 0c0 3.6-1.3 5.1-1.3 5.1Z" />
-          <path d="M10.2 18.1a1.8 1.8 0 0 0 3.6 0" />
-        </svg>
-      </span>
-      <strong>Phone notifications are live</strong>
-      <p>Get a quiet ping on this phone.</p>
-      <Link
-        className="phone-notifications-announcement-cta"
-        href="/settings/family#notifications"
-        prefetch={false}
-        onClick={dismiss}
-      >
-        Turn on notifications
-      </Link>
-    </aside>
+    <JournalBanner
+      variant="enablement"
+      title="Phone notifications are live"
+      body="Get a quiet ping on this phone."
+      cta={{
+        kind: "pill",
+        label: "Turn on notifications",
+        href: "/settings/family#notifications",
+        onClick: dismiss,
+      }}
+      showNotNow
+      onDismiss={dismiss}
+    />
   );
 }

@@ -49,9 +49,12 @@ describe("PhoneNotificationsAnnouncement", () => {
     expect(screen.getByText("Get a quiet ping on this phone.")).toBeVisible();
     const account = screen.getByRole("link", { name: "Turn on notifications" });
     expect(account).toHaveAttribute("href", "/settings/family#notifications");
+    expect(screen.getByRole("button", { name: "Not now" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
-    expect(screen.queryByText("Phone notifications are live")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
+    });
     expect(
       window.localStorage.getItem("our-days:phone-notifications-announcement"),
     ).toBe("dismissed");
@@ -71,6 +74,20 @@ describe("PhoneNotificationsAnnouncement", () => {
       await screen.findByRole("link", { name: "Turn on notifications" }),
     );
     expect(screen.queryByText("Phone notifications are live")).toBeNull();
+    expect(
+      window.localStorage.getItem("our-days:phone-notifications-announcement"),
+    ).toBe("dismissed");
+  });
+
+  it("dismisses from Not now", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
+    const user = userEvent.setup();
+    render(<PhoneNotificationsAnnouncement />);
+
+    await user.click(await screen.findByRole("button", { name: "Not now" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Phone notifications are live")).toBeNull();
+    });
     expect(
       window.localStorage.getItem("our-days:phone-notifications-announcement"),
     ).toBe("dismissed");
