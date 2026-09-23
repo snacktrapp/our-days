@@ -1,8 +1,7 @@
 # Insight ingest contract
 
-Daily curated Insights (quotes and tidbits from podcasts or essays) are
-circle-level cards. They are **not** personal journal entries and must not
-show a family-member byline.
+Daily curated Insights (quotes and tidbits from podcasts or essays) can target
+**Just me** or one/more real circles. They stay byline-less system cards.
 
 Ordinary members never see Insight in **+ New moment**. Humans post thoughts,
 verses, photos, and the rest through the existing composer. Insights are
@@ -14,7 +13,7 @@ membership (TARS) that authenticates as itself.
 | Gate | Rule |
 | --- | --- |
 | Who | Active **organizer** of the target circle, including an Operations organizer |
-| Circle | Server-derived from that session. A client `circleId` is accepted only when it matches the active circle. |
+| Circle | `circleId`/`circleIds` must be circles where the organizer has active membership. |
 | Browser writes | Cookie session + same-origin `Origin` matching `NEXT_PUBLIC_SITE_URL` |
 | Agent writes | Organizer or Operations access token (`Authorization: Bearer …`) **or** the same RPC against Supabase with that JWT |
 | Database | `create_insight_moment` independently rechecks `auth.uid()` and `is_circle_organizer` |
@@ -31,7 +30,9 @@ is stored for audit only and is not rendered as an author.
   "attribution": "Huberman Lab — Master Your Sleep",
   "sourceUrl": "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
   "occurredOn": "2026-09-04",
-  "circleId": "optional-must-match-active-circle"
+  "audience": "family",
+  "circleId": "optional-primary-circle-id",
+  "circleIds": ["optional-target-circle-id-1", "optional-target-circle-id-2"]
 }
 ```
 
@@ -42,7 +43,9 @@ is stored for audit only and is not rendered as an author.
 | `sourceUrl` | no | `https://` only, 12–2000 characters. Timestamped YouTube `?t=` links are allowed. |
 | `occurredOn` | no | `YYYY-MM-DD`. Defaults to today in the circle timezone. Cannot be in the future. |
 | `occurredAt` / `occurredTimezone` | no | Both present or both omitted. Same pairing rule as written moments. |
-| `circleId` | no | Must equal the organizer's active circle when supplied. |
+| `audience` | no | `family` (default) or `just_me`. |
+| `circleId` | no | Primary circle for organizer ownership and defaults. |
+| `circleIds` | no | For `family` audience, one/more real circles. |
 
 ## HTTP
 
@@ -68,7 +71,9 @@ Content-Type: application/json
   "quote": "…",
   "attribution": "Huberman Lab — episode name",
   "source_url": "https://www.youtube.com/watch?v=…&t=120",
-  "occurred_on": "2026-09-04"
+  "occurred_on": "2026-09-04",
+  "audience": "family",
+  "circle_ids": ["<circle uuid>", "<optional-second-circle uuid>"]
 }
 ```
 
@@ -79,7 +84,8 @@ service-role key in the web deployment.
 
 ## Timeline behavior
 
-- Family feed includes Insights. Personal journals do not.
+- Circle feeds include `audience = family` Insights on their linked circles.
+- `audience = just_me` Insights appear only on the recorder's own Just me feed.
 - Cards reuse the Bible-verse treatment: quote, small attribution, optional
   Listen / Read the source link. No avatar or person name.
 - Existing note and reaction chrome still works.

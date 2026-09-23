@@ -248,6 +248,46 @@ describe("local journal happy path", () => {
     );
   });
 
+  it("keeps Just me Insights only on the author journal", async () => {
+    await createLocalInsightMoment(access, {
+      quote: "Private system note.",
+      attribution: "Operations memo",
+      sourceUrl: null,
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+      audience: "just_me",
+    });
+
+    const context = await loadLocalJournalContext(access);
+    const family = await loadLocalTimeline(access, context, { pages: 1 });
+    const ownJournal = await loadLocalTimeline(access, context, {
+      journalPersonId: localAlexPersonId,
+      pages: 1,
+    });
+    const inTimeline = (
+      timeline: Awaited<ReturnType<typeof loadLocalTimeline>>,
+    ) =>
+      timeline.entries.flatMap((entry) =>
+        entry.entryType === "moment" ? [entry.moment.text] : [],
+      );
+    const ownInsight = ownJournal.entries.find(
+      (entry) =>
+        entry.entryType === "moment" &&
+        entry.moment.kind === "insight" &&
+        entry.moment.text === "Private system note.",
+    );
+
+    expect(inTimeline(family)).not.toContain("Private system note.");
+    expect(inTimeline(ownJournal)).toContain("Private system note.");
+    expect(ownInsight?.entryType).toBe("moment");
+    if (ownInsight?.entryType !== "moment") {
+      throw new Error("Just me insight missing from author journal");
+    }
+    expect(ownInsight.moment.showAudienceChip).toBe(true);
+    expect(ownInsight.moment.audienceChipLabel).toBe("Just me");
+  });
+
   it("keeps Just Me on the author's journal only", async () => {
     const jordanAccess: LocalAccess = {
       membershipId: localJordanMembershipId,

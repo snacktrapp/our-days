@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(24);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -56,7 +56,51 @@ select is(
     '30000000-0000-4000-8000-000000000001'
   ) where moment_kind = 'insight'),
   0::bigint,
-  'Insights never appear on a personal journal'
+  'family Insights never appear on a personal journal'
+);
+
+select ok(
+  public.create_insight_moment(
+    '20000000-0000-4000-8000-000000000001',
+    'Only I should see this one.',
+    'Private operations note',
+    null,
+    '2026-08-28',
+    null,
+    null,
+    'just_me',
+    null
+  ) is not null,
+  'an organizer can create a Just me Insight'
+);
+
+select is(
+  (select audience || '|' || coalesce(journal_person_id::text, '')
+     from public.moments
+    where kind = 'insight' and title = 'Private operations note'
+    order by created_at desc
+    limit 1),
+  'just_me|',
+  'Just me Insights remain byline-less with a null journal person'
+);
+
+select is(
+  (select count(*)::bigint from public.list_timeline_moments(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001'
+  ) where moment_kind = 'insight'
+      and moment_title = 'Private operations note'),
+  1::bigint,
+  'Just me Insights appear on the author journal'
+);
+
+select is(
+  (select count(*)::bigint from public.list_timeline_moments(
+    '20000000-0000-4000-8000-000000000001'
+  ) where moment_kind = 'insight'
+      and moment_title = 'Private operations note'),
+  0::bigint,
+  'Just me Insights stay off the circle feed'
 );
 
 select throws_ok(
@@ -98,6 +142,14 @@ select throws_ok(
   'an ordinary member cannot create an Insight'
 );
 
+select is(
+  (select count(*)::bigint from public.list_all_timeline_moments()
+    where moment_kind = 'insight'
+      and moment_title = 'Private operations note'),
+  0::bigint,
+  'an ordinary member cannot read another person''s Just me Insight'
+);
+
 select throws_ok(
   $$select public.set_written_moment_trashed(
     (select id from public.moments
@@ -122,6 +174,50 @@ select throws_ok(
   )$$,
   '42501', 'Insight could not be created',
   'an organizer cannot create an Insight in another circle'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000005', true);
+
+select ok(
+  public.create_insight_moment(
+    '20000000-0000-4000-8000-000000000002',
+    'Harbor and Cedar should both see this.',
+    'Shared circle insight',
+    null,
+    '2026-08-28',
+    null,
+    null,
+    'family',
+    array[
+      '20000000-0000-4000-8000-000000000002'::uuid,
+      '20000000-0000-4000-8000-000000000001'::uuid
+    ]
+  ) is not null,
+  'a dual-circle organizer can target one Insight to real circles'
+);
+
+select is(
+  (select linked_circle_ids
+     from public.list_timeline_moments('20000000-0000-4000-8000-000000000002')
+    where moment_title = 'Shared circle insight'
+    limit 1),
+  array[
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000002'::uuid
+  ],
+  'targeted Insight stores real linked circles instead of a fake Family label'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+
+select is(
+  (select count(*)::bigint from public.list_timeline_moments(
+    '20000000-0000-4000-8000-000000000001'
+  ) where moment_title = 'Shared circle insight'),
+  1::bigint,
+  'members of a targeted circle can read a shared Insight'
 );
 
 set local role authenticated;

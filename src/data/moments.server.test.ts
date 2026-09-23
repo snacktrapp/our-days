@@ -528,12 +528,18 @@ describe("connected timeline mapping", () => {
         recorder_person_name: "TARS",
       }),
       "2026-08-30",
+      {
+        viewerPersonId: "parent",
+        circleNames: { circle: "Our Days" },
+      },
     );
     expect(moment).toMatchObject({
       kind: "insight",
       journalPersonId: "",
       personName: "",
       kicker: "An insight",
+      showAudienceChip: true,
+      audienceChipLabel: "Our Days",
       attribution: "Huberman Lab — Master Your Sleep",
       sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
       sourceLabel: "Listen",

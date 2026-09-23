@@ -40,7 +40,7 @@ describe("moment audience mapping", () => {
     ).toBe(false);
   });
 
-  it("shows an audience chip on every post except insights", () => {
+  it("shows an audience chip on every post, including insights", () => {
     expect(
       showAudienceChip({
         viewerPersonId: "me",
@@ -48,7 +48,7 @@ describe("moment audience mapping", () => {
         momentJournalPersonId: "other",
       }),
     ).toBe(true);
-    expect(showAudienceChip({ momentKind: "insight" })).toBe(false);
+    expect(showAudienceChip({ momentKind: "insight" })).toBe(true);
   });
 
   it("labels All-feed chips with a name, Name +1, or N circles", () => {
