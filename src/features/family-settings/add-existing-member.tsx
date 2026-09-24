@@ -150,7 +150,7 @@ export function AddExistingMemberForm({
         });
       }}
     >
-      <p className="chrome-body">
+      <p className="sheet-helper">
         Add a member from another circle you manage.
       </p>
       <label htmlFor={`${id}-source`}>From circle</label>

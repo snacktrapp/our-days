@@ -272,7 +272,13 @@ describe("FamilySettingsPanel", () => {
     expect(screen.getByLabelText("Name")).toBeRequired();
     expect(screen.getByLabelText("Name")).toHaveValue("");
     expect(screen.queryByText("Name it for who can see it.")).toBeNull();
-    expect(screen.getByRole("button", { name: "Create circle" })).toBeVisible();
+    expect(screen.queryByText("New circle")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Create a circle" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Create circle" }),
+    ).toBeDisabled();
 
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Cousins");
