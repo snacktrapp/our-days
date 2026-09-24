@@ -16,12 +16,41 @@ vi.mock("@/lib/supabase/public-config", () => ({
   readSupabasePublicConfig: mocks.readConfig,
 }));
 
-import { expireOurDaysAuthCookies } from "./session-cookies.server";
+import {
+  expireOurDaysAuthCookies,
+  hasOurDaysAuthSessionCookie,
+} from "./session-cookies.server";
 
 describe("Our Days Auth cookie fallback", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
+  });
+
+  it("recognizes this project's Supabase auth cookies", async () => {
+    mocks.readConfig.mockReturnValue({
+      publishableKey: "test",
+      url: "https://ourdaysref.supabase.co",
+    });
+    mocks.getAll.mockReturnValue([
+      { name: "sb-proofref-auth-token.0", value: "other" },
+      { name: "sb-ourdaysref-auth-token.0", value: "private" },
+    ]);
+
+    await expect(hasOurDaysAuthSessionCookie()).resolves.toBe(true);
+  });
+
+  it("ignores empty and unrelated cookie chunks", async () => {
+    mocks.readConfig.mockReturnValue({
+      publishableKey: "test",
+      url: "https://ourdaysref.supabase.co",
+    });
+    mocks.getAll.mockReturnValue([
+      { name: "sb-ourdaysref-auth-token.0", value: "   " },
+      { name: "sb-proofref-auth-token.0", value: "unrelated" },
+    ]);
+
+    await expect(hasOurDaysAuthSessionCookie()).resolves.toBe(false);
   });
 
   it("expires every chunk for this Supabase project and preserves unrelated apps", async () => {

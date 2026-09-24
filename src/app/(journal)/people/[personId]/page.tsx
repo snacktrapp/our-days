@@ -1,4 +1,9 @@
+import { Suspense } from "react";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { withCircleBrowseContext } from "@/features/shell/journal-routes";
 import { PrivateSoftNotFound } from "@/features/shell/private-soft-not-found";
 import { TimelineFeed } from "@/features/timeline/timeline-feed";
@@ -88,6 +93,11 @@ export default async function PersonJournalPage({
       createMomentAction={createFamilyMomentAction}
       switcher={model.switcher}
       onSelectGroup={selectActiveGroupAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot access={access} />
+        </Suspense>
+      }
     >
       <TimelineFeed
         model={{

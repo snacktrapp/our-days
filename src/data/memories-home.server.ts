@@ -170,7 +170,9 @@ export async function loadMemoriesJournal(
 ): Promise<MemoriesViewModel> {
   let context;
   try {
-    context = await loadConnectedJournalContext(access);
+    context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
   } catch (error) {
     if (shouldTrapMemoriesInInterrupt(error)) throw error;
     return memoriesRefreshSoftFail(access);
@@ -190,7 +192,9 @@ export async function loadMemoryJourneyJournal(
 ): Promise<MemoryJourneyViewModel> {
   let context;
   try {
-    context = await loadConnectedJournalContext(access);
+    context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
   } catch (error) {
     if (shouldTrapMemoriesInInterrupt(error)) throw error;
     return memoryJourneyRefreshSoftFail(options, access);

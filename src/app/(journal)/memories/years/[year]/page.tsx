@@ -1,7 +1,12 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { getYearMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 import {
@@ -94,6 +99,11 @@ export default async function YearMemoriesPage({
       model={model.chrome}
       section="memories"
       createMomentAction={createFamilyMomentAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot access={access} />
+        </Suspense>
+      }
     >
       <MemoryJourneyPanel
         model={model}

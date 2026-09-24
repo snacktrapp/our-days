@@ -74,7 +74,9 @@ export async function loadTrashJournal(access: AuthenticatedAccess): Promise<
 > {
   try {
     const [context, moments] = await Promise.all([
-      loadConnectedJournalContext(access),
+      loadConnectedJournalContext(access, {
+        includeActivity: false,
+      }),
       loadManageableTrash(access),
     ]);
     return { ok: true, context, moments };

@@ -27,6 +27,7 @@ import {
 } from "./timeline-pull-to-refresh";
 import {
   resumeRefreshDebounceMs,
+  timelineResumeRefreshStartingEvent,
   shouldResumeRefreshOnPageShow,
   shouldResumeRefreshOnVisibility,
 } from "./timeline-resume-refresh";
@@ -49,6 +50,8 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const refreshingRef = useRef(false);
+  const lastRefreshAtRef = useRef<number | null>(null);
+  const hiddenAtRef = useRef<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -56,12 +59,22 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
     refreshingRef.current = refreshing;
   }, [refreshing]);
 
+  useEffect(() => {
+    if (lastRefreshAtRef.current == null) {
+      lastRefreshAtRef.current = Date.now();
+    }
+  }, []);
+
   const startRefresh = useCallback(
-    (pullPx?: number) => {
+    (pullPx?: number, reason: "pull" | "resume" = "pull") => {
       if (refreshingRef.current) return false;
       if (pullPx != null) writePull(rootRef.current, pullPx);
       writeState(shellRef.current, "refreshing");
       refreshingRef.current = true;
+      lastRefreshAtRef.current = Date.now();
+      if (reason === "resume") {
+        window.dispatchEvent(new Event(timelineResumeRefreshStartingEvent));
+      }
       setRefreshing(true);
       announceTimelineRefresh();
       startTransition(() => {
@@ -83,18 +96,32 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
       debounceId = window.setTimeout(() => {
         debounceId = 0;
         if (document.hidden || refreshingRef.current) return;
-        startRefresh();
+        startRefresh(undefined, "resume");
       }, resumeRefreshDebounceMs);
     };
 
     const onVisibility = () => {
       const isHidden = document.hidden;
+      const now = Date.now();
       if (isHidden) {
+        hiddenAtRef.current = now;
         window.clearTimeout(debounceId);
         debounceId = 0;
-      } else if (shouldResumeRefreshOnVisibility({ wasHidden, isHidden })) {
+      } else if (
+        shouldResumeRefreshOnVisibility({
+          wasHidden,
+          isHidden,
+          hiddenForMs:
+            hiddenAtRef.current == null ? null : now - hiddenAtRef.current,
+          lastRefreshAgeMs:
+            lastRefreshAtRef.current == null
+              ? 0
+              : now - lastRefreshAtRef.current,
+        })
+      ) {
         scheduleResumeRefresh();
       }
+      if (!isHidden) hiddenAtRef.current = null;
       wasHidden = isHidden;
     };
 
@@ -104,7 +131,20 @@ export function TimelineRefreshControl({ children }: { children: ReactNode }) {
         typeof (event as PageTransitionEvent).persisted === "boolean"
           ? (event as PageTransitionEvent).persisted
           : false;
-      if (!shouldResumeRefreshOnPageShow({ persisted })) return;
+      const now = Date.now();
+      if (
+        !shouldResumeRefreshOnPageShow({
+          persisted,
+          hiddenForMs:
+            hiddenAtRef.current == null ? null : now - hiddenAtRef.current,
+          lastRefreshAgeMs:
+            lastRefreshAtRef.current == null
+              ? 0
+              : now - lastRefreshAtRef.current,
+        })
+      ) {
+        return;
+      }
       scheduleResumeRefresh();
     };
 
