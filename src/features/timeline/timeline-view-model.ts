@@ -91,6 +91,10 @@ type TimelineMomentBase = Readonly<{
   displayTime?: string;
   displayDate: string;
   occurredOn: string;
+  recordedOccurrence?: Readonly<{
+    occurredAt: string;
+    timeZone: string;
+  }>;
   maxOccurredOn?: string;
   kicker: string;
   text: string;

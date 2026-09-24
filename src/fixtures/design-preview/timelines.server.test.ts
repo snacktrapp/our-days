@@ -172,7 +172,11 @@ describe("design preview timeline chronology", () => {
       entry.entryType === "moment" ? [entry.moment] : [],
     );
 
-    expect(moments.map((moment) => moment.kind)).toEqual(["photo", "video"]);
+    expect(moments.map((moment) => moment.kind)).toEqual([
+      "photo",
+      "video",
+      "thought",
+    ]);
     expect(
       moments.flatMap((moment) =>
         moment.kind === "photo"

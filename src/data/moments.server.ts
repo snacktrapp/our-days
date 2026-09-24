@@ -39,6 +39,7 @@ import {
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
 import { displayConversationDate } from "@/features/timeline/display-conversation-date";
+import { formatMomentClock } from "@/features/timeline/moment-time-label";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
@@ -124,11 +125,7 @@ function formatPlainDate(value: string, today: string) {
 
 function formatPreciseTime(value: string, timeZone: string | null) {
   if (!timeZone) return undefined;
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatMomentClock(value, timeZone);
 }
 
 // Closed timeline rows use conversation: { notes: [], reactions: [] }
@@ -355,6 +352,16 @@ export function mapTimelineRow(
     displayTime: row.occurred_at
       ? formatPreciseTime(row.occurred_at, row.occurred_timezone)
       : undefined,
+    recordedOccurrence:
+      row.moment_kind === "insight" ||
+      row.time_precision === "date" ||
+      !row.occurred_at ||
+      !row.occurred_timezone
+        ? undefined
+        : {
+            occurredAt: row.occurred_at,
+            timeZone: row.occurred_timezone,
+          },
     displayDate: formatPlainDate(row.occurred_on, today),
     occurredOn: row.occurred_on,
     maxOccurredOn: today,

@@ -581,6 +581,28 @@ export function getTimelineMediaDemoFixture(): TimelineViewModel {
       photo,
       { id: video.id, entryType: "moment", moment: video },
       {
+        id: "rome-lunch",
+        entryType: "moment",
+        moment: {
+          id: "rome-lunch",
+          journalPersonId: "calvin",
+          kind: "thought",
+          personName: "Calvin",
+          personInitial: "C",
+          personAccent: "clay",
+          displayTime: "1:15 PM",
+          displayDate: "Sep 24, 2026",
+          occurredOn: "2026-09-24",
+          recordedOccurrence: {
+            occurredAt: "2026-09-24T11:15:00.000Z",
+            timeZone: "Europe/Rome",
+          },
+          kicker: "A thought",
+          text: "Lunch in Rome.",
+          conversation: momentDetail({ notes: [], reactions: [] }),
+        },
+      },
+      {
         id: "media-demo-end",
         entryType: "end-message",
         markerLabel: "The beginning",

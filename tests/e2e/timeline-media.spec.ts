@@ -40,3 +40,30 @@ test("timeline media fixture is available without journal authentication", async
   );
   expect(mediaRequests).toEqual([]);
 });
+
+test.describe("poster timezone", () => {
+  test.use({ timezoneId: "America/Los_Angeles" });
+
+  test("a Rome moment shows the poster clock for a Pacific viewer", async ({
+    page,
+  }) => {
+    await page.goto("/quality/timeline-media");
+    const post = page.locator("article").filter({ hasText: "Lunch in Rome." });
+    for (const viewport of [
+      { width: 375, height: 667 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const lines = post.locator(".moment-when-line");
+      await expect(lines.first()).toContainText("1:15 PM Rome");
+      await expect(lines.nth(1)).toHaveText("· 4:15 AM your time");
+      await expect(post.locator(".moment-meta")).toContainText(
+        "Sept. 24, 2026",
+      );
+      const box = await post.locator(".moment-when").boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    }
+  });
+});
