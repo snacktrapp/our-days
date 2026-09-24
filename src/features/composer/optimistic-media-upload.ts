@@ -19,6 +19,13 @@ import {
   rememberVideoPoster,
 } from "@/features/video/video-poster-store";
 import { persistVideoPoster } from "@/features/video/persist-video-poster";
+import {
+  clearFailedMediaUploadDrafts,
+  loadFailedMediaUploadDrafts,
+  removeFailedMediaUploadDraft,
+  saveFailedMediaUploadDraft,
+  type FailedMediaUploadDraft,
+} from "./failed-media-upload-store";
 
 export type OptimisticMediaUploadStage =
   | Readonly<{ state: "preparing" }>
@@ -108,6 +115,8 @@ const listeners = new Set<() => void>();
 const controllers = new Map<string, AbortController>();
 const retryRecords = new Map<string, RetryRecord>();
 const queuedUploads: QueuedUpload[] = [];
+const restoredUploadIds = new Set<string>();
+let restoreTask: Promise<void> | null = null;
 const publishedRefreshKeyPrefix = "our-days:published-photo-refresh:";
 const acceptedRefreshKeyPrefix = "our-days:accepted-moment-refresh:";
 
@@ -135,6 +144,211 @@ function uploadErrorMessage(error: unknown, kind: "photo" | "video") {
     return "Upload stopped";
   }
   return `That ${kind} could not be uploaded.`;
+}
+
+function uploadFailureIsRetryable(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String(error.code)
+      : "";
+  const status =
+    typeof error === "object" && error && "status" in error
+      ? Number(error.status)
+      : Number.NaN;
+  if (
+    status === 403 ||
+    code === "42501" ||
+    /42501|permission denied/iu.test(`${code} ${message}`)
+  ) {
+    return true;
+  }
+  if (error instanceof PhotoUploadError || error instanceof VideoUploadError) {
+    return error.retryable;
+  }
+  return true;
+}
+
+function fileRecord(file: File) {
+  return { name: file.name, mimeType: file.type, blob: file };
+}
+
+function persistFailedUpload(id: string) {
+  const upload = currentUpload(id);
+  const record = retryRecords.get(id);
+  if (!upload || !record || upload.stage.state !== "failed") return;
+  const files =
+    record.kind === "photo" ? photoFiles(record.input) : [record.input.file];
+  const draft = record.input.draft;
+  const persisted: FailedMediaUploadDraft = {
+    id,
+    kind: record.kind,
+    circleId: upload.circleId,
+    body: draft.body,
+    occurredOn: draft.occurredOn,
+    occurredAt: draft.occurredAt,
+    occurredTimezone: draft.occurredTimezone,
+    occurredTime: record.input.occurredTime,
+    placeName: draft.placeName,
+    latitude: draft.latitude ?? null,
+    longitude: draft.longitude ?? null,
+    taggedPersonIds: [...draft.taggedPersonIds],
+    audience: upload.audience,
+    circleIds: [...(draft.circleIds ?? [])],
+    existingMomentId:
+      "existingMomentId" in draft ? draft.existingMomentId : undefined,
+    mentions: [...(draft.mentions ?? [])],
+    journalPersonId: upload.journalPersonId,
+    journalPersonName: upload.journalPersonName,
+    journalPersonInitial: upload.journalPersonInitial,
+    journalPersonAccent: upload.journalPersonAccent,
+    created: upload.created,
+    message: upload.stage.message,
+    retryable: upload.retryable,
+    completedFiles: upload.completedFiles,
+    intakeId: upload.intakeId,
+    momentId: upload.momentId,
+    files: files.map(fileRecord),
+    durationMs:
+      record.kind === "video" ? record.input.draft.durationMs : undefined,
+    posterDataUrl:
+      record.kind === "video" ? record.input.posterDataUrl : undefined,
+    width: record.kind === "video" ? record.input.width : undefined,
+    height: record.kind === "video" ? record.input.height : undefined,
+  };
+  void saveFailedMediaUploadDraft(persisted).catch(() => undefined);
+}
+
+function forgetFailedUpload(id: string) {
+  restoredUploadIds.add(id);
+  void removeFailedMediaUploadDraft(id).catch(() => undefined);
+}
+
+export function restoreFailedMediaUploads() {
+  if (restoreTask) return restoreTask;
+  restoreTask = (async () => {
+    let drafts: readonly FailedMediaUploadDraft[] = [];
+    try {
+      drafts = await loadFailedMediaUploadDrafts();
+    } catch {
+      return;
+    }
+    for (const draft of drafts) {
+      if (restoredUploadIds.has(draft.id) || uploadStillExists(draft.id)) {
+        continue;
+      }
+      restoredUploadIds.add(draft.id);
+      const files = draft.files.map(
+        (file) =>
+          new File([file.blob], file.name || "upload", {
+            type: file.mimeType || "application/octet-stream",
+          }),
+      );
+      const previewSource =
+        files[Math.min(draft.completedFiles, files.length - 1)] ?? files[0];
+      if (!previewSource) continue;
+      const person = {
+        id: draft.journalPersonId,
+        name: draft.journalPersonName,
+        initial: draft.journalPersonInitial,
+        accent: draft.journalPersonAccent,
+      };
+      addOptimisticMediaUpload({
+        id: draft.id,
+        circleId: draft.circleId,
+        kind: draft.kind,
+        body: draft.body,
+        occurredOn: draft.occurredOn,
+        occurredTime: draft.occurredTime,
+        journalPersonId: person.id,
+        journalPersonName: person.name,
+        journalPersonInitial: person.initial,
+        journalPersonAccent: person.accent,
+        audience: draft.audience,
+        created: draft.created,
+        previewUrl: URL.createObjectURL(previewSource),
+        intakeId: draft.intakeId,
+        momentId: draft.momentId,
+        totalFiles: files.length,
+        completedFiles: draft.completedFiles,
+        retryable: draft.retryable,
+        stage: { state: "failed", message: draft.message },
+      });
+      if (draft.kind === "photo") {
+        retryRecords.set(draft.id, {
+          kind: "photo",
+          input: {
+            file: files[0]!,
+            files,
+            occurredTime: draft.occurredTime,
+            person,
+            draft: {
+              body: draft.body,
+              circleId: draft.circleId,
+              journalPersonId: draft.journalPersonId,
+              occurredAt: draft.occurredAt,
+              occurredOn: draft.occurredOn,
+              occurredTimezone: draft.occurredTimezone,
+              placeName: draft.placeName,
+              latitude: draft.latitude,
+              longitude: draft.longitude,
+              taggedPersonIds: draft.taggedPersonIds,
+              audience: draft.audience,
+              circleIds: draft.circleIds,
+              existingMomentId: draft.existingMomentId,
+              mentions: draft.mentions,
+            },
+          },
+        });
+        continue;
+      }
+      retryRecords.set(draft.id, {
+        kind: "video",
+        input: {
+          file: files[0]!,
+          occurredTime: draft.occurredTime,
+          person,
+          posterDataUrl: draft.posterDataUrl,
+          width: draft.width,
+          height: draft.height,
+          draft: {
+            body: draft.body,
+            circleId: draft.circleId,
+            durationMs: draft.durationMs ?? 0,
+            journalPersonId: draft.journalPersonId,
+            occurredAt: draft.occurredAt,
+            occurredOn: draft.occurredOn,
+            occurredTimezone: draft.occurredTimezone,
+            placeName: draft.placeName,
+            latitude: draft.latitude,
+            longitude: draft.longitude,
+            taggedPersonIds: draft.taggedPersonIds,
+            audience: draft.audience,
+            circleIds: draft.circleIds,
+            mentions: draft.mentions,
+          },
+        },
+      });
+    }
+  })().finally(() => {
+    restoreTask = null;
+  });
+  return restoreTask;
+}
+
+function failUpload(
+  id: string,
+  error: unknown,
+  kind: "photo" | "video",
+  patch: UploadPatch,
+) {
+  updateOptimisticMediaUpload(id, {
+    ...patch,
+    retryable: uploadFailureIsRetryable(error),
+    stage: { state: "failed", message: uploadErrorMessage(error, kind) },
+  });
+  persistFailedUpload(id);
+  restoredUploadIds.add(id);
 }
 
 function hasActiveUploadTask() {
@@ -281,15 +495,12 @@ function runPhotoUpload(
                 : { state: "processing" },
         });
       }
+      forgetFailedUpload(id);
     } catch (error) {
       if (!uploadStillExists(id)) return;
-      updateOptimisticMediaUpload(id, {
+      failUpload(id, error, "photo", {
         intakeId: lastIntakeId,
         momentId: lastMomentId,
-        stage: {
-          state: "failed",
-          message: uploadErrorMessage(error, "photo"),
-        },
       });
     } finally {
       finishUploadTask(id);
@@ -398,15 +609,10 @@ function beginVideoUpload(input: StartVideoUploadInput) {
         completedFiles: 1,
         stage: { state: "published" },
       });
+      forgetFailedUpload(id);
     } catch (error) {
       if (!uploadStillExists(id)) return;
-      updateOptimisticMediaUpload(id, {
-        momentId: attempt.momentId,
-        stage: {
-          state: "failed",
-          message: uploadErrorMessage(error, "video"),
-        },
-      });
+      failUpload(id, error, "video", { momentId: attempt.momentId });
     } finally {
       finishUploadTask(id);
     }
@@ -509,6 +715,9 @@ export function updateOptimisticMediaUpload(id: string, changes: UploadPatch) {
   uploads = uploads.map((upload) =>
     upload.id === id ? { ...upload, ...changes } : upload,
   );
+  const next = uploads.find((upload) => upload.id === id);
+  if (next?.stage.state === "failed") persistFailedUpload(id);
+  if (next?.stage.state === "published") forgetFailedUpload(id);
   emit();
 }
 
@@ -596,14 +805,11 @@ export function retryOptimisticMediaUpload(id: string) {
         completedFiles: 1,
         stage: { state: "published" },
       });
+      forgetFailedUpload(id);
     } catch (error) {
       if (!uploadStillExists(id)) return;
-      updateOptimisticMediaUpload(id, {
+      failUpload(id, error, "video", {
         momentId: attempt.momentId ?? upload.momentId,
-        stage: {
-          state: "failed",
-          message: uploadErrorMessage(error, "video"),
-        },
       });
     } finally {
       finishUploadTask(id);
@@ -620,6 +826,7 @@ export function removeOptimisticMediaUpload(id: string) {
   controllers.get(id)?.abort();
   controllers.delete(id);
   retryRecords.delete(id);
+  forgetFailedUpload(id);
   if (removed) revokePreview(removed.previewUrl);
   if (wasFailed) clearFailedUploadQueue();
   emit();
@@ -639,6 +846,8 @@ export function clearOptimisticMediaUploads() {
   queuedUploads.length = 0;
   for (const upload of uploads) revokePreview(upload.previewUrl);
   uploads = [];
+  restoredUploadIds.clear();
+  void clearFailedMediaUploadDrafts().catch(() => undefined);
   emit();
 }
 
@@ -650,4 +859,5 @@ if (typeof window !== "undefined") {
     "our-days:clear-private-state",
     clearOptimisticMediaUploads,
   );
+  void restoreFailedMediaUploads();
 }

@@ -387,4 +387,98 @@ describe("optimistic media upload queue", () => {
       }),
     );
   });
+
+  it("restores a 403 failure with its caption, audience, and media after reload", async () => {
+    const { IDBFactory } = await import("fake-indexeddb");
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: new IDBFactory(),
+    });
+    photoUpload.upload.mockRejectedValueOnce(
+      new PhotoUploadError("permission denied", false),
+    );
+    const caption = "Pre-sunrise hike up Sydney with Seth";
+    const mention = {
+      userId: "10000000-0000-4000-8000-000000000002",
+      start: 28,
+      end: 32,
+    };
+    startOptimisticPhotoUpload({
+      draft: {
+        ...draft,
+        audience: "just_me",
+        body: caption,
+        mentions: [mention],
+      },
+      file: jpeg("sunrise.jpg"),
+      occurredTime: "05:12",
+      person,
+    });
+
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message: "permission denied",
+      }),
+    );
+    expect(optimisticMediaUploadSnapshot()[0]?.retryable).toBe(true);
+
+    const store = await import("./failed-media-upload-store");
+    await vi.waitFor(async () => {
+      const drafts = await store.loadFailedMediaUploadDrafts();
+      expect(drafts).toEqual([
+        expect.objectContaining({
+          audience: "just_me",
+          body: caption,
+          circleId: draft.circleId,
+          mentions: [mention],
+          occurredTime: "05:12",
+          retryable: true,
+        }),
+      ]);
+      expect(drafts[0]?.files[0]?.blob.size).toBeGreaterThan(0);
+    });
+
+    vi.resetModules();
+    const restored = await import("./optimistic-media-upload");
+    await restored.restoreFailedMediaUploads();
+    const upload = restored.optimisticMediaUploadSnapshot()[0];
+    expect(upload).toEqual(
+      expect.objectContaining({
+        audience: "just_me",
+        body: caption,
+        occurredOn: draft.occurredOn,
+        occurredTime: "05:12",
+        retryable: true,
+        stage: { state: "failed", message: "permission denied" },
+      }),
+    );
+
+    photoUpload.upload.mockResolvedValueOnce({
+      state: "published",
+      intakeId: "d6000000-0000-4000-8000-000000000021",
+      momentId: "d6000000-0000-4000-8000-000000000022",
+    });
+    expect(restored.retryOptimisticMediaUpload(upload!.id)).toBe(true);
+    await vi.waitFor(() =>
+      expect(restored.optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "published",
+      }),
+    );
+    expect(photoUpload.upload).toHaveBeenLastCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        audience: "just_me",
+        body: caption,
+        mentions: [mention],
+        occurredOn: draft.occurredOn,
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+    await vi.waitFor(async () => {
+      await expect(store.loadFailedMediaUploadDrafts()).resolves.toEqual([]);
+    });
+  });
 });
