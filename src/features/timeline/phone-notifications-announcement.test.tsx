@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PhoneNotificationsAnnouncement } from "./phone-notifications-announcement";
+import { JournalPromos } from "./journal-promos";
+
+const soloCircle = { signedIn: true, sharedCircle: false };
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -37,11 +39,15 @@ function stubExistingSubscription() {
   });
 }
 
+function renderPhoneCard() {
+  return render(<JournalPromos context={soloCircle} />);
+}
+
 describe("PhoneNotificationsAnnouncement", () => {
   it("offers Account once, then stays dismissed", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     const user = userEvent.setup();
-    const { rerender } = render(<PhoneNotificationsAnnouncement />);
+    const { rerender } = renderPhoneCard();
 
     expect(
       await screen.findByText("Phone notifications are live"),
@@ -59,7 +65,7 @@ describe("PhoneNotificationsAnnouncement", () => {
       window.localStorage.getItem("our-days:phone-notifications-announcement"),
     ).toBe("dismissed");
 
-    rerender(<PhoneNotificationsAnnouncement />);
+    rerender(<JournalPromos context={soloCircle} />);
     await waitFor(() => {
       expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
@@ -68,7 +74,7 @@ describe("PhoneNotificationsAnnouncement", () => {
   it("dismisses after opening Account", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     const user = userEvent.setup();
-    render(<PhoneNotificationsAnnouncement />);
+    renderPhoneCard();
 
     await user.click(
       await screen.findByRole("link", { name: "Turn on notifications" }),
@@ -82,7 +88,7 @@ describe("PhoneNotificationsAnnouncement", () => {
   it("dismisses from Not now", async () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     const user = userEvent.setup();
-    render(<PhoneNotificationsAnnouncement />);
+    renderPhoneCard();
 
     await user.click(await screen.findByRole("button", { name: "Not now" }));
     await waitFor(() => {
@@ -97,7 +103,7 @@ describe("PhoneNotificationsAnnouncement", () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     stubGrantedPermission();
 
-    render(<PhoneNotificationsAnnouncement />);
+    renderPhoneCard();
     await waitFor(() => {
       expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
@@ -107,14 +113,14 @@ describe("PhoneNotificationsAnnouncement", () => {
     vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "BpublicTestKey");
     stubExistingSubscription();
 
-    render(<PhoneNotificationsAnnouncement />);
+    renderPhoneCard();
     await waitFor(() => {
       expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
   });
 
   it("stays hidden when VAPID is missing", async () => {
-    render(<PhoneNotificationsAnnouncement />);
+    renderPhoneCard();
     await waitFor(() => {
       expect(screen.queryByText("Phone notifications are live")).toBeNull();
     });
