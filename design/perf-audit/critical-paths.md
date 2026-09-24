@@ -29,7 +29,8 @@ Legend for each step:
 | 14 | In parallel with 8–13: `FamilyActivity` (3 queries → authors → notes‖reactions → names → authors) | `family/page.tsx:55-64`, `journal-context.server.ts:550-620` | 2–5 V↔S waves |
 | 15 | After hydration: `ActivityBanner` polls `/api/activity` (the same activity queries again) | `activity-banner.tsx:26-98`, `api/activity/route.ts` | P↔V + 3–6 V↔S |
 | 16 | After hydration: `PhotoStatusShelf` creates the browser client → `list_my_photo_intakes` (second origin: new TLS) | `photo-status-shelf.tsx:617-620, 920` | P↔S |
-| 17 | Photos near the viewport (800 px margin): `/api/media/moments/:id?photo=` per image | `private-photo-image.tsx:27-52` | P↔V + 3 V↔S each |
+| 17 | Photos near the viewport (800 px margin): `/api/media/moments/:id?photo=` per image. Albums request every slide at once. | `private-photo-image.tsx:27-52`, `photo-card-pager.tsx:70-97` | P↔V + 3 V↔S each |
+| 18 | Videos within 200 px (since #129): poster fetch, visible player at `preload="auto"`, a hidden warm-up copy, then a poster re-upload + RPC from the phone | `video-moment-media.tsx:86-145`, `warm-video-poster.ts:59-118` | P↔V per Range (3 V↔S each) + P↔S |
 
 Serial V↔S waves before the first post: steps 2, 5, 6, 7, 9, and 10 add up to
 **~6–9** (8 when the top post has reactions or notes). At ~65 ms each, that's
@@ -112,6 +113,10 @@ status chip with a local preview.
 
 The database already supports photos 2..N attaching to a reserved moment
 (`multi_photo_moments.sql:580-703`, `existing_request` branch; 6-photo limit at `:626`).
+An account may hold at most 3 open intakes (reserved, claimed, or
+uploaded-unverified) and a circle 10
+(`stop_cleanup_backlog_blocking_uploads.sql:54-65`), so any parallel pipeline must
+work in a window of at most 3.
 
 ## 5. Video post
 
@@ -136,6 +141,14 @@ is kept only in memory (`:475-477`), so an app kill restarts from zero.
   route reads from byte 0 up to the requested range
   (`api/media/videos/[momentId]/route.ts:165-280`).
 - **Poster:** same three-hop pattern as photos (`…/poster/route.ts:67-77`).
+- **Album warming:** when an album comes within 800 px, every slide is requested
+  at once, not just the cover (`photo-card-pager.tsx:70-97`, added in #88).
+- **Video warm-up (since #129):** the client poster store is `sessionStorage`
+  (`video-poster-store.ts:25-37`) and empty on each cold open. So every video
+  within 200 px starts a hidden muted copy that captures a frame, switches its
+  visible player to `preload="auto"`, and re-uploads the poster from the phone,
+  even when the server poster is fine (`video-moment-media.tsx:86-145`,
+  `warm-video-poster.ts:59-118`, `persist-video-poster.ts:53-74`).
 - There is no photo lightbox today; photos are inline only
   (`double-tap-photo.tsx:8`).
 
@@ -146,6 +159,6 @@ is kept only in memory (`:475-477`), so an app kill restarts from zero.
 | Heart | identity → `set_moment_reaction` → deliveries RPC → pushes (await, no timeout) | 3 + push | 0 (UI is optimistic) |
 | Comment | identity → `create_moment_note` → deliveries → pushes; then `loadConversation` action: identity → `get_moment_conversation` | 5 + push | 0, but the UI waits for both actions |
 | Written post | identity → `create_family_moment` → deliveries → pushes → `revalidatePath` → re-render in the action response; client also `router.replace` + `router.refresh()` | 3 + push + 3 renders | up to 3 |
-| Edit | update RPC(s) → `revalidatePath`; client `router.replace(pathname)` + `router.refresh()` | 2–3 + 3 renders | up to 3 |
+| Edit | update action → `revalidatePath`; one action per removed photo, then a reorder action, each revalidating (`moment-composer.tsx:1310-1329`); client `router.replace(pathname)` + `router.refresh()` | 2–3 per action | 3 + one per removal or reorder |
 | Show earlier days (`pages=N`) | full navigation; opening and remainder each read N pages serially | ~2N + enrichment | 1 |
 | Pull to refresh | `router.refresh()` | full route | 1 |

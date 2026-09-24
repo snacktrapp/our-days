@@ -63,6 +63,9 @@ Lazy already (good): the 4.1 MB Bible catalog (`bible-verse-catalog.ts:112-118`)
 | Upload status poll | 10 s only while work is active, plus mount, resume, online | `photo-status-shelf.tsx:920-962` |
 | Photo memory cache | 24 entries / 16 MB / 60 s | `private-media-memory.ts:2-4` |
 | Photo lazy margin | 800 px (observes the album) | `private-photo-image.tsx:36-44` |
+| Album warming | all slides once the album is within 800 px | `photo-card-pager.tsx:70-97` |
+| Video warm-up | within 200 px; hidden copy plus `preload="auto"` whenever the session poster store is empty (since #129) | `video-moment-media.tsx:86-145` |
+| Open photo intakes | 3 per account, 10 per circle | `stop_cleanup_backlog_blocking_uploads.sql:54-65` |
 | Photo limits | 25 MB, JPEG/PNG/WebP, TUS 6 MB chunks, 6 per moment | `photo-upload.ts:22-23`, `multi_photo_moments.sql:626` |
 | Display derivative | 2560 px max edge, WebP q82 effort 4 | `scripts/lib/photo-display-derivative.mjs:11, 515-528` |
 | Processing route | `maxDuration` 300 s, synchronous | `src/app/api/photos/process/route.ts:13, 114` |

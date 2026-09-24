@@ -18,8 +18,8 @@
 4. **Taps wait on invisible work.** Hearts, comments, and posts block on Web Push fan-out with no timeout, and each written post triggers up to three full feed renders.
 5. **Uploads are strictly serial.** A 6-photo post hashes, uploads, and server-processes one photo at a time, although the database already supports attaching to a reserved moment.
 6. **Cold-open JS on `/family` is ~245 KB brotli, and ~40% of it (supabase-js, composer, upload code) isn't needed until Add.** Static JS/CSS also pays ~50 ms each for an unneeded proxy pass (measured).
-7. **Media:** each photo costs 3 serial hops plus whole-file buffering, feed cards (the only photo view) load the full 2560-px derivative, and the photo memory cache expires after 60 s.
-8. **Recommended first batch:** P0-1 through P0-9, in order. All are S or S–M and change no IA or visuals.
+7. **Media over-fetch on cold open:** since #129 (merged 2026-09-23), every video or Insight clip near the top loads twice and re-uploads its poster. Albums request every slide at once. Each photo costs 3 serial hops plus whole-file buffering at 2560 px.
+8. **Recommended first batch:** P0-1 through P0-11, in order. All are S or S–M and change no IA or visuals.
 
 ## Ranking legend
 
@@ -63,7 +63,35 @@ the measurements listed in each item.
   `[preview-supabase-timing]` log (`src/lib/supabase/server.ts:13, 37-58`);
   phone time-to-first-post and time-to-first-photo.
 
-### P0-2 · Stop running the proxy on static assets
+### P0-2 · Undo the #129 video double-load on every cold open
+
+- **Evidence:** #129 (merged 2026-09-23) changed the warm-up rule to
+  `shouldWarmPoster = !storedPoster || serverPosterLooksLikelyBlank`
+  (`src/features/timeline/video-moment-media.tsx:86`). `storedPoster` comes from
+  a `sessionStorage`-backed store that is empty on each PWA cold open
+  (`src/features/video/video-poster-store.ts:25-37`), so the rule is true for
+  every video, even one with a good server poster. Each video or Insight clip
+  within 200 px then does three things:
+  - The visible player switches to `preload="auto"`; before #129 it used
+    `metadata` (`video-moment-media.tsx:143-145`).
+  - A hidden muted copy loads, briefly plays, and grabs a frame
+    (`warm-video-poster.ts:59-103`, `capture-video-poster.ts:77-97`). Each of
+    its Range requests goes through the 3-hop video route.
+  - The phone re-uploads the captured poster and calls
+    `attach_video_moment_poster` (`warm-video-poster.ts:110-118`,
+    `persist-video-poster.ts:53-74`).
+
+  Before #129, warm-up ran only when no poster was available.
+- **Change:** Warm and capture only when the server has no poster or its poster
+  looks blank. Otherwise keep `preload="metadata"` and skip persisting. The
+  stale-poster regeneration that #129 added keeps working.
+- **User effect:** Less cellular data and bandwidth contention on every cold
+  open with a video near the top, so posters and first photos arrive sooner.
+- **Risk:** Low (restores pre-#129 behavior for good posters). · **Effort:** S
+- **Metric:** `/api/media/videos/*` requests per cold open; bytes transferred
+  before the first photo decodes.
+
+### P0-3 · Stop running the proxy on static assets
 
 - **Evidence:** The matcher (`src/proxy.ts:72-76`) includes `/_next/static/*`.
   The proxy only returns early there (`:35-38`) after building a nonce CSP,
@@ -79,7 +107,7 @@ the measurements listed in each item.
 - **Risk:** Low (security headers stay; CSP applies to documents). · **Effort:** S
 - **Metric:** chunk TTFB; cold-open time on the first open after a deploy.
 
-### P0-3 · Send Web Push after the response, with a timeout
+### P0-4 · Send Web Push after the response, with a timeout
 
 - **Evidence:** `setMomentReactionAction`, `createMomentNoteAction`,
   `createFamilyMomentAction`, and `createWrittenMomentAction` each
@@ -96,27 +124,45 @@ the measurements listed in each item.
 - **Risk:** Low. Push still fires; failures are only logged, as today. · **Effort:** S
 - **Metric:** server-action duration p50/p95 for reaction, note, and create.
 
-### P0-4 · One feed query per open; start the remainder immediately
+### P0-5 · Load the album cover first
 
-- **Evidence:** The family page awaits the opening timeline, then renders the
-  remainder inside it (`src/app/(journal)/family/page.tsx:92-126`), so the
+- **Evidence:** When a multi-photo album comes within 800 px of the viewport,
+  every slide is requested at once (`src/features/timeline/photo-card-pager.tsx:70-97`,
+  rendered at `:435`). A 6-photo album therefore starts six full-size (2560-px)
+  derivatives, each through the 3-hop photo route, all competing with the cover.
+  #88 added this deliberately so swipes are ready before the reader arrives.
+- **Change:** Keep warming before the reader arrives, but start the other
+  slides only after the cover decodes, and at low fetch priority.
+- **User effect:** The first photo of an album paints sooner on cellular, and
+  swipes stay warm.
+- **Risk:** Low–medium (keep the #87/#88 swipe-readiness tests). · **Effort:** S
+- **Metric:** time to cover decoded; swipe → next slide shown.
+
+### P0-6 · One feed query per open, started alongside the context
+
+- **Evidence:** The feed query starts only after the journal context's two
+  waves finish (`src/app/(journal)/family/page.tsx:139, 168-170`), although the
+  query needs only `access` and the page options. The page then awaits the
+  opening timeline and renders the remainder inside it (`:92-126`), so the
   second query starts only after the first finishes. Both call
   `loadConnectedTimeline`, which runs `list_all_timeline_moments` with
   `page_size` 21 (`src/data/moments.server.ts:756-778`). The opening keeps 1
   row (`enrichLimit: 1`) and the remainder re-reads the same 21 rows
   (`src/data/family-home.server.ts:210-262`). The snapshot is not shared either,
   which is still open as reliability review item 3.
-- **Change:** Fetch page rows once per request (a React `cache()`d promise that
-  also carries the snapshot). Stream enrichment of row 1 first, then rows 2–20.
-  Start the remainder's enrichment without waiting for the opening's render.
-- **User effect:** The rest of the first page appears one RPC plus one
-  enrichment chain sooner, and there is one fewer feed RPC per open, refresh, or
-  resume. It also closes the offset-drift risk.
+- **Change:** Preload the feed rows at the top of the page, in parallel with the
+  context, as a React `cache()`d promise that also carries the snapshot. Fetch
+  the rows once, then stream enrichment of row 1 first and rows 2–20 next.
+- **User effect:** The first post no longer waits for the context before its
+  own query starts. The rest of the first page appears one RPC plus one
+  enrichment chain sooner. There is one fewer feed RPC per open, refresh, or
+  resume, and the offset-drift risk closes.
 - **Risk:** Low–medium (streaming order; `FeedSaveAcknowledgment` tests).
   · **Effort:** S–M
-- **Metric:** feed RPCs per open (2 → 1); time from first post to full first page.
+- **Metric:** feed RPCs per open (2 → 1); time to first post; time from first
+  post to full first page.
 
-### P0-5 · Collapse the serial enrichment chains
+### P0-7 · Collapse the serial enrichment chains
 
 - **Evidence:** Conversations run notes‖reactions → `circle_memberships` →
   `people` → `visible_moment_authors`, up to 4 steps
@@ -134,7 +180,7 @@ the measurements listed in each item.
 - **Risk:** Low (keep "display-only attribution" behavior). · **Effort:** S
 - **Metric:** serial Supabase calls per render; server render time.
 
-### P0-6 · Just me paints like All circles; activity out of page renders
+### P0-8 · Just me paints like All circles; activity out of page renders
 
 - **Evidence:** `loadPersonJournal` calls `loadConnectedJournalContext(access)`
   (`src/data/person-journal.server.ts:153`), where activity defaults to on and
@@ -154,7 +200,7 @@ the measurements listed in each item.
 - **Risk:** Low (the bell dot may appear a moment after hydration). · **Effort:** S–M
 - **Metric:** tap → first post for Just me; activity queries per open (2 → 1 sets).
 
-### P0-7 · One refresh per write, not three
+### P0-9 · One refresh per write
 
 - **Evidence:** A written post runs `router.replace(familyRedirect)` immediately
   (`src/features/composer/moment-composer.tsx:1529-1533`). The action
@@ -163,18 +209,26 @@ the measurements listed in each item.
   page inside the action response. Then `onPublished: () => router.refresh()`
   renders it again (`moment-composer.tsx:1527`,
   `optimistic-moment-save.ts:77-84`). The edit path does
-  `router.replace(pathname); router.refresh()` (`:1375-1376`). Photo posts refresh
-  on both accepted and published (`photo-status-shelf.tsx:964-999`).
+  `router.replace(pathname); router.refresh()` (`:1375-1376`). Before that, an
+  edit that removes photos runs one server action per removed photo, then a
+  reorder action (`:1310-1329`). Each of those revalidates
+  (`moment-actions.ts:1152, 1194`), so each re-renders the feed in its response,
+  on top of the update action's own revalidation. Photo posts refresh on accept,
+  when the status poll sees an intake published, and at completion
+  (`photo-status-shelf.tsx:696-766, 964-999`; deduped per intake).
 - **Change:** Keep exactly one refresh per completed write (either the action's
   revalidation or one client refresh), and drop the redundant `replace` when
-  already on the target URL.
-- **User effect:** The post settles sooner with less flicker, and there are two
-  fewer full renders per post (each render is ~10–15 database calls).
+  already on the target URL. Batch an edit's update, removals, and reorder into
+  one action with one revalidation.
+- **User effect:** Posts and edits settle sooner with less flicker. Each written
+  post saves two full renders, and edits that remove or reorder photos save
+  more (each render is ~10–15 database calls).
 - **Risk:** Medium (acknowledgment and chip-clearing rely on refreshed entries;
   keep the #67/#73 regression tests green). · **Effort:** S–M
-- **Metric:** full page renders per post (3 → 1); post → acknowledged time.
+- **Metric:** full page renders per post (3 → 1) and per edit; post →
+  acknowledged time.
 
-### P0-8 · Make foreground refresh conditional and single-path
+### P0-10 · Make foreground refresh conditional and single-path
 
 - **Evidence:** Every hidden→visible change triggers a full `router.refresh()`
   after 1.2 s, with no minimum time away
@@ -187,11 +241,13 @@ the measurements listed in each item.
   separate activity poll. Keep pull-to-refresh as the explicit full refresh.
   Keep #57's behavior for real resumes.
 - **User effect:** Quick app switches (checking a text, the share sheet) no longer
-  cause a full re-render, jank, and data use. Real returns still refresh.
+  cause a full re-render, jank, and data use. Real returns still refresh. Build it
+  together with P1-12, because today's refresh can't update hearts and notes on
+  cards already on screen.
 - **Risk:** Low–medium (product expectation from #57). · **Effort:** S
 - **Metric:** full renders per foreground hour; resume → settled time.
 
-### P0-9 · Take the `/` redirect hop off cold open
+### P0-11 · Take the `/` redirect hop off cold open
 
 - **Evidence:** The PWA `start_url` is `/` (`src/app/manifest.ts:9`). `/` runs
   identity plus a memberships query, then 307s to `/family`
@@ -217,13 +273,20 @@ the measurements listed in each item.
   queue is also single-flight (`optimistic-media-upload.ts:408-427`). Meanwhile
   `attach_photo_to_moment` already supports a reserved-but-unpublished moment
   (`supabase/migrations/20260904234931_multi_photo_moments.sql:580-703`).
+- **Constraint:** An account may hold at most 3 open intakes (reserved, claimed,
+  or uploaded-unverified), and a circle at most 10
+  (`20260901181748_stop_cleanup_backlog_blocking_uploads.sql:54-65`). Reserving
+  all six photos up front would fail on photo 4, and any leftover unfinished
+  intake shrinks the window further.
 - **Change:** Hash every file at pick time (in the worker). Reserve and attach in
-  the user's order (cheap, keeps `sort_order`), then run TUS transfers and
-  processing with concurrency 2–3. Preserve one announce push per batch
-  (#70 invariant) and the quota errors.
-- **User effect:** A 6-photo post takes about as long as its slowest photo plus a
-  little, not the sum of all six. Fewer photos are left mid-flight if iOS kills
-  the app.
+  the user's order (cheap, keeps `sort_order`) as a sliding window of at most 3
+  open intakes minus leftovers. Run TUS transfers and processing inside that
+  window. Preserve one announce push per batch (#70 invariant) and the quota
+  errors. Raising the cap would be a separate migration decision.
+- **User effect:** A 6-photo post finishes in roughly the time to transfer all
+  six plus one processing step, instead of adding every photo's round trips and
+  processing wait in sequence. Fewer photos are left mid-flight if iOS kills the
+  app.
 - **Risk:** Medium (ordering, quotas, retry, chip states). · **Effort:** M
 - **Metric:** pick → all published for 6 photos; bytes/sec during transfer.
 
@@ -329,7 +392,7 @@ the measurements listed in each item.
 
 ### P1-9 · Optimistic comment posting
 
-- **Evidence:** `saveNote` awaits the create action (including push, see P0-3),
+- **Evidence:** `saveNote` awaits the create action (including push, see P0-4),
   then a second `loadConversation` action, before the note shows and the panel
   closes (`moment-conversation-control.tsx:393-447`). Reactions are already
   optimistic (`:321-358`).
@@ -353,14 +416,42 @@ the measurements listed in each item.
   security-definer `can_read_live_moment(id)` per row
   (`20260907204138_moment_circles.sql:49-81, 255-260`). The RPCs repeat
   visibility predicates, and the circle RPC calls `can_read_live_moment` again
-  (`…insight_circle_audience.sql:311`). The cross-circle ORDER BY has no matching
-  index. There is no index on `moments.recorded_by_membership_id` (used by
-  activity, `journal-context.server.ts:388-392`). Notes and reactions indexes lead
-  with `circle_id` (`20260830153119_phase_5_family_context.sql:73, 104`), but
-  feed and activity queries filter by `moment_id` or `author_membership_id` only.
+  (`…insight_circle_audience.sql:311`). Each returned row also runs
+  `moment_tagged_people`, which re-checks `can_read_live_moment` and aggregates
+  tags by `moment_id` (`20260913143000_moment_people_live_moment_read.sql:14-38`).
+  The cross-circle ORDER BY has no matching index.
+- **Index gaps:** Several hot filters omit `circle_id`, so the circle-leading
+  indexes can't seek:
+  - Activity filters `moments` by `recorded_by_membership_id`
+    (`journal-context.server.ts:388-392`), but `moments_recorded_by_membership_idx`
+    is `(circle_id, recorded_by_membership_id)` (renamed in
+    `20260831000000_phase_7b_membership_attribution_foundation.sql:52-53`).
+  - Feed and activity read notes and reactions by `moment_id` or
+    `author_membership_id` only, but those indexes lead with `circle_id`
+    (`20260830153119_phase_5_family_context.sql:73, 104`).
+  - Tag lookups by `moment_id` face `moment_people_person_idx`
+    `(circle_id, person_id, moment_id)` (same file `:43-45`).
+- **Unbounded reads:** Two activity reads have no limit: all owned moments and
+  all of the viewer's own notes (`journal-context.server.ts:388-392, 409-415`).
+  Both grow with history and run on every activity poll (every 30 s while
+  visible).
 - **Change:** Read Supabase Query Performance and Advisors (read-only). Then add
-  the missing indexes or `circle_id` filters, and avoid the double visibility
-  checks if EXPLAIN shows cost. · **Effort:** S–M · **Risk:** Low–medium (RLS)
+  `circle_id` filters or `moment_id`-leading partial indexes, bound the two
+  activity reads by time window, and remove the double visibility checks if
+  EXPLAIN shows cost. · **Effort:** S–M · **Risk:** Low–medium (RLS)
+
+### P1-12 · Let refreshed conversations reach cards already on screen
+
+- **Evidence:** `MomentConversationControl` copies `model.conversation` into
+  local state once (`moment-conversation-control.tsx:142-155`) and never syncs
+  later props. Cards keep stable keys across `router.refresh()`
+  (`timeline-feed.tsx:197-199`, `moment-card.tsx:126`). So a pull-to-refresh or
+  resume refresh can't show another member's new heart or note on a mounted card
+  until it remounts or the note panel reloads.
+- **Change:** Adopt the refreshed conversation when no local write is pending.
+- **User effect:** Refresh visibly does what it costs. · **Effort:** S
+- **Risk:** Low–medium (don't clobber an in-flight heart or note). Confirm on a
+  phone first: pull to refresh after someone else reacts.
 
 ---
 
@@ -376,6 +467,8 @@ the measurements listed in each item.
 | L-6 | Video TUS chunk size is 2 MB (`video-upload.ts:178-179`); Supabase documents 6 MB | Deliberate flaky-network choice; measure throughput |
 | L-7 | Composer remounts on every journal switch (its `key` includes home context, `composer-session.tsx:133-137`) | Cheap while closed; revisit with P1-3 |
 | L-8 | Narrow `refreshMomentSurfaces` (8 `revalidatePath` calls) | Low value while every route is dynamic |
+| L-9 | Downscale or re-encode photos on the phone before upload | Not recommended: ADR-009 keeps originals immutable and checksummed. Needs a product decision |
+| L-10 | List virtualization or the React Compiler for long feeds | Speculative; the feed is mostly Server Components and pages are 20 posts |
 
 ## Tiny enablers (called out separately)
 
@@ -397,8 +490,9 @@ Home Screen apps), or a stopwatch. Capture a baseline, then repeat after P0-1:
 5. Web Inspector Network on one cold open: document TTFB, chunk TTFB, first
    `/api/media/moments/*` timing.
 
-P0-1's result decides how much P0-4/5/6 still matter. P1-6 and L-2 need the
-Web Inspector evidence.
+P0-1's result decides how much P0-6/7/8 still matter. P1-6 and L-2 need the
+Web Inspector evidence. For P0-2, compare `/api/media/videos/*` request counts on
+one cold open before and after.
 
 ## State of previously fixed items
 
@@ -414,6 +508,9 @@ Web Inspector evidence.
 - **Multi-photo push spam:** Still coalesced: only the first file announces
   (`optimistic-media-upload.ts:234`, `activity-notifications.ts:51-58`), and the
   processing route never pushes (`process/route.ts:94-97`). P1-1 must keep this.
+- **Stale Insight posters (#129, 2026-09-23):** The regeneration path is in
+  place, but its new warm-up rule also loads every nearby video twice on each
+  cold open (P0-2).
 
 ## Guardrails respected
 
