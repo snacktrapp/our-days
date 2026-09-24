@@ -108,6 +108,13 @@ const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
 );
 const criticalFlowsTest = read("tests/e2e/critical-flows.spec.ts");
+const notificationArrival = read(
+  "src/features/timeline/notification-arrival.tsx",
+);
+const notificationArrivalTest = read(
+  "src/features/timeline/notification-arrival.test.tsx",
+);
+const notificationArrivalE2e = read("tests/e2e/notification-arrival.spec.ts");
 const momentTimeLabel = read("src/features/timeline/moment-time-label.ts");
 const timelineMediaTest = read("tests/e2e/timeline-media.spec.ts");
 const timelineMediaFixture = read(
@@ -540,6 +547,28 @@ describe("smash harden matrix", () => {
       expect(timelineMediaFixture).toContain("Europe/Rome");
       expect(timelineMediaTest).toContain("America/Los_Angeles");
       expect(timelineMediaTest).toContain("1:15 PM Rome");
+    });
+
+    it("lands a notification once, anchors late media, then releases the feed", () => {
+      expect(notificationArrival).toContain("history.replaceState");
+      expect(notificationArrival).not.toContain(
+        "observer.observe(document.body, { childList: true, subtree: true })",
+      );
+      expect(notificationArrival).toContain('scrollToY(top, "smooth")');
+      expect(notificationArrivalTest).toContain(
+        "scrolls once, anchors a later shift, then releases after the reader scrolls",
+      );
+      expect(notificationArrivalE2e).toContain(
+        "several notifications land once, anchor late media, then let the reader scroll to the top",
+      );
+      expect(notificationArrivalE2e).toContain(
+        "a new circle post lands on that entry once, then the feed can scroll to the top",
+      );
+      expect(notificationArrivalE2e).toContain(
+        '"/family?moment=porch-light-2019"',
+      );
+      expect(notificationArrivalE2e).toContain('"/family?moment=sunset"');
+      expect(notificationArrivalE2e).toContain('"/family?moment=first-day"');
     });
 
     it("lets a retryable failed upload chip be dismissed", () => {

@@ -12,19 +12,58 @@ import { scheduleBottomNavPin } from "@/features/shell/visual-viewport-bottom";
 const revealEvent = "our-days:notification-reveal";
 const targetEvent = "our-days:notification-target";
 const missingCopy = "That entry isn’t available anymore.";
+const duplicateLandingMs = 700;
+
+type NotificationTarget = NonNullable<
+  ReturnType<typeof readNotificationTarget>
+>;
+
+let landedDuplicate: { key: string; until: number } | null = null;
 
 function currentPath() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
-function scrollToMoment(article: HTMLElement) {
+function targetKey(target: NotificationTarget) {
+  return `${target.momentId}\n${target.noteId ?? ""}\n${target.openThread ? "1" : "0"}`;
+}
+
+function scrollTopFor(node: HTMLElement) {
   const topbar = document.querySelector(".topbar");
   const topbarBottom =
     topbar instanceof HTMLElement ? topbar.getBoundingClientRect().bottom : 0;
-  const top =
-    article.getBoundingClientRect().top + window.scrollY - topbarBottom - 16;
-  window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-  window.dispatchEvent(new Event("our-days:reveal-new-entry"));
+  return Math.max(
+    0,
+    node.getBoundingClientRect().top + window.scrollY - topbarBottom - 16,
+  );
+}
+
+function focusNode(article: HTMLElement, target: NotificationTarget) {
+  if (target.noteId) {
+    const note = document.getElementById(`note-${target.noteId}`);
+    if (note instanceof HTMLElement) return note;
+  }
+  if (target.openThread) {
+    const thread = article.querySelector(".inline-conversation");
+    if (thread instanceof HTMLElement) return thread;
+  }
+  return article;
+}
+
+function consumeMomentParam() {
+  const url = new URL(window.location.href);
+  if (
+    !url.searchParams.has("moment") &&
+    !url.searchParams.has("note") &&
+    !url.searchParams.has("thread")
+  ) {
+    return;
+  }
+  url.searchParams.delete("moment");
+  url.searchParams.delete("note");
+  url.searchParams.delete("thread");
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(window.history.state, "", next);
 }
 
 function showMissingTarget() {
@@ -39,78 +78,299 @@ function showMissingTarget() {
   host.prepend(note);
 }
 
-function revealNotificationTarget() {
-  const here = currentPath();
-  const normalized = normalizeNotificationPath(here);
-  const target = readNotificationTarget(normalized);
-  if (!target) return "idle" as const;
-  if (normalized !== here.split("#")[0] && normalized !== here) {
-    return { replace: normalized } as const;
-  }
-  const article = document.getElementById(`moment-${target.momentId}`);
-  if (!(article instanceof HTMLElement)) {
-    const link = document.querySelector(".timeline-pagination a");
-    const nextHref =
-      link instanceof HTMLAnchorElement
-        ? nextNotificationPageHref(here, link.getAttribute("href") ?? "")
-        : null;
-    if (nextHref && nextHref !== here.split("#")[0])
-      return { replace: nextHref };
-    showMissingTarget();
-    return "missing" as const;
-  }
-  article.classList.add("notification-target");
-  window.setTimeout(
-    () => article.classList.remove("notification-target"),
-    1800,
-  );
-  scrollToMoment(article);
-  window.dispatchEvent(new CustomEvent(targetEvent, { detail: target }));
-  const scrollThread = () => {
-    const node = target.noteId
-      ? document.getElementById(`note-${target.noteId}`)
-      : target.openThread
-        ? article.querySelector(".inline-conversation")
-        : null;
-    if (node instanceof HTMLElement) scrollToMoment(node);
-  };
-  window.requestAnimationFrame(scrollThread);
-  window.setTimeout(scrollThread, 80);
-  return "shown" as const;
+function isDuplicateLanding(key: string) {
+  return landedDuplicate?.key === key && Date.now() < landedDuplicate.until;
 }
 
+function rememberLanding(key: string) {
+  landedDuplicate = { key, until: Date.now() + duplicateLandingMs };
+}
+
+export function clearNotificationLandingGuard() {
+  landedDuplicate = null;
+}
+
+/**
+ * Scrolls a notification open once, keeps that post still while media above
+ * it loads, then lets go so later layout and realtime updates cannot pull
+ * the reader back.
+ */
 export function NotificationArrival() {
   const router = useRouter();
-  const replaced = useRef<string | null>(null);
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   useEffect(() => {
+    const replaced = { href: null as string | null };
+    const primed = { key: null as string | null };
+    const finished = { key: null as string | null };
     let frame = 0;
-    const run = () => {
-      const result = revealNotificationTarget();
+    let waitTimer = 0;
+    let followTimer = 0;
+    let highlightTimer = 0;
+    let attempts = 0;
+    let holding = false;
+    let ignoreScroll = false;
+    let anchor: HTMLElement | null = null;
+    let lastSet = -1;
+    let observer: ResizeObserver | null = null;
+    let noteWatcher: MutationObserver | null = null;
+    let pendingWatch: MutationObserver | null = null;
+    let highlighted: HTMLElement | null = null;
+
+    const release = () => {
+      holding = false;
+      anchor = null;
+      observer?.disconnect();
+      observer = null;
+      noteWatcher?.disconnect();
+      noteWatcher = null;
+      window.removeEventListener("scroll", onScroll);
+    };
+
+    const onScroll = () => {
+      if (!holding || ignoreScroll) return;
+      const max = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      const clamped = Math.min(Math.max(0, lastSet), max);
+      if (Math.abs(window.scrollY - clamped) <= 2) return;
+      release();
+    };
+
+    const scrollToY = (top: number, behavior: ScrollBehavior = "auto") => {
+      ignoreScroll = true;
+      lastSet = top;
+      window.scrollTo({ top, behavior });
+      ignoreScroll = false;
+    };
+
+    const stopWaiting = () => {
+      pendingWatch?.disconnect();
+      pendingWatch = null;
+    };
+
+    const waitForDom = () => {
+      if (pendingWatch) return;
+      pendingWatch = new MutationObserver(() => schedule());
+      pendingWatch.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    };
+
+    const correctAnchor = () => {
+      if (!holding || !anchor) return;
+      const next = scrollTopFor(anchor);
+      if (Math.abs(next - window.scrollY) < 2) return;
+      scrollToY(next);
+    };
+
+    const hold = (node: HTMLElement) => {
+      release();
+      holding = true;
+      anchor = node;
+      const timeline = document.querySelector(".timeline");
+      if (timeline && typeof ResizeObserver !== "undefined") {
+        observer = new ResizeObserver(() => correctAnchor());
+        observer.observe(timeline);
+      }
+      window.addEventListener("scroll", onScroll, { passive: true });
+    };
+
+    const scrollOnce = (node: HTMLElement) => {
+      scrollToY(scrollTopFor(node));
+      window.dispatchEvent(new Event("our-days:reveal-new-entry"));
+      scheduleBottomNavPin();
+      hold(node);
+      window.requestAnimationFrame(() => {
+        if (!holding) return;
+        const settled = scrollTopFor(node);
+        if (Math.abs(settled - window.scrollY) > 2) scrollToY(settled);
+      });
+    };
+
+    const prime = (article: HTMLElement, target: NotificationTarget) => {
+      const key = targetKey(target);
+      if (primed.key === key) return;
+      primed.key = key;
+      highlighted?.classList.remove("notification-target");
+      highlighted = article;
+      article.classList.add("notification-target");
+      window.clearTimeout(highlightTimer);
+      highlightTimer = window.setTimeout(() => {
+        highlighted?.classList.remove("notification-target");
+        if (highlighted === article) highlighted = null;
+      }, 1800);
+      window.dispatchEvent(new CustomEvent(targetEvent, { detail: target }));
+    };
+
+    const finish = (article: HTMLElement, target: NotificationTarget) => {
+      const key = targetKey(target);
+      if (finished.key === key) return;
+      finished.key = key;
+      attempts = 0;
+      stopWaiting();
+      rememberLanding(key);
+      noteWatcher?.disconnect();
+      const node = focusNode(article, target);
+      scrollOnce(node);
+      consumeMomentParam();
       if (
-        result &&
-        typeof result === "object" &&
-        "replace" in result &&
-        replaced.current !== result.replace
+        target.noteId &&
+        !(
+          document.getElementById(`note-${target.noteId}`) instanceof
+          HTMLElement
+        )
       ) {
-        replaced.current = result.replace;
-        router.replace(result.replace);
+        let settled = false;
+        noteWatcher = new MutationObserver(() => {
+          if (settled || !holding) {
+            noteWatcher?.disconnect();
+            return;
+          }
+          const note = document.getElementById(`note-${target.noteId}`);
+          if (!(note instanceof HTMLElement)) return;
+          settled = true;
+          noteWatcher?.disconnect();
+          noteWatcher = null;
+          const top = scrollTopFor(note);
+          if (Math.abs(top - window.scrollY) < 2) {
+            anchor = note;
+            return;
+          }
+          scrollToY(top, "smooth");
+          anchor = note;
+        });
+        noteWatcher.observe(article, { childList: true, subtree: true });
       }
     };
+
+    const run = () => {
+      const here = currentPath();
+      const normalized = normalizeNotificationPath(here);
+      const target = readNotificationTarget(normalized);
+      if (!target) {
+        finished.key = null;
+        primed.key = null;
+        attempts = 0;
+        stopWaiting();
+        return;
+      }
+      waitForDom();
+
+      const key = targetKey(target);
+      if (isDuplicateLanding(key)) {
+        if (document.getElementById(`moment-${target.momentId}`)) {
+          consumeMomentParam();
+        }
+        return;
+      }
+      if (finished.key === key) return;
+
+      const bare = here.split("#")[0];
+      if (normalized !== bare) {
+        if (replaced.href !== normalized) {
+          replaced.href = normalized;
+          const before = `${window.location.pathname}${window.location.search}`;
+          routerRef.current.replace(normalized, { scroll: false });
+          follow(before);
+        }
+        return;
+      }
+
+      const article = document.getElementById(`moment-${target.momentId}`);
+      if (!(article instanceof HTMLElement)) {
+        const link = document.querySelector(".timeline-pagination a");
+        const nextHref =
+          link instanceof HTMLAnchorElement
+            ? nextNotificationPageHref(here, link.getAttribute("href") ?? "")
+            : null;
+        if (nextHref && nextHref !== bare && replaced.href !== nextHref) {
+          replaced.href = nextHref;
+          const before = `${window.location.pathname}${window.location.search}`;
+          routerRef.current.replace(nextHref, { scroll: false });
+          follow(before);
+          return;
+        }
+        if (!nextHref) {
+          showMissingTarget();
+          consumeMomentParam();
+          finished.key = key;
+          stopWaiting();
+        }
+        return;
+      }
+
+      prime(article, target);
+      const notePending = Boolean(
+        target.noteId &&
+        !(
+          document.getElementById(`note-${target.noteId}`) instanceof
+          HTMLElement
+        ),
+      );
+      if (notePending && attempts < 10) {
+        attempts += 1;
+        window.clearTimeout(waitTimer);
+        waitTimer = window.setTimeout(schedule, 32);
+        return;
+      }
+      finish(article, target);
+    };
+
     const schedule = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(run);
     };
+
+    const follow = (before: string) => {
+      let tries = 0;
+      const tick = () => {
+        const now = `${window.location.pathname}${window.location.search}`;
+        if (now !== before || tries >= 30) {
+          schedule();
+          return;
+        }
+        tries += 1;
+        followTimer = window.setTimeout(tick, 50);
+      };
+      window.clearTimeout(followTimer);
+      followTimer = window.setTimeout(tick, 0);
+    };
+
+    const pushState = history.pushState.bind(history);
+    const replaceState = history.replaceState.bind(history);
+    history.pushState = (...args) => {
+      pushState(...args);
+      schedule();
+    };
+    history.replaceState = (...args) => {
+      replaceState(...args);
+      schedule();
+    };
+
     schedule();
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener(revealEvent, schedule);
+    const onReveal = () => {
+      schedule();
+      follow(`${window.location.pathname}${window.location.search}`);
+    };
+    window.addEventListener(revealEvent, onReveal);
     return () => {
       window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener(revealEvent, schedule);
+      window.clearTimeout(waitTimer);
+      window.clearTimeout(followTimer);
+      window.clearTimeout(highlightTimer);
+      window.removeEventListener(revealEvent, onReveal);
+      history.pushState = pushState;
+      history.replaceState = replaceState;
+      stopWaiting();
+      release();
     };
-  }, [router]);
+  }, []);
 
   return null;
 }
@@ -128,8 +388,8 @@ export function NotificationOpenBridge() {
       scheduleBottomNavPin();
       const next = normalizeNotificationPath(data.url);
       const here = `${window.location.pathname}${window.location.search}`;
-      if (here !== next) router.push(next);
-      else window.dispatchEvent(new Event(revealEvent));
+      if (here !== next) router.push(next, { scroll: false });
+      window.dispatchEvent(new Event(revealEvent));
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () =>
