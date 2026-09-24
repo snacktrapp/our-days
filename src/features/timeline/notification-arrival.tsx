@@ -167,6 +167,7 @@ export function NotificationArrival() {
     let attempts = 0;
     let holding = false;
     let ignoreScroll = false;
+    let caughtUp = false;
     let anchor: HTMLElement | null = null;
     let lastSet = -1;
     let observer: ResizeObserver | null = null;
@@ -207,21 +208,33 @@ export function NotificationArrival() {
       window.removeEventListener("scroll", onScroll);
     };
 
-    const onScroll = () => {
-      if (!holding || ignoreScroll) return;
+    const scrollGoal = (top: number) => {
       const max = Math.max(
         0,
         document.documentElement.scrollHeight - window.innerHeight,
       );
-      const clamped = Math.min(Math.max(0, lastSet), max);
-      if (Math.abs(window.scrollY - clamped) <= 2) return;
+      return Math.min(Math.max(0, top), max);
+    };
+
+    const onScroll = () => {
+      if (!holding || ignoreScroll) return;
+      // WebKit reports the programmatic landing scroll after scrollTo
+      // returns. That echo is not the reader. Only a move away from a
+      // position we already reached releases the anchor.
+      if (Math.abs(window.scrollY - scrollGoal(lastSet)) <= 2) {
+        caughtUp = true;
+        return;
+      }
+      if (!caughtUp) return;
       release();
     };
 
     const scrollToY = (top: number, behavior: ScrollBehavior = "auto") => {
       ignoreScroll = true;
       lastSet = top;
+      caughtUp = false;
       window.scrollTo({ top, behavior });
+      if (Math.abs(window.scrollY - scrollGoal(top)) <= 2) caughtUp = true;
       ignoreScroll = false;
     };
 

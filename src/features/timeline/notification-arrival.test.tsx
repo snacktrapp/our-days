@@ -150,6 +150,62 @@ describe("notification arrival landing", () => {
     expect(note.isConnected).toBe(true);
   });
 
+  it("keeps the anchor when the landing scroll event arrives late", () => {
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 800,
+    });
+    Object.defineProperty(document.documentElement, "scrollHeight", {
+      configurable: true,
+      value: 5000,
+    });
+    const tops: number[] = [];
+    let reportedY = 0;
+    let applyScroll = false;
+    Object.defineProperty(window, "scrollY", {
+      configurable: true,
+      get: () => reportedY,
+    });
+    window.scrollTo = ((options?: ScrollToOptions) => {
+      const top = options?.top ?? 0;
+      tops.push(top);
+      if (applyScroll) reportedY = top;
+    }) as typeof window.scrollTo;
+    window.history.replaceState(null, "", "/family?moment=porch&thread=1");
+    const timeline = document.createElement("div");
+    timeline.className = "timeline";
+    const article = document.createElement("article");
+    article.id = "moment-porch";
+    const thread = document.createElement("div");
+    thread.className = "inline-conversation";
+    let threadDoc = 900;
+    thread.getBoundingClientRect = () => box(threadDoc - reportedY);
+    article.append(thread);
+    timeline.append(article);
+    document.body.append(timeline);
+
+    render(<NotificationArrival />);
+    expect(tops.length).toBeGreaterThan(0);
+    expect(tops.every((top) => top === 900 - 16)).toBe(true);
+    const landingTops = tops.length;
+    window.dispatchEvent(new Event("scroll"));
+    expect(tops).toHaveLength(landingTops);
+
+    applyScroll = true;
+    reportedY = 900 - 16;
+    window.dispatchEvent(new Event("scroll"));
+    threadDoc = 900 + 480;
+    ResizeObserverStub.instances.at(-1)?.fire();
+    expect(tops.at(-1)).toBe(900 + 480 - 16);
+
+    reportedY = 0;
+    window.dispatchEvent(new Event("scroll"));
+    threadDoc = 900 + 480 + 360;
+    ResizeObserverStub.instances.at(-1)?.fire();
+    expect(tops.at(-1)).toBe(900 + 480 - 16);
+  });
+
   it("does not land again when refresh writes the comment query back", () => {
     const tops: number[] = [];
     window.scrollTo = ((options?: ScrollToOptions) => {

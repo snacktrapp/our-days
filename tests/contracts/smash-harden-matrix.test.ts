@@ -576,6 +576,9 @@ describe("smash harden matrix", () => {
         "does not land again when refresh writes the comment query back",
       );
       expect(notificationArrivalTest).toContain(
+        "keeps the anchor when the landing scroll event arrives late",
+      );
+      expect(notificationArrivalTest).toContain(
         "a reload of a consumed comment target stays at the top",
       );
       expect(notificationArrivalE2e).toContain(
