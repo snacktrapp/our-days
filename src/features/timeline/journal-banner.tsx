@@ -29,6 +29,8 @@ export type JournalBannerProps = Readonly<{
   title: string;
   body: string;
   cta: JournalBannerCta;
+  /** Named icon (`bell`, `sparkle`, `bulb`) or a short glyph such as `@`. */
+  icon?: string;
   showNotNow?: boolean;
   promoId?: string;
   onDismiss: () => void;
@@ -59,9 +61,12 @@ function BannerBellIcon() {
 
 function BannerSparkleIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6" />
-      <path d="M12 8.4 13.4 12l3.6.4-2.7 2.2.8 3.5L12 16.6 9.9 18.1l.8-3.5-2.7-2.2 3.6-.4L12 8.4Z" />
+    <svg
+      className="journal-banner-sparkle"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M12 2.8 13.15 10.15 20.5 12 13.15 13.85 12 21.2 10.85 13.85 3.5 12 10.85 10.15Z" />
     </svg>
   );
 }
@@ -75,15 +80,36 @@ function BannerBulbIcon() {
   );
 }
 
-function variantIcon(variant: JournalBannerVariant) {
+const namedBannerIcons = {
+  bell: BannerBellIcon,
+  sparkle: BannerSparkleIcon,
+  bulb: BannerBulbIcon,
+} as const;
+
+export type JournalBannerIconName = keyof typeof namedBannerIcons;
+
+function variantIconName(variant: JournalBannerVariant): JournalBannerIconName {
   switch (variant) {
     case "feature":
-      return <BannerSparkleIcon />;
+      return "sparkle";
     case "tip":
-      return <BannerBulbIcon />;
+      return "bulb";
     default:
-      return <BannerBellIcon />;
+      return "bell";
   }
+}
+
+function BannerGlyph({ glyph }: Readonly<{ glyph: string }>) {
+  return <span className="journal-banner-badge-glyph">{glyph}</span>;
+}
+
+function bannerMark(icon: string | undefined, variant: JournalBannerVariant) {
+  const mark = icon && icon.length > 0 ? icon : variantIconName(variant);
+  if (mark in namedBannerIcons) {
+    const Icon = namedBannerIcons[mark as JournalBannerIconName];
+    return <Icon />;
+  }
+  return <BannerGlyph glyph={mark} />;
 }
 
 function QuietChevron() {
@@ -105,6 +131,7 @@ export function JournalBanner({
   title,
   body,
   cta,
+  icon,
   showNotNow = false,
   promoId,
   onDismiss,
@@ -180,7 +207,7 @@ export function JournalBanner({
       style={style}
     >
       <span className="journal-banner-badge" aria-hidden="true">
-        {variantIcon(variant)}
+        {bannerMark(icon, variant)}
       </span>
       <h2 id={titleId} className="journal-banner-title">
         {title}

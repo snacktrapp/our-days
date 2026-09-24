@@ -2400,6 +2400,22 @@ span.moment-place-line {
   stroke-linejoin: round;
 }
 
+.journal-banner-badge svg.journal-banner-sparkle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.journal-banner-badge-glyph {
+  display: block;
+  color: var(--banner-accent);
+  font-family: var(--font-interface);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  text-box-trim: trim-both;
+  text-box-edge: cap alphabetic;
+}
+
 .journal-banner-title {
   grid-column: 2;
   grid-row: 1;

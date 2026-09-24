@@ -8,6 +8,9 @@ import type { JournalBannerVariant } from "./journal-banner";
  * - `storageKey` — localStorage key; `"dismissed"` hides it for good
  * - `priority` — lower numbers win; only one card shows at a time
  * - `variant` — `"feature"` | `"enablement"` | `"tip"`
+ * - `icon?` — badge mark. A short glyph such as `"@"` or a named icon
+ *   `"bell"` | `"sparkle"` | `"bulb"`. Omit to use the variant default
+ *   (feature sparkle, enablement bell, tip bulb).
  * - `title`, `body`, `ctaLabel`
  * - `ctaHref?` — pill link; omit for a pill button
  * - `showNotNow?` — include the Not now action
@@ -29,6 +32,7 @@ export type JournalPromoBannerConfig = {
   storageKey: string;
   priority: number;
   variant: JournalBannerVariant;
+  icon?: string;
   title: string;
   body: string;
   ctaLabel: string;
@@ -43,6 +47,7 @@ export const journalPromoBanners = [
     storageKey: "our-days:mentions-announcement",
     priority: 0,
     variant: "feature",
+    icon: "@",
     title: "Tag your people",
     body: "Type @ in a comment or caption to mention someone in the circle. They'll get a notice so they don't miss it.",
     ctaLabel: "Got it",
