@@ -10163,6 +10163,14 @@ iframe.composer-location-map {
 .settings-page .settings-avatar {
   box-shadow: none;
 }
+.moment,
+.inline-conversation,
+[id^="note-"] {
+  scroll-margin-top: calc(
+    var(--bottom-nav-float-gap) + env(safe-area-inset-top, 0px) +
+      var(--vv-offset-top, 0px) + 56px + 16px
+  );
+}
 .moment.notification-target {
   animation: notification-target-fade 1.8s ease;
 }

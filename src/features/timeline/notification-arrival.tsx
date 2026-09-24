@@ -13,12 +13,15 @@ const revealEvent = "our-days:notification-reveal";
 const targetEvent = "our-days:notification-target";
 const missingCopy = "That entry isn’t available anymore.";
 const duplicateLandingMs = 700;
+const consumedStorageKey = "our-days:notification-consumed";
+const landingGapPx = 16;
 
 type NotificationTarget = NonNullable<
   ReturnType<typeof readNotificationTarget>
 >;
 
 let landedDuplicate: { key: string; until: number } | null = null;
+let landedThisDocument: string | null = null;
 
 function currentPath() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -28,14 +31,63 @@ function targetKey(target: NotificationTarget) {
   return `${target.momentId}\n${target.noteId ?? ""}\n${target.openThread ? "1" : "0"}`;
 }
 
-function scrollTopFor(node: HTMLElement) {
+function readConsumedLanding() {
+  try {
+    return sessionStorage.getItem(consumedStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function rememberConsumedLanding(key: string) {
+  landedThisDocument = key;
+  try {
+    sessionStorage.setItem(consumedStorageKey, key);
+  } catch {
+    // Private mode must not pin the reader to a notification after refresh.
+  }
+}
+
+function navigationIsReload() {
+  const entry = performance.getEntriesByType("navigation")[0] as
+    { type?: string } | undefined;
+  return entry?.type === "reload";
+}
+
+/**
+ * Distance from the viewport top to the first pixel below the fixed header.
+ * Uses the header's layout box, not getBoundingClientRect: the scroll-away
+ * header translates upward, and that shrunk rect lands the post underneath
+ * the bar once the header is shown again.
+ */
+export function notificationTopInset() {
   const topbar = document.querySelector(".topbar");
-  const topbarBottom =
-    topbar instanceof HTMLElement ? topbar.getBoundingClientRect().bottom : 0;
+  if (!(topbar instanceof HTMLElement)) return landingGapPx;
+  const top = Number.parseFloat(getComputedStyle(topbar).top);
+  const anchoredTop = Number.isFinite(top) ? Math.max(0, top) : 0;
+  return anchoredTop + topbar.offsetHeight + landingGapPx;
+}
+
+function scrollTopFor(node: HTMLElement) {
   return Math.max(
     0,
-    node.getBoundingClientRect().top + window.scrollY - topbarBottom - 16,
+    node.getBoundingClientRect().top + window.scrollY - notificationTopInset(),
   );
+}
+
+function notificationHrefWithoutTarget() {
+  const url = new URL(window.location.href);
+  if (
+    !url.searchParams.has("moment") &&
+    !url.searchParams.has("note") &&
+    !url.searchParams.has("thread")
+  ) {
+    return null;
+  }
+  url.searchParams.delete("moment");
+  url.searchParams.delete("note");
+  url.searchParams.delete("thread");
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function focusNode(article: HTMLElement, target: NotificationTarget) {
@@ -50,20 +102,16 @@ function focusNode(article: HTMLElement, target: NotificationTarget) {
   return article;
 }
 
-function consumeMomentParam() {
-  const url = new URL(window.location.href);
-  if (
-    !url.searchParams.has("moment") &&
-    !url.searchParams.has("note") &&
-    !url.searchParams.has("thread")
-  ) {
-    return;
-  }
-  url.searchParams.delete("moment");
-  url.searchParams.delete("note");
-  url.searchParams.delete("thread");
-  const next = `${url.pathname}${url.search}${url.hash}`;
-  window.history.replaceState(window.history.state, "", next);
+function bareHistoryState() {
+  const state: Record<string, unknown> = {
+    ...(window.history.state as Record<string, unknown> | null),
+  };
+  // Next.js skips canonical-URL sync when the state is marked __NA, then
+  // the next router.refresh() writes the original notification query back.
+  delete state.__NA;
+  delete state._N;
+  delete state.__PRIVATE_NEXTJS_INTERNALS_TREE;
+  return state;
 }
 
 function showMissingTarget() {
@@ -88,6 +136,12 @@ function rememberLanding(key: string) {
 
 export function clearNotificationLandingGuard() {
   landedDuplicate = null;
+  landedThisDocument = null;
+  try {
+    sessionStorage.removeItem(consumedStorageKey);
+  } catch {
+    // Ignore storage failures while resetting tests.
+  }
 }
 
 /**
@@ -113,12 +167,36 @@ export function NotificationArrival() {
     let attempts = 0;
     let holding = false;
     let ignoreScroll = false;
+    let caughtUp = false;
     let anchor: HTMLElement | null = null;
     let lastSet = -1;
     let observer: ResizeObserver | null = null;
     let noteWatcher: MutationObserver | null = null;
     let pendingWatch: MutationObserver | null = null;
     let highlighted: HTMLElement | null = null;
+    let freshIntent = false;
+
+    const consumeMomentParam = () => {
+      const next = notificationHrefWithoutTarget();
+      if (!next) return;
+      // Null the App Router marker so Next records this URL. Reusing
+      // history.state leaves the notification query canonical, and refresh
+      // writes it back.
+      window.history.replaceState(bareHistoryState(), "", next);
+      routerRef.current.replace(next, { scroll: false });
+    };
+
+    const armIntent = () => {
+      freshIntent = true;
+      finished.key = null;
+      primed.key = null;
+      attempts = 0;
+    };
+
+    const restoredTarget = (key: string) =>
+      !freshIntent &&
+      (landedThisDocument === key ||
+        (navigationIsReload() && readConsumedLanding() === key));
 
     const release = () => {
       holding = false;
@@ -130,21 +208,33 @@ export function NotificationArrival() {
       window.removeEventListener("scroll", onScroll);
     };
 
-    const onScroll = () => {
-      if (!holding || ignoreScroll) return;
+    const scrollGoal = (top: number) => {
       const max = Math.max(
         0,
         document.documentElement.scrollHeight - window.innerHeight,
       );
-      const clamped = Math.min(Math.max(0, lastSet), max);
-      if (Math.abs(window.scrollY - clamped) <= 2) return;
+      return Math.min(Math.max(0, top), max);
+    };
+
+    const onScroll = () => {
+      if (!holding || ignoreScroll) return;
+      // WebKit reports the programmatic landing scroll after scrollTo
+      // returns. That echo is not the reader. Only a move away from a
+      // position we already reached releases the anchor.
+      if (Math.abs(window.scrollY - scrollGoal(lastSet)) <= 2) {
+        caughtUp = true;
+        return;
+      }
+      if (!caughtUp) return;
       release();
     };
 
     const scrollToY = (top: number, behavior: ScrollBehavior = "auto") => {
       ignoreScroll = true;
       lastSet = top;
+      caughtUp = false;
       window.scrollTo({ top, behavior });
+      if (Math.abs(window.scrollY - scrollGoal(top)) <= 2) caughtUp = true;
       ignoreScroll = false;
     };
 
@@ -215,6 +305,8 @@ export function NotificationArrival() {
       attempts = 0;
       stopWaiting();
       rememberLanding(key);
+      rememberConsumedLanding(key);
+      freshIntent = false;
       noteWatcher?.disconnect();
       const node = focusNode(article, target);
       scrollOnce(node);
@@ -254,8 +346,6 @@ export function NotificationArrival() {
       const normalized = normalizeNotificationPath(here);
       const target = readNotificationTarget(normalized);
       if (!target) {
-        finished.key = null;
-        primed.key = null;
         attempts = 0;
         stopWaiting();
         return;
@@ -263,6 +353,13 @@ export function NotificationArrival() {
       waitForDom();
 
       const key = targetKey(target);
+      if (restoredTarget(key)) {
+        finished.key = key;
+        freshIntent = false;
+        stopWaiting();
+        consumeMomentParam();
+        return;
+      }
       if (isDuplicateLanding(key)) {
         if (document.getElementById(`moment-${target.momentId}`)) {
           consumeMomentParam();
@@ -346,6 +443,9 @@ export function NotificationArrival() {
     const replaceState = history.replaceState.bind(history);
     history.pushState = (...args) => {
       pushState(...args);
+      if (readNotificationTarget(normalizeNotificationPath(currentPath()))) {
+        armIntent();
+      }
       schedule();
     };
     history.replaceState = (...args) => {
@@ -355,6 +455,7 @@ export function NotificationArrival() {
 
     schedule();
     const onReveal = () => {
+      armIntent();
       schedule();
       follow(`${window.location.pathname}${window.location.search}`);
     };
