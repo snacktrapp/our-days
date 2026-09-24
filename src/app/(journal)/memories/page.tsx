@@ -1,6 +1,11 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { MemoriesPanel } from "@/features/memories/memories-panel";
 import { getMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
@@ -40,6 +45,13 @@ export default async function MemoriesPage({
       section="memories"
       createMomentAction={
         access?.mode === "authenticated" ? createFamilyMomentAction : undefined
+      }
+      activity={
+        access?.mode === "authenticated" ? (
+          <Suspense fallback={<JournalActivitySlotFallback />}>
+            <JournalActivitySlot access={access} />
+          </Suspense>
+        ) : undefined
       }
       preserveChrome={!access}
     >

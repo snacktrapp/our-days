@@ -8,6 +8,7 @@ import {
   type TimelineMomentViewModel,
   type TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
+import type { AccentToken } from "@/features/accent-token";
 import {
   retryTransientFamilySessionQuery,
   type JournalAccess,
@@ -80,6 +81,37 @@ type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
 const pageSize = 20;
 const maximumCumulativePages = 25;
 
+export type ConnectedTimelineOptions = Readonly<{
+  journalPersonId?: string;
+  pages: number;
+  snapshotAt?: string;
+  allCircles?: boolean;
+  enrichOffset?: number;
+  enrichLimit?: number;
+  omitCompletion?: boolean;
+  omitPagination?: boolean;
+  sharedList?: Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
+}>;
+
+export type ConnectedTimelineListOptions = Readonly<{
+  journalPersonId?: string;
+  pages: number;
+  snapshotAt?: string;
+  allCircles?: boolean;
+}>;
+
+export type ConnectedTimelineListing = Readonly<{
+  rows: readonly TimelineRow[];
+  pageCount: number;
+  personal: ConnectedJournalContext["people"][number] | undefined;
+  requestedAllCircles: boolean;
+  queryPrefix: string;
+  hasMore: boolean;
+  paginationFailed: boolean;
+  firstPageFailed: boolean;
+  snapshotAt: string | undefined;
+}>;
+
 function formatPlainDate(value: string, today: string) {
   if (value === today) return "Today";
   return new Intl.DateTimeFormat("en-US", {
@@ -122,6 +154,8 @@ export async function loadMomentConversationsByMomentId(
     circleId: string;
     membershipId: string;
     membershipIds?: readonly string[];
+    memberNamesByMembershipId?: Readonly<Record<string, string>>;
+    memberAccentsByMembershipId?: Readonly<Record<string, AccentToken>>;
   }>,
   momentIds: readonly string[],
 ): Promise<Map<string, MomentConversationViewModel>> {
@@ -158,40 +192,18 @@ export async function loadMomentConversationsByMomentId(
   const viewerMembershipIds = new Set(
     access.membershipIds?.length ? access.membershipIds : [access.membershipId],
   );
-  const membershipsResult = await supabase
-    .from("circle_memberships")
-    .select("id, person_id")
-    .in("id", membershipIds);
-  const memberships = membershipsResult.data ?? [];
-  const personIds = [...new Set(memberships.map((row) => row.person_id))];
-  const peopleResult =
-    personIds.length === 0
-      ? {
-          data: [] as {
-            id: string;
-            display_name: string;
-            accent_token: string;
-          }[],
-        }
-      : await supabase
-          .from("people")
-          .select("id, display_name, accent_token")
-          .in("id", personIds);
-  const personById = new Map(
-    (peopleResult.data ?? []).map((person) => [person.id, person]),
-  );
-  const authorByMembership = new Map(
-    memberships.map((membership) => {
-      const person = personById.get(membership.person_id);
-      return [
-        membership.id,
-        {
-          name: person?.display_name ?? "Family",
-          accent: mapDatabaseAccent(person?.accent_token ?? "slate"),
-        },
-      ] as const;
-    }),
-  );
+  const authorByMembership = new Map<
+    string,
+    Readonly<{ name: string; accent: AccentToken }>
+  >();
+  for (const membershipId of membershipIds) {
+    const name = access.memberNamesByMembershipId?.[membershipId];
+    if (!name) continue;
+    authorByMembership.set(membershipId, {
+      name,
+      accent: access.memberAccentsByMembershipId?.[membershipId] ?? "slate",
+    });
+  }
 
   // A visible conversation can include authors outside the viewer's roster.
   // Fetch display-only attribution, never broaden roster access to find names.
@@ -564,10 +576,17 @@ export async function loadVideoMetaByMomentId(
   >();
   if (uniqueIds.length === 0) return metaByMoment;
   if (typeof supabase.from !== "function") return metaByMoment;
-  const { data, error } = await supabase
-    .from("moment_videos")
-    .select("moment_id, mime_type, duration_ms")
-    .in("moment_id", uniqueIds);
+  const [videosResult, postersResult] = await Promise.all([
+    supabase
+      .from("moment_videos")
+      .select("moment_id, mime_type, duration_ms")
+      .in("moment_id", uniqueIds),
+    supabase
+      .from("moment_video_posters")
+      .select("moment_id, size_bytes, width_px, height_px")
+      .in("moment_id", uniqueIds),
+  ]);
+  const { data, error } = videosResult;
   if (error || !data) return metaByMoment;
   for (const row of data) {
     if (
@@ -583,10 +602,7 @@ export async function loadVideoMetaByMomentId(
     });
   }
 
-  const { data: posters, error: posterError } = await supabase
-    .from("moment_video_posters")
-    .select("moment_id, size_bytes, width_px, height_px")
-    .in("moment_id", uniqueIds);
+  const { data: posters, error: posterError } = postersResult;
   if (posterError || !posters) return metaByMoment;
   for (const row of posters) {
     if (typeof row.moment_id !== "string") continue;
@@ -712,46 +728,32 @@ export function sliceTimelineAfterNthMoment(
   return sliced;
 }
 
-export async function loadConnectedTimeline(
+export async function loadConnectedTimelineListing(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
-  options: Readonly<{
-    journalPersonId?: string;
-    pages: number;
-    snapshotAt?: string;
-    allCircles?: boolean;
-    enrichOffset?: number;
-    enrichLimit?: number;
-    omitCompletion?: boolean;
-    omitPagination?: boolean;
-  }>,
-): Promise<TimelineViewModel> {
-  if (localJournalIsEnabled()) {
-    const { loadLocalTimeline } = await import("@/lib/local-journal/views");
-    return applyTimelineSlice(
-      await loadLocalTimeline(access, context, options),
-      options,
-    );
-  }
-  const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
+  options: ConnectedTimelineListOptions,
+  supabaseClient?: MomentPhotoClient,
+): Promise<ConnectedTimelineListing> {
+  const supabase =
+    supabaseClient ??
+    (await createOurDaysServerClient({ readTimeoutMs: 8000 }));
   const pageCount = requestedPageCount(options.pages);
   const rows: TimelineRow[] = [];
   const personal = options.journalPersonId
     ? context.people.find((person) => person.id === options.journalPersonId)
     : undefined;
-  const allCircles = Boolean(options.allCircles) && !personal;
+  const requestedAllCircles = Boolean(options.allCircles) && !personal;
   const queryPrefix = personal
     ? `/people/${personal.id}`
-    : allCircles
+    : requestedAllCircles
       ? "/family"
       : groupHomeHref(access.circleId);
-  const circleNames = circleNamesFromContext(context);
   let cursor: TimelineRow | undefined;
   let snapshotAt = requestedSnapshot(options.snapshotAt);
   let hasMore = false;
   let paginationFailed = false;
   let firstPageFailed = false;
-  let usingAllCircles = allCircles;
+  let usingAllCircles = requestedAllCircles;
 
   const pageArgs = () => ({
     cursor_occurred_on: cursor?.occurred_on,
@@ -798,6 +800,46 @@ export async function loadConnectedTimeline(
     if (!hasMore || !cursor) break;
   }
 
+  return {
+    rows,
+    pageCount,
+    personal,
+    requestedAllCircles,
+    queryPrefix,
+    hasMore,
+    paginationFailed,
+    firstPageFailed,
+    snapshotAt,
+  };
+}
+
+export async function loadConnectedTimeline(
+  access: AuthenticatedAccess,
+  context: ConnectedJournalContext,
+  options: ConnectedTimelineOptions,
+): Promise<TimelineViewModel> {
+  if (localJournalIsEnabled()) {
+    const { loadLocalTimeline } = await import("@/lib/local-journal/views");
+    return applyTimelineSlice(
+      await loadLocalTimeline(access, context, options),
+      options,
+    );
+  }
+  const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
+  const listing = options.sharedList
+    ? await options.sharedList
+    : await loadConnectedTimelineListing(access, context, options, supabase);
+  const pageCount = listing.pageCount;
+  const rows = [...listing.rows];
+  const personal = listing.personal;
+  const allCircles = listing.requestedAllCircles;
+  const queryPrefix = listing.queryPrefix;
+  const circleNames = circleNamesFromContext(context);
+  const hasMore = listing.hasMore;
+  const paginationFailed = listing.paginationFailed;
+  const firstPageFailed = listing.firstPageFailed;
+  const snapshotAt = listing.snapshotAt;
+
   const enrichOffset = options.enrichOffset ?? 0;
   const enrichRows = rows.slice(
     enrichOffset,
@@ -825,6 +867,8 @@ export async function loadConnectedTimeline(
           membershipIds: context.viewerMembershipIds?.length
             ? context.viewerMembershipIds
             : [access.membershipId],
+          memberNamesByMembershipId: context.memberNames,
+          memberAccentsByMembershipId: context.memberAccents,
         },
         enrichRows.map((row) => row.moment_id),
       ),

@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { MemoryJourneyPanel } from "@/features/memories/memory-journey-panel";
 import { getDesignPreviewOnThisDayFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
@@ -77,6 +82,11 @@ export default async function OnThisDayPage({
       model={model.chrome}
       section="memories"
       createMomentAction={createFamilyMomentAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot access={access} />
+        </Suspense>
+      }
     >
       <MemoryJourneyPanel
         model={model}

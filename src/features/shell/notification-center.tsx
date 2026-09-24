@@ -140,6 +140,15 @@ export function NotificationCenter({
   }, [initialItems, refreshOnOpen]);
 
   useEffect(() => {
+    if (!refreshOnOpen) return;
+    window.dispatchEvent(
+      new CustomEvent(activityUpdatedEvent, {
+        detail: [...initialItems],
+      }),
+    );
+  }, [initialItems, refreshOnOpen]);
+
+  useEffect(() => {
     if (!open || !refreshOnOpen) return;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15000);

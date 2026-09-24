@@ -159,6 +159,7 @@ export type ConnectedJournalContext = Readonly<{
   viewerMembershipIds?: readonly string[];
   viewerPersonIds?: readonly string[];
   memberNames?: Readonly<Record<string, string>>;
+  memberAccents?: Readonly<Record<string, AccentToken>>;
 }>;
 
 export type JournalPersonOption = Readonly<{
@@ -374,6 +375,7 @@ const emptyOptionalActivity = {
   postAuthorNames: new Map<string, string>(),
   familyMoments: [] as ActivityMoment[],
 };
+const activityScanLimit = 200;
 
 async function loadOptionalJournalActivity(
   supabase: JournalClient,
@@ -389,6 +391,8 @@ async function loadOptionalJournalActivity(
           .from("moments")
           .select("id, moment_circles(circle_id)")
           .in("recorded_by_membership_id", [...myMembershipIds])
+          .order("created_at", { ascending: false })
+          .limit(activityScanLimit)
           .is("trashed_at", null),
         supabase
           .from("moments")
@@ -412,6 +416,8 @@ async function loadOptionalJournalActivity(
             "moment_id, created_at, moments!moment_notes_moment_fkey!inner(id, recorded_by_membership_id, moment_circles(circle_id), author:circle_memberships!moments_recorded_by_membership_fkey(people!circle_memberships_person_fkey(display_name)))",
           )
           .in("author_membership_id", [...myMembershipIds])
+          .order("created_at", { ascending: false })
+          .limit(activityScanLimit)
           .is("trashed_at", null),
       ]);
     if (ownedMomentsResult.error) throw ownedMomentsResult.error;
@@ -639,11 +645,29 @@ export async function loadConnectedJournalContext(
     access.membershipId,
     ...circleMemberships.map((membership) => membership.membershipId),
   ]);
+  const groupsPromise =
+    rosterCircleIds.length === 0
+      ? Promise.resolve({
+          data: [] as {
+            id: string;
+            name: string;
+            created_by_membership_id?: string;
+            archived_at?: string | null;
+          }[],
+          error: null,
+        })
+      : retryTransientFamilySessionQuery(() =>
+          supabase
+            .from("circles")
+            .select("id, name, created_by_membership_id, archived_at")
+            .in("id", rosterCircleIds),
+        );
   const [
     circleResult,
     peopleResult,
     membershipsResult,
     guardiansResult,
+    groupsResult,
     activity,
   ] = await Promise.all([
     retryTransientFamilySessionQuery(() =>
@@ -675,6 +699,7 @@ export async function loadConnectedJournalContext(
         .eq("circle_id", access.circleId)
         .is("revoked_at", null),
     ),
+    groupsPromise,
     includeActivity
       ? loadOptionalJournalActivity(
           supabase,
@@ -689,29 +714,10 @@ export async function loadConnectedJournalContext(
     circleResult.error ??
     peopleResult.error ??
     membershipsResult.error ??
-    guardiansResult.error;
+    guardiansResult.error ??
+    groupsResult.error;
   if (error) throw error;
   if (!circleResult.data) throw new Error("Circle is unavailable");
-
-  const groupIds = rosterCircleIds;
-  const groupsResult =
-    groupIds.length === 0
-      ? {
-          data: [] as {
-            id: string;
-            name: string;
-            created_by_membership_id?: string;
-            archived_at?: string | null;
-          }[],
-          error: null,
-        }
-      : await retryTransientFamilySessionQuery(() =>
-          supabase
-            .from("circles")
-            .select("id, name, created_by_membership_id, archived_at")
-            .in("id", groupIds),
-        );
-  if (groupsResult.error) throw groupsResult.error;
   const groupNameById = new Map(
     (groupsResult.data ?? []).map((circle) => [circle.id, circle.name]),
   );
@@ -753,6 +759,18 @@ export async function loadConnectedJournalContext(
     allMemberships.map((membership) => [
       membership.id,
       allPersonNameById.get(membership.person_id) ?? "Family",
+    ]),
+  );
+  const allPersonAccentById = new Map(
+    allPeople.map((person) => [
+      person.id,
+      mapDatabaseAccent(person.accent_token),
+    ]),
+  );
+  const memberAccentById = new Map(
+    allMemberships.map((membership) => [
+      membership.id,
+      allPersonAccentById.get(membership.person_id) ?? "slate",
     ]),
   );
   const guardedPersonIds = new Set(
@@ -895,5 +913,6 @@ export async function loadConnectedJournalContext(
     viewerMembershipIds: [...myMembershipIds],
     viewerPersonIds,
     memberNames: Object.fromEntries(memberNameById),
+    memberAccents: Object.fromEntries(memberAccentById),
   };
 }

@@ -1,7 +1,12 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { loadTrashJournal } from "@/data/trash.server";
 import { TrashPanel } from "@/features/moments/trash-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { JournalPanelInterrupted } from "@/features/shell/journal-interrupted";
 import {
   createFamilyMomentAction,
@@ -57,6 +62,14 @@ export default async function TrashPage() {
       model={{ ...loaded.context.chrome, title: "Recently removed" }}
       section="trash"
       createMomentAction={createFamilyMomentAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot
+            access={access}
+            memberNames={loaded.context.memberNames}
+          />
+        </Suspense>
+      }
     >
       <TrashPanel
         moments={loaded.moments}

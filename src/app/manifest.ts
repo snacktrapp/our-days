@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Our Days",
     short_name: "Our Days",
     description: "A quiet, private journal.",
-    start_url: "/",
+    start_url: "/family",
     scope: "/",
     display: "standalone",
     background_color: "#101216",
