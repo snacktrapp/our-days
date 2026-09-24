@@ -1,17 +1,32 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VideoMomentMedia } from "./video-moment-media";
 
 const mocks = vi.hoisted(() => ({
   warmVideoPoster: vi.fn().mockResolvedValue(true),
+  usePrivateMediaObjectUrl: vi.fn((src?: string) => ({
+    objectUrl: src ?? null,
+  })),
 }));
 
 vi.mock("@/components/private-video-player", () => ({
   PrivateVideoPlayer: ({
     label,
     poster,
-  }: Readonly<{ label: string; poster?: string }>) => (
-    <video aria-label={label} poster={poster} />
+    preload,
+    onReadyFrame,
+  }: Readonly<{
+    label: string;
+    poster?: string;
+    preload?: "none" | "metadata" | "auto";
+    onReadyFrame?: unknown;
+  }>) => (
+    <video
+      aria-label={label}
+      poster={poster}
+      data-preload={preload}
+      data-has-ready-frame={onReadyFrame ? "yes" : "no"}
+    />
   ),
 }));
 
@@ -20,23 +35,27 @@ vi.mock("@/features/video/warm-video-poster", () => ({
 }));
 
 vi.mock("@/lib/use-private-media-object-url", () => ({
-  usePrivateMediaObjectUrl: (src?: string) => ({ objectUrl: src ?? null }),
+  usePrivateMediaObjectUrl: mocks.usePrivateMediaObjectUrl,
 }));
 
-class ImmediateIntersectionObserver {
+class ControlledIntersectionObserver {
+  static instances: ControlledIntersectionObserver[] = [];
   private readonly callback: IntersectionObserverCallback;
 
   constructor(callback: IntersectionObserverCallback) {
     this.callback = callback;
+    ControlledIntersectionObserver.instances.push(this);
   }
 
   disconnect() {}
 
-  observe() {
+  observe() {}
+
+  trigger(isIntersecting = true) {
     this.callback(
       [
         {
-          isIntersecting: true,
+          isIntersecting,
         } as IntersectionObserverEntry,
       ],
       this as unknown as IntersectionObserver,
@@ -48,11 +67,22 @@ class ImmediateIntersectionObserver {
   }
 
   unobserve() {}
+
+  static triggerAll() {
+    for (const observer of ControlledIntersectionObserver.instances) {
+      observer.trigger(true);
+    }
+  }
+
+  static reset() {
+    ControlledIntersectionObserver.instances = [];
+  }
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal("IntersectionObserver", ImmediateIntersectionObserver);
+  ControlledIntersectionObserver.reset();
+  vi.stubGlobal("IntersectionObserver", ControlledIntersectionObserver);
 });
 
 describe("VideoMomentMedia poster warmup", () => {
@@ -74,6 +104,13 @@ describe("VideoMomentMedia poster warmup", () => {
       />,
     );
 
+    expect(mocks.usePrivateMediaObjectUrl).toHaveBeenCalledWith(undefined);
+    await waitFor(() =>
+      expect(ControlledIntersectionObserver.instances.length).toBeGreaterThan(
+        0,
+      ),
+    );
+    ControlledIntersectionObserver.triggerAll();
     await waitFor(() => {
       expect(mocks.warmVideoPoster).toHaveBeenCalledWith({
         momentId: "d1af0c65-7663-46b9-afef-24c634953527",
@@ -81,9 +118,22 @@ describe("VideoMomentMedia poster warmup", () => {
         replaceExistingPoster: true,
       });
     });
+    await waitFor(() => {
+      expect(mocks.usePrivateMediaObjectUrl).toHaveBeenLastCalledWith(
+        "/api/media/videos/d1af0c65-7663-46b9-afef-24c634953527/poster",
+      );
+    });
+    expect(screen.getByLabelText("Lex clip")).toHaveAttribute(
+      "data-preload",
+      "auto",
+    );
+    expect(screen.getByLabelText("Lex clip")).toHaveAttribute(
+      "data-has-ready-frame",
+      "yes",
+    );
   });
 
-  it("warms healthy persisted posters without requesting replacement", async () => {
+  it("skips warmup and frame capture when the server poster looks good", async () => {
     render(
       <VideoMomentMedia
         moment={{
@@ -100,12 +150,62 @@ describe("VideoMomentMedia poster warmup", () => {
       />,
     );
 
+    expect(mocks.usePrivateMediaObjectUrl).toHaveBeenCalledWith(undefined);
+    await waitFor(() =>
+      expect(ControlledIntersectionObserver.instances.length).toBeGreaterThan(
+        0,
+      ),
+    );
+    ControlledIntersectionObserver.triggerAll();
+    await waitFor(() => {
+      expect(mocks.usePrivateMediaObjectUrl).toHaveBeenLastCalledWith(
+        "/api/media/videos/healthy-poster-moment/poster",
+      );
+    });
+    expect(mocks.warmVideoPoster).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Healthy clip")).toHaveAttribute(
+      "data-preload",
+      "metadata",
+    );
+    expect(screen.getByLabelText("Healthy clip")).toHaveAttribute(
+      "data-has-ready-frame",
+      "no",
+    );
+  });
+
+  it("warms posters when the server has no poster yet", async () => {
+    render(
+      <VideoMomentMedia
+        moment={{
+          id: "missing-server-poster",
+          video: {
+            src: "/api/media/videos/missing-server-poster",
+            poster: undefined,
+            posterSizeBytes: undefined,
+            width: 1280,
+            height: 720,
+          },
+        }}
+        label="Missing poster clip"
+      />,
+    );
+
+    await waitFor(() =>
+      expect(ControlledIntersectionObserver.instances.length).toBeGreaterThan(
+        0,
+      ),
+    );
+    ControlledIntersectionObserver.triggerAll();
     await waitFor(() => {
       expect(mocks.warmVideoPoster).toHaveBeenCalledWith({
-        momentId: "healthy-poster-moment",
-        src: "/api/media/videos/healthy-poster-moment",
+        momentId: "missing-server-poster",
+        src: "/api/media/videos/missing-server-poster",
         replaceExistingPoster: false,
       });
     });
+    expect(screen.getByLabelText("Missing poster clip")).toHaveAttribute(
+      "data-preload",
+      "auto",
+    );
   });
 });

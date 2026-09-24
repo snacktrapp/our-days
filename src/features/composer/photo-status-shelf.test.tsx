@@ -139,7 +139,7 @@ afterEach(() => {
 });
 
 describe("PhotoStatusShelf", () => {
-  it("does not poll an idle journal, but checks again when it resumes", async () => {
+  it("does not poll an idle journal again on resume without local work", async () => {
     vi.useFakeTimers();
     mocks.rpc.mockResolvedValue({ data: [], error: null });
     const view = render(<PhotoStatusShelf circleId={circleId} />);
@@ -156,7 +156,7 @@ describe("PhotoStatusShelf", () => {
       window.dispatchEvent(new Event("online"));
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(mocks.rpc.mock.calls.length).toBeGreaterThan(initial);
+    expect(mocks.rpc).toHaveBeenCalledTimes(initial);
     view.unmount();
   });
   it("shows a compact chip while a written save continues", async () => {
@@ -678,21 +678,21 @@ describe("PhotoStatusShelf", () => {
     });
   });
 
-  it("shows server-authoritative unfinished work even without local browser state", async () => {
+  it("keeps untracked server rows as a silent baseline", async () => {
     render(<PhotoStatusShelf circleId={circleId} />);
 
-    expect(await screen.findByText("Photo upload paused")).toBeVisible();
-    expect(screen.getByText(/A Organizer One/)).toBeVisible();
-    expect(mocks.rpc).toHaveBeenCalledWith("list_my_photo_intakes", {
-      circle_id: circleId,
-    });
+    await waitFor(() =>
+      expect(mocks.rpc).toHaveBeenCalledWith("list_my_photo_intakes", {
+        circle_id: circleId,
+      }),
+    );
     expect(mocks.listForScope).toHaveBeenCalledWith(accountId, circleId);
-    expect(
-      screen.getByRole("button", { name: /Cancel upload for A Organizer One/ }),
-    ).toBeVisible();
+    expect(screen.queryByText("Photo upload paused")).toBeNull();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("finishes processing automatically with only a quiet status", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     const processRequest = vi.fn(async () =>
       Response.json({ ok: true }, { status: 202 }),
     );
@@ -721,6 +721,7 @@ describe("PhotoStatusShelf", () => {
   });
 
   it("joins uploader processing and refreshes publication without a failed chip", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     let finish!: (response: Response) => void;
     const processRequest = vi.fn(
       () =>
@@ -823,6 +824,7 @@ describe("PhotoStatusShelf", () => {
   });
 
   it("keeps the item and does not claim cancellation when confirmation fails", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     mocks.rpc.mockImplementation(async (name: string) =>
       name === "cancel_photo_intake"
         ? { data: null, error: { message: "offline" } }
@@ -853,14 +855,14 @@ describe("PhotoStatusShelf", () => {
     mocks.rpc.mockResolvedValue({ data: [], error: null });
     render(<PhotoStatusShelf circleId={circleId} />);
 
-    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalled());
     expect(mocks.remove).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();
   });
 
-  it("hides published cleanup and refreshes the timeline", async () => {
+  it("keeps untracked published cleanup silent without refreshing", async () => {
     mocks.rpc.mockResolvedValue({
       data: [
         {
@@ -873,13 +875,15 @@ describe("PhotoStatusShelf", () => {
     });
     render(<PhotoStatusShelf circleId={circleId} />);
 
-    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledOnce());
     expect(
       screen.queryByRole("region", { name: "Private photo status" }),
     ).toBeNull();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it("refreshes the timeline only once for the same published intake", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     mocks.rpc.mockResolvedValue({
       data: [
         {
@@ -900,6 +904,7 @@ describe("PhotoStatusShelf", () => {
   });
 
   it("does not refresh the timeline again after a published shelf remount", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     mocks.rpc.mockResolvedValue({
       data: [
         {
@@ -941,6 +946,7 @@ describe("PhotoStatusShelf", () => {
   });
 
   it("does not let a delayed status poll overwrite confirmed cancellation", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     let resolveDelayed!: (value: unknown) => void;
     let listCalls = 0;
     mocks.rpc.mockImplementation((name: string) => {
@@ -967,7 +973,7 @@ describe("PhotoStatusShelf", () => {
     const user = userEvent.setup();
     render(<PhotoStatusShelf circleId={circleId} />);
     await screen.findByText("Photo upload paused");
-    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.listForScope).toHaveBeenCalled());
 
     fireEvent(window, new Event("online"));
     await waitFor(() => expect(listCalls).toBe(2));
@@ -1115,6 +1121,7 @@ describe("PhotoStatusShelf", () => {
   });
 
   it("clears a leftover reserved intake after another photo that day already landed", async () => {
+    mocks.listForScope.mockResolvedValue([localRecord]);
     mocks.rpc.mockImplementation(async (name: string) => {
       if (name === "list_my_photo_intakes") {
         return { data: [serverRow], error: null };

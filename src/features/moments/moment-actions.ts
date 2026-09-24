@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import {
   readJournalCircleMemberships,
@@ -297,7 +298,9 @@ export async function createFamilyMomentAction(input: {
     };
   }
   if (audience === "family") {
-    await deliverActivityWebPush(supabase, "moment", data);
+    after(async () => {
+      await deliverActivityWebPush(supabase, "moment", data);
+    });
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
@@ -810,7 +813,9 @@ export async function createMomentNoteAction(input: {
       ok: false,
       message: "That note could not be saved. Your words are still here.",
     };
-  await deliverActivityWebPush(supabase, "note", input.momentId);
+  after(async () => {
+    await deliverActivityWebPush(supabase, "note", input.momentId);
+  });
   return { ok: true, message: "Note saved.", momentId: input.momentId };
 }
 
@@ -958,7 +963,9 @@ export async function setMomentReactionAction(input: {
   });
   if (error) return { ok: false, message: "That response could not be saved." };
   if (input.reactionId) {
-    await deliverActivityWebPush(supabase, "reaction", input.momentId);
+    after(async () => {
+      await deliverActivityWebPush(supabase, "reaction", input.momentId);
+    });
   }
   return {
     ok: true,
@@ -1036,7 +1043,9 @@ export async function createWrittenMomentAction(input: {
       message: "That moment could not be saved. Your draft is still here.",
     };
   if (audience === "family") {
-    await deliverActivityWebPush(supabase, "moment", data);
+    after(async () => {
+      await deliverActivityWebPush(supabase, "moment", data);
+    });
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };

@@ -121,6 +121,28 @@ const activeUploadStates = new Set([
   "stopping",
   "uploading",
 ]);
+const statusCheckSessionKeyPrefix = "our-days:photo-status-shelf-check:";
+
+function claimPhotoStatusSessionCheck(circleId: string) {
+  try {
+    const key = `${statusCheckSessionKeyPrefix}${circleId}`;
+    if (window.sessionStorage.getItem(key) === "1") return false;
+    window.sessionStorage.setItem(key, "1");
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function clearPhotoStatusSessionCheck(circleId: string) {
+  try {
+    window.sessionStorage.removeItem(
+      `${statusCheckSessionKeyPrefix}${circleId}`,
+    );
+  } catch {
+    // Session storage cleanup is best-effort during account clears.
+  }
+}
 
 function momentStatusFromShelfItem(
   item: PhotoStatusItem,
@@ -635,9 +657,53 @@ export function PhotoStatusShelf({
             throw new Error("Photo status unavailable");
           }
 
+          let accountId: string | null = null;
+          let localRecords: Awaited<
+            ReturnType<typeof photoUploadResumeStore.listForScope>
+          > = [];
+          let localTrackingUnavailable = false;
+          try {
+            const { data: sessionData, error: sessionError } =
+              await supabase.auth.getSession();
+            accountId = sessionData.session?.user.id ?? null;
+            if (sessionError || !accountId) {
+              accountId = null;
+            } else {
+              try {
+                localRecords = await photoUploadResumeStore.listForScope(
+                  accountId,
+                  circleId,
+                );
+              } catch {
+                localTrackingUnavailable = true;
+              }
+            }
+          } catch {
+            // Status checks can continue from optimistic in-memory data.
+          }
+
+          const trackedIntakeIds = new Set<string>();
+          for (const upload of optimisticMediaUploadSnapshot()) {
+            if (
+              upload.circleId === circleId &&
+              upload.kind === "photo" &&
+              upload.intakeId
+            ) {
+              trackedIntakeIds.add(upload.intakeId);
+            }
+          }
+          for (const record of localRecords) {
+            if (record.intakeId) trackedIntakeIds.add(record.intakeId);
+          }
+          const intakeIsTracked = (intakeId: string) =>
+            localTrackingUnavailable || trackedIntakeIds.has(intakeId);
+
           if (finishProcessing) {
             const pendingIds = rows
-              .filter((row) => row.status === "processing")
+              .filter(
+                (row) =>
+                  row.status === "processing" && intakeIsTracked(row.intake_id),
+              )
               .map((row) => row.intake_id);
             if (pendingIds.length > 0) {
               await Promise.allSettled(
@@ -677,6 +743,7 @@ export function PhotoStatusShelf({
           }));
           const nextItems = allItems.filter(
             (item) =>
+              intakeIsTracked(item.id) &&
               (item.state === "pending" || item.state === "processing") &&
               !publishedRef.current.has(item.id),
           );
@@ -694,6 +761,7 @@ export function PhotoStatusShelf({
             const status = momentStatusFromShelfItem(item);
             if (status) resolvedStatuses.set(item.id, status);
             if (status === "published") {
+              if (!intakeIsTracked(item.id)) continue;
               if (
                 !publishedRef.current.has(item.id) &&
                 firstPublishedMediaRefresh(item.id)
@@ -765,61 +833,60 @@ export function PhotoStatusShelf({
           }
           if (shouldRefresh) router.refresh();
 
-          try {
-            const { data: sessionData, error: sessionError } =
-              await supabase.auth.getSession();
-            const accountId = sessionData.session?.user.id;
-            if (sessionError || !accountId)
-              throw new Error("Session unavailable");
-            const localRecords = await photoUploadResumeStore.listForScope(
-              accountId,
-              circleId,
-            );
-            const unresolvedLocalRecords = localRecords.filter(
-              (record) =>
-                record.intakeId &&
-                !serverIntakeIds.has(record.intakeId) &&
-                !resolvedStatuses.has(record.intakeId),
-            );
-            const localStatusResults = await Promise.all(
-              unresolvedLocalRecords.map(async (record) => {
-                const result = await supabase.rpc("get_photo_moment_status", {
-                  intake_id: record.intakeId!,
-                });
-                const status = result.data?.[0]?.status;
-                return {
-                  intakeId: record.intakeId!,
-                  status:
-                    !result.error && status && allowedMomentStatuses.has(status)
-                      ? (status as PhotoMomentStatus)
-                      : null,
-                };
-              }),
-            );
-            if (run !== runRef.current) return;
-            for (const result of localStatusResults) {
-              if (result.status) {
-                resolvedStatuses.set(result.intakeId, result.status);
+          if (accountId && localRecords.length > 0) {
+            try {
+              const unresolvedLocalRecords = localRecords.filter(
+                (record) =>
+                  record.intakeId &&
+                  !serverIntakeIds.has(record.intakeId) &&
+                  !resolvedStatuses.has(record.intakeId),
+              );
+              const localStatusResults = await Promise.all(
+                unresolvedLocalRecords.map(async (record) => {
+                  const result = await supabase.rpc("get_photo_moment_status", {
+                    intake_id: record.intakeId!,
+                  });
+                  const status = result.data?.[0]?.status;
+                  return {
+                    intakeId: record.intakeId!,
+                    status:
+                      !result.error &&
+                      status &&
+                      allowedMomentStatuses.has(status)
+                        ? (status as PhotoMomentStatus)
+                        : null,
+                  };
+                }),
+              );
+              if (run !== runRef.current) return;
+              for (const result of localStatusResults) {
+                if (result.status) {
+                  resolvedStatuses.set(result.intakeId, result.status);
+                }
               }
+              await Promise.all(
+                localRecords
+                  .filter(
+                    (record) =>
+                      record.intakeId &&
+                      ["cancelled", "needs_attention", "published"].includes(
+                        resolvedStatuses.get(record.intakeId) ?? "",
+                      ),
+                  )
+                  .map((record) => photoUploadResumeStore.remove(record.id)),
+              );
+            } catch {
+              // Browser resume shortcuts are best-effort and never need a family-facing notice.
             }
-            await Promise.all(
-              localRecords
-                .filter(
-                  (record) =>
-                    record.intakeId &&
-                    ["cancelled", "needs_attention", "published"].includes(
-                      resolvedStatuses.get(record.intakeId) ?? "",
-                    ),
-                )
-                .map((record) => photoUploadResumeStore.remove(record.id)),
-            );
-          } catch {
-            // Browser resume shortcuts are best-effort and never need a family-facing notice.
           }
 
           const optimisticSnapshot = optimisticMediaUploadSnapshot();
           const leftoverReserved = rows.filter((row) => {
-            if (visibleState(row.status) !== "pending" || !row.can_cancel) {
+            if (
+              !intakeIsTracked(row.intake_id) ||
+              visibleState(row.status) !== "pending" ||
+              !row.can_cancel
+            ) {
               return false;
             }
             if (publishedRef.current.has(row.intake_id)) return false;
@@ -885,7 +952,9 @@ export function PhotoStatusShelf({
                 updateOptimisticMediaUpload(upload.id, {
                   stage: { state: "published" },
                 });
-              shouldRefresh = true;
+              if (firstPublishedMediaRefresh(row.intake_id)) {
+                shouldRefresh = true;
+              }
               if (
                 await retirePhotoIntake({
                   circleId,
@@ -916,15 +985,50 @@ export function PhotoStatusShelf({
     [circleId, router],
   );
 
+  const checkOnMountOrResume = useCallback(async () => {
+    const hasOptimisticEvidence = optimisticMediaUploadSnapshot().some(
+      (upload) =>
+        upload.circleId === circleId &&
+        upload.kind === "photo" &&
+        upload.stage.state !== "failed",
+    );
+    let hasLocalResumeEvidence = false;
+    if (!hasOptimisticEvidence) {
+      try {
+        const supabase = createOurDaysBrowserClient();
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
+        const accountId = sessionData.session?.user.id;
+        if (!sessionError && accountId) {
+          const localRecords = await photoUploadResumeStore.listForScope(
+            accountId,
+            circleId,
+          );
+          hasLocalResumeEvidence = localRecords.length > 0;
+        }
+      } catch {
+        // Local evidence checks can fail open to the once-per-session baseline.
+      }
+    }
+    if (
+      hasOptimisticEvidence ||
+      hasLocalResumeEvidence ||
+      claimPhotoStatusSessionCheck(circleId)
+    ) {
+      await checkStatuses(true);
+    }
+  }, [checkStatuses, circleId]);
+
   useEffect(() => {
-    void checkStatuses(true);
+    void checkOnMountOrResume();
     const checkWhenVisible = () => {
-      if (!document.hidden) void checkStatuses(true);
+      if (!document.hidden) void checkOnMountOrResume();
     };
     const clear = () => {
       runRef.current += 1;
       inFlightRef.current = null;
       publishedRef.current.clear();
+      clearPhotoStatusSessionCheck(circleId);
       clearOptimisticMediaUploads();
       setItems([]);
       setCancellationResult(null);
@@ -942,7 +1046,7 @@ export function PhotoStatusShelf({
       runRef.current += 1;
       inFlightRef.current = null;
     };
-  }, [checkStatuses]);
+  }, [checkOnMountOrResume, circleId]);
 
   const hasActiveWork =
     items.some(

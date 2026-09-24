@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
@@ -109,6 +110,8 @@ export async function deliverPublishedMomentPushAction(input: {
   const supabase = await createOurDaysServerClient();
   const { deliverActivityWebPush } =
     await import("@/lib/web-push/deliver-activity");
-  await deliverActivityWebPush(supabase, "moment", input.momentId);
+  after(async () => {
+    await deliverActivityWebPush(supabase, "moment", input.momentId);
+  });
   return { ok: true, message: "Saved." };
 }
