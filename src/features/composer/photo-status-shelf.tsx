@@ -72,6 +72,7 @@ export type PhotoStatusChipViewProps = Readonly<{
   label: string;
   primaryAction?: ChipAction | null;
   progress?: number | null;
+  progressTone?: "progress" | "paused";
   secondaryAction?: ChipAction | null;
 }>;
 
@@ -306,7 +307,10 @@ function optimisticMomentChipLabel(save: OptimisticMomentSave) {
   return "Adding milestone…";
 }
 
-function ChipProgressBar({ value }: Readonly<{ value?: number }>) {
+function ChipProgressBar({
+  tone = "progress",
+  value,
+}: Readonly<{ tone?: "progress" | "paused"; value?: number }>) {
   const determinate = typeof value === "number";
   const percent = determinate
     ? Math.min(100, Math.max(0, Math.round(value * 100)))
@@ -315,8 +319,8 @@ function ChipProgressBar({ value }: Readonly<{ value?: number }>) {
     <div
       className={
         determinate
-          ? "photo-status-chip-bar"
-          : "photo-status-chip-bar photo-status-chip-indeterminate"
+          ? `photo-status-chip-bar${tone === "progress" ? " is-progress" : ""}`
+          : `photo-status-chip-bar photo-status-chip-indeterminate${tone === "progress" ? " is-progress" : ""}`
       }
       role="progressbar"
       aria-label="Upload progress"
@@ -362,6 +366,7 @@ export function PhotoStatusChipView({
   label,
   primaryAction,
   progress,
+  progressTone = "progress",
   secondaryAction,
 }: PhotoStatusChipViewProps) {
   return (
@@ -377,9 +382,9 @@ export function PhotoStatusChipView({
         </p>
         {detail ? <p className="photo-status-chip-detail">{detail}</p> : null}
         {typeof progress === "number" ? (
-          <ChipProgressBar value={progress} />
+          <ChipProgressBar tone={progressTone} value={progress} />
         ) : busy ? (
-          <ChipProgressBar />
+          <ChipProgressBar tone={progressTone} />
         ) : null}
         {confirmation ? (
           <p className="photo-status-confirmation">{confirmation}</p>
@@ -424,6 +429,7 @@ function serverShelfChip({
       confirmation: "Cancel this unfinished photo? It won’t be added.",
       detail: `${confirming.journalPersonName} · ${dateLabel(confirming.occurredOn)}`,
       label: "Photo upload paused",
+      progressTone: "paused",
       primaryAction: {
         ariaLabel: `Confirm cancellation for ${confirming.journalPersonName}, ${dateLabel(confirming.occurredOn)}`,
         disabled: cancelling,
@@ -443,6 +449,7 @@ function serverShelfChip({
       busy: cancelling,
       detail: `${pending.journalPersonName} · ${dateLabel(pending.occurredOn)}`,
       label: "Photo upload paused",
+      progressTone: "paused",
       primaryAction: {
         ariaLabel: `Cancel upload for ${pending.journalPersonName}, ${dateLabel(pending.occurredOn)}`,
         disabled: cancelling,
@@ -464,6 +471,7 @@ function serverShelfChip({
     return {
       alert: cancellationResult.message,
       label: "Photo upload paused",
+      progressTone: "paused",
     };
   }
 
@@ -597,7 +605,12 @@ function selectVisibleChip({
 
 export function PhotoStatusShelf({
   circleId,
-}: Readonly<{ circleId: string; today?: string }>) {
+  scope = "circle",
+}: Readonly<{
+  circleId: string;
+  scope?: "circle" | "journal";
+  today?: string;
+}>) {
   const router = useRouter();
   const [items, setItems] = useState<readonly PhotoStatusItem[]>([]);
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(
@@ -618,17 +631,20 @@ export function PhotoStatusShelf({
     subscribeToOptimisticMediaUploads,
     optimisticMediaUploadSnapshot,
     emptyOptimisticMediaUploadSnapshot,
-  ).filter((upload) => upload.circleId === circleId);
+  ).filter((upload) => scope === "journal" || upload.circleId === circleId);
   const queuedUploads = useSyncExternalStore(
     subscribeToOptimisticMediaUploads,
-    () => queuedOptimisticMediaUploadCount(circleId),
+    () =>
+      queuedOptimisticMediaUploadCount(
+        scope === "journal" ? undefined : circleId,
+      ),
     () => 0,
   );
   const optimisticMomentSaves = useSyncExternalStore(
     subscribeToOptimisticMomentSaves,
     optimisticMomentSaveSnapshot,
     emptyOptimisticMomentSaveSnapshot,
-  ).filter((save) => save.circleId === circleId);
+  ).filter((save) => scope === "journal" || save.circleId === circleId);
 
   const checkStatuses = useCallback(
     (finishProcessing = false) => {

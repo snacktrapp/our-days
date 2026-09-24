@@ -172,7 +172,10 @@ function JournalStage({
     <>
       {header}
       {model.composer.circleId ? (
-        <PhotoStatusShelf circleId={model.composer.circleId} />
+        <PhotoStatusShelf
+          circleId={model.composer.circleId}
+          scope={browsingCircle ? "circle" : "journal"}
+        />
       ) : null}
       <main className={`app-shell theme-${model.accent}`}>
         <div className="ambient ambient-one" />

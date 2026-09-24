@@ -3,6 +3,7 @@ import {
   createPostToDefault,
   defaultPostToCircleIds,
   familyFeedHref,
+  momentSubmitHref,
   formatPostToTriggerLabel,
   initialPostToCircleIds,
   orderPostToCircleIds,
@@ -39,6 +40,43 @@ describe("post-to selection", () => {
   it("sends Home back to the primary circle after save", () => {
     expect(familyFeedHref("family")).toBe("/family?circle=family");
     expect(familyFeedHref()).toBe("/family");
+  });
+
+  it("lands a new circle post on All circles and Just me on Just me", () => {
+    expect(
+      momentSubmitHref({
+        editing: false,
+        audience: "family",
+        journalPersonId: "brian",
+        stayHref: "/family?circle=cousins",
+      }),
+    ).toBe("/family");
+    expect(
+      momentSubmitHref({
+        editing: false,
+        audience: "family",
+        journalPersonId: "brian",
+        stayHref: "/family?circle=home",
+        momentId: "moment-1",
+      }),
+    ).toBe("/family?moment=moment-1");
+    expect(
+      momentSubmitHref({
+        editing: false,
+        audience: "just_me",
+        journalPersonId: "brian",
+        stayHref: "/family?circle=cousins",
+      }),
+    ).toBe("/people/brian");
+    expect(
+      momentSubmitHref({
+        editing: true,
+        audience: "family",
+        journalPersonId: "brian",
+        stayHref: "/family?circle=cousins",
+        momentId: "moment-1",
+      }),
+    ).toBe("/family?circle=cousins");
   });
 
   it("prefills linked circles and keeps the primary first", () => {

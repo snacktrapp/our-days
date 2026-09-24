@@ -783,7 +783,7 @@ describe("MomentComposer", () => {
         }),
       ),
     );
-    expect(navigation.replace).toHaveBeenCalledWith("/family?circle=cousins");
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
 
   it("shows Who else from the selected Post to circle, not the Home roster", async () => {
@@ -901,9 +901,7 @@ describe("MomentComposer", () => {
     await user.click(screen.getByRole("button", { name: "Post" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(navigation.replace).toHaveBeenCalledWith(
-      "/family?circle=20000000-0000-4000-8000-000000000001",
-    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
     expect(optimisticMediaUploadSnapshot()).toEqual([
       expect.objectContaining({
@@ -990,9 +988,7 @@ describe("MomentComposer", () => {
         height: expect.any(Number),
       }),
     );
-    expect(navigation.replace).toHaveBeenCalledWith(
-      "/family?circle=20000000-0000-4000-8000-000000000001",
-    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 
@@ -1049,9 +1045,7 @@ describe("MomentComposer", () => {
       ),
     );
     expect(videoInspect.inspect).toHaveBeenCalled();
-    expect(navigation.replace).toHaveBeenCalledWith(
-      "/family?circle=20000000-0000-4000-8000-000000000001",
-    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
   });
 
   it("rejects HEIC truthfully before a connected upload starts", async () => {
@@ -1332,9 +1326,7 @@ describe("MomentComposer", () => {
         state: "processing",
       }),
     );
-    expect(navigation.replace).toHaveBeenCalledWith(
-      "/family?circle=20000000-0000-4000-8000-000000000001",
-    );
+    expect(navigation.replace).toHaveBeenCalledWith("/family");
     expect(navigation.refresh).not.toHaveBeenCalled();
   });
 

@@ -18,9 +18,11 @@ export type OptimisticMomentSave = Readonly<{
   taggedPeopleLabel: string;
   occurredOn: string;
   occurredTime: string;
+  journalPersonId: string;
   journalPersonName: string;
   journalPersonInitial: string;
   journalPersonAccent: AccentToken;
+  audience: "family" | "just_me";
   stage:
     | Readonly<{ state: "saving" }>
     | Readonly<{ state: "published"; momentId?: string }>
@@ -37,10 +39,12 @@ type StartOptimisticMomentSaveInput = Readonly<{
   occurredOn: string;
   occurredTime: string;
   person: Readonly<{
+    id?: string;
     name: string;
     initial: string;
     accent: AccentToken;
   }>;
+  audience?: "family" | "just_me";
   save: () => Promise<MomentActionResult>;
   onPublished: () => void;
 }>;
@@ -105,9 +109,11 @@ export function startOptimisticMomentSave(
       taggedPeopleLabel: input.taggedPeopleLabel,
       occurredOn: input.occurredOn,
       occurredTime: input.occurredTime,
+      journalPersonId: input.person.id ?? "",
       journalPersonName: input.person.name,
       journalPersonInitial: input.person.initial,
       journalPersonAccent: input.person.accent,
+      audience: input.audience === "just_me" ? "just_me" : "family",
       stage: { state: "saving" },
     },
     ...saves,

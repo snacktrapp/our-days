@@ -65,6 +65,27 @@ export function familyFeedHref(circleId?: string) {
     : "/family";
 }
 
+/** Where the journal goes after a moment is submitted. */
+export function momentSubmitHref(
+  input: Readonly<{
+    editing: boolean;
+    audience: "family" | "just_me";
+    journalPersonId: string;
+    /** Edit stays on this href. Creates ignore it. */
+    stayHref: string;
+    momentId?: string;
+  }>,
+) {
+  if (input.editing) return input.stayHref;
+  if (input.audience === "just_me") {
+    return `/people/${encodeURIComponent(input.journalPersonId)}`;
+  }
+  if (input.momentId) {
+    return `/family?moment=${encodeURIComponent(input.momentId)}`;
+  }
+  return "/family";
+}
+
 export function primaryPostToCircle(
   circles: readonly PostableCircle[],
   selectedIds: readonly string[],
