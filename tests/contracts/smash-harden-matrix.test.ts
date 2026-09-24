@@ -569,6 +569,24 @@ describe("smash harden matrix", () => {
       );
       expect(notificationArrivalE2e).toContain('"/family?moment=sunset"');
       expect(notificationArrivalE2e).toContain('"/family?moment=first-day"');
+      expect(notificationArrival).toContain("notificationTopInset");
+      expect(notificationArrival).toContain("bareHistoryState");
+      expect(notificationArrival).toContain("our-days:notification-consumed");
+      expect(notificationArrivalTest).toContain(
+        "does not land again when refresh writes the comment query back",
+      );
+      expect(notificationArrivalTest).toContain(
+        "keeps the anchor when the landing scroll event arrives late",
+      );
+      expect(notificationArrivalTest).toContain(
+        "a reload of a consumed comment target stays at the top",
+      );
+      expect(notificationArrivalE2e).toContain(
+        "comment refresh after scrolling to the top stays on the latest day",
+      );
+      expect(notificationArrivalE2e).toContain(
+        "a comment notification sits fully below the top bar",
+      );
     });
 
     it("lets a retryable failed upload chip be dismissed", () => {
