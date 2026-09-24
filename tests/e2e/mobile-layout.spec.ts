@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 const routes = [
@@ -300,7 +301,8 @@ async function expectComposerMatchesActivitySheet(page: Page) {
   await expect(sheet).toHaveClass(/activity-sheet/u);
   await expect(sheet.locator(".sheet-handle")).toBeVisible();
   await expect(picker.getByRole("button", { name: "Done" })).toHaveCount(0);
-  const geometry = await sheet.evaluate((element) => {
+  await expectTypePickerHugsContent(sheet);
+  const chrome = await sheet.evaluate((element) => {
     const handle = element.querySelector(".sheet-handle");
     if (!(handle instanceof HTMLElement)) {
       throw new Error("Composer sheet is missing a grab handle.");
@@ -309,26 +311,36 @@ async function expectComposerMatchesActivitySheet(page: Page) {
     const handleRect = handle.getBoundingClientRect();
     const style = getComputedStyle(element);
     return {
-      height: rect.height,
       radius: style.borderTopLeftRadius,
       bottomRadius: style.borderBottomLeftRadius,
       sheetTop: rect.top,
       handleTop: handleRect.top,
-      viewport: window.innerHeight,
     };
   });
-  expect(geometry.height).toBeGreaterThan(geometry.viewport * 0.6);
-  expect(geometry.sheetTop).toBeGreaterThanOrEqual(20);
-  expect(geometry.handleTop).toBeGreaterThanOrEqual(geometry.sheetTop);
-  expect(Number.parseFloat(geometry.radius)).toBeGreaterThanOrEqual(14);
-  expect(Number.parseFloat(geometry.bottomRadius)).toBe(0);
+  expect(chrome.handleTop).toBeGreaterThanOrEqual(chrome.sheetTop);
+  expect(Number.parseFloat(chrome.radius)).toBeGreaterThanOrEqual(14);
+  expect(Number.parseFloat(chrome.bottomRadius)).toBe(0);
+  for (const entryType of [
+    /^Photo or video/u,
+    /^Written entry/u,
+    /^Bible verse/u,
+    /^Drafts/u,
+  ]) {
+    await expect(
+      picker.getByRole("button", { name: entryType }),
+    ).toBeInViewport({ ratio: 0.95 });
+  }
+  const chooserFitsWithoutScroll = await sheet
+    .locator(".composer-sheet-body")
+    .evaluate((element) => element.scrollHeight <= element.clientHeight + 1);
+  expect(chooserFitsWithoutScroll).toBe(true);
   const themeColor = await page
     .locator('meta[name="theme-color"]')
     .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
   expect(themeColor.includes("#000000")).toBe(true);
 }
 
-test("New moment composer uses the Activity tall sheet in dark", async ({
+test("New moment composer opens a thumb-zone sheet in dark", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -341,7 +353,7 @@ test("New moment composer uses the Activity tall sheet in dark", async ({
   await expectComposerMatchesActivitySheet(page);
 });
 
-test("New moment composer uses the Activity tall sheet in light", async ({
+test("New moment composer opens a thumb-zone sheet in light", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -351,6 +363,14 @@ test("New moment composer uses the Activity tall sheet in light", async ({
   });
   await page.goto("/family");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectComposerMatchesActivitySheet(page);
+});
+
+test("New moment composer keeps all chooser types reachable on iPhone SE class height", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/family");
   await expectComposerMatchesActivitySheet(page);
 });
 

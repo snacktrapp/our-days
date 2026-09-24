@@ -1,3 +1,4 @@
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 for (const theme of ["dark", "light"]) {
@@ -10,6 +11,8 @@ for (const theme of ["dark", "light"]) {
     );
     await page.goto("/family");
     await page.getByRole("button", { name: "Add", exact: true }).click();
+    const sheet = page.locator(".new-moment-composer-dialog .composer-sheet");
+    await expectTypePickerHugsContent(sheet);
     const choices = page.locator(".moment-choices");
     const cards = choices.locator("button");
     await expect(cards).toHaveCount(4);

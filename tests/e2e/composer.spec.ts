@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 const focusableSelector = [
@@ -168,7 +169,7 @@ test("a handle swipe dismisses the type picker sheet", async ({ page }) => {
   await expect(dialog).toBeHidden();
 });
 
-test("type selection opens as a tall sheet and dismisses with sheet-down", async ({
+test("type selection opens as a thumb-zone sheet and dismisses with sheet-down", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -378,7 +379,8 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     );
   });
   await expect(overlaySheet).toHaveCSS("transform", "none");
-  const chooserGeometry = await overlaySheet.evaluate((element) => {
+  await expectTypePickerHugsContent(overlaySheet);
+  const chooserChrome = await overlaySheet.evaluate((element) => {
     const handle = element.querySelector(".sheet-handle");
     if (!(handle instanceof HTMLElement)) {
       throw new Error("Composer sheet is missing a grab handle.");
@@ -386,21 +388,15 @@ test("composer is modal, contains focus, protects every draft, and restores focu
     const rect = element.getBoundingClientRect();
     const handleRect = handle.getBoundingClientRect();
     return {
-      height: rect.height,
       radius: getComputedStyle(element).borderTopLeftRadius,
       sheetTop: rect.top,
       handleTop: handleRect.top,
-      viewport: window.innerHeight,
     };
   });
-  expect(chooserGeometry.height).toBeGreaterThan(
-    chooserGeometry.viewport * 0.6,
+  expect(chooserChrome.handleTop).toBeGreaterThanOrEqual(
+    chooserChrome.sheetTop,
   );
-  expect(chooserGeometry.sheetTop).toBeGreaterThanOrEqual(20);
-  expect(chooserGeometry.handleTop).toBeGreaterThanOrEqual(
-    chooserGeometry.sheetTop,
-  );
-  expect(Number.parseFloat(chooserGeometry.radius)).toBeGreaterThanOrEqual(14);
+  expect(Number.parseFloat(chooserChrome.radius)).toBeGreaterThanOrEqual(14);
   await expect(page.locator("body")).toHaveClass(/composer-scroll-locked/u);
   await expectMinimumTargets(dialog);
 

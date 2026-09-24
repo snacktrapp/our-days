@@ -1,3 +1,4 @@
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 test("Circles fits the mobile canvas in both appearances", async ({
@@ -188,4 +189,50 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
     page.getByRole("heading", { name: "Just me", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".circle-back-link")).toHaveCount(0);
+});
+
+test("Add chooser opens low with reachable types and supports dismiss + pick flows @critical", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/family");
+
+  const addTrigger = page.getByRole("button", { name: "Add", exact: true });
+  await addTrigger.click();
+
+  const picker = page.locator(".new-moment-composer-dialog");
+  await expect(picker).toBeVisible();
+  const sheet = picker.locator(".composer-sheet");
+  await expectTypePickerHugsContent(sheet);
+
+  for (const entryType of [
+    /^Photo or video/u,
+    /^Written entry/u,
+    /^Bible verse/u,
+    /^Drafts/u,
+  ]) {
+    await expect(
+      picker.getByRole("button", { name: entryType }),
+    ).toBeInViewport({
+      ratio: 0.95,
+    });
+  }
+  const chooserFitsWithoutScroll = await sheet
+    .locator(".composer-sheet-body")
+    .evaluate((element) => element.scrollHeight <= element.clientHeight + 1);
+  expect(chooserFitsWithoutScroll).toBe(true);
+
+  await picker.click({ position: { x: 10, y: 10 } });
+  await expect(picker).toBeHidden();
+
+  await addTrigger.click();
+  await picker
+    .getByRole("button", {
+      name: "Written entry Text, date, and details",
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("textbox", { name: "Entry" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(picker).toBeHidden();
 });
