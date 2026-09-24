@@ -19,6 +19,7 @@ import {
   type MutableRefObject,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -251,6 +252,10 @@ function CreateGroupCard({
   const [pending, startTransition] = useTransition();
   const sourceCircleId = initialSourceId;
   const [name, setName] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    nameRef.current?.focus();
+  }, []);
   if (!createGroupAction) return null;
 
   return (
@@ -268,11 +273,14 @@ function CreateGroupCard({
 
       <label htmlFor="create-group-name">Name</label>
       <input
+        ref={nameRef}
         id="create-group-name"
         name="name"
         required
         maxLength={80}
         autoComplete="off"
+        autoFocus
+        enterKeyHint="done"
         value={name}
         disabled={pending}
         onChange={(event) => {
@@ -285,7 +293,7 @@ function CreateGroupCard({
           {error}
         </p>
       ) : null}
-      <button type="submit" disabled={pending}>
+      <button type="submit" disabled={pending || name.trim().length === 0}>
         {pending ? "Creating…" : "Create circle"}
       </button>
     </form>

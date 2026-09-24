@@ -138,10 +138,12 @@ test("Account is personal; circle creation and management live under Circles", a
       .getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "Circles" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.locator(".circles-create-section")).not.toHaveAttribute(
-    "open",
-  );
-  await page.getByText("Create a circle", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Create a circle", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Create a circle" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
   await page.getByLabel("Name", { exact: true }).fill("Friends");
   await page

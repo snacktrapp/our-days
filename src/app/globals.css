@@ -3264,11 +3264,102 @@ span.moment-place-line {
   background: transparent;
   color: var(--muted);
   font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+.circle-management-sheet-bar:has(h2) {
+  padding: 28px 20px 0;
+}
+.circle-management-sheet-bar h2 {
+  margin: 0;
+  padding: 0 44px 0 0;
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.circle-management-sheet-bar h2:focus,
+.circle-management-sheet-bar h2:focus-visible {
+  outline: none;
+}
+.composer-dialog[open] .circle-management-sheet {
+  max-height: 100%;
 }
 .circle-management-sheet-body {
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 20px max(24px, env(safe-area-inset-bottom));
+  padding: 8px 20px max(24px, env(safe-area-inset-bottom));
+}
+/* Create-circle and add-from-circle forms used to be styled only as
+   descendants of .circles-create-section / .add-existing-member. Those
+   ancestors are not on this sheet. Tailwind preflight removes native
+   input, select, button, and heading chrome, so the sheet itself owns
+   the control styles. */
+.circle-management-sheet-body > section > span {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--teal);
+  font: var(--chrome-eyebrow);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.circle-management-sheet-body > section > h3 {
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.circle-management-sheet-body .circle-rename-section,
+.circle-management-sheet-body .add-existing-member {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.circle-management-sheet-body .sheet-helper {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.circle-management-sheet-body form {
+  display: grid;
+  gap: 8px;
+}
+.circle-management-sheet-body form label {
+  color: var(--muted);
+  font: var(--settings-label);
+}
+.circle-management-sheet-body form :is(input:not([type="hidden"]), select) {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.3;
+}
+.circle-management-sheet-body form button {
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--action);
+  color: var(--action-ink);
+  font-size: 16px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.circle-management-sheet-body form button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 :root[data-theme] .circle-management-sheet-body > aside {
   margin: 0;
