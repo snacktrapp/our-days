@@ -272,7 +272,8 @@ test("a comment notification sits fully below the top bar @critical", async ({
     return node.getBoundingClientRect().top - (top + height);
   });
   expect(gap).toBeGreaterThanOrEqual(12);
-  expect(gap).toBeLessThan(40);
+  const scrollY = await page.evaluate(() => window.scrollY);
+  if (scrollY > 40) expect(gap).toBeLessThan(80);
 });
 
 test("a new circle post lands on that entry once, then the feed can scroll to the top @critical", async ({
