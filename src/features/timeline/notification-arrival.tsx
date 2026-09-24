@@ -24,6 +24,7 @@ function scrollToMoment(article: HTMLElement) {
   const top =
     article.getBoundingClientRect().top + window.scrollY - topbarBottom - 16;
   window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  window.dispatchEvent(new Event("our-days:reveal-new-entry"));
 }
 
 function showMissingTarget() {

@@ -53,10 +53,15 @@ export function useScrollAwayHeader() {
       paint();
       previous = position();
     };
+    let revealUntil = 0;
     const show = () => {
       offset = 0;
       paint();
       previous = position();
+    };
+    const reveal = () => {
+      revealUntil = performance.now() + 160;
+      show();
     };
     const heldOpen = () =>
       Boolean(
@@ -74,6 +79,10 @@ export function useScrollAwayHeader() {
       if (event.persisted) resume();
     };
     const scroll = () => {
+      if (performance.now() < revealUntil) {
+        show();
+        return;
+      }
       const y = position();
       const delta = y - previous;
       previous = y;
@@ -105,7 +114,7 @@ export function useScrollAwayHeader() {
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("pageshow", pageShow);
     window.visualViewport?.addEventListener("resize", measure);
-    window.addEventListener("our-days:reveal-new-entry", show);
+    window.addEventListener("our-days:reveal-new-entry", reveal);
     header.addEventListener("focusin", show);
     nav?.addEventListener("focusin", show);
     return () => {
@@ -115,7 +124,7 @@ export function useScrollAwayHeader() {
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("pageshow", pageShow);
       window.visualViewport?.removeEventListener("resize", measure);
-      window.removeEventListener("our-days:reveal-new-entry", show);
+      window.removeEventListener("our-days:reveal-new-entry", reveal);
       header.removeEventListener("focusin", show);
       nav?.removeEventListener("focusin", show);
       root.style.removeProperty("--journal-nav-scroll-offset");
