@@ -5,7 +5,8 @@ import {
 
 const posterMaxWidth = 720;
 const seekTimeoutMs = 1_500;
-const posterProbeSeconds = [0.18, 0.36, 0.72, 1.2] as const;
+const earlyPosterProbeSeconds = [0.18, 0.36, 0.72, 1.2, 2.4, 3.6] as const;
+const timelineProbeFractions = [0.5, 0.75] as const;
 
 export type CapturedVideoPoster = Readonly<{
   dataUrl: string;
@@ -74,6 +75,29 @@ async function seekVideoForPoster(
   });
 }
 
+function posterProbeSecondsFor(video: HTMLVideoElement) {
+  const maxSeekSeconds = Number.isFinite(video.duration)
+    ? Math.max(0, video.duration - 0.05)
+    : 0;
+  if (maxSeekSeconds <= 0) return [...earlyPosterProbeSeconds];
+  const probes = new Set<number>();
+  const addProbe = (seconds: number) => {
+    if (
+      !Number.isFinite(seconds) ||
+      seconds <= 0 ||
+      seconds >= maxSeekSeconds
+    ) {
+      return;
+    }
+    probes.add(Number(seconds.toFixed(3)));
+  };
+  for (const seconds of earlyPosterProbeSeconds) addProbe(seconds);
+  for (const fraction of timelineProbeFractions) {
+    addProbe(maxSeekSeconds * fraction);
+  }
+  return [...probes].sort((left, right) => left - right);
+}
+
 export async function captureVideoPoster(video: HTMLVideoElement) {
   const captures: CapturedVideoPoster[] = [];
   const initial = captureCurrentVideoPoster(video);
@@ -82,7 +106,7 @@ export async function captureVideoPoster(video: HTMLVideoElement) {
     if (!initial.looksLikelyBlank) return initial;
   }
 
-  for (const offsetSeconds of posterProbeSeconds) {
+  for (const offsetSeconds of posterProbeSecondsFor(video)) {
     const seeked = await seekVideoForPoster(video, offsetSeconds);
     if (!seeked) continue;
     const captured = captureCurrentVideoPoster(video);

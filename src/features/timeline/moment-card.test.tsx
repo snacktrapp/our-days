@@ -530,7 +530,7 @@ describe("MomentCard timeline media", () => {
       blob: async () => new Blob(),
     });
     vi.stubGlobal("fetch", fetchMock);
-    const cachedPoster = "data:image/jpeg;base64,abc";
+    const cachedPoster = `data:image/jpeg;base64,${"A".repeat(20_000)}`;
     rememberVideoPoster("retry-poster-video", cachedPoster);
 
     render(
@@ -592,7 +592,7 @@ describe("MomentCard timeline media", () => {
       expect(timelineVideo).toHaveAttribute("poster", "blob:server-poster");
     });
 
-    const cachedPoster = "data:image/jpeg;base64,refreshed";
+    const cachedPoster = `data:image/jpeg;base64,${"B".repeat(20_000)}`;
     rememberVideoPoster("refresh-poster-video", cachedPoster);
     await waitFor(() => {
       expect(timelineVideo).toHaveAttribute("poster", cachedPoster);

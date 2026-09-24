@@ -105,17 +105,18 @@ export async function warmVideoPoster(input: {
       failed.add(momentId);
       return false;
     }
+    if (poster.looksLikelyBlank) {
+      return false;
+    }
     rememberVideoPoster(momentId, poster.dataUrl);
     rememberVideoFrame(momentId, poster.width, poster.height);
-    if (!poster.looksLikelyBlank) {
-      void persistVideoPoster({
-        momentId,
-        posterDataUrl: poster.dataUrl,
-        width: poster.width,
-        height: poster.height,
-        replaceExisting: input.replaceExistingPoster === true,
-      });
-    }
+    void persistVideoPoster({
+      momentId,
+      posterDataUrl: poster.dataUrl,
+      width: poster.width,
+      height: poster.height,
+      replaceExisting: input.replaceExistingPoster === true,
+    });
     return true;
   } catch {
     failed.add(momentId);

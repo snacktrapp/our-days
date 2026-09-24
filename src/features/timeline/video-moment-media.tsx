@@ -40,7 +40,6 @@ function handleCapturedFrame(
     height: number;
   }>,
   options: Readonly<{
-    hasServerPoster: boolean;
     shouldPersist: boolean;
     replaceExisting: boolean;
   }>,
@@ -50,12 +49,10 @@ function handleCapturedFrame(
     frame.width,
     frame.height,
   );
-  if (options.hasServerPoster && looksLikelyBlank) {
-    return;
-  }
+  if (looksLikelyBlank) return;
   rememberVideoPoster(momentId, frame.posterDataUrl);
   rememberVideoFrame(momentId, frame.width, frame.height);
-  if (!options.shouldPersist || looksLikelyBlank) return;
+  if (!options.shouldPersist) return;
   void persistVideoPoster({
     momentId,
     posterDataUrl: frame.posterDataUrl,
@@ -74,15 +71,23 @@ export function VideoMomentMedia({
 }>) {
   const storedPoster = useVideoPoster(moment.id);
   const storedFrame = useVideoFrame(moment.id);
+  const posterWidth = moment.video.width ?? storedFrame?.width;
+  const posterHeight = moment.video.height ?? storedFrame?.height;
   const serverPosterLooksLikelyBlank = posterLooksLikelyBlankByBytes(
     moment.video.posterSizeBytes,
-    moment.video.width,
-    moment.video.height,
+    posterWidth,
+    posterHeight,
   );
+  const storedPosterLooksLikelyBlank = storedPoster
+    ? posterDataUrlLooksLikelyBlank(storedPoster, posterWidth, posterHeight)
+    : false;
   const hasGoodServerPoster =
     Boolean(moment.video.poster) && !serverPosterLooksLikelyBlank;
   const [videoNearViewport, setVideoNearViewport] = useState(false);
-  const candidatePoster = storedPoster ?? moment.video.poster ?? undefined;
+  const candidatePoster =
+    (storedPosterLooksLikelyBlank ? undefined : storedPoster) ??
+    (serverPosterLooksLikelyBlank ? undefined : moment.video.poster) ??
+    undefined;
   const shouldLoadPoster =
     videoNearViewport ||
     typeof IntersectionObserver === "undefined" ||
@@ -161,7 +166,6 @@ export function VideoMomentMedia({
             ? undefined
             : (frame) =>
                 handleCapturedFrame(moment.id, frame, {
-                  hasServerPoster: Boolean(moment.video.poster),
                   shouldPersist: shouldPersistPoster,
                   replaceExisting: Boolean(moment.video.poster),
                 })

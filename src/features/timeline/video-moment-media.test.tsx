@@ -120,9 +120,10 @@ describe("VideoMomentMedia poster warmup", () => {
     });
     await waitFor(() => {
       expect(mocks.usePrivateMediaObjectUrl).toHaveBeenLastCalledWith(
-        "/api/media/videos/d1af0c65-7663-46b9-afef-24c634953527/poster",
+        undefined,
       );
     });
+    expect(screen.getByLabelText("Lex clip")).not.toHaveAttribute("poster");
     expect(screen.getByLabelText("Lex clip")).toHaveAttribute(
       "data-preload",
       "auto",
