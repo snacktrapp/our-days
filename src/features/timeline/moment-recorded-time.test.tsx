@@ -6,7 +6,10 @@ import { MomentRecordedTime } from "./moment-recorded-time";
 describe("MomentRecordedTime", () => {
   it("keeps today's timestamp when no zone was recorded", () => {
     render(
-      <MomentRecordedTime occurredOn="2026-08-01" displayTime="8:00 pm" />,
+      <MomentRecordedTime
+        dateLabel="Aug. 1, 2026"
+        quietLabel="Aug. 1, 2026 · 8:00 pm"
+      />,
     );
     expect(screen.getByText("Aug. 1, 2026 · 8:00 pm")).toBeVisible();
   });
@@ -14,8 +17,8 @@ describe("MomentRecordedTime", () => {
   it("adds the poster city when the viewer zone differs", async () => {
     render(
       <MomentRecordedTime
-        occurredOn="2026-09-24"
-        displayTime="1:15 PM"
+        dateLabel="Sept. 24, 2026"
+        quietLabel="Sept. 24, 2026 · 1:15 PM"
         occurredAt="2026-09-24T11:15:00.000Z"
         timeZone="Europe/Rome"
       />,

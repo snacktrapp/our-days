@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from "react";
 import { formatMomentTimeLabel } from "./moment-time-label";
-import { timelineCardOccurredLabel } from "./timeline-view-model";
 
 function subscribe() {
   return () => {};
@@ -13,13 +12,13 @@ function viewerTimeZone() {
 }
 
 export function MomentRecordedTime({
-  occurredOn,
-  displayTime,
+  dateLabel,
+  quietLabel,
   occurredAt,
   timeZone,
 }: Readonly<{
-  occurredOn: string;
-  displayTime?: string;
+  dateLabel: string;
+  quietLabel: string;
   occurredAt?: string;
   timeZone?: string;
 }>) {
@@ -28,9 +27,8 @@ export function MomentRecordedTime({
     viewerTimeZone,
     () => null,
   );
-  const quiet = timelineCardOccurredLabel(occurredOn, displayTime);
   if (!viewerZone || !occurredAt || !timeZone) {
-    return <span>{quiet}</span>;
+    return <span>{quietLabel}</span>;
   }
   const label = formatMomentTimeLabel({
     occurredAt,
@@ -39,13 +37,12 @@ export function MomentRecordedTime({
     viewerTimeZone: viewerZone,
   });
   if (label.precision !== "minute" || !label.zonesDiffer || !label.viewerTime) {
-    return <span>{quiet}</span>;
+    return <span>{quietLabel}</span>;
   }
-  const posted = timelineCardOccurredLabel(occurredOn, label.posterTime);
   return (
     <span className="moment-when">
       <span className="moment-when-line">
-        {posted}
+        {`${dateLabel} · ${label.posterTime}`}
         {label.placeLabel ? ` ${label.placeLabel}` : ""}
       </span>
       <span className="moment-when-line">· {label.viewerTime} your time</span>

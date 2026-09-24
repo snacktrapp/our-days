@@ -59,8 +59,8 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
           <span>{dateAndTime}</span>
         ) : (
           <MomentRecordedTime
-            occurredOn={moment.occurredOn}
-            displayTime={moment.displayTime}
+            dateLabel={timelineCardOccurredLabel(moment.occurredOn)}
+            quietLabel={dateAndTime}
             occurredAt={moment.recordedOccurrence?.occurredAt}
             timeZone={moment.recordedOccurrence?.timeZone}
           />
