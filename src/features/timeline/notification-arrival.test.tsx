@@ -1,11 +1,12 @@
 /**
  * @vitest-environment jsdom
  */
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearNotificationLandingGuard,
   NotificationArrival,
+  notificationTopInset,
 } from "./notification-arrival";
 
 const navigation = vi.hoisted(() => ({
@@ -51,6 +52,7 @@ function box(top: number): DOMRect {
 
 describe("notification arrival landing", () => {
   afterEach(() => {
+    cleanup();
     clearNotificationLandingGuard();
     document.body.replaceChildren();
     vi.useRealTimers();
@@ -87,10 +89,15 @@ describe("notification arrival landing", () => {
     timeline.className = "timeline";
     const topbar = document.createElement("header");
     topbar.className = "topbar";
+    topbar.style.top = "59px";
+    Object.defineProperty(topbar, "offsetHeight", {
+      configurable: true,
+      value: 56,
+    });
     topbar.getBoundingClientRect = () => ({
       ...box(0),
-      height: 48,
-      bottom: 48,
+      height: 20,
+      bottom: 8,
     });
     const article = document.createElement("article");
     article.id = "moment-kitchen";
@@ -105,14 +112,15 @@ describe("notification arrival landing", () => {
 
     render(<NotificationArrival />);
 
-    expect(tops).toEqual([700 - 48 - 16]);
+    expect(notificationTopInset()).toBe(59 + 56 + 16);
+    expect(tops).toEqual([700 - (59 + 56 + 16)]);
     expect(window.location.search).toBe("");
     expect(article.classList.contains("notification-target")).toBe(true);
 
     threadDoc = 860;
     ResizeObserverStub.instances.at(-1)?.fire();
-    expect(tops).toEqual([636, 796]);
-    expect(window.scrollY).toBe(796);
+    expect(tops).toEqual([569, 860 - (59 + 56 + 16)]);
+    expect(window.scrollY).toBe(860 - (59 + 56 + 16));
 
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -122,7 +130,7 @@ describe("notification arrival landing", () => {
     threadDoc = 1100;
     timeline.append(document.createElement("p"));
     ResizeObserverStub.instances.at(-1)?.fire();
-    expect(tops).toEqual([636, 796]);
+    expect(tops).toEqual([569, 860 - (59 + 56 + 16)]);
     expect(window.scrollY).toBe(0);
 
     const lake = document.createElement("article");
@@ -137,8 +145,79 @@ describe("notification arrival landing", () => {
       "",
       "/family?moment=lake&note=lake-note&thread=1",
     );
-    expect(tops.at(-1)).toBe(1200 - 48 - 16);
+    expect(tops.at(-1)).toBe(1200 - (59 + 56 + 16));
     expect(window.location.search).toBe("");
     expect(note.isConnected).toBe(true);
+  });
+
+  it("does not land again when refresh writes the comment query back", () => {
+    const tops: number[] = [];
+    window.scrollTo = ((options?: ScrollToOptions) => {
+      const top = options?.top ?? 0;
+      tops.push(top);
+      Object.defineProperty(window, "scrollY", {
+        configurable: true,
+        value: top,
+      });
+    }) as typeof window.scrollTo;
+    window.history.replaceState(
+      null,
+      "",
+      "/family?moment=kitchen&note=kitchen-note&thread=1",
+    );
+    const timeline = document.createElement("div");
+    timeline.className = "timeline";
+    const article = document.createElement("article");
+    article.id = "moment-kitchen";
+    const note = document.createElement("li");
+    note.id = "note-kitchen-note";
+    note.getBoundingClientRect = () => box(900 - window.scrollY);
+    article.append(note);
+    timeline.append(article);
+    document.body.append(timeline);
+
+    render(<NotificationArrival />);
+    expect(tops).toHaveLength(1);
+    expect(window.location.search).toBe("");
+
+    window.history.replaceState(
+      { __NA: true },
+      "",
+      "/family?moment=kitchen&note=kitchen-note&thread=1",
+    );
+    expect(tops).toHaveLength(1);
+    expect(window.location.search).toBe("");
+    expect(navigation.replace).toHaveBeenCalledWith("/family", {
+      scroll: false,
+    });
+  });
+
+  it("a reload of a consumed comment target stays at the top", () => {
+    const scrollTo = vi.spyOn(window, "scrollTo");
+    sessionStorage.setItem(
+      "our-days:notification-consumed",
+      "kitchen\nkitchen-note\n1",
+    );
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      { type: "reload" } as unknown as PerformanceEntry,
+    ]);
+    window.history.replaceState(
+      null,
+      "",
+      "/family?moment=kitchen&note=kitchen-note&thread=1",
+    );
+    const article = document.createElement("article");
+    article.id = "moment-kitchen";
+    const note = document.createElement("li");
+    note.id = "note-kitchen-note";
+    note.getBoundingClientRect = () => box(900 - window.scrollY);
+    article.append(note);
+    document.body.append(article);
+
+    render(<NotificationArrival />);
+
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(window.location.search).toBe("");
+    scrollTo.mockRestore();
   });
 });

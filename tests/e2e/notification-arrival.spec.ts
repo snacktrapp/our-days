@@ -213,6 +213,68 @@ test("several notifications land once, anchor late media, then let the reader sc
   await expectNavPinned(page);
 });
 
+test("comment refresh after scrolling to the top stays on the latest day @critical", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    performance.getEntriesByType = ((type: string) =>
+      type === "navigation"
+        ? [{ type: "reload" }]
+        : []) as unknown as typeof performance.getEntriesByType;
+  });
+  await page.goto("/family?moment=porch-light-2019&note=missing-note&thread=1");
+  const porch = page.locator("#moment-porch-light-2019");
+  await expect(porch).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&](?:moment|note|thread)=/);
+  const landed = await page.evaluate(() => window.scrollY);
+  expect(landed).toBeGreaterThan(200);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("moment", "porch-light-2019");
+    url.searchParams.set("note", "missing-note");
+    url.searchParams.set("thread", "1");
+    window.history.replaceState(
+      { __NA: true },
+      "",
+      `${url.pathname}${url.search}`,
+    );
+  });
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
+  await expect(page).not.toHaveURL(/[?&](?:moment|note|thread)=/);
+
+  await page.goto("/family?moment=porch-light-2019&note=missing-note&thread=1");
+  await expect(
+    page.getByRole("heading", { name: "All circles" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
+  await expect(page).not.toHaveURL(/[?&](?:moment|note|thread)=/);
+  await expect(porch).not.toBeInViewport();
+});
+
+test("a comment notification sits fully below the top bar @critical", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family?moment=sunset&note=sunset-note-molly&thread=1");
+  const note = page.locator("#note-sunset-note-molly");
+  await expect(note).toBeVisible();
+  const gap = await note.evaluate((node) => {
+    const topbar = document.querySelector(".topbar");
+    const top =
+      topbar instanceof HTMLElement
+        ? Number.parseFloat(getComputedStyle(topbar).top) || 0
+        : 0;
+    const height = topbar instanceof HTMLElement ? topbar.offsetHeight : 0;
+    return node.getBoundingClientRect().top - (top + height);
+  });
+  expect(gap).toBeGreaterThanOrEqual(12);
+  expect(gap).toBeLessThan(40);
+});
+
 test("a new circle post lands on that entry once, then the feed can scroll to the top @critical", async ({
   page,
 }) => {
