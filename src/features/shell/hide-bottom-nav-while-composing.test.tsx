@@ -1,4 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentConversationControl } from "@/features/timeline/moment-conversation-control";
@@ -99,7 +105,7 @@ describe("bottom nav while composing", () => {
     document.documentElement.style.removeProperty("--vv-bottom-inset");
   });
 
-  it("hides the bottom nav while the inline note panel is open and restores it on cancel", async () => {
+  it("hides the bottom nav while the inline note panel is open and restores it on dismiss", async () => {
     const user = userEvent.setup();
     renderNoteWithNav();
 
@@ -121,11 +127,16 @@ describe("bottom nav while composing", () => {
     expect(
       screen.getByRole("textbox", { name: "Add a family note" }),
     ).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.getByRole("button", { name: "Post" })).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(document.querySelector(".inline-note-form")).toBeNull();
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    await waitFor(() => {
+      expect(document.querySelector(".inline-note-form")).toBeNull();
+    });
     await waitFor(() => {
       expect(primaryNav()).not.toHaveClass("is-hidden");
     });

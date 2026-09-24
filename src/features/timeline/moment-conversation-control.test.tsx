@@ -358,7 +358,7 @@ describe("MomentConversationControl", () => {
     expect(actions.load).not.toHaveBeenCalled();
   });
 
-  it("opens a comment drawer with Cancel and Post without scrolling the entry", async () => {
+  it("opens a comment drawer with a send control and no header actions", async () => {
     const user = userEvent.setup();
     const scrollIntoView = vi.fn();
     HTMLElement.prototype.scrollIntoView = scrollIntoView;
@@ -374,12 +374,13 @@ describe("MomentConversationControl", () => {
     expect(form).toHaveClass("inline-note-form");
     expect(form).not.toHaveClass("overlay-popover");
     expect(form).not.toHaveClass("note-drawer");
-    expect(form.querySelector("button")).toBeNull();
+    expect(form.querySelector("button")).toHaveAttribute("aria-label", "Post");
     expect(
       within(screen.getByRole("dialog", { name: "Add comment" }))
         .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["Cancel", "Post"]);
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Post"]);
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(
       screen.getByRole("dialog", { name: "Add comment" }),
     ).toContainElement(form);
@@ -388,13 +389,21 @@ describe("MomentConversationControl", () => {
     );
 
     await user.type(note, "Keep this draft?");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(
-      screen.queryByRole("textbox", { name: "Add a family note" }),
-    ).toBeNull();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    expect(confirm).toHaveBeenCalledWith("Discard this comment?");
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("textbox", { name: "Add a family note" }),
+      ).toBeNull(),
+    );
+    confirm.mockRestore();
   });
 
-  it("retains a draft after dismissing the drawer and restores focus", async () => {
+  it("confirms before discarding unsent text and closes an empty draft", async () => {
     const user = userEvent.setup();
     renderControl();
     const trigger = screen.getByRole("button", {
@@ -402,6 +411,14 @@ describe("MomentConversationControl", () => {
     });
     await user.click(trigger);
     await user.type(screen.getByRole("textbox"), "Keep this comment");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    expect(confirm).toHaveBeenCalledWith("Discard this comment?");
+    expect(screen.getByRole("textbox")).toHaveValue("Keep this comment");
+    confirm.mockReturnValue(true);
     fireEvent(
       screen.getByRole("dialog"),
       new Event("cancel", { bubbles: true, cancelable: true }),
@@ -409,10 +426,14 @@ describe("MomentConversationControl", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(trigger).toHaveFocus());
     await user.click(trigger);
-    expect(screen.getByRole("textbox")).toHaveValue("Keep this comment");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await user.click(trigger);
     expect(screen.getByRole("textbox")).toHaveValue("");
+    fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { bubbles: true, cancelable: true }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(confirm).toHaveBeenCalledTimes(2);
+    confirm.mockRestore();
   });
 
   it("saves a note and immediately shows its author and text in the timeline", async () => {

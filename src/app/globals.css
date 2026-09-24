@@ -1957,6 +1957,7 @@ button {
 .mention-chip-row {
   display: flex;
   flex: 0 0 auto;
+  flex-shrink: 0;
   gap: 8px;
   width: 100%;
   min-height: 44px;
@@ -7354,7 +7355,78 @@ html.overlay-open .bottom-nav {
   flex-direction: column;
   min-height: 0;
 }
-.comment-sheet .inline-note-form textarea,
+.comment-sheet .activity-sheet-bar {
+  justify-content: center;
+}
+.comment-sheet .activity-sheet-bar h2 {
+  text-align: center;
+}
+.comment-sheet .inline-note-form {
+  margin-top: auto;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+.mention-field.is-pill {
+  gap: 8px;
+}
+.mention-pill {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 48px;
+  padding: 2px 2px 2px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  background: var(--cream);
+}
+.mention-pill textarea,
+.comment-sheet .inline-note-form .mention-pill textarea {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: calc(1.45em + 4px);
+  max-height: calc(1.45em * 5 + 4px);
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.mention-send,
+.inline-note-form button.mention-send,
+.inline-note-form button.mention-send[type="submit"],
+.inline-note-form button.mention-send[type="submit"]:disabled,
+.inline-note-form button.mention-send[type="submit"]:not(:disabled) {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--action);
+  color: #fff;
+  opacity: 1;
+  cursor: pointer;
+}
+.mention-send svg {
+  width: 22px;
+  height: 22px;
+}
+.inline-note-form button.mention-send:disabled {
+  opacity: 0.38;
+  background: var(--action);
+  color: #fff;
+  cursor: default;
+}
 .composer-field .mention-field textarea {
   height: auto;
   min-height: calc(1.45em * 2 + 28px);
@@ -7362,6 +7434,9 @@ html.overlay-open .bottom-nav {
   overflow-y: auto;
   font-size: 16px;
   line-height: 1.45;
+}
+.composer-editor-footer.is-keyboard-away {
+  display: none;
 }
 .comment-sheet .mention-chip-row,
 .composer-field .mention-chip-row {
@@ -10187,4 +10262,10 @@ iframe.composer-location-map {
   margin: 8px 0 16px;
   color: var(--ink-soft);
   font-size: 0.95rem;
+}
+
+.comment-sheet .inline-note-form button.mention-send[type="submit"]:disabled {
+  opacity: 0.38;
+  background: var(--action);
+  color: #fff;
 }

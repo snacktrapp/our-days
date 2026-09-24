@@ -369,7 +369,8 @@ test("comment drawer drafts save safely and remain reversible", async ({
   await reopened.form
     .getByRole("textbox", { name: "Add a family note" })
     .fill("Discard this draft");
-  await reopened.form.getByRole("button", { name: "Cancel" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.keyboard.press("Escape");
   await expect(reopened.form).toBeHidden();
   await expect(card.getByText("Discard this draft")).toHaveCount(0);
 });
@@ -390,6 +391,10 @@ test("comment drawer preserves dismissed drafts and the timeline position", asyn
     true,
   );
   await dialog.getByRole("textbox").fill("Keep my draft");
+  page.once("dialog", (confirmation) => confirmation.dismiss());
+  await page.keyboard.press("Escape");
+  await expect(dialog.getByRole("textbox")).toHaveValue("Keep my draft");
+  page.once("dialog", (confirmation) => confirmation.accept());
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
@@ -397,12 +402,9 @@ test("comment drawer preserves dismissed drafts and the timeline position", asyn
     Math.abs((await page.evaluate(() => window.scrollY)) - before),
   ).toBeLessThanOrEqual(2);
   await trigger.click();
-  await expect(dialog.getByRole("textbox")).toHaveValue("Keep my draft");
-  await page.mouse.click(5, 5);
+  await expect(dialog.getByRole("textbox")).toHaveValue("");
+  await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await trigger.click();
-  await expect(dialog.getByRole("textbox")).toHaveValue("Keep my draft");
-  await dialog.getByRole("button", { name: "Cancel" }).click();
 });
 
 test("comment drawer follows the keyboard viewport and keeps Post readable", async ({

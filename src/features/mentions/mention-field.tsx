@@ -27,7 +27,25 @@ type MentionFieldProps = Omit<
     enabled: boolean;
     onValueChange: (value: string, mentions: readonly DraftMention[]) => void;
     fieldRef?: Ref<HTMLTextAreaElement>;
+    layout?: "inline" | "pill";
+    submitLabel?: string;
+    submitDisabled?: boolean;
   }>;
+
+function SendArrow() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 19V6M6.5 11.5 12 6l5.5 5.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function assignTextareaRef(
   node: HTMLTextAreaElement | null,
@@ -49,6 +67,9 @@ export function MentionField({
   fieldRef,
   onSelect,
   onKeyDown,
+  layout = "inline",
+  submitLabel,
+  submitDisabled = false,
   ...props
 }: MentionFieldProps) {
   const [cursor, setCursor] = useState(value.length);
@@ -64,91 +85,120 @@ export function MentionField({
     if (!field) return;
     const caret = caretRef.current;
     field.style.height = "0px";
-    const max = 136;
-    const next = Math.min(Math.max(field.scrollHeight, 0), max);
+    const line = Number.parseFloat(getComputedStyle(field).lineHeight) || 23;
+    const max = layout === "pill" ? line * 5 + 4 : 136;
+    const next = Math.min(Math.max(field.scrollHeight, line), max);
     field.style.height = `${next}px`;
     if (caret !== null) {
       caretRef.current = null;
       field.setSelectionRange(caret, caret);
     }
     const row = chipRowRef.current;
-    const scroller = row?.closest(
+    const target = row ?? field;
+    const scroller = target.closest(
       ".composer-editor-scroll, .comment-sheet-body",
     );
-    if (!row || !(scroller instanceof HTMLElement)) return;
-    const rowBox = row.getBoundingClientRect();
+    if (!(scroller instanceof HTMLElement)) return;
+    const box = target.getBoundingClientRect();
     const view = scroller.getBoundingClientRect();
-    if (rowBox.bottom > view.bottom - 4) {
-      scroller.scrollTop += rowBox.bottom - view.bottom + 8;
+    if (box.bottom > view.bottom - 8) {
+      scroller.scrollTop += box.bottom - view.bottom + 12;
+    } else if (box.top < view.top + 4) {
+      scroller.scrollTop -= view.top - box.top + 12;
     }
-  }, [value, open]);
+  }, [value, open, layout]);
+
+  const chips =
+    open && query ? (
+      <div
+        ref={chipRowRef}
+        className="mention-chip-row"
+        role="listbox"
+        aria-label="Mention a circle member"
+      >
+        {choices.map((member) => (
+          <button
+            key={member.userId}
+            type="button"
+            role="option"
+            aria-label={member.name}
+            aria-selected={false}
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              const inserted = insertMention(
+                value,
+                cursor,
+                query.start,
+                member,
+                mentions,
+              );
+              caretRef.current = inserted.cursor;
+              onValueChange(inserted.text, inserted.mentions);
+              setCursor(inserted.cursor);
+              textareaRef.current?.focus({ preventScroll: true });
+            }}
+          >
+            <span
+              className={`mention-chip-mark dot-${member.accent}`}
+              aria-hidden="true"
+            >
+              {member.initial}
+            </span>
+            <span>{member.name}</span>
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  const field = (
+    <textarea
+      {...props}
+      ref={(node) => assignTextareaRef(node, fieldRef, textareaRef)}
+      rows={layout === "pill" ? 1 : props.rows}
+      value={value}
+      onSelect={(event) => {
+        setCursor(event.currentTarget.selectionStart ?? value.length);
+        onSelect?.(event);
+      }}
+      onKeyDown={onKeyDown}
+      onChange={(event) => {
+        const next = event.target.value;
+        const selection = event.target.selectionStart ?? next.length;
+        if (!enabled) {
+          onValueChange(next, []);
+          setCursor(selection);
+          return;
+        }
+        const applied = applyMentionTextChange(value, next, mentions);
+        if (applied.text !== next) caretRef.current = applied.cursor;
+        onValueChange(applied.text, applied.mentions);
+        setCursor(applied.text === next ? selection : applied.cursor);
+      }}
+    />
+  );
 
   return (
-    <div className="mention-field">
-      <textarea
-        {...props}
-        ref={(node) => assignTextareaRef(node, fieldRef, textareaRef)}
-        value={value}
-        onSelect={(event) => {
-          setCursor(event.currentTarget.selectionStart ?? value.length);
-          onSelect?.(event);
-        }}
-        onKeyDown={onKeyDown}
-        onChange={(event) => {
-          const next = event.target.value;
-          const selection = event.target.selectionStart ?? next.length;
-          if (!enabled) {
-            onValueChange(next, []);
-            setCursor(selection);
-            return;
-          }
-          const applied = applyMentionTextChange(value, next, mentions);
-          if (applied.text !== next) caretRef.current = applied.cursor;
-          onValueChange(applied.text, applied.mentions);
-          setCursor(applied.text === next ? selection : applied.cursor);
-        }}
-      />
-      {open && query ? (
-        <div
-          ref={chipRowRef}
-          className="mention-chip-row"
-          role="listbox"
-          aria-label="Mention a circle member"
-        >
-          {choices.map((member) => (
+    <div className={`mention-field${layout === "pill" ? " is-pill" : ""}`}>
+      {layout === "pill" ? chips : null}
+      {layout === "pill" ? (
+        <div className="mention-pill">
+          {field}
+          {submitLabel ? (
             <button
-              key={member.userId}
-              type="button"
-              role="option"
-              aria-label={member.name}
-              aria-selected={false}
-              onPointerDown={(event) => event.preventDefault()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                const inserted = insertMention(
-                  value,
-                  cursor,
-                  query.start,
-                  member,
-                  mentions,
-                );
-                caretRef.current = inserted.cursor;
-                onValueChange(inserted.text, inserted.mentions);
-                setCursor(inserted.cursor);
-                textareaRef.current?.focus({ preventScroll: true });
-              }}
+              className="mention-send"
+              type="submit"
+              aria-label={submitLabel}
+              disabled={submitDisabled}
             >
-              <span
-                className={`mention-chip-mark dot-${member.accent}`}
-                aria-hidden="true"
-              >
-                {member.initial}
-              </span>
-              <span>{member.name}</span>
+              <SendArrow />
             </button>
-          ))}
+          ) : null}
         </div>
-      ) : null}
+      ) : (
+        field
+      )}
+      {layout === "pill" ? null : chips}
     </div>
   );
 }

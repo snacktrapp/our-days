@@ -241,7 +241,7 @@ describe("smash harden matrix", () => {
     it("hides the bottom nav while a note is open and restores it on close", () => {
       expect(hideNav).toContain(".inline-note-form");
       expect(hideNavTest).toContain(
-        "hides the bottom nav while the inline note panel is open and restores it on cancel",
+        "hides the bottom nav while the inline note panel is open and restores it on dismiss",
       );
       expect(bottomNavCss).toContain(
         "hides the pill without lifting it when a note or composer is open",
@@ -534,7 +534,7 @@ describe("smash harden matrix", () => {
         "useVisualViewportFill(dialogRef, true)",
       );
       expect(conversationControlTest).toContain(
-        "retains a draft after dismissing the drawer and restores focus",
+        "confirms before discarding unsent text and closes an empty draft",
       );
       expect(read("tests/e2e/moment-detail.spec.ts")).toContain(
         "comment drawer follows the keyboard viewport and keeps Post readable",
@@ -660,8 +660,9 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("shows mention chips below the field and keeps Post above the keyboard", () => {
+    it("shows mention chips beside the field and keeps Post above the keyboard", () => {
       expect(mentionField).toContain('className="mention-chip-row"');
+      expect(mentionField).toContain('className="mention-pill"');
       expect(mentionField).not.toContain("mention-picker");
       expect(mentionDraft).toContain("export function applyMentionTextChange");
       expect(mentionDraft).toContain("name.startsWith(needle)");
@@ -675,8 +676,11 @@ describe("smash harden matrix", () => {
       expect(read("tests/e2e/mention-chips.spec.ts")).toContain(
         "comment chips stay fully visible above a simulated keyboard",
       );
-      expect(read("src/features/timeline/comment-drawer.tsx")).toContain(
+      expect(read("src/features/timeline/comment-drawer.tsx")).not.toContain(
         "sheet-action-bar",
+      );
+      expect(read("src/features/composer/moment-composer.tsx")).toContain(
+        "Save draft",
       );
     });
   });

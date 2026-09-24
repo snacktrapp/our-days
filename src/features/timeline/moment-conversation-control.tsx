@@ -709,20 +709,14 @@ export function MomentConversationControl({
           title={editingNoteId ? "Edit comment" : "Add comment"}
           context={`${model.personName} · ${kindLabel}${controlLabel ? ` · ${controlLabel}` : ""}`}
           pending={pending}
-          formId={`${panelId}-note-form`}
-          submitLabel={pending ? "Saving…" : editingNoteId ? "Save" : "Post"}
-          submitDisabled={loading || !noteDraft.trim()}
-          onCancel={() => {
+          confirmDiscard={
+            noteDraft.trim() ? "Discard this comment?" : undefined
+          }
+          onDismiss={() => {
             setNoteDraft("");
             setNoteMentions([]);
             setEditingNoteId(null);
             setError(null);
-            setPanel(null);
-            window.requestAnimationFrame(() =>
-              noteTriggerRef.current?.focus({ preventScroll: true }),
-            );
-          }}
-          onDismiss={() => {
             setPanel(null);
             window.requestAnimationFrame(() =>
               noteTriggerRef.current?.focus({ preventScroll: true }),
@@ -738,6 +732,11 @@ export function MomentConversationControl({
             }}
           >
             <MentionField
+              layout="pill"
+              submitLabel={
+                pending ? "Saving…" : editingNoteId ? "Save" : "Post"
+              }
+              submitDisabled={loading || pending || !noteDraft.trim()}
               fieldRef={noteRef}
               id={`${panelId}-note-field`}
               aria-label={
