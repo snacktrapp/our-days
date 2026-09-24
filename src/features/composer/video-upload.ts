@@ -372,7 +372,9 @@ async function uploadLocalVideoMoment(
   ) {
     throw new VideoUploadError(
       payload.message ?? "That video could not be uploaded.",
-      response.status >= 500,
+      response.status === 403 ||
+        response.status >= 500 ||
+        /42501|permission denied/iu.test(payload.message ?? ""),
     );
   }
   attempt.momentId = payload.momentId;

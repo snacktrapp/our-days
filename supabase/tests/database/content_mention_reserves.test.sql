@@ -78,6 +78,12 @@ select ok(
   'family photo reserve with a mention returns the preallocated moment id'
 );
 
+select public.cancel_photo_intake(listed.intake_id)
+  from public.list_my_photo_intakes(
+    '20000000-0000-4000-8000-000000000001'
+  ) as listed
+ where listed.can_cancel;
+
 select lives_ok(
   $$select * from public.reserve_photo_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',

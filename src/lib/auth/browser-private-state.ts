@@ -1,7 +1,11 @@
 "use client";
 
 const PRIVATE_KEY_PREFIXES = ["our-days:", "our_days:"];
-const PRIVATE_DATABASE_NAMES = ["our-days:drafts", "our-days:photo-uploads"];
+const PRIVATE_DATABASE_NAMES = [
+  "our-days:drafts",
+  "our-days:failed-media-uploads",
+  "our-days:photo-uploads",
+];
 
 function belongsToOurDays(name: string) {
   return PRIVATE_KEY_PREFIXES.some((prefix) => name.startsWith(prefix));

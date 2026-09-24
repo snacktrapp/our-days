@@ -19,6 +19,7 @@ import {
   optimisticMediaUploadSnapshot,
   queuedOptimisticMediaUploadCount,
   removeOptimisticMediaUpload,
+  restoreFailedMediaUploads,
   retryOptimisticMediaUpload,
   subscribeToOptimisticMediaUploads,
   updateOptimisticMediaUpload,
@@ -1036,6 +1037,7 @@ export function PhotoStatusShelf({
   }, [checkStatuses, circleId]);
 
   useEffect(() => {
+    void restoreFailedMediaUploads();
     void checkOnMountOrResume();
     const checkWhenVisible = () => {
       if (!document.hidden) void checkOnMountOrResume();

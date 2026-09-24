@@ -597,6 +597,27 @@ describe("smash harden matrix", () => {
         "dismisses a retryable failed upload without retrying",
       );
     });
+
+    it("keeps a failed photo chip with Retry after a 403 and a reload", () => {
+      expect(optimisticUpload).toContain("restoreFailedMediaUploads");
+      expect(optimisticUpload).toContain("saveFailedMediaUploadDraft");
+      expect(optimisticUpload).toContain('code === "42501"');
+      expect(optimisticUpload).toContain("status === 403");
+      expect(photoUpload).toContain("response.status === 403");
+      expect(read("src/features/composer/video-upload.ts")).toContain(
+        "response.status === 403",
+      );
+      expect(photoStatusShelf).toContain("restoreFailedMediaUploads");
+      expect(read("src/lib/auth/browser-private-state.ts")).toContain(
+        "our-days:failed-media-uploads",
+      );
+      expect(read("tests/e2e/local-journal.spec.ts")).toContain(
+        "a failed photo reserve survives reload until Retry publishes it",
+      );
+      expect(optimisticUploadTest).toContain(
+        "restores a 403 failure with its caption, audience, and media after reload",
+      );
+    });
   });
 
   describe("mentions in captions and comments", () => {

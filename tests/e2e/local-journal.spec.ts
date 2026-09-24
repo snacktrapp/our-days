@@ -566,6 +566,58 @@ test("nearby album requests all photos before the cover finishes and retains the
   expect(errors).toEqual([]);
 });
 
+test("a failed photo reserve survives reload until Retry publishes it", async ({
+  page,
+}) => {
+  let failReserve = true;
+  await page.route("**/api/media/local/photo", async (route) => {
+    if (!failReserve) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "42501",
+        message: "permission denied",
+      }),
+    });
+  });
+  const caption = "Pre-sunrise hike up Sydney with Seth";
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Photo or video Media with date and note" })
+    .click();
+  await page.locator('input[type="file"]').setInputFiles(await jpegFixture());
+  await expect(
+    page.getByText("Photo ready to upload privately."),
+  ).toBeVisible();
+  await page.getByRole("textbox", { name: "Note" }).fill(caption);
+  await page.getByRole("checkbox", { name: "Just me" }).click();
+  await page.getByRole("button", { name: "Post", exact: true }).click();
+
+  const chip = page.getByRole("region", { name: "Private photo status" });
+  await expect(chip.getByText("Upload failed")).toBeVisible();
+  await expect(chip.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(chip.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+  await page.reload();
+  await expect(chip.getByText("Upload failed")).toBeVisible();
+  await expect(chip.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(chip.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+  failReserve = false;
+  await chip.getByRole("button", { name: "Retry" }).click();
+  await expect(
+    page.getByLabel("Chronological moments").getByText(caption),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Upload failed")).toHaveCount(0);
+});
+
 test("sign in, write a moment, attach media, and browse by date", async ({
   page,
 }) => {

@@ -657,7 +657,9 @@ async function uploadLocalPhotoMoment(
   ) {
     throw new PhotoUploadError(
       payload.message ?? "That photo could not be uploaded.",
-      response.status >= 500,
+      response.status === 403 ||
+        response.status >= 500 ||
+        /42501|permission denied/iu.test(payload.message ?? ""),
     );
   }
   attempt.intakeId = payload.intakeId ?? payload.momentId;
