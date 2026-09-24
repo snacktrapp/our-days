@@ -431,7 +431,7 @@ export async function uploadVideoMoment(
       tagged_person_ids: [...draft.taggedPersonIds],
       audience: draft.audience ?? "family",
       ...(draft.circleIds?.length ? { circle_ids: [...draft.circleIds] } : {}),
-      ...(draft.mentions
+      ...(draft.mentions && draft.mentions.length > 0
         ? {
             mentioned_user_ids: draft.mentions.map((mention) => mention.userId),
             mention_starts: draft.mentions.map((mention) => mention.start),
