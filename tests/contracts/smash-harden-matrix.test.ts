@@ -650,6 +650,36 @@ describe("smash harden matrix", () => {
       );
     });
 
+    it("post photo + video with no mention, and with a mention", () => {
+      const reserveFix = read(
+        "supabase/migrations/20260924223000_mention_reserve_without_moment.sql",
+      );
+      const photoUpload = read("src/features/composer/photo-upload.ts");
+      const videoUpload = read("src/features/composer/video-upload.ts");
+      expect(reserveFix).toContain("if requested_user_ids is null then");
+      expect(reserveFix).toContain("if mention_count = 0 then");
+      expect(reserveFix).toContain("private.stage_media_mentions");
+      expect(reserveFix).toContain("private.attach_staged_moment_mentions");
+      expect(reserveFix).toContain(
+        "coalesce(cardinality(mentioned_user_ids), 0) > 0",
+      );
+      expect(photoUpload).toContain(
+        "draft.mentions && draft.mentions.length > 0",
+      );
+      expect(videoUpload).toContain(
+        "draft.mentions && draft.mentions.length > 0",
+      );
+      expect(read("src/features/composer/photo-upload.test.ts")).toContain(
+        "omits mention params when a retried photo has no mentions",
+      );
+      expect(read("src/features/composer/video-upload.test.ts")).toContain(
+        "sends a mention and omits an empty mention list",
+      );
+      expect(
+        read("supabase/tests/database/content_mention_reserves.test.sql"),
+      ).toContain("reserve_photo_moment");
+    });
+
     it("shows no picker on a Just me post", () => {
       expect(momentComposer).toContain('enabled={audience !== "just_me"}');
       expect(mentionMigration).toContain(

@@ -845,7 +845,7 @@ export async function uploadPhotoMoment(
             ...(draft.circleIds?.length
               ? { circle_ids: [...draft.circleIds] }
               : {}),
-            ...(draft.mentions
+            ...(draft.mentions && draft.mentions.length > 0
               ? {
                   mentioned_user_ids: draft.mentions.map(
                     (mention) => mention.userId,
