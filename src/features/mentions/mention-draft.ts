@@ -63,16 +63,25 @@ export function filterMentionCandidates(
 ) {
   const needle = query.trim().toLocaleLowerCase("en-US");
   const seen = new Set<string>();
-  const matches: MentionCandidate[] = [];
+  const prefix: MentionCandidate[] = [];
+  const contains: MentionCandidate[] = [];
   for (const member of members) {
     if (seen.has(member.userId)) continue;
     const name = member.name.toLocaleLowerCase("en-US");
-    if (needle && !name.includes(needle)) continue;
-    seen.add(member.userId);
-    matches.push(member);
-    if (matches.length === 8) break;
+    if (!needle) {
+      seen.add(member.userId);
+      prefix.push(member);
+      continue;
+    }
+    if (name.startsWith(needle)) {
+      seen.add(member.userId);
+      prefix.push(member);
+    } else if (name.includes(needle)) {
+      seen.add(member.userId);
+      contains.push(member);
+    }
   }
-  return matches;
+  return [...prefix, ...contains];
 }
 
 function shiftMentions(

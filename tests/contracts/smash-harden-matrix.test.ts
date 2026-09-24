@@ -642,14 +642,21 @@ describe("smash harden matrix", () => {
       );
     });
 
-    it("keeps the picker above the field without moving the bottom nav", () => {
-      expect(mentionField).toContain('className="mention-picker"');
+    it("shows mention chips below the field and keeps Post above the keyboard", () => {
+      expect(mentionField).toContain('className="mention-chip-row"');
+      expect(mentionField).not.toContain("mention-picker");
       expect(mentionDraft).toContain("export function applyMentionTextChange");
-      expect(globalsCss).toContain(".mention-picker");
-      expect(globalsCss).toContain("bottom: calc(100% + 6px)");
+      expect(mentionDraft).toContain("name.startsWith(needle)");
+      expect(globalsCss).toContain(".mention-chip-row");
+      expect(globalsCss).toContain("min-height: 44px");
+      expect(globalsCss).toContain("overflow-x: auto");
+      expect(globalsCss).not.toContain(".mention-picker");
       expect(hideNav).toContain('root.querySelector(".inline-note-form")');
       expect(deliverPush).toContain('kind === "mention"');
       expect(deliverPush).toContain("our-days:${kind}:${row.moment_id}");
+      expect(read("tests/e2e/mention-chips.spec.ts")).toContain(
+        "chip row sits between the comment field and Post",
+      );
     });
   });
 });

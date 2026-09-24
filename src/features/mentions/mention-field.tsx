@@ -40,27 +40,6 @@ function assignTextareaRef(
   else fieldRef.current = node;
 }
 
-function scrollPickerAboveField(picker: HTMLElement, field: HTMLElement) {
-  const scroller = picker.closest(
-    ".composer-editor-scroll, .comment-sheet-body, .composer-sheet-body",
-  );
-  if (!(scroller instanceof HTMLElement)) return;
-  const padding = 8;
-  const viewportBottom = window.visualViewport
-    ? window.visualViewport.offsetTop + window.visualViewport.height
-    : window.innerHeight;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const visibleBottom = Math.min(scrollerRect.bottom, viewportBottom) - padding;
-  const pickerTop = picker.getBoundingClientRect().top;
-  if (pickerTop < scrollerRect.top + padding) {
-    scroller.scrollTop -= scrollerRect.top + padding - pickerTop;
-  }
-  const fieldBottom = field.getBoundingClientRect().bottom;
-  if (fieldBottom > visibleBottom) {
-    scroller.scrollTop += fieldBottom - visibleBottom;
-  }
-}
-
 export function MentionField({
   value,
   mentions,
@@ -74,8 +53,6 @@ export function MentionField({
 }: MentionFieldProps) {
   const [cursor, setCursor] = useState(value.length);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const pickerRef = useRef<HTMLUListElement | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const caretRef = useRef<number | null>(null);
   const query = enabled ? mentionQueryAt(value, cursor, mentions) : null;
   const choices = query ? filterMentionCandidates(members, query.query) : [];
@@ -89,58 +66,8 @@ export function MentionField({
     field.setSelectionRange(caret, caret);
   }, [value]);
 
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    const picker = pickerRef.current;
-    const field = textareaRef.current;
-    if (!root) return;
-    if (!open || !picker || !field) {
-      root.style.marginTop = "";
-      return;
-    }
-    root.style.marginTop = `${picker.offsetHeight + 6}px`;
-    scrollPickerAboveField(picker, field);
-  }, [open, choices.length, value]);
-
   return (
-    <div className="mention-field" ref={rootRef}>
-      {open && query ? (
-        <ul
-          ref={pickerRef}
-          className="mention-picker"
-          role="listbox"
-          aria-label="Mention a circle member"
-        >
-          {choices.map((member) => (
-            <li key={member.userId}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={false}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  const inserted = insertMention(
-                    value,
-                    cursor,
-                    query.start,
-                    member,
-                    mentions,
-                  );
-                  caretRef.current = inserted.cursor;
-                  onValueChange(inserted.text, inserted.mentions);
-                  setCursor(inserted.cursor);
-                }}
-              >
-                <span
-                  className={`comment-color-dot dot-${member.accent}`}
-                  aria-hidden="true"
-                />
-                <span>{member.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+    <div className="mention-field">
       <textarea
         {...props}
         ref={(node) => assignTextareaRef(node, fieldRef, textareaRef)}
@@ -164,6 +91,46 @@ export function MentionField({
           setCursor(applied.text === next ? selection : applied.cursor);
         }}
       />
+      {open && query ? (
+        <div
+          className="mention-chip-row"
+          role="listbox"
+          aria-label="Mention a circle member"
+        >
+          {choices.map((member) => (
+            <button
+              key={member.userId}
+              type="button"
+              role="option"
+              aria-label={member.name}
+              aria-selected={false}
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const inserted = insertMention(
+                  value,
+                  cursor,
+                  query.start,
+                  member,
+                  mentions,
+                );
+                caretRef.current = inserted.cursor;
+                onValueChange(inserted.text, inserted.mentions);
+                setCursor(inserted.cursor);
+                textareaRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              <span
+                className={`mention-chip-mark dot-${member.accent}`}
+                aria-hidden="true"
+              >
+                {member.initial}
+              </span>
+              <span>{member.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

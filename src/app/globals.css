@@ -1949,42 +1949,54 @@ button {
   gap: 7px;
 }
 .mention-field {
-  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
-.mention-picker {
-  position: absolute;
-  z-index: 3;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 6px);
-  max-height: 11rem;
-  margin: 0;
-  padding: 4px;
-  overflow: auto;
-  list-style: none;
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  background: var(--cream);
-  box-shadow: 0 8px 24px rgba(16, 18, 22, 0.12);
-}
-.mention-picker button {
-  width: 100%;
-  min-height: 40px;
-  padding: 6px 8px;
+.mention-chip-row {
   display: flex;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mention-chip-row::-webkit-scrollbar {
+  display: none;
+}
+.mention-chip-row button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 14px 0 8px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--ink);
   font: inherit;
+  font-size: 16px;
   font-weight: 600;
-  text-align: left;
+  line-height: 1;
   cursor: pointer;
 }
-.mention-picker button:hover,
-.mention-picker button:focus-visible {
+.mention-chip-mark {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+}
+.mention-chip-row button:hover,
+.mention-chip-row button:focus-visible {
   background: color-mix(in srgb, var(--action) 14%, var(--cream));
 }
 .mention-token {

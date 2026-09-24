@@ -30,6 +30,23 @@ describe("mention drafts", () => {
         "mo",
       ).map((member) => member.name),
     ).toEqual(["Molly"]);
+    expect(
+      filterMentionCandidates(
+        [
+          molly,
+          { ...molly, userId: "user-nana", name: "Nana", initial: "N" },
+          { ...molly, userId: "user-ann", name: "Ann", initial: "A" },
+        ],
+        "an",
+      ).map((member) => member.name),
+    ).toEqual(["Ann", "Nana"]);
+    expect(
+      filterMentionCandidates(
+        [molly, { ...molly, userId: "user-nana", name: "Nana" }],
+        "",
+      ),
+    ).toHaveLength(2);
+    expect(filterMentionCandidates([molly], "zzz")).toEqual([]);
   });
 
   it("inserts @Name with a trailing space and deletes the whole mention on backspace", () => {
