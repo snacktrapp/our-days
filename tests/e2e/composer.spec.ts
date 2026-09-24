@@ -169,7 +169,7 @@ test("a handle swipe dismisses the type picker sheet", async ({ page }) => {
   await expect(dialog).toBeHidden();
 });
 
-test("type selection opens as a thumb-zone sheet and dismisses with sheet-down", async ({
+test("type selection opens as a mid-screen sheet and dismisses with sheet-down", async ({
   page,
 }) => {
   await page.goto("/family");
