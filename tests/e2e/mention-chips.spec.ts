@@ -15,6 +15,53 @@ async function shrinkKeyboard(page: Page, height = 360) {
   }, height);
 }
 
+async function placeholderBox(field: Locator) {
+  return field.evaluate((textarea) => {
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Comment field is missing.");
+    }
+    const pill = textarea.closest(".mention-pill");
+    const sheet = textarea.closest(".comment-sheet");
+    const dialog = textarea.closest("dialog");
+    if (
+      !(pill instanceof HTMLElement) ||
+      !(sheet instanceof HTMLElement) ||
+      !(dialog instanceof HTMLElement)
+    ) {
+      throw new Error("Comment pill is missing its sheet.");
+    }
+    const style = getComputedStyle(textarea);
+    const probe = document.createElement("span");
+    probe.textContent = textarea.placeholder;
+    probe.style.position = "fixed";
+    probe.style.visibility = "hidden";
+    probe.style.whiteSpace = "nowrap";
+    probe.style.font = style.font;
+    document.body.append(probe);
+    const text = probe.getBoundingClientRect();
+    probe.remove();
+    const fieldBox = textarea.getBoundingClientRect();
+    const pillBox = pill.getBoundingClientRect();
+    const send = pill.querySelector("button")?.getBoundingClientRect();
+    const textTop = fieldBox.top + (fieldBox.height - text.height) / 2;
+    const viewport = window.visualViewport;
+    return {
+      fontSize: Number.parseFloat(style.fontSize),
+      textTop,
+      textBottom: textTop + text.height,
+      textCenter: textTop + text.height / 2,
+      pillTop: pillBox.top,
+      pillBottom: pillBox.bottom,
+      fieldBottom: fieldBox.bottom,
+      sendCenter: send ? send.top + send.height / 2 : textTop,
+      dialogBottom: dialog.getBoundingClientRect().bottom,
+      sheetBottom: sheet.getBoundingClientRect().bottom,
+      vvBottom:
+        (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight),
+    };
+  });
+}
+
 async function chipBox(dialog: Locator) {
   const row = dialog.getByRole("listbox", { name: "Mention a circle member" });
   await expect(row).toBeVisible();
@@ -62,6 +109,35 @@ test("comment chips stay fully visible above a simulated keyboard", async ({
   const post = dialog.getByRole("button", { name: "Post" });
   await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCount(0);
   await expect(post).toBeDisabled();
+  const emptyPill = await placeholderBox(field);
+  expect(emptyPill.fontSize).toBeGreaterThanOrEqual(16);
+  expect(emptyPill.textTop).toBeGreaterThanOrEqual(emptyPill.pillTop - 1);
+  expect(emptyPill.textBottom).toBeLessThanOrEqual(emptyPill.pillBottom + 1);
+  expect(emptyPill.fieldBottom).toBeLessThanOrEqual(emptyPill.pillBottom + 1);
+  expect(
+    Math.abs(emptyPill.sendCenter - emptyPill.textCenter),
+  ).toBeLessThanOrEqual(6);
+  expect(
+    Math.abs(emptyPill.dialogBottom - emptyPill.vvBottom),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(emptyPill.sheetBottom - emptyPill.dialogBottom),
+  ).toBeLessThanOrEqual(2);
+  await dialog.screenshot({
+    path: "/opt/cursor/artifacts/mention-ig-comment-empty.png",
+  });
+  await field.evaluate((element) => {
+    element.style.fontSize = "22px";
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+  const largePill = await placeholderBox(field);
+  expect(largePill.fontSize).toBeGreaterThanOrEqual(22);
+  expect(largePill.textTop).toBeGreaterThanOrEqual(largePill.pillTop - 1);
+  expect(largePill.textBottom).toBeLessThanOrEqual(largePill.pillBottom + 1);
+  await field.evaluate((element) => {
+    element.style.removeProperty("font-size");
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")));
   await field.fill("@");
   const many = await chipBox(dialog);
   expect(many.height).toBeGreaterThanOrEqual(43);

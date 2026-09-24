@@ -7291,9 +7291,15 @@ html.overlay-open .bottom-nav {
   background: var(--paper);
 }
 
+.comment-dialog[open] {
+  align-items: flex-end;
+  justify-content: center;
+}
 .comment-sheet {
+  width: 100%;
   height: auto;
   max-height: 100%;
+  margin: 0;
   overflow: hidden;
 }
 
@@ -7365,36 +7371,49 @@ html.overlay-open .bottom-nav {
   margin-top: auto;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
+.comment-dialog.is-keyboard-open .comment-sheet .inline-note-form {
+  padding-bottom: 8px;
+}
 .mention-field.is-pill {
   gap: 8px;
 }
 .mention-pill {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
   min-height: 48px;
-  padding: 2px 2px 2px 14px;
+  padding: 0 4px 0 16px;
   border: 1px solid var(--hairline);
   border-radius: 24px;
   background: var(--cream);
+}
+.mention-pill.is-multiline {
+  align-items: flex-end;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 .mention-pill textarea,
 .comment-sheet .inline-note-form .mention-pill textarea {
   width: 100%;
   min-width: 0;
-  height: auto;
-  min-height: calc(1.45em + 4px);
-  max-height: calc(1.45em * 5 + 4px);
+  height: 1.25em;
+  min-height: 1.25em;
+  max-height: calc(1.25em * 5);
   margin: 0;
-  padding: 10px 0;
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   resize: none;
+  overflow-x: hidden;
   overflow-y: auto;
-  font-size: 16px;
-  line-height: 1.45;
+  font-family: var(--font-interface), sans-serif;
+  font-size: max(16px, 1rem);
+  line-height: 1.25;
+}
+.mention-pill textarea::placeholder {
+  line-height: 1.25;
 }
 .mention-send,
 .inline-note-form button.mention-send,

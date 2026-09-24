@@ -31,10 +31,13 @@ export function applyVisualViewportFill(
     element.style.removeProperty("height");
     return;
   }
+  element.style.position = "fixed";
+  element.style.margin = "0";
   element.style.top = `${box.top}px`;
   element.style.left = `${box.left}px`;
   element.style.width = `${box.width}px`;
   element.style.height = `${box.height}px`;
+  element.style.bottom = "auto";
 }
 
 export function subscribeVisualViewportFill(
@@ -57,9 +60,12 @@ export function subscribeVisualViewportFill(
     view.removeEventListener("resize", sync);
     view.removeEventListener("orientationchange", sync);
     if (!element) return;
+    element.style.removeProperty("position");
+    element.style.removeProperty("margin");
     element.style.removeProperty("top");
     element.style.removeProperty("left");
     element.style.removeProperty("width");
     element.style.removeProperty("height");
+    element.style.removeProperty("bottom");
   };
 }

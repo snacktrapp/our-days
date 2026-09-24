@@ -58,7 +58,22 @@ export function CommentDrawer({
   useVisualViewportFill(dialogRef, true);
   useLayoutEffect(() => {
     lockOverlayChrome();
-    return () => unlockOverlayChrome();
+    const dialog = dialogRef.current;
+    const syncKeyboard = () => {
+      const viewport = window.visualViewport;
+      const inset = viewport
+        ? window.innerHeight - viewport.height - viewport.offsetTop
+        : 0;
+      dialog?.classList.toggle("is-keyboard-open", inset > 80);
+    };
+    syncKeyboard();
+    window.visualViewport?.addEventListener("resize", syncKeyboard);
+    window.visualViewport?.addEventListener("scroll", syncKeyboard);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", syncKeyboard);
+      window.visualViewport?.removeEventListener("scroll", syncKeyboard);
+      unlockOverlayChrome();
+    };
   }, []);
 
   return createPortal(

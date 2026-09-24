@@ -84,11 +84,18 @@ export function MentionField({
     const field = textareaRef.current;
     if (!field) return;
     const caret = caretRef.current;
-    field.style.height = "0px";
-    const line = Number.parseFloat(getComputedStyle(field).lineHeight) || 23;
-    const max = layout === "pill" ? line * 5 + 4 : 136;
-    const next = Math.min(Math.max(field.scrollHeight, line), max);
+    const line = Number.parseFloat(getComputedStyle(field).lineHeight) || 20;
+    const max = layout === "pill" ? line * 5 : 136;
+    if (layout === "pill") field.style.height = `${line}px`;
+    else field.style.height = "0px";
+    const content =
+      layout === "pill" && field.value.length === 0 ? line : field.scrollHeight;
+    const next = Math.min(Math.max(content, line), max);
     field.style.height = `${next}px`;
+    field.parentElement?.classList.toggle(
+      "is-multiline",
+      layout === "pill" && next > line + 1,
+    );
     if (caret !== null) {
       caretRef.current = null;
       field.setSelectionRange(caret, caret);
@@ -107,6 +114,25 @@ export function MentionField({
       scroller.scrollTop -= view.top - box.top + 12;
     }
   }, [value, open, layout]);
+
+  useLayoutEffect(() => {
+    if (layout !== "pill") return;
+    const field = textareaRef.current;
+    if (!field) return;
+    const resize = () => {
+      const line = Number.parseFloat(getComputedStyle(field).lineHeight) || 20;
+      const content = field.value.length === 0 ? line : field.scrollHeight;
+      const next = Math.min(Math.max(content, line), line * 5);
+      field.style.height = `${next}px`;
+      field.parentElement?.classList.toggle("is-multiline", next > line + 1);
+    };
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
+    };
+  }, [layout, value]);
 
   const chips =
     open && query ? (
@@ -155,7 +181,7 @@ export function MentionField({
     <textarea
       {...props}
       ref={(node) => assignTextareaRef(node, fieldRef, textareaRef)}
-      rows={layout === "pill" ? 1 : props.rows}
+      rows={layout === "pill" ? undefined : props.rows}
       value={value}
       onSelect={(event) => {
         setCursor(event.currentTarget.selectionStart ?? value.length);
