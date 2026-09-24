@@ -1214,6 +1214,47 @@ describe("connected private photo upload", () => {
     });
     expect(resumeStore.remove).toHaveBeenCalledWith(publishedResume.id);
   });
+
+  it("omits mention params when a retried photo has no mentions", async () => {
+    const { client, rpc } = clientWithStatus();
+    const mentionedUserId = "10000000-0000-4000-8000-000000000002";
+    const run = (mentions: PhotoMomentDraft["mentions"]) =>
+      uploadPhotoMoment(
+        jpegFile(),
+        { ...draft, mentions },
+        createPhotoUploadAttempt(),
+        new AbortController().signal,
+        () => undefined,
+        {
+          createClient: () => client,
+          hash: vi.fn(async () => "a".repeat(64)),
+          resumeStore: memoryResumeStore(),
+        },
+      );
+
+    await expect(run([])).rejects.toThrow();
+    const emptyPayload = rpc.mock.calls[0] as unknown as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(emptyPayload[0]).toBe("reserve_photo_moment");
+    expect(emptyPayload[1]).not.toHaveProperty("mentioned_user_ids");
+
+    rpc.mockClear();
+    await expect(
+      run([{ userId: mentionedUserId, start: 0, end: 2 }]),
+    ).rejects.toThrow();
+    const mentionPayload = rpc.mock.calls[0] as unknown as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(mentionPayload[0]).toBe("reserve_photo_moment");
+    expect(mentionPayload[1]).toMatchObject({
+      mentioned_user_ids: [mentionedUserId],
+      mention_starts: [0],
+      mention_ends: [2],
+    });
+  });
 });
 
 describe("hosted Vercel photo upload", () => {

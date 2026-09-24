@@ -192,6 +192,43 @@ describe("connected private video upload", () => {
     );
     expect(createClient).not.toHaveBeenCalled();
   });
+
+  it("sends a mention and omits an empty mention list", async () => {
+    const attempt = createVideoUploadAttempt();
+    const { client, rpc } = connectedClient();
+    const mentionedUserId = "10000000-0000-4000-8000-000000000002";
+    const upload = vi.fn(async () => undefined);
+    const run = (mentions: VideoMomentDraft["mentions"]) =>
+      uploadVideoMoment(
+        videoFile(),
+        { ...draft, mentions },
+        attempt,
+        new AbortController().signal,
+        () => undefined,
+        { createClient: () => client, upload },
+      );
+
+    await expect(run([])).resolves.toEqual({ momentId });
+    const emptyPayload = rpc.mock.calls[0] as unknown as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(emptyPayload[1]).not.toHaveProperty("mentioned_user_ids");
+
+    rpc.mockClear();
+    await expect(
+      run([{ userId: mentionedUserId, start: 0, end: 6 }]),
+    ).resolves.toEqual({ momentId });
+    const mentionPayload = rpc.mock.calls[0] as unknown as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(mentionPayload[1]).toMatchObject({
+      mentioned_user_ids: [mentionedUserId],
+      mention_starts: [0],
+      mention_ends: [6],
+    });
+  });
 });
 
 describe("local private video upload", () => {
