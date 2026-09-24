@@ -123,6 +123,7 @@ export function JournalPromos({
     <JournalBanner
       promoId={banner.id}
       variant={banner.variant}
+      icon={banner.icon}
       title={banner.title}
       body={banner.body}
       cta={cta}

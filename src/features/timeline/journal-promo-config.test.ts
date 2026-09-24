@@ -18,6 +18,10 @@ describe("journal promo config", () => {
     expect(journalPromoBanner("mentions").priority).toBeLessThan(
       journalPromoBanner("phone-notifications").priority,
     );
+    expect(journalPromoBanner("mentions").icon).toBe("@");
+    expect(journalPromoBanner("phone-notifications")).not.toHaveProperty(
+      "icon",
+    );
     expect(
       selectJournalPromo({
         ...signedIn,
