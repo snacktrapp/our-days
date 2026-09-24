@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import Script from "next/script";
 import { connection } from "next/server";
+import { journalPromoPrepaintScript } from "@/features/timeline/journal-promo-config";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
@@ -66,11 +67,7 @@ const themeBootstrap = `
   } catch (_) {
     document.documentElement.dataset.theme = "dark";
   }
-  try {
-    if (window.localStorage.getItem("our-days:mentions-announcement") === "dismissed") {
-      document.documentElement.dataset.mentionsAnnouncement = "dismissed";
-    }
-  } catch (_) {}
+  ${journalPromoPrepaintScript()}
 `;
 
 export default async function RootLayout({

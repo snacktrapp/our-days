@@ -3,7 +3,10 @@ import { JournalChrome } from "@/features/shell/journal-chrome";
 import { NotificationCenter } from "@/features/shell/notification-center";
 import { OpeningJournalShell } from "@/features/shell/opening-journal-shell";
 import { JournalPromos } from "@/features/timeline/journal-promos";
-import { mentionsAnnouncementEligible } from "@/features/timeline/journal-promo-config";
+import {
+  hasSharedCircle,
+  type JournalPromoContext,
+} from "@/features/timeline/journal-promo-config";
 import type { FamilyTimelineSwitcherItem } from "@/features/shell/journal-switcher";
 import {
   TimelineFeed,
@@ -48,14 +51,16 @@ const connectedActions = {
   reorderPhotos: reorderMomentPhotosAction,
 };
 
-function mentionsPromoEligible(
+function journalPromoContext(
   signedIn: boolean,
   switcher: readonly FamilyTimelineSwitcherItem[] | undefined,
-) {
-  return mentionsAnnouncementEligible(
+): JournalPromoContext {
+  return {
     signedIn,
-    (switcher ?? []).filter((item) => item.kind === "group"),
-  );
+    sharedCircle: hasSharedCircle(
+      (switcher ?? []).filter((item) => item.kind === "group"),
+    ),
+  };
 }
 
 const conversationActions = {
@@ -156,6 +161,7 @@ async function ConnectedFamilyHome({
   }>;
 }>) {
   const { model, context } = await loadFamilyHomeChrome(access, options);
+  const promoContext = journalPromoContext(true, model.switcher);
   if (!context) {
     return (
       <JournalChrome
@@ -165,9 +171,7 @@ async function ConnectedFamilyHome({
         onSelectGroup={selectActiveGroupAction}
         preserveChrome
       >
-        <JournalPromos
-          mentionsEligible={mentionsPromoEligible(true, model.switcher)}
-        />
+        <JournalPromos context={promoContext} />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -185,9 +189,7 @@ async function ConnectedFamilyHome({
         </Suspense>
       }
     >
-      <JournalPromos
-        mentionsEligible={mentionsPromoEligible(true, model.switcher)}
-      />
+      <JournalPromos context={promoContext} />
       <Suspense fallback={<RoutePendingSkeleton kind="timeline" />}>
         <FamilyTimeline access={access} context={context} options={options} />
       </Suspense>
@@ -222,7 +224,7 @@ export default async function FamilyPage({
         onSelectGroup={selectActiveGroupAction}
         preserveChrome
       >
-        <JournalPromos mentionsEligible={false} />
+        <JournalPromos context={journalPromoContext(false, model.switcher)} />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -239,7 +241,7 @@ export default async function FamilyPage({
         switcher={model.switcher}
         onSelectGroup={selectActiveGroupAction}
       >
-        <JournalPromos mentionsEligible={false} />
+        <JournalPromos context={journalPromoContext(false, model.switcher)} />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
