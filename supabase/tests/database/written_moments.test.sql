@@ -1,6 +1,6 @@
 begin;
 
-select plan(44);
+select plan(47);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
@@ -338,6 +338,33 @@ select is(
   )),
   0::bigint,
   'circle B cannot inspect circle A trash'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+
+select lives_ok(
+  $$select public.create_family_moment(
+    '20000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001',
+    'milestone', 'Not a thought', 'A milestone body.',
+    null, '{}', '2026-08-29'
+  )$$,
+  'a milestone can be created for the written-moment kind guard'
+);
+
+select throws_ok(
+  $$select public.update_written_moment(
+    (select id from public.moments where title = 'Not a thought'),
+    1, 'Legacy kind rewrite', '2026-08-29'
+  )$$,
+  '22023', 'Moment could not be changed',
+  'update_written_moment rejects a non-thought moment'
+);
+
+select is(
+  (select body from public.moments where title = 'Not a thought'),
+  'A milestone body.',
+  'a rejected written-moment edit leaves the non-thought body unchanged'
 );
 
 reset role;

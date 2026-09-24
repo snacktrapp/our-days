@@ -705,8 +705,23 @@ security invoker
 set search_path = ''
 as $$
 declare
+  target_circle_id uuid;
+  target_journal_person_id uuid;
+  target_kind text;
   resulting_revision bigint;
 begin
+  select moment.circle_id, moment.journal_person_id, moment.kind
+    into target_circle_id, target_journal_person_id, target_kind
+    from public.moments as moment
+   where moment.id = update_written_moment.moment_id;
+  if target_kind <> 'thought' then
+    if not (select private.can_manage_person(
+      target_circle_id, target_journal_person_id
+    )) then
+      raise exception using errcode = '42501', message = 'Moment could not be changed';
+    end if;
+    raise exception using errcode = '22023', message = 'Moment could not be changed';
+  end if;
   resulting_revision := private.update_written_moment(
     moment_id, expected_revision, body, occurred_on, occurred_at, occurred_timezone
   );
