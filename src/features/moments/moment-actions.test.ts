@@ -3,6 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  after: vi.fn((callback: () => void | Promise<void>) => {
+    void callback();
+  }),
   createClient: vi.fn(),
   deliver: vi.fn(),
   getHeaders: vi.fn(),
@@ -14,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
+vi.mock("next/server", () => ({ after: mocks.after }));
 vi.mock("@/lib/auth/journal-access", () => ({
   requireJournalAccess: mocks.requireAccess,
   readJournalCircleMemberships: vi.fn().mockResolvedValue([

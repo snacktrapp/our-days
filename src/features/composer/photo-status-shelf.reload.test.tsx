@@ -70,20 +70,19 @@ beforeEach(() => {
 });
 
 describe("PhotoStatusShelf reload recovery", () => {
-  it("survives remount from server state when this browser has no resume record", async () => {
+  it("keeps untracked remounts quiet after one session baseline check", async () => {
     const firstPage = render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Uploading…")).toBeVisible();
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByRole("region", { name: "Private photo status" }),
+    ).toBeNull();
     firstPage.unmount();
 
     render(<PhotoStatusShelf circleId={circleId} />);
-    expect(await screen.findByText("Uploading…")).toBeVisible();
-    expect(screen.queryByText("Adding your photo…")).toBeNull();
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
     await expect(
       photoUploadResumeStore.listForScope(accountId, circleId),
     ).resolves.toEqual([]);
-    expect(mocks.rpc).toHaveBeenCalledWith("list_my_photo_intakes", {
-      circle_id: circleId,
-    });
   });
 
   it("removes an obsolete browser resume record only after explicit publication", async () => {

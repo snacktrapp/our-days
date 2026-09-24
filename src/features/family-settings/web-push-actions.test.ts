@@ -3,6 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  after: vi.fn((callback: () => void | Promise<void>) => {
+    void callback();
+  }),
   createClient: vi.fn(),
   deliver: vi.fn(),
   getHeaders: vi.fn(),
@@ -12,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ headers: mocks.getHeaders }));
+vi.mock("next/server", () => ({ after: mocks.after }));
 vi.mock("@/lib/auth/journal-access", () => ({
   requireJournalAccess: mocks.requireAccess,
 }));
@@ -88,7 +92,7 @@ describe("web push subscription actions", () => {
     });
   });
 
-  it("awaits published moment push delivery", async () => {
+  it("schedules published moment push delivery after the response", async () => {
     const momentId = "60000000-0000-4000-8000-000000000001";
     let resolveDelivery: (() => void) | undefined;
     const delivery = new Promise<void>((resolve) => {
@@ -96,18 +100,15 @@ describe("web push subscription actions", () => {
     });
     mocks.deliver.mockReturnValue(delivery);
 
-    const action = deliverPublishedMomentPushAction({ momentId });
-    await vi.waitFor(() => {
-      expect(mocks.deliver).toHaveBeenCalledWith(
-        { rpc: mocks.rpc },
-        "moment",
-        momentId,
-      );
-    });
-    expect(await Promise.race([action, Promise.resolve("pending")])).toBe(
-      "pending",
+    await expect(
+      deliverPublishedMomentPushAction({ momentId }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(mocks.after).toHaveBeenCalledOnce();
+    expect(mocks.deliver).toHaveBeenCalledWith(
+      { rpc: mocks.rpc },
+      "moment",
+      momentId,
     );
     resolveDelivery?.();
-    await expect(action).resolves.toMatchObject({ ok: true });
   });
 });
