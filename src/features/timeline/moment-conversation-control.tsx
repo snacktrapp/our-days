@@ -709,6 +709,19 @@ export function MomentConversationControl({
           title={editingNoteId ? "Edit comment" : "Add comment"}
           context={`${model.personName} · ${kindLabel}${controlLabel ? ` · ${controlLabel}` : ""}`}
           pending={pending}
+          formId={`${panelId}-note-form`}
+          submitLabel={pending ? "Saving…" : editingNoteId ? "Save" : "Post"}
+          submitDisabled={loading || !noteDraft.trim()}
+          onCancel={() => {
+            setNoteDraft("");
+            setNoteMentions([]);
+            setEditingNoteId(null);
+            setError(null);
+            setPanel(null);
+            window.requestAnimationFrame(() =>
+              noteTriggerRef.current?.focus({ preventScroll: true }),
+            );
+          }}
           onDismiss={() => {
             setPanel(null);
             window.requestAnimationFrame(() =>
@@ -717,6 +730,7 @@ export function MomentConversationControl({
           }}
         >
           <form
+            id={`${panelId}-note-form`}
             className="inline-note-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -747,30 +761,6 @@ export function MomentConversationControl({
                 {error}
               </p>
             ) : null}
-            <div>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => {
-                  setNoteDraft("");
-                  setNoteMentions([]);
-                  setEditingNoteId(null);
-                  setError(null);
-                  setPanel(null);
-                  window.requestAnimationFrame(() =>
-                    noteTriggerRef.current?.focus({ preventScroll: true }),
-                  );
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || pending || !noteDraft.trim()}
-              >
-                {pending ? "Saving…" : editingNoteId ? "Save" : "Post"}
-              </button>
-            </div>
           </form>
         </CommentDrawer>
       ) : null}

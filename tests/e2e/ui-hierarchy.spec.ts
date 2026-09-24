@@ -81,14 +81,13 @@ for (const theme of ["light", "dark"]) {
     const post = dialog.getByRole("button", { name: "Post", exact: true });
     await expect(post).toBeDisabled();
     const disabledColor = await post.evaluate(
-      (element) => getComputedStyle(element).backgroundColor,
+      (element) => getComputedStyle(element).color,
     );
     await dialog.getByRole("textbox").fill("Ready to post");
     await expect(post).toBeEnabled();
     expect(
-      await post.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      ),
+      await post.evaluate((element) => getComputedStyle(element).color),
     ).not.toBe(disabledColor);
+    await expect(post).toHaveCSS("min-height", "44px");
   });
 }

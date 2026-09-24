@@ -202,7 +202,10 @@ test("tapping comments expands inline without opening the composer", async ({
   const card = firstPhoto(page);
   const { form } = await openNoteForm(page, card);
   await form.getByRole("textbox").fill("Another memory from this day.");
-  await form.getByRole("button", { name: "Post", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
   const comments = card.getByRole("list", { name: "Notes from family" });
   await expect(comments.locator("li")).toHaveCount(2);
   await comments.locator("p").first().tap();
@@ -333,12 +336,13 @@ test("comment drawer drafts save safely and remain reversible", async ({
   const { form, trigger } = await openNoteForm(page, card);
   const note = form.getByRole("textbox", { name: "Add a family note" });
   await expect(note).toBeFocused();
-  await expect(form.getByRole("button", { name: "Post" })).toBeDisabled();
+  const dialog = page.getByRole("dialog", { name: "Add comment" });
+  await expect(dialog.getByRole("button", { name: "Post" })).toBeDisabled();
 
   const hostileNote =
     '<img data-detail-injection src=x onerror="window.__detailInjected=true"> A safe family note';
   await note.fill(hostileNote);
-  await form.getByRole("button", { name: "Post" }).click();
+  await dialog.getByRole("button", { name: "Post" }).click();
   await expect(form).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(card.getByText(hostileNote, { exact: true })).toBeVisible();
@@ -435,7 +439,10 @@ test("comment drawer follows the keyboard viewport and keeps Post readable", asy
     window.visualViewport!.dispatchEvent(new Event("resize"));
   });
   await expect(page.getByRole("dialog")).toHaveCSS("height", "330px");
-  const button = await form.getByRole("button", { name: "Post" }).boundingBox();
+  const button = await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post" })
+    .boundingBox();
   expect(button!.y).toBeGreaterThanOrEqual(0);
   expect(button!.y + button!.height).toBeLessThanOrEqual(330);
 });
@@ -468,7 +475,10 @@ test("preview interactions do not navigate, persist, or make requests", async ({
   await form
     .getByRole("textbox", { name: "Add a family note" })
     .fill("A local-only preview note");
-  await form.getByRole("button", { name: "Post" }).click();
+  await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post" })
+    .click();
 
   expect(requests).toEqual([]);
   expect(await inventory()).toEqual(baseline);

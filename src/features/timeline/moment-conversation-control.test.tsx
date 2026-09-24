@@ -374,8 +374,9 @@ describe("MomentConversationControl", () => {
     expect(form).toHaveClass("inline-note-form");
     expect(form).not.toHaveClass("overlay-popover");
     expect(form).not.toHaveClass("note-drawer");
+    expect(form.querySelector("button")).toBeNull();
     expect(
-      within(form)
+      within(screen.getByRole("dialog", { name: "Add comment" }))
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Cancel", "Post"]);
@@ -387,7 +388,7 @@ describe("MomentConversationControl", () => {
     );
 
     await user.type(note, "Keep this draft?");
-    await user.click(within(form).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(
       screen.queryByRole("textbox", { name: "Add a family note" }),
     ).toBeNull();
@@ -583,9 +584,7 @@ describe("MomentConversationControl", () => {
     expect(editor).toHaveValue("Original newest note.");
     await user.clear(editor);
     await user.type(editor, "Updated newest note.");
-    await user.click(
-      within(editor.closest("form")!).getByRole("button", { name: "Save" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(actions.updateNote).toHaveBeenCalledWith({
         noteId: "note-owned",
@@ -690,9 +689,7 @@ describe("MomentConversationControl", () => {
     ).toBeVisible();
     await user.clear(editor);
     await user.type(editor, "Updated note.");
-    await user.click(
-      within(editor.closest("form")!).getByRole("button", { name: "Save" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(actions.updateNote).toHaveBeenCalledWith({
         noteId: "note-owned",

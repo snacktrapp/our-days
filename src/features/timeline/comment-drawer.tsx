@@ -20,6 +20,10 @@ export function CommentDrawer({
   title,
   context,
   pending,
+  formId,
+  submitLabel,
+  submitDisabled,
+  onCancel,
   onDismiss,
   children,
 }: {
@@ -27,6 +31,10 @@ export function CommentDrawer({
   title: string;
   context: string;
   pending: boolean;
+  formId?: string;
+  submitLabel?: string;
+  submitDisabled?: boolean;
+  onCancel?: () => void;
   onDismiss: () => void;
   children: ReactNode;
 }) {
@@ -81,8 +89,32 @@ export function CommentDrawer({
       >
         <div className="activity-sheet-chrome">
           <span className="sheet-handle" aria-hidden="true" />
-          <header className="activity-sheet-bar">
+          <header
+            className={`activity-sheet-bar${
+              onCancel && formId && submitLabel ? " sheet-action-bar" : ""
+            }`}
+          >
+            {onCancel && formId && submitLabel ? (
+              <button
+                className="sheet-header-action"
+                type="button"
+                disabled={pending}
+                onClick={onCancel}
+              >
+                Cancel
+              </button>
+            ) : null}
             <h2 id={`${id}-title`}>{title}</h2>
+            {onCancel && formId && submitLabel ? (
+              <button
+                className="sheet-header-action is-primary"
+                type="submit"
+                form={formId}
+                disabled={pending || submitDisabled}
+              >
+                {submitLabel}
+              </button>
+            ) : null}
           </header>
         </div>
         <div ref={scrollerRef} className="comment-sheet-body">

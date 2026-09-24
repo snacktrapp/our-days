@@ -21,6 +21,7 @@ import {
   useOverlayPopoverClose,
 } from "@/features/shell/use-overlay-popover-close";
 import { useSheetDismiss } from "@/features/shell/use-sheet-dismiss";
+import { useVisualViewportFill } from "@/features/shell/use-visual-viewport-fill";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import {
   taggablePeopleForSelectedCircles,
@@ -736,6 +737,7 @@ export function MomentComposer({
 
   const typePicker = !mode || choosingMode;
   const dialogMounted = useModalDialog(open, dialogRef);
+  useVisualViewportFill(dialogRef, dialogMounted);
   const dismissGesture = useSheetDismiss({
     onDismiss: close,
     scrollerRef,
@@ -1658,6 +1660,20 @@ export function MomentComposer({
   if (!dialogMounted) return null;
   if (typeof document === "undefined") return null;
 
+  const editorChrome = Boolean(copy && mode && !choosingMode && !reviewing);
+  const composerSubmitLabel = saving
+    ? editDraft || (mode !== "photo" && mode !== "video")
+      ? "Saving…"
+      : photoUploadStage?.state === "finishing"
+        ? `Finishing ${mode}…`
+        : `Adding ${mode}…`
+    : !editDraft && photoRetryBlocked
+      ? "Upload unavailable"
+      : !editDraft && (mode === "photo" || mode === "video") && saveError
+        ? "Try upload again"
+        : editDraft
+          ? "Save"
+          : "Post";
   const sheetTitle = reviewing
     ? "Review entry"
     : listingDrafts
@@ -1682,7 +1698,19 @@ export function MomentComposer({
     >
       <div className="activity-sheet-chrome">
         <span className="sheet-handle" aria-hidden="true" />
-        <header className="activity-sheet-bar">
+        <header
+          className={`activity-sheet-bar${editorChrome ? " sheet-action-bar" : ""}`}
+        >
+          {editorChrome ? (
+            <button
+              className="sheet-header-action"
+              type="button"
+              disabled={saving || savingDraft}
+              onClick={() => close()}
+            >
+              Cancel
+            </button>
+          ) : null}
           <h2
             ref={
               reviewing
@@ -1696,6 +1724,16 @@ export function MomentComposer({
           >
             {sheetTitle}
           </h2>
+          {editorChrome ? (
+            <button
+              className="sheet-header-action is-primary"
+              type="submit"
+              form="composer-editor-form"
+              disabled={saving || savingDraft || photoRetryBlocked}
+            >
+              {composerSubmitLabel}
+            </button>
+          ) : null}
         </header>
       </div>
       <div
@@ -1915,6 +1953,7 @@ export function MomentComposer({
           </div>
         ) : copy ? (
           <form
+            id="composer-editor-form"
             className="quick-compose composer-fullscreen-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -2386,33 +2425,8 @@ export function MomentComposer({
             </div>
 
             <footer className="composer-editor-footer">
-              <div
-                className={`composer-editor-actions${
-                  editDraft ? "" : " is-split"
-                }`}
-              >
-                <button
-                  className="save-moment"
-                  type="submit"
-                  disabled={saving || savingDraft || photoRetryBlocked}
-                >
-                  {saving
-                    ? editDraft || (mode !== "photo" && mode !== "video")
-                      ? "Saving…"
-                      : photoUploadStage?.state === "finishing"
-                        ? `Finishing ${mode}…`
-                        : `Adding ${mode}…`
-                    : !editDraft && photoRetryBlocked
-                      ? "Upload unavailable"
-                      : !editDraft &&
-                          (mode === "photo" || mode === "video") &&
-                          saveError
-                        ? "Try upload again"
-                        : editDraft
-                          ? "Save"
-                          : "Post"}
-                </button>
-                {!editDraft ? (
+              {!editDraft ? (
+                <div className="composer-editor-actions">
                   <button
                     className="secondary-composer-action"
                     type="button"
@@ -2421,8 +2435,8 @@ export function MomentComposer({
                   >
                     {savingDraft ? "Saving draft…" : "Save draft"}
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
               {(mode === "photo" || mode === "video") &&
               saving &&
               (photoUploadStage?.state === "preparing" ||

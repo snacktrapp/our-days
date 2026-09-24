@@ -655,7 +655,10 @@ describe("smash harden matrix", () => {
       expect(deliverPush).toContain('kind === "mention"');
       expect(deliverPush).toContain("our-days:${kind}:${row.moment_id}");
       expect(read("tests/e2e/mention-chips.spec.ts")).toContain(
-        "chip row sits between the comment field and Post",
+        "comment chips stay fully visible above a simulated keyboard",
+      );
+      expect(read("src/features/timeline/comment-drawer.tsx")).toContain(
+        "sheet-action-bar",
       );
     });
   });

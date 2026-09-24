@@ -53,18 +53,35 @@ export function MentionField({
 }: MentionFieldProps) {
   const [cursor, setCursor] = useState(value.length);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const chipRowRef = useRef<HTMLDivElement | null>(null);
   const caretRef = useRef<number | null>(null);
   const query = enabled ? mentionQueryAt(value, cursor, mentions) : null;
   const choices = query ? filterMentionCandidates(members, query.query) : [];
   const open = Boolean(query && choices.length > 0);
 
   useLayoutEffect(() => {
-    const caret = caretRef.current;
     const field = textareaRef.current;
-    if (caret === null || !field) return;
-    caretRef.current = null;
-    field.setSelectionRange(caret, caret);
-  }, [value]);
+    if (!field) return;
+    const caret = caretRef.current;
+    field.style.height = "0px";
+    const max = 136;
+    const next = Math.min(Math.max(field.scrollHeight, 0), max);
+    field.style.height = `${next}px`;
+    if (caret !== null) {
+      caretRef.current = null;
+      field.setSelectionRange(caret, caret);
+    }
+    const row = chipRowRef.current;
+    const scroller = row?.closest(
+      ".composer-editor-scroll, .comment-sheet-body",
+    );
+    if (!row || !(scroller instanceof HTMLElement)) return;
+    const rowBox = row.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    if (rowBox.bottom > view.bottom - 4) {
+      scroller.scrollTop += rowBox.bottom - view.bottom + 8;
+    }
+  }, [value, open]);
 
   return (
     <div className="mention-field">
@@ -93,6 +110,7 @@ export function MentionField({
       />
       {open && query ? (
         <div
+          ref={chipRowRef}
           className="mention-chip-row"
           role="listbox"
           aria-label="Mention a circle member"
