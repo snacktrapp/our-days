@@ -187,9 +187,31 @@ describe("connected timeline mapping", () => {
       };
       return query;
     });
+    const rpc = vi.fn(
+      async (
+        fn: string,
+        args: Readonly<{ membership_ids?: readonly string[] }>,
+      ) => ({
+        data:
+          fn === "visible_moment_authors"
+            ? (args.membership_ids ?? []).flatMap((membershipId) =>
+                membershipId === "membership-molly"
+                  ? [
+                      {
+                        membership_id: "membership-molly",
+                        display_name: "Molly",
+                        accent_token: "sage",
+                      },
+                    ]
+                  : [],
+              )
+            : [],
+        error: null,
+      }),
+    );
 
     const conversations = await loadMomentConversationsByMomentId(
-      { from } as never,
+      { from, rpc } as never,
       { circleId: "circle", membershipId: "membership-brian" },
       ["moment-2", "moment-quiet"],
     );
@@ -273,9 +295,31 @@ describe("connected timeline mapping", () => {
       };
       return query;
     });
+    const rpc = vi.fn(
+      async (
+        fn: string,
+        args: Readonly<{ membership_ids?: readonly string[] }>,
+      ) => ({
+        data:
+          fn === "visible_moment_authors"
+            ? (args.membership_ids ?? []).flatMap((membershipId) =>
+                membershipId === "membership-nana-gparents"
+                  ? [
+                      {
+                        membership_id: "membership-nana-gparents",
+                        display_name: "Nana",
+                        accent_token: "gold",
+                      },
+                    ]
+                  : [],
+              )
+            : [],
+        error: null,
+      }),
+    );
 
     const conversations = await loadMomentConversationsByMomentId(
-      { from } as never,
+      { from, rpc } as never,
       {
         circleId: "home",
         membershipId: "membership-brian-home",
@@ -344,9 +388,31 @@ describe("connected timeline mapping", () => {
       };
       return query;
     });
+    const rpc = vi.fn(
+      async (
+        fn: string,
+        args: Readonly<{ membership_ids?: readonly string[] }>,
+      ) => ({
+        data:
+          fn === "visible_moment_authors"
+            ? (args.membership_ids ?? []).flatMap((membershipId) =>
+                membershipId === "membership-brian-gparents"
+                  ? [
+                      {
+                        membership_id: "membership-brian-gparents",
+                        display_name: "Brian",
+                        accent_token: "sky",
+                      },
+                    ]
+                  : [],
+              )
+            : [],
+        error: null,
+      }),
+    );
 
     const conversations = await loadMomentConversationsByMomentId(
-      { from } as never,
+      { from, rpc } as never,
       {
         circleId: "home",
         membershipId: "membership-brian-home",

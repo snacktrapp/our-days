@@ -7,7 +7,11 @@ import {
 } from "@/features/shell/visual-viewport-bottom";
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { pullArmPx, pullThresholdPx } from "./timeline-pull-to-refresh";
-import { resumeRefreshDebounceMs } from "./timeline-resume-refresh";
+import {
+  resumeRefreshDebounceMs,
+  resumeRefreshMaximumAgeMs,
+  resumeRefreshMinimumHiddenMs,
+} from "./timeline-resume-refresh";
 
 const navigation = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -65,9 +69,12 @@ function setDocumentHidden(hidden: boolean) {
   });
 }
 
-function becomeVisibleFromBackground() {
+function becomeVisibleFromBackground(hiddenMs = 0) {
   setDocumentHidden(true);
   document.dispatchEvent(new Event("visibilitychange"));
+  if (hiddenMs > 0) {
+    vi.advanceTimersByTime(hiddenMs);
+  }
   setDocumentHidden(false);
   document.dispatchEvent(new Event("visibilitychange"));
 }
@@ -226,7 +233,7 @@ describe("TimelineRefreshControl", () => {
     );
 
     act(() => {
-      becomeVisibleFromBackground();
+      becomeVisibleFromBackground(resumeRefreshMinimumHiddenMs);
     });
     expect(navigation.refresh).not.toHaveBeenCalled();
 
@@ -272,14 +279,14 @@ describe("TimelineRefreshControl", () => {
     );
 
     act(() => {
-      becomeVisibleFromBackground();
+      becomeVisibleFromBackground(resumeRefreshMinimumHiddenMs);
       dispatchPageShow(true);
       vi.advanceTimersByTime(resumeRefreshDebounceMs);
     });
     expect(navigation.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes a bfcache restore and ignores a first pageshow", () => {
+  it("refreshes a stale bfcache restore and ignores a first pageshow", () => {
     vi.useFakeTimers();
     render(
       <TimelineRefreshControl>
@@ -294,6 +301,7 @@ describe("TimelineRefreshControl", () => {
     expect(navigation.refresh).not.toHaveBeenCalled();
 
     act(() => {
+      vi.advanceTimersByTime(resumeRefreshMaximumAgeMs);
       dispatchPageShow(true);
       vi.advanceTimersByTime(resumeRefreshDebounceMs);
     });
@@ -418,7 +426,7 @@ describe("TimelineRefreshControl", () => {
     ).toBe("268px");
   });
 
-  it("does not start a resume refresh while pull-to-refresh is already running", () => {
+  it("does not start a resume refresh before the absence threshold", () => {
     vi.useFakeTimers();
     render(
       <TimelineRefreshControl>
@@ -432,7 +440,7 @@ describe("TimelineRefreshControl", () => {
     expect(navigation.refresh).toHaveBeenCalledTimes(1);
 
     act(() => {
-      becomeVisibleFromBackground();
+      becomeVisibleFromBackground(resumeRefreshMinimumHiddenMs - 1);
       vi.advanceTimersByTime(resumeRefreshDebounceMs);
     });
     expect(navigation.refresh).toHaveBeenCalledTimes(1);

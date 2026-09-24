@@ -16,6 +16,7 @@ import {
   loadFamilyHomeChrome,
   loadFamilyHomeOpeningTimeline,
   loadFamilyHomeRemainder,
+  loadFamilyHomeTimelineList,
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
@@ -64,21 +65,11 @@ async function FamilyActivity({
 }
 
 async function FamilyTimelineRest({
-  access,
-  context,
-  options,
+  remainder,
 }: Readonly<{
-  access: AuthenticatedAccess;
-  context: NonNullable<
-    Awaited<ReturnType<typeof loadFamilyHomeChrome>>["context"]
-  >;
-  options: Readonly<{
-    pages?: string;
-    snapshotAt?: string;
-    circleId?: string;
-  }>;
+  remainder: Promise<Awaited<ReturnType<typeof loadFamilyHomeRemainder>>>;
 }>) {
-  const model = await loadFamilyHomeRemainder(access, context, options);
+  const model = await remainder;
   return (
     <TimelineFeedEntries
       model={model}
@@ -104,7 +95,26 @@ async function FamilyTimeline({
     circleId?: string;
   }>;
 }>) {
-  const opening = await loadFamilyHomeOpeningTimeline(access, context, options);
+  const sharedTimelineList = loadFamilyHomeTimelineList(
+    access,
+    context,
+    options,
+  );
+  const remainder = loadFamilyHomeRemainder(
+    access,
+    context,
+    options,
+    sharedTimelineList,
+  );
+  const opening = await loadFamilyHomeOpeningTimeline(
+    access,
+    context,
+    options,
+    sharedTimelineList,
+  );
+  if (!opening.streamRemainder) {
+    void remainder.catch(() => undefined);
+  }
   return (
     <TimelineFeed
       model={opening.model}
@@ -113,11 +123,7 @@ async function FamilyTimeline({
       trailing={
         opening.streamRemainder ? (
           <Suspense fallback={null}>
-            <FamilyTimelineRest
-              access={access}
-              context={context}
-              options={options}
-            />
+            <FamilyTimelineRest remainder={remainder} />
           </Suspense>
         ) : null
       }

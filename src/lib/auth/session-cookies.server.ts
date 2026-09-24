@@ -9,6 +9,18 @@ function authCookiePrefix() {
   return `sb-${projectReference}-auth-token`;
 }
 
+export async function hasOurDaysAuthSessionCookie() {
+  const cookieStore = await cookies();
+  const prefix = authCookiePrefix();
+  return cookieStore
+    .getAll()
+    .some(
+      ({ name, value }) =>
+        (name === prefix || name.startsWith(`${prefix}.`)) &&
+        value.trim().length > 0,
+    );
+}
+
 export async function expireOurDaysAuthCookies() {
   const cookieStore = await cookies();
   const prefix = authCookiePrefix();

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import {
   loadMemoryJourneyJournal,
@@ -17,6 +18,10 @@ import {
   updateMomentNoteAction,
 } from "@/features/moments/moment-actions";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { getMilestoneMemoriesFixture } from "@/fixtures/design-preview/timelines.server";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 
@@ -74,6 +79,11 @@ export default async function MilestonesPage({
       model={model.chrome}
       section="memories"
       createMomentAction={createFamilyMomentAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot access={access} />
+        </Suspense>
+      }
     >
       <MemoryJourneyPanel
         model={model}

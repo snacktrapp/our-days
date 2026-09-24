@@ -150,7 +150,9 @@ export async function loadPersonJournal(
 ): Promise<TimelineViewModel | null> {
   let context;
   try {
-    context = await loadConnectedJournalContext(access);
+    context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
   } catch (error) {
     if (shouldTrapPersonJournalInInterrupt(error)) throw error;
     return remountSoftFailTimeline(access, null, options.personId);

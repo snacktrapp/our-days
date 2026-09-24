@@ -16,9 +16,13 @@ import { loadConnectedJournalContext } from "./journal-context.server";
 import {
   connectedTimelineInteraction,
   loadConnectedTimeline,
+  loadConnectedTimelineListing,
+  type ConnectedTimelineListing,
 } from "./moments.server";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
+type SharedFamilyTimelineList =
+  Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
 
 function fallbackFamilyChrome(
   access: AuthenticatedAccess,
@@ -179,6 +183,22 @@ function familyHomeTimelineOptions(
   };
 }
 
+export function loadFamilyHomeTimelineList(
+  access: AuthenticatedAccess,
+  context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>,
+) {
+  return loadConnectedTimelineListing(
+    access,
+    context,
+    familyHomeTimelineOptions(options),
+  );
+}
+
 export async function loadFamilyHomeOpeningTimeline(
   access: AuthenticatedAccess,
   context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
@@ -187,13 +207,19 @@ export async function loadFamilyHomeOpeningTimeline(
     snapshotAt?: string;
     circleId?: string;
   }>,
+  timelineList?: SharedFamilyTimelineList,
 ): Promise<
   Readonly<{
     model: TimelineViewModel;
     streamRemainder: boolean;
   }>
 > {
-  const first = await loadFamilyHomeFirstMoment(access, context, options);
+  const first = await loadFamilyHomeFirstMoment(
+    access,
+    context,
+    options,
+    timelineList,
+  );
   const hasFirstMoment = first.entries.some(
     (entry) => entry.entryType === "moment",
   );
@@ -215,6 +241,7 @@ export async function loadFamilyHomeFirstMoment(
     snapshotAt?: string;
     circleId?: string;
   }>,
+  timelineList?: SharedFamilyTimelineList,
 ): Promise<TimelineViewModel> {
   try {
     return await loadConnectedTimeline(access, context, {
@@ -222,6 +249,7 @@ export async function loadFamilyHomeFirstMoment(
       enrichLimit: 1,
       omitCompletion: true,
       omitPagination: true,
+      sharedList: timelineList,
     });
   } catch (error) {
     if (shouldTrapJournalHomeInInterrupt(error)) throw error;
@@ -237,11 +265,13 @@ export async function loadFamilyHomeRemainder(
     snapshotAt?: string;
     circleId?: string;
   }>,
+  timelineList?: SharedFamilyTimelineList,
 ): Promise<TimelineViewModel> {
   try {
     return await loadConnectedTimeline(access, context, {
       ...familyHomeTimelineOptions(options),
       enrichOffset: 1,
+      sharedList: timelineList,
     });
   } catch (error) {
     if (shouldTrapJournalHomeInInterrupt(error)) throw error;

@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { FamilySettingsPanel } from "@/features/family-settings/family-settings-panel";
 import { JournalChrome } from "@/features/shell/journal-chrome";
+import {
+  JournalActivitySlot,
+  JournalActivitySlotFallback,
+} from "@/features/shell/journal-activity-slot";
 import { AccountPanelInterrupted } from "@/features/shell/journal-interrupted";
 import {
   readJournalCircleMemberships,
@@ -136,7 +141,9 @@ export default async function AccountScreen({
 
   let context;
   try {
-    context = await loadConnectedJournalContext(access);
+    context = await loadConnectedJournalContext(access, {
+      includeActivity: false,
+    });
   } catch (error) {
     if (isFatalJournalHomeError(error)) throw error;
     return (
@@ -181,6 +188,14 @@ export default async function AccountScreen({
         }}
         section={manageCircles ? "circles" : "settings"}
         createMomentAction={createFamilyMomentAction}
+        activity={
+          <Suspense fallback={<JournalActivitySlotFallback />}>
+            <JournalActivitySlot
+              access={access}
+              memberNames={context.memberNames}
+            />
+          </Suspense>
+        }
       >
         <AccountPanelInterrupted>
           <AccountTools />
@@ -215,6 +230,14 @@ export default async function AccountScreen({
       }}
       section={manageCircles ? "circles" : "settings"}
       createMomentAction={createFamilyMomentAction}
+      activity={
+        <Suspense fallback={<JournalActivitySlotFallback />}>
+          <JournalActivitySlot
+            access={access}
+            memberNames={context.memberNames}
+          />
+        </Suspense>
+      }
     >
       {manageCircles ? (
         <FamilySettingsPanel
