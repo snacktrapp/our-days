@@ -814,7 +814,9 @@ export async function createMomentNoteAction(input: {
       message: "That note could not be saved. Your words are still here.",
     };
   after(async () => {
-    await deliverActivityWebPush(supabase, "note", input.momentId);
+    await deliverActivityWebPush(supabase, "note", input.momentId, {
+      noteId: data,
+    });
   });
   return { ok: true, message: "Note saved.", momentId: input.momentId };
 }

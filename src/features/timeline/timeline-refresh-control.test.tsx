@@ -320,6 +320,9 @@ describe("TimelineRefreshControl", () => {
         offsetTop: 16,
       },
     });
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
     syncBottomNavVisualInset();
     expect(
       document.documentElement.style.getPropertyValue(
@@ -331,6 +334,7 @@ describe("TimelineRefreshControl", () => {
         visualViewportBottomInsetVar,
       ),
     ).toBe("268px");
+    field.blur();
 
     render(
       <TimelineRefreshControl>
@@ -400,6 +404,9 @@ describe("TimelineRefreshControl", () => {
       </TimelineRefreshControl>,
     );
     const shell = document.querySelector(".timeline-pull-shell");
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
 
     act(() => {
       pullFrom(200, pullThresholdPx + 20);

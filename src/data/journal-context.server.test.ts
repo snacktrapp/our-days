@@ -321,7 +321,7 @@ describe("circle calendar date", () => {
       expect.objectContaining({
         id: "note:reply",
         message: "also commented on Brian’s post.",
-        href: "/family?circle=family#moment-old-thread",
+        href: "/family?moment=old-thread&note=reply&thread=1",
       }),
     ]);
     expect(client.notes.in).toHaveBeenCalledWith("moment_id", ["old-thread"]);
@@ -387,7 +387,7 @@ describe("family activity notifications", () => {
     expect(items).toEqual([
       expect.objectContaining({
         actorName: "Nana",
-        href: "/family?circle=grandparents#moment-new-grandparents-post",
+        href: "/family?moment=new-grandparents-post",
       }),
     ]);
   });
@@ -469,7 +469,7 @@ describe("family activity notifications", () => {
         id: "moment:italy-video",
         actorName: "Calvin",
         message: "posted a video.",
-        href: "/family?circle=home-gparents#moment-italy-video",
+        href: "/family?moment=italy-video",
       }),
     ]);
   });
@@ -503,12 +503,12 @@ describe("family activity notifications", () => {
       expect.objectContaining({
         id: "reaction:nana-reaction:held-close",
         actorName: "Nana",
-        href: "/family?circle=home#moment-calvin-post",
+        href: "/family?moment=calvin-post&thread=1",
       }),
       expect.objectContaining({
         id: "note:nana-note",
         actorName: "Nana",
-        href: "/family?circle=home#moment-calvin-post",
+        href: "/family?moment=calvin-post&note=nana-note&thread=1",
       }),
     ]);
   });
@@ -557,7 +557,7 @@ describe("family activity notifications", () => {
         id: "moment:tars-note",
         actorName: "TARS",
         message: "posted a note.",
-        href: "/family#moment-tars-note",
+        href: "/family?moment=tars-note",
       }),
     ]);
   });
@@ -1005,7 +1005,7 @@ describe("connected journal context load", () => {
         id: "note:nana-note",
         actorName: "Nana",
         message: "commented on your entry.",
-        href: "/family?circle=family#moment-calvin-post",
+        href: "/family?moment=calvin-post&note=nana-note&thread=1",
       }),
     ]);
     expect(context.people.map((person) => person.id)).toEqual([

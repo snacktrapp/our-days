@@ -10009,3 +10009,20 @@ iframe.composer-location-map {
 .settings-page .settings-avatar {
   box-shadow: none;
 }
+.moment.notification-target {
+  animation: notification-target-fade 1.8s ease;
+}
+@keyframes notification-target-fade {
+  0%,
+  25% {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.timeline-target-note {
+  margin: 8px 0 16px;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}

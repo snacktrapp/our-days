@@ -315,7 +315,7 @@ export function buildActivityNotifications(
         actorName: memberNames.get(moment.author_membership_id) ?? "Family",
         message: familyMomentPostedMessage(moment.moment_kind),
         displayDate: displayDate(moment.created_at),
-        href: activityMomentHref(moment.id, moment.circle_id),
+        href: activityMomentHref(moment.id),
         createdAt: moment.created_at,
       })),
     ...notes
@@ -335,7 +335,10 @@ export function buildActivityNotifications(
             ? `also commented on ${postAuthorNames.get(note.moment_id)}’s post.`
             : "also commented on a post.",
         displayDate: displayDate(note.created_at),
-        href: activityMomentHref(note.moment_id, note.circle_id),
+        href: activityMomentHref(note.moment_id, {
+          noteId: note.id,
+          thread: true,
+        }),
         createdAt: note.created_at,
       })),
     ...reactions
@@ -349,7 +352,7 @@ export function buildActivityNotifications(
         actorName: memberNames.get(reaction.author_membership_id) ?? "Family",
         message: entryReactionMessage(reaction.reaction_type),
         displayDate: displayDate(reaction.created_at),
-        href: activityMomentHref(reaction.moment_id, reaction.circle_id),
+        href: activityMomentHref(reaction.moment_id, { thread: true }),
         createdAt: reaction.created_at,
       })),
   ]

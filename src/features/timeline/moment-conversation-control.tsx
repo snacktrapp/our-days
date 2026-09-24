@@ -148,6 +148,22 @@ export function MomentConversationControl({
   const [error, setError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [showAllNotes, setShowAllNotes] = useState(false);
+  useEffect(() => {
+    const onTarget = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          momentId?: string;
+          noteId?: string | null;
+          openThread?: boolean;
+        }>
+      ).detail;
+      if (detail?.momentId !== model.id) return;
+      if (detail.openThread) setShowAllNotes(true);
+    };
+    window.addEventListener("our-days:notification-target", onTarget);
+    return () =>
+      window.removeEventListener("our-days:notification-target", onTarget);
+  }, [model.id]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [selectedReactionId, setSelectedReactionId] =
     useState<MomentReactionId | null>(() =>
@@ -563,7 +579,7 @@ export function MomentConversationControl({
             }}
           >
             {visibleNotes.map((note) => (
-              <li key={note.id}>
+              <li key={note.id} id={`note-${note.id}`}>
                 <div>
                   <span className="inline-note-author">
                     <strong>

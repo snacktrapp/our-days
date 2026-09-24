@@ -77,6 +77,14 @@ function writeViewportVar(root: HTMLElement, name: string, value: number) {
   root.style.setProperty(name, `${value}px`);
 }
 
+export function editableElementIsFocused(doc: Document) {
+  const active = doc.activeElement;
+  if (!(active instanceof HTMLElement)) return false;
+  if (active.isContentEditable) return true;
+  const tag = active.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
 export function syncBottomNavVisualInset(
   view: VisualViewportView & {
     document: Document;
@@ -99,8 +107,23 @@ export function syncBottomNavVisualInset(
   writeViewportVar(
     root,
     visualViewportBottomInsetVar,
-    pinVisualViewportBottomInset(view),
+    editableElementIsFocused(view.document)
+      ? pinVisualViewportBottomInset(view)
+      : 0,
   );
+}
+
+export function scheduleBottomNavPin(
+  view: VisualViewportView & {
+    document: Document;
+    requestAnimationFrame: Window["requestAnimationFrame"];
+    setTimeout: Window["setTimeout"];
+  } = window,
+) {
+  const sync = () => syncBottomNavVisualInset(view);
+  sync();
+  view.requestAnimationFrame(sync);
+  view.setTimeout(sync, 250);
 }
 
 export function clearBottomNavVisualInset(root: HTMLElement) {

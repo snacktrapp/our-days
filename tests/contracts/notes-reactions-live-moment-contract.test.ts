@@ -56,13 +56,12 @@ describe("notes and reactions live-moment read contract", () => {
     expect(authorLookup).not.toContain('.eq("circle_id", access.circleId)');
   });
 
-  it("loads Activity notes by visible moment id and keeps circle hrefs", () => {
+  it("loads Activity notes by visible moment id and opens them in All circles", () => {
     expect(activityLoad).toContain('.in("moment_id", conversationMomentIds)');
+    expect(activityLoad).toContain("activityMomentHref(note.moment_id");
+    expect(activityLoad).toContain("noteId: note.id");
     expect(activityLoad).toContain(
-      "activityMomentHref(note.moment_id, note.circle_id)",
-    );
-    expect(activityLoad).toContain(
-      "activityMomentHref(reaction.moment_id, reaction.circle_id)",
+      "activityMomentHref(reaction.moment_id, { thread: true })",
     );
   });
 });

@@ -166,7 +166,7 @@ describe("deliverActivityWebPush", () => {
       },
       {
         title: "Molly posted a photo.",
-        url: "/family?circle=circle-home-gparents#moment-moment-1",
+        url: "/family?moment=moment-1",
         tag: "our-days:moment:moment-1",
       },
     );

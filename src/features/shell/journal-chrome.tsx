@@ -17,6 +17,10 @@ import { fallbackJournalChrome } from "@/data/journal-chrome-fallback";
 import type { SaveFamilyMomentAction } from "@/features/composer/moment-composer";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { PhotoStatusShelf } from "@/features/composer/photo-status-shelf";
+import {
+  NotificationArrival,
+  NotificationOpenBridge,
+} from "@/features/timeline/notification-arrival";
 import { PrimaryNavigation } from "./primary-navigation";
 import { SettingsLink } from "./settings-link";
 import { ThemeToggle } from "./theme-toggle";
@@ -281,6 +285,8 @@ export function PersistentJournalShell({ children }: { children: ReactNode }) {
   }, []);
   return (
     <JournalShellContext.Provider value={register}>
+      <NotificationOpenBridge />
+      <NotificationArrival />
       <StandaloneJournalChrome {...page} preserveChrome={false}>
         {children}
       </StandaloneJournalChrome>

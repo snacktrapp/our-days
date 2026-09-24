@@ -9,6 +9,7 @@ import {
 } from "@/features/timeline/timeline-feed";
 import { RoutePendingSkeleton } from "@/features/shell/journal-pending-route";
 import { getFamilyTimelineFixture } from "@/fixtures/design-preview/timelines.server";
+import { slicePreviewTimelineForNotification } from "@/features/timeline/notification-preview";
 import { requireJournalAccessUnlessRecoverable } from "@/lib/auth/journal-access";
 import type { JournalAccess } from "@/lib/auth/journal-access";
 import {
@@ -186,6 +187,9 @@ export default async function FamilyPage({
     snapshot?: string;
     circle?: string;
     name?: string;
+    moment?: string;
+    note?: string;
+    thread?: string;
   }>;
 }>) {
   const params = await searchParams;
@@ -208,7 +212,10 @@ export default async function FamilyPage({
     );
   }
   if (access.mode === "preview") {
-    const model = getFamilyTimelineFixture(await previewGroupOptions(params));
+    const model = slicePreviewTimelineForNotification(
+      getFamilyTimelineFixture(await previewGroupOptions(params)),
+      params,
+    );
     return (
       <JournalChrome
         model={model.chrome}
