@@ -168,7 +168,7 @@ test("a handle swipe dismisses the type picker sheet", async ({ page }) => {
   await expect(dialog).toBeHidden();
 });
 
-test("type selection opens as a tall sheet and dismisses with sheet-down", async ({
+test("type selection opens as a thumb-zone sheet and dismisses with sheet-down", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -389,14 +389,22 @@ test("composer is modal, contains focus, protects every draft, and restores focu
       height: rect.height,
       radius: getComputedStyle(element).borderTopLeftRadius,
       sheetTop: rect.top,
+      sheetBottom: rect.bottom,
       handleTop: handleRect.top,
       viewport: window.innerHeight,
     };
   });
-  expect(chooserGeometry.height).toBeGreaterThan(
+  expect(chooserGeometry.height).toBeGreaterThanOrEqual(
+    chooserGeometry.viewport * 0.4,
+  );
+  expect(chooserGeometry.height).toBeLessThanOrEqual(
     chooserGeometry.viewport * 0.6,
   );
-  expect(chooserGeometry.sheetTop).toBeGreaterThanOrEqual(20);
+  expect(chooserGeometry.sheetTop).toBeGreaterThanOrEqual(
+    chooserGeometry.viewport * 0.34,
+  );
+  const bottomInset = chooserGeometry.viewport - chooserGeometry.sheetBottom;
+  expect(Math.abs(bottomInset)).toBeLessThanOrEqual(40);
   expect(chooserGeometry.handleTop).toBeGreaterThanOrEqual(
     chooserGeometry.sheetTop,
   );

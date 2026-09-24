@@ -313,22 +313,40 @@ async function expectComposerMatchesActivitySheet(page: Page) {
       radius: style.borderTopLeftRadius,
       bottomRadius: style.borderBottomLeftRadius,
       sheetTop: rect.top,
+      sheetBottom: rect.bottom,
       handleTop: handleRect.top,
       viewport: window.innerHeight,
     };
   });
-  expect(geometry.height).toBeGreaterThan(geometry.viewport * 0.6);
-  expect(geometry.sheetTop).toBeGreaterThanOrEqual(20);
+  expect(geometry.height).toBeGreaterThanOrEqual(geometry.viewport * 0.4);
+  expect(geometry.height).toBeLessThanOrEqual(geometry.viewport * 0.6);
+  expect(geometry.sheetTop).toBeGreaterThanOrEqual(geometry.viewport * 0.34);
+  const bottomInset = geometry.viewport - geometry.sheetBottom;
+  expect(Math.abs(bottomInset)).toBeLessThanOrEqual(40);
   expect(geometry.handleTop).toBeGreaterThanOrEqual(geometry.sheetTop);
   expect(Number.parseFloat(geometry.radius)).toBeGreaterThanOrEqual(14);
   expect(Number.parseFloat(geometry.bottomRadius)).toBe(0);
+  for (const entryType of [
+    /^Photo or video/u,
+    /^Written entry/u,
+    /^Bible verse/u,
+    /^Drafts/u,
+  ]) {
+    await expect(
+      picker.getByRole("button", { name: entryType }),
+    ).toBeInViewport({ ratio: 0.95 });
+  }
+  const chooserFitsWithoutScroll = await sheet
+    .locator(".composer-sheet-body")
+    .evaluate((element) => element.scrollHeight <= element.clientHeight + 1);
+  expect(chooserFitsWithoutScroll).toBe(true);
   const themeColor = await page
     .locator('meta[name="theme-color"]')
     .evaluateAll((metas) => metas.map((meta) => meta.getAttribute("content")));
   expect(themeColor.includes("#000000")).toBe(true);
 }
 
-test("New moment composer uses the Activity tall sheet in dark", async ({
+test("New moment composer opens a thumb-zone sheet in dark", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -341,7 +359,7 @@ test("New moment composer uses the Activity tall sheet in dark", async ({
   await expectComposerMatchesActivitySheet(page);
 });
 
-test("New moment composer uses the Activity tall sheet in light", async ({
+test("New moment composer opens a thumb-zone sheet in light", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -351,6 +369,14 @@ test("New moment composer uses the Activity tall sheet in light", async ({
   });
   await page.goto("/family");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expectComposerMatchesActivitySheet(page);
+});
+
+test("New moment composer keeps all chooser types reachable on iPhone SE class height", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/family");
   await expectComposerMatchesActivitySheet(page);
 });
 

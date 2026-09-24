@@ -8322,12 +8322,21 @@ html[data-theme].overlay-open .app-shell::before,
   max-height: 360px;
 }
 
-/* New moment uses the same tall-sheet chrome as Activity: rounded top,
-   grab handle, swipe-down dismiss, and a viewport scrim. Type picker and
-   editor share this shell; only the body content changes. */
+/* New moment keeps the shared Activity chrome: rounded top, grab handle,
+   swipe-down dismiss, and a viewport scrim. The type picker starts lower
+   for thumb reach, while the full editor can still use the taller sheet. */
 .new-moment-composer-dialog[open] {
   align-items: flex-end;
   justify-content: center;
+}
+
+.new-moment-composer-dialog.composer-type-picker .activity-sheet {
+  --composer-type-picker-height: min(
+    calc(100dvh - var(--activity-sheet-top-gap)),
+    max(46dvh, 280px)
+  );
+  height: var(--composer-type-picker-height);
+  max-height: var(--composer-type-picker-height);
 }
 
 .new-moment-composer-dialog .activity-sheet-bar {
