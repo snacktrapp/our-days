@@ -105,6 +105,11 @@ test("comment chips stay fully visible above a simulated keyboard", async ({
   await card.getByRole("button", { name: /Add a note to/u }).click();
   await shrinkKeyboard(page);
   const dialog = page.getByRole("dialog", { name: "Add comment" });
+  await dialog.locator(".comment-sheet").evaluate(async (sheet) => {
+    await Promise.all(
+      sheet.getAnimations().map((animation) => animation.finished),
+    );
+  });
   const field = dialog.getByRole("textbox");
   const post = dialog.getByRole("button", { name: "Post" });
   await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCount(0);
