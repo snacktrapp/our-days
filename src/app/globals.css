@@ -8331,12 +8331,15 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 .new-moment-composer-dialog.composer-type-picker .activity-sheet {
-  --composer-type-picker-height: min(
+  height: auto;
+  max-height: min(
     calc(100dvh - var(--activity-sheet-top-gap)),
     max(46dvh, 280px)
   );
-  height: var(--composer-type-picker-height);
-  max-height: var(--composer-type-picker-height);
+}
+
+.new-moment-composer-dialog.composer-type-picker .composer-sheet-body {
+  flex: 0 1 auto;
 }
 
 .new-moment-composer-dialog .activity-sheet-bar {

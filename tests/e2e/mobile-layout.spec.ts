@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 const routes = [
@@ -300,7 +301,8 @@ async function expectComposerMatchesActivitySheet(page: Page) {
   await expect(sheet).toHaveClass(/activity-sheet/u);
   await expect(sheet.locator(".sheet-handle")).toBeVisible();
   await expect(picker.getByRole("button", { name: "Done" })).toHaveCount(0);
-  const geometry = await sheet.evaluate((element) => {
+  await expectTypePickerHugsContent(sheet);
+  const chrome = await sheet.evaluate((element) => {
     const handle = element.querySelector(".sheet-handle");
     if (!(handle instanceof HTMLElement)) {
       throw new Error("Composer sheet is missing a grab handle.");
@@ -309,23 +311,15 @@ async function expectComposerMatchesActivitySheet(page: Page) {
     const handleRect = handle.getBoundingClientRect();
     const style = getComputedStyle(element);
     return {
-      height: rect.height,
       radius: style.borderTopLeftRadius,
       bottomRadius: style.borderBottomLeftRadius,
       sheetTop: rect.top,
-      sheetBottom: rect.bottom,
       handleTop: handleRect.top,
-      viewport: window.innerHeight,
     };
   });
-  expect(geometry.height).toBeGreaterThanOrEqual(geometry.viewport * 0.4);
-  expect(geometry.height).toBeLessThanOrEqual(geometry.viewport * 0.6);
-  expect(geometry.sheetTop).toBeGreaterThanOrEqual(geometry.viewport * 0.34);
-  const bottomInset = geometry.viewport - geometry.sheetBottom;
-  expect(Math.abs(bottomInset)).toBeLessThanOrEqual(40);
-  expect(geometry.handleTop).toBeGreaterThanOrEqual(geometry.sheetTop);
-  expect(Number.parseFloat(geometry.radius)).toBeGreaterThanOrEqual(14);
-  expect(Number.parseFloat(geometry.bottomRadius)).toBe(0);
+  expect(chrome.handleTop).toBeGreaterThanOrEqual(chrome.sheetTop);
+  expect(Number.parseFloat(chrome.radius)).toBeGreaterThanOrEqual(14);
+  expect(Number.parseFloat(chrome.bottomRadius)).toBe(0);
   for (const entryType of [
     /^Photo or video/u,
     /^Written entry/u,

@@ -1,3 +1,4 @@
+import { expectTypePickerHugsContent } from "./composer-type-picker";
 import { expect, test } from "./test";
 
 test("Circles fits the mobile canvas in both appearances", async ({
@@ -202,26 +203,7 @@ test("Add chooser opens low with reachable types and supports dismiss + pick flo
   const picker = page.locator(".new-moment-composer-dialog");
   await expect(picker).toBeVisible();
   const sheet = picker.locator(".composer-sheet");
-  const chooserGeometry = await sheet.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      height: rect.height,
-      top: rect.top,
-      bottom: rect.bottom,
-      viewport: window.innerHeight,
-    };
-  });
-  expect(chooserGeometry.height).toBeGreaterThanOrEqual(
-    chooserGeometry.viewport * 0.4,
-  );
-  expect(chooserGeometry.height).toBeLessThanOrEqual(
-    chooserGeometry.viewport * 0.6,
-  );
-  expect(chooserGeometry.top).toBeGreaterThanOrEqual(
-    chooserGeometry.viewport * 0.34,
-  );
-  const bottomInset = chooserGeometry.viewport - chooserGeometry.bottom;
-  expect(Math.abs(bottomInset)).toBeLessThanOrEqual(40);
+  await expectTypePickerHugsContent(sheet);
 
   for (const entryType of [
     /^Photo or video/u,

@@ -272,7 +272,11 @@ describe("smash harden matrix", () => {
       expect(globalsCss).toContain(
         ".new-moment-composer-dialog.composer-type-picker .activity-sheet",
       );
+      expect(globalsCss).toContain("height: auto");
       expect(globalsCss).toContain("max(46dvh, 280px)");
+      expect(globalsCss).toContain(
+        ".new-moment-composer-dialog.composer-type-picker .composer-sheet-body",
+      );
       expect(criticalFlowsTest).toContain(
         "Add chooser opens low with reachable types and supports dismiss + pick flows @critical",
       );
