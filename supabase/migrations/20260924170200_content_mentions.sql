@@ -995,4 +995,8 @@ grant execute on function public.reserve_video_moment(
   text, uuid, text, uuid[], uuid, uuid[], integer[], integer[]
 ) to authenticated;
 
+-- private.is_valid_time_zone is an internal helper. Postgres grants execute to
+-- PUBLIC on create, which made it anonymously callable.
+revoke all on function private.is_valid_time_zone(text) from public, anon, authenticated;
+
 notify pgrst, 'reload schema';
