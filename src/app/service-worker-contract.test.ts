@@ -32,6 +32,7 @@ function createLifecycleHarness(source: string) {
   const showNotification = vi.fn().mockResolvedValue(undefined);
   const focus = vi.fn().mockResolvedValue(undefined);
   const navigate = vi.fn().mockResolvedValue(undefined);
+  const postMessage = vi.fn();
   const openWindow = vi.fn().mockResolvedValue(undefined);
   const matchAll = vi.fn().mockResolvedValue([]);
   const caches = {
@@ -68,6 +69,7 @@ function createLifecycleHarness(source: string) {
     dispatch,
     focus,
     matchAll,
+    postMessage,
     navigate,
     openWindow,
     showNotification,
@@ -119,7 +121,7 @@ describe("push-capable public service worker contract", () => {
     expect(harness.showNotification).toHaveBeenCalledWith(
       "Molly posted a photo.",
       expect.objectContaining({
-        data: { url: "/family#moment-photo" },
+        data: { url: "/family?moment=photo" },
         tag: "our-days:moment:photo",
       }),
     );
@@ -131,7 +133,38 @@ describe("push-capable public service worker contract", () => {
       },
     });
     expect(harness.openWindow).toHaveBeenCalledWith(
-      "https://journal.example.com/family#moment-photo",
+      "https://journal.example.com/family?moment=photo",
     );
+  });
+
+  it("focuses an open journal and tells it the All circles target", async () => {
+    const source = await readWorkerSource();
+    const harness = createLifecycleHarness(source);
+    const client = {
+      url: "https://journal.example.com/people/calvin",
+      focus: harness.focus,
+      navigate: harness.navigate,
+      postMessage: harness.postMessage,
+    };
+    harness.matchAll.mockResolvedValue([client]);
+
+    await harness.dispatch("notificationclick", {
+      notification: {
+        close: vi.fn(),
+        data: {
+          url: "/family?circle=home#moment-calvin",
+        },
+      },
+    });
+
+    expect(harness.focus).toHaveBeenCalled();
+    expect(harness.navigate).toHaveBeenCalledWith(
+      "https://journal.example.com/family?moment=calvin",
+    );
+    expect(harness.postMessage).toHaveBeenCalledWith({
+      type: "our-days:notification-open",
+      url: "/family?moment=calvin",
+    });
+    expect(harness.openWindow).not.toHaveBeenCalled();
   });
 });

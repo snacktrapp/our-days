@@ -6,6 +6,9 @@ import {
   entryReactionMessage,
   familyMomentPostedMessage,
   isNotifiableFamilyMoment,
+  nextNotificationPageHref,
+  normalizeNotificationPath,
+  readNotificationTarget,
   shouldAnnouncePhotoMomentPublication,
 } from "./activity-notifications";
 
@@ -20,9 +23,43 @@ describe("family activity notification copy", () => {
     expect(activityNotificationTitle("Calvin", entryCommentMessage)).toBe(
       "Calvin commented on your entry.",
     );
-    expect(activityMomentHref("abc")).toBe("/family#moment-abc");
-    expect(activityMomentHref("abc", "circle-home")).toBe(
-      "/family?circle=circle-home#moment-abc",
+    expect(activityMomentHref("abc")).toBe("/family?moment=abc");
+    expect(activityMomentHref("abc", { noteId: "note-1", thread: true })).toBe(
+      "/family?moment=abc&note=note-1&thread=1",
+    );
+    expect(activityMomentHref("abc", { thread: true })).toBe(
+      "/family?moment=abc&thread=1",
+    );
+  });
+
+  it("routes every notification kind to the All circles entry", () => {
+    expect(normalizeNotificationPath("/family?circle=home#moment-calvin")).toBe(
+      "/family?moment=calvin",
+    );
+    expect(
+      normalizeNotificationPath(
+        "/family?circle=home&moment=calvin&note=reply&thread=1",
+      ),
+    ).toBe("/family?moment=calvin&note=reply&thread=1");
+    expect(readNotificationTarget("/family?moment=calvin")).toEqual({
+      momentId: "calvin",
+      noteId: null,
+      openThread: false,
+    });
+    expect(
+      readNotificationTarget("/family?moment=calvin&note=reply&thread=1"),
+    ).toEqual({
+      momentId: "calvin",
+      noteId: "reply",
+      openThread: true,
+    });
+    expect(
+      nextNotificationPageHref(
+        "/family?moment=porch&note=n&thread=1",
+        "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z",
+      ),
+    ).toBe(
+      "/family?pages=2&snapshot=2026-08-30T10%3A00%3A01Z&moment=porch&note=n&thread=1",
     );
   });
 

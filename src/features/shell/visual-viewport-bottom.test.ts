@@ -154,7 +154,11 @@ describe("visual viewport bottom inset", () => {
   });
 
   it("writes a keyboard pin when the visual viewport shrinks from the bottom", () => {
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
     syncBottomNavVisualInset(viewport(844, 560, 0));
+    field.remove();
     expect(
       document.documentElement.style.getPropertyValue(
         visualViewportOffsetTopVar,
@@ -239,7 +243,11 @@ describe("visual viewport bottom inset", () => {
 
     shell.dataset.pullState = "idle";
     expect(timelinePullFreezesChromeInset(document)).toBe(false);
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
     syncBottomNavVisualInset(viewport(844, 560, 16));
+    field.remove();
     expect(
       document.documentElement.style.getPropertyValue(
         visualViewportOffsetTopVar,

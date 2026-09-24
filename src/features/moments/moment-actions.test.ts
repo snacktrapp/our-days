@@ -437,6 +437,7 @@ describe("written moment actions", () => {
       { rpc: mocks.rpc },
       "note",
       momentId,
+      { noteId },
     );
     expect(mocks.deliver).not.toHaveBeenCalledWith(
       expect.anything(),

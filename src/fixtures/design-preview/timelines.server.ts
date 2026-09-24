@@ -117,14 +117,14 @@ function chrome(
         actorName: "Molly",
         message: "commented on your photo.",
         displayDate: "Today",
-        href: "/family#moment-sunset",
+        href: "/family?moment=sunset&note=sunset-note-molly&thread=1",
       },
       {
         id: "preview-reaction-molly",
         actorName: "Molly",
         message: "loved your photo.",
         displayDate: "Today",
-        href: "/family#moment-sunset",
+        href: "/family?moment=sunset&thread=1",
       },
     ],
     composer: {

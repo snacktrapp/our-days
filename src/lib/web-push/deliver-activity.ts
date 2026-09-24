@@ -48,6 +48,7 @@ export async function deliverActivityWebPush(
   client: ActivityPushClient,
   kind: ActivityPushKind,
   activityId: string,
+  options?: Readonly<{ noteId?: string | null }>,
 ) {
   if (!webPushIsConfigured()) {
     logPushSkip("not_configured", { kind, activityId });
@@ -97,7 +98,14 @@ export async function deliverActivityWebPush(
           },
           {
             title,
-            url: activityMomentHref(row.moment_id, row.visible_circle_id),
+            url: activityMomentHref(
+              row.moment_id,
+              kind === "note"
+                ? { noteId: options?.noteId, thread: true }
+                : kind === "reaction"
+                  ? { thread: true }
+                  : undefined,
+            ),
             tag: `our-days:${kind}:${row.moment_id}`,
           },
         );

@@ -190,7 +190,7 @@ describe("PrimaryNavigation", () => {
     ).toBe("0px");
     expect(
       document.documentElement.style.getPropertyValue("--vv-bottom-inset"),
-    ).toBe("284px");
+    ).toBe("0px");
     expect(
       document.head.querySelector("style#our-days-dynamic-css"),
     ).toBeNull();
