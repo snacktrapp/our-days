@@ -14,6 +14,14 @@ export const entryReactionMessages = {
 
 export const entryCommentMessage = "commented on your entry.";
 
+export function mentionNotificationMessage(snippet: string) {
+  const compact = snippet.replace(/\s+/gu, " ").trim();
+  if (!compact) return "mentioned you.";
+  const short =
+    compact.length > 80 ? `${compact.slice(0, 79).trimEnd()}…` : compact;
+  return `mentioned you. “${short}”`;
+}
+
 export type FamilyMomentPostedKind = keyof typeof familyMomentPostedMessages;
 export type EntryReactionType = keyof typeof entryReactionMessages;
 

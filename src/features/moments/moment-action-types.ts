@@ -1,5 +1,11 @@
 import type { MomentAudience } from "./moment-audience";
 
+export type MentionWrite = Readonly<{
+  userId: string;
+  start: number;
+  end: number;
+}>;
+
 export type MomentActionResult = Readonly<{
   ok: boolean;
   message: string;
@@ -23,6 +29,7 @@ export type SaveFamilyMomentAction = (input: {
   occurredTimezone: string | null;
   audience?: MomentAudience;
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }) => Promise<MomentActionResult>;
 
 export type SaveWrittenMomentAction = (input: {
@@ -33,6 +40,7 @@ export type SaveWrittenMomentAction = (input: {
   occurredTimezone: string | null;
   audience?: MomentAudience;
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }) => Promise<MomentActionResult>;
 
 export type UpdateFamilyMomentAction = (input: {
@@ -50,6 +58,7 @@ export type UpdateFamilyMomentAction = (input: {
   occurredTimezone: string | null;
   audience?: MomentAudience;
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }) => Promise<MomentActionResult>;
 
 export type SetMomentAudienceAction = (input: {
@@ -93,11 +102,14 @@ export type MomentConversationActions = Readonly<{
   createNote: (input: {
     momentId: string;
     body: string;
+    mentions?: readonly MentionWrite[];
   }) => Promise<MomentActionResult>;
   updateNote: (input: {
     noteId: string;
+    momentId?: string;
     revision: number;
     body: string;
+    mentions?: readonly MentionWrite[];
   }) => Promise<MomentActionResult>;
   trashNote: (input: {
     noteId: string;

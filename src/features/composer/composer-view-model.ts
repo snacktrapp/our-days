@@ -22,6 +22,18 @@ export type MomentComposerViewModel = Readonly<{
   taggablePeopleByCircle?: Readonly<
     Record<string, readonly ComposerPersonOption[]>
   >;
+  mentionableMembersByCircle?: Readonly<
+    Record<
+      string,
+      readonly {
+        userId: string;
+        name: string;
+        initial: string;
+        accent: AccentToken;
+        circleId: string;
+      }[]
+    >
+  >;
   postableCircles?: readonly PostableCircle[];
 }>;
 

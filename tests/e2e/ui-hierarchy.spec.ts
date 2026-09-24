@@ -74,21 +74,14 @@ for (const theme of ["light", "dark"]) {
       .first()
       .click();
     const dialog = page.getByRole("dialog", { name: "Add comment" });
-    await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCSS(
-      "background-color",
-      "rgba(0, 0, 0, 0)",
-    );
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCount(0);
     const post = dialog.getByRole("button", { name: "Post", exact: true });
     await expect(post).toBeDisabled();
-    const disabledColor = await post.evaluate(
-      (element) => getComputedStyle(element).backgroundColor,
-    );
+    await expect(post).toHaveCSS("opacity", "0.38");
     await dialog.getByRole("textbox").fill("Ready to post");
     await expect(post).toBeEnabled();
-    expect(
-      await post.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      ),
-    ).not.toBe(disabledColor);
+    await expect(post).toHaveCSS("opacity", "1");
+    await expect(post).toHaveCSS("min-height", "44px");
+    await expect(post).toHaveCSS("border-radius", "50%");
   });
 }

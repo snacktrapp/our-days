@@ -21,6 +21,7 @@ import {
   useOverlayPopoverClose,
 } from "@/features/shell/use-overlay-popover-close";
 import { useSheetDismiss } from "@/features/shell/use-sheet-dismiss";
+import { useVisualViewportFill } from "@/features/shell/use-visual-viewport-fill";
 import type { MomentKind } from "@/features/timeline/timeline-view-model";
 import {
   taggablePeopleForSelectedCircles,
@@ -67,6 +68,11 @@ import {
   type CreatePostToHomeContext,
   type CreatePostToIntent,
 } from "./post-to";
+import { MentionField } from "@/features/mentions/mention-field";
+import {
+  mentionsForSavedBody,
+  type DraftMention,
+} from "@/features/mentions/mention-draft";
 import { LocationFields } from "./location-fields";
 import {
   emptyPlaceSelection,
@@ -125,6 +131,7 @@ export type ComposerEditDraft = Readonly<{
   verseSelection: BibleVerseSelection;
   title: string;
   body: string;
+  mentions?: readonly import("@/features/mentions/mention-draft").DraftMention[];
   audience?: MomentAudience;
   circleId?: string;
   linkedCircleIds?: readonly string[];
@@ -358,6 +365,9 @@ export function MomentComposer({
         : createDefault.circleIds,
   );
   const [body, setBody] = useState(editDraft?.body ?? "");
+  const [captionMentions, setCaptionMentions] = useState<
+    readonly DraftMention[]
+  >(editDraft?.mentions ?? []);
   const [title, setTitle] = useState(editDraft?.title ?? "");
   const [verseSelection, setVerseSelection] = useState<BibleVerseSelection>(
     editDraft?.verseSelection ?? emptyBibleVerseSelection,
@@ -435,6 +445,32 @@ export function MomentComposer({
     selectedCircleIds,
     audience === "just_me",
   );
+  const mentionMembers = useMemo(() => {
+    if (audience === "just_me") return [];
+    const byCircle = model.mentionableMembersByCircle;
+    if (!byCircle) return [];
+    const circleIds =
+      selectedCircleIds.length > 0
+        ? selectedCircleIds
+        : model.circleId
+          ? [model.circleId]
+          : [];
+    const seen = new Set<string>();
+    const members = [];
+    for (const circleId of circleIds) {
+      for (const member of byCircle[circleId] ?? []) {
+        if (seen.has(member.userId)) continue;
+        seen.add(member.userId);
+        members.push(member);
+      }
+    }
+    return members;
+  }, [
+    audience,
+    model.circleId,
+    model.mentionableMembersByCircle,
+    selectedCircleIds,
+  ]);
   const selfPersonIds = new Set<string>([journalPersonId]);
   if (audience !== "just_me") {
     for (const circle of postableCircles) {
@@ -580,6 +616,7 @@ export function MomentComposer({
       setChoosingMode(false);
       setReviewing(false);
       setBody("");
+      setCaptionMentions([]);
       setShareToCircleId("");
       setTitle("");
       setVerseSelection(emptyBibleVerseSelection);
@@ -700,6 +737,23 @@ export function MomentComposer({
 
   const typePicker = !mode || choosingMode;
   const dialogMounted = useModalDialog(open, dialogRef);
+  useVisualViewportFill(dialogRef, dialogMounted);
+  const [captionFocused, setCaptionFocused] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const sync = () => {
+      setKeyboardOpen(window.innerHeight - viewport.height > 80);
+    };
+    sync();
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+    };
+  }, [dialogMounted]);
   const dismissGesture = useSheetDismiss({
     onDismiss: close,
     scrollerRef,
@@ -1226,6 +1280,10 @@ export function MomentComposer({
       occurredTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
     const capturedBody = body.trim();
+    const savedMentions =
+      audience === "just_me" || mode === "bible-verse"
+        ? []
+        : mentionsForSavedBody(body, captionMentions);
     const savedOccurredOn = occurredOn;
     const savedOccurredTime = occurredTime;
     const savedJournalPersonId = journalPersonId;
@@ -1276,6 +1334,7 @@ export function MomentComposer({
           revision: editDraft.revision,
           title: savedKind === "milestone" ? savedTitle : "",
           body: savedBody,
+          mentions: savedMentions,
           placeName: savedResolvedPlaceName,
           latitude: savedLatitude,
           longitude: savedLongitude,
@@ -1439,6 +1498,7 @@ export function MomentComposer({
             taggedPersonIds: savedTaggedPersonIds,
             audience,
             circleIds: saveCircleIds,
+            mentions: savedMentions,
           },
         });
       } else {
@@ -1459,6 +1519,7 @@ export function MomentComposer({
             taggedPersonIds: savedTaggedPersonIds,
             audience,
             circleIds: saveCircleIds,
+            mentions: savedMentions,
           },
         });
       }
@@ -1530,6 +1591,7 @@ export function MomentComposer({
               occurredTimezone,
               audience,
               circleIds: saveCircleIds,
+              mentions: savedMentions,
             })
           : saveWrittenMoment!({
               journalPersonId: savedJournalPersonId,
@@ -1539,6 +1601,7 @@ export function MomentComposer({
               occurredTimezone,
               audience,
               circleIds: saveCircleIds,
+              mentions: savedMentions,
             }),
       onPublished: () => router.refresh(),
     });
@@ -1870,6 +1933,7 @@ export function MomentComposer({
           </div>
         ) : copy ? (
           <form
+            id="composer-editor-form"
             className="quick-compose composer-fullscreen-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -2176,8 +2240,8 @@ export function MomentComposer({
               {mode === "bible-verse" ? null : (
                 <label className="composer-field">
                   <span>{copy.bodyLabel}</span>
-                  <textarea
-                    ref={bodyTextareaRef}
+                  <MentionField
+                    fieldRef={bodyTextareaRef}
                     className={
                       mode === "photo" || mode === "video"
                         ? "media-caption-field"
@@ -2185,6 +2249,9 @@ export function MomentComposer({
                     }
                     placeholder={copy.bodyPlaceholder}
                     value={body}
+                    mentions={captionMentions}
+                    members={mentionMembers}
+                    enabled={audience !== "just_me"}
                     required={copy.bodyRequired}
                     aria-invalid={
                       mode === "thought" && contentError ? true : undefined
@@ -2195,9 +2262,14 @@ export function MomentComposer({
                         : undefined
                     }
                     maxLength={4000}
-                    onChange={(event) => {
-                      setBody(event.target.value);
-                      if (mode === "thought" && event.target.value.trim()) {
+                    onFocus={() => setCaptionFocused(true)}
+                    onBlur={() => setCaptionFocused(false)}
+                    onValueChange={(next, mentions) => {
+                      setBody(next);
+                      setCaptionMentions(
+                        audience === "just_me" ? [] : mentions,
+                      );
+                      if (mode === "thought" && next.trim()) {
                         setContentError(null);
                       }
                     }}
@@ -2334,7 +2406,11 @@ export function MomentComposer({
               ) : null}
             </div>
 
-            <footer className="composer-editor-footer">
+            <footer
+              className={`composer-editor-footer${
+                captionFocused && keyboardOpen ? " is-keyboard-away" : ""
+              }`}
+            >
               <div
                 className={`composer-editor-actions${
                   editDraft ? "" : " is-split"

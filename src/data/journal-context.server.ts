@@ -28,6 +28,7 @@ import {
   entryReactionMessage,
   familyMomentPostedMessage,
   isNotifiableFamilyMoment,
+  mentionNotificationMessage,
 } from "@/lib/activity-notifications";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
@@ -55,6 +56,7 @@ type MembershipRow = Readonly<{
   directory_kind?: string | null;
   circle_id?: string | null;
   user_id?: string | null;
+  status?: string | null;
 }>;
 
 function circleIdOf(
@@ -123,6 +125,58 @@ export function buildTaggablePeopleByCircle(
       viewer,
       new Set(),
     ).taggablePeople;
+  }
+  return byCircle;
+}
+
+export function buildMentionableMembersByCircle(
+  rosterCircleIds: readonly string[],
+  people: readonly PersonRow[],
+  memberships: readonly MembershipRow[],
+  fallbackCircleId: string,
+) {
+  const byCircle: Record<
+    string,
+    readonly {
+      userId: string;
+      name: string;
+      initial: string;
+      accent: AccentToken;
+      circleId: string;
+    }[]
+  > = {};
+  for (const circleId of rosterCircleIds) {
+    const circlePeople = new Map(
+      people
+        .filter((person) => circleIdOf(person, fallbackCircleId) === circleId)
+        .map((person) => [person.id, person]),
+    );
+    const seen = new Set<string>();
+    const members = [];
+    for (const membership of memberships) {
+      if (circleIdOf(membership, fallbackCircleId) !== circleId) continue;
+      if (!membership.user_id || membership.status === "revoked") continue;
+      if (membership.status && membership.status !== "active") continue;
+      if (
+        isOperationsMembership({
+          role: membership.role,
+          directoryKind: membership.directory_kind,
+        })
+      ) {
+        continue;
+      }
+      const person = circlePeople.get(membership.person_id);
+      if (!person || seen.has(membership.user_id)) continue;
+      seen.add(membership.user_id);
+      members.push({
+        userId: membership.user_id,
+        name: person.display_name,
+        initial: initialFor(person.display_name),
+        accent: mapDatabaseAccent(person.accent_token),
+        circleId,
+      });
+    }
+    byCircle[circleId] = members;
   }
   return byCircle;
 }
@@ -284,6 +338,16 @@ type ActivityMoment = Readonly<{
   circle_id?: string;
 }>;
 
+type ActivityMention = Readonly<{
+  id: string;
+  moment_id: string;
+  note_id?: string | null;
+  actor_membership_id: string;
+  actor_name?: string;
+  snippet?: string;
+  created_at: string;
+}>;
+
 export function buildActivityNotifications(
   notes: readonly ActivityNote[],
   reactions: readonly ActivityReaction[],
@@ -293,6 +357,7 @@ export function buildActivityNotifications(
   viewerMembershipId?: string,
   commentedSince: ReadonlyMap<string, string> = new Map(),
   postAuthorNames: ReadonlyMap<string, string> = new Map(),
+  mentions: readonly ActivityMention[] = [],
 ): NonNullable<JournalChromeViewModel["notifications"]> {
   const displayDate = (createdAt: string) =>
     new Intl.DateTimeFormat("en-US", {
@@ -355,6 +420,20 @@ export function buildActivityNotifications(
         href: activityMomentHref(reaction.moment_id, { thread: true }),
         createdAt: reaction.created_at,
       })),
+    ...mentions.map((mention) => ({
+      id: `mention:${mention.id}`,
+      actorName:
+        mention.actor_name ??
+        memberNames.get(mention.actor_membership_id) ??
+        "Family",
+      message: mentionNotificationMessage(mention.snippet ?? ""),
+      displayDate: displayDate(mention.created_at),
+      href: activityMomentHref(mention.moment_id, {
+        noteId: mention.note_id,
+        thread: Boolean(mention.note_id),
+      }),
+      createdAt: mention.created_at,
+    })),
   ]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .slice(0, 20)
@@ -377,6 +456,7 @@ const emptyOptionalActivity = {
   commentedSince: new Map<string, string>(),
   postAuthorNames: new Map<string, string>(),
   familyMoments: [] as ActivityMoment[],
+  mentions: [] as ActivityMention[],
 };
 const activityScanLimit = 200;
 
@@ -529,12 +609,33 @@ async function loadOptionalJournalActivity(
         circle_id: visibleCircleOf(reaction.moment_id, reaction.circle_id),
       }));
 
+    let mentions: ActivityMention[] = [];
+    if (typeof supabase.rpc === "function") {
+      const mentionResult = await supabase.rpc("list_my_mention_notifications");
+      if (mentionResult.error) throw mentionResult.error;
+      mentions = (mentionResult.data ?? []).flatMap((row) => {
+        if (!row.mention_id || !row.moment_id || !row.created_at) return [];
+        return [
+          {
+            id: row.mention_id,
+            moment_id: row.moment_id,
+            note_id: row.note_id,
+            actor_membership_id: row.actor_membership_id,
+            actor_name: row.actor_name,
+            snippet: row.snippet,
+            created_at: row.created_at,
+          },
+        ];
+      });
+    }
+
     return {
       notes,
       reactions,
       ownedMomentIds,
       commentedSince,
       postAuthorNames,
+      mentions,
       familyMoments: linkedMoments
         .filter(
           (moment) =>
@@ -592,6 +693,7 @@ export async function loadJournalActivityNotifications(
         ...activity.notes.map((note) => note.author_membership_id),
         ...activity.reactions.map((reaction) => reaction.author_membership_id),
         ...activity.familyMoments.map((moment) => moment.author_membership_id),
+        ...activity.mentions.map((mention) => mention.actor_membership_id),
       ]),
     ].filter((id) => !names.has(id));
     if (actorIds.length > 0) {
@@ -621,6 +723,7 @@ export async function loadJournalActivityNotifications(
       access.membershipId,
       activity.commentedSince,
       activity.postAuthorNames,
+      activity.mentions,
     );
   } catch (error) {
     if (options?.strict) throw error;
@@ -849,6 +952,12 @@ export async function loadConnectedJournalContext(
     recordedByName: recorder.name,
     journalPeople: surface.journalPeople,
     taggablePeople: surface.taggablePeople,
+    mentionableMembersByCircle: buildMentionableMembersByCircle(
+      rosterCircleIds,
+      allPeople,
+      allMemberships,
+      access.circleId,
+    ),
     taggablePeopleByCircle: {
       ...buildTaggablePeopleByCircle(
         rosterCircleIds,

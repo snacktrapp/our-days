@@ -1948,6 +1948,65 @@ button {
   display: grid;
   gap: 7px;
 }
+.mention-field {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: 0;
+}
+.mention-chip-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mention-chip-row::-webkit-scrollbar {
+  display: none;
+}
+.mention-chip-row button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 14px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.mention-chip-mark {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+}
+.mention-chip-row button:hover,
+.mention-chip-row button:focus-visible {
+  background: color-mix(in srgb, var(--action) 14%, var(--cream));
+}
+.mention-token {
+  color: var(--action);
+  font-weight: 600;
+}
 .inline-note-form textarea {
   width: 100%;
   min-height: 76px;
@@ -2003,7 +2062,7 @@ button {
 .inline-note-form textarea:focus {
   border-color: var(--hairline);
 }
-.inline-note-form > div {
+.inline-note-form > div:not(.mention-field) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px;
@@ -7323,8 +7382,16 @@ html.overlay-open .bottom-nav {
   background: var(--paper);
 }
 
+.comment-dialog[open] {
+  align-items: flex-end;
+  justify-content: center;
+}
 .comment-sheet {
+  width: 100%;
   height: auto;
+  max-height: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
 .invitation-drawer-content.invite-section {
@@ -7363,8 +7430,10 @@ html.overlay-open .bottom-nav {
 
 .comment-sheet-body {
   min-height: 0;
-  overflow-y: auto;
-  padding: 0 20px max(16px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 20px 12px;
 }
 
 .comment-sheet-context {
@@ -7375,9 +7444,113 @@ html.overlay-open .bottom-nav {
   overflow-wrap: anywhere;
 }
 
-.comment-sheet .inline-note-form textarea {
-  min-height: 120px;
+.comment-sheet .inline-note-form {
+  min-height: 0;
+}
+.comment-sheet .mention-field {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.comment-sheet .activity-sheet-bar {
+  justify-content: center;
+}
+.comment-sheet .activity-sheet-bar h2 {
+  text-align: center;
+}
+.comment-sheet .inline-note-form {
+  margin-top: auto;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+.comment-dialog.is-keyboard-open .comment-sheet .inline-note-form {
+  padding-bottom: 8px;
+}
+.mention-field.is-pill {
+  gap: 8px;
+}
+.mention-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+  padding: 0 4px 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 24px;
+  background: var(--cream);
+}
+.mention-pill.is-multiline {
+  align-items: flex-end;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.mention-pill textarea,
+.comment-sheet .inline-note-form .mention-pill textarea {
+  width: 100%;
+  min-width: 0;
+  height: 1.25em;
+  min-height: 1.25em;
+  max-height: calc(1.25em * 5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-family: var(--font-interface), sans-serif;
+  font-size: max(16px, 1rem);
+  line-height: 1.25;
+}
+.mention-pill textarea::placeholder {
+  line-height: 1.25;
+}
+.mention-send,
+.inline-note-form button.mention-send,
+.inline-note-form button.mention-send[type="submit"],
+.inline-note-form button.mention-send[type="submit"]:disabled,
+.inline-note-form button.mention-send[type="submit"]:not(:disabled) {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--action);
+  color: #fff;
+  opacity: 1;
+  cursor: pointer;
+}
+.mention-send svg {
+  width: 22px;
+  height: 22px;
+}
+.inline-note-form button.mention-send:disabled {
+  opacity: 0.38;
+  background: var(--action);
+  color: #fff;
+  cursor: default;
+}
+.composer-field .mention-field textarea {
+  height: auto;
+  min-height: calc(1.45em * 2 + 28px);
+  max-height: 8.5rem;
+  overflow-y: auto;
   font-size: 16px;
+  line-height: 1.45;
+}
+.composer-editor-footer.is-keyboard-away {
+  display: none;
+}
+.comment-sheet .mention-chip-row,
+.composer-field .mention-chip-row {
+  flex: 0 0 auto;
 }
 
 :root[data-theme] .comment-sheet .inline-note-form {
@@ -7392,11 +7565,37 @@ html.overlay-open .bottom-nav {
   color: var(--action-ink);
 }
 
-.comment-sheet .inline-note-form > div {
-  position: sticky;
-  bottom: 0;
-  padding-block: 8px;
-  background: var(--paper);
+.activity-sheet-bar.sheet-action-bar {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto minmax(72px, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 4px 8px 8px;
+}
+.sheet-action-bar h2 {
+  text-align: center;
+}
+.sheet-header-action {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--action);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sheet-header-action.is-primary {
+  justify-self: end;
+  font-weight: 700;
+}
+.sheet-header-action:disabled {
+  color: var(--muted);
+  cursor: default;
 }
 
 .activity-sheet-chrome .sheet-handle,
@@ -10173,4 +10372,10 @@ iframe.composer-location-map {
   margin: 8px 0 16px;
   color: var(--ink-soft);
   font-size: 0.95rem;
+}
+
+.comment-sheet .inline-note-form button.mention-send[type="submit"]:disabled {
+  opacity: 0.38;
+  background: var(--action);
+  color: #fff;
 }

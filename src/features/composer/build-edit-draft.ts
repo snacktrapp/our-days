@@ -9,6 +9,7 @@ import {
   emptyBibleVerseSelection,
   parseBibleVerseMoment,
 } from "./bible-verse-catalog";
+import { draftFromMentionDisplay } from "@/features/mentions/mention-draft";
 import type { ComposerEditDraft } from "./moment-composer";
 import type { PlaceSelection } from "@/lib/place-coordinates";
 
@@ -47,6 +48,10 @@ export function buildComposerEditDraft(
   const parsed =
     moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
   const place = placeFromMoment(moment);
+  const sourceBody = parsed ? parsed.text : moment.text;
+  const drafted = parsed
+    ? { text: sourceBody, mentions: [] }
+    : draftFromMentionDisplay(sourceBody, moment.mentions ?? []);
   return {
     momentId: moment.id,
     revision: moment.revision,
@@ -70,7 +75,8 @@ export function buildComposerEditDraft(
         : moment.kind === "location"
           ? place.label
           : "",
-    body: parsed ? parsed.text : moment.text,
+    body: drafted.text,
+    mentions: drafted.mentions,
     existingMedia:
       moment.kind === "photo"
         ? {

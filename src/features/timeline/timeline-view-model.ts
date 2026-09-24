@@ -1,4 +1,5 @@
 import type { AccentToken } from "@/features/accent-token";
+import type { MentionDisplay } from "@/features/mentions/mention-draft";
 import type { FamilyTimelineSwitcherItem } from "@/features/shell/journal-switcher";
 import type { JournalChromeViewModel } from "@/features/shell/shell-view-model";
 
@@ -46,6 +47,13 @@ export type MomentInteractionViewModel = Readonly<{
     initial: string;
     accent: AccentToken;
   }>[];
+  mentionableMembers?: readonly Readonly<{
+    userId: string;
+    name: string;
+    initial: string;
+    accent: AccentToken;
+    circleId: string;
+  }>[];
   reactionOptions: readonly Readonly<{
     id: MomentReactionId;
     label: string;
@@ -64,7 +72,9 @@ export type MomentConversationViewModel = Readonly<{
     displayDate: string;
     revision?: number;
     canChange?: boolean;
+    mentions?: readonly MentionDisplay[];
   }>[];
+  captionMentions?: readonly MentionDisplay[];
   reactions: readonly Readonly<{
     id: string;
     personName: string;
@@ -98,6 +108,7 @@ type TimelineMomentBase = Readonly<{
   maxOccurredOn?: string;
   kicker: string;
   text: string;
+  mentions?: readonly MentionDisplay[];
   conversation: MomentConversationViewModel;
   canChange?: boolean;
   revision?: number;

@@ -62,6 +62,7 @@ export type VideoMomentDraft = Readonly<{
   taggedPersonIds: readonly string[];
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
+  mentions?: readonly { userId: string; start: number; end: number }[];
 }>;
 
 export class VideoUploadError extends Error {
@@ -430,6 +431,13 @@ export async function uploadVideoMoment(
       tagged_person_ids: [...draft.taggedPersonIds],
       audience: draft.audience ?? "family",
       ...(draft.circleIds?.length ? { circle_ids: [...draft.circleIds] } : {}),
+      ...(draft.mentions
+        ? {
+            mentioned_user_ids: draft.mentions.map((mention) => mention.userId),
+            mention_starts: draft.mentions.map((mention) => mention.start),
+            mention_ends: draft.mentions.map((mention) => mention.end),
+          }
+        : {}),
     },
   );
   const reservation = firstRow(reservationRows);

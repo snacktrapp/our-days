@@ -53,6 +53,7 @@ export type PhotoMomentDraft = Readonly<{
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
   existingMomentId?: string;
+  mentions?: readonly { userId: string; start: number; end: number }[];
   announcePublication?: boolean;
 }>;
 
@@ -843,6 +844,17 @@ export async function uploadPhotoMoment(
             audience: draft.audience ?? "family",
             ...(draft.circleIds?.length
               ? { circle_ids: [...draft.circleIds] }
+              : {}),
+            ...(draft.mentions
+              ? {
+                  mentioned_user_ids: draft.mentions.map(
+                    (mention) => mention.userId,
+                  ),
+                  mention_starts: draft.mentions.map(
+                    (mention) => mention.start,
+                  ),
+                  mention_ends: draft.mentions.map((mention) => mention.end),
+                }
               : {}),
           });
     const reservationQuotaMessage = photoQuotaMessage(reservationError);

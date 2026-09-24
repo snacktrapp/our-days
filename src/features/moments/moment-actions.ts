@@ -14,6 +14,7 @@ import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
 import type { AccentToken } from "@/features/accent-token";
 import type {
   EditableMomentKind,
+  MentionWrite,
   MomentActionResult,
 } from "./moment-action-types";
 import { normalizeMomentAudience } from "./moment-audience";
@@ -26,6 +27,10 @@ import type {
   MomentReactionId,
 } from "@/features/timeline/timeline-view-model";
 import { displayConversationDate } from "@/features/timeline/display-conversation-date";
+import {
+  codePointLength,
+  sliceCodePoints,
+} from "@/features/mentions/mention-draft";
 
 async function localStore() {
   return import("@/lib/local-journal/store");
@@ -37,6 +42,43 @@ async function localViews() {
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function mentionRpcFields(body: string, mentions?: readonly MentionWrite[]) {
+  if (!mentions) return { ok: true as const, fields: {} };
+  if (mentions.length > 20) return { ok: false as const, fields: {} };
+  const bodyLength = codePointLength(body);
+  for (const mention of mentions) {
+    if (
+      !uuidPattern.test(mention.userId) ||
+      !Number.isInteger(mention.start) ||
+      !Number.isInteger(mention.end) ||
+      mention.start < 0 ||
+      mention.end <= mention.start ||
+      mention.end > bodyLength ||
+      !sliceCodePoints(body, mention.start, mention.end).startsWith("@")
+    ) {
+      return { ok: false as const, fields: {} };
+    }
+  }
+  return {
+    ok: true as const,
+    fields: {
+      mentioned_user_ids: mentions.map((mention) => mention.userId),
+      mention_starts: mentions.map((mention) => mention.start),
+      mention_ends: mentions.map((mention) => mention.end),
+    },
+  };
+}
+
+function queueMentionPush(
+  supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
+  momentId: string,
+  noteId?: string,
+) {
+  after(async () => {
+    await deliverActivityWebPush(supabase, "mention", momentId, { noteId });
+  });
+}
 const plainDatePattern = /^\d{4}-\d{2}-\d{2}$/u;
 
 const accentMap: Readonly<Record<string, AccentToken>> = {
@@ -208,6 +250,7 @@ export async function createFamilyMomentAction(input: {
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }): Promise<MomentActionResult> {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -266,6 +309,10 @@ export async function createFamilyMomentAction(input: {
     }
   }
 
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
+  if (!mentionFields.ok) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
   const supabase = await createOurDaysServerClient();
   const coordinates = coordinateRpcFields(input);
   const payload = {
@@ -276,6 +323,7 @@ export async function createFamilyMomentAction(input: {
     moment_body: input.body.trim(),
     place_name: input.placeName.trim(),
     tagged_person_ids: [...input.taggedPersonIds],
+    ...mentionFields.fields,
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
@@ -301,6 +349,7 @@ export async function createFamilyMomentAction(input: {
     after(async () => {
       await deliverActivityWebPush(supabase, "moment", data);
     });
+    if (input.mentions) queueMentionPush(supabase, data);
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
@@ -321,6 +370,7 @@ export async function updateFamilyMomentAction(input: {
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }): Promise<MomentActionResult> {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -352,6 +402,10 @@ export async function updateFamilyMomentAction(input: {
     ) ||
     !validPlaceCoordinates(input.latitude, input.longitude)
   ) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
+  if (!mentionFields.ok) {
     return { ok: false, message: "Check the moment and try again." };
   }
   const audience = normalizeMomentAudience(input.audience);
@@ -430,6 +484,7 @@ export async function updateFamilyMomentAction(input: {
     moment_body: input.body.trim(),
     place_name: input.placeName.trim(),
     tagged_person_ids: [...input.taggedPersonIds],
+    ...mentionFields.fields,
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
@@ -466,6 +521,9 @@ export async function updateFamilyMomentAction(input: {
           ? "This moment changed elsewhere. Reopen it before editing again."
           : "That moment could not be changed.",
     };
+  }
+  if (input.mentions && audience === "family") {
+    queueMentionPush(supabase, input.momentId);
   }
   if (!sharing && circleIds !== undefined) {
     return setMomentAudienceAction({
@@ -764,24 +822,69 @@ export async function loadMomentConversationAction(input: {
       message: "That conversation could not be opened.",
     };
   }
-  return {
-    ok: true as const,
-    conversation: mapConversation({
-      notes: row.notes,
-      reactions: row.reactions,
-    }),
-  };
+  const conversation = mapConversation({
+    notes: row.notes,
+    reactions: row.reactions,
+  });
+  const mentions = await supabase.rpc("list_visible_content_mentions", {
+    moment_ids: [input.momentId],
+  });
+  if (!mentions.error && mentions.data) {
+    const captions = [];
+    const byNote = new Map<
+      string,
+      {
+        userId: string;
+        start: number;
+        end: number;
+        name: string | null;
+        active: boolean;
+      }[]
+    >();
+    for (const item of mentions.data) {
+      const display = {
+        userId: item.mentioned_user_id,
+        start: item.start_offset,
+        end: item.end_offset,
+        name: item.active ? item.display_name : null,
+        active: item.active,
+      };
+      if (item.note_id) {
+        const list = byNote.get(item.note_id) ?? [];
+        list.push(display);
+        byNote.set(item.note_id, list);
+      } else {
+        captions.push(display);
+      }
+    }
+    return {
+      ok: true as const,
+      conversation: {
+        ...conversation,
+        notes: conversation.notes.map((note) =>
+          byNote.has(note.id)
+            ? { ...note, mentions: byNote.get(note.id) }
+            : note,
+        ),
+        ...(captions.length ? { captionMentions: captions } : {}),
+      },
+    };
+  }
+  return { ok: true as const, conversation };
 }
 
 export async function createMomentNoteAction(input: {
   momentId: string;
   body: string;
+  mentions?: readonly MentionWrite[];
 }): Promise<MomentActionResult> {
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
   if (
     !(await hasExpectedOrigin()) ||
     !uuidPattern.test(input.momentId) ||
     !validBody(input.body) ||
-    input.body.trim().length > 1000
+    input.body.trim().length > 1000 ||
+    !mentionFields.ok
   ) {
     return { ok: false, message: "Check the note and try again." };
   }
@@ -807,6 +910,7 @@ export async function createMomentNoteAction(input: {
   const { data, error } = await supabase.rpc("create_moment_note", {
     moment_id: input.momentId,
     body: input.body.trim(),
+    ...mentionFields.fields,
   });
   if (error || !data)
     return {
@@ -818,21 +922,27 @@ export async function createMomentNoteAction(input: {
       noteId: data,
     });
   });
+  if (input.mentions) queueMentionPush(supabase, input.momentId, data);
   return { ok: true, message: "Note saved.", momentId: input.momentId };
 }
 
 export async function updateMomentNoteAction(input: {
   noteId: string;
+  momentId?: string;
   revision: number;
   body: string;
+  mentions?: readonly MentionWrite[];
 }): Promise<MomentActionResult> {
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
   if (
     !(await hasExpectedOrigin()) ||
     !uuidPattern.test(input.noteId) ||
+    (input.momentId !== undefined && !uuidPattern.test(input.momentId)) ||
     !Number.isInteger(input.revision) ||
     input.revision < 1 ||
     !validBody(input.body) ||
-    input.body.trim().length > 1000
+    input.body.trim().length > 1000 ||
+    !mentionFields.ok
   ) {
     return { ok: false, message: "Check the note and try again." };
   }
@@ -864,6 +974,7 @@ export async function updateMomentNoteAction(input: {
     note_id: input.noteId,
     expected_revision: input.revision,
     body: input.body.trim(),
+    ...mentionFields.fields,
   });
   if (error)
     return {
@@ -873,6 +984,9 @@ export async function updateMomentNoteAction(input: {
           ? "This note changed elsewhere. Reopen it before editing again."
           : "That note could not be changed.",
     };
+  if (input.mentions && input.momentId) {
+    queueMentionPush(supabase, input.momentId, input.noteId);
+  }
   return { ok: true, message: "Note updated.", revision: data };
 }
 
@@ -984,6 +1098,7 @@ export async function createWrittenMomentAction(input: {
   occurredTimezone: string | null;
   audience?: "family" | "just_me";
   circleIds?: readonly string[];
+  mentions?: readonly MentionWrite[];
 }) {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -1029,6 +1144,10 @@ export async function createWrittenMomentAction(input: {
     }
   }
   const supabase = await createOurDaysServerClient();
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
+  if (!mentionFields.ok) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
   const { data, error } = await supabase.rpc("create_written_moment", {
     circle_id: access.circleId,
     journal_person_id: input.journalPersonId,
@@ -1038,6 +1157,7 @@ export async function createWrittenMomentAction(input: {
     occurred_timezone: input.occurredTimezone ?? undefined,
     audience,
     ...(circleIds ? { circle_ids: circleIds } : {}),
+    ...mentionFields.fields,
   });
   if (error || !data)
     return {
@@ -1048,6 +1168,7 @@ export async function createWrittenMomentAction(input: {
     after(async () => {
       await deliverActivityWebPush(supabase, "moment", data);
     });
+    if (input.mentions) queueMentionPush(supabase, data);
   }
   refreshMomentSurfaces(input.journalPersonId);
   return { ok: true, message: "Moment saved.", momentId: data };
@@ -1060,6 +1181,7 @@ export async function updateWrittenMomentAction(input: {
   occurredOn: string;
   occurredAt: string | null;
   occurredTimezone: string | null;
+  mentions?: readonly MentionWrite[];
 }) {
   if (!(await hasExpectedOrigin())) {
     return { ok: false, message: "That request could not be verified." };
@@ -1105,6 +1227,10 @@ export async function updateWrittenMomentAction(input: {
     }
   }
   const supabase = await createOurDaysServerClient();
+  const mentionFields = mentionRpcFields(input.body.trim(), input.mentions);
+  if (!mentionFields.ok) {
+    return { ok: false, message: "Check the moment and try again." };
+  }
   const { data, error } = await supabase.rpc("update_written_moment", {
     moment_id: input.momentId,
     expected_revision: input.revision,
@@ -1112,6 +1238,7 @@ export async function updateWrittenMomentAction(input: {
     occurred_on: input.occurredOn,
     occurred_at: input.occurredAt ?? undefined,
     occurred_timezone: input.occurredTimezone ?? undefined,
+    ...mentionFields.fields,
   });
   if (error)
     return {
@@ -1121,6 +1248,7 @@ export async function updateWrittenMomentAction(input: {
           ? "This moment changed elsewhere. Reopen it before editing again."
           : "That moment could not be changed.",
     };
+  if (input.mentions) queueMentionPush(supabase, input.momentId);
   refreshMomentSurfaces();
   return { ok: true, message: "Moment updated.", revision: data };
 }

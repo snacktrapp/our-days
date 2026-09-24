@@ -112,6 +112,7 @@ export async function deliverPublishedMomentPushAction(input: {
     await import("@/lib/web-push/deliver-activity");
   after(async () => {
     await deliverActivityWebPush(supabase, "moment", input.momentId);
+    await deliverActivityWebPush(supabase, "mention", input.momentId);
   });
   return { ok: true, message: "Saved." };
 }

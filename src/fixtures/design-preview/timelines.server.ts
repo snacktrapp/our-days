@@ -39,7 +39,7 @@ const familyMark = [
   { id: "molly", initial: "M", accent: "clay" },
 ] as const;
 
-const timelineInteraction = {
+const timelineInteractionBase = {
   currentPerson: {
     name: "Brian",
     initial: "B",
@@ -50,7 +50,7 @@ const timelineInteraction = {
     { id: "made-me-smile", label: "Made me smile", symbol: "✦" },
     { id: "remember-this", label: "I remember", symbol: "↺" },
   ],
-} as const satisfies MomentInteractionViewModel;
+} as const;
 
 function momentDetail(
   detail: MomentConversationViewModel,
@@ -96,6 +96,39 @@ const composerPeople = [
   },
 ] as const;
 
+const previewMentionMembers = [
+  ...composerPeople.filter((person) => person.id !== "brian"),
+  {
+    id: "nana",
+    name: "Nana",
+    initial: "N",
+    accent: "ochre",
+  },
+  {
+    id: "calvin",
+    name: "Calvin",
+    initial: "C",
+    accent: "slate",
+  },
+  {
+    id: "eleanor",
+    name: "Eleanor",
+    initial: "E",
+    accent: "moss",
+  },
+].map((person) => ({
+  userId: person.id,
+  name: person.name,
+  initial: person.initial,
+  accent: person.accent as AccentToken,
+  circleId: "family",
+}));
+
+const timelineInteraction = {
+  ...timelineInteractionBase,
+  mentionableMembers: previewMentionMembers,
+} as const satisfies MomentInteractionViewModel;
+
 const composerJournalPeople = composerPeople.filter(
   (person) => person.id !== "molly",
 );
@@ -134,6 +167,9 @@ function chrome(
       recordedByName: "Brian",
       journalPeople: composerJournalPeople,
       taggablePeople: composerPeople,
+      mentionableMembersByCircle: {
+        family: previewMentionMembers,
+      },
       circleId: "family",
       postableCircles: [
         {

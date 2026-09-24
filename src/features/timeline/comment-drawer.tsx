@@ -20,6 +20,7 @@ export function CommentDrawer({
   title,
   context,
   pending,
+  confirmDiscard,
   onDismiss,
   children,
 }: {
@@ -27,6 +28,7 @@ export function CommentDrawer({
   title: string;
   context: string;
   pending: boolean;
+  confirmDiscard?: string;
   onDismiss: () => void;
   children: ReactNode;
 }) {
@@ -38,8 +40,15 @@ export function CommentDrawer({
     sheetCloseMs,
   );
   const dismiss = useCallback(() => {
-    if (!pending) requestClose(onDismiss);
-  }, [pending, requestClose, onDismiss]);
+    if (pending) return;
+    if (confirmDiscard && !window.confirm(confirmDiscard)) {
+      const sheet = sheetRef.current;
+      sheet?.style.removeProperty("--activity-sheet-drag");
+      sheet?.classList.remove("is-dragging");
+      return;
+    }
+    requestClose(onDismiss);
+  }, [confirmDiscard, pending, requestClose, onDismiss]);
   const gesture = useSheetDismiss({
     onDismiss: dismiss,
     scrollerRef,
@@ -49,7 +58,22 @@ export function CommentDrawer({
   useVisualViewportFill(dialogRef, true);
   useLayoutEffect(() => {
     lockOverlayChrome();
-    return () => unlockOverlayChrome();
+    const dialog = dialogRef.current;
+    const syncKeyboard = () => {
+      const viewport = window.visualViewport;
+      const inset = viewport
+        ? window.innerHeight - viewport.height - viewport.offsetTop
+        : 0;
+      dialog?.classList.toggle("is-keyboard-open", inset > 80);
+    };
+    syncKeyboard();
+    window.visualViewport?.addEventListener("resize", syncKeyboard);
+    window.visualViewport?.addEventListener("scroll", syncKeyboard);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", syncKeyboard);
+      window.visualViewport?.removeEventListener("scroll", syncKeyboard);
+      unlockOverlayChrome();
+    };
   }, []);
 
   return createPortal(
