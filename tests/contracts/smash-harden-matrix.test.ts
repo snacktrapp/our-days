@@ -412,7 +412,7 @@ describe("smash harden matrix", () => {
       );
       expect(optimisticUpload).toContain("queuedUploads.push");
       expect(photoStatusShelf).toContain(
-        "() => queuedOptimisticMediaUploadCount(circleId)",
+        '() =>\n      queuedOptimisticMediaUploadCount(\n        scope === "journal" ? undefined : circleId,\n      )',
       );
       expect(photoStatusShelf).toContain("post is");
       expect(photoStatusShelfTest).toContain(

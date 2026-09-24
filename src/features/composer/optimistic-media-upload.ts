@@ -40,6 +40,9 @@ export type OptimisticMediaUpload = Readonly<{
   journalPersonName: string;
   journalPersonInitial: string;
   journalPersonAccent: AccentToken;
+  audience: "family" | "just_me";
+  /** False when media is added to a moment that already exists. */
+  created: boolean;
   previewUrl: string;
   intakeId?: string;
   momentId?: string;
@@ -149,7 +152,13 @@ function photoFiles(input: StartPhotoUploadInput) {
 function createOptimisticUpload(
   kind: "photo" | "video",
   input: CommonUploadInput & {
-    draft: { circleId: string; body: string; occurredOn: string };
+    draft: {
+      circleId: string;
+      body: string;
+      occurredOn: string;
+      audience?: "family" | "just_me";
+      existingMomentId?: string;
+    };
   },
   totalFiles: number,
 ) {
@@ -165,6 +174,8 @@ function createOptimisticUpload(
     journalPersonName: input.person.name,
     journalPersonInitial: input.person.initial,
     journalPersonAccent: input.person.accent,
+    audience: input.draft.audience === "just_me" ? "just_me" : "family",
+    created: !input.draft.existingMomentId,
     previewUrl: URL.createObjectURL(input.file),
     totalFiles,
     completedFiles: 0,
@@ -468,16 +479,21 @@ export function firstAcceptedMomentRefresh(momentId: string) {
 export function addOptimisticMediaUpload(
   upload: Omit<
     OptimisticMediaUpload,
-    "totalFiles" | "completedFiles" | "retryable"
+    "totalFiles" | "completedFiles" | "retryable" | "audience" | "created"
   > &
     Partial<
-      Pick<OptimisticMediaUpload, "totalFiles" | "completedFiles" | "retryable">
+      Pick<
+        OptimisticMediaUpload,
+        "totalFiles" | "completedFiles" | "retryable" | "audience" | "created"
+      >
     >,
 ) {
   const next: OptimisticMediaUpload = {
     totalFiles: 1,
     completedFiles: 0,
     retryable: false,
+    audience: "family",
+    created: true,
     ...upload,
   };
   const previous = uploads.find((item) => item.id === next.id);

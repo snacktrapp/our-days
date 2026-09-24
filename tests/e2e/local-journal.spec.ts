@@ -585,6 +585,10 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     page.getByRole("button", { name: "Add", exact: true }),
   ).toBeVisible();
 
+  await page.getByRole("link", { name: "Circles", exact: true }).click();
+  await page.locator(`a[href="/family?circle=${localCircleId}"]`).click();
+  await expect(page).toHaveURL(new RegExp(`/family\\?circle=${localCircleId}`));
+
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page
     .getByRole("button", { name: "Written entry Text, date, and details" })
@@ -593,6 +597,10 @@ test("sign in, write a moment, attach media, and browse by date", async ({
     .getByRole("textbox", { name: "Entry" })
     .fill("Casey left a pebble on the porch.");
   await page.getByRole("button", { name: "Post", exact: true }).click();
+  await expect(page).toHaveURL(/\/family(?:\?moment=|$)/);
+  await expect(
+    page.getByRole("heading", { name: "All circles", exact: true }),
+  ).toBeVisible();
   await expect(
     page
       .getByLabel("Chronological moments")

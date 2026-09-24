@@ -14,6 +14,7 @@ import type {
 import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
+import { PendingTimelineEntries } from "./pending-timeline-entries";
 import { AudienceChip } from "./audience-chip";
 import { MomentRecordedTime } from "./moment-recorded-time";
 
@@ -286,6 +287,7 @@ export function TimelineFeed({
           tabIndex={-1}
         >
           <div className="time-rail" aria-hidden="true" />
+          <PendingTimelineEntries />
           <TimelineFeedEntries
             model={
               trailing

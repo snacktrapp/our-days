@@ -60,6 +60,7 @@ import { PostToField } from "./post-to-field";
 import {
   createPostToDefault,
   familyFeedHref,
+  momentSubmitHref,
   initialPostToCircleIds,
   orderPostToCircleIds,
   primaryPostToCircle,
@@ -1361,9 +1362,12 @@ export function MomentComposer({
             returnFocusRef.current?.focus({ preventScroll: true }),
           );
           router.replace(
-            audience === "just_me"
-              ? `/people/${savedJournalPersonId}`
-              : familyRedirect,
+            momentSubmitHref({
+              editing: true,
+              audience,
+              journalPersonId: savedJournalPersonId,
+              stayHref: familyRedirect,
+            }),
           );
           return;
         }
@@ -1372,7 +1376,14 @@ export function MomentComposer({
         resetDraft();
         onRequestClose();
         restoreJournalFocusAfterRefresh();
-        router.replace(pathname);
+        router.replace(
+          momentSubmitHref({
+            editing: true,
+            audience,
+            journalPersonId: savedJournalPersonId,
+            stayHref: pathname,
+          }),
+        );
         router.refresh();
       } catch {
         setSaveError(
@@ -1459,9 +1470,12 @@ export function MomentComposer({
         returnFocusRef.current?.focus({ preventScroll: true }),
       );
       router.replace(
-        audience === "just_me"
-          ? `/people/${savedJournalPersonId}`
-          : familyRedirect,
+        momentSubmitHref({
+          editing: false,
+          audience,
+          journalPersonId: savedJournalPersonId,
+          stayHref: pathname,
+        }),
       );
       return;
     }
@@ -1494,10 +1508,12 @@ export function MomentComposer({
       occurredOn: savedOccurredOn,
       occurredTime: savedOccurredTime,
       person: {
+        id: savedJournalPersonId,
         name: savedJournalPerson.name,
         initial: savedJournalPerson.initial,
         accent: savedJournalPerson.accent,
       },
+      audience,
       save: () =>
         saveFamilyMoment
           ? saveFamilyMoment({
@@ -1527,9 +1543,12 @@ export function MomentComposer({
       onPublished: () => router.refresh(),
     });
     router.replace(
-      audience === "just_me"
-        ? `/people/${savedJournalPersonId}`
-        : familyRedirect,
+      momentSubmitHref({
+        editing: false,
+        audience,
+        journalPersonId: savedJournalPersonId,
+        stayHref: pathname,
+      }),
     );
   };
 

@@ -5172,7 +5172,7 @@ span.moment-place-line {
 .composer-upload-status progress {
   width: 100%;
   height: 0.55rem;
-  accent-color: var(--accent);
+  accent-color: var(--action);
 }
 .photo-status-shelf {
   position: fixed;
@@ -5304,6 +5304,13 @@ span.moment-place-line {
 .photo-status-chip-indeterminate > span {
   width: 36%;
   background: color-mix(in srgb, var(--ochre) 58%, #e4c36a);
+}
+.photo-status-chip-bar.is-progress > span,
+.photo-status-chip-bar.is-progress.photo-status-chip-indeterminate > span {
+  background: var(--action);
+}
+.photo-status-chip-bar.is-progress .photo-status-chip-bar-fill rect {
+  fill: var(--action);
 }
 .photo-status-confirmation {
   margin: 0;
@@ -9095,7 +9102,7 @@ iframe.composer-location-map {
   width: 100%;
   height: 3px;
   margin-top: 10px;
-  accent-color: var(--ochre);
+  accent-color: var(--action);
 }
 
 .optimistic-written-timeline {
