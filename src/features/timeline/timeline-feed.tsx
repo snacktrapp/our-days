@@ -15,6 +15,7 @@ import { TimelineRefreshControl } from "./timeline-refresh-control";
 import { TimelineScrollMemory } from "./timeline-scroll-memory";
 import { FeedSaveAcknowledgment } from "./feed-save-acknowledgment";
 import { AudienceChip } from "./audience-chip";
+import { MomentRecordedTime } from "./moment-recorded-time";
 
 const insightSystemByline = {
   name: "Our Days",
@@ -54,7 +55,16 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
         <div className="timeline-author-row">
           <strong>{bylineName}</strong>
         </div>
-        <span>{dateAndTime}</span>
+        {isInsight ? (
+          <span>{dateAndTime}</span>
+        ) : (
+          <MomentRecordedTime
+            occurredOn={moment.occurredOn}
+            displayTime={moment.displayTime}
+            occurredAt={moment.recordedOccurrence?.occurredAt}
+            timeZone={moment.recordedOccurrence?.timeZone}
+          />
+        )}
       </div>
     </div>
   );

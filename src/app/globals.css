@@ -9573,6 +9573,17 @@ iframe.composer-location-map {
   min-width: 0;
   max-width: 100%;
 }
+.connection .moment-when {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+.connection .moment-when-line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .timeline-author-row {
   display: flex;
   align-items: center;

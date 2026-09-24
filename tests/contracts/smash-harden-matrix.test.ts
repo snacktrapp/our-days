@@ -108,6 +108,11 @@ const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
 );
 const criticalFlowsTest = read("tests/e2e/critical-flows.spec.ts");
+const momentTimeLabel = read("src/features/timeline/moment-time-label.ts");
+const timelineMediaTest = read("tests/e2e/timeline-media.spec.ts");
+const timelineMediaFixture = read(
+  "src/fixtures/design-preview/timelines.server.ts",
+);
 
 describe("smash harden matrix", () => {
   describe("R-Account Account→Journal remount", () => {
@@ -527,6 +532,14 @@ describe("smash harden matrix", () => {
       expect(read("tests/e2e/moment-detail.spec.ts")).toContain(
         "comment drawer follows the keyboard viewport and keeps Post readable",
       );
+    });
+
+    it("shows a Rome moment in the poster's clock when viewed from Los Angeles", () => {
+      expect(momentTimeLabel).toContain("zonesDiffer");
+      expect(timelineFeed).toContain("MomentRecordedTime");
+      expect(timelineMediaFixture).toContain("Europe/Rome");
+      expect(timelineMediaTest).toContain("America/Los_Angeles");
+      expect(timelineMediaTest).toContain("1:15 PM Rome");
     });
 
     it("lets a retryable failed upload chip be dismissed", () => {

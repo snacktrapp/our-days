@@ -64,6 +64,27 @@ describe("connected timeline mapping", () => {
       "2026-08-30",
     );
     expect(moment.displayTime).toBe("10:15 AM");
+    expect(moment.recordedOccurrence).toEqual({
+      occurredAt: "2026-08-28T17:15:00Z",
+      timeZone: "America/Los_Angeles",
+    });
+  });
+
+  it("does not attach a zone label source to date-only or insight rows", () => {
+    expect(
+      mapTimelineRow(row(), "2026-08-30").recordedOccurrence,
+    ).toBeUndefined();
+    expect(
+      mapTimelineRow(
+        row({
+          moment_kind: "insight",
+          occurred_at: "2026-09-24T11:15:00Z",
+          occurred_timezone: "Europe/Rome",
+          time_precision: "minute",
+        }),
+        "2026-08-30",
+      ).recordedOccurrence,
+    ).toBeUndefined();
   });
 
   it("maps milestones and manual places without inventing age or map precision", () => {
