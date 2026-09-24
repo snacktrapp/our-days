@@ -8346,18 +8346,19 @@ html[data-theme].overlay-open .app-shell::before,
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding-top: clamp(8px, 2.5dvh, 20px);
+  /* Keep cards glued under the handle so they land near mid-screen. */
+  padding-top: 4px;
 }
 
 /* Grow the chooser cards slightly so the half-height sheet feels filled
-   rather than empty below the grid. */
+   rather than empty below the grid, without pushing them too low. */
 .new-moment-composer-dialog.composer-type-picker .moment-choices {
   flex: 0 0 auto;
 }
 
 .new-moment-composer-dialog.composer-type-picker .moment-choices button {
-  min-height: 88px;
-  padding: 12px 12px;
+  min-height: 80px;
+  padding: 11px 12px;
 }
 
 .new-moment-composer-dialog .activity-sheet-bar {

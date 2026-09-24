@@ -44,8 +44,8 @@ for (const theme of ["dark", "light"]) {
     expect(bounds[2].y).toBeGreaterThan(bounds[0].bottom);
     for (const card of bounds) {
       // Fractional pixels can result from the sheet's transform.
-      expect(card.height).toBeGreaterThanOrEqual(85);
-      expect(card.height).toBeLessThanOrEqual(110);
+      expect(card.height).toBeGreaterThanOrEqual(78);
+      expect(card.height).toBeLessThanOrEqual(100);
       expect(card.width).toBeGreaterThanOrEqual(120);
       expect(card.right).toBeLessThanOrEqual(page.viewportSize()!.width);
     }

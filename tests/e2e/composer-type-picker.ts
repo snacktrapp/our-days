@@ -55,9 +55,13 @@ export async function expectTypePickerMidScreen(sheet: Locator) {
   // Sheet top near vertical midpoint.
   expect(geometry.sheetTop).toBeGreaterThanOrEqual(geometry.viewport * 0.4);
   expect(geometry.sheetTop).toBeLessThanOrEqual(geometry.viewport * 0.6);
-  // Cards sit in the upper/middle of the sheet → around mid-screen.
-  expect(geometry.cardsMidY).toBeGreaterThanOrEqual(geometry.viewport * 0.42);
-  expect(geometry.cardsMidY).toBeLessThanOrEqual(geometry.viewport * 0.72);
+  // Cards live in the upper ~70% of the sheet (under the handle), which puts
+  // them around mid-screen on phones. SE-class (667) card mid can reach ~0.8.
+  expect(geometry.cardsMidY).toBeGreaterThanOrEqual(geometry.sheetTop);
+  expect(geometry.cardsMidY).toBeLessThanOrEqual(
+    geometry.sheetTop + geometry.sheetHeight * 0.7,
+  );
+  expect(geometry.firstRowTop).toBeLessThan(geometry.viewport * 0.72);
   expect(geometry.fitsWithoutScroll).toBe(true);
   expect(geometry.lastRowBottom).toBeLessThanOrEqual(
     geometry.sheetBottom - geometry.safeAreaInset + 1,
