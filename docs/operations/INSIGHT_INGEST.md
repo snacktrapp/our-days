@@ -82,6 +82,48 @@ A later worker should authenticate as the circle’s Operations membership
 Operations label only hides it from Family and People. Do not put a
 service-role key in the web deployment.
 
+`audience: "just_me"` on `create_insight_moment` posts to the **caller’s**
+Just me. Operations using that path lands on Operations’ Just me.
+
+## Just me for a consented member
+
+Operations can post a Just me Insight that belongs to another adult in the
+same circle. The row is recorded by that member, so it appears on their Just
+me, keeps the Insight card chrome, accepts a clip and poster, and can be
+trashed by that member when they are an organizer — the same rules as an
+Insight they created. `moments.created_by_operations_membership_id` records
+the Operations membership for audit and is not shown in the UI.
+
+The target must have an active journal membership in that circle and a row
+in `private.operations_just_me_insight_consent`. The migration seeds that
+allowlist only for `trappbrian@gmail.com`. Signed-out callers, ordinary
+members, and non-Operations organizers cannot call this RPC. It creates
+Insights only; it does not write thoughts, photos, or comments as the member.
+
+```
+POST {NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/create_just_me_insight_for_member
+Authorization: Bearer <Operations access token>
+apikey: <publishable key>
+Content-Type: application/json
+```
+
+```json
+{
+  "circle_id": "<circle uuid>",
+  "member_person_id": "<target member person uuid>",
+  "quote": "…",
+  "attribution": "Huberman Lab — episode name",
+  "source_url": "https://www.youtube.com/watch?v=…&t=120",
+  "occurred_on": "2026-09-04"
+}
+```
+
+`occurred_at` and `occurred_timezone` stay optional and paired. There is no
+`audience` argument: the Insight is always `just_me` for `member_person_id`.
+Attach a clip afterwards with `reserve_video_moment` /
+`finalize_video_moment` and the returned moment id, using the same
+Operations token.
+
 ## Optional short clip attach (short-video v1 path)
 
 When an Insight should play a private clip inline, keep the Insight as

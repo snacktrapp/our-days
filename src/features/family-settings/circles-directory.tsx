@@ -476,7 +476,10 @@ export function AddExistingMemberSheet({
   );
   return (
     <CircleManagementSheet labelledBy="add-existing-heading" onClose={onClose}>
-      <section aria-labelledby="add-existing-heading">
+      <section
+        className="add-existing-member"
+        aria-labelledby="add-existing-heading"
+      >
         <span>Add from a circle</span>
         <h3 id="add-existing-heading" tabIndex={-1}>
           {circle.name}
@@ -500,18 +503,16 @@ export function CreateCircleSheet({
   children: ReactNode;
 }) {
   return (
-    <CircleManagementSheet labelledBy="create-circle-heading" onClose={onClose}>
-      <section aria-labelledby="create-circle-heading">
-        <span>New circle</span>
-        <h3 id="create-circle-heading" tabIndex={-1}>
-          Create a circle
-        </h3>
-        <p className="chrome-body">
-          A circle is a group of people who share one journal. You can invite
-          people after it’s created.
-        </p>
-        {children}
-      </section>
+    <CircleManagementSheet
+      labelledBy="create-circle-heading"
+      title="Create a circle"
+      onClose={onClose}
+    >
+      <p className="sheet-helper">
+        A circle is a group of people who share one journal. You can invite
+        people after it’s created.
+      </p>
+      {children}
     </CircleManagementSheet>
   );
 }

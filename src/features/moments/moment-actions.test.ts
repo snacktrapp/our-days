@@ -264,8 +264,8 @@ describe("written moment actions", () => {
       occurred_on: "2026-08-28",
       occurred_at: undefined,
       occurred_timezone: undefined,
-      latitude: null,
-      longitude: null,
+      latitude: undefined,
+      longitude: undefined,
       audience: "family",
     });
     expect(mocks.deliver).toHaveBeenCalledWith(
@@ -342,8 +342,8 @@ describe("written moment actions", () => {
       occurred_on: "2026-08-28",
       occurred_at: undefined,
       occurred_timezone: undefined,
-      latitude: null,
-      longitude: null,
+      latitude: undefined,
+      longitude: undefined,
       audience: "family",
     });
   });
