@@ -28,7 +28,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport);
     await page.goto("/family?circle=family#moment-sunset");
-    await expect(page).toHaveURL(/\/family\?moment=sunset$/);
+    await expect(page).toHaveURL(/\/family$/);
     await expect(
       page.getByRole("heading", { name: "All circles" }),
     ).toBeVisible();
@@ -45,6 +45,7 @@ test("comment notification opens the post thread @critical", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family?moment=sunset&note=sunset-note-molly&thread=1");
   await expect(page.locator("#note-sunset-note-molly")).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&](?:moment|note|thread)=/);
   await expect(
     page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
@@ -57,7 +58,7 @@ test("notification target beyond the first page stays in All circles @critical",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/family?moment=porch-light-2019");
   await expect(page.locator("#moment-porch-light-2019")).toBeVisible();
-  await expect(page).toHaveURL(/moment=porch-light-2019/);
+  await expect(page).not.toHaveURL(/[?&]moment=/);
   await expect(
     page.getByRole("heading", { name: "All circles" }),
   ).toBeVisible();
@@ -114,5 +115,121 @@ test("resume and route changes keep the bottom nav pinned @critical", async ({
   await expect(
     page.getByRole("heading", { name: "All our days" }),
   ).toBeVisible();
+  await expectNavPinned(page);
+});
+
+async function openNotification(page: Page, url: string) {
+  await page.evaluate((href) => {
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent("message", {
+        data: { type: "our-days:notification-open", url: href },
+      }),
+    );
+  }, url);
+}
+
+async function postOffset(page: Page, selector: string) {
+  return page.locator(selector).evaluate((node) => {
+    const topbar = document.querySelector(".topbar");
+    const inset =
+      topbar instanceof HTMLElement ? topbar.getBoundingClientRect().bottom : 0;
+    return node.getBoundingClientRect().top - inset;
+  });
+}
+
+test("several notifications land once, anchor late media, then let the reader scroll to the top @critical", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    const positions: number[] = [];
+    window.addEventListener(
+      "scroll",
+      () => positions.push(Math.round(window.scrollY)),
+      { passive: true },
+    );
+    Object.assign(window, { __notificationScrolls: positions });
+  });
+  await page.goto("/family?moment=sunset&note=sunset-note-molly&thread=1");
+  const sunset = page.locator("#moment-sunset");
+  await expect(sunset).toBeVisible();
+  await expect(page.locator("#note-sunset-note-molly")).toBeVisible();
+  await expect(sunset).toHaveClass(/notification-target/);
+  await expect(page).not.toHaveURL(/[?&]moment=/);
+  const landingScrolls = await page.evaluate(
+    () =>
+      (window as unknown as { __notificationScrolls: number[] })
+        .__notificationScrolls,
+  );
+  expect(new Set(landingScrolls).size).toBeLessThanOrEqual(2);
+
+  await openNotification(page, "/family?moment=porch-light-2019");
+  const porch = page.locator("#moment-porch-light-2019");
+  await expect(porch).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]moment=/);
+  const landedOffset = await postOffset(page, "#moment-porch-light-2019");
+  const atFeedEnd = await page.evaluate(
+    () =>
+      document.documentElement.scrollHeight -
+        window.innerHeight -
+        window.scrollY <
+      2,
+  );
+  expect(atFeedEnd || (landedOffset > 0 && landedOffset < 40)).toBe(true);
+
+  await page.evaluate(() => {
+    const timeline = document.querySelector(".timeline");
+    const spacer = document.createElement("div");
+    spacer.dataset.lateMedia = "above";
+    spacer.style.height = "480px";
+    spacer.style.overflowAnchor = "none";
+    timeline?.prepend(spacer);
+  });
+  await expect
+    .poll(() => postOffset(page, "#moment-porch-light-2019"))
+    .toBeLessThan(landedOffset + 24);
+  await expect
+    .poll(() => postOffset(page, "#moment-porch-light-2019"))
+    .toBeGreaterThan(landedOffset - 24);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => {
+    const timeline = document.querySelector(".timeline");
+    const spacer = document.createElement("div");
+    spacer.dataset.lateMedia = "after-release";
+    spacer.style.height = "360px";
+    spacer.style.overflowAnchor = "none";
+    timeline?.prepend(spacer);
+  });
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
+  await expectNavPinned(page);
+
+  await page.waitForTimeout(750);
+  await openNotification(page, "/family?moment=sunset");
+  await expect(sunset).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]moment=/);
+  await expect.poll(() => postOffset(page, "#moment-sunset")).toBeLessThan(40);
+  await expectNavPinned(page);
+});
+
+test("a new circle post lands on that entry once, then the feed can scroll to the top @critical", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family?moment=first-day");
+  const post = page.locator("#moment-first-day");
+  await expect(post).toBeVisible();
+  await expect(post).toHaveClass(/notification-target/);
+  await expect(
+    page.getByRole("heading", { name: "All circles" }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/[?&]moment=/);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => {
+    document.querySelector(".timeline")?.prepend(document.createElement("div"));
+  });
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(8);
   await expectNavPinned(page);
 });
