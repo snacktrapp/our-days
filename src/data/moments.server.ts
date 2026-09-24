@@ -290,6 +290,7 @@ export function mapTimelineRow(
     mimeType: string;
     durationMs: number;
     poster?: string;
+    posterSizeBytes?: number;
     width?: number;
     height?: number;
   }>,
@@ -428,6 +429,7 @@ export function mapTimelineRow(
       video: {
         src: `/api/media/videos/${row.moment_id}`,
         poster: videoMeta?.poster,
+        posterSizeBytes: videoMeta?.posterSizeBytes,
         mimeType: videoMeta?.mimeType,
         durationMs: videoMeta?.durationMs,
         width: videoMeta?.width,
@@ -447,6 +449,7 @@ export function mapTimelineRow(
         ? {
             src: `/api/media/videos/${row.moment_id}`,
             poster: videoMeta.poster,
+            posterSizeBytes: videoMeta.posterSizeBytes,
             mimeType: videoMeta.mimeType,
             durationMs: videoMeta.durationMs,
             width: videoMeta.width,

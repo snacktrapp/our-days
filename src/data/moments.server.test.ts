@@ -634,6 +634,7 @@ describe("connected timeline mapping", () => {
         mimeType: "video/mp4",
         durationMs: 17_000,
         poster: "/api/media/videos/10000000-0000-4000-8000-000000000097/poster",
+        posterSizeBytes: 5_549,
         width: 1080,
         height: 1920,
       },
@@ -645,8 +646,42 @@ describe("connected timeline mapping", () => {
         mimeType: "video/mp4",
         durationMs: 17_000,
         poster: "/api/media/videos/10000000-0000-4000-8000-000000000097/poster",
+        posterSizeBytes: 5_549,
         width: 1080,
         height: 1920,
+      },
+    });
+  });
+
+  it("maps connected video poster byte metadata for blank-poster detection", () => {
+    const moment = mapTimelineRow(
+      row({
+        moment_id: "10000000-0000-4000-8000-000000000098",
+        moment_kind: "video",
+        journal_person_name: "Molly",
+        recorder_person_id: "child",
+        recorder_person_name: "Molly",
+        body: "First steps across the kitchen.",
+      }),
+      "2026-08-30",
+      undefined,
+      undefined,
+      undefined,
+      {
+        mimeType: "video/mp4",
+        durationMs: 17_000,
+        poster: "/api/media/videos/10000000-0000-4000-8000-000000000098/poster",
+        posterSizeBytes: 5_549,
+        width: 1280,
+        height: 720,
+      },
+    );
+    expect(moment).toMatchObject({
+      kind: "video",
+      video: {
+        src: "/api/media/videos/10000000-0000-4000-8000-000000000098",
+        poster: "/api/media/videos/10000000-0000-4000-8000-000000000098/poster",
+        posterSizeBytes: 5_549,
       },
     });
   });
