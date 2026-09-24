@@ -285,6 +285,57 @@ export type Database = {
           },
         ];
       };
+      moment_reactions: {
+        Row: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at: string;
+          id: string;
+          moment_id: string;
+          reaction_type: string;
+          removed_at: string | null;
+          revision: number;
+          updated_at: string;
+        };
+        Insert: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at?: string;
+          id?: string;
+          moment_id: string;
+          reaction_type: string;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Update: {
+          author_membership_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          id?: string;
+          moment_id?: string;
+          reaction_type?: string;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_reactions_author_fkey";
+            columns: ["author_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moment_reactions_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_video_posters: {
         Row: {
           bucket_id: string;
@@ -330,11 +381,25 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "moment_video_posters_membership_fkey";
+            columns: ["circle_id", "created_by_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
             foreignKeyName: "moment_video_posters_moment_fkey";
             columns: ["circle_id", "moment_id"];
             isOneToOne: true;
             referencedRelation: "moments";
             referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_video_posters_video_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: true;
+            referencedRelation: "moment_videos";
+            referencedColumns: ["circle_id", "moment_id"];
           },
         ];
       };
@@ -388,63 +453,13 @@ export type Database = {
           },
         ];
       };
-      moment_reactions: {
-        Row: {
-          author_membership_id: string;
-          circle_id: string;
-          created_at: string;
-          id: string;
-          moment_id: string;
-          reaction_type: string;
-          removed_at: string | null;
-          revision: number;
-          updated_at: string;
-        };
-        Insert: {
-          author_membership_id: string;
-          circle_id: string;
-          created_at?: string;
-          id?: string;
-          moment_id: string;
-          reaction_type: string;
-          removed_at?: string | null;
-          revision?: number;
-          updated_at?: string;
-        };
-        Update: {
-          author_membership_id?: string;
-          circle_id?: string;
-          created_at?: string;
-          id?: string;
-          moment_id?: string;
-          reaction_type?: string;
-          removed_at?: string | null;
-          revision?: number;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "moment_reactions_author_fkey";
-            columns: ["author_membership_id"];
-            isOneToOne: false;
-            referencedRelation: "circle_memberships";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "moment_reactions_moment_fkey";
-            columns: ["circle_id", "moment_id"];
-            isOneToOne: false;
-            referencedRelation: "moments";
-            referencedColumns: ["circle_id", "id"];
-          },
-        ];
-      };
       moments: {
         Row: {
           audience: string;
           body: string;
           circle_id: string;
           created_at: string;
+          created_by_operations_membership_id: string | null;
           id: string;
           journal_person_id: string | null;
           kind: string;
@@ -468,6 +483,7 @@ export type Database = {
           body: string;
           circle_id: string;
           created_at?: string;
+          created_by_operations_membership_id?: string | null;
           id?: string;
           journal_person_id?: string | null;
           kind?: string;
@@ -491,6 +507,7 @@ export type Database = {
           body?: string;
           circle_id?: string;
           created_at?: string;
+          created_by_operations_membership_id?: string | null;
           id?: string;
           journal_person_id?: string | null;
           kind?: string;
@@ -516,6 +533,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "circles";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moments_created_by_operations_membership_fkey";
+            columns: ["circle_id", "created_by_operations_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
           },
           {
             foreignKeyName: "moments_journal_person_fkey";
@@ -655,43 +679,9 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      visible_moment_authors: {
-        Args: { membership_ids: string[] };
-        Returns: {
-          accent_token: string;
-          display_name: string;
-          membership_id: string;
-          person_id: string;
-        }[];
-      };
-      share_private_moment: {
-        Args: {
-          destination_circle_id: string;
-          expected_revision: number;
-          latitude?: number | null;
-          longitude?: number | null;
-          moment_body: string;
-          moment_id: string;
-          moment_title: string;
-          occurred_at?: string;
-          occurred_on: string;
-          occurred_timezone?: string;
-          place_name: string;
-          tagged_person_ids: string[];
-        };
-        Returns: number;
-      };
-      list_existing_circle_members: {
-        Args: { source_circle_id: string; target_circle_id: string };
-        Returns: { membership_id: string; display_name: string }[];
-      };
-      add_existing_circle_member: {
-        Args: { source_membership_id: string; target_circle_id: string };
-        Returns: string;
-      };
       accept_invitation: { Args: { token: string }; Returns: string };
       accept_pending_invitation_for_current_user: {
-        Args: Record<PropertyKey, never>;
+        Args: never;
         Returns: string;
       };
       acknowledge_photo_intake: {
@@ -706,6 +696,10 @@ export type Database = {
           state: string;
         }[];
       };
+      add_existing_circle_member: {
+        Args: { source_membership_id: string; target_circle_id: string };
+        Returns: string;
+      };
       attach_photo_to_moment: {
         Args: { existing_moment_id: string; request_key: string };
         Returns: {
@@ -716,6 +710,10 @@ export type Database = {
           object_path: string;
           state: string;
         }[];
+      };
+      attach_video_moment_poster: {
+        Args: { height_px: number; moment_id: string; width_px: number };
+        Returns: boolean;
       };
       cancel_photo_intake: {
         Args: { intake_id: string };
@@ -845,8 +843,12 @@ export type Database = {
       };
       create_family_moment: {
         Args: {
+          audience?: string;
           circle_id: string;
+          circle_ids?: string[];
           journal_person_id: string;
+          latitude?: number;
+          longitude?: number;
           moment_body: string;
           moment_kind: string;
           moment_title: string;
@@ -854,11 +856,7 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           place_name: string;
-          latitude?: number | null;
-          longitude?: number | null;
           tagged_person_ids: string[];
-          audience?: string;
-          circle_ids?: string[];
         };
         Returns: string;
       };
@@ -872,7 +870,7 @@ export type Database = {
           occurred_on?: string;
           occurred_timezone?: string;
           quote: string;
-          source_url?: string | null;
+          source_url?: string;
         };
         Returns: string;
       };
@@ -889,6 +887,19 @@ export type Database = {
           raw_token: string;
         }[];
       };
+      create_just_me_insight_for_member: {
+        Args: {
+          attribution: string;
+          circle_id: string;
+          member_person_id: string;
+          occurred_at?: string;
+          occurred_on?: string;
+          occurred_timezone?: string;
+          quote: string;
+          source_url?: string;
+        };
+        Returns: string;
+      };
       create_managed_person: {
         Args: {
           accent_token?: string;
@@ -903,25 +914,27 @@ export type Database = {
       };
       create_written_moment: {
         Args: {
+          audience?: string;
           body: string;
           circle_id: string;
+          circle_ids?: string[];
           journal_person_id: string;
           occurred_at?: string;
           occurred_on: string;
           occurred_timezone?: string;
-          audience?: string;
-          circle_ids?: string[];
         };
         Returns: string;
       };
-      delete_entry_draft: {
-        Args: { draft_id: string };
-        Returns: boolean;
+      delete_empty_circle: {
+        Args: { expected_name: string; target_circle_id: string };
+        Returns: undefined;
       };
+      delete_entry_draft: { Args: { draft_id: string }; Returns: boolean };
       delete_web_push_subscription: {
         Args: { endpoint: string };
         Returns: boolean;
       };
+      finalize_video_moment: { Args: { request_id: string }; Returns: string };
       flag_photo_display_derivative_for_review: {
         Args: {
           derivative_job_id: string;
@@ -938,10 +951,6 @@ export type Database = {
         };
         Returns: string;
       };
-      finalize_video_moment: {
-        Args: { request_id: string };
-        Returns: string;
-      };
       get_entry_draft: {
         Args: { draft_id: string };
         Returns: {
@@ -950,19 +959,19 @@ export type Database = {
           circle_ids: string[];
           created_at: string;
           draft_id: string;
-          journal_person_id: string | null;
+          journal_person_id: string;
           kind: string;
-          latitude: number | null;
-          longitude: number | null;
+          latitude: number;
+          longitude: number;
           media: Json;
-          occurred_on: string | null;
-          occurred_time: string | null;
-          occurred_timezone: string | null;
+          occurred_on: string;
+          occurred_time: string;
+          occurred_timezone: string;
           place_name: string;
           tagged_person_ids: string[];
           title: string;
           updated_at: string;
-          verse: Json | null;
+          verse: Json;
         }[];
       };
       get_moment_conversation: {
@@ -993,13 +1002,15 @@ export type Database = {
           status: string;
         }[];
       };
-      attach_video_moment_poster: {
-        Args: {
-          height_px: number;
-          moment_id: string;
-          width_px: number;
-        };
-        Returns: boolean;
+      get_video_moment_delivery: {
+        Args: { moment_id: string };
+        Returns: {
+          bucket_id: string;
+          duration_ms: number;
+          mime_type: string;
+          object_path: string;
+          size_bytes: number;
+        }[];
       };
       get_video_moment_poster_delivery: {
         Args: { moment_id: string };
@@ -1012,23 +1023,68 @@ export type Database = {
           width_px: number;
         }[];
       };
-      get_video_moment_delivery: {
-        Args: { moment_id: string };
+      list_all_timeline_moments: {
+        Args: {
+          cursor_has_precise_time?: boolean;
+          cursor_moment_id?: string;
+          cursor_occurred_at?: string;
+          cursor_occurred_on?: string;
+          page_size?: number;
+          snapshot_at?: string;
+        };
         Returns: {
-          bucket_id: string;
-          duration_ms: number;
-          mime_type: string;
-          object_path: string;
-          size_bytes: number;
+          body: string;
+          can_change: boolean;
+          created_at: string;
+          feed_snapshot_at: string;
+          journal_person_accent: string;
+          journal_person_kind: string;
+          journal_person_name: string;
+          latitude: number;
+          linked_circle_ids: string[];
+          longitude: number;
+          moment_audience: string;
+          moment_circle_id: string;
+          moment_id: string;
+          moment_journal_person_id: string;
+          moment_kind: string;
+          moment_title: string;
+          occurred_at: string;
+          occurred_on: string;
+          occurred_timezone: string;
+          place_name: string;
+          recorder_person_id: string;
+          recorder_person_name: string;
+          revision: number;
+          source_url: string;
+          tagged_people: Json;
+          time_precision: string;
+          updated_at: string;
+        }[];
+      };
+      list_entry_drafts: {
+        Args: never;
+        Returns: {
+          draft_id: string;
+          kind: string;
+          preview_text: string;
+          updated_at: string;
+        }[];
+      };
+      list_existing_circle_members: {
+        Args: { source_circle_id: string; target_circle_id: string };
+        Returns: {
+          display_name: string;
+          membership_id: string;
         }[];
       };
       list_manageable_trashed_written_moments: {
         Args: { circle_id: string };
         Returns: {
           body: string;
-          journal_person_accent: string | null;
-          journal_person_id: string | null;
-          journal_person_name: string | null;
+          journal_person_accent: string;
+          journal_person_id: string;
+          journal_person_name: string;
           moment_id: string;
           moment_kind: string;
           moment_title: string;
@@ -1150,54 +1206,6 @@ export type Database = {
           invitation_id: string;
         }[];
       };
-      list_entry_drafts: {
-        Args: Record<PropertyKey, never>;
-        Returns: {
-          draft_id: string;
-          kind: string;
-          preview_text: string;
-          updated_at: string;
-        }[];
-      };
-      list_all_timeline_moments: {
-        Args: {
-          cursor_has_precise_time?: boolean;
-          cursor_moment_id?: string;
-          cursor_occurred_at?: string;
-          cursor_occurred_on?: string;
-          page_size?: number;
-          snapshot_at?: string;
-        };
-        Returns: {
-          body: string;
-          can_change: boolean;
-          created_at: string;
-          feed_snapshot_at: string;
-          journal_person_accent: string | null;
-          journal_person_kind: string | null;
-          journal_person_name: string | null;
-          latitude: number | null;
-          longitude: number | null;
-          moment_circle_id: string;
-          moment_id: string;
-          moment_journal_person_id: string | null;
-          moment_kind: string;
-          moment_title: string;
-          occurred_at: string;
-          occurred_on: string;
-          occurred_timezone: string;
-          place_name: string;
-          recorder_person_id: string;
-          recorder_person_name: string;
-          revision: number;
-          source_url: string | null;
-          tagged_people: Json;
-          time_precision: string;
-          updated_at: string;
-          moment_audience: string;
-          linked_circle_ids: string[];
-        }[];
-      };
       list_timeline_moments: {
         Args: {
           circle_id: string;
@@ -1214,14 +1222,16 @@ export type Database = {
           can_change: boolean;
           created_at: string;
           feed_snapshot_at: string;
-          journal_person_accent: string | null;
-          journal_person_kind: string | null;
-          journal_person_name: string | null;
-          latitude: number | null;
-          longitude: number | null;
+          journal_person_accent: string;
+          journal_person_kind: string;
+          journal_person_name: string;
+          latitude: number;
+          linked_circle_ids: string[];
+          longitude: number;
+          moment_audience: string;
           moment_circle_id: string;
           moment_id: string;
-          moment_journal_person_id: string | null;
+          moment_journal_person_id: string;
           moment_kind: string;
           moment_title: string;
           occurred_at: string;
@@ -1231,12 +1241,10 @@ export type Database = {
           recorder_person_id: string;
           recorder_person_name: string;
           revision: number;
-          source_url: string | null;
+          source_url: string;
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
-          moment_audience: string;
-          linked_circle_ids: string[];
         }[];
       };
       list_web_push_deliveries: {
@@ -1249,7 +1257,7 @@ export type Database = {
           moment_id: string;
           moment_kind: string;
           p256dh: string;
-          reaction_type: string | null;
+          reaction_type: string;
           visible_circle_id: string;
         }[];
       };
@@ -1345,14 +1353,6 @@ export type Database = {
         };
         Returns: string;
       };
-      remove_moment_photo: {
-        Args: { moment_id: string; photo_id: string };
-        Returns: undefined;
-      };
-      reorder_moment_photos: {
-        Args: { moment_id: string; photo_ids: string[] };
-        Returns: undefined;
-      };
       reject_photo_validation: {
         Args: {
           lease_key: string;
@@ -1360,6 +1360,14 @@ export type Database = {
           validation_job_id: string;
         };
         Returns: string;
+      };
+      remove_moment_photo: {
+        Args: { moment_id: string; photo_id: string };
+        Returns: undefined;
+      };
+      reorder_moment_photos: {
+        Args: { moment_id: string; photo_ids: string[] };
+        Returns: undefined;
       };
       request_account_closure: {
         Args: { request_key: string };
@@ -1403,8 +1411,10 @@ export type Database = {
       };
       reserve_photo_moment: {
         Args: {
+          audience?: string;
           body: string;
           circle_id: string;
+          circle_ids?: string[];
           journal_person_id: string;
           occurred_at?: string;
           occurred_on: string;
@@ -1412,8 +1422,6 @@ export type Database = {
           place_name: string;
           request_key?: string;
           tagged_person_ids: string[];
-          audience?: string;
-          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1426,9 +1434,12 @@ export type Database = {
       };
       reserve_video_moment: {
         Args: {
+          audience?: string;
           body: string;
           circle_id: string;
+          circle_ids?: string[];
           duration_ms: number;
+          existing_moment_id?: string;
           expected_mime_type: string;
           expected_size_bytes: number;
           journal_person_id: string;
@@ -1438,8 +1449,6 @@ export type Database = {
           place_name: string;
           request_key?: string;
           tagged_person_ids: string[];
-          audience?: string;
-          circle_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1466,8 +1475,8 @@ export type Database = {
           draft_id?: string;
           journal_person_id?: string;
           kind?: string;
-          latitude?: number | null;
-          longitude?: number | null;
+          latitude?: number;
+          longitude?: number;
           media?: Json;
           occurred_on?: string;
           occurred_time?: string;
@@ -1483,9 +1492,13 @@ export type Database = {
         Args: { auth: string; endpoint: string; p256dh: string };
         Returns: string;
       };
-      set_my_profile_color: {
-        Args: { color: string };
-        Returns: boolean;
+      set_circle_archived: {
+        Args: { archive: boolean; target_circle_id: string };
+        Returns: undefined;
+      };
+      set_membership_role: {
+        Args: { membership_id: string; role: string };
+        Returns: undefined;
       };
       set_moment_audience: {
         Args: {
@@ -1496,14 +1509,11 @@ export type Database = {
         };
         Returns: number;
       };
-      set_membership_role: {
-        Args: { membership_id: string; role: string };
-        Returns: undefined;
-      };
       set_moment_reaction: {
         Args: { moment_id: string; reaction_type: string };
         Returns: number;
       };
+      set_my_profile_color: { Args: { color: string }; Returns: boolean };
       set_person_guardian: {
         Args: {
           grant_access: boolean;
@@ -1520,6 +1530,23 @@ export type Database = {
         };
         Returns: number;
       };
+      share_private_moment: {
+        Args: {
+          destination_circle_id: string;
+          expected_revision: number;
+          latitude?: number;
+          longitude?: number;
+          moment_body: string;
+          moment_id: string;
+          moment_title: string;
+          occurred_at?: string;
+          occurred_on: string;
+          occurred_timezone?: string;
+          place_name: string;
+          tagged_person_ids: string[];
+        };
+        Returns: number;
+      };
       sweep_expired_invitation_email_requests: {
         Args: { batch_limit: number };
         Returns: number;
@@ -1528,21 +1555,16 @@ export type Database = {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
       };
-      set_circle_archived: {
-        Args: { target_circle_id: string; archive: boolean };
-        Returns: undefined;
-      };
-      delete_empty_circle: {
-        Args: { target_circle_id: string; expected_name: string };
-        Returns: undefined;
-      };
       update_circle: {
         Args: { circle_id: string; circle_name: string };
         Returns: string;
       };
       update_family_moment: {
         Args: {
+          audience?: string;
           expected_revision: number;
+          latitude?: number;
+          longitude?: number;
           moment_body: string;
           moment_id: string;
           moment_title: string;
@@ -1550,10 +1572,7 @@ export type Database = {
           occurred_on: string;
           occurred_timezone?: string;
           place_name: string;
-          latitude?: number | null;
-          longitude?: number | null;
           tagged_person_ids: string[];
-          audience?: string;
         };
         Returns: number;
       };
@@ -1571,6 +1590,15 @@ export type Database = {
           occurred_timezone?: string;
         };
         Returns: number;
+      };
+      visible_moment_authors: {
+        Args: { membership_ids: string[] };
+        Returns: {
+          accent_token: string;
+          display_name: string;
+          membership_id: string;
+          person_id: string;
+        }[];
       };
       withdraw_invitation_email_request: {
         Args: { email_request_id: string };
