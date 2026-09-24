@@ -751,6 +751,42 @@ test("Just Me stays owner-only across All Circles and personal journals", async 
   await expect(page.getByText("A porch thought just for me.")).toHaveCount(0);
 });
 
+test("mentions Quiet card shows once, dismisses, and leaves the journal still", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  const banner = page
+    .getByRole("status")
+    .filter({ hasText: "Tag your people" });
+  const journal = page.getByLabel("Chronological moments");
+  await expect(banner).toBeVisible();
+  await expect(
+    banner.getByText(
+      "Type @ in a comment or caption to mention someone in the circle. They'll get a notice so they don't miss it.",
+    ),
+  ).toBeVisible();
+  const before = await journal.boundingBox();
+  await page.reload();
+  await expect(banner).toBeVisible();
+  const afterReload = await journal.boundingBox();
+  expect(afterReload!.y).toBe(before!.y);
+
+  await banner.getByRole("button", { name: "Got it" }).click();
+  await expect(banner).toHaveCount(0);
+  const dismissedTop = await journal.boundingBox();
+  expect(dismissedTop!.y).toBeLessThan(before!.y);
+
+  await page.reload();
+  await expect(banner).toHaveCount(0);
+  const reloadedTop = await journal.boundingBox();
+  expect(reloadedTop!.y).toBe(dismissedTop!.y);
+  await page.goto(`/family?circle=${localCircleId}`);
+  await expect(page).toHaveURL(new RegExp(`/family\\?circle=${localCircleId}`));
+  await expect(banner).toHaveCount(0);
+});
+
 test("unconfigured Google and X stay on the invitation gate", async ({
   page,
 }) => {

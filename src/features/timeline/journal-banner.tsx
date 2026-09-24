@@ -30,6 +30,7 @@ export type JournalBannerProps = Readonly<{
   body: string;
   cta: JournalBannerCta;
   showNotNow?: boolean;
+  promoId?: string;
   onDismiss: () => void;
 }>;
 
@@ -93,32 +94,10 @@ function QuietChevron() {
   );
 }
 
-function renderCta(cta: JournalBannerCta, variant: JournalBannerVariant) {
-  const className =
-    cta.kind === "pill"
-      ? `journal-banner-cta journal-banner-cta-pill journal-banner-cta-pill-${variant}`
-      : "journal-banner-cta journal-banner-cta-quiet";
-
-  if ("href" in cta) {
-    return (
-      <Link
-        className={className}
-        href={cta.href}
-        prefetch={false}
-        onClick={cta.onClick}
-      >
-        {cta.label}
-        {cta.kind === "quiet" ? <QuietChevron /> : null}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" className={className} onClick={cta.onClick}>
-      {cta.label}
-      {cta.kind === "quiet" ? <QuietChevron /> : null}
-    </button>
-  );
+function ctaClassName(cta: JournalBannerCta, variant: JournalBannerVariant) {
+  return cta.kind === "pill"
+    ? `journal-banner-cta journal-banner-cta-pill journal-banner-cta-pill-${variant}`
+    : "journal-banner-cta journal-banner-cta-quiet";
 }
 
 export function JournalBanner({
@@ -127,6 +106,7 @@ export function JournalBanner({
   body,
   cta,
   showNotNow = false,
+  promoId,
   onDismiss,
 }: JournalBannerProps) {
   const titleId = useId();
@@ -193,6 +173,7 @@ export function JournalBanner({
       ref={bannerRef}
       className="journal-banner"
       data-variant={variant}
+      data-promo={promoId}
       data-motion={motionState}
       role="status"
       aria-labelledby={titleId}
@@ -206,7 +187,29 @@ export function JournalBanner({
       </h2>
       <p className="journal-banner-body">{body}</p>
       <div className="journal-banner-actions">
-        {renderCta(cta, variant)}
+        {"href" in cta ? (
+          <Link
+            className={ctaClassName(cta, variant)}
+            href={cta.href}
+            prefetch={false}
+            onClick={cta.onClick}
+          >
+            {cta.label}
+            {cta.kind === "quiet" ? <QuietChevron /> : null}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className={ctaClassName(cta, variant)}
+            onClick={() => {
+              cta.onClick();
+              beginDismiss();
+            }}
+          >
+            {cta.label}
+            {cta.kind === "quiet" ? <QuietChevron /> : null}
+          </button>
+        )}
         {showNotNow ? (
           <button
             type="button"

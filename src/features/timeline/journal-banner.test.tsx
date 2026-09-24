@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { JournalBanner } from "./journal-banner";
 
@@ -50,5 +51,34 @@ describe("JournalBanner", () => {
     expect(screen.getByRole("link", { name: "Add a caption" })).toHaveClass(
       "journal-banner-cta-quiet",
     );
+  });
+
+  it("collapses a feature pill before telling the parent it was dismissed", async () => {
+    const onDismiss = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <JournalBanner
+        promoId="mentions"
+        variant="feature"
+        title="Tag your people"
+        body="Type @ in a comment or caption to mention someone in the circle. They'll get a notice so they don't miss it."
+        cta={{ kind: "pill", label: "Got it", onClick: vi.fn() }}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    const banner = await screen.findByRole("status");
+    expect(banner).toHaveAttribute("data-variant", "feature");
+    expect(banner).toHaveAttribute("data-promo", "mentions");
+    expect(screen.getByRole("button", { name: "Got it" })).toHaveClass(
+      "journal-banner-cta-pill-feature",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Got it" }));
+    expect(banner).toHaveAttribute("data-motion", "fade");
+    expect(onDismiss).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onDismiss).toHaveBeenCalledOnce();
+    });
   });
 });

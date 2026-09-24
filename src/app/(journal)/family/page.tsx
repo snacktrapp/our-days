@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { NotificationCenter } from "@/features/shell/notification-center";
 import { OpeningJournalShell } from "@/features/shell/opening-journal-shell";
-import { PhoneNotificationsAnnouncement } from "@/features/timeline/phone-notifications-announcement";
+import { JournalPromos } from "@/features/timeline/journal-promos";
+import { mentionsAnnouncementEligible } from "@/features/timeline/journal-promo-config";
+import type { FamilyTimelineSwitcherItem } from "@/features/shell/journal-switcher";
 import {
   TimelineFeed,
   TimelineFeedEntries,
@@ -45,6 +47,16 @@ const connectedActions = {
   removePhoto: removeMomentPhotoAction,
   reorderPhotos: reorderMomentPhotosAction,
 };
+
+function mentionsPromoEligible(
+  signedIn: boolean,
+  switcher: readonly FamilyTimelineSwitcherItem[] | undefined,
+) {
+  return mentionsAnnouncementEligible(
+    signedIn,
+    (switcher ?? []).filter((item) => item.kind === "group"),
+  );
+}
 
 const conversationActions = {
   load: loadMomentConversationAction,
@@ -153,7 +165,9 @@ async function ConnectedFamilyHome({
         onSelectGroup={selectActiveGroupAction}
         preserveChrome
       >
-        <PhoneNotificationsAnnouncement />
+        <JournalPromos
+          mentionsEligible={mentionsPromoEligible(true, model.switcher)}
+        />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -171,7 +185,9 @@ async function ConnectedFamilyHome({
         </Suspense>
       }
     >
-      <PhoneNotificationsAnnouncement />
+      <JournalPromos
+        mentionsEligible={mentionsPromoEligible(true, model.switcher)}
+      />
       <Suspense fallback={<RoutePendingSkeleton kind="timeline" />}>
         <FamilyTimeline access={access} context={context} options={options} />
       </Suspense>
@@ -206,7 +222,7 @@ export default async function FamilyPage({
         onSelectGroup={selectActiveGroupAction}
         preserveChrome
       >
-        <PhoneNotificationsAnnouncement />
+        <JournalPromos mentionsEligible={false} />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
@@ -223,7 +239,7 @@ export default async function FamilyPage({
         switcher={model.switcher}
         onSelectGroup={selectActiveGroupAction}
       >
-        <PhoneNotificationsAnnouncement />
+        <JournalPromos mentionsEligible={false} />
         <TimelineFeed model={model} />
       </JournalChrome>
     );
