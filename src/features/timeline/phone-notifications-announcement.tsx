@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { JournalBanner } from "./journal-banner";
+import {
+  JOURNAL_PROMO_DISMISSED,
+  journalPromoBanner,
+} from "./journal-promo-config";
 
-const STORAGE_KEY = "our-days:phone-notifications-announcement";
-const DISMISSED = "dismissed";
+const phonePromo = journalPromoBanner("phone-notifications");
+const STORAGE_KEY = phonePromo.storageKey;
+const DISMISSED = JOURNAL_PROMO_DISMISSED;
 
 function vapidConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim());
@@ -38,14 +43,18 @@ function rememberDismissed() {
   }
 }
 
+export async function phoneNotificationsAnnouncementEligible() {
+  if (!vapidConfigured() || alreadyDismissed()) return false;
+  return !(await notificationsAlreadyEnabled());
+}
+
 export function PhoneNotificationsAnnouncement() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!vapidConfigured() || alreadyDismissed()) return;
     let cancelled = false;
-    void notificationsAlreadyEnabled().then((enabled) => {
-      if (!cancelled && !enabled) setVisible(true);
+    void phoneNotificationsAnnouncementEligible().then((eligible) => {
+      if (!cancelled && eligible) setVisible(true);
     });
     return () => {
       cancelled = true;
@@ -61,16 +70,17 @@ export function PhoneNotificationsAnnouncement() {
 
   return (
     <JournalBanner
-      variant="enablement"
-      title="Phone notifications are live"
-      body="Get a quiet ping on this phone."
+      promoId={phonePromo.id}
+      variant={phonePromo.variant}
+      title={phonePromo.title}
+      body={phonePromo.body}
       cta={{
         kind: "pill",
-        label: "Turn on notifications",
-        href: "/settings/family#notifications",
+        label: phonePromo.ctaLabel,
+        href: phonePromo.ctaHref,
         onClick: dismiss,
       }}
-      showNotNow
+      showNotNow={phonePromo.showNotNow}
       onDismiss={dismiss}
     />
   );

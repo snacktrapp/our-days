@@ -2294,6 +2294,11 @@ span.moment-place-line {
   font-size: 0.82rem;
 }
 
+html[data-mentions-announcement="dismissed"]
+  .journal-banner[data-promo="mentions"] {
+  display: none;
+}
+
 .journal-banner {
   --banner-accent: var(--action);
   position: relative;

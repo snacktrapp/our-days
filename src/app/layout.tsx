@@ -66,6 +66,11 @@ const themeBootstrap = `
   } catch (_) {
     document.documentElement.dataset.theme = "dark";
   }
+  try {
+    if (window.localStorage.getItem("our-days:mentions-announcement") === "dismissed") {
+      document.documentElement.dataset.mentionsAnnouncement = "dismissed";
+    }
+  } catch (_) {}
 `;
 
 export default async function RootLayout({
