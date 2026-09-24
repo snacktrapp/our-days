@@ -340,7 +340,7 @@ async function expectComposerMatchesActivitySheet(page: Page) {
   expect(themeColor.includes("#000000")).toBe(true);
 }
 
-test("New moment composer opens a thumb-zone sheet in dark", async ({
+test("New moment composer opens a mid-screen sheet in dark", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -353,7 +353,7 @@ test("New moment composer opens a thumb-zone sheet in dark", async ({
   await expectComposerMatchesActivitySheet(page);
 });
 
-test("New moment composer opens a thumb-zone sheet in light", async ({
+test("New moment composer opens a mid-screen sheet in light", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });

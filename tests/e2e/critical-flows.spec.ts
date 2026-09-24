@@ -191,7 +191,7 @@ test("Journal, Circles, and Settings remain distinct with one Add entry point @c
   await expect(page.locator(".circle-back-link")).toHaveCount(0);
 });
 
-test("Add chooser opens low with reachable types and supports dismiss + pick flows @critical", async ({
+test("Add chooser opens mid-screen with reachable types and supports dismiss + pick flows @critical", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 667 });

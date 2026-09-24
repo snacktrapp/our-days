@@ -8323,23 +8323,41 @@ html[data-theme].overlay-open .app-shell::before,
 }
 
 /* New moment keeps the shared Activity chrome: rounded top, grab handle,
-   swipe-down dismiss, and a viewport scrim. The type picker starts lower
-   for thumb reach, while the full editor can still use the taller sheet. */
+   swipe-down dismiss, and a viewport scrim. The type picker rises to about
+   half the viewport for mid-screen thumb reach; the editor stays tall. */
 .new-moment-composer-dialog[open] {
   align-items: flex-end;
   justify-content: center;
 }
 
+/* Type picker rises to ~mid-screen so the four entry cards land near
+   the vertical middle of an iPhone for easier thumb taps. The editor
+   that opens after a type is picked keeps the tall activity sheet. */
 .new-moment-composer-dialog.composer-type-picker .activity-sheet {
-  height: auto;
+  height: max(50dvh, 300px);
   max-height: min(
     calc(100dvh - var(--activity-sheet-top-gap)),
-    max(46dvh, 280px)
+    max(50dvh, 300px)
   );
 }
 
 .new-moment-composer-dialog.composer-type-picker .composer-sheet-body {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: clamp(8px, 2.5dvh, 20px);
+}
+
+/* Grow the chooser cards slightly so the half-height sheet feels filled
+   rather than empty below the grid. */
+.new-moment-composer-dialog.composer-type-picker .moment-choices {
+  flex: 0 0 auto;
+}
+
+.new-moment-composer-dialog.composer-type-picker .moment-choices button {
+  min-height: 88px;
+  padding: 12px 12px;
 }
 
 .new-moment-composer-dialog .activity-sheet-bar {

@@ -267,18 +267,20 @@ describe("smash harden matrix", () => {
   });
 
   describe("A-add chooser thumb zone", () => {
-    it("keeps Add opening low while retaining critical open, pick, and dismiss coverage", () => {
+    it("keeps Add opening mid-screen while retaining critical open, pick, and dismiss coverage", () => {
       expect(momentComposer).toContain("composer-type-picker");
       expect(globalsCss).toContain(
         ".new-moment-composer-dialog.composer-type-picker .activity-sheet",
       );
-      expect(globalsCss).toContain("height: auto");
-      expect(globalsCss).toContain("max(46dvh, 280px)");
+      expect(globalsCss).toContain("max(50dvh, 300px)");
       expect(globalsCss).toContain(
         ".new-moment-composer-dialog.composer-type-picker .composer-sheet-body",
       );
+      expect(globalsCss).toContain(
+        ".new-moment-composer-dialog.composer-type-picker .moment-choices button",
+      );
       expect(criticalFlowsTest).toContain(
-        "Add chooser opens low with reachable types and supports dismiss + pick flows @critical",
+        "Add chooser opens mid-screen with reachable types and supports dismiss + pick flows @critical",
       );
     });
   });
