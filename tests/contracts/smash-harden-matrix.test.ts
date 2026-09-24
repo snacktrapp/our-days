@@ -75,6 +75,7 @@ const refreshTest = read(
   "src/features/timeline/timeline-refresh-control.test.tsx",
 );
 const routeBoundary = read("src/features/shell/journal-route-boundary.tsx");
+const globalsCss = read("src/app/globals.css");
 const photoWorker = read("src/lib/photo-worker.server.ts");
 const photoProcessRoute = read("src/app/api/photos/process/route.ts");
 const photoProcessRouteTest = read("src/app/api/photos/process/route.test.ts");
@@ -106,6 +107,7 @@ const momentComposer = read("src/features/composer/moment-composer.tsx");
 const momentComposerTest = read(
   "src/features/composer/moment-composer.test.tsx",
 );
+const criticalFlowsTest = read("tests/e2e/critical-flows.spec.ts");
 
 describe("smash harden matrix", () => {
   describe("R-Account Account→Journal remount", () => {
@@ -260,6 +262,23 @@ describe("smash harden matrix", () => {
       expect(audienceChip).toContain('<span className="audience-chip"');
       expect(audienceChipTest).toContain(
         "renders a decorative chip and does not expand names",
+      );
+    });
+  });
+
+  describe("A-add chooser thumb zone", () => {
+    it("keeps Add opening low while retaining critical open, pick, and dismiss coverage", () => {
+      expect(momentComposer).toContain("composer-type-picker");
+      expect(globalsCss).toContain(
+        ".new-moment-composer-dialog.composer-type-picker .activity-sheet",
+      );
+      expect(globalsCss).toContain("height: auto");
+      expect(globalsCss).toContain("max(46dvh, 280px)");
+      expect(globalsCss).toContain(
+        ".new-moment-composer-dialog.composer-type-picker .composer-sheet-body",
+      );
+      expect(criticalFlowsTest).toContain(
+        "Add chooser opens low with reachable types and supports dismiss + pick flows @critical",
       );
     });
   });
