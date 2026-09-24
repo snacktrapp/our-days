@@ -389,7 +389,7 @@ export async function POST(request: Request) {
     circle_id: target.target.circleId,
     quote: body.quote.trim(),
     attribution: body.attribution.trim(),
-    source_url: source.url,
+    source_url: source.url ?? undefined,
     occurred_on: occurrence.occurredOn,
     occurred_at: occurrence.occurredAt ?? undefined,
     occurred_timezone: occurrence.occurredTimezone ?? undefined,
