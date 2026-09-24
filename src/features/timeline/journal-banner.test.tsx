@@ -51,6 +51,48 @@ describe("JournalBanner", () => {
     expect(screen.getByRole("link", { name: "Add a caption" })).toHaveClass(
       "journal-banner-cta-quiet",
     );
+    expect(banner.querySelector(".journal-banner-badge svg")).not.toHaveClass(
+      "journal-banner-sparkle",
+    );
+  });
+
+  it("renders a configured glyph in the badge and keeps the bell for enablement", async () => {
+    const { unmount } = render(
+      <JournalBanner
+        variant="feature"
+        icon="@"
+        title="Tag your people"
+        body="Mention someone."
+        cta={{ kind: "pill", label: "Got it", onClick: vi.fn() }}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("@")).toHaveClass(
+      "journal-banner-badge-glyph",
+    );
+
+    unmount();
+    render(
+      <JournalBanner
+        variant="enablement"
+        title="Phone notifications are live"
+        body="Get a quiet ping on this phone."
+        cta={{
+          kind: "pill",
+          label: "Turn on notifications",
+          href: "/settings/family#notifications",
+        }}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    const badge = screen
+      .getByRole("status")
+      .querySelector(".journal-banner-badge");
+    expect(badge?.querySelector(".journal-banner-badge-glyph")).toBeNull();
+    expect(badge?.querySelector("svg.journal-banner-sparkle")).toBeNull();
+    expect(badge?.querySelectorAll("path").length).toBeGreaterThan(1);
   });
 
   it("collapses a feature pill before telling the parent it was dismissed", async () => {
@@ -73,6 +115,10 @@ describe("JournalBanner", () => {
     expect(screen.getByRole("button", { name: "Got it" })).toHaveClass(
       "journal-banner-cta-pill-feature",
     );
+    expect(banner.querySelector(".journal-banner-badge-glyph")).toBeNull();
+    const sparkle = banner.querySelector(".journal-banner-sparkle");
+    expect(sparkle?.querySelectorAll("path")).toHaveLength(1);
+    expect(sparkle?.innerHTML ?? "").not.toContain("M12 3v2.2");
 
     await user.click(screen.getByRole("button", { name: "Got it" }));
     expect(banner).toHaveAttribute("data-motion", "fade");

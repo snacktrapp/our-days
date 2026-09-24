@@ -29,6 +29,7 @@ describe("JournalPromos", () => {
       ),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Got it" })).toBeVisible();
+    expect(screen.getByText("@")).toHaveClass("journal-banner-badge-glyph");
     expect(screen.queryByText("Phone notifications are live")).toBeNull();
   });
 
