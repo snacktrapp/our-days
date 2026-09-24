@@ -8,11 +8,12 @@ import {
   entryCommentMessage,
   entryReactionMessage,
   familyMomentPostedMessage,
+  mentionNotificationMessage,
 } from "@/lib/activity-notifications";
 import { sendWebPush } from "./send";
 import { webPushIsConfigured } from "./keys";
 
-export type ActivityPushKind = "moment" | "note" | "reaction";
+export type ActivityPushKind = "moment" | "note" | "reaction" | "mention";
 
 type DeliveryRow =
   Database["public"]["Functions"]["list_web_push_deliveries"]["Returns"][number];
@@ -55,10 +56,16 @@ export async function deliverActivityWebPush(
     return;
   }
   try {
-    const { data, error } = await client.rpc("list_web_push_deliveries", {
-      activity_kind: kind,
-      activity_id: activityId,
-    });
+    const { data, error } =
+      kind === "mention"
+        ? await client.rpc("claim_mention_push_deliveries", {
+            requested_moment_id: activityId,
+            requested_note_id: options?.noteId ?? undefined,
+          })
+        : await client.rpc("list_web_push_deliveries", {
+            activity_kind: kind,
+            activity_id: activityId,
+          });
     if (error) {
       logPushSkip("rpc_error", {
         kind,
@@ -83,13 +90,26 @@ export async function deliverActivityWebPush(
 
     await Promise.all(
       deliveries.map(async (row) => {
+        const actorName = row.actor_name?.trim() || "Family";
+        const mentionSnippet =
+          "snippet" in row && typeof row.snippet === "string"
+            ? row.snippet
+            : "";
         const title =
-          kind === "note"
+          kind === "mention"
             ? activityNotificationTitle(
-                row.actor_name?.trim() || "Family",
-                entryCommentMessage,
+                actorName,
+                mentionNotificationMessage(mentionSnippet),
               )
-            : pushTitle(row);
+            : kind === "note"
+              ? activityNotificationTitle(actorName, entryCommentMessage)
+              : pushTitle(row as DeliveryRow);
+        const noteId =
+          kind === "mention" &&
+          "note_id" in row &&
+          typeof row.note_id === "string"
+            ? row.note_id
+            : options?.noteId;
         const result = await sendWebPush(
           {
             endpoint: row.endpoint,
@@ -100,8 +120,8 @@ export async function deliverActivityWebPush(
             title,
             url: activityMomentHref(
               row.moment_id,
-              kind === "note"
-                ? { noteId: options?.noteId, thread: true }
+              kind === "note" || (kind === "mention" && noteId)
+                ? { noteId, thread: true }
                 : kind === "reaction"
                   ? { thread: true }
                   : undefined,

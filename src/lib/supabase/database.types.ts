@@ -859,6 +859,9 @@ export type Database = {
           tagged_person_ids: string[];
           audience?: string;
           circle_ids?: string[];
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
         };
         Returns: string;
       };
@@ -897,8 +900,30 @@ export type Database = {
         };
         Returns: string;
       };
+      claim_mention_push_deliveries: {
+        Args: { requested_moment_id: string; requested_note_id?: string };
+        Returns: {
+          actor_name: string;
+          auth: string;
+          circle_name: string | null;
+          endpoint: string;
+          moment_id: string;
+          moment_kind: string | null;
+          note_id: string | null;
+          p256dh: string;
+          reaction_type: string | null;
+          snippet: string | null;
+          visible_circle_id: string | null;
+        }[];
+      };
       create_moment_note: {
-        Args: { body: string; moment_id: string };
+        Args: {
+          body: string;
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
+          moment_id: string;
+        };
         Returns: string;
       };
       create_written_moment: {
@@ -911,6 +936,9 @@ export type Database = {
           occurred_timezone?: string;
           audience?: string;
           circle_ids?: string[];
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
         };
         Returns: string;
       };
@@ -1239,6 +1267,30 @@ export type Database = {
           linked_circle_ids: string[];
         }[];
       };
+      list_my_mention_notifications: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          actor_membership_id: string;
+          actor_name: string;
+          created_at: string;
+          mention_id: string;
+          moment_id: string;
+          note_id: string | null;
+          snippet: string;
+        }[];
+      };
+      list_visible_content_mentions: {
+        Args: { moment_ids: string[] };
+        Returns: {
+          active: boolean;
+          display_name: string | null;
+          end_offset: number;
+          mentioned_user_id: string;
+          moment_id: string;
+          note_id: string | null;
+          start_offset: number;
+        }[];
+      };
       list_web_push_deliveries: {
         Args: { activity_id: string; activity_kind: string };
         Returns: {
@@ -1414,6 +1466,9 @@ export type Database = {
           tagged_person_ids: string[];
           audience?: string;
           circle_ids?: string[];
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1440,6 +1495,10 @@ export type Database = {
           tagged_person_ids: string[];
           audience?: string;
           circle_ids?: string[];
+          existing_moment_id?: string;
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
         };
         Returns: {
           bucket_id: string;
@@ -1554,17 +1613,30 @@ export type Database = {
           longitude?: number | null;
           tagged_person_ids: string[];
           audience?: string;
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
         };
         Returns: number;
       };
       update_moment_note: {
-        Args: { body: string; expected_revision: number; note_id: string };
+        Args: {
+          body: string;
+          expected_revision: number;
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
+          note_id: string;
+        };
         Returns: number;
       };
       update_written_moment: {
         Args: {
           body: string;
           expected_revision: number;
+          mention_ends?: number[];
+          mention_starts?: number[];
+          mentioned_user_ids?: string[];
           moment_id: string;
           occurred_at?: string;
           occurred_on: string;

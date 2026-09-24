@@ -40,6 +40,7 @@ import {
 } from "@/features/moments/moment-photos";
 import { displayConversationDate } from "@/features/timeline/display-conversation-date";
 import { formatMomentClock } from "@/features/timeline/moment-time-label";
+import type { MentionDisplay } from "@/features/mentions/mention-draft";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type GeneratedTimelineRow =
@@ -135,6 +136,24 @@ const emptyConversation: MomentConversationViewModel = {
   reactions: [],
 };
 
+function mentionDisplays(
+  rows: readonly {
+    mentioned_user_id: string;
+    start_offset: number;
+    end_offset: number;
+    display_name: string | null;
+    active: boolean;
+  }[],
+): MentionDisplay[] {
+  return rows.map((row) => ({
+    userId: row.mentioned_user_id,
+    start: row.start_offset,
+    end: row.end_offset,
+    name: row.active ? row.display_name : null,
+    active: row.active,
+  }));
+}
+
 const knownReactionIds = new Set<MomentReactionId>([
   "held-close",
   "made-me-smile",
@@ -165,7 +184,7 @@ export async function loadMomentConversationsByMomentId(
     return conversations;
   }
 
-  const [notesResult, reactionsResult] = await Promise.all([
+  const [notesResult, reactionsResult, mentionResult] = await Promise.all([
     supabase
       .from("moment_notes")
       .select("id, moment_id, author_membership_id, body, revision, created_at")
@@ -178,13 +197,44 @@ export async function loadMomentConversationsByMomentId(
       .in("moment_id", uniqueIds)
       .is("removed_at", null)
       .order("created_at", { ascending: true }),
+    typeof supabase.rpc === "function"
+      ? supabase.rpc("list_visible_content_mentions", {
+          moment_ids: uniqueIds,
+        })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   const notes = notesResult.data ?? [];
   const reactions = reactionsResult.data ?? [];
+  const mentionRows = mentionResult.error ? [] : (mentionResult.data ?? []);
+  const captionMentions = new Map<string, MentionDisplay[]>();
+  const noteMentions = new Map<string, MentionDisplay[]>();
+  for (const row of mentionRows) {
+    const display = mentionDisplays([row])[0];
+    if (!display) continue;
+    if (row.note_id) {
+      const list = noteMentions.get(row.note_id) ?? [];
+      list.push(display);
+      noteMentions.set(row.note_id, list);
+    } else {
+      const list = captionMentions.get(row.moment_id) ?? [];
+      list.push(display);
+      captionMentions.set(row.moment_id, list);
+    }
+  }
   const membershipIds = [
     ...new Set([...notes, ...reactions].map((row) => row.author_membership_id)),
   ];
-  if (membershipIds.length === 0) return conversations;
+  if (membershipIds.length === 0) {
+    for (const id of uniqueIds) {
+      const captions = captionMentions.get(id);
+      conversations.set(id, {
+        notes: [],
+        reactions: [],
+        ...(captions?.length ? { captionMentions: captions } : {}),
+      });
+    }
+    return conversations;
+  }
 
   const viewerMembershipIds = new Set(
     access.membershipIds?.length ? access.membershipIds : [access.membershipId],
@@ -237,6 +287,9 @@ export async function loadMomentConversationsByMomentId(
       displayDate: displayConversationDate(note.created_at),
       revision: note.revision,
       canChange: viewerMembershipIds.has(note.author_membership_id),
+      ...(noteMentions.get(note.id)?.length
+        ? { mentions: noteMentions.get(note.id) }
+        : {}),
     });
     notesByMoment.set(note.moment_id, list);
   }
@@ -264,9 +317,11 @@ export async function loadMomentConversationsByMomentId(
   }
 
   for (const id of uniqueIds) {
+    const captions = captionMentions.get(id);
     conversations.set(id, {
       notes: notesByMoment.get(id) ?? [],
       reactions: reactionsByMoment.get(id) ?? [],
+      ...(captions?.length ? { captionMentions: captions } : {}),
     });
   }
   return conversations;
@@ -381,6 +436,9 @@ export function mapTimelineRow(
                   : "A thought"
           : `Recorded by ${row.recorder_person_name}`,
     text: row.body,
+    ...(conversation.captionMentions?.length
+      ? { mentions: conversation.captionMentions }
+      : {}),
     conversation,
     canChange: row.can_change,
     revision: row.revision,
@@ -662,6 +720,9 @@ export function connectedTimelineInteraction(
       initial: person.initial,
       accent: person.accent,
     })),
+    mentionableMembers: Object.values(
+      context.chrome.composer.mentionableMembersByCircle ?? {},
+    ).flat(),
     reactionOptions: [
       { id: "held-close", label: "Held close", symbol: "♡" },
       { id: "made-me-smile", label: "Made me smile", symbol: "◡" },

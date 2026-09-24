@@ -449,6 +449,7 @@ describe("MomentConversationControl", () => {
       expect(actions.createNote).toHaveBeenCalledWith({
         momentId: "moment-one",
         body: "The sky was even better in person.",
+        mentions: [],
       }),
     );
     expect(
@@ -519,6 +520,7 @@ describe("MomentConversationControl", () => {
       expect(actions.createNote).toHaveBeenCalledWith({
         momentId: "moment-one",
         body: "Nana just replied.",
+        mentions: [],
       }),
     );
     const notes = screen.getByRole("list", { name: "Notes from family" });
@@ -587,8 +589,10 @@ describe("MomentConversationControl", () => {
     await waitFor(() =>
       expect(actions.updateNote).toHaveBeenCalledWith({
         noteId: "note-owned",
+        momentId: "moment-one",
         revision: 3,
         body: "Updated newest note.",
+        mentions: [],
       }),
     );
     expect(screen.getByText("Updated newest note.")).toBeVisible();
@@ -618,6 +622,7 @@ describe("MomentConversationControl", () => {
       expect(actions.createNote).toHaveBeenCalledWith({
         momentId: "moment-one",
         body: "The porch light was on.",
+        mentions: [],
       }),
     );
     expect(screen.queryByRole("alert")).toBeNull();
@@ -691,8 +696,10 @@ describe("MomentConversationControl", () => {
     await waitFor(() =>
       expect(actions.updateNote).toHaveBeenCalledWith({
         noteId: "note-owned",
+        momentId: "moment-one",
         revision: 3,
         body: "Updated note.",
+        mentions: [],
       }),
     );
     expect(screen.getByText("Updated note.")).toBeVisible();

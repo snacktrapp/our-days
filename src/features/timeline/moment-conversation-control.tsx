@@ -22,6 +22,14 @@ import {
   visibleConversationNotes,
 } from "./moment-conversation-notes";
 import { displayConversationDate } from "./display-conversation-date";
+import { MentionField } from "@/features/mentions/mention-field";
+import {
+  draftFromMentionDisplay,
+  mentionsForSavedBody,
+  type DraftMention,
+  type MentionCandidate,
+} from "@/features/mentions/mention-draft";
+import { MentionText } from "@/features/mentions/mention-text";
 import { CommentDrawer } from "./comment-drawer";
 import { HeartGlyph } from "./heart-glyph";
 import type {
@@ -48,6 +56,8 @@ type MomentConversationControlProps = Readonly<{
   position?: number;
   total?: number;
   trailing?: ReactNode;
+  mentionMembers?: readonly MentionCandidate[];
+  mentionsEnabled?: boolean;
 }>;
 
 function momentKindLabel(model: MomentDetailViewModel) {
@@ -134,6 +144,8 @@ export function MomentConversationControl({
   position = 1,
   total = 1,
   trailing,
+  mentionMembers = [],
+  mentionsEnabled = false,
 }: MomentConversationControlProps) {
   const panelId = useId();
   const noteRef = useRef<HTMLTextAreaElement>(null);
@@ -147,6 +159,7 @@ export function MomentConversationControl({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [noteMentions, setNoteMentions] = useState<readonly DraftMention[]>([]);
   const [showAllNotes, setShowAllNotes] = useState(false);
   useEffect(() => {
     const onTarget = (event: Event) => {
@@ -422,8 +435,10 @@ export function MomentConversationControl({
       if (actions && editingNote?.revision) {
         const result = await actions.updateNote({
           noteId: editingNote.id,
+          momentId: model.id,
           revision: editingNote.revision,
           body,
+          mentions: mentionsForSavedBody(noteDraft, noteMentions),
         });
         if (!result.ok) {
           setError(result.message);
@@ -438,7 +453,11 @@ export function MomentConversationControl({
         const reloaded = await loadConversation(true);
         if (!reloaded) setError(null);
       } else if (actions) {
-        const result = await actions.createNote({ momentId: model.id, body });
+        const result = await actions.createNote({
+          momentId: model.id,
+          body,
+          mentions: mentionsForSavedBody(noteDraft, noteMentions),
+        });
         if (!result.ok) {
           setError(result.message);
           return;
@@ -450,6 +469,7 @@ export function MomentConversationControl({
         rememberLocalNote(body, "preview");
       }
       setNoteDraft("");
+      setNoteMentions([]);
       setEditingNoteId(null);
       setPanel(null);
       window.requestAnimationFrame(() =>
@@ -610,7 +630,12 @@ export function MomentConversationControl({
                           onClick={() => {
                             flushSync(() => {
                               setEditingNoteId(note.id);
-                              setNoteDraft(note.body);
+                              const drafted = draftFromMentionDisplay(
+                                note.body,
+                                note.mentions ?? [],
+                              );
+                              setNoteDraft(drafted.text);
+                              setNoteMentions(drafted.mentions);
                               setPanel("note");
                               setError(null);
                             });
@@ -655,7 +680,9 @@ export function MomentConversationControl({
                       </span>
                     ) : null}
                   </span>
-                  <p>{note.body}</p>
+                  <p>
+                    <MentionText text={note.body} mentions={note.mentions} />
+                  </p>
                 </div>
               </li>
             ))}
@@ -696,19 +723,23 @@ export function MomentConversationControl({
               void saveNote();
             }}
           >
-            <textarea
-              ref={noteRef}
+            <MentionField
+              fieldRef={noteRef}
               id={`${panelId}-note-field`}
               aria-label={
                 editingNoteId ? "Edit your note" : "Add a family note"
               }
               value={noteDraft}
+              mentions={noteMentions}
+              members={mentionMembers}
+              enabled={mentionsEnabled}
               maxLength={1000}
               placeholder="A memory, detail, or reply…"
               disabled={loading || pending}
-              onChange={(event) => {
-                setNoteDraft(event.target.value);
-                if (event.target.value.trim()) setError(null);
+              onValueChange={(next, mentions) => {
+                setNoteDraft(next);
+                setNoteMentions(mentionsEnabled ? mentions : []);
+                if (next.trim()) setError(null);
               }}
             />
             {error ? (
@@ -722,6 +753,7 @@ export function MomentConversationControl({
                 disabled={pending}
                 onClick={() => {
                   setNoteDraft("");
+                  setNoteMentions([]);
                   setEditingNoteId(null);
                   setError(null);
                   setPanel(null);

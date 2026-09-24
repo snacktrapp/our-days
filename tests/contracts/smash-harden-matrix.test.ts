@@ -551,4 +551,76 @@ describe("smash harden matrix", () => {
       );
     });
   });
+
+  describe("mentions in captions and comments", () => {
+    const mentionMigration = read(
+      "supabase/migrations/20260924170200_content_mentions.sql",
+    );
+    const mentionField = read("src/features/mentions/mention-field.tsx");
+    const mentionDraft = read("src/features/mentions/mention-draft.ts");
+    const deliverPush = read("src/lib/web-push/deliver-activity.ts");
+
+    it("mentions in a caption with the same write as the caption", () => {
+      expect(momentComposer).toContain("<MentionField");
+      expect(momentComposer).toContain("mentions: savedMentions");
+      expect(mentionMigration).toContain("private.apply_content_mentions");
+      expect(mentionMigration).toContain(
+        "perform private.apply_content_mentions",
+      );
+      expect(read("src/features/timeline/moment-card.tsx")).toContain(
+        "<MentionText",
+      );
+      expect(read("src/features/mentions/mention-text.tsx")).toContain(
+        "mention-token",
+      );
+    });
+
+    it("mentions in a comment and opens the thread from the notification", () => {
+      expect(conversationControl).toContain("<MentionField");
+      expect(conversationControl).toContain("mentionsForSavedBody");
+      expect(activityNotifications).toContain("mentionNotificationMessage");
+      expect(read("src/data/journal-context.server.ts")).toContain(
+        "noteId: mention.note_id",
+      );
+      expect(read("src/data/journal-context.server.ts")).toContain(
+        "list_my_mention_notifications",
+      );
+    });
+
+    it("notifies only a newly added mention and keeps removals quiet", () => {
+      expect(mentionMigration).toContain("notified_at is null");
+      expect(mentionMigration).toContain(
+        "when requested_user = current_user_id then statement_timestamp()",
+      );
+      expect(mentionMigration).not.toContain("notified_at = null");
+      expect(momentActionsTest).toContain("deliverActivityWebPush");
+    });
+
+    it("rejects a non-member mention inside the save", () => {
+      expect(mentionMigration).toContain("mention_user_is_in_moment_circle");
+      expect(mentionMigration).toContain(
+        "message = 'Mention could not be saved'",
+      );
+    });
+
+    it("shows no picker on a Just me post", () => {
+      expect(momentComposer).toContain('enabled={audience !== "just_me"}');
+      expect(mentionMigration).toContain(
+        "coalesce(target_audience, 'family') = 'just_me'",
+      );
+      expect(read("src/features/timeline/moment-card.tsx")).toContain(
+        'moment.audience !== "just_me"',
+      );
+    });
+
+    it("keeps the picker above the field without moving the bottom nav", () => {
+      expect(mentionField).toContain('className="mention-picker"');
+      expect(mentionDraft).toContain("export function applyMentionTextChange");
+      expect(globalsCss).toContain(".mention-picker");
+      expect(globalsCss).toContain("bottom: calc(100% + 6px)");
+      expect(hideNav).toContain('root.querySelector(".inline-note-form")');
+      expect(deliverPush).toContain('kind === "mention"');
+      expect(deliverPush).toContain("our-days:${kind}:${row.moment_id}");
+    });
+  });
 });

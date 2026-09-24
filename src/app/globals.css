@@ -1948,6 +1948,49 @@ button {
   display: grid;
   gap: 7px;
 }
+.mention-field {
+  position: relative;
+}
+.mention-picker {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  max-height: 11rem;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--cream);
+  box-shadow: 0 8px 24px rgba(16, 18, 22, 0.12);
+}
+.mention-picker button {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-picker button:hover,
+.mention-picker button:focus-visible {
+  background: color-mix(in srgb, var(--action) 14%, var(--cream));
+}
+.mention-token {
+  color: var(--action);
+  font-weight: 600;
+}
 .inline-note-form textarea {
   width: 100%;
   min-height: 76px;
@@ -2003,7 +2046,7 @@ button {
 .inline-note-form textarea:focus {
   border-color: var(--hairline);
 }
-.inline-note-form > div {
+.inline-note-form > div:not(.mention-field) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px;
@@ -7301,7 +7344,7 @@ html.overlay-open .bottom-nav {
   color: var(--action-ink);
 }
 
-.comment-sheet .inline-note-form > div {
+.comment-sheet .inline-note-form > div:not(.mention-field) {
   position: sticky;
   bottom: 0;
   padding-block: 8px;

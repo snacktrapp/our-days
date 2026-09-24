@@ -3,6 +3,7 @@ import {
   activityMomentHref,
   activityNotificationTitle,
   entryCommentMessage,
+  mentionNotificationMessage,
   entryReactionMessage,
   familyMomentPostedMessage,
   isNotifiableFamilyMoment,
@@ -23,6 +24,12 @@ describe("family activity notification copy", () => {
     expect(activityNotificationTitle("Calvin", entryCommentMessage)).toBe(
       "Calvin commented on your entry.",
     );
+    expect(
+      activityNotificationTitle(
+        "Molly",
+        mentionNotificationMessage("the porch light"),
+      ),
+    ).toBe("Molly mentioned you. “the porch light”");
     expect(activityMomentHref("abc")).toBe("/family?moment=abc");
     expect(activityMomentHref("abc", { noteId: "note-1", thread: true })).toBe(
       "/family?moment=abc&note=note-1&thread=1",

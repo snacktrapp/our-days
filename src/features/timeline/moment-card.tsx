@@ -8,6 +8,7 @@ import { ConnectedMomentControl } from "@/features/moments/connected-moment-cont
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import { ExpandableThoughtCopy } from "./expandable-thought-copy";
+import { MentionText } from "@/features/mentions/mention-text";
 import type {
   ConnectedMomentActions,
   MomentConversationActions,
@@ -106,6 +107,33 @@ function cardOptions(
   );
 }
 
+function mentionMembersForMoment(
+  moment: TimelineMomentViewModel,
+  interaction?: MomentInteractionViewModel,
+) {
+  if (
+    !interaction?.mentionableMembers ||
+    moment.audience === "just_me" ||
+    moment.kind === "insight"
+  ) {
+    return [];
+  }
+  const circles = moment.linkedCircleIds?.length
+    ? moment.linkedCircleIds
+    : moment.circleId
+      ? [moment.circleId]
+      : [];
+  const seen = new Set<string>();
+  const members = [];
+  for (const member of interaction.mentionableMembers) {
+    if (circles.length > 0 && !circles.includes(member.circleId)) continue;
+    if (seen.has(member.userId)) continue;
+    seen.add(member.userId);
+    members.push(member);
+  }
+  return members;
+}
+
 function CardActions({
   interaction,
   moment,
@@ -122,6 +150,7 @@ function CardActions({
   options: ReactNode;
 }>) {
   if (interaction) {
+    const mentionMembers = mentionMembersForMoment(moment, interaction);
     return (
       <MomentConversationControl
         interaction={interaction}
@@ -130,6 +159,10 @@ function CardActions({
         position={connectedPosition}
         total={connectedTotal}
         trailing={options}
+        mentionMembers={mentionMembers}
+        mentionsEnabled={
+          moment.audience !== "just_me" && moment.kind !== "insight"
+        }
       />
     );
   }
@@ -224,7 +257,9 @@ export function MomentCard({
           >
             <PostAuthor moment={moment} />
           </CardTopChrome>
-          <p>{moment.text}</p>
+          <p>
+            <MentionText text={moment.text} mentions={moment.mentions} />
+          </p>
           <CardActions
             interaction={interaction}
             moment={moment}
@@ -270,7 +305,7 @@ export function MomentCard({
           </ExpandableThoughtCopy>
         ) : (
           <ExpandableThoughtCopy momentId={moment.id}>
-            “{moment.text}”
+            “<MentionText text={moment.text} mentions={moment.mentions} />”
           </ExpandableThoughtCopy>
         )}
         <CardActions
@@ -372,7 +407,9 @@ export function MomentCard({
               {moment.place}
             </MomentPlaceButton>
           </h3>
-          <p>{moment.text}</p>
+          <p>
+            <MentionText text={moment.text} mentions={moment.mentions} />
+          </p>
           <CardActions
             interaction={interaction}
             moment={moment}
@@ -412,7 +449,9 @@ export function MomentCard({
           <PostAuthor moment={moment} />
         </CardTopChrome>
         <h3>{moment.milestone}</h3>
-        <p>{moment.text}</p>
+        <p>
+          <MentionText text={moment.text} mentions={moment.mentions} />
+        </p>
       </div>
       <CardActions
         interaction={interaction}
