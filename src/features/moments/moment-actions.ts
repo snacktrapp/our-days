@@ -149,8 +149,8 @@ function coordinateRpcFields(input: {
 }) {
   const parsed = parsePlaceCoordinates(input.latitude, input.longitude);
   return {
-    latitude: parsed?.latitude ?? null,
-    longitude: parsed?.longitude ?? null,
+    latitude: parsed?.latitude ?? undefined,
+    longitude: parsed?.longitude ?? undefined,
   };
 }
 
