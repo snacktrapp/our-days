@@ -10017,6 +10017,9 @@ iframe.composer-location-map {
 .post-author-place .moment-place-pin {
   flex-shrink: 0;
 }
+.post-author-place .moment-place-pin {
+  color: var(--muted);
+}
 .post-author-place a {
   min-width: 0;
   overflow: hidden;
