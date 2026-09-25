@@ -845,7 +845,9 @@ export function MomentConversationControl({
                         </button>
                       </span>
                     ) : null}
-                    <span className="inline-note-heart">
+                    <span
+                      className={`inline-note-heart${(note.heartCount ?? 0) > 0 ? " has-count" : ""}`}
+                    >
                       <button
                         className={`inline-note-heart-trigger${note.heartedByViewer ? " is-loved" : " is-caption"}`}
                         type="button"

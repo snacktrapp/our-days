@@ -861,6 +861,12 @@ describe("MomentConversationControl", () => {
     })[0];
     expect(heart).toHaveClass("inline-note-heart-trigger", "is-caption");
     expect(heart).not.toHaveClass("is-loved");
+    expect(heart.closest(".inline-note-heart")).toHaveClass("has-count");
+    expect(
+      notes
+        .querySelectorAll(".inline-note-row")[1]
+        ?.querySelector(".inline-note-heart"),
+    ).not.toHaveClass("has-count");
     expect(
       within(notes).queryByRole("button", { name: "Edit comment" }),
     ).toBeNull();
