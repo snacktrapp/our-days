@@ -39,13 +39,30 @@ test("post location pin and conversation share the intended alignment", async ({
       },
     ),
   );
-  expect(new Set(typography.map((style) => style.family)).size).toBe(1);
+  const record = await card
+    .locator(".moment-when-line")
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  const [author, place, participants] = typography;
+  expect(author.family).toBe(participants.family);
+  expect(place.family).toBe(record);
+  expect(place.family).not.toBe(author.family);
   expect(new Set(typography.map((style) => style.size)).size).toBe(1);
   expect(typography.map((style) => style.weight)).toEqual([
     "500",
     "400",
     "400",
   ]);
+  const sameLine = await card.evaluate((element) => {
+    const name = element.querySelector(".post-author > strong");
+    const location = element.querySelector(".post-author-place");
+    if (!name || !location) return false;
+    const nameBox = name.getBoundingClientRect();
+    const placeBox = location.getBoundingClientRect();
+    return Math.abs(
+      nameBox.top + nameBox.height / 2 - (placeBox.top + placeBox.height / 2),
+    );
+  });
+  expect(sameLine).toBeLessThanOrEqual(1);
   await expect(
     card.locator(".post-author-place .moment-place-pin"),
   ).toBeVisible();
