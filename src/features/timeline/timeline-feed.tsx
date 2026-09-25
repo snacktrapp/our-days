@@ -1,11 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { MomentCard } from "./moment-card";
-import {
-  timelineCardOccurredLabel,
-  type TimelineEntryViewModel,
-  type TimelineMomentViewModel,
-  type TimelineViewModel,
+import type {
+  TimelineEntryViewModel,
+  TimelineMomentViewModel,
+  TimelineViewModel,
 } from "./timeline-view-model";
 import type {
   ConnectedMomentActions,
@@ -23,10 +22,6 @@ const insightSystemByline = {
 } as const;
 
 function Connection({ moment }: { moment: TimelineMomentViewModel }) {
-  const dateAndTime = timelineCardOccurredLabel(
-    moment.occurredOn,
-    moment.displayTime,
-  );
   const chipLabel =
     moment.audienceChipLabel ??
     (moment.showJustMeBadge ? "Just me" : undefined);
@@ -56,16 +51,12 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
         <div className="timeline-author-row">
           <strong>{bylineName}</strong>
         </div>
-        {isInsight ? (
-          <span>{dateAndTime}</span>
-        ) : (
-          <MomentRecordedTime
-            dateLabel={timelineCardOccurredLabel(moment.occurredOn)}
-            quietLabel={dateAndTime}
-            occurredAt={moment.recordedOccurrence?.occurredAt}
-            timeZone={moment.recordedOccurrence?.timeZone}
-          />
-        )}
+        <MomentRecordedTime
+          occurredOn={moment.occurredOn}
+          clock={moment.displayTime}
+          occurredAt={moment.recordedOccurrence?.occurredAt}
+          timeZone={moment.recordedOccurrence?.timeZone}
+        />
       </div>
     </div>
   );

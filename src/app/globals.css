@@ -1842,8 +1842,10 @@ button {
 
 .inline-note-when {
   color: var(--muted);
-  font-size: 9px;
+  font-family: var(--font-record);
+  font-size: 8px;
   font-weight: 400;
+  letter-spacing: 0.02em;
   line-height: 1.2;
   white-space: nowrap;
   flex-shrink: 0;
@@ -10160,7 +10162,15 @@ iframe.composer-location-map {
   margin: 2px 0 0;
 }
 .inline-note-author {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.inline-note-author strong {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .comment-color-dot {
   display: inline-block;
