@@ -337,6 +337,8 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   const rows = card.locator(".inline-note-row");
   await expect(rows).toHaveCount(2);
   const heart = rows.first().getByRole("button", { name: "Love this comment" });
+  await expect(heart).toHaveClass(/is-caption/);
+  await expect(heart).not.toHaveClass(/is-loved/);
   const box = await heart.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(44);
   expect(box?.height).toBeGreaterThanOrEqual(44);
@@ -361,6 +363,8 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
     .first()
     .getByRole("button", { name: "Undo love on this comment" });
   await expect(loved).toHaveAttribute("aria-pressed", "true");
+  await expect(loved).toHaveClass(/is-loved/);
+  await expect(loved).not.toHaveClass(/is-caption/);
   const glyph = loved.locator(".heart-glyph");
   const glyphBox = await glyph.boundingBox();
   expect(glyphBox?.width ?? 99).toBeLessThanOrEqual(16);
@@ -369,6 +373,7 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
     .first()
     .getByRole("button", { name: "1 person loves this comment" });
   await expect(count).toBeVisible();
+  await expect(count).toHaveClass(/is-caption/);
   const countBox = await count.boundingBox();
   expect((countBox?.x ?? 0) > (glyphBox?.x ?? 0)).toBe(true);
   expect(Math.abs((countBox?.y ?? 0) - (glyphBox?.y ?? 0))).toBeLessThan(24);
@@ -392,6 +397,54 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   await expect(
     rows.first().getByRole("button", { name: "Love this comment" }),
   ).toHaveAttribute("aria-pressed", "false");
+});
+
+test("own comments edit from dots and delete from the editor", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const { form } = await openNoteForm(page, card);
+  await expect(
+    form.getByRole("button", { name: "Delete comment" }),
+  ).toHaveCount(0);
+  await form.getByRole("textbox").fill("A note only I can edit.");
+  await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
+  const rows = card.locator(".inline-note-row");
+  const mine = rows.filter({ hasText: "A note only I can edit." });
+  await expect(
+    mine.getByRole("button", { name: "Edit comment" }),
+  ).toBeVisible();
+  await expect(
+    rows.filter({ hasNotText: "A note only I can edit." }).getByRole("button", {
+      name: "Edit comment",
+    }),
+  ).toHaveCount(0);
+  const spacing = await mine.evaluate((row) => {
+    const author = row.querySelector(".inline-note-author");
+    const body = row.querySelector("p");
+    if (!author || !body) return 99;
+    return (
+      body.getBoundingClientRect().top - author.getBoundingClientRect().bottom
+    );
+  });
+  expect(spacing).toBeGreaterThanOrEqual(0);
+  expect(spacing).toBeLessThanOrEqual(6);
+  await mine.getByRole("button", { name: "Edit comment" }).click();
+  const editor = page.getByRole("dialog", { name: "Edit comment" });
+  await expect(editor.getByRole("textbox")).toHaveValue(
+    "A note only I can edit.",
+  );
+  await expect(
+    editor.getByRole("button", { name: "Delete comment" }),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await editor.getByRole("button", { name: "Delete comment" }).click();
+  await expect(card.getByText("A note only I can edit.")).toHaveCount(0);
 });
 
 test("comment drawer drafts save safely and remain reversible", async ({

@@ -489,6 +489,7 @@ export function MomentConversationControl({
           body: nextBody,
           displayDate: "Just now",
           canChange: true,
+          revision: 1,
           heartCount: 0,
           heartedByViewer: false,
           heartNames: [],
@@ -555,6 +556,55 @@ export function MomentConversationControl({
       );
     } catch {
       setError("That note could not be saved. Try again.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const openNoteEditor = (note: (typeof conversation.notes)[number]) => {
+    flushSync(() => {
+      setEditingNoteId(note.id);
+      const drafted = draftFromMentionDisplay(note.body, note.mentions ?? []);
+      setNoteDraft(drafted.text);
+      setNoteMentions(drafted.mentions);
+      setPanel("note");
+      setError(null);
+    });
+    noteRef.current?.focus({ preventScroll: true });
+  };
+
+  const removeNote = async (note: { id: string; revision?: number }) => {
+    if (!window.confirm("Remove this comment?")) return;
+    if (!actions || !note.revision) {
+      setConversation((current) => ({
+        ...current,
+        notes: current.notes.filter((item) => item.id !== note.id),
+      }));
+      setNoteDraft("");
+      setNoteMentions([]);
+      setEditingNoteId(null);
+      setError(null);
+      setPanel(null);
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const result = await actions.trashNote({
+        noteId: note.id,
+        revision: note.revision,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setNoteDraft("");
+      setNoteMentions([]);
+      setEditingNoteId(null);
+      setPanel(null);
+      await loadConversation(true);
+    } catch {
+      setError("That note could not be removed. Try again.");
     } finally {
       setPending(false);
     }
@@ -782,66 +832,25 @@ export function MomentConversationControl({
                         {note.displayDate}
                       </span>
                     )}
-                    {actions && note.canChange && note.revision ? (
-                      <span className="inline-note-actions">
+                    {note.canChange && note.revision ? (
+                      <span className="inline-note-more">
                         <button
                           type="button"
+                          aria-label="Edit comment"
                           disabled={pending}
-                          onClick={() => {
-                            flushSync(() => {
-                              setEditingNoteId(note.id);
-                              const drafted = draftFromMentionDisplay(
-                                note.body,
-                                note.mentions ?? [],
-                              );
-                              setNoteDraft(drafted.text);
-                              setNoteMentions(drafted.mentions);
-                              setPanel("note");
-                              setError(null);
-                            });
-                            noteRef.current?.focus({ preventScroll: true });
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openNoteEditor(note);
                           }}
                         >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                "Remove this note from the family conversation?",
-                              )
-                            )
-                              return;
-                            setPending(true);
-                            setError(null);
-                            try {
-                              const result = await actions.trashNote({
-                                noteId: note.id,
-                                revision: note.revision!,
-                              });
-                              if (!result.ok) {
-                                setError(result.message);
-                                return;
-                              }
-                              await loadConversation(true);
-                            } catch {
-                              setError(
-                                "That note could not be removed. Try again.",
-                              );
-                            } finally {
-                              setPending(false);
-                            }
-                          }}
-                        >
-                          Remove
+                          …
                         </button>
                       </span>
                     ) : null}
                     <span className="inline-note-heart">
                       <button
-                        className="inline-note-heart-trigger"
+                        className={`inline-note-heart-trigger${note.heartedByViewer ? " is-loved" : " is-caption"}`}
                         type="button"
                         aria-pressed={note.heartedByViewer === true}
                         aria-label={
@@ -868,7 +877,7 @@ export function MomentConversationControl({
                       </button>
                       {(note.heartCount ?? 0) > 0 ? (
                         <button
-                          className="inline-note-heart-count"
+                          className="inline-note-heart-count is-caption"
                           type="button"
                           aria-expanded={openHeartNamesId === note.id}
                           aria-label={`${note.heartCount} ${note.heartCount === 1 ? "person loves" : "people love"} this comment`}
@@ -953,6 +962,33 @@ export function MomentConversationControl({
           >
             <MentionField
               layout="pill"
+              leading={
+                editingNoteId ? (
+                  <button
+                    className="comment-delete is-caption"
+                    type="button"
+                    aria-label="Delete comment"
+                    disabled={pending}
+                    onClick={() => {
+                      const note = conversation.notes.find(
+                        (item) => item.id === editingNoteId,
+                      );
+                      if (note) void removeNote(note);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                ) : null
+              }
               submitLabel={
                 pending ? "Saving…" : editingNoteId ? "Save" : "Post"
               }

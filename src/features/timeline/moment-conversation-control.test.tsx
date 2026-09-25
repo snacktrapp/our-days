@@ -608,7 +608,7 @@ describe("MomentConversationControl", () => {
     renderControl(actions, thread);
 
     expect(screen.queryByText("Oldest family note.")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor).toHaveValue("Original newest note.");
     await user.clear(editor);
@@ -707,7 +707,7 @@ describe("MomentConversationControl", () => {
     const user = userEvent.setup();
     renderControl(actions, owned);
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor.closest("form")).toHaveClass("inline-note-form");
     expect(editor).toHaveValue("Original note.");
@@ -734,10 +734,13 @@ describe("MomentConversationControl", () => {
       ok: true,
       conversation: { notes: [], reactions: [] },
     });
-    await user.click(screen.getByRole("button", { name: "Remove" }));
-    expect(confirm).toHaveBeenCalledWith(
-      "Remove this note from the family conversation?",
-    );
+    expect(screen.queryByRole("button", { name: "Delete comment" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
+    expect(
+      screen.getByRole("button", { name: "Delete comment" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Delete comment" }));
+    expect(confirm).toHaveBeenCalledWith("Remove this comment?");
     await waitFor(() =>
       expect(actions.trashNote).toHaveBeenCalledWith({
         noteId: "note-owned",
@@ -805,9 +808,15 @@ describe("MomentConversationControl", () => {
     const heart = within(notes).getAllByRole("button", {
       name: "Love this comment",
     })[0];
-    expect(heart).toHaveClass("inline-note-heart-trigger");
+    expect(heart).toHaveClass("inline-note-heart-trigger", "is-caption");
+    expect(heart).not.toHaveClass("is-loved");
+    expect(
+      within(notes).queryByRole("button", { name: "Edit comment" }),
+    ).toBeNull();
     await user.click(heart);
     expect(heart).toHaveAttribute("aria-pressed", "true");
+    expect(heart).toHaveClass("is-loved");
+    expect(heart).not.toHaveClass("is-caption");
     expect(heart.querySelector(".quick-reaction-glyph")).toHaveClass(
       "is-popping",
     );
@@ -821,6 +830,7 @@ describe("MomentConversationControl", () => {
     const count = within(notes).getByRole("button", {
       name: "2 people love this comment",
     });
+    expect(count).toHaveClass("is-caption");
     await user.click(count);
     expect(notes).toHaveTextContent("Loved by Molly and Brian");
     await user.click(count);
