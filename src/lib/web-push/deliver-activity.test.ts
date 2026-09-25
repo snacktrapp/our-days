@@ -303,7 +303,7 @@ describe("deliverActivityWebPush", () => {
       expect.objectContaining({
         title: "Brian loved your comment.",
         url: "/family?moment=moment-9&note=note-9&thread=1",
-        tag: "our-days:note_reaction:moment-9",
+        tag: "our-days:note_reaction:note-9",
       }),
     );
   });

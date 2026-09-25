@@ -787,6 +787,22 @@ export type Database = {
           state: string;
         }[];
       };
+      claim_mention_push_deliveries: {
+        Args: { requested_moment_id: string; requested_note_id?: string };
+        Returns: {
+          actor_name: string;
+          auth: string;
+          circle_name: string | null;
+          endpoint: string;
+          moment_id: string;
+          moment_kind: string | null;
+          note_id: string | null;
+          p256dh: string;
+          reaction_type: string | null;
+          snippet: string | null;
+          visible_circle_id: string | null;
+        }[];
+      };
       claim_note_reaction_push_deliveries: {
         Args: { requested_note_id: string };
         Returns: {
@@ -989,22 +1005,6 @@ export type Database = {
           display_name: string;
         };
         Returns: string;
-      };
-      claim_mention_push_deliveries: {
-        Args: { requested_moment_id: string; requested_note_id?: string };
-        Returns: {
-          actor_name: string;
-          auth: string;
-          circle_name: string | null;
-          endpoint: string;
-          moment_id: string;
-          moment_kind: string | null;
-          note_id: string | null;
-          p256dh: string;
-          reaction_type: string | null;
-          snippet: string | null;
-          visible_circle_id: string | null;
-        }[];
       };
       create_moment_note: {
         Args: {
@@ -1280,6 +1280,18 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_my_mention_notifications: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          actor_membership_id: string;
+          actor_name: string;
+          created_at: string;
+          mention_id: string;
+          moment_id: string;
+          note_id: string | null;
+          snippet: string;
+        }[];
+      };
       list_my_photo_intakes: {
         Args: { circle_id: string };
         Returns: {
@@ -1352,18 +1364,6 @@ export type Database = {
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
-        }[];
-      };
-      list_my_mention_notifications: {
-        Args: Record<PropertyKey, never>;
-        Returns: {
-          actor_membership_id: string;
-          actor_name: string;
-          created_at: string;
-          mention_id: string;
-          moment_id: string;
-          note_id: string | null;
-          snippet: string;
         }[];
       };
       list_visible_content_mentions: {

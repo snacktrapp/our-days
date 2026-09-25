@@ -138,7 +138,10 @@ export async function deliverActivityWebPush(
                   ? { thread: true }
                   : undefined,
             ),
-            tag: `our-days:${kind}:${row.moment_id}`,
+            tag:
+              kind === "note_reaction" && noteId
+                ? `our-days:note_reaction:${noteId}`
+                : `our-days:${kind}:${row.moment_id}`,
           },
         );
         console.info("[web-push] send", {
