@@ -226,12 +226,12 @@ describe("TimelineFeed", () => {
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
     expect(
       container.querySelector(
-        '[data-moment-kind="location"] .soft-actions .connected-moment-menu-trigger',
+        '[data-moment-kind="location"] .card-top-chrome .connected-moment-menu-trigger',
       ),
     ).toBeInTheDocument();
     expect(
       container.querySelector(
-        '[data-moment-kind="location"] .card-top-chrome .connected-moment-menu-trigger',
+        '[data-moment-kind="location"] .soft-actions .connected-moment-menu-trigger',
       ),
     ).toBeNull();
   });
@@ -380,10 +380,9 @@ describe("TimelineFeed", () => {
     expect(container.querySelector(".connection")?.contains(pill)).toBe(true);
     expect(chrome?.contains(pill)).toBe(false);
     expect(chrome?.querySelector(".post-author")).not.toBeNull();
-    expect(actions?.contains(options)).toBe(true);
-    expect(chrome?.contains(options)).toBe(false);
+    expect(actions?.contains(options)).toBe(false);
+    expect(chrome?.contains(options)).toBe(true);
     expect(actions?.contains(pill)).toBe(false);
-    expect(actions?.lastElementChild?.contains(options)).toBe(true);
   });
 
   it("keeps the audience chip decorative without expand, Edit, or Posted to", () => {
