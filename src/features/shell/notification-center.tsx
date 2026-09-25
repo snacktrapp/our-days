@@ -22,6 +22,7 @@ import {
 } from "./use-overlay-popover-close";
 import { useSheetDismiss } from "./use-sheet-dismiss";
 import { activityUpdatedEvent } from "./activity-banner";
+import { ActivityStamp } from "./activity-stamp";
 
 type NotificationItem = NonNullable<
   JournalChromeViewModel["notifications"]
@@ -310,7 +311,10 @@ export function NotificationCenter({
                     <span>
                       <strong>{item.actorName}</strong> {item.message}
                     </span>
-                    <time>{item.displayDate}</time>
+                    <ActivityStamp
+                      createdAt={item.createdAt}
+                      displayDate={item.displayDate}
+                    />
                   </Link>
                 </li>
               ))}

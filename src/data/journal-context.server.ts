@@ -361,6 +361,7 @@ export function buildActivityNotifications(
 ): NonNullable<JournalChromeViewModel["notifications"]> {
   const displayDate = (createdAt: string) =>
     new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
       month: "short",
       day: "numeric",
       year: "numeric",

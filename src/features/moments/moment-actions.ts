@@ -26,7 +26,7 @@ import type {
   MomentConversationViewModel,
   MomentReactionId,
 } from "@/features/timeline/timeline-view-model";
-import { displayConversationDate } from "@/features/timeline/display-conversation-date";
+import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
 import {
   codePointLength,
   sliceCodePoints,
@@ -737,7 +737,7 @@ function mapConversation(value: {
             authorAccent: mapDatabaseAccent(note.authorAccent),
             body: note.body,
             createdAt: note.createdAt,
-            displayDate: displayConversationDate(note.createdAt),
+            displayDate: displayConversationDateOnly(note.createdAt, "UTC"),
             revision: note.revision,
             canChange: note.canChange,
             heartCount:
