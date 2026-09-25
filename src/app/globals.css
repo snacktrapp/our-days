@@ -59,6 +59,9 @@
   --chrome-title: 600 16px / 1.25 var(--font-interface);
   --chrome-body: 400 12px / 1.45 var(--font-interface);
   --chrome-meta: 400 10px / 1.35 var(--font-record);
+  --record-stamp-size: 8px;
+  --record-stamp-tracking: normal;
+  --record-stamp-leading: normal;
   --settings-label: 600 13px / 1.3 var(--font-interface);
   --settings-row-title: 600 15px / 1.3 var(--font-interface);
   --selection-fill: color-mix(in srgb, var(--action) 14%, var(--cream));
@@ -1477,7 +1480,9 @@ button {
 }
 .moment-meta span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: var(--record-stamp-size);
+  letter-spacing: var(--record-stamp-tracking);
+  line-height: var(--record-stamp-leading);
   margin-top: 1px;
 }
 .moment-card {
@@ -1843,10 +1848,10 @@ button {
 .inline-note-when {
   color: var(--muted);
   font-family: var(--font-record);
-  font-size: 10px;
+  font-size: var(--record-stamp-size);
   font-weight: 400;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
+  letter-spacing: var(--record-stamp-tracking);
+  line-height: var(--record-stamp-leading);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -6269,7 +6274,9 @@ html.overlay-open .bottom-nav {
 
 .moment-meta span {
   font-family: var(--font-record);
-  font-size: 8px;
+  font-size: var(--record-stamp-size);
+  letter-spacing: var(--record-stamp-tracking);
+  line-height: var(--record-stamp-leading);
 }
 
 .moment-card {
@@ -10172,7 +10179,7 @@ iframe.composer-location-map {
   background: transparent;
   color: var(--muted);
   font-family: var(--font-record);
-  font-size: 9px;
+  font-size: var(--record-stamp-size);
   font-weight: 400;
   line-height: 1.2;
   cursor: pointer;

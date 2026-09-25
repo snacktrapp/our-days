@@ -85,13 +85,24 @@ test.describe("poster timezone", () => {
     const fonts = await card.evaluate((node) => {
       const headerNode = node.querySelector(".moment-when-line");
       const stampNode = node.querySelector(".inline-note-when");
+      const headerStyle = headerNode ? getComputedStyle(headerNode) : null;
+      const stampStyle = stampNode ? getComputedStyle(stampNode) : null;
       return {
-        header: headerNode ? getComputedStyle(headerNode).fontFamily : "",
-        stamp: stampNode ? getComputedStyle(stampNode).fontFamily : "",
+        header: headerStyle?.fontFamily ?? "",
+        stamp: stampStyle?.fontFamily ?? "",
+        headerSize: headerStyle?.fontSize ?? "",
+        stampSize: stampStyle?.fontSize ?? "",
+        headerTracking: headerStyle?.letterSpacing ?? "",
+        stampTracking: stampStyle?.letterSpacing ?? "",
+        headerLeading: headerStyle?.lineHeight ?? "",
+        stampLeading: stampStyle?.lineHeight ?? "",
       };
     });
     expect(fonts.header).toContain("ui-monospace");
     expect(fonts.stamp).toBe(fonts.header);
+    expect(fonts.stampSize).toBe(fonts.headerSize);
+    expect(fonts.stampTracking).toBe(fonts.headerTracking);
+    expect(fonts.stampLeading).toBe(fonts.headerLeading);
     const chip = card.locator(".connection .audience-chip-face");
     await expect(chip).toBeVisible();
     const recorded = await card.evaluate((node) => {
@@ -115,10 +126,12 @@ test.describe("poster timezone", () => {
       name: "1 person loves this comment",
     });
     await expect(count).toBeVisible();
-    const countFont = await count.evaluate(
-      (node) => getComputedStyle(node).fontFamily,
-    );
-    expect(countFont).toBe(recorded.header);
+    const countFont = await count.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { family: style.fontFamily, size: style.fontSize };
+    });
+    expect(countFont.family).toBe(recorded.header);
+    expect(countFont.size).toBe(fonts.headerSize);
     const centered = await row.evaluate((note) => {
       const glyph = note.querySelector(".inline-note-heart .heart-glyph");
       const countNode = note.querySelector(".inline-note-heart-count");
