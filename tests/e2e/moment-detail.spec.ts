@@ -347,9 +347,19 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
     .first()
     .getByRole("button", { name: "Undo love on this comment" });
   await expect(loved).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    rows.first().getByRole("button", { name: "1 person loves this comment" }),
-  ).toBeVisible();
+  const glyph = loved.locator(".heart-glyph");
+  const glyphBox = await glyph.boundingBox();
+  expect(glyphBox?.width ?? 99).toBeLessThanOrEqual(16);
+  expect(glyphBox?.height ?? 99).toBeLessThanOrEqual(16);
+  const count = rows
+    .first()
+    .getByRole("button", { name: "1 person loves this comment" });
+  await expect(count).toBeVisible();
+  const countBox = await count.boundingBox();
+  expect((countBox?.x ?? 0) > (glyphBox?.x ?? 0)).toBe(true);
+  expect(Math.abs((countBox?.y ?? 0) - (glyphBox?.y ?? 0))).toBeLessThan(24);
+  await count.click();
+  await expect(rows.first()).toContainText("Loved by Brian");
   await rows
     .nth(1)
     .locator("p")

@@ -32,6 +32,13 @@ import {
 import { MentionText } from "@/features/mentions/mention-text";
 import { CommentDrawer } from "./comment-drawer";
 import { HeartGlyph } from "./heart-glyph";
+
+function lovedByLine(names: readonly string[]) {
+  if (names.length <= 1) return `Loved by ${names[0] ?? ""}`;
+  if (names.length === 2) return `Loved by ${names[0]} and ${names[1]}`;
+  const others = names.length - 2;
+  return `Loved by ${names[0]}, ${names[1]} and ${others} ${others === 1 ? "other" : "others"}`;
+}
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -832,66 +839,59 @@ export function MomentConversationControl({
                         </button>
                       </span>
                     ) : null}
+                    <span className="inline-note-heart">
+                      <button
+                        className="inline-note-heart-trigger"
+                        type="button"
+                        aria-pressed={note.heartedByViewer === true}
+                        aria-label={
+                          note.heartedByViewer
+                            ? "Undo love on this comment"
+                            : "Love this comment"
+                        }
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void chooseNoteHeart(
+                            note.id,
+                            note.heartedByViewer !== true,
+                          );
+                        }}
+                      >
+                        <span
+                          key={noteHeartPops[note.id] ?? 0}
+                          className={`quick-reaction-glyph${(noteHeartPops[note.id] ?? 0) > 0 ? " is-popping" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <HeartGlyph filled={note.heartedByViewer === true} />
+                        </span>
+                      </button>
+                      {(note.heartCount ?? 0) > 0 ? (
+                        <button
+                          className="inline-note-heart-count"
+                          type="button"
+                          aria-expanded={openHeartNamesId === note.id}
+                          aria-label={`${note.heartCount} ${note.heartCount === 1 ? "person loves" : "people love"} this comment`}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenHeartNamesId((current) =>
+                              current === note.id ? null : note.id,
+                            );
+                          }}
+                        >
+                          {note.heartCount}
+                        </button>
+                      ) : null}
+                    </span>
                   </span>
                   <p>
                     <MentionText text={note.body} mentions={note.mentions} />
                   </p>
-                </div>
-                <div className="inline-note-heart">
-                  <button
-                    className="inline-note-heart-trigger"
-                    type="button"
-                    aria-pressed={note.heartedByViewer === true}
-                    aria-label={
-                      note.heartedByViewer
-                        ? "Undo love on this comment"
-                        : "Love this comment"
-                    }
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void chooseNoteHeart(
-                        note.id,
-                        note.heartedByViewer !== true,
-                      );
-                    }}
-                  >
-                    <span
-                      key={noteHeartPops[note.id] ?? 0}
-                      className={`quick-reaction-glyph${(noteHeartPops[note.id] ?? 0) > 0 ? " is-popping" : ""}`}
-                      aria-hidden="true"
-                    >
-                      <HeartGlyph filled={note.heartedByViewer === true} />
-                    </span>
-                  </button>
-                  {(note.heartCount ?? 0) > 0 ? (
-                    <button
-                      className="inline-note-heart-count"
-                      type="button"
-                      aria-expanded={openHeartNamesId === note.id}
-                      aria-label={`${note.heartCount} ${note.heartCount === 1 ? "person loves" : "people love"} this comment`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setOpenHeartNamesId((current) =>
-                          current === note.id ? null : note.id,
-                        );
-                      }}
-                    >
-                      {note.heartCount}
-                    </button>
-                  ) : null}
                   {openHeartNamesId === note.id ? (
-                    <ul
-                      className="inline-reaction-summary inline-note-heart-names"
-                      aria-label="People who loved this comment"
-                    >
-                      {(note.heartNames ?? []).map((name, index) => (
-                        <li key={`${name}-${index}`}>
-                          <span>{name}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="inline-note-loved">
+                      {lovedByLine(note.heartNames ?? [])}
+                    </p>
                   ) : null}
                 </div>
                 {noteBurst?.noteId === note.id ? (

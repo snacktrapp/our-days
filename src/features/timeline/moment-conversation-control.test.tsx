@@ -818,15 +818,15 @@ describe("MomentConversationControl", () => {
     });
     expect(notes.querySelectorAll(".inline-note-row")).toHaveLength(2);
 
-    await user.click(
-      within(notes).getByRole("button", { name: "2 people love this comment" }),
-    );
-    expect(
-      screen.getByRole("list", { name: "People who loved this comment" }),
-    ).toHaveTextContent("Molly");
-    expect(
-      screen.getByRole("list", { name: "People who loved this comment" }),
-    ).toHaveTextContent("Brian");
+    const count = within(notes).getByRole("button", {
+      name: "2 people love this comment",
+    });
+    await user.click(count);
+    expect(notes).toHaveTextContent("Loved by Molly and Brian");
+    await user.click(count);
+    expect(notes).not.toHaveTextContent("Loved by Molly and Brian");
+    await user.click(count);
+    expect(notes).toHaveTextContent("Loved by Molly and Brian");
 
     await user.click(
       within(notes).getByRole("button", { name: "Undo love on this comment" }),
