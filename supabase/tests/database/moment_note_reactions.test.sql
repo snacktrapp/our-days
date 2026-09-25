@@ -169,14 +169,19 @@ select is(
   'toggling a comment heart off and on does not send another push'
 );
 
+select id as hearted_note_id
+  from public.moment_notes
+ where body = 'A comment worth a heart.'
+\gset
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true);
 
 select throws_ok(
-  $$select public.set_moment_note_heart(
-    (select id from public.moment_notes where body = 'A comment worth a heart.'),
-    true
-  )$$,
+  format(
+    'select public.set_moment_note_heart(%L, true)',
+    :'hearted_note_id'
+  ),
   '42501',
   'Comment heart could not be saved',
   'another circle cannot heart a comment it cannot read'
