@@ -23,7 +23,7 @@ import type {
   TimelineMomentViewModel,
   TimelineViewModel,
 } from "@/features/timeline/timeline-view-model";
-import { displayConversationDate } from "@/features/timeline/display-conversation-date";
+import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import { buildPeopleViewModel } from "@/features/people/people-view-model";
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
@@ -196,7 +196,7 @@ function conversationFromLocalDocument(
           authorAccent: mapDatabaseAccent(author?.accentToken ?? "clay"),
           body: note.body,
           createdAt: note.createdAt,
-          displayDate: displayConversationDate(note.createdAt),
+          displayDate: displayConversationDateOnly(note.createdAt, "UTC"),
           revision: note.revision,
           canChange: mine.has(note.authorMembershipId),
           heartCount: noteHearts.length,

@@ -92,6 +92,93 @@ export function zonePlaceLabel(timeZone: string, instant: Date) {
   }
 }
 
+const headerMonths = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+function headerClock(clock: string | undefined) {
+  const trimmed = clock?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/\b([ap])m\b/giu, (_match, period: string) => {
+    return `${period.toUpperCase()}M`;
+  });
+}
+
+/** One-line post header: "Sep 25 · 6:15 PM", year only when it is not the viewer's. */
+export function formatMomentHeaderLabel(
+  input: Readonly<{
+    occurredOn: string;
+    clock?: string;
+    placeLabel?: string;
+    viewerYear: number;
+  }>,
+) {
+  const [yearText, monthText, dayText] = input.occurredOn.split("-");
+  const year = Number(yearText);
+  const month = headerMonths[Number(monthText) - 1];
+  const day = Number(dayText);
+  const date =
+    month && year && day
+      ? year === input.viewerYear
+        ? `${month} ${day}`
+        : `${month} ${day}, ${year}`
+      : input.occurredOn;
+  const clock = headerClock(input.clock);
+  const timed = clock ? `${date} · ${clock}` : date;
+  return input.placeLabel ? `${timed} ${input.placeLabel}` : timed;
+}
+
+export function formatRecordedMomentHeader(
+  input: Readonly<{
+    occurredOn: string;
+    occurredAt?: string | null;
+    occurredTimezone?: string | null;
+    clock?: string;
+    viewerTimeZone?: string | null;
+    viewerYear: number;
+  }>,
+) {
+  let clock = input.clock;
+  let placeLabel: string | undefined;
+  if (input.occurredAt && input.occurredTimezone) {
+    clock =
+      formatMomentClock(input.occurredAt, input.occurredTimezone) ??
+      input.clock;
+    if (input.viewerTimeZone) {
+      const label = formatMomentTimeLabel({
+        occurredAt: input.occurredAt,
+        occurredTimezone: input.occurredTimezone,
+        timePrecision: "minute",
+        viewerTimeZone: input.viewerTimeZone,
+      });
+      if (
+        label.precision === "minute" &&
+        label.zonesDiffer &&
+        label.placeLabel
+      ) {
+        placeLabel = label.placeLabel;
+      }
+    }
+  }
+  return formatMomentHeaderLabel({
+    occurredOn: input.occurredOn,
+    clock,
+    placeLabel,
+    viewerYear: input.viewerYear,
+  });
+}
+
 export function formatMomentClock(
   occurredAt: string,
   occurredTimezone: string,

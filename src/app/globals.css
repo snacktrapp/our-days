@@ -1842,8 +1842,10 @@ button {
 
 .inline-note-when {
   color: var(--muted);
-  font-size: 9px;
+  font-family: var(--font-record);
+  font-size: 10px;
   font-weight: 400;
+  letter-spacing: 0.02em;
   line-height: 1.2;
   white-space: nowrap;
   flex-shrink: 0;
@@ -6210,7 +6212,7 @@ html.overlay-open .bottom-nav {
   border-radius: 5px;
   background: var(--paper);
   color: #bdc6c0;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: var(--font-record);
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.15em;
@@ -6266,7 +6268,7 @@ html.overlay-open .bottom-nav {
 }
 
 .moment-meta span {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: var(--font-record);
   font-size: 8px;
 }
 
@@ -9949,7 +9951,7 @@ iframe.composer-location-map {
 }
 .connection .audience-chip-face {
   display: block;
-  font: 600 7px/1.3 var(--font-interface);
+  font: 600 7px/1.3 var(--font-record);
   letter-spacing: 0.02em;
 }
 .card-top-chrome {
@@ -9965,15 +9967,19 @@ iframe.composer-location-map {
 .post-author {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
   color: var(--ink);
   font: 400 11px/1.4 var(--font-interface);
 }
 .post-author > strong {
+  min-width: 0;
+  overflow: hidden;
   font: inherit;
   font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .post-author-avatar {
   display: inline-flex;
@@ -9991,14 +9997,27 @@ iframe.composer-location-map {
   align-items: center;
   gap: 4px;
   min-width: 0;
-  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  overflow: hidden;
   color: var(--muted);
+  font-family: var(--font-record);
   font-weight: 400;
   font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.post-author-place > span,
+.post-author-place .moment-place-pin {
+  flex-shrink: 0;
 }
 .post-author-place a {
+  min-width: 0;
+  overflow: hidden;
   color: inherit;
+  font: inherit;
+  text-overflow: ellipsis;
   text-decoration: none;
+  white-space: nowrap;
 }
 .inline-conversation .inline-reaction-summary {
   padding: 0;
@@ -10147,20 +10166,45 @@ iframe.composer-location-map {
   min-height: 44px;
   margin-left: -6px;
   padding: 0 2px 0 0;
+  display: flex;
+  align-items: center;
   border: 0;
   background: transparent;
   color: var(--muted);
+  font-family: var(--font-record);
   font-size: 9px;
   font-weight: 400;
   line-height: 1.2;
   cursor: pointer;
 }
-.inline-note-loved {
+.inline-note-summary li p.inline-note-loved {
   display: block;
   margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+:root[data-theme="light"] .inline-note-summary li p.inline-note-loved {
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 .inline-note-author {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.inline-note-author strong {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .comment-color-dot {
   display: inline-block;

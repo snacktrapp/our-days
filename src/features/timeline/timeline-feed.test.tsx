@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ComposerSessionProvider } from "@/features/composer/composer-session";
 import { TimelineFeed } from "./timeline-feed";
+import { formatMomentHeaderLabel } from "./moment-time-label";
 import {
   journalLoadSoftFailEntryId,
   type TimelineViewModel,
@@ -213,7 +214,15 @@ describe("TimelineFeed", () => {
         ?.getAttribute("datetime"),
     ).toBe("2026-08-01");
     expect(screen.getByAltText("Family outside")).toBeInTheDocument();
-    expect(screen.getAllByText("Aug. 1, 2026 · 8:00 pm")).toHaveLength(4);
+    expect(
+      screen.getAllByText(
+        formatMomentHeaderLabel({
+          occurredOn: "2026-08-01",
+          clock: "8:00 pm",
+          viewerYear: new Date().getFullYear(),
+        }),
+      ),
+    ).toHaveLength(4);
     expect(screen.queryByText("LAKE")).not.toBeInTheDocument();
     expect(
       container.querySelector(
@@ -556,7 +565,14 @@ describe("TimelineFeed", () => {
     );
 
     expect(screen.queryByText("DATE ONLY")).not.toBeInTheDocument();
-    expect(screen.getByText("Aug. 1, 2026")).toBeVisible();
+    expect(
+      screen.getByText(
+        formatMomentHeaderLabel({
+          occurredOn: "2026-08-01",
+          viewerYear: new Date().getFullYear(),
+        }),
+      ),
+    ).toBeVisible();
   });
 
   it("shows entry options only on moments the viewer can change", () => {

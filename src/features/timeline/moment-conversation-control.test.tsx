@@ -161,6 +161,22 @@ describe("MomentConversationControl", () => {
         },
         {
           ...initialConversation.notes[0],
+          id: "note-fourth",
+          authorName: "Avery",
+          authorInitial: "A",
+          authorAccent: "moss",
+          body: "A fourth note.",
+        },
+        {
+          ...initialConversation.notes[0],
+          id: "note-third",
+          authorName: "Sam",
+          authorInitial: "S",
+          authorAccent: "slate",
+          body: "A third note.",
+        },
+        {
+          ...initialConversation.notes[0],
           id: "note-middle",
           authorName: "Brian",
           authorInitial: "B",
@@ -181,7 +197,7 @@ describe("MomentConversationControl", () => {
 
     const notes = screen.getByRole("list", { name: "Notes from family" });
     const collapsed = within(notes).getAllByRole("listitem");
-    expect(collapsed).toHaveLength(2);
+    expect(collapsed).toHaveLength(4);
     expect(collapsed[0]).toHaveTextContent("Nana");
     expect(collapsed[0]).toHaveTextContent("Nana just replied.");
     expect(collapsed[0].querySelector(".note-avatar")).toBeNull();
@@ -205,34 +221,38 @@ describe("MomentConversationControl", () => {
 
     await user.click(screen.getByText("Nana just replied."));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(4);
     expect(screen.queryByText("Oldest family note.")).toBeNull();
     const stillCollapsed = within(notes).getAllByRole("listitem");
     expect(stillCollapsed.map((item) => item.textContent)).toEqual([
       expect.stringContaining("Nana just replied."),
       expect.stringContaining("A middle note."),
+      expect.stringContaining("A third note."),
+      expect.stringContaining("A fourth note."),
     ]);
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
     const expanded = within(notes).getAllByRole("listitem");
     expect(expanded.map((item) => item.textContent)).toEqual([
       expect.stringContaining("Nana just replied."),
       expect.stringContaining("A middle note."),
+      expect.stringContaining("A third note."),
+      expect.stringContaining("A fourth note."),
       expect.stringContaining("Oldest family note."),
     ]);
-    expect(expanded[2].querySelector(".note-avatar")).toBeNull();
-    expect(expanded[2].querySelector(".comment-color-dot")).toHaveClass(
+    expect(expanded[4].querySelector(".note-avatar")).toBeNull();
+    expect(expanded[4].querySelector(".comment-color-dot")).toHaveClass(
       "dot-ochre",
     );
     await user.click(screen.getByText("Nana just replied."));
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(5);
 
     await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(4);
     expect(screen.queryByText("Oldest family note.")).toBeNull();
     await user.click(notes);
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(4);
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(5);
   });
 
   it("loves immediately with one tap, no picker, and undoes with another", async () => {
@@ -504,6 +524,22 @@ describe("MomentConversationControl", () => {
           displayDate: "Aug 2, 2026",
         },
         {
+          id: "note-fourth",
+          authorName: "Avery",
+          authorInitial: "A",
+          authorAccent: "moss",
+          body: "A fourth note.",
+          displayDate: "Aug 2, 2026",
+        },
+        {
+          id: "note-third",
+          authorName: "Sam",
+          authorInitial: "S",
+          authorAccent: "slate",
+          body: "A third note.",
+          displayDate: "Aug 2, 2026",
+        },
+        {
           id: "note-middle",
           authorName: "Brian",
           authorInitial: "B",
@@ -555,7 +591,7 @@ describe("MomentConversationControl", () => {
     );
     const notes = screen.getByRole("list", { name: "Notes from family" });
     const items = within(notes).getAllByRole("listitem");
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(4);
     expect(items[0]).toHaveTextContent("Nana just replied.");
     expect(items[1]).toHaveTextContent("A middle note.");
     expect(screen.queryByText("Oldest family note.")).toBeNull();
@@ -574,11 +610,27 @@ describe("MomentConversationControl", () => {
           displayDate: "Aug 2, 2026",
         },
         {
-          id: "note-middle",
+          id: "note-fourth",
+          authorName: "Avery",
+          authorInitial: "A",
+          authorAccent: "moss",
+          body: "A fourth note.",
+          displayDate: "Aug 2, 2026",
+        },
+        {
+          id: "note-third",
           authorName: "Sam",
           authorInitial: "S",
           authorAccent: "slate",
-          body: "A middle note.",
+          body: "A third note.",
+          displayDate: "Aug 3, 2026",
+        },
+        {
+          id: "note-second",
+          authorName: "June",
+          authorInitial: "J",
+          authorAccent: "clay",
+          body: "A second note.",
           displayDate: "Aug 3, 2026",
         },
         {
@@ -597,9 +649,8 @@ describe("MomentConversationControl", () => {
     const updated = {
       ...thread,
       notes: [
-        thread.notes[0],
-        thread.notes[1],
-        { ...thread.notes[2], body: "Updated newest note.", revision: 4 },
+        ...thread.notes.slice(0, 4),
+        { ...thread.notes[4], body: "Updated newest note.", revision: 4 },
       ],
     } as const satisfies MomentConversationViewModel;
     const actions = connectedActions(thread);
@@ -825,7 +876,7 @@ describe("MomentConversationControl", () => {
       momentId: model.id,
       hearted: true,
     });
-    expect(notes.querySelectorAll(".inline-note-row")).toHaveLength(2);
+    expect(notes.querySelectorAll(".inline-note-row")).toHaveLength(3);
 
     const count = within(notes).getByRole("button", {
       name: "2 people love this comment",

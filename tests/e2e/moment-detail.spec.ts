@@ -39,13 +39,30 @@ test("post location pin and conversation share the intended alignment", async ({
       },
     ),
   );
-  expect(new Set(typography.map((style) => style.family)).size).toBe(1);
+  const record = await card
+    .locator(".moment-when-line")
+    .evaluate((node) => getComputedStyle(node).fontFamily);
+  const [author, place, participants] = typography;
+  expect(author.family).toBe(participants.family);
+  expect(place.family).toBe(record);
+  expect(place.family).not.toBe(author.family);
   expect(new Set(typography.map((style) => style.size)).size).toBe(1);
   expect(typography.map((style) => style.weight)).toEqual([
     "500",
     "400",
     "400",
   ]);
+  const sameLine = await card.evaluate((element) => {
+    const name = element.querySelector(".post-author > strong");
+    const location = element.querySelector(".post-author-place");
+    if (!name || !location) return false;
+    const nameBox = name.getBoundingClientRect();
+    const placeBox = location.getBoundingClientRect();
+    return Math.abs(
+      nameBox.top + nameBox.height / 2 - (placeBox.top + placeBox.height / 2),
+    );
+  });
+  expect(sameLine).toBeLessThanOrEqual(1);
   await expect(
     card.locator(".post-author-place .moment-place-pin"),
   ).toBeVisible();
@@ -200,23 +217,30 @@ test("tapping a comment does not expand it; Show more does", async ({
 }) => {
   await page.goto("/family");
   const card = firstPhoto(page);
-  const { form } = await openNoteForm(page, card);
-  await form.getByRole("textbox").fill("Another memory from this day.");
-  await page
-    .getByRole("dialog", { name: "Add comment" })
-    .getByRole("button", { name: "Post", exact: true })
-    .click();
+  for (const body of [
+    "Another memory from this day.",
+    "A second memory from this day.",
+    "A third memory from this day.",
+  ]) {
+    const { form } = await openNoteForm(page, card);
+    await form.getByRole("textbox").fill(body);
+    await page
+      .getByRole("dialog", { name: "Add comment" })
+      .getByRole("button", { name: "Post", exact: true })
+      .click();
+    await expect(form).toBeHidden();
+  }
   const comments = card.getByRole("list", { name: "Notes from family" });
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await comments.locator("p").first().tap();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await comments.tap({ position: { x: 8, y: 8 } });
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await card.getByRole("button", { name: "Show 1 more" }).click();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(3);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(5);
   await card.getByRole("button", { name: "Show fewer notes" }).click();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
 });
 
 test("one-tap love is salmon, names share actions, comments follow", async ({
@@ -379,25 +403,35 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   expect(Math.abs((countBox?.y ?? 0) - (glyphBox?.y ?? 0))).toBeLessThan(24);
   await count.click();
   await expect(rows.first()).toContainText("Loved by Brian");
-  const lovedMatchesTimestamp = await rows.first().evaluate((row) => {
+  const lovedCaption = await rows.first().evaluate((row) => {
     const stamp = row.querySelector(
       "time.inline-note-when, span.inline-note-when",
     );
     const loved = row.querySelector(".inline-note-loved");
-    if (!stamp || !loved) return false;
+    const names = row
+      .closest("article")
+      ?.querySelector(".inline-reaction-summary li");
+    if (!stamp || !loved || !names) return null;
     const stampStyle = getComputedStyle(stamp);
     const lovedStyle = getComputedStyle(loved);
-    return (
-      [
-        "fontFamily",
-        "fontSize",
-        "fontWeight",
-        "letterSpacing",
-        "color",
-      ] as const
-    ).every((key) => stampStyle[key] === lovedStyle[key]);
+    const namesStyle = getComputedStyle(names);
+    return {
+      familyMatchesNames: lovedStyle.fontFamily === namesStyle.fontFamily,
+      familyDiffersFromStamp: lovedStyle.fontFamily !== stampStyle.fontFamily,
+      size: lovedStyle.fontSize === stampStyle.fontSize,
+      weight: lovedStyle.fontWeight === stampStyle.fontWeight,
+      tracking: lovedStyle.letterSpacing === stampStyle.letterSpacing,
+      color: lovedStyle.color === stampStyle.color,
+    };
   });
-  expect(lovedMatchesTimestamp).toBe(true);
+  expect(lovedCaption).toEqual({
+    familyMatchesNames: true,
+    familyDiffersFromStamp: true,
+    size: true,
+    weight: true,
+    tracking: true,
+    color: true,
+  });
   await rows
     .nth(1)
     .locator("p")
@@ -490,9 +524,25 @@ test("comment drawer drafts save safely and remain reversible", async ({
 
   const hostileNote =
     '<img data-detail-injection src=x onerror="window.__detailInjected=true"> A safe family note';
-  await note.fill(hostileNote);
+  await note.fill("A filler note so the oldest comment stays folded.");
   await dialog.getByRole("button", { name: "Post" }).click();
   await expect(form).toBeHidden();
+  const second = await openNoteForm(page, card);
+  await second.form
+    .getByRole("textbox")
+    .fill("Another filler note so the oldest comment stays folded.");
+  await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
+  await expect(second.form).toBeHidden();
+  const hostile = await openNoteForm(page, card);
+  const hostileDialog = page.getByRole("dialog", { name: "Add comment" });
+  await hostile.form.getByRole("textbox").fill(hostileNote);
+  await hostileDialog
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
+  await expect(hostile.form).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(card.getByText(hostileNote, { exact: true })).toBeVisible();
   await expect(

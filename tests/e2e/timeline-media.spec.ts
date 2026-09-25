@@ -55,15 +55,106 @@ test.describe("poster timezone", () => {
     ]) {
       await page.setViewportSize(viewport);
       const lines = post.locator(".moment-when-line");
-      await expect(lines.first()).toContainText("1:15 PM Rome");
-      await expect(lines.nth(1)).toHaveText("· 4:15 AM your time");
-      await expect(post.locator(".moment-meta")).toContainText(
-        "Sept. 24, 2026",
+      await expect(lines).toHaveCount(1);
+      await expect(lines).toHaveText("Sep 24 · 1:15 PM Rome");
+      await expect(post.getByText("your time")).toHaveCount(0);
+      const headerFont = await lines.evaluate(
+        (node) => getComputedStyle(node).fontFamily,
       );
+      expect(headerFont).toContain("ui-monospace");
+      expect(headerFont).toContain("SFMono-Regular");
+      expect(headerFont).toContain("monospace");
       const box = await post.locator(".moment-when").boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     }
+  });
+
+  test("comment timestamps use the post header mono on one author line", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/family");
+    const card = page.locator('[data-moment-kind="photo"]').first();
+    const header = card.locator(".moment-when-line");
+    const stamp = card.locator(".inline-note-when").first();
+    await expect(header).toBeVisible();
+    await expect(stamp).toBeVisible();
+    await expect(page.getByText("your time")).toHaveCount(0);
+    const fonts = await card.evaluate((node) => {
+      const headerNode = node.querySelector(".moment-when-line");
+      const stampNode = node.querySelector(".inline-note-when");
+      return {
+        header: headerNode ? getComputedStyle(headerNode).fontFamily : "",
+        stamp: stampNode ? getComputedStyle(stampNode).fontFamily : "",
+      };
+    });
+    expect(fonts.header).toContain("ui-monospace");
+    expect(fonts.stamp).toBe(fonts.header);
+    const chip = card.locator(".connection .audience-chip-face");
+    await expect(chip).toBeVisible();
+    const recorded = await card.evaluate((node) => {
+      const read = (selector: string) => {
+        const element = node.querySelector(selector);
+        return element ? getComputedStyle(element).fontFamily : "";
+      };
+      return {
+        header: read(".moment-when-line"),
+        chip: read(".connection .audience-chip-face"),
+        author: read(".inline-note-author strong"),
+        names: read(".inline-reaction-summary li"),
+      };
+    });
+    expect(recorded.chip).toBe(recorded.header);
+    expect(recorded.author).toBe(recorded.names);
+    expect(recorded.author).not.toBe(recorded.header);
+    const row = card.locator(".inline-note-row").first();
+    await row.getByRole("button", { name: "Love this comment" }).click();
+    const count = row.getByRole("button", {
+      name: "1 person loves this comment",
+    });
+    await expect(count).toBeVisible();
+    const countFont = await count.evaluate(
+      (node) => getComputedStyle(node).fontFamily,
+    );
+    expect(countFont).toBe(recorded.header);
+    const centered = await row.evaluate((note) => {
+      const glyph = note.querySelector(".inline-note-heart .heart-glyph");
+      const countNode = note.querySelector(".inline-note-heart-count");
+      if (!glyph || !countNode) return 99;
+      const glyphBox = glyph.getBoundingClientRect();
+      const countBox = countNode.getBoundingClientRect();
+      return Math.abs(
+        glyphBox.top +
+          glyphBox.height / 2 -
+          (countBox.top + countBox.height / 2),
+      );
+    });
+    expect(centered).toBeLessThanOrEqual(1);
+    await count.click();
+    const loved = row.locator(".inline-note-loved");
+    await expect(loved).toBeVisible();
+    const lovedFont = await loved.evaluate(
+      (node) => getComputedStyle(node).fontFamily,
+    );
+    expect(lovedFont).toBe(recorded.names);
+    expect(lovedFont).not.toBe(recorded.header);
+    const singleLine = await card
+      .locator(".inline-note-row")
+      .first()
+      .evaluate((row) => {
+        const author = row.querySelector(".inline-note-author");
+        if (!author) return false;
+        const inFlow = [...author.children].filter(
+          (child) => getComputedStyle(child).position !== "absolute",
+        );
+        const tops = inFlow.map((child) => child.getBoundingClientRect().top);
+        return (
+          author.getClientRects().length === 1 &&
+          Math.max(...tops) - Math.min(...tops) < 2
+        );
+      });
+    expect(singleLine).toBe(true);
   });
 });

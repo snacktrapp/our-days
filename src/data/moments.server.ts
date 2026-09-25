@@ -38,7 +38,7 @@ import {
   timelinePhotosFor,
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
-import { displayConversationDate } from "@/features/timeline/display-conversation-date";
+import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
 import { formatMomentClock } from "@/features/timeline/moment-time-label";
 import type { MentionDisplay } from "@/features/mentions/mention-draft";
 
@@ -301,7 +301,7 @@ export async function loadMomentConversationsByMomentId(
       authorAccent: author?.accent ?? "slate",
       body: note.body,
       createdAt: note.created_at,
-      displayDate: displayConversationDate(note.created_at),
+      displayDate: displayConversationDateOnly(note.created_at, "UTC"),
       revision: note.revision,
       canChange: viewerMembershipIds.has(note.author_membership_id),
       heartCount: noteHearts.length,

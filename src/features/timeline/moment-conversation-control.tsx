@@ -21,7 +21,7 @@ import {
   hiddenConversationNoteCount,
   visibleConversationNotes,
 } from "./moment-conversation-notes";
-import { displayConversationDate } from "./display-conversation-date";
+import { ConversationStamp } from "./conversation-stamp";
 import { MentionField } from "@/features/mentions/mention-field";
 import {
   draftFromMentionDisplay,
@@ -820,13 +820,7 @@ export function MomentConversationControl({
                       {note.authorName}
                     </strong>
                     {note.createdAt ? (
-                      <time
-                        className="inline-note-when"
-                        dateTime={note.createdAt}
-                        suppressHydrationWarning
-                      >
-                        {displayConversationDate(note.createdAt)}
-                      </time>
+                      <ConversationStamp createdAt={note.createdAt} />
                     ) : (
                       <span className="inline-note-when">
                         {note.displayDate}
@@ -901,7 +895,7 @@ export function MomentConversationControl({
                     <MentionText text={note.body} mentions={note.mentions} />
                   </p>
                   {openHeartNamesId === note.id ? (
-                    <p className="inline-note-when inline-note-loved">
+                    <p className="inline-note-loved">
                       {lovedByLine(note.heartNames ?? [])}
                     </p>
                   ) : null}

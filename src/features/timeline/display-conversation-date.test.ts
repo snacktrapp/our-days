@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { displayConversationDate } from "./display-conversation-date";
+import {
+  displayActivityDate,
+  displayConversationDate,
+  displayConversationDateOnly,
+} from "./display-conversation-date";
 
 describe("displayConversationDate", () => {
   const now = new Date(2026, 8, 12, 15, 0, 0);
@@ -48,5 +52,26 @@ describe("displayConversationDate", () => {
     }
     expect(formatted).toMatch(/ · \d{1,2}:\d{2} [AP]M$/u);
     expect(formatted).not.toMatch(/ago/iu);
+  });
+
+  it("keeps a Pacific evening on the previous viewer day when the server clock is UTC", () => {
+    const createdAt = "2026-09-25T04:52:00.000Z";
+    const now = new Date("2026-09-25T10:22:00.000Z");
+    expect(displayConversationDate(createdAt, now, "America/Los_Angeles")).toBe(
+      "Sep 24 · 9:52 PM",
+    );
+    expect(displayConversationDate(createdAt, now, "UTC")).toBe(
+      "Today · 4:52 AM",
+    );
+    expect(displayConversationDateOnly(createdAt, "UTC")).not.toMatch(/[AP]M/u);
+  });
+
+  it("labels notification days in the viewer zone", () => {
+    expect(
+      displayActivityDate("2026-09-25T04:52:00.000Z", "America/Los_Angeles"),
+    ).toBe("Sep 24, 2026");
+    expect(displayActivityDate("2026-09-25T04:52:00.000Z", "UTC")).toBe(
+      "Sep 25, 2026",
+    );
   });
 });

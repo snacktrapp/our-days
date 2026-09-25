@@ -1,7 +1,62 @@
 import { describe, expect, it } from "vitest";
-import { formatMomentTimeLabel } from "./moment-time-label";
+import {
+  formatMomentHeaderLabel,
+  formatMomentTimeLabel,
+  formatRecordedMomentHeader,
+} from "./moment-time-label";
 
 const romeLunch = "2026-09-24T11:15:00.000Z";
+
+describe("formatRecordedMomentHeader", () => {
+  it("keeps the poster clock without a city when the viewer shares the zone", () => {
+    expect(
+      formatRecordedMomentHeader({
+        occurredOn: "2026-09-25",
+        occurredAt: "2026-09-25T01:15:00Z",
+        occurredTimezone: "America/Los_Angeles",
+        viewerTimeZone: "America/Los_Angeles",
+        viewerYear: 2026,
+      }),
+    ).toBe("Sep 25 · 6:15 PM");
+  });
+
+  it("appends the city when the recorded zone differs", () => {
+    expect(
+      formatRecordedMomentHeader({
+        occurredOn: "2026-09-25",
+        occurredAt: "2026-09-25T16:15:00Z",
+        occurredTimezone: "Europe/Rome",
+        viewerTimeZone: "America/Los_Angeles",
+        viewerYear: 2026,
+      }),
+    ).toBe("Sep 25 · 6:15 PM Rome");
+  });
+
+  it("includes the year when the post is not from the viewer year", () => {
+    expect(
+      formatMomentHeaderLabel({
+        occurredOn: "2024-09-20",
+        clock: "8:00 AM",
+        viewerYear: 2026,
+      }),
+    ).toBe("Sep 20, 2024 · 8:00 AM");
+  });
+
+  it("stays date-only when no minute was recorded", () => {
+    expect(
+      formatRecordedMomentHeader({
+        occurredOn: "2026-09-20",
+        viewerYear: 2026,
+      }),
+    ).toBe("Sep 20");
+    expect(
+      formatMomentHeaderLabel({
+        occurredOn: "2024-09-20",
+        viewerYear: 2026,
+      }),
+    ).toBe("Sep 20, 2024");
+  });
+});
 
 describe("formatMomentTimeLabel", () => {
   it("keeps the clock alone when the viewer shares the poster zone", () => {
