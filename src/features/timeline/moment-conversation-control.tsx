@@ -895,7 +895,7 @@ export function MomentConversationControl({
                     <MentionText text={note.body} mentions={note.mentions} />
                   </p>
                   {openHeartNamesId === note.id ? (
-                    <p className="inline-note-when inline-note-loved">
+                    <p className="inline-note-loved">
                       {lovedByLine(note.heartNames ?? [])}
                     </p>
                   ) : null}

@@ -92,6 +92,54 @@ test.describe("poster timezone", () => {
     });
     expect(fonts.header).toContain("ui-monospace");
     expect(fonts.stamp).toBe(fonts.header);
+    const chip = card.locator(".connection .audience-chip-face");
+    await expect(chip).toBeVisible();
+    const recorded = await card.evaluate((node) => {
+      const read = (selector: string) => {
+        const element = node.querySelector(selector);
+        return element ? getComputedStyle(element).fontFamily : "";
+      };
+      return {
+        header: read(".moment-when-line"),
+        chip: read(".connection .audience-chip-face"),
+        author: read(".inline-note-author strong"),
+        names: read(".inline-reaction-summary li"),
+      };
+    });
+    expect(recorded.chip).toBe(recorded.header);
+    expect(recorded.author).toBe(recorded.names);
+    expect(recorded.author).not.toBe(recorded.header);
+    const row = card.locator(".inline-note-row").first();
+    await row.getByRole("button", { name: "Love this comment" }).click();
+    const count = row.getByRole("button", {
+      name: "1 person loves this comment",
+    });
+    await expect(count).toBeVisible();
+    const countFont = await count.evaluate(
+      (node) => getComputedStyle(node).fontFamily,
+    );
+    expect(countFont).toBe(recorded.header);
+    const centered = await row.evaluate((note) => {
+      const glyph = note.querySelector(".inline-note-heart .heart-glyph");
+      const countNode = note.querySelector(".inline-note-heart-count");
+      if (!glyph || !countNode) return 99;
+      const glyphBox = glyph.getBoundingClientRect();
+      const countBox = countNode.getBoundingClientRect();
+      return Math.abs(
+        glyphBox.top +
+          glyphBox.height / 2 -
+          (countBox.top + countBox.height / 2),
+      );
+    });
+    expect(centered).toBeLessThanOrEqual(1);
+    await count.click();
+    const loved = row.locator(".inline-note-loved");
+    await expect(loved).toBeVisible();
+    const lovedFont = await loved.evaluate(
+      (node) => getComputedStyle(node).fontFamily,
+    );
+    expect(lovedFont).toBe(recorded.names);
+    expect(lovedFont).not.toBe(recorded.header);
     const singleLine = await card
       .locator(".inline-note-row")
       .first()

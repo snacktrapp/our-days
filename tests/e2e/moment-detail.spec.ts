@@ -379,25 +379,35 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   expect(Math.abs((countBox?.y ?? 0) - (glyphBox?.y ?? 0))).toBeLessThan(24);
   await count.click();
   await expect(rows.first()).toContainText("Loved by Brian");
-  const lovedMatchesTimestamp = await rows.first().evaluate((row) => {
+  const lovedCaption = await rows.first().evaluate((row) => {
     const stamp = row.querySelector(
       "time.inline-note-when, span.inline-note-when",
     );
     const loved = row.querySelector(".inline-note-loved");
-    if (!stamp || !loved) return false;
+    const names = row
+      .closest("article")
+      ?.querySelector(".inline-reaction-summary li");
+    if (!stamp || !loved || !names) return null;
     const stampStyle = getComputedStyle(stamp);
     const lovedStyle = getComputedStyle(loved);
-    return (
-      [
-        "fontFamily",
-        "fontSize",
-        "fontWeight",
-        "letterSpacing",
-        "color",
-      ] as const
-    ).every((key) => stampStyle[key] === lovedStyle[key]);
+    const namesStyle = getComputedStyle(names);
+    return {
+      familyMatchesNames: lovedStyle.fontFamily === namesStyle.fontFamily,
+      familyDiffersFromStamp: lovedStyle.fontFamily !== stampStyle.fontFamily,
+      size: lovedStyle.fontSize === stampStyle.fontSize,
+      weight: lovedStyle.fontWeight === stampStyle.fontWeight,
+      tracking: lovedStyle.letterSpacing === stampStyle.letterSpacing,
+      color: lovedStyle.color === stampStyle.color,
+    };
   });
-  expect(lovedMatchesTimestamp).toBe(true);
+  expect(lovedCaption).toEqual({
+    familyMatchesNames: true,
+    familyDiffersFromStamp: true,
+    size: true,
+    weight: true,
+    tracking: true,
+    color: true,
+  });
   await rows
     .nth(1)
     .locator("p")

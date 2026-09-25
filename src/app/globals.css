@@ -1843,7 +1843,7 @@ button {
 .inline-note-when {
   color: var(--muted);
   font-family: var(--font-record);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.02em;
   line-height: 1.2;
@@ -6212,7 +6212,7 @@ html.overlay-open .bottom-nav {
   border-radius: 5px;
   background: var(--paper);
   color: #bdc6c0;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: var(--font-record);
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.15em;
@@ -6268,7 +6268,7 @@ html.overlay-open .bottom-nav {
 }
 
 .moment-meta span {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: var(--font-record);
   font-size: 8px;
 }
 
@@ -9951,7 +9951,7 @@ iframe.composer-location-map {
 }
 .connection .audience-chip-face {
   display: block;
-  font: 600 7px/1.3 var(--font-interface);
+  font: 600 7px/1.3 var(--font-record);
   letter-spacing: 0.02em;
 }
 .card-top-chrome {
@@ -10149,17 +10149,34 @@ iframe.composer-location-map {
   min-height: 44px;
   margin-left: -6px;
   padding: 0 2px 0 0;
+  display: flex;
+  align-items: center;
   border: 0;
   background: transparent;
   color: var(--muted);
+  font-family: var(--font-record);
   font-size: 9px;
   font-weight: 400;
   line-height: 1.2;
   cursor: pointer;
 }
-.inline-note-loved {
+.inline-note-summary li p.inline-note-loved {
   display: block;
   margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+:root[data-theme="light"] .inline-note-summary li p.inline-note-loved {
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 .inline-note-author {
   flex-wrap: nowrap;
