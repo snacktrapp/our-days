@@ -379,6 +379,25 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   expect(Math.abs((countBox?.y ?? 0) - (glyphBox?.y ?? 0))).toBeLessThan(24);
   await count.click();
   await expect(rows.first()).toContainText("Loved by Brian");
+  const lovedMatchesTimestamp = await rows.first().evaluate((row) => {
+    const stamp = row.querySelector(
+      "time.inline-note-when, span.inline-note-when",
+    );
+    const loved = row.querySelector(".inline-note-loved");
+    if (!stamp || !loved) return false;
+    const stampStyle = getComputedStyle(stamp);
+    const lovedStyle = getComputedStyle(loved);
+    return (
+      [
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "letterSpacing",
+        "color",
+      ] as const
+    ).every((key) => stampStyle[key] === lovedStyle[key]);
+  });
+  expect(lovedMatchesTimestamp).toBe(true);
   await rows
     .nth(1)
     .locator("p")
@@ -434,6 +453,17 @@ test("own comments edit from dots and delete from the editor", async ({
   });
   expect(spacing).toBeGreaterThanOrEqual(0);
   expect(spacing).toBeLessThanOrEqual(6);
+  const dotAlignment = await mine.evaluate((row) => {
+    const stamp = row.querySelector(".inline-note-when");
+    const dots = row.querySelector(".inline-note-more-dots");
+    if (!stamp || !dots) return 99;
+    const glyph = dots.getBoundingClientRect();
+    const stampBox = stamp.getBoundingClientRect();
+    return Math.abs(
+      glyph.top + glyph.height / 2 - (stampBox.top + stampBox.height / 2),
+    );
+  });
+  expect(dotAlignment).toBeLessThanOrEqual(1);
   await mine.getByRole("button", { name: "Edit comment" }).click();
   const editor = page.getByRole("dialog", { name: "Edit comment" });
   await expect(editor.getByRole("textbox")).toHaveValue(

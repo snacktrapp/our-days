@@ -1849,7 +1849,7 @@ button {
   flex-shrink: 0;
 }
 
-.inline-note-summary li p {
+.inline-note-summary li p:not(.inline-note-when) {
   color: var(--ink);
 }
 .inline-note-summary .note-avatar {
@@ -1889,7 +1889,7 @@ button {
   min-height: 44px;
   justify-self: start;
 }
-.inline-note-summary p {
+.inline-note-summary p:not(.inline-note-when) {
   margin: 2px 0 0;
   overflow-wrap: anywhere;
   color: #5e564e;
@@ -7249,13 +7249,13 @@ html.overlay-open .bottom-nav {
   color: var(--ink);
 }
 
-.inline-note-summary li p,
+.inline-note-summary li p:not(.inline-note-when),
 .location-card .card-copy > p:not(.moment-kicker),
 .milestone-copy > p {
   color: var(--ink);
 }
 
-.inline-note-summary li p {
+.inline-note-summary li p:not(.inline-note-when) {
   font-family: var(--font-interface);
   font-size: 13px;
   line-height: 1.5;
@@ -8267,7 +8267,7 @@ html[data-theme].overlay-open .app-shell::before,
   background: color-mix(in srgb, var(--teal) 16%, #fff);
 }
 
-:root[data-theme="light"] .inline-note-summary li p,
+:root[data-theme="light"] .inline-note-summary li p:not(.inline-note-when),
 :root[data-theme="light"] .location-card .card-copy > p:not(.moment-kicker),
 :root[data-theme="light"] .milestone-copy > p {
   color: var(--ink);
@@ -10112,14 +10112,29 @@ iframe.composer-location-map {
   height: 44px;
   min-width: 44px;
   min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   transform: translate(-50%, -50%);
   border: 0;
   background: transparent;
+  color: var(--muted);
   font-size: 16px;
   font-weight: 400;
   line-height: 1;
   cursor: pointer;
+}
+.inline-note-more-dots {
+  width: 13px;
+  height: 3px;
+  background:
+    radial-gradient(circle, currentColor 1px, transparent 1.2px) 0 50% / 3px 3px
+      no-repeat,
+    radial-gradient(circle, currentColor 1px, transparent 1.2px) 50% 50% / 3px
+      3px no-repeat,
+    radial-gradient(circle, currentColor 1px, transparent 1.2px) 100% 50% / 3px
+      3px no-repeat;
 }
 .inline-note-heart .heart-glyph {
   width: 15px;
@@ -10141,12 +10156,8 @@ iframe.composer-location-map {
   cursor: pointer;
 }
 .inline-note-loved {
-  margin: 1px 0 0;
-  color: var(--muted);
-  font-family: var(--font-interface);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.5;
+  display: block;
+  margin: 2px 0 0;
 }
 .inline-note-author {
   flex-wrap: wrap;
