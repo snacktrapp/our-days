@@ -5,20 +5,25 @@ import {
 } from "./moment-conversation-notes";
 
 describe("visibleConversationNotes", () => {
-  const notes = ["oldest", "middle", "newest"] as const;
+  const notes = ["oldest", "fourth", "third", "second", "newest"] as const;
 
-  it("shows the newest notes first in the collapsed window", () => {
+  it("shows the four newest notes first in the collapsed window", () => {
     expect(visibleConversationNotes(notes, false)).toEqual([
       "newest",
-      "middle",
+      "second",
+      "third",
+      "fourth",
     ]);
     expect(hiddenConversationNoteCount(notes.length)).toBe(1);
+    expect(hiddenConversationNoteCount(4)).toBe(0);
   });
 
   it("keeps newest-first order when Show more reveals older notes", () => {
     expect(visibleConversationNotes(notes, true)).toEqual([
       "newest",
-      "middle",
+      "second",
+      "third",
+      "fourth",
       "oldest",
     ]);
   });
@@ -28,7 +33,7 @@ describe("visibleConversationNotes", () => {
       "newer",
       "older",
     ]);
-    expect(hiddenConversationNoteCount(2)).toBe(0);
+    expect(hiddenConversationNoteCount(4)).toBe(0);
     expect(visibleConversationNotes(["only"], false)).toEqual(["only"]);
   });
 });

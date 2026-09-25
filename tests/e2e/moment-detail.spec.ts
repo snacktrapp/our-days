@@ -200,23 +200,30 @@ test("tapping a comment does not expand it; Show more does", async ({
 }) => {
   await page.goto("/family");
   const card = firstPhoto(page);
-  const { form } = await openNoteForm(page, card);
-  await form.getByRole("textbox").fill("Another memory from this day.");
-  await page
-    .getByRole("dialog", { name: "Add comment" })
-    .getByRole("button", { name: "Post", exact: true })
-    .click();
+  for (const body of [
+    "Another memory from this day.",
+    "A second memory from this day.",
+    "A third memory from this day.",
+  ]) {
+    const { form } = await openNoteForm(page, card);
+    await form.getByRole("textbox").fill(body);
+    await page
+      .getByRole("dialog", { name: "Add comment" })
+      .getByRole("button", { name: "Post", exact: true })
+      .click();
+    await expect(form).toBeHidden();
+  }
   const comments = card.getByRole("list", { name: "Notes from family" });
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await comments.locator("p").first().tap();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await comments.tap({ position: { x: 8, y: 8 } });
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
   await card.getByRole("button", { name: "Show 1 more" }).click();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(3);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(5);
   await card.getByRole("button", { name: "Show fewer notes" }).click();
-  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(4);
 });
 
 test("one-tap love is salmon, names share actions, comments follow", async ({
@@ -500,9 +507,25 @@ test("comment drawer drafts save safely and remain reversible", async ({
 
   const hostileNote =
     '<img data-detail-injection src=x onerror="window.__detailInjected=true"> A safe family note';
-  await note.fill(hostileNote);
+  await note.fill("A filler note so the oldest comment stays folded.");
   await dialog.getByRole("button", { name: "Post" }).click();
   await expect(form).toBeHidden();
+  const second = await openNoteForm(page, card);
+  await second.form
+    .getByRole("textbox")
+    .fill("Another filler note so the oldest comment stays folded.");
+  await page
+    .getByRole("dialog", { name: "Add comment" })
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
+  await expect(second.form).toBeHidden();
+  const hostile = await openNoteForm(page, card);
+  const hostileDialog = page.getByRole("dialog", { name: "Add comment" });
+  await hostile.form.getByRole("textbox").fill(hostileNote);
+  await hostileDialog
+    .getByRole("button", { name: "Post", exact: true })
+    .click();
+  await expect(hostile.form).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(card.getByText(hostileNote, { exact: true })).toBeVisible();
   await expect(

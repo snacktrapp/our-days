@@ -1,4 +1,4 @@
-export const VISIBLE_CONVERSATION_NOTE_LIMIT = 2;
+export const VISIBLE_CONVERSATION_NOTE_LIMIT = 4;
 
 /**
  * Feed batch reads and `get_moment_conversation` return notes oldest-first
