@@ -76,14 +76,17 @@ function detailModel(moment: TimelineMomentViewModel): MomentDetailViewModel {
 function CardTopChrome({
   children,
   participants,
+  options,
 }: Readonly<{
   children: ReactNode;
   participants: ReactNode;
+  options?: ReactNode;
 }>) {
   return (
     <div className="card-top-chrome">
       {children}
       {participants}
+      {options}
     </div>
   );
 }
@@ -140,14 +143,12 @@ function CardActions({
   conversationActions,
   connectedPosition,
   connectedTotal,
-  options,
 }: Readonly<{
   interaction?: MomentInteractionViewModel;
   moment: TimelineMomentViewModel;
   conversationActions?: MomentConversationActions;
   connectedPosition?: number;
   connectedTotal?: number;
-  options: ReactNode;
 }>) {
   if (interaction) {
     const mentionMembers = mentionMembersForMoment(moment, interaction);
@@ -158,7 +159,6 @@ function CardActions({
         actions={conversationActions}
         position={connectedPosition}
         total={connectedTotal}
-        trailing={options}
         mentionMembers={mentionMembers}
         mentionsEnabled={
           moment.audience !== "just_me" && moment.kind !== "insight"
@@ -166,8 +166,7 @@ function CardActions({
       />
     );
   }
-  if (!options) return null;
-  return <div className="soft-actions">{options}</div>;
+  return null;
 }
 
 type MomentCardProps = Readonly<{
@@ -254,6 +253,13 @@ export function MomentCard({
                 </span>
               ) : null
             }
+            options={cardOptions(
+              moment,
+              interaction,
+              connectedActions,
+              connectedPosition,
+              connectedTotal,
+            )}
           >
             <PostAuthor moment={moment} />
           </CardTopChrome>
@@ -266,13 +272,6 @@ export function MomentCard({
             conversationActions={conversationActions}
             connectedPosition={connectedPosition}
             connectedTotal={connectedTotal}
-            options={cardOptions(
-              moment,
-              interaction,
-              connectedActions,
-              connectedPosition,
-              connectedTotal,
-            )}
           />
         </div>
       </div>
@@ -292,6 +291,13 @@ export function MomentCard({
               </span>
             ) : null
           }
+          options={cardOptions(
+            moment,
+            interaction,
+            connectedActions,
+            connectedPosition,
+            connectedTotal,
+          )}
         >
           <PostAuthor moment={moment} />
         </CardTopChrome>
@@ -314,13 +320,6 @@ export function MomentCard({
           conversationActions={conversationActions}
           connectedPosition={connectedPosition}
           connectedTotal={connectedTotal}
-          options={cardOptions(
-            moment,
-            interaction,
-            connectedActions,
-            connectedPosition,
-            connectedTotal,
-          )}
         />
       </div>
     );
@@ -333,7 +332,16 @@ export function MomentCard({
       (sourceHref ? insightSourceLabel(sourceHref) : undefined);
     return (
       <div className="moment-card thought-card bible-verse-card insight-card">
-        <CardTopChrome participants={null}>
+        <CardTopChrome
+          participants={null}
+          options={cardOptions(
+            moment,
+            interaction,
+            connectedActions,
+            connectedPosition,
+            connectedTotal,
+          )}
+        >
           <span className="thought-label">Insight</span>
         </CardTopChrome>
         <ExpandableThoughtCopy
@@ -370,13 +378,6 @@ export function MomentCard({
           conversationActions={conversationActions}
           connectedPosition={connectedPosition}
           connectedTotal={connectedTotal}
-          options={cardOptions(
-            moment,
-            interaction,
-            connectedActions,
-            connectedPosition,
-            connectedTotal,
-          )}
         />
       </div>
     );
@@ -394,6 +395,13 @@ export function MomentCard({
                 </span>
               ) : null
             }
+            options={cardOptions(
+              moment,
+              interaction,
+              connectedActions,
+              connectedPosition,
+              connectedTotal,
+            )}
           >
             <PostAuthor moment={moment} />
           </CardTopChrome>
@@ -416,13 +424,6 @@ export function MomentCard({
             conversationActions={conversationActions}
             connectedPosition={connectedPosition}
             connectedTotal={connectedTotal}
-            options={cardOptions(
-              moment,
-              interaction,
-              connectedActions,
-              connectedPosition,
-              connectedTotal,
-            )}
           />
         </div>
       </div>
@@ -445,6 +446,13 @@ export function MomentCard({
               </span>
             ) : null
           }
+          options={cardOptions(
+            moment,
+            interaction,
+            connectedActions,
+            connectedPosition,
+            connectedTotal,
+          )}
         >
           <PostAuthor moment={moment} />
         </CardTopChrome>
@@ -459,13 +467,6 @@ export function MomentCard({
         conversationActions={conversationActions}
         connectedPosition={connectedPosition}
         connectedTotal={connectedTotal}
-        options={cardOptions(
-          moment,
-          interaction,
-          connectedActions,
-          connectedPosition,
-          connectedTotal,
-        )}
       />
     </div>
   );

@@ -418,18 +418,23 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
     return {
       familyMatchesNames: lovedStyle.fontFamily === namesStyle.fontFamily,
       familyDiffersFromStamp: lovedStyle.fontFamily !== stampStyle.fontFamily,
-      size: lovedStyle.fontSize === stampStyle.fontSize,
+      keepsCaptionSize: lovedStyle.fontSize === "10px",
+      sizeDiffersFromStamp: lovedStyle.fontSize !== stampStyle.fontSize,
       weight: lovedStyle.fontWeight === stampStyle.fontWeight,
-      tracking: lovedStyle.letterSpacing === stampStyle.letterSpacing,
+      keepsCaptionTracking: lovedStyle.letterSpacing !== "normal",
+      trackingDiffersFromStamp:
+        lovedStyle.letterSpacing !== stampStyle.letterSpacing,
       color: lovedStyle.color === stampStyle.color,
     };
   });
   expect(lovedCaption).toEqual({
     familyMatchesNames: true,
     familyDiffersFromStamp: true,
-    size: true,
+    keepsCaptionSize: true,
+    sizeDiffersFromStamp: true,
     weight: true,
-    tracking: true,
+    keepsCaptionTracking: true,
+    trackingDiffersFromStamp: true,
     color: true,
   });
   await rows
