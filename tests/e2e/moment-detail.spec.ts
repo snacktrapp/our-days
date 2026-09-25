@@ -340,6 +340,20 @@ test("comment hearts stay on the comment and do not expand the thread", async ({
   const box = await heart.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(44);
   expect(box?.height).toBeGreaterThanOrEqual(44);
+  const spacing = await rows.first().evaluate((row) => {
+    const author = row.querySelector(".inline-note-author");
+    const body = row.querySelector("p");
+    if (!author || !body) return { authorHeight: 99, gap: 99 };
+    const authorBox = author.getBoundingClientRect();
+    const bodyBox = body.getBoundingClientRect();
+    return {
+      authorHeight: authorBox.height,
+      gap: bodyBox.top - authorBox.bottom,
+    };
+  });
+  expect(spacing.authorHeight).toBeLessThan(28);
+  expect(spacing.gap).toBeGreaterThanOrEqual(0);
+  expect(spacing.gap).toBeLessThanOrEqual(6);
   await rows.first().locator("p").click();
   await expect(rows).toHaveCount(2);
   await heart.click();

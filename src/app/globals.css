@@ -10026,7 +10026,7 @@ iframe.composer-location-map {
 }
 .inline-conversation .inline-note-author {
   position: relative;
-  min-height: 44px;
+  min-height: 0;
   padding-right: 52px;
 }
 .inline-conversation .inline-note-author:has(.inline-note-heart-count) {
