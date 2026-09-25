@@ -10130,10 +10130,9 @@ iframe.composer-location-map {
   min-height: 0;
   padding-right: 52px;
 }
-.inline-conversation .inline-note-author:has(.inline-note-heart-count) {
-  padding-right: 72px;
-}
 .inline-note-heart {
+  --note-heart-icon: 15px;
+  --note-heart-inset: 6px;
   position: absolute;
   top: 50%;
   right: 0;
@@ -10142,12 +10141,16 @@ iframe.composer-location-map {
   align-items: center;
   transform: translateY(-50%);
 }
+.inline-note-heart.has-count .inline-note-heart-trigger {
+  transform: translateX(calc(-1 * var(--note-heart-icon)));
+}
+.inline-note-author .inline-note-heart-trigger,
 .inline-note-heart-trigger {
   width: 44px;
   height: 44px;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 2px 0 0;
+  padding: 0 var(--note-heart-inset) 0 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -10203,18 +10206,24 @@ iframe.composer-location-map {
       3px no-repeat;
 }
 .inline-note-heart .heart-glyph {
-  width: 15px;
-  height: 15px;
+  width: var(--note-heart-icon);
+  height: var(--note-heart-icon);
   color: inherit;
   stroke-width: 1.5;
 }
-.inline-note-heart-count {
-  min-width: 28px;
+.inline-note-author .inline-note-heart-count {
+  position: absolute;
+  top: 0;
+  right: var(--note-heart-inset);
+  width: var(--note-heart-icon);
+  height: 44px;
+  min-width: var(--note-heart-icon);
   min-height: 44px;
-  margin-left: -6px;
-  padding: 0 2px 0 0;
+  margin: 0;
+  padding: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -10222,6 +10231,7 @@ iframe.composer-location-map {
   font-size: var(--record-stamp-size);
   font-weight: 400;
   line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
 }
 .inline-note-summary li p.inline-note-loved {
