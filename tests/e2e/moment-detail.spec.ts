@@ -195,7 +195,7 @@ async function openNoteForm(page: Page, card: Locator = firstPhoto(page)) {
   return { form, trigger };
 }
 
-test("tapping comments expands inline without opening the composer", async ({
+test("tapping a comment does not expand it; Show more does", async ({
   page,
 }) => {
   await page.goto("/family");
@@ -207,16 +207,16 @@ test("tapping comments expands inline without opening the composer", async ({
     .getByRole("button", { name: "Post", exact: true })
     .click();
   const comments = card.getByRole("list", { name: "Notes from family" });
-  await expect(comments.locator("li")).toHaveCount(2);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
   await comments.locator("p").first().tap();
-  await expect(comments.locator("li")).toHaveCount(3);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await comments.locator("p").first().tap();
-  await expect(comments.locator("li")).toHaveCount(3);
+  await comments.tap({ position: { x: 8, y: 8 } });
+  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
+  await card.getByRole("button", { name: "Show 1 more" }).click();
+  await expect(comments.locator(".inline-note-row")).toHaveCount(3);
   await card.getByRole("button", { name: "Show fewer notes" }).click();
-  await expect(comments.locator("li")).toHaveCount(2);
-  await comments.tap({ position: { x: 2, y: 2 } });
-  await expect(comments.locator("li")).toHaveCount(3);
+  await expect(comments.locator(".inline-note-row")).toHaveCount(2);
 });
 
 test("one-tap love is salmon, names share actions, comments follow", async ({
@@ -326,6 +326,48 @@ test("reduced motion suppresses the heart animation", async ({ page }) => {
     card.getByRole("button", { name: /Love photo/u }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(card.locator(".post-love-burst")).toBeHidden();
+});
+
+test("comment hearts stay on the comment and do not expand the thread", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/family");
+  const card = firstPhoto(page);
+  const rows = card.locator(".inline-note-row");
+  await expect(rows).toHaveCount(2);
+  const heart = rows.first().getByRole("button", { name: "Love this comment" });
+  const box = await heart.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await rows.first().locator("p").click();
+  await expect(rows).toHaveCount(2);
+  await heart.click();
+  const loved = rows
+    .first()
+    .getByRole("button", { name: "Undo love on this comment" });
+  await expect(loved).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    rows.first().getByRole("button", { name: "1 person loves this comment" }),
+  ).toBeVisible();
+  await rows
+    .nth(1)
+    .locator("p")
+    .dblclick({ position: { x: 12, y: 8 } });
+  await expect(
+    rows.nth(1).getByRole("button", { name: "Undo love on this comment" }),
+  ).toBeVisible();
+  await rows
+    .nth(1)
+    .locator("p")
+    .dblclick({ position: { x: 14, y: 8 } });
+  await expect(
+    rows.nth(1).getByRole("button", { name: "Undo love on this comment" }),
+  ).toBeVisible();
+  await loved.click();
+  await expect(
+    rows.first().getByRole("button", { name: "Love this comment" }),
+  ).toHaveAttribute("aria-pressed", "false");
 });
 
 test("comment drawer drafts save safely and remain reversible", async ({

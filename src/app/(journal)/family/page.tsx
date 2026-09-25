@@ -31,6 +31,7 @@ import {
   createFamilyMomentAction,
   createMomentNoteAction,
   loadMomentConversationAction,
+  setMomentNoteHeartAction,
   setMomentReactionAction,
   removeMomentPhotoAction,
   reorderMomentPhotosAction,
@@ -69,6 +70,7 @@ const conversationActions = {
   updateNote: updateMomentNoteAction,
   trashNote: trashMomentNoteAction,
   setReaction: setMomentReactionAction,
+  setNoteHeart: setMomentNoteHeartAction,
 };
 
 async function FamilyActivity({

@@ -10017,10 +10017,60 @@ iframe.composer-location-map {
   gap: 12px;
 }
 .inline-conversation .inline-note-summary li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
+  column-gap: 12px;
+  align-items: start;
   padding: 0;
 }
 .inline-conversation .inline-note-summary li > div {
   width: 100%;
+}
+.inline-note-heart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 44px;
+  justify-self: end;
+}
+.inline-note-heart-trigger {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--clay);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.inline-note-heart-count {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.inline-note-heart-names {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 3;
+  width: max-content;
+  max-width: 200px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
 }
 .inline-note-author {
   flex-wrap: wrap;

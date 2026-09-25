@@ -61,6 +61,7 @@ function conversationActions() {
     updateNote: vi.fn(),
     trashNote: vi.fn(),
     setReaction: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
+    setNoteHeart: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
   };
 }
 

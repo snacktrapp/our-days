@@ -141,6 +141,70 @@ export type Database = {
           },
         ];
       };
+      moment_note_reactions: {
+        Row: {
+          author_membership_id: string;
+          author_user_id: string;
+          circle_id: string;
+          created_at: string;
+          id: string;
+          moment_id: string;
+          note_id: string;
+          notified_at: string | null;
+          removed_at: string | null;
+          revision: number;
+          updated_at: string;
+        };
+        Insert: {
+          author_membership_id: string;
+          author_user_id: string;
+          circle_id: string;
+          created_at?: string;
+          id?: string;
+          moment_id: string;
+          note_id: string;
+          notified_at?: string | null;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Update: {
+          author_membership_id?: string;
+          author_user_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          id?: string;
+          moment_id?: string;
+          note_id?: string;
+          notified_at?: string | null;
+          removed_at?: string | null;
+          revision?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "moment_note_reactions_author_fkey";
+            columns: ["author_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "moment_note_reactions_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "moment_note_reactions_note_fkey";
+            columns: ["circle_id", "note_id"];
+            isOneToOne: false;
+            referencedRelation: "moment_notes";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_notes: {
         Row: {
           author_membership_id: string;
@@ -721,6 +785,21 @@ export type Database = {
           cleanup_state: string;
           intake_id: string;
           state: string;
+        }[];
+      };
+      claim_note_reaction_push_deliveries: {
+        Args: { requested_note_id: string };
+        Returns: {
+          actor_name: string;
+          auth: string;
+          circle_name: string | null;
+          endpoint: string;
+          moment_id: string;
+          moment_kind: string | null;
+          note_id: string;
+          p256dh: string;
+          reaction_type: string | null;
+          visible_circle_id: string | null;
         }[];
       };
       claim_photo_display_derivative: {
@@ -1565,6 +1644,10 @@ export type Database = {
           expected_revision: number;
           moment_id: string;
         };
+        Returns: number;
+      };
+      set_moment_note_heart: {
+        Args: { hearted: boolean; note_id: string };
         Returns: number;
       };
       set_moment_reaction: {

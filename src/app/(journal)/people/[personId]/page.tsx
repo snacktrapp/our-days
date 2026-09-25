@@ -19,6 +19,7 @@ import {
   createFamilyMomentAction,
   createMomentNoteAction,
   loadMomentConversationAction,
+  setMomentNoteHeartAction,
   setMomentReactionAction,
   removeMomentPhotoAction,
   reorderMomentPhotosAction,
@@ -134,6 +135,7 @@ export default async function PersonJournalPage({
           updateNote: updateMomentNoteAction,
           trashNote: trashMomentNoteAction,
           setReaction: setMomentReactionAction,
+          setNoteHeart: setMomentNoteHeartAction,
         }}
       />
     </JournalChrome>

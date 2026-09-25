@@ -740,6 +740,14 @@ function mapConversation(value: {
             displayDate: displayConversationDate(note.createdAt),
             revision: note.revision,
             canChange: note.canChange,
+            heartCount:
+              typeof note.heartCount === "number" ? note.heartCount : 0,
+            heartedByViewer: note.heartedByViewer === true,
+            heartNames: Array.isArray(note.heartNames)
+              ? note.heartNames.filter(
+                  (name): name is string => typeof name === "string",
+                )
+              : [],
           },
         ];
       })
@@ -1086,6 +1094,57 @@ export async function setMomentReactionAction(input: {
   return {
     ok: true,
     message: input.reactionId ? "Response saved." : "Response removed.",
+    revision: data,
+  };
+}
+
+export async function setMomentNoteHeartAction(input: {
+  noteId: string;
+  momentId: string;
+  hearted: boolean;
+}): Promise<MomentActionResult> {
+  if (
+    !(await hasExpectedOrigin()) ||
+    !uuidPattern.test(input.noteId) ||
+    !uuidPattern.test(input.momentId) ||
+    typeof input.hearted !== "boolean"
+  ) {
+    return { ok: false, message: "That heart could not be saved." };
+  }
+  const access = await requireJournalAccess();
+  if (access.mode !== "authenticated")
+    return { ok: false, message: "Preview hearts are not saved." };
+  if (localJournalIsEnabled()) {
+    try {
+      const { setLocalNoteHeart } = await localStore();
+      const revision = await setLocalNoteHeart(access, {
+        noteId: input.noteId,
+        momentId: input.momentId,
+        hearted: input.hearted,
+      });
+      return {
+        ok: true,
+        message: input.hearted ? "Heart saved." : "Heart removed.",
+        revision,
+      };
+    } catch {
+      return { ok: false, message: "That heart could not be saved." };
+    }
+  }
+  const supabase = await createOurDaysServerClient();
+  const { data, error } = await supabase.rpc("set_moment_note_heart", {
+    note_id: input.noteId,
+    hearted: input.hearted,
+  });
+  if (error) return { ok: false, message: "That heart could not be saved." };
+  if (input.hearted) {
+    after(async () => {
+      await deliverActivityWebPush(supabase, "note_reaction", input.noteId);
+    });
+  }
+  return {
+    ok: true,
+    message: input.hearted ? "Heart saved." : "Heart removed.",
     revision: data,
   };
 }

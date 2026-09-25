@@ -73,6 +73,9 @@ export type MomentConversationViewModel = Readonly<{
     revision?: number;
     canChange?: boolean;
     mentions?: readonly MentionDisplay[];
+    heartCount?: number;
+    heartedByViewer?: boolean;
+    heartNames?: readonly string[];
   }>[];
   captionMentions?: readonly MentionDisplay[];
   reactions: readonly Readonly<{

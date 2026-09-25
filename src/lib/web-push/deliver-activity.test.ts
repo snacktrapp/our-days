@@ -266,4 +266,45 @@ describe("deliverActivityWebPush", () => {
       }),
     );
   });
+
+  it("sends one comment-heart push that opens the comment thread", async () => {
+    vi.stubEnv("NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY", "Bpublic");
+    vi.stubEnv("OUR_DAYS_WEB_PUSH_VAPID_PRIVATE_KEY", "privatekeyvalue");
+    const rpc = vi.fn(async () => ({
+      data: [
+        {
+          endpoint: "https://push.example.test/molly",
+          p256dh: "p256",
+          auth: "auth",
+          actor_name: "Brian",
+          moment_id: "moment-9",
+          moment_kind: "photo",
+          reaction_type: "held-close",
+          note_id: "note-9",
+          visible_circle_id: "circle-1",
+          circle_name: "Home",
+        },
+      ],
+      error: null,
+    }));
+    sendWebPush.mockResolvedValue({ ok: true, status: 201 });
+
+    await deliverActivityWebPush(
+      { rpc } as unknown as ActivityPushClient,
+      "note_reaction",
+      "note-9",
+    );
+
+    expect(rpc).toHaveBeenCalledWith("claim_note_reaction_push_deliveries", {
+      requested_note_id: "note-9",
+    });
+    expect(sendWebPush).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: "Brian loved your comment.",
+        url: "/family?moment=moment-9&note=note-9&thread=1",
+        tag: "our-days:note_reaction:moment-9",
+      }),
+    );
+  });
 });

@@ -184,27 +184,39 @@ export async function loadMomentConversationsByMomentId(
     return conversations;
   }
 
-  const [notesResult, reactionsResult, mentionResult] = await Promise.all([
-    supabase
-      .from("moment_notes")
-      .select("id, moment_id, author_membership_id, body, revision, created_at")
-      .in("moment_id", uniqueIds)
-      .is("trashed_at", null)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("moment_reactions")
-      .select("id, moment_id, author_membership_id, reaction_type, created_at")
-      .in("moment_id", uniqueIds)
-      .is("removed_at", null)
-      .order("created_at", { ascending: true }),
-    typeof supabase.rpc === "function"
-      ? supabase.rpc("list_visible_content_mentions", {
-          moment_ids: uniqueIds,
-        })
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+  const [notesResult, reactionsResult, mentionResult, heartResult] =
+    await Promise.all([
+      supabase
+        .from("moment_notes")
+        .select(
+          "id, moment_id, author_membership_id, body, revision, created_at",
+        )
+        .in("moment_id", uniqueIds)
+        .is("trashed_at", null)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("moment_reactions")
+        .select(
+          "id, moment_id, author_membership_id, reaction_type, created_at",
+        )
+        .in("moment_id", uniqueIds)
+        .is("removed_at", null)
+        .order("created_at", { ascending: true }),
+      typeof supabase.rpc === "function"
+        ? supabase.rpc("list_visible_content_mentions", {
+            moment_ids: uniqueIds,
+          })
+        : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("moment_note_reactions")
+        .select("id, note_id, moment_id, author_membership_id, created_at")
+        .in("moment_id", uniqueIds)
+        .is("removed_at", null)
+        .order("created_at", { ascending: true }),
+    ]);
   const notes = notesResult.data ?? [];
   const reactions = reactionsResult.data ?? [];
+  const hearts = heartResult.error ? [] : (heartResult.data ?? []);
   const mentionRows = mentionResult.error ? [] : (mentionResult.data ?? []);
   const captionMentions = new Map<string, MentionDisplay[]>();
   const noteMentions = new Map<string, MentionDisplay[]>();
@@ -222,7 +234,11 @@ export async function loadMomentConversationsByMomentId(
     }
   }
   const membershipIds = [
-    ...new Set([...notes, ...reactions].map((row) => row.author_membership_id)),
+    ...new Set(
+      [...notes, ...reactions, ...hearts].map(
+        (row) => row.author_membership_id,
+      ),
+    ),
   ];
   if (membershipIds.length === 0) {
     for (const id of uniqueIds) {
@@ -276,6 +292,7 @@ export async function loadMomentConversationsByMomentId(
   for (const note of notes) {
     const author = authorByMembership.get(note.author_membership_id);
     const authorName = author?.name ?? "Family";
+    const noteHearts = hearts.filter((heart) => heart.note_id === note.id);
     const list = notesByMoment.get(note.moment_id) ?? [];
     list.push({
       id: note.id,
@@ -287,6 +304,14 @@ export async function loadMomentConversationsByMomentId(
       displayDate: displayConversationDate(note.created_at),
       revision: note.revision,
       canChange: viewerMembershipIds.has(note.author_membership_id),
+      heartCount: noteHearts.length,
+      heartedByViewer: noteHearts.some((heart) =>
+        viewerMembershipIds.has(heart.author_membership_id),
+      ),
+      heartNames: noteHearts.map(
+        (heart) =>
+          authorByMembership.get(heart.author_membership_id)?.name ?? "Family",
+      ),
       ...(noteMentions.get(note.id)?.length
         ? { mentions: noteMentions.get(note.id) }
         : {}),
