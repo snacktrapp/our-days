@@ -393,6 +393,7 @@ select is(
     'mention_user_is_in_moment_circle(target_moment_id uuid, target_circle_id uuid, requested_user_id uuid, span_text text)',
     'moment_actor_membership(target_moment_id uuid)',
     'moment_tagged_people(requested_moment_id uuid)',
+    'operations_can_manage_member_insight(moment_id uuid)',
     'photo_capability_is_enabled(requested_capability text)',
     'photo_derivative_source_is_readable(requested_object_path text, requested_storage_object_id uuid, requested_storage_object_version text)',
     'photo_display_path_is_readable(requested_object_path text)',
