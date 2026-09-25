@@ -147,6 +147,7 @@ function emptyDocument(): LocalJournalDocument {
     ],
     moments: [],
     notes: [],
+    noteHearts: [],
     reactions: [],
     drafts: [],
   };
@@ -1009,6 +1010,72 @@ export async function trashLocalNote(
       ),
     });
     return updated.revision;
+  });
+}
+
+export async function setLocalNoteHeart(
+  access: LocalAccess,
+  input: Readonly<{
+    noteId: string;
+    momentId: string;
+    hearted: boolean;
+  }>,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const moment = document.moments.find(
+      (candidate) =>
+        candidate.id === input.momentId && candidate.trashedAt === null,
+    );
+    const note = document.notes.find(
+      (candidate) =>
+        candidate.id === input.noteId &&
+        candidate.momentId === input.momentId &&
+        candidate.trashedAt === null,
+    );
+    if (!moment || !note) throw new Error("That heart could not be saved.");
+    if (
+      moment.audience === "just_me" &&
+      moment.recordedByMembershipId !== access.membershipId
+    ) {
+      throw new Error("That heart could not be saved.");
+    }
+    const hearts = document.noteHearts ?? [];
+    const existing = hearts.find(
+      (heart) =>
+        heart.noteId === input.noteId &&
+        heart.authorMembershipId === access.membershipId,
+    );
+    const createdAt = nowIso();
+    let noteHearts = hearts;
+    if (input.hearted) {
+      if (existing) {
+        noteHearts = hearts.map((heart) =>
+          heart.id === existing.id ? { ...heart, removedAt: null } : heart,
+        );
+      } else {
+        noteHearts = [
+          {
+            id: randomUUID(),
+            noteId: input.noteId,
+            momentId: input.momentId,
+            authorMembershipId: access.membershipId,
+            authorUserId: access.membershipId,
+            createdAt,
+            removedAt: null,
+            notifiedAt: null,
+          },
+          ...hearts,
+        ];
+      }
+    } else if (existing && existing.removedAt === null) {
+      noteHearts = hearts.map((heart) =>
+        heart.id === existing.id ? { ...heart, removedAt: createdAt } : heart,
+      );
+    }
+    writeDocumentUnlocked({ ...document, noteHearts });
+    return 1;
   });
 }
 

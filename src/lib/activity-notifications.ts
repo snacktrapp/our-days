@@ -14,6 +14,8 @@ export const entryReactionMessages = {
 
 export const entryCommentMessage = "commented on your entry.";
 
+export const commentHeartMessage = "loved your comment.";
+
 export function mentionNotificationMessage(snippet: string) {
   const compact = snippet.replace(/\s+/gu, " ").trim();
   if (!compact) return "mentioned you.";

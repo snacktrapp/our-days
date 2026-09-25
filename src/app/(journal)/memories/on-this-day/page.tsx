@@ -18,6 +18,7 @@ import {
   loadMomentConversationAction,
   removeMomentPhotoAction,
   reorderMomentPhotosAction,
+  setMomentNoteHeartAction,
   setMomentReactionAction,
   trashMomentNoteAction,
   trashWrittenMomentAction,
@@ -42,6 +43,7 @@ const conversationActions = {
   updateNote: updateMomentNoteAction,
   trashNote: trashMomentNoteAction,
   setReaction: setMomentReactionAction,
+  setNoteHeart: setMomentNoteHeartAction,
 };
 
 export default async function OnThisDayPage({

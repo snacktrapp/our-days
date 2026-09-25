@@ -87,6 +87,17 @@ export type LocalNote = Readonly<{
   trashedAt: string | null;
 }>;
 
+export type LocalNoteHeart = Readonly<{
+  id: string;
+  noteId: string;
+  momentId: string;
+  authorMembershipId: string;
+  authorUserId: string;
+  createdAt: string;
+  removedAt: string | null;
+  notifiedAt: string | null;
+}>;
+
 export type LocalReaction = Readonly<{
   id: string;
   momentId: string;
@@ -156,6 +167,7 @@ export type LocalJournalDocument = Readonly<{
   guardians: readonly LocalGuardian[];
   moments: readonly LocalMoment[];
   notes: readonly LocalNote[];
+  noteHearts?: readonly LocalNoteHeart[];
   reactions: readonly LocalReaction[];
   drafts?: readonly LocalEntryDraft[];
 }>;

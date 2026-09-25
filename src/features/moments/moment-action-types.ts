@@ -119,4 +119,9 @@ export type MomentConversationActions = Readonly<{
     momentId: string;
     reactionId: string | null;
   }) => Promise<MomentActionResult>;
+  setNoteHeart: (input: {
+    noteId: string;
+    momentId: string;
+    hearted: boolean;
+  }) => Promise<MomentActionResult>;
 }>;

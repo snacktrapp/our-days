@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
   type Ref,
   type TextareaHTMLAttributes,
 } from "react";
@@ -30,6 +31,7 @@ type MentionFieldProps = Omit<
     layout?: "inline" | "pill";
     submitLabel?: string;
     submitDisabled?: boolean;
+    leading?: ReactNode;
   }>;
 
 function SendArrow() {
@@ -70,6 +72,7 @@ export function MentionField({
   layout = "inline",
   submitLabel,
   submitDisabled = false,
+  leading,
   ...props
 }: MentionFieldProps) {
   const [cursor, setCursor] = useState(value.length);
@@ -209,6 +212,7 @@ export function MentionField({
       {layout === "pill" ? chips : null}
       {layout === "pill" ? (
         <div className="mention-pill">
+          {leading}
           {field}
           {submitLabel ? (
             <button

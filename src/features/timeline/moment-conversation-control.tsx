@@ -32,6 +32,13 @@ import {
 import { MentionText } from "@/features/mentions/mention-text";
 import { CommentDrawer } from "./comment-drawer";
 import { HeartGlyph } from "./heart-glyph";
+
+function lovedByLine(names: readonly string[]) {
+  if (names.length <= 1) return `Loved by ${names[0] ?? ""}`;
+  if (names.length === 2) return `Loved by ${names[0]} and ${names[1]}`;
+  const others = names.length - 2;
+  return `Loved by ${names[0]}, ${names[1]} and ${others} ${others === 1 ? "other" : "others"}`;
+}
 import type {
   MomentConversationViewModel,
   MomentDetailViewModel,
@@ -161,6 +168,29 @@ export function MomentConversationControl({
   const [noteDraft, setNoteDraft] = useState("");
   const [noteMentions, setNoteMentions] = useState<readonly DraftMention[]>([]);
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [noteHeartPops, setNoteHeartPops] = useState<
+    Readonly<Record<string, number>>
+  >({});
+  const [openHeartNamesId, setOpenHeartNamesId] = useState<string | null>(null);
+  const [noteBurst, setNoteBurst] = useState<{
+    noteId: string;
+    generation: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const notePointer = useRef<{
+    id: number;
+    noteId: string;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
+  const noteTap = useRef<{
+    noteId: string;
+    time: number;
+    x: number;
+    y: number;
+  } | null>(null);
   useEffect(() => {
     const onTarget = (event: Event) => {
       const detail = (
@@ -386,6 +416,51 @@ export function MomentConversationControl({
     }
   };
 
+  const chooseNoteHeart = async (noteId: string, hearted: boolean) => {
+    const priorConversation = conversation;
+    const personName = interaction.currentPerson.name;
+    setConversation((current) => ({
+      ...current,
+      notes: current.notes.map((note) => {
+        if (note.id !== noteId) return note;
+        const names = note.heartNames ?? [];
+        const nextNames = hearted
+          ? names.includes(personName)
+            ? names
+            : [...names, personName]
+          : names.filter((name) => name !== personName);
+        return {
+          ...note,
+          heartedByViewer: hearted,
+          heartNames: nextNames,
+          heartCount: nextNames.length,
+        };
+      }),
+    }));
+    if (hearted && !overlayMotionReduced()) {
+      setNoteHeartPops((current) => ({
+        ...current,
+        [noteId]: (current[noteId] ?? 0) + 1,
+      }));
+    }
+    setError(null);
+    if (!actions) return;
+    try {
+      const result = await actions.setNoteHeart({
+        noteId,
+        momentId: model.id,
+        hearted,
+      });
+      if (!result.ok) {
+        setConversation(priorConversation);
+        setError(result.message);
+      }
+    } catch {
+      setConversation(priorConversation);
+      setError("That heart could not be saved. Try again.");
+    }
+  };
+
   const conversationId = `moment-conversation-${model.id}`;
 
   useEffect(() => {
@@ -414,6 +489,10 @@ export function MomentConversationControl({
           body: nextBody,
           displayDate: "Just now",
           canChange: true,
+          revision: 1,
+          heartCount: 0,
+          heartedByViewer: false,
+          heartNames: [],
         },
       ],
     }));
@@ -477,6 +556,55 @@ export function MomentConversationControl({
       );
     } catch {
       setError("That note could not be saved. Try again.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const openNoteEditor = (note: (typeof conversation.notes)[number]) => {
+    flushSync(() => {
+      setEditingNoteId(note.id);
+      const drafted = draftFromMentionDisplay(note.body, note.mentions ?? []);
+      setNoteDraft(drafted.text);
+      setNoteMentions(drafted.mentions);
+      setPanel("note");
+      setError(null);
+    });
+    noteRef.current?.focus({ preventScroll: true });
+  };
+
+  const removeNote = async (note: { id: string; revision?: number }) => {
+    if (!window.confirm("Remove this comment?")) return;
+    if (!actions || !note.revision) {
+      setConversation((current) => ({
+        ...current,
+        notes: current.notes.filter((item) => item.id !== note.id),
+      }));
+      setNoteDraft("");
+      setNoteMentions([]);
+      setEditingNoteId(null);
+      setError(null);
+      setPanel(null);
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const result = await actions.trashNote({
+        noteId: note.id,
+        revision: note.revision,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setNoteDraft("");
+      setNoteMentions([]);
+      setEditingNoteId(null);
+      setPanel(null);
+      await loadConversation(true);
+    } catch {
+      setError("That note could not be removed. Try again.");
     } finally {
       setPending(false);
     }
@@ -585,21 +713,103 @@ export function MomentConversationControl({
             id={`${panelId}-comments`}
             className="inline-note-summary"
             aria-label="Notes from family"
-            onClick={(event) => {
-              if (showAllNotes || olderNoteCount === 0) return;
-              if (
-                event.target instanceof Element &&
-                event.target.closest(
-                  "button, a, input, textarea, select, [role='button']",
-                )
-              )
-                return;
-              if (window.getSelection()?.toString()) return;
-              setShowAllNotes(true);
-            }}
           >
             {visibleNotes.map((note) => (
-              <li key={note.id} id={`note-${note.id}`}>
+              <li
+                key={note.id}
+                id={`note-${note.id}`}
+                className="inline-note-row"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  if (!event.isPrimary || event.button !== 0) {
+                    notePointer.current = null;
+                    noteTap.current = null;
+                    return;
+                  }
+                  if (
+                    event.target instanceof Element &&
+                    event.target.closest(
+                      "button, a, input, textarea, select, [role='button']",
+                    )
+                  ) {
+                    notePointer.current = null;
+                    return;
+                  }
+                  notePointer.current = {
+                    id: event.pointerId,
+                    noteId: note.id,
+                    x: event.clientX,
+                    y: event.clientY,
+                    moved: false,
+                  };
+                }}
+                onPointerMove={(event) => {
+                  const current = notePointer.current;
+                  if (
+                    current?.noteId === note.id &&
+                    Math.hypot(
+                      event.clientX - current.x,
+                      event.clientY - current.y,
+                    ) > 10
+                  ) {
+                    current.moved = true;
+                  }
+                }}
+                onPointerCancel={() => {
+                  notePointer.current = null;
+                  noteTap.current = null;
+                }}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  const current = notePointer.current;
+                  notePointer.current = null;
+                  if (
+                    !current ||
+                    current.noteId !== note.id ||
+                    current.id !== event.pointerId ||
+                    current.moved ||
+                    Math.hypot(
+                      event.clientX - current.x,
+                      event.clientY - current.y,
+                    ) > 10
+                  ) {
+                    noteTap.current = null;
+                    return;
+                  }
+                  const previous = noteTap.current;
+                  const now = performance.now();
+                  if (
+                    previous &&
+                    previous.noteId === note.id &&
+                    now - previous.time < 300 &&
+                    Math.hypot(
+                      previous.x - event.clientX,
+                      previous.y - event.clientY,
+                    ) < 32
+                  ) {
+                    noteTap.current = null;
+                    event.preventDefault();
+                    if (!note.heartedByViewer) {
+                      const bounds =
+                        event.currentTarget.getBoundingClientRect();
+                      setNoteBurst({
+                        noteId: note.id,
+                        generation: now,
+                        x: event.clientX - bounds.left,
+                        y: event.clientY - bounds.top,
+                      });
+                      void chooseNoteHeart(note.id, true);
+                    }
+                    return;
+                  }
+                  noteTap.current = {
+                    noteId: note.id,
+                    time: now,
+                    x: event.clientX,
+                    y: event.clientY,
+                  };
+                }}
+              >
                 <div>
                   <span className="inline-note-author">
                     <strong>
@@ -622,68 +832,90 @@ export function MomentConversationControl({
                         {note.displayDate}
                       </span>
                     )}
-                    {actions && note.canChange && note.revision ? (
-                      <span className="inline-note-actions">
+                    {note.canChange && note.revision ? (
+                      <span className="inline-note-more">
                         <button
                           type="button"
+                          aria-label="Edit comment"
                           disabled={pending}
-                          onClick={() => {
-                            flushSync(() => {
-                              setEditingNoteId(note.id);
-                              const drafted = draftFromMentionDisplay(
-                                note.body,
-                                note.mentions ?? [],
-                              );
-                              setNoteDraft(drafted.text);
-                              setNoteMentions(drafted.mentions);
-                              setPanel("note");
-                              setError(null);
-                            });
-                            noteRef.current?.focus({ preventScroll: true });
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openNoteEditor(note);
                           }}
                         >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                "Remove this note from the family conversation?",
-                              )
-                            )
-                              return;
-                            setPending(true);
-                            setError(null);
-                            try {
-                              const result = await actions.trashNote({
-                                noteId: note.id,
-                                revision: note.revision!,
-                              });
-                              if (!result.ok) {
-                                setError(result.message);
-                                return;
-                              }
-                              await loadConversation(true);
-                            } catch {
-                              setError(
-                                "That note could not be removed. Try again.",
-                              );
-                            } finally {
-                              setPending(false);
-                            }
-                          }}
-                        >
-                          Remove
+                          <span
+                            className="inline-note-more-dots"
+                            aria-hidden="true"
+                          />
                         </button>
                       </span>
                     ) : null}
+                    <span className="inline-note-heart">
+                      <button
+                        className={`inline-note-heart-trigger${note.heartedByViewer ? " is-loved" : " is-caption"}`}
+                        type="button"
+                        aria-pressed={note.heartedByViewer === true}
+                        aria-label={
+                          note.heartedByViewer
+                            ? "Undo love on this comment"
+                            : "Love this comment"
+                        }
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void chooseNoteHeart(
+                            note.id,
+                            note.heartedByViewer !== true,
+                          );
+                        }}
+                      >
+                        <span
+                          key={noteHeartPops[note.id] ?? 0}
+                          className={`quick-reaction-glyph${(noteHeartPops[note.id] ?? 0) > 0 ? " is-popping" : ""}`}
+                          aria-hidden="true"
+                        >
+                          <HeartGlyph filled={note.heartedByViewer === true} />
+                        </span>
+                      </button>
+                      {(note.heartCount ?? 0) > 0 ? (
+                        <button
+                          className="inline-note-heart-count is-caption"
+                          type="button"
+                          aria-expanded={openHeartNamesId === note.id}
+                          aria-label={`${note.heartCount} ${note.heartCount === 1 ? "person loves" : "people love"} this comment`}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenHeartNamesId((current) =>
+                              current === note.id ? null : note.id,
+                            );
+                          }}
+                        >
+                          {note.heartCount}
+                        </button>
+                      ) : null}
+                    </span>
                   </span>
                   <p>
                     <MentionText text={note.body} mentions={note.mentions} />
                   </p>
+                  {openHeartNamesId === note.id ? (
+                    <p className="inline-note-when inline-note-loved">
+                      {lovedByLine(note.heartNames ?? [])}
+                    </p>
+                  ) : null}
                 </div>
+                {noteBurst?.noteId === note.id ? (
+                  <span
+                    key={noteBurst.generation}
+                    className="post-love-burst"
+                    style={{ left: noteBurst.x, top: noteBurst.y }}
+                    onAnimationEnd={() => setNoteBurst(null)}
+                  >
+                    <HeartGlyph filled />
+                  </span>
+                ) : null}
               </li>
             ))}
           </ol>
@@ -733,6 +965,33 @@ export function MomentConversationControl({
           >
             <MentionField
               layout="pill"
+              leading={
+                editingNoteId ? (
+                  <button
+                    className="comment-delete is-caption"
+                    type="button"
+                    aria-label="Delete comment"
+                    disabled={pending}
+                    onClick={() => {
+                      const note = conversation.notes.find(
+                        (item) => item.id === editingNoteId,
+                      );
+                      if (note) void removeNote(note);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                ) : null
+              }
               submitLabel={
                 pending ? "Saving…" : editingNoteId ? "Save" : "Post"
               }

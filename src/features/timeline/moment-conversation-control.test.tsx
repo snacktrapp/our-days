@@ -71,6 +71,7 @@ function connectedActions(
     updateNote: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
     trashNote: vi.fn().mockResolvedValue({ ok: true, message: "Removed" }),
     setReaction: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
+    setNoteHeart: vi.fn().mockResolvedValue({ ok: true, message: "Saved" }),
   };
 }
 
@@ -204,6 +205,14 @@ describe("MomentConversationControl", () => {
 
     await user.click(screen.getByText("Nana just replied."));
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByText("Oldest family note.")).toBeNull();
+    const stillCollapsed = within(notes).getAllByRole("listitem");
+    expect(stillCollapsed.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Nana just replied."),
+      expect.stringContaining("A middle note."),
+    ]);
+    await user.click(screen.getByRole("button", { name: "Show 1 more" }));
     const expanded = within(notes).getAllByRole("listitem");
     expect(expanded.map((item) => item.textContent)).toEqual([
       expect.stringContaining("Nana just replied."),
@@ -221,8 +230,7 @@ describe("MomentConversationControl", () => {
     expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.queryByText("Oldest family note.")).toBeNull();
     await user.click(notes);
-    expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
-    await user.click(screen.getByRole("button", { name: "Show fewer notes" }));
+    expect(within(notes).getAllByRole("listitem")).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: "Show 1 more" }));
     expect(within(notes).getAllByRole("listitem")).toHaveLength(3);
   });
@@ -600,7 +608,7 @@ describe("MomentConversationControl", () => {
     renderControl(actions, thread);
 
     expect(screen.queryByText("Oldest family note.")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor).toHaveValue("Original newest note.");
     await user.clear(editor);
@@ -699,7 +707,7 @@ describe("MomentConversationControl", () => {
     const user = userEvent.setup();
     renderControl(actions, owned);
 
-    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
     const editor = screen.getByRole("textbox", { name: "Edit your note" });
     expect(editor.closest("form")).toHaveClass("inline-note-form");
     expect(editor).toHaveValue("Original note.");
@@ -726,10 +734,13 @@ describe("MomentConversationControl", () => {
       ok: true,
       conversation: { notes: [], reactions: [] },
     });
-    await user.click(screen.getByRole("button", { name: "Remove" }));
-    expect(confirm).toHaveBeenCalledWith(
-      "Remove this note from the family conversation?",
-    );
+    expect(screen.queryByRole("button", { name: "Delete comment" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Edit comment" }));
+    expect(
+      screen.getByRole("button", { name: "Delete comment" }),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Delete comment" }));
+    expect(confirm).toHaveBeenCalledWith("Remove this comment?");
     await waitFor(() =>
       expect(actions.trashNote).toHaveBeenCalledWith({
         noteId: "note-owned",
@@ -760,5 +771,142 @@ describe("MomentConversationControl", () => {
     const list = screen.getByRole("list", { name: "Notes from family" });
     expect(list).toHaveTextContent(hostile);
     expect(list.querySelector("[data-note-injection]")).toBeNull();
+  });
+
+  it("hearts a comment from the heart and from a double tap, and lists names", async () => {
+    const user = userEvent.setup();
+    const actions = connectedActions();
+    renderControl(actions, {
+      notes: [
+        {
+          id: "note-oldest",
+          authorName: "Nana",
+          authorInitial: "N",
+          authorAccent: "clay",
+          body: "An older note.",
+          displayDate: "Aug 1, 2026",
+        },
+        {
+          id: "note-two",
+          authorName: "Brian",
+          authorInitial: "B",
+          authorAccent: "teal",
+          body: "A second note.",
+          displayDate: "Aug 3, 2026",
+        },
+        {
+          ...initialConversation.notes[0],
+          heartCount: 1,
+          heartedByViewer: false,
+          heartNames: ["Molly"],
+        },
+      ],
+      reactions: [],
+    });
+
+    const notes = screen.getByRole("list", { name: "Notes from family" });
+    const heart = within(notes).getAllByRole("button", {
+      name: "Love this comment",
+    })[0];
+    expect(heart).toHaveClass("inline-note-heart-trigger", "is-caption");
+    expect(heart).not.toHaveClass("is-loved");
+    expect(
+      within(notes).queryByRole("button", { name: "Edit comment" }),
+    ).toBeNull();
+    await user.click(heart);
+    expect(heart).toHaveAttribute("aria-pressed", "true");
+    expect(heart).toHaveClass("is-loved");
+    expect(heart).not.toHaveClass("is-caption");
+    expect(heart.querySelector(".quick-reaction-glyph")).toHaveClass(
+      "is-popping",
+    );
+    expect(actions.setNoteHeart).toHaveBeenLastCalledWith({
+      noteId: "note-one",
+      momentId: model.id,
+      hearted: true,
+    });
+    expect(notes.querySelectorAll(".inline-note-row")).toHaveLength(2);
+
+    const count = within(notes).getByRole("button", {
+      name: "2 people love this comment",
+    });
+    expect(count).toHaveClass("is-caption");
+    await user.click(count);
+    expect(notes).toHaveTextContent("Loved by Molly and Brian");
+    await user.click(count);
+    expect(notes).not.toHaveTextContent("Loved by Molly and Brian");
+    await user.click(count);
+    expect(notes).toHaveTextContent("Loved by Molly and Brian");
+
+    await user.click(
+      within(notes).getByRole("button", { name: "Undo love on this comment" }),
+    );
+    expect(actions.setNoteHeart).toHaveBeenLastCalledWith({
+      noteId: "note-one",
+      momentId: model.id,
+      hearted: false,
+    });
+
+    const second = notes.querySelectorAll(".inline-note-row")[1];
+    fireEvent.pointerDown(second, {
+      pointerId: 1,
+      clientX: 20,
+      clientY: 20,
+      button: 0,
+      isPrimary: true,
+    });
+    fireEvent.pointerUp(second, {
+      pointerId: 1,
+      clientX: 20,
+      clientY: 20,
+      button: 0,
+    });
+    fireEvent.pointerDown(second, {
+      pointerId: 1,
+      clientX: 22,
+      clientY: 22,
+      button: 0,
+      isPrimary: true,
+    });
+    fireEvent.pointerUp(second, {
+      pointerId: 1,
+      clientX: 22,
+      clientY: 22,
+      button: 0,
+    });
+    expect(actions.setNoteHeart).toHaveBeenLastCalledWith({
+      noteId: "note-two",
+      momentId: model.id,
+      hearted: true,
+    });
+    expect(second.querySelector(".post-love-burst")).not.toBeNull();
+
+    fireEvent.pointerDown(second, {
+      pointerId: 1,
+      clientX: 20,
+      clientY: 20,
+      button: 0,
+      isPrimary: true,
+    });
+    fireEvent.pointerUp(second, {
+      pointerId: 1,
+      clientX: 20,
+      clientY: 20,
+      button: 0,
+    });
+    fireEvent.pointerDown(second, {
+      pointerId: 1,
+      clientX: 22,
+      clientY: 22,
+      button: 0,
+      isPrimary: true,
+    });
+    fireEvent.pointerUp(second, {
+      pointerId: 1,
+      clientX: 22,
+      clientY: 22,
+      button: 0,
+    });
+    expect(actions.setNoteHeart).toHaveBeenCalledTimes(3);
   });
 });

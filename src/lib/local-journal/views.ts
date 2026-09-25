@@ -186,6 +186,9 @@ function conversationFromLocalDocument(
               (membership) => membership.id === note.authorMembershipId,
             )?.personId,
         );
+        const noteHearts = (document.noteHearts ?? []).filter(
+          (heart) => heart.noteId === note.id && heart.removedAt === null,
+        );
         return {
           id: note.id,
           authorName,
@@ -196,6 +199,13 @@ function conversationFromLocalDocument(
           displayDate: displayConversationDate(note.createdAt),
           revision: note.revision,
           canChange: mine.has(note.authorMembershipId),
+          heartCount: noteHearts.length,
+          heartedByViewer: noteHearts.some((heart) =>
+            mine.has(heart.authorMembershipId),
+          ),
+          heartNames: noteHearts.map((heart) =>
+            membershipPersonName(document, heart.authorMembershipId),
+          ),
         };
       }),
     reactions: document.reactions
