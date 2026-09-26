@@ -3,7 +3,9 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { connection } from "next/server";
 import { journalPromoPrepaintScript } from "@/features/timeline/journal-promo-config";
+import { enableDeferredStylesheetScript } from "@/lib/defer-full-stylesheet";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
+import { criticalShellCss } from "./critical-shell-css";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
 
@@ -80,6 +82,18 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <style
+          id="our-days-critical-shell"
+          nonce={nonce || undefined}
+          dangerouslySetInnerHTML={{ __html: criticalShellCss }}
+        />
+        <script
+          id="our-days-deferred-css"
+          nonce={nonce || undefined}
+          dangerouslySetInnerHTML={{ __html: enableDeferredStylesheetScript }}
+        />
+      </head>
       <body>
         <Script
           id="our-days-theme"

@@ -14,6 +14,7 @@ const familyPage = read("src/app/(journal)/family/page.tsx");
 const familyHome = read("src/data/family-home.server.ts");
 const journalContext = read("src/data/journal-context.server.ts");
 const openingShell = read("src/features/shell/opening-journal-shell.tsx");
+const rootLayout = read("src/app/layout.tsx");
 
 describe("journal open paint", () => {
   it("keeps the journal layout shell-first without an eager access throw path", () => {
@@ -46,7 +47,15 @@ describe("journal open paint", () => {
     expect(familyPage).toContain("loadFamilyHomeRemainder");
     expect(familyPage).toContain("loadJournalActivityNotifications");
     expect(familyPage).toContain("OpeningJournalShell");
+    expect(
+      familyPage.indexOf("<Suspense fallback={<OpeningJournalShell />}>"),
+    ).toBeLessThan(
+      familyPage.indexOf("await requireJournalAccessUnlessRecoverable"),
+    );
     expect(familyPage).toContain("familyHomeRefreshSoftFail");
+    expect(rootLayout).toContain('id="our-days-critical-shell"');
+    expect(rootLayout).toContain('import "./globals.css"');
+    expect(rootLayout).toContain("enableDeferredStylesheetScript");
     expect(familyHome).toContain("includeActivity: false");
     expect(familyHome).toContain("enrichLimit: 1");
     expect(journalContext).toContain("includeActivity");

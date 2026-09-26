@@ -173,6 +173,105 @@ describe("security proxy", () => {
     );
   });
 
+  it("sends a signed-out journal document to sign-in before the page renders", async () => {
+    const response = await proxy(
+      new NextRequest(
+        "https://journal.example.com/family?circle=created&name=Cousins",
+      ),
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://journal.example.com/sign-in",
+    );
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-ancestors 'none'",
+    );
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    const setCookies = response.headers.getSetCookie();
+    expect(
+      setCookies.some((cookie) =>
+        cookie.includes("our-days-active-circle=created"),
+      ),
+    ).toBe(true);
+    expect(
+      setCookies.some((cookie) =>
+        cookie.includes("our-days-created-group-name=Cousins"),
+      ),
+    ).toBe(true);
+  });
+
+  it("leaves RSC journal requests for the page redirect digest", async () => {
+    const response = await proxy(
+      new NextRequest("https://journal.example.com/family?_rsc=1", {
+        headers: { rsc: "1" },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+
+    // Production strips the flight header and `_rsc` before proxy. `next-url`
+    // is what still marks the request as a client navigation.
+    const stripped = await proxy(
+      new NextRequest("https://journal.example.com/circles", {
+        headers: { "next-url": "/family" },
+      }),
+    );
+    expect(stripped.status).toBe(200);
+    expect(stripped.headers.get("location")).toBeNull();
+  });
+
+  it("does not redirect public, quality, preview, or local-journal documents", async () => {
+    const signIn = await proxy(
+      new NextRequest("https://journal.example.com/sign-in"),
+    );
+    const quality = await proxy(
+      new NextRequest("https://journal.example.com/quality/global-error"),
+    );
+    expect(signIn.status).toBe(200);
+    expect(quality.status).toBe(200);
+    expect(signIn.headers.get("location")).toBeNull();
+    expect(quality.headers.get("location")).toBeNull();
+
+    vi.stubEnv("OUR_DAYS_ENABLE_DESIGN_PREVIEW", "true");
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "detached");
+    vi.stubEnv("OUR_DAYS_ENVIRONMENT", "local");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://127.0.0.1:3100");
+    const preview = await proxy(
+      new NextRequest("https://journal.example.com/family"),
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get("location")).toBeNull();
+    vi.unstubAllEnvs();
+
+    vi.stubEnv("OUR_DAYS_LOCAL_JOURNAL_MODE", "enabled");
+    vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "detached");
+    vi.stubEnv("OUR_DAYS_ENVIRONMENT", "local");
+    vi.stubEnv("OUR_DAYS_ENABLE_DESIGN_PREVIEW", "false");
+    const localJournal = await proxy(
+      new NextRequest("https://journal.example.com/people/molly"),
+    );
+    expect(localJournal.status).toBe(200);
+    expect(localJournal.headers.get("location")).toBeNull();
+  });
+
+  it("redirects a journal document when the session claim is missing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: async () => ({ data: { claims: null }, error: null }),
+      },
+    }));
+    const response = await proxy(
+      new NextRequest("https://journal.example.com/circles"),
+    );
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "https://journal.example.com/sign-in",
+    );
+  });
+
   it.each([
     ["/", true],
     ["/family", true],
