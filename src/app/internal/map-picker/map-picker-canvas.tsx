@@ -45,8 +45,13 @@ export function MapPickerCanvas() {
     const placeMarker = (latitude: number, longitude: number) => {
       if (!map || !maplibre) return;
       if (!marker) {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--accent)";
+        document.body.appendChild(probe);
+        const markerColor = getComputedStyle(probe).color;
+        probe.remove();
         marker = new maplibre.Marker({
-          color: "#c9a227",
+          color: markerColor,
           draggable: interactive,
         })
           .setLngLat([longitude, latitude])

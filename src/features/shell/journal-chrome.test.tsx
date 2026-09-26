@@ -34,9 +34,6 @@ vi.mock("@/features/composer/composer-session", () => ({
 vi.mock("./notification-center", () => ({
   NotificationCenter: () => <button type="button">Open notifications</button>,
 }));
-vi.mock("./theme-toggle", () => ({
-  ThemeToggle: () => <button type="button">Use light appearance</button>,
-}));
 vi.mock("./primary-navigation", () => ({
   PrimaryNavigation: () => (
     <nav className="bottom-nav" aria-label="Primary navigation" />
@@ -152,8 +149,8 @@ describe("JournalChrome", () => {
         screen.getByRole("button", { name: "Open notifications" }),
       ).toBeVisible();
       expect(
-        screen.getByRole("button", { name: "Use light appearance" }),
-      ).toBeVisible();
+        screen.queryByRole("button", { name: "Use light appearance" }),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole("link", { name: /Back to/u }),
       ).not.toBeInTheDocument();

@@ -39,8 +39,10 @@ describe("installed app icons", () => {
 
     const webManifest = manifest();
     expect(webManifest).toMatchObject({
-      background_color: "#101216",
-      theme_color: "#101216",
+      name: "Our Days Mono",
+      short_name: "Our Days Mono",
+      background_color: "#14110f",
+      theme_color: "#14110f",
     });
     expect(webManifest.icons).toEqual(
       expect.arrayContaining([

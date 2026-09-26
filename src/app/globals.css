@@ -35,26 +35,46 @@
 }
 
 :root {
-  --grid-surface: #101216;
-  --paper: #101216;
-  --ink: #edf0f5;
-  --muted: #a1abba;
-  --hairline: rgba(176, 190, 210, 0.2);
-  --line: #343c49;
-  --cream: #1b2028;
-  --surface-raised: #242b35;
-  --teal: #79adff;
-  --action: #79adff;
-  --action-ink: #101216;
-  --clay: #c77c80;
-  --ochre: #c59a56;
-  --slate: #8b98ad;
-  --moss: #82a472;
-  --accent: var(--teal);
+  --bg: #14110f;
+  --surface: #1b1714;
+  --surface-2: #221c18;
+  --border: #2a2420;
+  --text: #ece3d8;
+  --text-muted: #a39688;
+  --text-faint: #6f655b;
+  --accent-orange: #e8743b;
+  --accent-green: #8cc26a;
+  --accent-amber: #e0a93f;
+  --accent-blue: #5eb4de;
+  --accent-pink: #f09ab8;
+  --accent-violet: #c4b0f5;
+  --accent: var(--accent-orange);
+  --accent-contrast: #14110f;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --danger: #e0604f;
+  --success: #8cc26a;
+  --warning: #e0a93f;
+  --info: #5eb4de;
+  --grid-surface: var(--bg);
+  --paper: var(--bg);
+  --ink: var(--text);
+  --muted: var(--text-muted);
+  --hairline: var(--border);
+  --line: var(--border);
+  --cream: var(--surface);
+  --surface-raised: var(--surface-2);
+  --teal: var(--accent);
+  --action: var(--accent);
+  --action-ink: var(--accent-contrast);
+  --clay: var(--danger);
+  --ochre: var(--accent);
+  --slate: var(--text-muted);
+  --moss: var(--success);
   --font-interface:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-record: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --font-serif: Georgia, "Times New Roman", serif;
+    "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    monospace;
+  --font-record: var(--font-interface);
+  --font-serif: var(--font-interface);
   --chrome-eyebrow: 650 9px / 1.2 var(--font-record);
   --chrome-title: 600 16px / 1.25 var(--font-interface);
   --chrome-body: 400 12px / 1.45 var(--font-interface);
@@ -67,7 +87,7 @@
   --selection-fill: color-mix(in srgb, var(--action) 14%, var(--cream));
   --selection-border: color-mix(in srgb, var(--action) 55%, var(--hairline));
   --header-drawer-radius: 10px;
-  --header-drawer-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  --header-drawer-shadow: none;
   --overlay-popover-fill: color-mix(in srgb, var(--cream) 88%, transparent);
   --overlay-popover-blur: 18px;
   --header-drawer-padding: 16px;
@@ -88,9 +108,9 @@
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --bottom-nav-float-gap: 10px;
   --bottom-nav-inline-gap: 12px;
-  --nav-pill-fill: rgba(27, 32, 40, 0.88);
-  --nav-pill-blur: 14px;
-  --journal-grid-line: rgba(139, 160, 190, 0.085);
+  --nav-pill-fill: color-mix(in srgb, var(--surface) 94%, transparent);
+  --nav-pill-blur: 0px;
+  --journal-grid-line: transparent;
   --journal-grid-size: 28px;
   --journal-grid-image:
     linear-gradient(var(--journal-grid-line) 1px, transparent 1px),
@@ -103,26 +123,7 @@
 }
 
 :root[data-theme="light"] {
-  color-scheme: light;
-  --grid-surface: #edf0f4;
-  --paper: #edf0f4;
-  --ink: #1b2431;
-  --muted: #596678;
-  --hairline: rgba(56, 73, 98, 0.18);
-  --line: #c8d1de;
-  --cream: #ffffff;
-  --surface-raised: #f2f5f9;
-  --teal: #2764be;
-  --action: #2764be;
-  --action-ink: #ffffff;
-  --clay: #a8525c;
-  --ochre: #9b6d24;
-  --slate: #59677d;
-  --moss: #58764e;
-  --nav-pill-fill: rgba(255, 255, 255, 0.88);
-  --journal-grid-line: rgba(74, 96, 128, 0.075);
-  --header-drawer-shadow: 0 18px 42px rgba(25, 35, 52, 0.18);
-  --overlay-popover-fill: color-mix(in srgb, var(--cream) 90%, transparent);
+  color-scheme: dark;
 }
 
 * {

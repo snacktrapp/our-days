@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-latin.woff2") format("woff2");
+}
+
 .body,
 .body *,
 .body *::before,
@@ -6,29 +14,34 @@
 }
 
 .body {
+  --bg: #14110f;
+  --surface: #1b1714;
+  --border: #2a2420;
+  --text: #ece3d8;
+  --text-muted: #a39688;
+  --accent: #e8743b;
+  --accent-contrast: #14110f;
   min-height: 100svh;
   margin: 0;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: #f3eee4;
-  color: #2d2924;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
   font-family:
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+    "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    monospace;
 }
 
 .card {
   width: min(100%, 390px);
   padding: 44px 30px;
-  border: 1px solid rgba(67, 54, 43, 0.14);
-  border-radius: 28px;
-  background: #fffdf8;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
   text-align: center;
-  box-shadow: 0 18px 56px rgba(58, 44, 31, 0.1);
+  box-shadow: none;
 }
 
 .mark {
@@ -44,45 +57,40 @@
 
 .mark::before {
   content: "";
-  width: 2px;
+  width: 1px;
   position: absolute;
   inset-block: 0;
   left: 50%;
   transform: translateX(-50%);
-  background: #c7b7a2;
+  background: var(--border);
 }
 
 .mark i {
   width: 20px;
   height: 20px;
   z-index: 1;
-  border: 4px solid #fffdf8;
-  border-radius: 50%;
-  background: #315f63;
-}
-
-.mark i:nth-child(2) {
-  background: #8f4f49;
-}
-
-.mark i:nth-child(3) {
-  background: #b88b42;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 5px var(--accent);
 }
 
 .card p {
   margin: 24px 0 7px;
-  color: #526047;
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .card h1 {
   margin: 0;
+  color: var(--text);
   font:
-    500 30px/1.16 Georgia,
-    serif;
+    500 22px/1.3 "JetBrains Mono",
+    ui-monospace,
+    monospace;
 }
 
 .retryButton {
@@ -90,20 +98,20 @@
   min-height: 44px;
   margin-top: 20px;
   padding: 10px 18px;
-  border: 1px solid rgba(67, 54, 43, 0.18);
-  border-radius: 999px;
-  background: #315f63;
-  color: #fffdf8;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font:
-    700 13px/1 ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+    700 12px/1 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .retryButton:focus-visible {
-  outline: 3px solid #b88b42;
+  outline: 1px solid var(--accent);
   outline-offset: 3px;
 }

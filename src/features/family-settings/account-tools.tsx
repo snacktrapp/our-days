@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { AccentPicker } from "@/features/shell/accent-picker";
 import { NotificationPreference } from "./notification-preference";
 import {
   SettingsChevron,
@@ -15,6 +16,7 @@ export function AccountTools() {
     <>
       <SettingsSection aria-label="Preferences">
         <SettingsGroup>
+          <AccentPicker />
           <NotificationPreference />
           <SettingsRowLink href="/trash" plain ariaLabel="Recently removed">
             <SettingsRowCopy

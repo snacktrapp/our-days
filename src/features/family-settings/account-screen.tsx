@@ -37,34 +37,8 @@ import { createGroupAction } from "@/features/groups/create-group-action";
 import { renameCircleAction } from "@/features/groups/rename-circle-action";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import { countFamilyFacingPeople } from "@/lib/circle-roles";
-import { ProfileColorSelector } from "@/features/family-settings/profile-color-selector";
 import { SettingsPage } from "@/features/family-settings/settings-directory";
-import { saveProfileColorAction } from "@/features/family-settings/profile-color-action";
-import type {
-  FamilySettingsPanelViewModel,
-  FamilySettingsViewModel,
-} from "@/features/family-settings/family-settings-view-model";
-
-function ProfileColorSettings({
-  model,
-}: {
-  model: FamilySettingsPanelViewModel;
-}) {
-  const person = model.groups
-    .flatMap((group) => group.members)
-    .find((member) => member.id === model.currentMemberId);
-  if (!person) return null;
-  return (
-    <ProfileColorSelector
-      key={`${person.id}-${person.accent}`}
-      name={person.name}
-      initial={person.initial}
-      accent={person.accent}
-      preview={model.mode === "preview"}
-      saveColor={saveProfileColorAction}
-    />
-  );
-}
+import type { FamilySettingsViewModel } from "@/features/family-settings/family-settings-view-model";
 
 export default async function AccountScreen({
   searchParams,
@@ -131,7 +105,6 @@ export default async function AccountScreen({
           />
         ) : (
           <SettingsPage>
-            <ProfileColorSettings model={model.panel} />
             <AccountContents />
           </SettingsPage>
         )}
@@ -261,7 +234,6 @@ export default async function AccountScreen({
         />
       ) : (
         <SettingsPage>
-          <ProfileColorSettings model={model.panel} />
           <AccountContents />
         </SettingsPage>
       )}

@@ -23,7 +23,6 @@ import {
 } from "@/features/timeline/notification-arrival";
 import { PrimaryNavigation } from "./primary-navigation";
 import { SettingsLink } from "./settings-link";
-import { ThemeToggle } from "./theme-toggle";
 import { NotificationCenter } from "./notification-center";
 import { ActivityBanner } from "./activity-banner";
 import {
@@ -105,7 +104,6 @@ function PrimaryJournalHeader({
             refreshOnOpen={activityEnabled}
           />
         )}
-        <ThemeToggle />
       </div>
     </header>
   );

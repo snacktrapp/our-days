@@ -3,9 +3,14 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import { connection } from "next/server";
 import { journalPromoPrepaintScript } from "@/features/timeline/journal-promo-config";
+import {
+  terminalBackground,
+  terminalThemeBootstrap,
+} from "@/features/shell/terminal-accent";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
+import "./terminal-mono.css";
 
 const metadataBase = resolveMetadataBase();
 
@@ -28,7 +33,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Our Days",
+    title: "Our Days Mono",
     statusBarStyle: "black-translucent",
   },
   openGraph: {
@@ -48,27 +53,16 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // Safari paints theme-color in the toolbar / home-indicator gap. Dark
-  // matches the journal canvas. Activity and New moment sheets set it to
-  // #000 via lockOverlayChrome.
+  // Dark only. Safari paints theme-color in the toolbar / home-indicator gap.
+  // Activity and New moment sheets set it to black via lockOverlayChrome.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#edf0f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#101216" },
+    { media: "(prefers-color-scheme: light)", color: terminalBackground },
+    { media: "(prefers-color-scheme: dark)", color: terminalBackground },
   ],
 };
 
-const themeBootstrap = `
-  try {
-    var savedTheme = window.localStorage.getItem("our-days-theme");
-    var theme = savedTheme === "light" || savedTheme === "dark"
-      ? savedTheme
-      : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-    document.documentElement.dataset.theme = theme;
-  } catch (_) {
-    document.documentElement.dataset.theme = "dark";
-  }
-  ${journalPromoPrepaintScript()}
-`;
+const themeBootstrap = `${terminalThemeBootstrap()}
+  ${journalPromoPrepaintScript()}`;
 
 export default async function RootLayout({
   children,
