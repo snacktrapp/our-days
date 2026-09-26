@@ -283,7 +283,7 @@ dialog::backdrop {
    timestamps keep their own sizes and stay centered on the author line. */
 .inline-note-summary .inline-note-author strong,
 .inline-note-summary li p:not(.inline-note-when) {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
