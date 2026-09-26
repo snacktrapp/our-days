@@ -59,6 +59,41 @@ describe("family session error classification", () => {
     ).toBe(false);
   });
 
+  it("does not retry an edit conflict, including HTTP 409 and legacy 40001", () => {
+    expect(
+      isTransientFamilySessionError({
+        code: "PT409",
+        status: 409,
+        message: "Moment changed elsewhere",
+      }),
+    ).toBe(false);
+    expect(
+      isTransientFamilySessionError({
+        code: "PT409",
+        message: "fetch failed",
+      }),
+    ).toBe(false);
+    expect(
+      isTransientFamilySessionError({
+        code: "40001",
+        message: "Note changed elsewhere",
+      }),
+    ).toBe(false);
+    expect(
+      isTransientFamilySessionError({
+        code: "23505",
+        status: 409,
+        message: "duplicate key value",
+      }),
+    ).toBe(false);
+    expect(
+      isTransientFamilySessionError({
+        status: 409,
+        message: "Moment changed elsewhere",
+      }),
+    ).toBe(false);
+  });
+
   it("still treats unrecoverable timeline integrity failures as fatal", () => {
     expect(
       isFatalJournalHomeError(new Error("Timeline request is too large")),

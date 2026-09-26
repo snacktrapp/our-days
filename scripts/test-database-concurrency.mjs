@@ -2087,7 +2087,8 @@ try {
     editSuccesses.length !== 1 ||
     editSuccesses[0].body !== 2 ||
     editConflicts.length !== 1 ||
-    editConflicts[0].body?.code !== "40001" ||
+    editConflicts[0].response.status !== 409 ||
+    editConflicts[0].body?.code !== "PT409" ||
     editConflicts[0].body?.message !== "Moment changed elsewhere"
   ) {
     throw new Error(
@@ -2194,7 +2195,8 @@ try {
     familyEditSuccesses.length !== 1 ||
     familyEditSuccesses[0].body !== 2 ||
     familyEditConflicts.length !== 1 ||
-    familyEditConflicts[0].body?.code !== "40001" ||
+    familyEditConflicts[0].response.status !== 409 ||
+    familyEditConflicts[0].body?.code !== "PT409" ||
     familyEditConflicts[0].body?.message !== "Moment changed elsewhere"
   ) {
     throw new Error(
@@ -2295,7 +2297,8 @@ try {
     noteEditSuccesses.length !== 1 ||
     noteEditSuccesses[0].body !== 2 ||
     noteEditConflicts.length !== 1 ||
-    noteEditConflicts[0].body?.code !== "40001" ||
+    noteEditConflicts[0].response.status !== 409 ||
+    noteEditConflicts[0].body?.code !== "PT409" ||
     noteEditConflicts[0].body?.message !== "Note changed elsewhere"
   ) {
     throw new Error(

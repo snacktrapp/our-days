@@ -1,3 +1,5 @@
+import { isEditConflictError } from "@/lib/edit-conflict";
+
 const recoverableJournalBootstrapMessages = new Set([
   "Circle is unavailable",
   "Member profile is unavailable",
@@ -72,6 +74,17 @@ export function isTransientFamilySessionError(error: unknown) {
   const code = errorCode(error);
   const message = errorMessage(error);
   const status = errorStatus(error);
+  // Edit conflicts are permanent. HTTP 409 must not enter the one-shot retry,
+  // and neither must the legacy serialization_failure code.
+  if (
+    isEditConflictError(error) ||
+    status === 409 ||
+    code === "PT409" ||
+    code === "40001" ||
+    code === "409"
+  ) {
+    return false;
+  }
   return (
     isRecoverableJournalNavigationError(error) ||
     code === "PGRST301" ||
