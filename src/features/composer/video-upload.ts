@@ -12,7 +12,7 @@ import {
 } from "@/lib/supabase/public-config";
 
 export const maximumVideoBytes = 100 * 1024 * 1024;
-export const maximumVideoDurationMs = 60_500;
+export const maximumVideoDurationMs = 120_500;
 
 const allowedVideoTypes = new Set([
   "video/mp4",
@@ -116,7 +116,7 @@ function inspectVideo(file: File, durationMs: number) {
     durationMs > maximumVideoDurationMs
   ) {
     throw new VideoUploadError(
-      "Choose a video about 60 seconds or shorter.",
+      "Choose a video about 2 minutes or shorter.",
       false,
     );
   }

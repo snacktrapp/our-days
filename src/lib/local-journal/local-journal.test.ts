@@ -386,6 +386,29 @@ describe("local journal happy path", () => {
     expect(ownMoment.moment.taggedPeopleLabel).toBe("Jordan");
   });
 
+  it("accepts a video of about 94 seconds and rejects 121 seconds", async () => {
+    const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
+    const input = {
+      file: new File([videoBytes], "wave.mp4", { type: "video/mp4" }),
+      journalPersonId: localAlexPersonId,
+      body: "A longer porch clip.",
+      placeName: "",
+      taggedPersonIds: [],
+      occurredOn: "2026-08-21",
+      occurredAt: null,
+      occurredTimezone: null,
+    };
+    await expect(
+      publishVerifiedVideoMoment(access, { ...input, durationMs: 121_000 }),
+    ).rejects.toThrow("2 minutes or shorter");
+    await expect(
+      publishVerifiedVideoMoment(access, { ...input, durationMs: 94_360 }),
+    ).resolves.toMatchObject({
+      kind: "video",
+      media: expect.objectContaining({ durationMs: 94_360 }),
+    });
+  });
+
   it("keeps a Just Me video on the author's journal only", async () => {
     const jordanAccess: LocalAccess = {
       membershipId: localJordanMembershipId,

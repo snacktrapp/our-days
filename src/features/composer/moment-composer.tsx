@@ -950,7 +950,7 @@ export function MomentComposer({
     const durationMs = Math.ceil(duration * 1000);
     if (durationMs > maximumVideoDurationMs) {
       rejectUndecodablePhoto(expectedUrl);
-      setPhotoError("Choose a video about 60 seconds or shorter.");
+      setPhotoError("Choose a video about 2 minutes or shorter.");
       return;
     }
     if (

@@ -9,6 +9,7 @@ import {
   acceptedVideoMime,
   createVideoUploadAttempt,
   maximumVideoBytes,
+  maximumVideoDurationMs,
   uploadVideoMoment,
   type VideoMomentDraft,
   type VideoUploadStage,
@@ -187,10 +188,34 @@ describe("connected private video upload", () => {
       value: maximumVideoBytes + 1,
     });
     await expect(run(oversized, 1_000)).rejects.toThrow("smaller than 100 MB");
-    await expect(run(videoFile(), 60_501)).rejects.toThrow(
-      "60 seconds or shorter",
+    await expect(run(videoFile(), maximumVideoDurationMs + 1)).rejects.toThrow(
+      "2 minutes or shorter",
     );
     expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("accepts about 94 seconds and rejects 121 seconds", async () => {
+    expect(maximumVideoDurationMs).toBe(120_500);
+    const { client, rpc } = connectedClient();
+    const upload = vi.fn(async (input) => {
+      input.onStage({ state: "uploading", progress: 1 });
+    });
+    const run = (durationMs: number) =>
+      uploadVideoMoment(
+        videoFile(),
+        { ...draft, durationMs },
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client, upload },
+      );
+
+    await expect(run(94_360)).resolves.toEqual({ momentId });
+    expect(rpc).toHaveBeenCalledWith(
+      "reserve_video_moment",
+      expect.objectContaining({ duration_ms: 94_360 }),
+    );
+    await expect(run(121_000)).rejects.toThrow("2 minutes or shorter");
   });
 
   it("sends a mention and omits an empty mention list", async () => {
