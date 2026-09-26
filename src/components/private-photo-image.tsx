@@ -23,6 +23,7 @@ export function PrivatePhotoImage({
   const [attempt, setAttempt] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
   const [decoded, setDecoded] = useState<boolean | null>(null);
+  const [rescueWithBlob, setRescueWithBlob] = useState(false);
   const placeholderRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(false);
   const shouldLoad =
@@ -48,11 +49,12 @@ export function PrivatePhotoImage({
   }, [shouldLoad]);
   const deliverySrc = privateMediaRetrySrc(src, attempt);
   const discoverInDocument = highPriority && deliverySrc.startsWith("/");
-  if (discoverInDocument) {
+  const loadThroughBlob = !discoverInDocument || rescueWithBlob;
+  if (discoverInDocument && !rescueWithBlob) {
     preload(deliverySrc, { as: "image", fetchPriority: "high" });
   }
   const { objectUrl, failed } = usePrivateMediaObjectUrl(
-    unavailable || !shouldLoad ? undefined : deliverySrc,
+    unavailable || !shouldLoad || !loadThroughBlob ? undefined : deliverySrc,
     highPriority ? "high" : "auto",
   );
 
@@ -70,6 +72,7 @@ export function PrivatePhotoImage({
           onClick={() => {
             setUnavailable(false);
             setDecoded(null);
+            setRescueWithBlob(false);
             setAttempt((current) => current + 1);
           }}
         >
@@ -79,8 +82,38 @@ export function PrivatePhotoImage({
     );
   }
 
-  const shownSrc = objectUrl ?? (discoverInDocument ? deliverySrc : null);
-  if (!shownSrc) {
+  // The first photo's delivery URL is in the document, the same way a video
+  // poster is, so the browser starts it with the HTML. A successful load is
+  // the only request. If that response is a pinned iOS 404, the no-store blob
+  // fetch is the rescue and the API URL does not stay on the img.
+  if (discoverInDocument && !rescueWithBlob) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        key={attempt}
+        src={deliverySrc}
+        alt={alt}
+        width={width}
+        height={height}
+        className={
+          decoded === true
+            ? "is-ready"
+            : decoded === false
+              ? "is-pending"
+              : undefined
+        }
+        loading="eager"
+        fetchPriority="high"
+        onLoad={() => setDecoded(true)}
+        onError={() => {
+          setDecoded(null);
+          setRescueWithBlob(true);
+        }}
+      />
+    );
+  }
+
+  if (!objectUrl) {
     return (
       <div
         ref={placeholderRef}
@@ -90,16 +123,11 @@ export function PrivatePhotoImage({
     );
   }
 
-  // The first photo's delivery URL is in the document, the same way a video
-  // poster is, so the browser can start it with the HTML. Once the credentialed
-  // no-store fetch finishes, the img swaps to a blob URL so iPhone PWA cannot
-  // pin a stale 404 on the authorized route. A failed response never stays on
-  // the img.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={attempt}
-      src={shownSrc}
+      src={objectUrl}
       alt={alt}
       width={width}
       height={height}

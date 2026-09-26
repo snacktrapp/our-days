@@ -1078,7 +1078,7 @@ export async function loadConnectedTimeline(
       ),
     ]);
   if (enrichmentReader && photoMomentIds.length > 0) {
-    await warmTimelinePhotoUrls(supabase, photoMomentIds);
+    void warmTimelinePhotoUrls(supabase, photoMomentIds);
   }
   const visibility = {
     viewerPersonId: access.personId,

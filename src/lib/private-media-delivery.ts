@@ -104,21 +104,29 @@ const signedUrls = new Map<
   Readonly<{ url: string; expiresAt: number }>
 >();
 
+function signedUrlCacheKey(bucketId: string, objectPath: string) {
+  return `${bucketId}\0${objectPath}`;
+}
+
 export function rememberSignedPrivateUrls(
-  entries: readonly { path: string; signedUrl: string }[],
+  entries: readonly { bucketId: string; path: string; signedUrl: string }[],
 ) {
   const expiresAt = Date.now() + signedUrlTtlMs;
   for (const entry of entries) {
-    if (!entry.path || !entry.signedUrl) continue;
-    signedUrls.set(entry.path, { url: entry.signedUrl, expiresAt });
+    if (!entry.bucketId || !entry.path || !entry.signedUrl) continue;
+    signedUrls.set(signedUrlCacheKey(entry.bucketId, entry.path), {
+      url: entry.signedUrl,
+      expiresAt,
+    });
   }
 }
 
-export function readSignedPrivateUrl(path: string) {
-  const entry = signedUrls.get(path);
+export function readSignedPrivateUrl(bucketId: string, path: string) {
+  const key = signedUrlCacheKey(bucketId, path);
+  const entry = signedUrls.get(key);
   if (!entry) return null;
   if (entry.expiresAt <= Date.now()) {
-    signedUrls.delete(path);
+    signedUrls.delete(key);
     return null;
   }
   return entry.url;
@@ -149,7 +157,7 @@ export async function warmSignedPhotoUrls(
     rememberSignedPrivateUrls(
       signed.data.flatMap((item) =>
         item.path && item.signedUrl && !item.error
-          ? [{ path: item.path, signedUrl: item.signedUrl }]
+          ? [{ bucketId: bucket, path: item.path, signedUrl: item.signedUrl }]
           : [],
       ),
     );
@@ -296,10 +304,11 @@ export async function fetchSignedPrivateObject(
 
 export async function openSignedPrivateObject(
   bucket: SignedUrlBucket,
+  bucketId: string,
   objectPath: string,
   expected: PrivateObjectExpectation,
 ) {
-  const cached = readSignedPrivateUrl(objectPath);
+  const cached = readSignedPrivateUrl(bucketId, objectPath);
   if (cached) {
     const upstream = await fetchSignedUrl(cached);
     const opened = upstream

@@ -1,4 +1,5 @@
 const inflight = new Map<string, Headers>();
+const maxTrackedDocuments = 100;
 
 export const requestTimingHeader = "x-our-days-rid";
 
@@ -18,10 +19,15 @@ export function upsertServerTiming(headers: Headers, name: string, ms: number) {
 
 export function trackDocumentHeaders(id: string, headers: Headers) {
   inflight.set(id, headers);
-  const timer = setTimeout(() => {
-    if (inflight.get(id) === headers) inflight.delete(id);
-  }, 30_000);
-  timer.unref?.();
+  while (inflight.size > maxTrackedDocuments) {
+    const oldest = inflight.keys().next().value;
+    if (!oldest) break;
+    inflight.delete(oldest);
+  }
+}
+
+export function trackedTimingDocumentCount() {
+  return inflight.size;
 }
 
 export function recordPageDataTiming(id: string, ms: number) {

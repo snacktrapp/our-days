@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -21,22 +20,39 @@ import {
   upsertServerTiming,
 } from "@/lib/server-timing";
 
+function randomBase64(size: number) {
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function randomHex(size: number) {
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
 function finish(
   request: NextRequest,
   response: NextResponse,
   requestId: string,
   started: number,
+  trackTiming: boolean,
 ) {
   const finished = applyActiveCircleCookie(request, response);
   upsertServerTiming(finished.headers, "proxy", performance.now() - started);
-  trackDocumentHeaders(requestId, finished.headers);
+  if (trackTiming) trackDocumentHeaders(requestId, finished.headers);
   return finished;
 }
 
 export async function proxy(request: NextRequest) {
   const started = performance.now();
-  const requestId = randomBytes(8).toString("hex");
-  const nonce = randomBytes(18).toString("base64");
+  const requestId = randomHex(8);
+  const nonce = randomBase64(18);
   const embeddableMap =
     request.nextUrl.pathname === "/internal/map-picker" ||
     request.nextUrl.pathname === "/internal/map-picker/";
@@ -65,7 +81,7 @@ export async function proxy(request: NextRequest) {
   // especially important on a fresh Home Screen install with an empty cache.
   // Keep the response policy, but authenticate pages and APIs, not JS/CSS.
   if (request.nextUrl.pathname.startsWith("/_next/static/")) {
-    return finish(request, response, requestId, started);
+    return finish(request, response, requestId, started, false);
   }
   const supabaseConfig = readOptionalSupabasePublicConfig();
   const documentGet = isDocumentGet(request);
@@ -73,7 +89,7 @@ export async function proxy(request: NextRequest) {
 
   if (!supabaseConfig) {
     if (blockOnLabAuth) await labAuthNetworkDelay();
-    return finish(request, response, requestId, started);
+    return finish(request, response, requestId, started, true);
   }
 
   const supabase = createServerClient<Database>(
@@ -119,17 +135,17 @@ export async function proxy(request: NextRequest) {
     }
   };
 
-  if (documentGet && !blockOnLabAuth) {
+  const budgetMs =
+    documentGet && !blockOnLabAuth ? documentAuthBudgetMs(request) : null;
+  if (budgetMs == null) {
+    await verifySession();
+  } else {
     await Promise.race([
       verifySession(),
-      new Promise((resolve) =>
-        setTimeout(resolve, documentAuthBudgetMs(request)),
-      ),
+      new Promise((resolve) => setTimeout(resolve, budgetMs)),
     ]);
-  } else {
-    await verifySession();
   }
-  return finish(request, response, requestId, started);
+  return finish(request, response, requestId, started, true);
 }
 
 export const config = {

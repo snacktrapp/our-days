@@ -40,24 +40,48 @@ export async function labAuthNetworkDelay() {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(
+    normalized.length + ((4 - (normalized.length % 4)) % 4),
+    "=",
+  );
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export function isDocumentGet(request: {
   method: string;
-  nextUrl: { pathname: string };
+  nextUrl: {
+    pathname: string;
+    searchParams: { has(name: string): boolean };
+  };
   headers: { get(name: string): string | null };
 }) {
   if (request.method !== "GET") return false;
   const path = request.nextUrl.pathname;
   if (path.startsWith("/api/") || path.startsWith("/_next/")) return false;
-  if (request.headers.get("rsc") === "1") return false;
-  const dest = request.headers.get("sec-fetch-dest");
-  if (dest === "document") return true;
-  if (dest && dest !== "empty") return false;
+  // Next strips `rsc` before proxy runs. Flight and prefetch requests keep
+  // `_rsc`, the router headers, or `text/x-component`.
+  if (request.nextUrl.searchParams.has("_rsc")) return false;
+  if (
+    request.headers.get("next-router-prefetch") ||
+    request.headers.get("next-router-state-tree") ||
+    request.headers.get("next-router-segment-prefetch") ||
+    request.headers.get("next-url")
+  ) {
+    return false;
+  }
   const accept = request.headers.get("accept") ?? "";
-  return (
-    accept.length === 0 ||
-    accept.includes("text/html") ||
-    accept.includes("*/*")
-  );
+  if (!accept.includes("text/html") || accept.includes("text/x-component")) {
+    return false;
+  }
+  const dest = request.headers.get("sec-fetch-dest");
+  return !dest || dest === "document" || dest === "empty";
 }
 
 function combineAuthCookie(request: CookieSource) {
@@ -81,7 +105,7 @@ function combineAuthCookie(request: CookieSource) {
 
 function decodeJson(value: string) {
   const encoded = value.startsWith("base64-")
-    ? Buffer.from(value.slice("base64-".length), "base64url").toString("utf8")
+    ? decodeBase64Url(value.slice("base64-".length))
     : value;
   return JSON.parse(encoded) as unknown;
 }
@@ -89,7 +113,7 @@ function decodeJson(value: string) {
 function decodeJwtPart(token: string, index: number) {
   const part = token.split(".")[index];
   if (!part) return null;
-  return JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as unknown;
+  return JSON.parse(decodeBase64Url(part)) as unknown;
 }
 
 export function readDocumentAccessToken(request: CookieSource) {
@@ -111,9 +135,16 @@ export function readDocumentAccessToken(request: CookieSource) {
   }
 }
 
+function hasAuthCookie(request: CookieSource) {
+  return request.cookies
+    .getAll()
+    .some((cookie) => authCookiePattern.test(cookie.name));
+}
+
+/** A number budgets the wait. Null means wait for getClaims so cookie writes land. */
 export function documentAuthBudgetMs(request: CookieSource) {
   const token = readDocumentAccessToken(request);
-  if (!token) return 200;
+  if (!token) return hasAuthCookie(request) ? null : 200;
   try {
     const header = decodeJwtPart(token, 0);
     const payload = decodeJwtPart(token, 1);
@@ -139,11 +170,11 @@ export function documentAuthBudgetMs(request: CookieSource) {
         ? payload.exp * 1000
         : null;
     const asymmetric = Boolean(alg) && !alg.startsWith("HS") && kid.length > 0;
-    const nearExpiry = exp == null || exp - Date.now() < expiryMarginMs;
-    if (!asymmetric || nearExpiry) return 1_200;
-    return 200;
+    const fresh = exp != null && exp - Date.now() >= expiryMarginMs;
+    if (asymmetric && fresh) return 200;
+    return null;
   } catch {
-    return 1_200;
+    return null;
   }
 }
 

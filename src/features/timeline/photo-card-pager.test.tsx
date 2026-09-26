@@ -208,12 +208,15 @@ describe("PhotoCardPager", () => {
       />,
     );
     const resolvePhoto = async (i: number, ok = true) => {
-      await act(async () =>
-        pending.get(`/api/photo/${i}`)!({
-          ok,
-          blob: async () => new Blob(["photo"]),
-        }),
-      );
+      const settle = pending.get(`/api/photo/${i}`);
+      if (settle) {
+        await act(async () =>
+          settle({
+            ok,
+            blob: async () => new Blob(["photo"]),
+          }),
+        );
+      }
       if (ok) {
         const img = document.querySelector(
           `[data-photo-index="${i}"] img`,
@@ -222,10 +225,13 @@ describe("PhotoCardPager", () => {
         fireEvent.load(img);
       }
     };
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
     expect(new Set(fetchMock.mock.calls.map(([src]) => src))).toEqual(
-      new Set(Array.from({ length: 6 }, (_, i) => `/api/photo/${i}`)),
+      new Set(Array.from({ length: 5 }, (_, i) => `/api/photo/${i + 1}`)),
     );
+    expect(
+      document.querySelector('[data-photo-index="0"] img'),
+    ).toHaveAttribute("src", "/api/photo/0");
     await resolvePhoto(0);
     const original = document.querySelector('[data-photo-index="0"] img');
 
@@ -236,12 +242,12 @@ describe("PhotoCardPager", () => {
     await resolvePhoto(1);
     await waitFor(() => expect(track()).toHaveClass("is-sliding"));
     settleSlide();
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
 
     swipeAlbum(pager, { fromX: 120, toX: 180 });
     settleSlide();
     expect(screen.getByRole("img", { name: "Porch 1" })).toBe(original);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(revoke).not.toHaveBeenCalled();
 
     // Wrapping to a failed neighbor exposes its retry control rather than

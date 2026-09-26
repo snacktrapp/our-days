@@ -39,7 +39,7 @@ describe("document auth budget", () => {
     clearCachedJwks();
   });
 
-  it("treats a journal HTML GET as a document and leaves APIs on the full auth path", () => {
+  it("treats a journal HTML GET as a document and leaves APIs and flights on the full auth path", () => {
     expect(
       isDocumentGet(
         new NextRequest("https://journal.example.com/family", {
@@ -62,9 +62,27 @@ describe("document auth budget", () => {
         }),
       ),
     ).toBe(false);
+    expect(
+      isDocumentGet(
+        new NextRequest("https://journal.example.com/family", {
+          headers: { accept: "text/x-component", rsc: "1" },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isDocumentGet(
+        new NextRequest("https://journal.example.com/family?_rsc=abc", {
+          headers: {
+            accept: "text/html",
+            "next-router-prefetch": "1",
+            "next-router-state-tree": "%5B%5D",
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 
-  it("keeps a short budget for a fresh asymmetric session and a longer one near expiry", () => {
+  it("keeps a short budget for a fresh asymmetric session and waits in full when a refresh may write cookies", () => {
     const future = Math.floor(Date.now() / 1000) + 60 * 60;
     const soon = Math.floor(Date.now() / 1000) + 30;
     const fresh = requestWithSession(
@@ -80,8 +98,20 @@ describe("document auth budget", () => {
       future,
     );
     expect(documentAuthBudgetMs(fresh)).toBe(200);
-    expect(documentAuthBudgetMs(expiring)).toBe(1_200);
-    expect(documentAuthBudgetMs(symmetric)).toBe(1_200);
+    expect(documentAuthBudgetMs(expiring)).toBeNull();
+    expect(documentAuthBudgetMs(symmetric)).toBeNull();
+    expect(
+      documentAuthBudgetMs(
+        new NextRequest("https://journal.example.com/family", {
+          headers: { cookie: "sb-project-auth-token=not-a-session" },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      documentAuthBudgetMs(
+        new NextRequest("https://journal.example.com/family"),
+      ),
+    ).toBe(200);
     expect(readDocumentAccessToken(fresh)?.split(".").length).toBe(3);
   });
 

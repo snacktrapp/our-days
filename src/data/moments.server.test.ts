@@ -1108,16 +1108,22 @@ describe("connected timeline mapping", () => {
   it("enriches a page in one RPC and signs its photos in one batch", async () => {
     const momentId = "10000000-0000-4000-8000-000000000099";
     const photoId = "10000000-0000-4000-8000-000000000098";
-    const createSignedUrls = vi.fn().mockResolvedValue({
-      data: [
-        {
-          path: "display/private/photo.webp",
-          signedUrl: "https://storage.example.test/signed",
-          error: null,
-        },
-      ],
-      error: null,
+    let releaseSignedUrls: () => void = () => undefined;
+    const signedUrls = new Promise<void>((resolve) => {
+      releaseSignedUrls = resolve;
     });
+    const createSignedUrls = vi.fn(() =>
+      signedUrls.then(() => ({
+        data: [
+          {
+            path: "display/private/photo.webp",
+            signedUrl: "https://storage.example.test/signed",
+            error: null,
+          },
+        ],
+        error: null,
+      })),
+    );
     const from = vi.fn(() => {
       throw new Error("timeline enrichment fell back to per-table reads");
     });
@@ -1205,10 +1211,14 @@ describe("connected timeline mapping", () => {
     expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
       moment_ids: [momentId],
     });
-    expect(createSignedUrls).toHaveBeenCalledWith(
-      ["display/private/photo.webp"],
-      60,
+    await vi.waitFor(() =>
+      expect(createSignedUrls).toHaveBeenCalledWith(
+        ["display/private/photo.webp"],
+        60,
+      ),
     );
+    releaseSignedUrls();
+    await signedUrls;
   });
 
   it("loads the All feed from list_all_timeline_moments", async () => {
