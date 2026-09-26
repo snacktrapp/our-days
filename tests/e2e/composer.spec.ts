@@ -7,7 +7,8 @@ import { expect, test } from "./test";
 const focusableSelector = [
   "a[href]",
   "button:not([disabled])",
-  "input:not([disabled])",
+  'input:not([disabled]):not([type="radio"])',
+  'input[type="radio"]:checked:not([disabled])',
   "select:not([disabled])",
   "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
@@ -31,7 +32,7 @@ async function expectReachable(control: Locator) {
 async function expectMinimumTargets(dialog: Locator) {
   const targetSelector = [
     "button",
-    'input:not([type="checkbox"]):not([type="file"])',
+    'input:not([type="checkbox"]):not([type="radio"]):not([type="file"])',
     "select",
     "textarea",
     ".photo-input",
@@ -62,7 +63,7 @@ async function expectMinimumTargets(dialog: Locator) {
 async function expectReadableInputType(dialog: Locator) {
   const undersizedText = await dialog
     .locator(
-      'input:not([type="checkbox"]):not([type="file"]), select, textarea',
+      'input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea',
     )
     .evaluateAll((controls) =>
       controls
