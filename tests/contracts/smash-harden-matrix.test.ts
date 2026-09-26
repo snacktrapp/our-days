@@ -41,6 +41,7 @@ const journalAccess = read("src/lib/auth/journal-access.ts");
 const journalContext = read("src/data/journal-context.server.ts");
 const sessionError = readIfPresent("src/lib/auth/family-session-error.ts");
 const photoRoute = read("src/app/api/media/moments/[momentId]/route.ts");
+const photoDeliveryChecks = read("src/lib/private-media-delivery.ts");
 const videoRoute = read("src/app/api/media/videos/[momentId]/route.ts");
 const videoRouteTest = read(
   "src/app/api/media/videos/[momentId]/route.test.ts",
@@ -185,7 +186,7 @@ describe("smash harden matrix", () => {
       );
       expect(photoRoute).toContain("get_photo_moment_delivery");
       expect(photoRoute).toContain("if (descriptorError || !descriptor)");
-      expect(photoRoute).toContain("fetchSignedPrivateObject");
+      expect(photoRoute).toContain("openSignedPrivateObject");
     });
 
     it("would have 404'd openable photos when Storage omitted MIME or stringified size", () => {
@@ -213,7 +214,11 @@ describe("smash harden matrix", () => {
       const usesOldPredicate = photoRoute.includes(
         "photo.type !== descriptor.output_mime_type",
       );
-      const usesHelper = photoRoute.includes("mediaTypeMatches");
+      const usesHelper =
+        photoRoute.includes("openSignedPrivateObject") &&
+        photoDeliveryChecks.includes("mediaTypeMatches") &&
+        photoDeliveryChecks.includes("declaredByteSize") &&
+        photoDeliveryChecks.includes("contentLengthAgrees");
       expect(usesOldPredicate || usesHelper).toBe(true);
     });
 

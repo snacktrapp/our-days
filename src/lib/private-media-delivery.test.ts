@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   byteSizeMatches,
+  clearSignedPrivateUrls,
   contentLengthAgrees,
   declaredByteSize,
   fetchSignedPrivateObject,
   mediaTypeMatches,
   privateMediaRetrySrc,
+  readSignedPrivateUrl,
   sha256HexMatches,
+  streamVerifiedBytes,
+  warmSignedPhotoUrls,
 } from "./private-media-delivery";
 
 describe("private media delivery checks", () => {
@@ -118,6 +122,93 @@ describe("private media delivery checks", () => {
       ),
     ).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("streams a matching object before the last chunk is released and stops a bad digest", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const good = streamVerifiedBytes(
+      new Response(bytes).body!,
+      bytes.byteLength,
+      digest,
+    );
+    expect(new Uint8Array(await new Response(good).arrayBuffer())).toEqual(
+      bytes,
+    );
+    const bad = streamVerifiedBytes(
+      new Response(bytes).body!,
+      bytes.byteLength,
+      "0".repeat(64),
+    );
+    await expect(new Response(bad).arrayBuffer()).rejects.toThrow(
+      /did not match its descriptor/u,
+    );
+  });
+
+  it("mints one signed-url batch per bucket and reuses it", async () => {
+    clearSignedPrivateUrls();
+    const createSignedUrls = vi.fn().mockResolvedValue({
+      data: [
+        {
+          path: "display/one",
+          signedUrl: "https://storage.example.test/one",
+          error: null,
+        },
+        {
+          path: "display/two",
+          signedUrl: "https://storage.example.test/two",
+          error: null,
+        },
+      ],
+      error: null,
+    });
+    await warmSignedPhotoUrls(
+      { from: () => ({ createSignedUrl: vi.fn(), createSignedUrls }) },
+      [
+        { bucket_id: "our-days-display", object_path: "display/one" },
+        { bucket_id: "our-days-display", object_path: "display/two" },
+        { bucket_id: "our-days-display", object_path: "display/one" },
+      ],
+    );
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls).toHaveBeenCalledWith(
+      ["display/one", "display/two"],
+      60,
+    );
+    expect(readSignedPrivateUrl("our-days-display", "display/one")).toBe(
+      "https://storage.example.test/one",
+    );
+  });
+
+  it("keeps signed urls for the same path in different buckets apart", async () => {
+    clearSignedPrivateUrls();
+    let call = 0;
+    const createSignedUrls = vi.fn(async (paths: readonly string[]) => {
+      call += 1;
+      return {
+        data: paths.map((path) => ({
+          path,
+          signedUrl: `https://storage.example.test/${call}/${path}`,
+          error: null,
+        })),
+        error: null,
+      };
+    });
+    await warmSignedPhotoUrls(
+      { from: () => ({ createSignedUrl: vi.fn(), createSignedUrls }) },
+      [
+        { bucket_id: "our-days-display", object_path: "display/one" },
+        { bucket_id: "our-days-originals", object_path: "display/one" },
+      ],
+    );
+    expect(createSignedUrls).toHaveBeenCalledTimes(2);
+    expect(readSignedPrivateUrl("our-days-display", "display/one")).toBe(
+      "https://storage.example.test/1/display/one",
+    );
+    expect(readSignedPrivateUrl("our-days-originals", "display/one")).toBe(
+      "https://storage.example.test/2/display/one",
+    );
   });
 
   it("cache-busts a same-origin retry without dropping the photo id", () => {

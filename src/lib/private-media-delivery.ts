@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const genericBlobTypes = new Set([
   "",
   "application/octet-stream",
@@ -81,7 +83,193 @@ type SignedUrlBucket = {
     data: { signedUrl?: string | null } | null;
     error: unknown;
   }>;
+  createSignedUrls?: (
+    paths: string[],
+    expiresIn: number,
+  ) => Promise<{
+    data:
+      | {
+          error?: string | null;
+          path?: string | null;
+          signedUrl?: string | null;
+        }[]
+      | null;
+    error: unknown;
+  }>;
 };
+
+const signedUrlTtlMs = 45_000;
+const signedUrls = new Map<
+  string,
+  Readonly<{ url: string; expiresAt: number }>
+>();
+
+function signedUrlCacheKey(bucketId: string, objectPath: string) {
+  return `${bucketId}\0${objectPath}`;
+}
+
+export function rememberSignedPrivateUrls(
+  entries: readonly { bucketId: string; path: string; signedUrl: string }[],
+) {
+  const expiresAt = Date.now() + signedUrlTtlMs;
+  for (const entry of entries) {
+    if (!entry.bucketId || !entry.path || !entry.signedUrl) continue;
+    signedUrls.set(signedUrlCacheKey(entry.bucketId, entry.path), {
+      url: entry.signedUrl,
+      expiresAt,
+    });
+  }
+}
+
+export function readSignedPrivateUrl(bucketId: string, path: string) {
+  const key = signedUrlCacheKey(bucketId, path);
+  const entry = signedUrls.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    signedUrls.delete(key);
+    return null;
+  }
+  return entry.url;
+}
+
+export function clearSignedPrivateUrls() {
+  signedUrls.clear();
+}
+
+export async function warmSignedPhotoUrls(
+  storage: {
+    from: (bucket: string) => SignedUrlBucket;
+  },
+  rows: readonly { bucket_id: string; object_path: string }[],
+) {
+  const pathsByBucket = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.bucket_id || !row.object_path) continue;
+    const paths = pathsByBucket.get(row.bucket_id) ?? [];
+    if (!paths.includes(row.object_path)) paths.push(row.object_path);
+    pathsByBucket.set(row.bucket_id, paths);
+  }
+  for (const [bucket, paths] of pathsByBucket) {
+    const signer = storage.from(bucket);
+    if (!signer.createSignedUrls) continue;
+    const signed = await signer.createSignedUrls(paths, 60);
+    if (signed.error || !signed.data) continue;
+    rememberSignedPrivateUrls(
+      signed.data.flatMap((item) =>
+        item.path && item.signedUrl && !item.error
+          ? [{ bucketId: bucket, path: item.path, signedUrl: item.signedUrl }]
+          : [],
+      ),
+    );
+  }
+}
+
+export function streamVerifiedBytes(
+  source: ReadableStream<Uint8Array>,
+  expectedSize: number,
+  expectedSha: string,
+) {
+  const reader = source.getReader();
+  const hash = createHash("sha256");
+  let pending: Uint8Array | null = null;
+  let seen = 0;
+  let finished = false;
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) {
+        controller.close();
+        return;
+      }
+      // Keep reading inside this pull. A one-chunk body would otherwise sit
+      // in `pending` with nothing enqueued, and the consumer would never ask
+      // for pull again.
+      while (true) {
+        const next = await reader.read();
+        if (next.done) {
+          finished = true;
+          if (pending) {
+            hash.update(pending);
+            seen += pending.byteLength;
+          }
+          const digest = hash.digest("hex");
+          if (seen !== expectedSize || !sha256HexMatches(digest, expectedSha)) {
+            controller.error(
+              new Error("Private media did not match its descriptor"),
+            );
+            return;
+          }
+          if (pending) controller.enqueue(pending);
+          pending = null;
+          controller.close();
+          return;
+        }
+        if (pending) {
+          hash.update(pending);
+          seen += pending.byteLength;
+          if (seen > expectedSize) {
+            controller.error(
+              new Error("Private media did not match its descriptor"),
+            );
+            return;
+          }
+          const released = pending;
+          pending = next.value;
+          controller.enqueue(released);
+          return;
+        }
+        pending = next.value;
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
+}
+
+type PrivateObjectExpectation = Readonly<{
+  size: unknown;
+  mime: string | null | undefined;
+  sha: unknown;
+}>;
+
+export async function openFetchedPrivateObject(
+  upstream: Response,
+  expected: PrivateObjectExpectation,
+) {
+  if (upstream.status !== 200 || !upstream.body) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  if (!mediaTypeMatches(upstream.headers.get("content-type"), expected.mime)) {
+    await upstream.body.cancel();
+    return null;
+  }
+  const size = declaredByteSize(expected.size);
+  const sha = normalizedSha256Hex(expected.sha);
+  if (size == null || !sha) {
+    await upstream.body.cancel();
+    return null;
+  }
+  if (!contentLengthAgrees(upstream.headers, size)) {
+    await upstream.body.cancel();
+    return null;
+  }
+  return {
+    stream: streamVerifiedBytes(upstream.body, size, sha),
+    contentType:
+      normalizedMediaType(expected.mime) || "application/octet-stream",
+    contentLength: upstream.headers.has("content-length") ? size : null,
+  };
+}
+
+async function fetchSignedUrl(signedUrl: string) {
+  try {
+    return await fetch(signedUrl, { cache: "no-store", redirect: "error" });
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchSignedPrivateObject(
   bucket: SignedUrlBucket,
@@ -112,4 +300,26 @@ export async function fetchSignedPrivateObject(
     bytes,
     contentType: upstream.headers.get("content-type"),
   };
+}
+
+export async function openSignedPrivateObject(
+  bucket: SignedUrlBucket,
+  bucketId: string,
+  objectPath: string,
+  expected: PrivateObjectExpectation,
+) {
+  const cached = readSignedPrivateUrl(bucketId, objectPath);
+  if (cached) {
+    const upstream = await fetchSignedUrl(cached);
+    const opened = upstream
+      ? await openFetchedPrivateObject(upstream, expected)
+      : null;
+    if (opened) return opened;
+  }
+
+  const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
+  if (error || !signed?.signedUrl) return null;
+  const upstream = await fetchSignedUrl(signed.signedUrl);
+  if (!upstream) return null;
+  return openFetchedPrivateObject(upstream, expected);
 }

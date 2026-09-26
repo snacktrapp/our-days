@@ -27,6 +27,7 @@ import {
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
 import { labJournalDataDelay } from "@/data/lab-journal-delay.server";
+import { timePageData } from "@/lib/page-data-timing.server";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
   createFamilyMomentAction,
@@ -127,11 +128,8 @@ async function FamilyTimeline({
     options,
     sharedTimelineList,
   );
-  const opening = await loadFamilyHomeOpeningTimeline(
-    access,
-    context,
-    options,
-    sharedTimelineList,
+  const opening = await timePageData(() =>
+    loadFamilyHomeOpeningTimeline(access, context, options, sharedTimelineList),
   );
   if (!opening.streamRemainder) {
     void remainder.catch(() => undefined);
@@ -233,7 +231,7 @@ export default async function FamilyPage({
     );
   }
   if (access.mode === "preview") {
-    await labJournalDataDelay();
+    await timePageData(() => labJournalDataDelay());
     const model = slicePreviewTimelineForNotification(
       getFamilyTimelineFixture(await previewGroupOptions(params)),
       params,

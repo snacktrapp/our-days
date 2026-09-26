@@ -52,7 +52,7 @@ describe("PrivatePhotoImage", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
-  it("shows authorized bytes from a credentialed blob URL", async () => {
+  it("puts the first photo URL in the document and fetches a blob only after that load fails", async () => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:private-photo");
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -71,22 +71,43 @@ describe("PrivatePhotoImage", () => {
       />,
     );
 
-    const image = await screen.findByRole("img", {
+    const image = screen.getByRole("img", {
       name: "Photo in Molly’s journal from Aug 1, 2026",
     });
-    expect(image).toHaveAttribute("src", "blob:private-photo");
+    expect(image).toHaveAttribute("src", "/api/media/moments/one");
+    expect(document.querySelector('link[rel="preload"]')).toHaveAttribute(
+      "href",
+      "/api/media/moments/one",
+    );
     expect(image).toHaveAttribute("loading", "eager");
     expect(image).toHaveAttribute("fetchpriority", "high");
     expect(image).toHaveAttribute("width", "1200");
     expect(image).toHaveAttribute("height", "800");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/media/moments/one",
-      expect.objectContaining({
-        cache: "no-store",
-        credentials: "same-origin",
-        priority: "high",
-      }),
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.load(image);
+    expect(image).toHaveAttribute("src", "/api/media/moments/one");
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.error(image);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/media/moments/one",
+        expect.objectContaining({
+          cache: "no-store",
+          credentials: "same-origin",
+          priority: "high",
+        }),
+      ),
     );
+    expect(
+      await screen.findByRole("img", {
+        name: "Photo in Molly’s journal from Aug 1, 2026",
+      }),
+    ).toHaveAttribute("src", "blob:private-photo");
   });
 
   it("shows a stable retry control after a private response fails", async () => {

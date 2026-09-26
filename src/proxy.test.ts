@@ -13,6 +13,7 @@ vi.mock("@supabase/ssr", () => ({
   createServerClient: supabaseMocks.createServerClient,
 }));
 
+import { trackedTimingDocumentCount } from "@/lib/server-timing";
 import { config, proxy } from "./proxy";
 
 type ProxyCookie = Readonly<{
@@ -42,10 +43,12 @@ describe("security proxy", () => {
   it("serves application chunks without waiting for Supabase auth", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    const tracked = trackedTimingDocumentCount();
     const response = await proxy(
       new NextRequest("https://journal.example.com/_next/static/chunks/app.js"),
     );
     expect(supabaseMocks.createServerClient).not.toHaveBeenCalled();
+    expect(trackedTimingDocumentCount()).toBe(tracked);
     expect(response.headers.get("content-security-policy")).toContain(
       "script-src",
     );
@@ -159,6 +162,9 @@ describe("security proxy", () => {
     );
     expect(response.headers.get("pragma")).toBe("no-cache");
     expect(response.headers.get("expires")).toBe("0");
+    expect(response.headers.get("server-timing")).toMatch(
+      /^proxy;dur=\d+\.\d$/u,
+    );
     expect(response.headers.get("content-security-policy")).toContain(
       "frame-ancestors 'none'",
     );
@@ -171,6 +177,125 @@ describe("security proxy", () => {
     expect(response.headers.get("x-middleware-request-cookie")).toContain(
       "sb-local-auth-token.1=refreshed-second-chunk",
     );
+  });
+
+  it("does not hold a document GET open when auth discovery stalls", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => new Promise(() => undefined),
+      },
+    }));
+    const started = Date.now();
+    const response = await proxy(
+      new NextRequest("https://journal.example.com/family", {
+        headers: { accept: "text/html" },
+      }),
+    );
+    expect(Date.now() - started).toBeLessThan(700);
+    expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
+    expect(response.headers.get("content-security-policy")).toContain(
+      "script-src",
+    );
+  });
+
+  it("waits for a near-expiry session so the refresh can write cookies", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    const soon = Math.floor(Date.now() / 1000) + 30;
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const token = `${encode({ alg: "ES256", kid: "prod-key" })}.${encode({ exp: soon })}.sig`;
+    const session = Buffer.from(
+      JSON.stringify({ access_token: token, expires_at: soon }),
+    ).toString("base64url");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => gate.then(() => ({ data: null, error: null })),
+      },
+    }));
+    let settled = false;
+    const pending = proxy(
+      new NextRequest("https://journal.example.com/family", {
+        headers: {
+          accept: "text/html",
+          cookie: `sb-project-auth-token=base64-${session}`,
+        },
+      }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(settled).toBe(false);
+    release();
+    const response = await pending;
+    expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
+  });
+
+  it("waits for a flight request even when Accept also mentions HTML", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => gate.then(() => ({ data: null, error: null })),
+      },
+    }));
+    let settled = false;
+    const pending = proxy(
+      new NextRequest("https://journal.example.com/family?_rsc=1", {
+        headers: {
+          accept: "text/x-component",
+          "next-router-prefetch": "1",
+          "next-router-state-tree": "[]",
+        },
+      }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(settled).toBe(false);
+    release();
+    await pending;
+  });
+
+  it("still waits for auth on a mutation so refreshed cookies can be stored", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => gate.then(() => ({ data: null, error: null })),
+      },
+    }));
+    let settled = false;
+    const pending = proxy(
+      new NextRequest("https://journal.example.com/api/moments", {
+        method: "POST",
+        headers: { accept: "application/json" },
+      }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(settled).toBe(false);
+    release();
+    const response = await pending;
+    expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
   });
 
   it.each([
