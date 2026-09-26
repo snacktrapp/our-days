@@ -12,6 +12,7 @@ import {
 } from "@/features/timeline/timeline-view-model";
 import { isFatalJournalHomeError } from "@/lib/auth/family-session-error";
 import type { JournalAccess } from "@/lib/auth/journal-access";
+import { labJournalDataDelay } from "./lab-journal-delay.server";
 import { loadConnectedJournalContext } from "./journal-context.server";
 import {
   connectedTimelineInteraction,
@@ -152,6 +153,7 @@ export async function loadFamilyHomeChrome(
   }>
 > {
   const allCircles = !options.circleId;
+  await labJournalDataDelay();
   try {
     const context = await loadConnectedJournalContext(access, {
       includeActivity: false,
@@ -214,6 +216,7 @@ export async function loadFamilyHomeOpeningTimeline(
     streamRemainder: boolean;
   }>
 > {
+  await labJournalDataDelay();
   const first = await loadFamilyHomeFirstMoment(
     access,
     context,

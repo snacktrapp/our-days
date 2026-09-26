@@ -26,6 +26,7 @@ import {
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
+import { labJournalDataDelay } from "@/data/lab-journal-delay.server";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
   createFamilyMomentAction,
@@ -232,6 +233,7 @@ export default async function FamilyPage({
     );
   }
   if (access.mode === "preview") {
+    await labJournalDataDelay();
     const model = slicePreviewTimelineForNotification(
       getFamilyTimelineFixture(await previewGroupOptions(params)),
       params,
