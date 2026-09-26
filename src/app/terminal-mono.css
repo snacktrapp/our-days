@@ -597,6 +597,31 @@ select {
   letter-spacing: 0.08em;
 }
 
+.thought-label,
+.thought-more,
+.thought-card .moment-kind-meta,
+.thought-card .moment-kind-meta-type,
+.insight-source,
+.bible-verse-copy a,
+.optimistic-written-card .moment-kicker {
+  color: var(--accent);
+}
+
+.avatar-node.avatar-node-image.insight-byline-avatar {
+  background-color: var(--surface-2);
+  background-image: none;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.insight-byline-avatar svg {
+  width: 70%;
+  height: 70%;
+  display: block;
+  fill: currentColor;
+}
+
 .composer-field input,
 .composer-field select,
 .composer-field textarea,
