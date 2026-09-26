@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { preload } from "react-dom";
 import { privateMediaRetrySrc } from "@/lib/private-media-delivery";
 import { usePrivateMediaObjectUrl } from "@/lib/use-private-media-object-url";
 
@@ -46,6 +47,10 @@ export function PrivatePhotoImage({
     return () => observer.disconnect();
   }, [shouldLoad]);
   const deliverySrc = privateMediaRetrySrc(src, attempt);
+  const discoverInDocument = highPriority && deliverySrc.startsWith("/");
+  if (discoverInDocument) {
+    preload(deliverySrc, { as: "image", fetchPriority: "high" });
+  }
   const { objectUrl, failed } = usePrivateMediaObjectUrl(
     unavailable || !shouldLoad ? undefined : deliverySrc,
     highPriority ? "high" : "auto",
@@ -74,7 +79,8 @@ export function PrivatePhotoImage({
     );
   }
 
-  if (!objectUrl) {
+  const shownSrc = objectUrl ?? (discoverInDocument ? deliverySrc : null);
+  if (!shownSrc) {
     return (
       <div
         ref={placeholderRef}
@@ -84,13 +90,16 @@ export function PrivatePhotoImage({
     );
   }
 
-  // Private media is fetched with credentials + no-store, then shown from a
-  // blob URL so iPhone PWA cannot pin a stale 404 on the authorized route.
+  // The first photo's delivery URL is in the document, the same way a video
+  // poster is, so the browser can start it with the HTML. Once the credentialed
+  // no-store fetch finishes, the img swaps to a blob URL so iPhone PWA cannot
+  // pin a stale 404 on the authorized route. A failed response never stays on
+  // the img.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={attempt}
-      src={objectUrl}
+      src={shownSrc}
       alt={alt}
       width={width}
       height={height}

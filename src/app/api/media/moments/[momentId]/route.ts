@@ -2,12 +2,7 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
 } from "../../../../../../config/our-days-environment";
-import {
-  byteSizeMatches,
-  fetchSignedPrivateObject,
-  mediaTypeMatches,
-  sha256HexMatches,
-} from "@/lib/private-media-delivery";
+import { openSignedPrivateObject } from "@/lib/private-media-delivery";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
@@ -23,12 +18,6 @@ const privateHeaders = {
 
 function unavailable() {
   return new Response(null, { status: 404, headers: privateHeaders });
-}
-
-function hex(bytes: ArrayBuffer) {
-  return Array.from(new Uint8Array(bytes), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 }
 
 export async function GET(
@@ -89,28 +78,27 @@ export async function GET(
     : rows?.[0];
   if (descriptorError || !descriptor) return unavailable();
 
-  const photo = await fetchSignedPrivateObject(
+  const photo = await openSignedPrivateObject(
     supabase.storage.from(descriptor.bucket_id),
     descriptor.object_path,
+    {
+      size: descriptor.output_size_bytes,
+      mime: descriptor.output_mime_type,
+      sha: descriptor.output_sha256_hex,
+    },
   );
-  if (
-    !photo ||
-    !byteSizeMatches(photo.bytes.byteLength, descriptor.output_size_bytes) ||
-    !mediaTypeMatches(photo.contentType, descriptor.output_mime_type)
-  ) {
-    return unavailable();
-  }
+  if (!photo) return unavailable();
 
-  const digest = hex(await crypto.subtle.digest("SHA-256", photo.bytes));
-  if (!sha256HexMatches(digest, descriptor.output_sha256_hex)) {
-    return unavailable();
-  }
-
-  return new Response(photo.bytes, {
+  // No ETag: the descriptor digest is checked while the body streams, so a
+  // hash ETag would require buffering the whole object before the first byte.
+  // Cache-Control stays private/no-store, which is what keeps iOS from pinning.
+  return new Response(photo.stream, {
     status: 200,
     headers: {
       ...privateHeaders,
-      "Content-Length": String(photo.bytes.byteLength),
+      ...(photo.contentLength == null
+        ? {}
+        : { "Content-Length": String(photo.contentLength) }),
       "Content-Type": descriptor.output_mime_type,
     },
   });

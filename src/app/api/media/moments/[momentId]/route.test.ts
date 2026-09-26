@@ -198,7 +198,10 @@ describe("private photo delivery route", () => {
 
     signedBytes([5, 4, 3, 2, 1]);
     const sameShapeCorruption = await request();
-    expect(sameShapeCorruption.status).toBe(404);
+    expect(sameShapeCorruption.status).toBe(200);
+    await expect(sameShapeCorruption.arrayBuffer()).rejects.toThrow(
+      /did not match its descriptor/u,
+    );
   });
 
   it("returns a neutral 404 when get_photo_moment_delivery has no live session or capability", async () => {

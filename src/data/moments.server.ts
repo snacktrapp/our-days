@@ -39,6 +39,7 @@ import {
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
 import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
+import { warmSignedPhotoUrls } from "@/lib/private-media-delivery";
 import { formatMomentClock } from "@/features/timeline/moment-time-label";
 import type { MentionDisplay } from "@/features/mentions/mention-draft";
 
@@ -824,6 +825,108 @@ export function sliceTimelineAfterNthMoment(
   return sliced;
 }
 
+type EnrichmentPayload = Readonly<{
+  photos: unknown[];
+  videos: unknown[];
+  posters: unknown[];
+  notes: unknown[];
+  reactions: unknown[];
+  hearts: unknown[];
+  mentions: unknown[];
+  authors: unknown[];
+}>;
+
+function isEnrichmentPayload(value: unknown): value is EnrichmentPayload {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const payload = value as Partial<EnrichmentPayload>;
+  return (
+    Array.isArray(payload.photos) &&
+    Array.isArray(payload.videos) &&
+    Array.isArray(payload.posters) &&
+    Array.isArray(payload.notes) &&
+    Array.isArray(payload.reactions) &&
+    Array.isArray(payload.hearts) &&
+    Array.isArray(payload.mentions) &&
+    Array.isArray(payload.authors)
+  );
+}
+
+function enrichmentQuery(rows: unknown[]) {
+  const query = {
+    select: () => query,
+    eq: () => query,
+    in: () => query,
+    is: () => query,
+    order: () => query,
+    then(
+      resolve: (value: { data: unknown[]; error: null }) => unknown,
+      reject?: (reason: unknown) => unknown,
+    ) {
+      return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+    },
+  };
+  return query;
+}
+
+function enrichmentReader(payload: EnrichmentPayload): MomentPhotoClient {
+  const tables: Record<string, unknown[]> = {
+    moment_photos: payload.photos,
+    moment_videos: payload.videos,
+    moment_video_posters: payload.posters,
+    moment_notes: payload.notes,
+    moment_reactions: payload.reactions,
+    moment_note_reactions: payload.hearts,
+  };
+  return {
+    from(table: string) {
+      return enrichmentQuery(tables[table] ?? []);
+    },
+    rpc(fn: string) {
+      if (fn === "list_visible_content_mentions") {
+        return Promise.resolve({ data: payload.mentions, error: null });
+      }
+      if (fn === "visible_moment_authors") {
+        return Promise.resolve({ data: payload.authors, error: null });
+      }
+      return Promise.resolve({ data: [], error: null });
+    },
+  } as unknown as MomentPhotoClient;
+}
+
+async function timelineEnrichmentReader(
+  supabase: MomentPhotoClient,
+  momentIds: readonly string[],
+) {
+  if (momentIds.length === 0 || typeof supabase.from !== "function")
+    return null;
+  if (typeof supabase.rpc !== "function") return null;
+  const { data, error } = await supabase.rpc("enrich_timeline_page", {
+    moment_ids: [...new Set(momentIds.filter(Boolean))],
+  });
+  if (error || !isEnrichmentPayload(data)) return null;
+  return enrichmentReader(data);
+}
+
+async function warmTimelinePhotoUrls(
+  supabase: MomentPhotoClient,
+  momentIds: readonly string[],
+) {
+  const storage = supabase.storage;
+  if (!storage || typeof storage.from !== "function") return;
+  if (typeof supabase.rpc !== "function") return;
+  try {
+    const { data, error } = await supabase.rpc("get_photo_moments_delivery", {
+      moment_ids: [...new Set(momentIds.filter(Boolean))],
+    });
+    if (error || !data?.length) return;
+    await warmSignedPhotoUrls(storage, data);
+  } catch {
+    // Each photo route can still mint its own signed URL.
+  }
+}
+
 export async function loadConnectedTimelineListing(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -952,12 +1055,17 @@ export async function loadConnectedTimeline(
       (row) => row.moment_kind === "video" || row.moment_kind === "insight",
     )
     .map((row) => row.moment_id);
+  const enrichmentReader = await timelineEnrichmentReader(
+    supabase,
+    enrichRows.map((row) => row.moment_id),
+  );
+  const reader = enrichmentReader ?? supabase;
   const [photosByMoment, videoMetaByMoment, conversationsByMoment] =
     await Promise.all([
-      loadMomentPhotosByMomentId(supabase, photoMomentIds),
-      loadVideoMetaByMomentId(supabase, videoMomentIds),
+      loadMomentPhotosByMomentId(reader, photoMomentIds),
+      loadVideoMetaByMomentId(reader, videoMomentIds),
       loadMomentConversationsByMomentId(
-        supabase,
+        reader,
         {
           ...access,
           membershipIds: context.viewerMembershipIds?.length
@@ -969,6 +1077,9 @@ export async function loadConnectedTimeline(
         enrichRows.map((row) => row.moment_id),
       ),
     ]);
+  if (enrichmentReader && photoMomentIds.length > 0) {
+    await warmTimelinePhotoUrls(supabase, photoMomentIds);
+  }
   const visibility = {
     viewerPersonId: access.personId,
     viewingJournalPersonId: options.journalPersonId,

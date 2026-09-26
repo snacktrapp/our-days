@@ -1105,6 +1105,112 @@ describe("connected timeline mapping", () => {
     ]);
   });
 
+  it("enriches a page in one RPC and signs its photos in one batch", async () => {
+    const momentId = "10000000-0000-4000-8000-000000000099";
+    const photoId = "10000000-0000-4000-8000-000000000098";
+    const createSignedUrls = vi.fn().mockResolvedValue({
+      data: [
+        {
+          path: "display/private/photo.webp",
+          signedUrl: "https://storage.example.test/signed",
+          error: null,
+        },
+      ],
+      error: null,
+    });
+    const from = vi.fn(() => {
+      throw new Error("timeline enrichment fell back to per-table reads");
+    });
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "list_all_timeline_moments") {
+        return {
+          data: [row({ moment_id: momentId, moment_kind: "photo" })],
+          error: null,
+        };
+      }
+      if (fn === "enrich_timeline_page") {
+        return {
+          data: {
+            photos: [
+              {
+                id: photoId,
+                moment_id: momentId,
+                sort_order: 0,
+                display_width: 1200,
+                display_height: 800,
+              },
+            ],
+            videos: [],
+            posters: [],
+            notes: [
+              {
+                id: "note-1",
+                moment_id: momentId,
+                author_membership_id: "membership-molly",
+                body: "Look at this.",
+                revision: 1,
+                created_at: "2026-08-29T12:00:00Z",
+              },
+            ],
+            reactions: [],
+            hearts: [],
+            mentions: [],
+            authors: [
+              {
+                membership_id: "membership-molly",
+                display_name: "Molly",
+                accent_token: "sage",
+              },
+            ],
+          },
+          error: null,
+        };
+      }
+      if (fn === "get_photo_moments_delivery") {
+        return {
+          data: [
+            {
+              bucket_id: "our-days-display",
+              object_path: "display/private/photo.webp",
+            },
+          ],
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({
+      from,
+      rpc,
+      storage: { from: () => ({ createSignedUrls }) },
+    } as never);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+    });
+    const moment = timeline.entries.find(
+      (entry) => entry.entryType === "moment",
+    );
+    expect(moment?.entryType).toBe("moment");
+    if (moment?.entryType !== "moment") return;
+    expect(moment.moment.kind).toBe("photo");
+    if (moment.moment.kind !== "photo") return;
+    expect(moment.moment.image.src).toBe(
+      `/api/media/moments/${momentId}?photo=${photoId}`,
+    );
+    expect(moment.moment.conversation.notes[0]?.body).toBe("Look at this.");
+    expect(moment.moment.conversation.notes[0]?.authorName).toBe("Molly");
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [momentId],
+    });
+    expect(createSignedUrls).toHaveBeenCalledWith(
+      ["display/private/photo.webp"],
+      60,
+    );
+  });
+
   it("loads the All feed from list_all_timeline_moments", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: [row()], error: null });
     vi.mocked(createOurDaysServerClient).mockResolvedValue({ rpc } as never);

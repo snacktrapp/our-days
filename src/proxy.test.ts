@@ -159,6 +159,9 @@ describe("security proxy", () => {
     );
     expect(response.headers.get("pragma")).toBe("no-cache");
     expect(response.headers.get("expires")).toBe("0");
+    expect(response.headers.get("server-timing")).toMatch(
+      /^proxy;dur=\d+\.\d$/u,
+    );
     expect(response.headers.get("content-security-policy")).toContain(
       "frame-ancestors 'none'",
     );
@@ -171,6 +174,56 @@ describe("security proxy", () => {
     expect(response.headers.get("x-middleware-request-cookie")).toContain(
       "sb-local-auth-token.1=refreshed-second-chunk",
     );
+  });
+
+  it("does not hold a document GET open when auth discovery stalls", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => new Promise(() => undefined),
+      },
+    }));
+    const started = Date.now();
+    const response = await proxy(
+      new NextRequest("https://journal.example.com/family", {
+        headers: { accept: "text/html" },
+      }),
+    );
+    expect(Date.now() - started).toBeLessThan(700);
+    expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
+    expect(response.headers.get("content-security-policy")).toContain(
+      "script-src",
+    );
+  });
+
+  it("still waits for auth on a mutation so refreshed cookies can be stored", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: () => gate.then(() => ({ data: null, error: null })),
+      },
+    }));
+    let settled = false;
+    const pending = proxy(
+      new NextRequest("https://journal.example.com/api/moments", {
+        method: "POST",
+        headers: { accept: "application/json" },
+      }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(settled).toBe(false);
+    release();
+    const response = await pending;
+    expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
   });
 
   it.each([

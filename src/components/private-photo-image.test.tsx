@@ -71,10 +71,22 @@ describe("PrivatePhotoImage", () => {
       />,
     );
 
+    expect(
+      screen.getByRole("img", {
+        name: "Photo in Molly’s journal from Aug 1, 2026",
+      }),
+    ).toHaveAttribute("src", "/api/media/moments/one");
+    expect(document.querySelector('link[rel="preload"]')).toHaveAttribute(
+      "href",
+      "/api/media/moments/one",
+    );
+
     const image = await screen.findByRole("img", {
       name: "Photo in Molly’s journal from Aug 1, 2026",
     });
-    expect(image).toHaveAttribute("src", "blob:private-photo");
+    await waitFor(() =>
+      expect(image).toHaveAttribute("src", "blob:private-photo"),
+    );
     expect(image).toHaveAttribute("loading", "eager");
     expect(image).toHaveAttribute("fetchpriority", "high");
     expect(image).toHaveAttribute("width", "1200");

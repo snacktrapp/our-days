@@ -2,12 +2,40 @@ import { randomBytes } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import {
+  cachedJwksAreFresh,
+  documentAuthBudgetMs,
+  isDocumentGet,
+  labAuthMustBlockDocument,
+  labAuthNetworkDelay,
+  readCachedJwks,
+  refreshJwks,
+} from "@/lib/auth/document-auth";
 import { buildContentSecurityPolicy } from "@/lib/content-security-policy";
 import type { Database } from "@/lib/supabase/database.types";
 import { applyActiveCircleCookie } from "@/lib/auth/active-circle-middleware";
 import { readOptionalSupabasePublicConfig } from "@/lib/supabase/public-config";
+import {
+  requestTimingHeader,
+  trackDocumentHeaders,
+  upsertServerTiming,
+} from "@/lib/server-timing";
+
+function finish(
+  request: NextRequest,
+  response: NextResponse,
+  requestId: string,
+  started: number,
+) {
+  const finished = applyActiveCircleCookie(request, response);
+  upsertServerTiming(finished.headers, "proxy", performance.now() - started);
+  trackDocumentHeaders(requestId, finished.headers);
+  return finished;
+}
 
 export async function proxy(request: NextRequest) {
+  const started = performance.now();
+  const requestId = randomBytes(8).toString("hex");
   const nonce = randomBytes(18).toString("base64");
   const embeddableMap =
     request.nextUrl.pathname === "/internal/map-picker" ||
@@ -20,6 +48,7 @@ export async function proxy(request: NextRequest) {
     embeddableMap,
   });
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(requestTimingHeader, requestId);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
 
@@ -35,9 +64,17 @@ export async function proxy(request: NextRequest) {
   // Loading application assets must not wait for a session refresh. This is
   // especially important on a fresh Home Screen install with an empty cache.
   // Keep the response policy, but authenticate pages and APIs, not JS/CSS.
-  if (request.nextUrl.pathname.startsWith("/_next/static/")) return response;
+  if (request.nextUrl.pathname.startsWith("/_next/static/")) {
+    return finish(request, response, requestId, started);
+  }
   const supabaseConfig = readOptionalSupabasePublicConfig();
-  if (!supabaseConfig) return applyActiveCircleCookie(request, response);
+  const documentGet = isDocumentGet(request);
+  const blockOnLabAuth = documentGet && labAuthMustBlockDocument();
+
+  if (!supabaseConfig) {
+    if (blockOnLabAuth) await labAuthNetworkDelay();
+    return finish(request, response, requestId, started);
+  }
 
   const supabase = createServerClient<Database>(
     supabaseConfig.url,
@@ -65,8 +102,34 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getClaims();
-  return applyActiveCircleCookie(request, response);
+  const verifySession = async () => {
+    if (blockOnLabAuth) await labAuthNetworkDelay();
+    if (!cachedJwksAreFresh(supabaseConfig.url)) {
+      void refreshJwks(supabaseConfig.url);
+    }
+    const keys = readCachedJwks(supabaseConfig.url);
+    try {
+      await supabase.auth.getClaims(
+        undefined,
+        keys ? { jwks: { keys: keys as never } } : undefined,
+      );
+    } catch {
+      // A stalled Auth call must not fail the document. The page and RPCs
+      // remain the authority for who is signed in.
+    }
+  };
+
+  if (documentGet && !blockOnLabAuth) {
+    await Promise.race([
+      verifySession(),
+      new Promise((resolve) =>
+        setTimeout(resolve, documentAuthBudgetMs(request)),
+      ),
+    ]);
+  } else {
+    await verifySession();
+  }
+  return finish(request, response, requestId, started);
 }
 
 export const config = {
