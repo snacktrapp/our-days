@@ -283,7 +283,7 @@ dialog::backdrop {
    timestamps keep their own sizes and stay centered on the author line. */
 .inline-note-summary .inline-note-author strong,
 .inline-note-summary li p:not(.inline-note-when) {
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -453,6 +453,11 @@ select {
 .comment-color-dot,
 .memory-feature-avatar {
   border-radius: 2px;
+}
+
+.inline-note-author .comment-color-dot {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .auth-error,
