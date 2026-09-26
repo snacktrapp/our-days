@@ -26,10 +26,7 @@ import {
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
 import { selectActiveGroupAction } from "@/features/groups/create-group-action";
-import {
-  labBlocksShellOnJournalData,
-  labJournalDataDelay,
-} from "@/data/lab-journal-delay.server";
+import { labJournalDataDelay } from "@/data/lab-journal-delay.server";
 import { previewGroupOptions } from "@/data/preview-groups.server";
 import {
   createFamilyMomentAction,
@@ -47,16 +44,6 @@ import {
 } from "@/features/moments/moment-actions";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
-
-type FamilySearchParams = Promise<{
-  pages?: string;
-  snapshot?: string;
-  circle?: string;
-  name?: string;
-  moment?: string;
-  note?: string;
-  thread?: string;
-}>;
 
 const connectedActions = {
   update: updateFamilyMomentAction,
@@ -216,24 +203,15 @@ async function ConnectedFamilyHome({
 export default async function FamilyPage({
   searchParams,
 }: Readonly<{
-  searchParams: FamilySearchParams;
-}>) {
-  // Lab switch only. Production returns the shell immediately and lets the
-  // access and timeline reads stream in behind it.
-  if (labBlocksShellOnJournalData()) {
-    return FamilyHomeContent({ searchParams });
-  }
-  return (
-    <Suspense fallback={<OpeningJournalShell />}>
-      <FamilyHomeContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-export async function FamilyHomeContent({
-  searchParams,
-}: Readonly<{
-  searchParams: FamilySearchParams;
+  searchParams: Promise<{
+    pages?: string;
+    snapshot?: string;
+    circle?: string;
+    name?: string;
+    moment?: string;
+    note?: string;
+    thread?: string;
+  }>;
 }>) {
   const params = await searchParams;
   const access = await requireJournalAccessUnlessRecoverable({
@@ -274,13 +252,15 @@ export async function FamilyHomeContent({
   }
   const { pages, snapshot } = params;
   return (
-    <ConnectedFamilyHome
-      access={access}
-      options={{
-        pages,
-        snapshotAt: snapshot,
-        circleId: params.circle,
-      }}
-    />
+    <Suspense fallback={<OpeningJournalShell />}>
+      <ConnectedFamilyHome
+        access={access}
+        options={{
+          pages,
+          snapshotAt: snapshot,
+          circleId: params.circle,
+        }}
+      />
+    </Suspense>
   );
 }

@@ -2,88 +2,10 @@ import { randomBytes } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isDesignPreviewEnvironment } from "../config/design-preview-policy";
-import { localJournalIsEnabled } from "../config/our-days-environment";
 import { buildContentSecurityPolicy } from "@/lib/content-security-policy";
 import type { Database } from "@/lib/supabase/database.types";
 import { applyActiveCircleCookie } from "@/lib/auth/active-circle-middleware";
 import { readOptionalSupabasePublicConfig } from "@/lib/supabase/public-config";
-
-const journalDocumentRoots = [
-  "/family",
-  "/journal",
-  "/trash",
-  "/circles",
-  "/people",
-  "/memories",
-  "/settings",
-];
-
-function normalizePath(pathname: string) {
-  if (pathname.length > 1 && pathname.endsWith("/")) {
-    return pathname.slice(0, -1);
-  }
-  return pathname;
-}
-
-function isJournalDocumentPath(pathname: string) {
-  const path = normalizePath(pathname);
-  return journalDocumentRoots.some(
-    (root) => path === root || path.startsWith(`${root}/`),
-  );
-}
-
-function isDocumentRead(request: NextRequest) {
-  return request.method === "GET" || request.method === "HEAD";
-}
-
-function hasSupabaseAuthSessionCookie(request: NextRequest) {
-  return request.cookies.getAll().some(({ name, value }) => {
-    if (value.trim().length === 0) return false;
-    return /^sb-.+-auth-token(?:\.\d+)?$/u.test(name);
-  });
-}
-
-function isRscRequest(request: NextRequest) {
-  // Next removes `rsc` and `_rsc` before this proxy runs. Client navigations
-  // still send `next-url`, and the flight accept type is left intact.
-  const accept = request.headers.get("accept") ?? "";
-  return (
-    request.headers.get("rsc") === "1" ||
-    request.nextUrl.searchParams.has("_rsc") ||
-    request.headers.has("next-url") ||
-    accept.includes("text/x-component")
-  );
-}
-
-function shouldRedirectSignedOutJournal(request: NextRequest) {
-  if (!isDocumentRead(request)) return false;
-  if (isRscRequest(request)) return false;
-  if (!isJournalDocumentPath(request.nextUrl.pathname)) return false;
-  if (isDesignPreviewEnvironment(process.env)) return false;
-  if (localJournalIsEnabled(process.env)) return false;
-  return true;
-}
-
-function redirectSignedOutJournal(request: NextRequest, source: NextResponse) {
-  const destination = request.nextUrl.clone();
-  destination.pathname = "/sign-in";
-  destination.search = "";
-  const redirect = NextResponse.redirect(destination, 307);
-  const policy = source.headers.get("Content-Security-Policy");
-  if (policy) redirect.headers.set("Content-Security-Policy", policy);
-  redirect.headers.set("Cache-Control", "private, no-store, max-age=0");
-  redirect.headers.set("Pragma", "no-cache");
-  redirect.headers.set("Expires", "0");
-  redirect.headers.set(
-    "X-Robots-Tag",
-    "noindex, nofollow, noarchive, nosnippet",
-  );
-  for (const cookie of source.headers.getSetCookie()) {
-    redirect.headers.append("set-cookie", cookie);
-  }
-  return redirect;
-}
 
 export async function proxy(request: NextRequest) {
   const nonce = randomBytes(18).toString("base64");
@@ -114,16 +36,8 @@ export async function proxy(request: NextRequest) {
   // especially important on a fresh Home Screen install with an empty cache.
   // Keep the response policy, but authenticate pages and APIs, not JS/CSS.
   if (request.nextUrl.pathname.startsWith("/_next/static/")) return response;
-  response = applyActiveCircleCookie(request, response);
   const supabaseConfig = readOptionalSupabasePublicConfig();
-  // No auth cookie means there is no session to refresh. A present cookie can
-  // still be valid, so a failed claims read must reach the page.
-  if (!supabaseConfig || !hasSupabaseAuthSessionCookie(request)) {
-    if (shouldRedirectSignedOutJournal(request)) {
-      return redirectSignedOutJournal(request, response);
-    }
-    return response;
-  }
+  if (!supabaseConfig) return applyActiveCircleCookie(request, response);
 
   const supabase = createServerClient<Database>(
     supabaseConfig.url,
@@ -151,16 +65,8 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  try {
-    const { data, error } = await supabase.auth.getClaims();
-    if (error || data?.claims?.sub) return response;
-  } catch {
-    return response;
-  }
-  if (shouldRedirectSignedOutJournal(request)) {
-    return redirectSignedOutJournal(request, response);
-  }
-  return response;
+  await supabase.auth.getClaims();
+  return applyActiveCircleCookie(request, response);
 }
 
 export const config = {

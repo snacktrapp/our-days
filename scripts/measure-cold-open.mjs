@@ -3,9 +3,10 @@
  * Slow 4G (1.6 Mbps / 750 Kbps / 150 ms) and 4x CPU.
  * OUR_DAYS_LAB_JOURNAL_DELAY_MS stands in for phone-to-database latency.
  *
- * Before: the page awaits journal data before it returns.
- * After: the shell streams while that read is still in flight.
- * The full stylesheet stays render-blocking in both profiles.
+ * The family page matches main: it awaits access and the preview timeline
+ * before it returns. loading.tsx streams the opening shell during that wait.
+ * OUR_DAYS_LAB_BLOCK_BEFORE_SHELL no longer changes the page; both profiles
+ * measure that same path. The full stylesheet stays render-blocking.
  */
 import { spawn } from "node:child_process";
 import { chromium, devices } from "@playwright/test";
