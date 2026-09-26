@@ -28,19 +28,22 @@ function channelDelta(
   );
 }
 
+const accent = { r: 0xe8, g: 0x74, b: 0x3b };
+
 describe("installed app icons", () => {
-  it("uses the cloud-gray OD mark on blue-gray for PWA icons", async () => {
+  it("uses the orange OD mark on blue-gray for PWA icons", async () => {
     const source = await readFile(`${publicDir}icon-source.svg`, "utf8");
     expect(source).toContain('fill="#1b2028"');
-    expect(source).toContain('fill="#edf0f5"');
+    expect(source).toContain('fill="#e8743b"');
+    expect(source).not.toContain("#edf0f5");
     expect(source).not.toContain("paper");
     expect(source).not.toContain("#fffaf0");
     expect(source).not.toContain("#f3eee4");
 
     const webManifest = manifest();
     expect(webManifest).toMatchObject({
-      name: "Our Days Mono",
-      short_name: "Our Days Mono",
+      name: "Our Days",
+      short_name: "Our Days",
       background_color: "#14110f",
       theme_color: "#14110f",
     });
@@ -84,9 +87,52 @@ describe("installed app icons", () => {
         g: data[centerIndex + 1],
         b: data[centerIndex + 2],
       };
-      expect(channelDelta(center, { r: 0xed, g: 0xf0, b: 0xf5 })).toBeLessThan(
-        24,
-      );
+      expect(channelDelta(center, accent)).toBeLessThan(24);
+    }
+
+    const favicon = await readFile(`${publicDir}favicon.ico`);
+    const embedded = pngsInIco(favicon);
+    expect(embedded.map((image) => image.length)).toEqual([16, 32, 48]);
+    for (const image of embedded) {
+      const { data, info } = await sharp(image.png)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(
+        channelDelta({ r: data[0], g: data[1], b: data[2] }, canvas),
+      ).toBeLessThan(8);
+      const centerIndex =
+        (Math.floor(info.height / 2) * info.width +
+          Math.floor(info.width / 2)) *
+        info.channels;
+      expect(
+        channelDelta(
+          {
+            r: data[centerIndex],
+            g: data[centerIndex + 1],
+            b: data[centerIndex + 2],
+          },
+          accent,
+        ),
+      ).toBeLessThan(48);
     }
   });
 });
+
+function pngsInIco(file: Buffer) {
+  expect(file.readUInt16LE(0)).toBe(0);
+  expect(file.readUInt16LE(2)).toBe(1);
+  const count = file.readUInt16LE(4);
+  const images = [];
+  for (let index = 0; index < count; index += 1) {
+    const entry = 6 + index * 16;
+    const size = file.readUInt8(entry) || 256;
+    const length = file.readUInt32LE(entry + 8);
+    const offset = file.readUInt32LE(entry + 12);
+    images.push({
+      length: size,
+      png: file.subarray(offset, offset + length),
+    });
+  }
+  return images;
+}

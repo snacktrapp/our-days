@@ -4,8 +4,8 @@ import { terminalBackground } from "@/features/shell/terminal-accent";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Our Days Mono",
-    short_name: "Our Days Mono",
+    name: "Our Days",
+    short_name: "Our Days",
     description: "A quiet, private journal.",
     start_url: "/family",
     scope: "/",
