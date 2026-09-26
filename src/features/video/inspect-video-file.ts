@@ -135,7 +135,7 @@ export async function inspectVideoFile(
             }
             if (durationMs > maximumVideoDurationMs) {
               throw new VideoUploadError(
-                "Choose a video about 60 seconds or shorter.",
+                "Choose a video about 2 minutes or shorter.",
                 false,
               );
             }

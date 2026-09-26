@@ -16,7 +16,7 @@ import type { LocalMedia } from "./types";
 
 const maximumPhotoBytes = 25 * 1024 * 1024;
 const maximumVideoBytes = 100 * 1024 * 1024;
-const maximumVideoDurationMs = 60_500;
+const maximumVideoDurationMs = 120_500;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const plainDatePattern = /^\d{4}-\d{2}-\d{2}$/u;
@@ -251,7 +251,7 @@ export async function publishVerifiedVideoMoment(
     input.durationMs > maximumVideoDurationMs
   ) {
     throw new LocalMediaCoordinatorError(
-      "Choose a video about 60 seconds or shorter.",
+      "Choose a video about 2 minutes or shorter.",
     );
   }
   if (input.file.size < 1 || input.file.size > maximumVideoBytes) {

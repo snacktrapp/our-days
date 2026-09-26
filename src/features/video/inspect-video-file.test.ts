@@ -85,14 +85,14 @@ describe("inspectVideoFile", () => {
     });
   });
 
-  it("rejects a clip longer than about 60 seconds", async () => {
-    stubInspectableVideo({ duration: 61.2 });
+  it("rejects a clip longer than about 2 minutes", async () => {
+    stubInspectableVideo({ duration: 121 });
     await expect(
       inspectVideoFile(
         new File([new Uint8Array(24)], "long.mp4", { type: "video/mp4" }),
       ),
     ).rejects.toMatchObject({
-      message: "Choose a video about 60 seconds or shorter.",
+      message: "Choose a video about 2 minutes or shorter.",
     });
   });
 
