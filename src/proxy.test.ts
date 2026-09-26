@@ -130,7 +130,9 @@ describe("security proxy", () => {
 
     const response = await proxy(
       new NextRequest("https://journal.example.com/family", {
-        headers: { cookie: "existing-cookie=kept" },
+        headers: {
+          cookie: "existing-cookie=kept; sb-local-auth-token=present",
+        },
       }),
     );
 
@@ -141,6 +143,7 @@ describe("security proxy", () => {
     );
     expect(cookieAdapter?.getAll()).toEqual([
       { name: "existing-cookie", value: "kept" },
+      { name: "sb-local-auth-token", value: "present" },
       { name: "sb-local-auth-token.0", value: "refreshed-first-chunk" },
       { name: "sb-local-auth-token.1", value: "refreshed-second-chunk" },
     ]);
@@ -164,6 +167,9 @@ describe("security proxy", () => {
     );
     expect(response.headers.get("x-middleware-request-cookie")).toContain(
       "existing-cookie=kept",
+    );
+    expect(response.headers.get("x-middleware-request-cookie")).toContain(
+      "sb-local-auth-token=present",
     );
     expect(response.headers.get("x-middleware-request-cookie")).toContain(
       "sb-local-auth-token.0=refreshed-first-chunk",
@@ -258,16 +264,77 @@ describe("security proxy", () => {
   it("redirects a journal document when the session claim is missing", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    const getClaims = vi.fn(async () => ({
+      data: { claims: null },
+      error: null,
+    }));
     supabaseMocks.createServerClient.mockImplementation(() => ({
-      auth: {
-        getClaims: async () => ({ data: { claims: null }, error: null }),
-      },
+      auth: { getClaims },
     }));
     const response = await proxy(
-      new NextRequest("https://journal.example.com/circles"),
+      new NextRequest("https://journal.example.com/circles", {
+        headers: { cookie: "sb-local-auth-token.0=stale" },
+      }),
     );
+    expect(getClaims).toHaveBeenCalledOnce();
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
+      "https://journal.example.com/sign-in",
+    );
+  });
+
+  it("passes a journal read through when the claims check fails", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: async () => ({
+          data: { claims: null },
+          error: new Error("network unavailable"),
+        }),
+      },
+    }));
+    const errored = await proxy(
+      new NextRequest("https://journal.example.com/family", {
+        headers: { cookie: "sb-local-auth-token=present" },
+      }),
+    );
+    expect(errored.status).toBe(200);
+    expect(errored.headers.get("location")).toBeNull();
+
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: {
+        getClaims: async () => {
+          throw new Error("connection reset");
+        },
+      },
+    }));
+    const thrown = await proxy(
+      new NextRequest("https://journal.example.com/family", {
+        method: "GET",
+        headers: { cookie: "sb-local-auth-token=present" },
+      }),
+    );
+    expect(thrown.status).toBe(200);
+    expect(thrown.headers.get("location")).toBeNull();
+  });
+
+  it("redirects only GET and HEAD journal documents", async () => {
+    const posted = await proxy(
+      new NextRequest("https://journal.example.com/family", {
+        method: "POST",
+      }),
+    );
+    expect(posted.status).toBe(200);
+    expect(posted.headers.get("location")).toBeNull();
+
+    const head = await proxy(
+      new NextRequest("https://journal.example.com/people/molly", {
+        method: "HEAD",
+      }),
+    );
+    expect(head.status).toBe(307);
+    expect(head.headers.get("location")).toBe(
       "https://journal.example.com/sign-in",
     );
   });

@@ -53,9 +53,7 @@ describe("journal open paint", () => {
       familyPage.indexOf("await requireJournalAccessUnlessRecoverable"),
     );
     expect(familyPage).toContain("familyHomeRefreshSoftFail");
-    expect(rootLayout).toContain('id="our-days-critical-shell"');
     expect(rootLayout).toContain('import "./globals.css"');
-    expect(rootLayout).toContain("enableDeferredStylesheetScript");
     expect(familyHome).toContain("includeActivity: false");
     expect(familyHome).toContain("enrichLimit: 1");
     expect(journalContext).toContain("includeActivity");

@@ -33,6 +33,17 @@ function isJournalDocumentPath(pathname: string) {
   );
 }
 
+function isDocumentRead(request: NextRequest) {
+  return request.method === "GET" || request.method === "HEAD";
+}
+
+function hasSupabaseAuthSessionCookie(request: NextRequest) {
+  return request.cookies.getAll().some(({ name, value }) => {
+    if (value.trim().length === 0) return false;
+    return /^sb-.+-auth-token(?:\.\d+)?$/u.test(name);
+  });
+}
+
 function isRscRequest(request: NextRequest) {
   // Next removes `rsc` and `_rsc` before this proxy runs. Client navigations
   // still send `next-url`, and the flight accept type is left intact.
@@ -46,6 +57,7 @@ function isRscRequest(request: NextRequest) {
 }
 
 function shouldRedirectSignedOutJournal(request: NextRequest) {
+  if (!isDocumentRead(request)) return false;
   if (isRscRequest(request)) return false;
   if (!isJournalDocumentPath(request.nextUrl.pathname)) return false;
   if (isDesignPreviewEnvironment(process.env)) return false;
@@ -102,9 +114,11 @@ export async function proxy(request: NextRequest) {
   // especially important on a fresh Home Screen install with an empty cache.
   // Keep the response policy, but authenticate pages and APIs, not JS/CSS.
   if (request.nextUrl.pathname.startsWith("/_next/static/")) return response;
+  response = applyActiveCircleCookie(request, response);
   const supabaseConfig = readOptionalSupabasePublicConfig();
-  if (!supabaseConfig) {
-    response = applyActiveCircleCookie(request, response);
+  // No auth cookie means there is no session to refresh. A present cookie can
+  // still be valid, so a failed claims read must reach the page.
+  if (!supabaseConfig || !hasSupabaseAuthSessionCookie(request)) {
     if (shouldRedirectSignedOutJournal(request)) {
       return redirectSignedOutJournal(request, response);
     }
@@ -137,9 +151,12 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const { data, error } = await supabase.auth.getClaims();
-  response = applyActiveCircleCookie(request, response);
-  if (!error && data?.claims?.sub) return response;
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    if (error || data?.claims?.sub) return response;
+  } catch {
+    return response;
+  }
   if (shouldRedirectSignedOutJournal(request)) {
     return redirectSignedOutJournal(request, response);
   }

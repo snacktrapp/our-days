@@ -3,8 +3,9 @@
  * Slow 4G (1.6 Mbps / 750 Kbps / 150 ms) and 4x CPU.
  * OUR_DAYS_LAB_JOURNAL_DELAY_MS stands in for phone-to-database latency.
  *
- * Before: the page awaits journal data, and the full stylesheet blocks paint.
- * After: the shell streams first, and the full stylesheet does not block paint.
+ * Before: the page awaits journal data before it returns.
+ * After: the shell streams while that read is still in flight.
+ * The full stylesheet stays render-blocking in both profiles.
  */
 import { spawn } from "node:child_process";
 import { chromium, devices } from "@playwright/test";
@@ -30,13 +31,13 @@ function labEnv(blocking) {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
     NEXT_PUBLIC_SITE_URL: origin,
     OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
+    OUR_DAYS_LAB: "1",
     OUR_DAYS_LAB_JOURNAL_DELAY_MS: "1500",
   };
   delete env.OUR_DAYS_LAB_BLOCK_BEFORE_SHELL;
-  delete env.OUR_DAYS_LAB_BLOCKING_CSS;
+  delete env.VERCEL_ENV;
   if (blocking) {
     env.OUR_DAYS_LAB_BLOCK_BEFORE_SHELL = "1";
-    env.OUR_DAYS_LAB_BLOCKING_CSS = "1";
   }
   return env;
 }
@@ -204,6 +205,7 @@ async function sample(page) {
     return button.getAttribute("aria-expanded") === "true";
   });
   const reading = await page.evaluate(() => {
+    const navigation = performance.getEntriesByType("navigation")[0];
     const paints = Object.fromEntries(
       performance
         .getEntriesByType("paint")
@@ -220,6 +222,7 @@ async function sample(page) {
       : false;
     return {
       paints,
+      ttfb: navigation ? navigation.responseStart : null,
       marks,
       url: location.href,
       pullShell: Boolean(shell),
@@ -238,6 +241,7 @@ async function sample(page) {
     url: reading.url,
     firstPaint: reading.paints["first-paint"] ?? null,
     firstContentfulPaint: reading.paints["first-contentful-paint"] ?? null,
+    ttfb: reading.ttfb,
     shellVisible: mark("shell"),
     firstPostVisible: mark("post"),
     bytesBeforeDataWait: bytesBeforeStall(sentAt, chunks),
@@ -276,12 +280,6 @@ async function measureProfile(browser, blocking) {
     const field = (name) => median(samples.map((reading) => reading[name]));
     return {
       status: document.status,
-      criticalShell: html.includes('id="our-days-critical-shell"'),
-      deferredStylesheet: stylesheetTags.some(
-        (tag) =>
-          tag.includes('media="print"') &&
-          tag.includes("data-our-days-deferred-css"),
-      ),
       blockingStylesheet: stylesheetTags.some(
         (tag) =>
           tag.includes('data-precedence="next"') &&
@@ -292,6 +290,7 @@ async function measureProfile(browser, blocking) {
       median: {
         firstPaint: field("firstPaint"),
         firstContentfulPaint: field("firstContentfulPaint"),
+        ttfb: field("ttfb"),
         shellVisible: field("shellVisible"),
         firstPostVisible: field("firstPostVisible"),
         bytesBeforeDataWait: field("bytesBeforeDataWait"),
