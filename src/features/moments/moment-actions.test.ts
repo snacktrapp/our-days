@@ -192,6 +192,7 @@ describe("written moment actions", () => {
     mocks.rpc.mockResolvedValueOnce({
       data: null,
       error: { code: "40001", message: "Moment changed elsewhere" },
+      status: 500,
     });
     await expect(
       updateWrittenMomentAction({
@@ -206,6 +207,7 @@ describe("written moment actions", () => {
       ok: false,
       message: "This moment changed elsewhere. Reopen it before editing again.",
     });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
     expect(mocks.rpc).toHaveBeenCalledWith("update_written_moment", {
       moment_id: momentId,
       expected_revision: 4,
@@ -214,6 +216,95 @@ describe("written moment actions", () => {
       occurred_at: undefined,
       occurred_timezone: undefined,
     });
+  });
+
+  it("maps PT409 and HTTP 409 to the same recovery copy without retrying", async () => {
+    const input = {
+      momentId,
+      revision: 4,
+      body: "A current draft.",
+      occurredOn: "2026-08-28",
+      occurredAt: null,
+      occurredTimezone: null,
+    };
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "PT409", message: "Moment changed elsewhere" },
+      status: 409,
+    });
+    await expect(updateWrittenMomentAction(input)).resolves.toEqual({
+      ok: false,
+      message: "This moment changed elsewhere. Reopen it before editing again.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+
+    mocks.rpc.mockClear();
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Moment changed elsewhere" },
+      status: 409,
+    });
+    await expect(updateWrittenMomentAction(input)).resolves.toEqual({
+      ok: false,
+      message: "This moment changed elsewhere. Reopen it before editing again.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+
+    mocks.rpc.mockClear();
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "PT409", message: "Note changed elsewhere" },
+      status: 409,
+    });
+    await expect(
+      updateMomentNoteAction({
+        noteId: "70000000-0000-4000-8000-000000000001",
+        revision: 2,
+        body: "A newer note.",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "This note changed elsewhere. Reopen it before editing again.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+
+    mocks.rpc.mockClear();
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "PT409", message: "Moment changed elsewhere" },
+      status: 409,
+    });
+    await expect(
+      trashWrittenMomentAction({ momentId, revision: 2 }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "This moment changed elsewhere. Refresh before trying again.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+
+    mocks.rpc.mockClear();
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { code: "PT409", message: "Moment changed elsewhere" },
+      status: 409,
+    });
+    await expect(
+      updateFamilyMomentAction({
+        momentId,
+        revision: 4,
+        title: "First ride",
+        body: "Two brave laps.",
+        placeName: "Cedar Park",
+        taggedPersonIds: [],
+        occurredOn: "2026-08-28",
+        occurredAt: null,
+        occurredTimezone: null,
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "This moment changed elsewhere. Reopen it before editing again.",
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
   });
 
   it("uses the same revision-checked RPC for trash and restore", async () => {

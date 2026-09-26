@@ -615,6 +615,16 @@ export async function createLocalInsightMoment(
   });
 }
 
+function revisionConflict() {
+  const error = new Error("revision conflict") as Error & {
+    code?: string;
+    status?: number;
+  };
+  error.code = "PT409";
+  error.status = 409;
+  return error;
+}
+
 export async function updateLocalWrittenMoment(
   access: LocalAccess,
   input: Readonly<{
@@ -644,11 +654,7 @@ export async function updateLocalWrittenMoment(
     if (mediaKinds.has(current.kind) && (input.title || input.placeName)) {
       // Caption and date edits stay on the generic written path.
     }
-    if (current.revision !== input.revision) {
-      const error = new Error("revision conflict");
-      (error as Error & { code?: string }).code = "40001";
-      throw error;
-    }
+    if (current.revision !== input.revision) throw revisionConflict();
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
@@ -750,11 +756,7 @@ export async function updateLocalMomentAudience(
       (moment) => moment.id === input.momentId && moment.trashedAt === null,
     );
     if (!current) throw new Error("That moment could not be changed.");
-    if (current.revision !== input.revision) {
-      const error = new Error("revision conflict");
-      (error as Error & { code?: string }).code = "40001";
-      throw error;
-    }
+    if (current.revision !== input.revision) throw revisionConflict();
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That moment could not be changed.");
     }
@@ -810,11 +812,7 @@ export async function setLocalMomentTrashed(
       (moment) => moment.id === input.momentId,
     );
     if (!current) throw new Error("That moment could not be changed.");
-    if (current.revision !== input.revision) {
-      const error = new Error("revision conflict");
-      (error as Error & { code?: string }).code = "40001";
-      throw error;
-    }
+    if (current.revision !== input.revision) throw revisionConflict();
     if (!canWriteJournal(document, access, current.journalPersonId)) {
       throw new Error("That journal cannot be written from this account.");
     }
@@ -958,11 +956,7 @@ export async function updateLocalNote(
         note.trashedAt === null,
     );
     if (!current) throw new Error("That note could not be changed.");
-    if (current.revision !== input.revision) {
-      const error = new Error("revision conflict");
-      (error as Error & { code?: string }).code = "40001";
-      throw error;
-    }
+    if (current.revision !== input.revision) throw revisionConflict();
     const updated: LocalNote = {
       ...current,
       body: input.body,
@@ -992,11 +986,7 @@ export async function trashLocalNote(
         note.authorMembershipId === access.membershipId,
     );
     if (!current) throw new Error("That note could not be changed.");
-    if (current.revision !== input.revision) {
-      const error = new Error("revision conflict");
-      (error as Error & { code?: string }).code = "40001";
-      throw error;
-    }
+    if (current.revision !== input.revision) throw revisionConflict();
     const updated: LocalNote = {
       ...current,
       revision: nextRevision(current.revision),

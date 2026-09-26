@@ -31,6 +31,7 @@ import {
   requireJournalAccess,
   requireJournalAccessUnlessRecoverable,
   requirePreviewFixtureAccess,
+  retryTransientFamilySessionQuery,
 } from "./journal-access";
 
 function membershipQuery() {
@@ -282,6 +283,30 @@ describe("journal access boundary", () => {
 
     await expect(requireJournalAccessUnlessRecoverable()).resolves.toBeNull();
     expect(mocks.limit).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry an edit conflict or any HTTP 409", async () => {
+    const conflict = {
+      data: null,
+      error: {
+        code: "PT409",
+        message: "Moment changed elsewhere",
+        status: 409,
+      },
+    };
+    const run = vi.fn().mockResolvedValue(conflict);
+    await expect(retryTransientFamilySessionQuery(run)).resolves.toBe(conflict);
+    expect(run).toHaveBeenCalledOnce();
+
+    const thrown = Object.assign(new Error("Moment changed elsewhere"), {
+      code: "40001",
+      status: 409,
+    });
+    const throwing = vi.fn().mockRejectedValue(thrown);
+    await expect(retryTransientFamilySessionQuery(throwing)).rejects.toBe(
+      thrown,
+    );
+    expect(throwing).toHaveBeenCalledOnce();
   });
 
   it("retries a transient People circle lookup instead of interrupting the journal", async () => {

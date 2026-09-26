@@ -11,7 +11,7 @@ select public.set_moment_reaction(current_setting('test.share_post')::uuid, 'hel
 
 select throws_ok($q$select public.share_private_moment(current_setting('test.share_post')::uuid, 999,
   '20000000-0000-4000-8000-000000000002', null, 'Changed', null, '{}', '2026-08-29')$q$,
-  '40001', 'Moment changed elsewhere', 'stale share rejected');
+  'PT409', 'Moment changed elsewhere', 'stale share rejected');
 select is((select audience from public.moments where id=current_setting('test.share_post')::uuid), 'just_me', 'failed share stays private');
 select lives_ok($q$select public.share_private_moment(current_setting('test.share_post')::uuid, 1,
   '20000000-0000-4000-8000-000000000002', null, 'Shared only to Harbor.', null, '{}', '2026-08-29')$q$, 'author shares private post with content atomically');

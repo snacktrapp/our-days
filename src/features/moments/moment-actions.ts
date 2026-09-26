@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { localJournalIsEnabled } from "../../../config/our-days-environment";
+import { isEditConflictError } from "@/lib/edit-conflict";
 import {
   readJournalCircleMemberships,
   requireJournalAccess,
@@ -42,6 +43,15 @@ async function localViews() {
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function conflictOr(
+  error: unknown,
+  status: number | undefined,
+  conflictCopy: string,
+  fallback: string,
+) {
+  return isEditConflictError(error, status) ? conflictCopy : fallback;
+}
 
 function mentionRpcFields(body: string, mentions?: readonly MentionWrite[]) {
   if (!mentions) return { ok: true as const, fields: {} };
@@ -466,11 +476,12 @@ export async function updateFamilyMomentAction(input: {
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This moment changed elsewhere. Reopen it before editing again."
-            : "That moment could not be changed.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This moment changed elsewhere. Reopen it before editing again.",
+          "That moment could not be changed.",
+        ),
       };
     }
   }
@@ -491,7 +502,7 @@ export async function updateFamilyMomentAction(input: {
     audience,
     ...coordinates,
   };
-  let { data, error } = sharing
+  let { data, error, status } = sharing
     ? await supabase.rpc("share_private_moment", {
         moment_id: input.momentId,
         expected_revision: input.revision,
@@ -511,15 +522,20 @@ export async function updateFamilyMomentAction(input: {
     delete (fallback as { latitude?: number | null }).latitude;
     delete (fallback as { longitude?: number | null }).longitude;
     delete (fallback as { audience?: string }).audience;
-    ({ data, error } = await supabase.rpc("update_family_moment", fallback));
+    ({ data, error, status } = await supabase.rpc(
+      "update_family_moment",
+      fallback,
+    ));
   }
   if (error) {
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This moment changed elsewhere. Reopen it before editing again."
-          : "That moment could not be changed.",
+      message: conflictOr(
+        error,
+        status,
+        "This moment changed elsewhere. Reopen it before editing again.",
+        "That moment could not be changed.",
+      ),
     };
   }
   if (input.mentions && audience === "family") {
@@ -591,17 +607,18 @@ export async function setMomentAudienceAction(input: {
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This moment changed elsewhere. Reopen it before editing again."
-            : "That moment could not be changed.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This moment changed elsewhere. Reopen it before editing again.",
+          "That moment could not be changed.",
+        ),
       };
     }
   }
 
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("set_moment_audience", {
+  const { data, error, status } = await supabase.rpc("set_moment_audience", {
     moment_id: input.momentId,
     expected_revision: input.revision,
     audience,
@@ -610,10 +627,12 @@ export async function setMomentAudienceAction(input: {
   if (error) {
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This moment changed elsewhere. Reopen it before editing again."
-          : "That moment could not be changed.",
+      message: conflictOr(
+        error,
+        status,
+        "This moment changed elsewhere. Reopen it before editing again.",
+        "That moment could not be changed.",
+      ),
     };
   }
   refreshMomentSurfaces();
@@ -659,27 +678,33 @@ async function setMomentTrashed(
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This moment changed elsewhere. Refresh before trying again."
-            : "That moment could not be changed.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This moment changed elsewhere. Refresh before trying again.",
+          "That moment could not be changed.",
+        ),
       };
     }
   }
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("set_written_moment_trashed", {
-    moment_id: input.momentId,
-    expected_revision: input.revision,
-    trashed,
-  });
+  const { data, error, status } = await supabase.rpc(
+    "set_written_moment_trashed",
+    {
+      moment_id: input.momentId,
+      expected_revision: input.revision,
+      trashed,
+    },
+  );
   if (error) {
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This moment changed elsewhere. Refresh before trying again."
-          : "That moment could not be changed.",
+      message: conflictOr(
+        error,
+        status,
+        "This moment changed elsewhere. Refresh before trying again.",
+        "That moment could not be changed.",
+      ),
     };
   }
   refreshMomentSurfaces();
@@ -969,16 +994,17 @@ export async function updateMomentNoteAction(input: {
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This note changed elsewhere. Reopen it before editing again."
-            : "That note could not be changed.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This note changed elsewhere. Reopen it before editing again.",
+          "That note could not be changed.",
+        ),
       };
     }
   }
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("update_moment_note", {
+  const { data, error, status } = await supabase.rpc("update_moment_note", {
     note_id: input.noteId,
     expected_revision: input.revision,
     body: input.body.trim(),
@@ -987,10 +1013,12 @@ export async function updateMomentNoteAction(input: {
   if (error)
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This note changed elsewhere. Reopen it before editing again."
-          : "That note could not be changed.",
+      message: conflictOr(
+        error,
+        status,
+        "This note changed elsewhere. Reopen it before editing again.",
+        "That note could not be changed.",
+      ),
     };
   if (input.mentions && input.momentId) {
     queueMentionPush(supabase, input.momentId, input.noteId);
@@ -1024,26 +1052,29 @@ export async function trashMomentNoteAction(input: {
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This note changed elsewhere. Reopen it before trying again."
-            : "That note could not be moved to trash.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This note changed elsewhere. Reopen it before trying again.",
+          "That note could not be moved to trash.",
+        ),
       };
     }
   }
   const supabase = await createOurDaysServerClient();
-  const { data, error } = await supabase.rpc("trash_moment_note", {
+  const { data, error, status } = await supabase.rpc("trash_moment_note", {
     note_id: input.noteId,
     expected_revision: input.revision,
   });
   if (error)
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This note changed elsewhere. Reopen it before trying again."
-          : "That note could not be moved to trash.",
+      message: conflictOr(
+        error,
+        status,
+        "This note changed elsewhere. Reopen it before trying again.",
+        "That note could not be moved to trash.",
+      ),
     };
   return { ok: true, message: "Note moved to trash.", revision: data };
 }
@@ -1277,11 +1308,12 @@ export async function updateWrittenMomentAction(input: {
     } catch (error) {
       return {
         ok: false,
-        message:
-          error instanceof Error &&
-          (error as Error & { code?: string }).code === "40001"
-            ? "This moment changed elsewhere. Reopen it before editing again."
-            : "That moment could not be changed.",
+        message: conflictOr(
+          error,
+          undefined,
+          "This moment changed elsewhere. Reopen it before editing again.",
+          "That moment could not be changed.",
+        ),
       };
     }
   }
@@ -1290,7 +1322,7 @@ export async function updateWrittenMomentAction(input: {
   if (!mentionFields.ok) {
     return { ok: false, message: "Check the moment and try again." };
   }
-  const { data, error } = await supabase.rpc("update_written_moment", {
+  const { data, error, status } = await supabase.rpc("update_written_moment", {
     moment_id: input.momentId,
     expected_revision: input.revision,
     body: input.body.trim(),
@@ -1302,10 +1334,12 @@ export async function updateWrittenMomentAction(input: {
   if (error)
     return {
       ok: false,
-      message:
-        error.code === "40001"
-          ? "This moment changed elsewhere. Reopen it before editing again."
-          : "That moment could not be changed.",
+      message: conflictOr(
+        error,
+        status,
+        "This moment changed elsewhere. Reopen it before editing again.",
+        "That moment could not be changed.",
+      ),
     };
   if (input.mentions) queueMentionPush(supabase, input.momentId);
   refreshMomentSurfaces();

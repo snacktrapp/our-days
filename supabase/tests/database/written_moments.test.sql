@@ -249,7 +249,7 @@ select throws_ok(
     'A stale tab must not overwrite the latest version.',
     '2026-08-28'
   )$$,
-  '40001',
+  'PT409',
   'Moment changed elsewhere',
   'optimistic concurrency rejects a stale edit after authorization'
 );
