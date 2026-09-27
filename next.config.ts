@@ -38,20 +38,19 @@ const privateHeaders = [
   { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive, nosnippet" },
 ];
 
+const sharpTraceIncludes = [
+  "./node_modules/sharp/**/*",
+  "./node_modules/@img/sharp-linux*/**/*",
+  "./node_modules/@img/sharp-libvips-linux*/**/*",
+];
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["sharp"],
   outputFileTracingIncludes: {
-    "/api/photos/process": [
-      "./node_modules/sharp/**/*",
-      "./node_modules/@img/sharp-linux*/**/*",
-      "./node_modules/@img/sharp-libvips-linux*/**/*",
-    ],
-    "/api/maps/static": [
-      "./node_modules/sharp/**/*",
-      "./node_modules/@img/sharp-linux*/**/*",
-      "./node_modules/@img/sharp-libvips-linux*/**/*",
-    ],
+    "/api/photos/process": sharpTraceIncludes,
+    "/api/photos/card-backfill": sharpTraceIncludes,
+    "/api/maps/static": sharpTraceIncludes,
   },
   images: {
     qualities: [75],
