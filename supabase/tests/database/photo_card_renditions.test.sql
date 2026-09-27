@@ -52,6 +52,56 @@ select ok(
     not like '%allow_any_operation%',
   'card reads use the path predicate without a Storage operation allow-list'
 );
+select ok(
+  (select relrowsecurity and relforcerowsecurity
+     from pg_class
+    where oid = 'private.photo_card_backfill_leases'::regclass),
+  'photo card backfill leases enable and force RLS'
+);
+select is(
+  (select count(*)::bigint
+     from information_schema.role_table_grants
+    where table_schema = 'private'
+      and table_name = 'photo_card_backfill_leases'
+      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')),
+  0::bigint,
+  'browser and service roles have no direct backfill-lease privileges'
+);
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.list_photo_card_backfill_candidates(integer, uuid)',
+    'EXECUTE'
+  ) and not has_function_privilege(
+    'anon',
+    'public.list_photo_card_backfill_candidates(integer, uuid)',
+    'EXECUTE'
+  ) and not has_function_privilege(
+    'service_role',
+    'public.list_photo_card_backfill_candidates(integer, uuid)',
+    'EXECUTE'
+  ) and not has_function_privilege(
+    'authenticated',
+    'private.list_photo_card_backfill_candidates(integer, uuid)',
+    'EXECUTE'
+  ),
+  'the backfill list is a validator RPC and is not granted on the private function'
+);
+select ok(
+  pg_get_functiondef(
+    'private.list_photo_card_backfill_candidates(integer, uuid)'::regprocedure
+  ) like '%least(requested_batch_limit, 10)%',
+  'backfill listing never returns more than 10 rows'
+);
+select ok(
+  pg_get_functiondef(
+    'private.photo_display_path_is_readable(text)'::regprocedure
+  ) like '%state = ''leased''%'
+  and pg_get_functiondef(
+    'private.photo_display_path_is_readable(text)'::regprocedure
+  ) not like '%allow_any_operation%',
+  'display reads stay on the live job lease or family moment rule'
+);
 
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values (
@@ -199,6 +249,94 @@ set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
 );
+select set_config('storage.operation', 'object.get_authenticated', true);
+select is(
+  private.photo_display_path_is_readable(:'cardfix_display_object_path'),
+  false,
+  'the worker cannot read a display photo without a lease'
+);
+select is(
+  private.photo_display_backfill_path_is_readable(
+    :'cardfix_display_object_path'
+  ),
+  false,
+  'a display photo stays unreadable before a backfill lease'
+);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  false,
+  'the worker cannot read a card path without a job or backfill lease'
+);
+select throws_ok(
+  $$select * from public.list_photo_card_backfill_candidates(0, null)$$,
+  '22023', 'Photo card backfill candidates could not be listed',
+  'a backfill list rejects an empty batch'
+);
+select is(
+  (select display_derivative_id
+     from public.list_photo_card_backfill_candidates(10, null)
+    where display_derivative_id = :'carddone_derivative_id'::uuid),
+  :'carddone_derivative_id'::uuid,
+  'the validator lists a display derivative missing a 1080 card'
+);
+select is(
+  (select state
+     from public.claim_photo_card_backfill_lease(
+       :'carddone_derivative_id'::uuid
+     )),
+  'leased'::text,
+  'the validator claims a short per-photo backfill lease'
+);
+select is(
+  private.photo_display_backfill_path_is_readable(
+    :'cardfix_display_object_path'
+  ),
+  true,
+  'the backfill lease grants a read of that display path'
+);
+select is(
+  private.photo_display_path_is_readable(:'cardfix_display_object_path'),
+  false,
+  'the live display rule still ignores a backfill lease'
+);
+select is(
+  private.photo_display_backfill_path_is_readable(
+    :'cardfix_display_object_path' || '.other'
+  ),
+  false,
+  'a backfill lease does not grant a different display path'
+);
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_display_backfill_path_is_readable(
+    :'cardfix_display_object_path'
+  ),
+  false,
+  'a backfill lease does not grant display writes or non-read operations'
+);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  false,
+  'the upload-then-read-back window is not an upload operation'
+);
+select set_config('storage.operation', 'object.get_authenticated', true);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  true,
+  'a leased worker can read a card path before its row exists'
+);
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
 select set_config('storage.operation', 'object.upload', true);
 select is(
   private.photo_card_path_is_uploadable(
@@ -271,12 +409,30 @@ select throws_ok(
   '42501', 'Photo card rendition could not be recorded',
   'a different card checksum cannot replace a recorded rendition'
 );
+select set_config('storage.operation', 'object.get_authenticated', true);
 select is(
   private.photo_card_path_is_readable(
     :'cardfix_display_object_path' || '.card-1080.webp'
   ),
-  true,
-  'the validator can read the recorded card path'
+  false,
+  'a recorded card is outside the worker upload-then-read-back window'
+);
+select is(
+  (select count(*)::bigint
+     from public.list_photo_card_backfill_candidates(10, null)
+    where display_derivative_id = :'carddone_derivative_id'::uuid),
+  0::bigint,
+  'a recorded 1080 card leaves the backfill candidate list'
+);
+select public.release_photo_card_backfill_lease(
+  :'carddone_derivative_id'::uuid
+);
+select is(
+  private.photo_display_backfill_path_is_readable(
+    :'cardfix_display_object_path'
+  ),
+  false,
+  'releasing the backfill lease removes the display read'
 );
 reset role;
 
@@ -335,6 +491,112 @@ select throws_ok(
   $$select count(*) from private.photo_card_renditions$$,
   '42501', 'permission denied for table photo_card_renditions',
   'authenticated callers cannot read the card ledger'
+);
+select throws_ok(
+  $$select * from public.list_photo_card_backfill_candidates(10, null)$$,
+  '42501', 'Photo card backfill candidates could not be listed',
+  'a family member cannot list card backfill candidates'
+);
+select throws_ok(
+  format(
+    'select * from public.claim_photo_card_backfill_lease(%L::uuid)',
+    :'carddone_derivative_id'
+  ),
+  '42501', 'Photo card backfill lease could not be claimed',
+  'a family member cannot claim a card backfill lease'
+);
+reset role;
+
+insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+values
+  ('72000000-0000-4000-8000-000000000001',
+   '10000000-0000-4000-8000-000000000001', statement_timestamp(),
+   statement_timestamp(), statement_timestamp() + interval '1 day'),
+  ('72000000-0000-4000-8000-000000000006',
+   '10000000-0000-4000-8000-000000000006', statement_timestamp(),
+   statement_timestamp(), statement_timestamp() + interval '1 day');
+insert into public.moments (
+  id, circle_id, journal_person_id, recorded_by_membership_id,
+  kind, audience, body, occurred_on
+) values (
+  'eb000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
+  'photo', 'family', 'A card worth keeping.', '2024-06-15'
+);
+insert into public.moment_photos (
+  id, circle_id, moment_id, original_id, display_derivative_id,
+  display_width, display_height, sort_order
+) values (
+  'eb100000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'eb000000-0000-4000-8000-000000000001',
+  'e5000000-0000-4000-8000-000000000001',
+  :'carddone_derivative_id'::uuid,
+  2, 2, 0
+);
+update private.photo_capabilities
+   set enabled = true, updated_at = statement_timestamp()
+ where capability = 'family_derivative_delivery';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","session_id":"72000000-0000-4000-8000-000000000001"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select set_config('storage.operation', 'object.sign', true);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  true,
+  'a same-circle member can read a card on a live moment'
+);
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000006","session_id":"72000000-0000-4000-8000-000000000006"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000006', true
+);
+select set_config('storage.operation', 'object.sign', true);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  false,
+  'a member of another circle cannot read a card'
+);
+reset role;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","session_id":"72000000-0000-4000-8000-000000000001"}',
+  true
+);
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select public.set_written_moment_trashed(
+  'eb000000-0000-4000-8000-000000000001', 1, true
+);
+select set_config('storage.operation', 'object.sign', true);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  false,
+  'a trashed moment card is unreadable'
 );
 reset role;
 

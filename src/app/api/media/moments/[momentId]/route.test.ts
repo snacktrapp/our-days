@@ -331,6 +331,7 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(response.headers.get("server-timing")).toContain("queue;dur=0");
     expect(Buffer.from(await response.arrayBuffer())).toEqual(source.bytes);
   });
 
@@ -385,6 +386,7 @@ describe("private photo delivery route", () => {
     const timing = response.headers.get("server-timing") ?? "";
     expect(timing).toContain("auth;dur=");
     expect(timing).toContain("fetch;dur=");
+    expect(timing).toContain("queue;dur=");
     expect(timing).toContain("resize;dur=");
     const body = Buffer.from(await response.arrayBuffer());
     expect(body.byteLength).toBeLessThan(source.bytes.byteLength);
@@ -456,6 +458,7 @@ describe("private photo delivery route", () => {
     const cached = await request(momentId, "?w=640");
     expect(cached.status).toBe(200);
     expect(cached.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(cached.headers.get("server-timing")).toContain("queue;dur=0");
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -530,6 +533,7 @@ describe("private photo delivery route", () => {
     );
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(response.headers.get("server-timing")).toContain("queue;dur=0");
     expect(Buffer.from(await response.arrayBuffer())).toEqual(card);
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(cardPath, 60);
@@ -637,6 +641,7 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(200);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(source.bytes);
     expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(response.headers.get("server-timing")).toContain("queue;dur=0");
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(
       descriptor.object_path,

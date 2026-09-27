@@ -30,10 +30,11 @@ const privateHeaders = {
   "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
 } as const;
 
-function mediaTiming(auth: number, fetchMs: number, resize: number) {
+function mediaTiming(auth: number, fetchMs: number, resize: number, queue = 0) {
   const headers = new Headers();
   upsertServerTiming(headers, "auth", auth);
   upsertServerTiming(headers, "fetch", fetchMs);
+  upsertServerTiming(headers, "queue", queue);
   upsertServerTiming(headers, "resize", resize);
   return headers.get("server-timing") ?? "";
 }
@@ -174,15 +175,19 @@ export async function GET(
         },
       });
     }
-    const resizeStarted = performance.now();
-    const resized = await renderCardPhoto(bytes, cardWidth);
-    const resizeMs = elapsedSince(resizeStarted);
-    if (!resized) return unavailable(mediaTiming(authMs, fetchMs, resizeMs));
-    if (expectedSha) rememberCardRendition(expectedSha, cardWidth, resized);
+    const rendered = await renderCardPhoto(bytes, cardWidth);
+    if (!rendered.bytes) {
+      return unavailable(
+        mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
+      );
+    }
+    if (expectedSha) {
+      rememberCardRendition(expectedSha, cardWidth, rendered.bytes);
+    }
     return imageResponse(
-      resized,
+      rendered.bytes,
       "image/webp",
-      mediaTiming(authMs, fetchMs, resizeMs),
+      mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
     );
   }
   if (!mediaDeliveryIsEnabled()) {
@@ -239,15 +244,17 @@ export async function GET(
     );
     const fetchMs = elapsedSince(fetchStarted);
     if (!verified) return unavailable(mediaTiming(authMs, fetchMs, 0));
-    const resizeStarted = performance.now();
-    const resized = await renderCardPhoto(verified, cardWidth);
-    const resizeMs = elapsedSince(resizeStarted);
-    if (!resized) return unavailable(mediaTiming(authMs, fetchMs, resizeMs));
-    rememberCardRendition(sha, cardWidth, resized);
+    const rendered = await renderCardPhoto(verified, cardWidth);
+    if (!rendered.bytes) {
+      return unavailable(
+        mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
+      );
+    }
+    rememberCardRendition(sha, cardWidth, rendered.bytes);
     return imageResponse(
-      resized,
+      rendered.bytes,
       "image/webp",
-      mediaTiming(authMs, fetchMs, resizeMs),
+      mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
     );
   }
 

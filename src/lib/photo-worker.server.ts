@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
-  rememberPhotoCardRenditions,
+  schedulePhotoCardRenditions,
   storePhotoCardRenditions,
 } from "@/lib/photo-card-rendition-store.server";
 import {
@@ -520,7 +520,7 @@ async function createDisplay(
       lease.source_bucket_id,
       lease.source_object_path,
     );
-    return await withValidatedPhotoSpool(
+    const completed = await withValidatedPhotoSpool(
       source,
       {
         expectedMimeType: lease.source_mime_type,
@@ -599,64 +599,71 @@ async function createDisplay(
               );
             }
             const displayBytes = evidence.bytes as Uint8Array | undefined;
-            if (displayBytes?.byteLength) {
-              await rememberPhotoCardRenditions(() =>
-                storePhotoCardRenditions({
-                  displayBytes,
-                  displayDerivativeId: derivativeId,
-                  displayObjectPath: lease.display_object_path,
-                  identity: (objectPath) =>
-                    objectIdentity(
-                      worker.client,
-                      lease.display_bucket_id,
-                      objectPath,
-                    ),
-                  originalId: lease.original_id,
-                  readBack: async (objectPath) =>
-                    readStreamBytes(
-                      await readObject(
-                        worker,
-                        lease.display_bucket_id,
-                        objectPath,
-                      ),
-                    ),
-                  record: async (card) => {
-                    const { error: cardError } = await worker.client.rpc(
-                      "record_photo_card_rendition",
-                      {
-                        card_width: card.cardWidth,
-                        display_derivative_id: card.displayDerivativeId,
-                        output_height: card.outputHeight,
-                        output_sha256_hex: card.outputSha256Hex,
-                        output_size_bytes: card.outputSizeBytes,
-                        output_width: card.outputWidth,
-                        storage_object_id: card.storageObjectId,
-                        storage_object_version: card.storageObjectVersion,
-                      },
-                    );
-                    if (cardError) {
-                      throw new Error(
-                        "Photo card rendition could not be recorded.",
-                      );
-                    }
-                  },
-                  upload: (objectPath, bytes, metadata) =>
-                    uploadObject(
-                      worker,
-                      lease.display_bucket_id,
-                      objectPath,
-                      "image/webp",
-                      metadata,
-                      Readable.from(Buffer.from(bytes)),
-                    ),
-                }),
-              );
-            }
-            return derivativeId;
+            return {
+              derivativeId,
+              displayBytes: displayBytes?.byteLength ? displayBytes : undefined,
+            };
           },
         );
       },
     );
+    if (!completed?.displayBytes?.byteLength) return null;
+    const displayBytes = completed.displayBytes;
+    const derivativeId = completed.derivativeId;
+    return async () => {
+      const claimed = await worker.client.rpc(
+        "claim_photo_card_backfill_lease",
+        { display_derivative_id: derivativeId },
+      );
+      if (claimed.error || !claimed.data?.[0]) {
+        throw new Error("Photo card rendition lease was not granted.");
+      }
+      try {
+        await storePhotoCardRenditions({
+          displayBytes,
+          displayDerivativeId: derivativeId,
+          displayObjectPath: lease.display_object_path,
+          identity: (objectPath) =>
+            objectIdentity(worker.client, lease.display_bucket_id, objectPath),
+          originalId: lease.original_id,
+          readBack: async (objectPath) =>
+            readStreamBytes(
+              await readObject(worker, lease.display_bucket_id, objectPath),
+            ),
+          record: async (card) => {
+            const { error: cardError } = await worker.client.rpc(
+              "record_photo_card_rendition",
+              {
+                card_width: card.cardWidth,
+                display_derivative_id: card.displayDerivativeId,
+                output_height: card.outputHeight,
+                output_sha256_hex: card.outputSha256Hex,
+                output_size_bytes: card.outputSizeBytes,
+                output_width: card.outputWidth,
+                storage_object_id: card.storageObjectId,
+                storage_object_version: card.storageObjectVersion,
+              },
+            );
+            if (cardError) {
+              throw new Error("Photo card rendition could not be recorded.");
+            }
+          },
+          upload: (objectPath, bytes, metadata) =>
+            uploadObject(
+              worker,
+              lease.display_bucket_id,
+              objectPath,
+              "image/webp",
+              metadata,
+              Readable.from(Buffer.from(bytes)),
+            ),
+        });
+      } finally {
+        await worker.client.rpc("release_photo_card_backfill_lease", {
+          display_derivative_id: derivativeId,
+        });
+      }
+    };
   } catch (error) {
     if (error instanceof PhotoByteValidationError) {
       const sourceChanged = [
@@ -698,12 +705,23 @@ export async function processPhotoIntake(intakeId: string) {
     throw new PhotoWorkerError("Photo intake is invalid.", false);
   }
   const worker = await authenticatedWorker();
+  let scheduled = false;
   try {
     const originalId = await validateAndPromote(worker, intakeId);
-    await createDisplay(worker, originalId);
+    const cardWork = await createDisplay(worker, originalId);
+    if (cardWork) {
+      schedulePhotoCardRenditions(async () => {
+        try {
+          await cardWork();
+        } finally {
+          await worker.client.auth.signOut({ scope: "local" });
+        }
+      });
+      scheduled = true;
+    }
     // Photo-ready push is coalesced by the composer batch (one announce
     // per create/edit). Per-intake delivery here was N pushes for N photos.
   } finally {
-    await worker.client.auth.signOut({ scope: "local" });
+    if (!scheduled) await worker.client.auth.signOut({ scope: "local" });
   }
 }

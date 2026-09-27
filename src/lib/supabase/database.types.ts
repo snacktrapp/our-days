@@ -818,6 +818,22 @@ export type Database = {
           visible_circle_id: string | null;
         }[];
       };
+      claim_photo_card_backfill_lease: {
+        Args: { display_derivative_id: string };
+        Returns: {
+          bucket_id: string;
+          display_derivative_id: string;
+          lease_expires_at: string;
+          object_path: string;
+          original_id: string;
+          output_height: number;
+          output_mime_type: string;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+          state: string;
+        }[];
+      };
       claim_photo_display_derivative: {
         Args: { lease_key: string; original_id: string };
         Returns: {
@@ -1345,6 +1361,23 @@ export type Database = {
           invitation_id: string;
         }[];
       };
+      list_photo_card_backfill_candidates: {
+        Args: {
+          after_display_derivative_id: string;
+          batch_limit: number;
+        };
+        Returns: {
+          bucket_id: string;
+          display_derivative_id: string;
+          object_path: string;
+          original_id: string;
+          output_height: number;
+          output_mime_type: string;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+        }[];
+      };
       list_timeline_moments: {
         Args: {
           circle_id: string;
@@ -1524,6 +1557,10 @@ export type Database = {
           validation_job_id: string;
         };
         Returns: string;
+      };
+      release_photo_card_backfill_lease: {
+        Args: { display_derivative_id: string };
+        Returns: undefined;
       };
       remove_moment_photo: {
         Args: { moment_id: string; photo_id: string };

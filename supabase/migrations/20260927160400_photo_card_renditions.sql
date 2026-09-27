@@ -32,7 +32,7 @@ create table private.photo_card_renditions (
   constraint photo_card_renditions_bucket_valid check (
     bucket_id = 'our-days-display'
   ),
-  constraint photo_card_renditions_width_valid check (width in (640, 1080)),
+  constraint photo_card_renditions_width_valid check (width = 1080),
   constraint photo_card_renditions_mime_valid check (
     output_mime_type = 'image/webp'
   ),
@@ -133,7 +133,7 @@ begin
       return false;
   end;
 
-  if parsed_card_width not in (640, 1080)
+  if parsed_card_width is distinct from 1080
     or parsed_size_bytes not between 1 and 12582912
     or parsed_width not between 1 and parsed_card_width
     or parsed_height not between 1 and 2560
@@ -166,6 +166,34 @@ begin
 end;
 $$;
 
+-- Short per-photo lease for reading a display object after its derivative
+-- job lease has ended. The live photo_display_path_is_readable body is not
+-- changed: a worker still reads a display photo only while that job lease
+-- is active, or while this backfill lease covers that exact path.
+create table private.photo_card_backfill_leases (
+  display_derivative_id uuid primary key,
+  validator_auth_user_id uuid not null,
+  state text not null,
+  lease_started_at timestamptz not null,
+  lease_expires_at timestamptz not null,
+  constraint photo_card_backfill_leases_derivative_fkey
+    foreign key (display_derivative_id)
+    references private.photo_display_derivatives (id) on delete restrict,
+  constraint photo_card_backfill_leases_validator_fkey
+    foreign key (validator_auth_user_id)
+    references auth.users (id) on delete restrict,
+  constraint photo_card_backfill_leases_state_valid check (
+    state in ('leased', 'released')
+  ),
+  constraint photo_card_backfill_leases_window_valid check (
+    lease_expires_at > lease_started_at
+    and lease_expires_at = lease_started_at + interval '2 minutes'
+  )
+);
+
+alter table private.photo_card_backfill_leases enable row level security;
+alter table private.photo_card_backfill_leases force row level security;
+
 create function private.photo_card_path_is_readable(
   requested_object_path text
 )
@@ -176,16 +204,36 @@ security definer
 set search_path = ''
 as $$
   select (
-    (select private.photo_validator_is_allowed((select auth.uid())))
+    (select storage.allow_any_operation(array[
+      'object.get_authenticated', 'object.get_authenticated_info'
+    ]::text[]))
+    and (select private.photo_validator_is_allowed((select auth.uid())))
     and exists (
       select 1
         from private.photo_display_derivatives as derivative
         join private.photo_derivative_jobs as job
           on job.id = derivative.derivative_job_id
-       where job.state = 'verified'
-         and requested_object_path in (
-           derivative.object_path || '.card-1080.webp',
-           derivative.object_path || '.card-640.webp'
+       where requested_object_path =
+           derivative.object_path || '.card-1080.webp'
+         and not exists (
+           select 1
+             from private.photo_card_renditions as card
+            where card.object_path = requested_object_path
+         )
+         and (
+           (
+             job.state = 'leased'
+             and job.validator_auth_user_id = (select auth.uid())
+             and job.lease_expires_at > statement_timestamp()
+           )
+           or exists (
+             select 1
+               from private.photo_card_backfill_leases as lease
+              where lease.display_derivative_id = derivative.id
+                and lease.state = 'leased'
+                and lease.validator_auth_user_id = (select auth.uid())
+                and lease.lease_expires_at > statement_timestamp()
+           )
          )
     )
   ) or exists (
@@ -209,7 +257,7 @@ as $$
   );
 $$;
 
-create or replace function private.photo_display_path_is_readable(
+create function private.photo_display_backfill_path_is_readable(
   requested_object_path text
 )
 returns boolean
@@ -219,44 +267,18 @@ security definer
 set search_path = ''
 as $$
   select exists (
-    select 1 from private.photo_derivative_jobs as job
-    join private.photo_originals as original on original.id = job.original_id
-    where job.display_object_path = requested_object_path
-      and job.state = 'leased'
-      and job.validator_auth_user_id = (select auth.uid())
-      and job.lease_expires_at > statement_timestamp()
-      and (select private.photo_validator_is_allowed((select auth.uid())))
-      and (select private.photo_intake_requester_is_authorized(
-        original.intake_id
-      ))
-  ) or exists (
-    select 1 from public.moment_photos as photo
-    join public.moments as moment
-      on moment.circle_id = photo.circle_id and moment.id = photo.moment_id
-    join private.photo_display_derivatives as derivative
-      on derivative.circle_id = photo.circle_id
-     and derivative.id = photo.display_derivative_id
-     and derivative.original_id = photo.original_id
-    where derivative.object_path = requested_object_path
-      and moment.kind = 'photo' and moment.trashed_at is null
-      and (select private.photo_capability_is_enabled(
-        'family_derivative_delivery'
-      ))
-      and (select private.current_family_session_is_live())
-      and (select private.can_read_live_moment(moment.id))
-  ) or (
-    (select storage.allow_any_operation(array[
-      'object.get_authenticated', 'object.get_authenticated_info'
-    ]::text[]))
-    and (select private.photo_validator_is_allowed((select auth.uid())))
-    and exists (
-      select 1
-        from private.photo_display_derivatives as derivative
-        join private.photo_derivative_jobs as job
-          on job.id = derivative.derivative_job_id
-       where job.state = 'verified'
-         and derivative.object_path = requested_object_path
-    )
+    select 1
+      from private.photo_card_backfill_leases as lease
+      join private.photo_display_derivatives as derivative
+        on derivative.id = lease.display_derivative_id
+     where derivative.object_path = requested_object_path
+       and lease.state = 'leased'
+       and lease.validator_auth_user_id = (select auth.uid())
+       and lease.lease_expires_at > statement_timestamp()
+       and (select private.photo_validator_is_allowed((select auth.uid())))
+       and (select storage.allow_any_operation(array[
+         'object.get_authenticated', 'object.get_authenticated_info'
+       ]::text[]))
   );
 $$;
 
@@ -287,7 +309,7 @@ begin
   if current_user_id is null
     or requested_display_derivative_id is null
     or requested_card_width is null
-    or requested_card_width not in (640, 1080)
+    or requested_card_width is distinct from 1080
     or requested_storage_object_id is null
     or requested_storage_object_version is null
     or requested_output_size_bytes is null
@@ -418,6 +440,256 @@ as $$
   );
 $$;
 
+create function private.claim_photo_card_backfill_lease(
+  requested_display_derivative_id uuid
+)
+returns table (
+  bucket_id text,
+  display_derivative_id uuid,
+  lease_expires_at timestamptz,
+  object_path text,
+  original_id uuid,
+  output_height integer,
+  output_mime_type text,
+  output_sha256_hex text,
+  output_size_bytes bigint,
+  output_width integer,
+  state text
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  current_user_id uuid := (select auth.uid());
+  target private.photo_display_derivatives%rowtype;
+begin
+  if current_user_id is null
+    or requested_display_derivative_id is null
+    or not (select private.photo_validator_is_allowed(current_user_id))
+  then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
+
+  select derivative.* into target
+    from private.photo_display_derivatives as derivative
+    join private.photo_derivative_jobs as job
+      on job.id = derivative.derivative_job_id
+   where derivative.id = requested_display_derivative_id
+     and job.state = 'verified'
+   for update;
+  if target.id is null then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
+
+  if exists (
+    select 1
+      from private.photo_card_renditions as card
+     where card.display_derivative_id = target.id
+       and card.width = 1080
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
+
+  if exists (
+    select 1
+      from private.photo_card_backfill_leases as lease
+     where lease.display_derivative_id = target.id
+       and lease.state = 'leased'
+       and lease.lease_expires_at > statement_timestamp()
+       and lease.validator_auth_user_id is distinct from current_user_id
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
+
+  insert into private.photo_card_backfill_leases (
+    display_derivative_id, validator_auth_user_id, state,
+    lease_started_at, lease_expires_at
+  ) values (
+    target.id, current_user_id, 'leased',
+    statement_timestamp(), statement_timestamp() + interval '2 minutes'
+  )
+  on conflict (display_derivative_id) do update
+    set validator_auth_user_id = excluded.validator_auth_user_id,
+        state = 'leased',
+        lease_started_at = excluded.lease_started_at,
+        lease_expires_at = excluded.lease_expires_at
+  where private.photo_card_backfill_leases.state = 'released'
+     or private.photo_card_backfill_leases.lease_expires_at
+        <= statement_timestamp()
+     or private.photo_card_backfill_leases.validator_auth_user_id
+        = excluded.validator_auth_user_id;
+
+  return query
+  select target.bucket_id, target.id, lease.lease_expires_at,
+    target.object_path, target.original_id, target.output_height,
+    target.output_mime_type, encode(target.output_sha256, 'hex'),
+    target.output_size_bytes, target.output_width, lease.state
+    from private.photo_card_backfill_leases as lease
+   where lease.display_derivative_id = target.id
+     and lease.state = 'leased'
+     and lease.validator_auth_user_id = current_user_id
+     and lease.lease_expires_at > statement_timestamp();
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
+end;
+$$;
+
+create function public.claim_photo_card_backfill_lease(
+  display_derivative_id uuid
+)
+returns table (
+  bucket_id text,
+  display_derivative_id uuid,
+  lease_expires_at timestamptz,
+  object_path text,
+  original_id uuid,
+  output_height integer,
+  output_mime_type text,
+  output_sha256_hex text,
+  output_size_bytes bigint,
+  output_width integer,
+  state text
+)
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select * from private.claim_photo_card_backfill_lease($1);
+$$;
+
+create function private.list_photo_card_backfill_candidates(
+  requested_batch_limit integer,
+  requested_after_display_derivative_id uuid
+)
+returns table (
+  bucket_id text,
+  display_derivative_id uuid,
+  object_path text,
+  original_id uuid,
+  output_height integer,
+  output_mime_type text,
+  output_sha256_hex text,
+  output_size_bytes bigint,
+  output_width integer
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+  effective_limit integer;
+begin
+  if current_user_id is null
+    or not (select private.photo_validator_is_allowed(current_user_id))
+  then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill candidates could not be listed';
+  end if;
+  if requested_batch_limit is null or requested_batch_limit < 1 then
+    raise exception using errcode = '22023',
+      message = 'Photo card backfill candidates could not be listed';
+  end if;
+  effective_limit := least(requested_batch_limit, 10);
+
+  return query
+  select derivative.bucket_id, derivative.id, derivative.object_path,
+    derivative.original_id, derivative.output_height,
+    derivative.output_mime_type, encode(derivative.output_sha256, 'hex'),
+    derivative.output_size_bytes, derivative.output_width
+    from private.photo_display_derivatives as derivative
+    join private.photo_derivative_jobs as job
+      on job.id = derivative.derivative_job_id
+   where job.state = 'verified'
+     and (
+       requested_after_display_derivative_id is null
+       or derivative.id > requested_after_display_derivative_id
+     )
+     and not exists (
+       select 1
+         from private.photo_card_renditions as card
+        where card.display_derivative_id = derivative.id
+          and card.width = 1080
+     )
+   order by derivative.id
+   limit effective_limit;
+end;
+$$;
+
+create function public.list_photo_card_backfill_candidates(
+  batch_limit integer,
+  after_display_derivative_id uuid
+)
+returns table (
+  bucket_id text,
+  display_derivative_id uuid,
+  object_path text,
+  original_id uuid,
+  output_height integer,
+  output_mime_type text,
+  output_sha256_hex text,
+  output_size_bytes bigint,
+  output_width integer
+)
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select * from private.list_photo_card_backfill_candidates($1, $2);
+$$;
+
+create function private.release_photo_card_backfill_lease(
+  requested_display_derivative_id uuid
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+begin
+  if current_user_id is null
+    or requested_display_derivative_id is null
+    or not (select private.photo_validator_is_allowed(current_user_id))
+  then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be released';
+  end if;
+
+  update private.photo_card_backfill_leases as lease
+     set state = 'released'
+   where lease.display_derivative_id = requested_display_derivative_id
+     and lease.validator_auth_user_id = current_user_id
+     and lease.state = 'leased';
+end;
+$$;
+
+create function public.release_photo_card_backfill_lease(
+  display_derivative_id uuid
+)
+returns void
+language sql
+volatile
+security definer
+set search_path = ''
+as $$
+  select private.release_photo_card_backfill_lease($1);
+$$;
+
 drop policy our_days_display_insert_exact_active_derivative_lease
   on storage.objects;
 drop policy our_days_display_select_exact_active_derivative_lease
@@ -450,6 +722,7 @@ using (
   bucket_id = 'our-days-display'
   and (
     (select private.photo_display_path_is_readable(name))
+    or (select private.photo_display_backfill_path_is_readable(name))
     or (select private.photo_card_path_is_readable(name))
   )
 );
@@ -478,6 +751,7 @@ using (
     bucket_id = 'our-days-display'
     and (
       (select private.photo_display_path_is_readable(name))
+      or (select private.photo_display_backfill_path_is_readable(name))
       or (select private.photo_card_path_is_readable(name))
     )
   )
@@ -621,6 +895,8 @@ $$;
 
 revoke all on table private.photo_card_renditions
   from public, anon, authenticated, service_role;
+revoke all on table private.photo_card_backfill_leases
+  from public, anon, authenticated, service_role;
 revoke all on function private.enforce_photo_card_rendition_insert()
   from public, anon, authenticated, service_role;
 revoke all on function private.enforce_photo_card_rendition_integrity()
@@ -628,6 +904,20 @@ revoke all on function private.enforce_photo_card_rendition_integrity()
 revoke all on function private.photo_card_path_is_uploadable(text, text, jsonb)
   from public, anon, authenticated, service_role;
 revoke all on function private.photo_card_path_is_readable(text)
+  from public, anon, authenticated, service_role;
+revoke all on function private.photo_display_backfill_path_is_readable(text)
+  from public, anon, authenticated, service_role;
+revoke all on function private.claim_photo_card_backfill_lease(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.claim_photo_card_backfill_lease(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function private.list_photo_card_backfill_candidates(integer, uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.list_photo_card_backfill_candidates(integer, uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function private.release_photo_card_backfill_lease(uuid)
+  from public, anon, authenticated, service_role;
+revoke all on function public.release_photo_card_backfill_lease(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function private.record_photo_card_rendition(
   uuid, integer, uuid, text, bigint, text, integer, integer
@@ -645,6 +935,14 @@ revoke all on function public.get_photo_moments_delivery(uuid[])
 grant execute on function private.photo_card_path_is_uploadable(text, text, jsonb)
   to authenticated;
 grant execute on function private.photo_card_path_is_readable(text)
+  to authenticated;
+grant execute on function private.photo_display_backfill_path_is_readable(text)
+  to authenticated;
+grant execute on function public.claim_photo_card_backfill_lease(uuid)
+  to authenticated;
+grant execute on function public.list_photo_card_backfill_candidates(integer, uuid)
+  to authenticated;
+grant execute on function public.release_photo_card_backfill_lease(uuid)
   to authenticated;
 grant execute on function public.record_photo_card_rendition(
   uuid, integer, uuid, text, bigint, text, integer, integer

@@ -1,21 +1,33 @@
 // @vitest-environment node
 
 import { createHash } from "node:crypto";
-import sharp from "sharp";
 import { readFileSync } from "node:fs";
+import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cardSharpActiveCount,
   clearCardRenditionCache,
+  renderCardPhoto,
   withCardSharpPermit,
 } from "@/lib/card-photo-rendition.server";
 import {
   cardRenditionObjectPath,
   rememberPhotoCardRenditions,
+  runPhotoCardRenditions,
+  schedulePhotoCardRenditions,
   storePhotoCardRenditions,
 } from "@/lib/photo-card-rendition-store.server";
 
+const scheduled = vi.hoisted(() => ({
+  tasks: [] as Array<() => unknown>,
+}));
+
 vi.mock("server-only", () => ({}));
+vi.mock("next/server", () => ({
+  after: (callback: () => unknown) => {
+    scheduled.tasks.push(callback);
+  },
+}));
 
 const derivativeId = "10000000-0000-4000-8000-0000000000c1";
 const originalId = "10000000-0000-4000-8000-0000000000c2";
@@ -35,10 +47,7 @@ function ports() {
       if (!bytes) throw new Error("missing");
       return bytes;
     },
-    record: async (card: {
-      cardWidth: 1080 | 640;
-      outputSha256Hex: string;
-    }) => {
+    record: async (card: { cardWidth: 1080; outputSha256Hex: string }) => {
       recorded.push({
         path: cardRenditionObjectPath("display/photo.webp", card.cardWidth),
         sha: card.outputSha256Hex,
@@ -117,19 +126,13 @@ describe("card renditions stored after a display derivative", () => {
     ).toBe(true);
   });
 
-  it("skips the 640 card when the 1080 rendition is already over the budget", async () => {
+  it("stores only the 1080 card", async () => {
     const widths: number[] = [];
     const stored = await storePhotoCardRenditions({
       ...ports(),
-      budgetMs: 150,
       displayBytes: Uint8Array.from([1]),
       displayDerivativeId: derivativeId,
       displayObjectPath: "display/photo.webp",
-      now: (() => {
-        const marks = [0, 200];
-        let index = 0;
-        return () => marks[Math.min(index++, marks.length - 1)] ?? 200;
-      })(),
       originalId,
       render: async (_bytes, width) => {
         widths.push(width);
@@ -171,17 +174,77 @@ describe("card renditions stored after a display derivative", () => {
     gate.resolve();
     await Promise.all(tasks);
     expect(cardSharpActiveCount()).toBe(0);
-    expect(sharp.concurrency()).toBe(1);
   });
 
-  it("generates cards from the worker only after the display derivative completes", () => {
+  it("does not set a process-wide sharp concurrency limit", () => {
+    const server = readFileSync(
+      new URL("./card-photo-rendition.server.ts", import.meta.url),
+      "utf8",
+    );
+    const shared = readFileSync(
+      new URL("../../scripts/lib/card-photo-rendition.mjs", import.meta.url),
+      "utf8",
+    );
+    expect(server).not.toContain("sharp.concurrency");
+    expect(shared).not.toContain("sharp.concurrency");
+    expect(server).toContain("withCardSharpPermit");
+  });
+
+  it("schedules card generation outside the processing response", () => {
     const source = readFileSync(
       new URL("./photo-worker.server.ts", import.meta.url),
       "utf8",
     );
     const complete = source.indexOf("complete_photo_display_derivative");
-    const remember = source.indexOf("await rememberPhotoCardRenditions");
+    const callbackReturn = source.indexOf(
+      "return {\n              derivativeId,",
+    );
+    const schedule = source.indexOf("schedulePhotoCardRenditions(");
     expect(complete).toBeGreaterThan(0);
-    expect(remember).toBeGreaterThan(complete);
+    expect(callbackReturn).toBeGreaterThan(complete);
+    expect(schedule).toBeGreaterThan(callbackReturn);
+    expect(source).not.toMatch(/await\s+schedulePhotoCardRenditions/);
+    expect(source).not.toContain("await rememberPhotoCardRenditions");
+  });
+
+  it("does not await card generation, and a hanging upload does not delay it", async () => {
+    scheduled.tasks.length = 0;
+    let started = false;
+    const hang = () =>
+      new Promise<void>(() => {
+        started = true;
+      });
+    const began = performance.now();
+    schedulePhotoCardRenditions(hang);
+    expect(performance.now() - began).toBeLessThan(50);
+    expect(started).toBe(false);
+    expect(scheduled.tasks).toHaveLength(1);
+
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const winner = await Promise.race([
+      runPhotoCardRenditions(hang, 30).then(() => "settled"),
+      new Promise((resolve) => setTimeout(() => resolve("blocked"), 200)),
+    ]);
+    expect(winner).toBe("settled");
+    expect(started).toBe(true);
+    expect(error).toHaveBeenCalled();
+  });
+
+  it("counts permit wait separately from resize", async () => {
+    const gate = Promise.withResolvers<void>();
+    const blockers = Array.from({ length: 2 }, () =>
+      withCardSharpPermit(() => gate.promise),
+    );
+    await vi.waitFor(() => {
+      expect(cardSharpActiveCount()).toBe(2);
+    });
+    const pending = renderCardPhoto(Uint8Array.from([1, 2, 3]), 1080);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    gate.resolve();
+    const rendered = await pending;
+    await Promise.all(blockers);
+    expect(rendered.queueMs).toBeGreaterThanOrEqual(30);
   });
 });

@@ -1,11 +1,12 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { renderCardPhotoDetails } from "@/lib/card-photo-rendition.server";
 
-export const cardWidthBudgetMs = 150;
+type CardWidth = 1080;
 
-type CardWidth = 1080 | 640;
+export const photoCardRenditionTimeoutMs = 10_000;
 
 export type CardRenditionMetadata = {
   card_width: number;
@@ -30,12 +31,10 @@ export type StoredCardRecord = {
 };
 
 type StoreCardInput = {
-  budgetMs?: number;
   displayBytes: Uint8Array;
   displayDerivativeId: string;
   displayObjectPath: string;
   identity: (objectPath: string) => Promise<{ id: string; version: string }>;
-  now?: () => number;
   originalId: string;
   readBack: (objectPath: string) => Promise<Uint8Array>;
   record: (card: StoredCardRecord) => Promise<void>;
@@ -96,9 +95,34 @@ export async function rememberPhotoCardRenditions(
   }
 }
 
+export async function runPhotoCardRenditions(
+  work: () => Promise<unknown>,
+  timeoutMs = photoCardRenditionTimeoutMs,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      work(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("Photo card rendition timed out."));
+        }, timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    console.error("[photo-card] rendition skipped", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export function schedulePhotoCardRenditions(work: () => Promise<unknown>) {
+  after(() => runPhotoCardRenditions(work));
+}
+
 export async function storePhotoCardRenditions(input: StoreCardInput) {
-  const now = input.now ?? (() => performance.now());
-  const budgetMs = input.budgetMs ?? cardWidthBudgetMs;
   const render = input.render ?? renderCardPhotoDetails;
   const stored: CardWidth[] = [];
 
@@ -145,16 +169,6 @@ export async function storePhotoCardRenditions(input: StoreCardInput) {
     stored.push(width);
   };
 
-  const started = now();
   await storeOne(1080);
-  if (now() - started < budgetMs) {
-    try {
-      await storeOne(640);
-    } catch (error) {
-      console.error("[photo-card] 640 rendition skipped", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    }
-  }
   return stored;
 }
