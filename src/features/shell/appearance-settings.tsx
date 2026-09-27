@@ -15,7 +15,7 @@ import {
 
 const options = [
   { id: "standard", name: "Standard" },
-  { id: "retro", name: "Retro" },
+  { id: "retro", name: "Future" },
 ] as const satisfies readonly { id: AppearanceId; name: string }[];
 
 export function AppearanceSettings() {
