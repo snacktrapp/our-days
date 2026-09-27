@@ -4,8 +4,16 @@ import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  claimPhotoCardBackfillLease,
+  PhotoCardBackfillListError,
+  runLeasedCardRendition,
+  type PhotoCardBackfillIo,
+} from "@/lib/photo-card-backfill.server";
+import {
   schedulePhotoCardRenditions,
   storePhotoCardRenditions,
+  type CardRenditionMetadata,
+  type StoredCardRecord,
 } from "@/lib/photo-card-rendition-store.server";
 import {
   PHOTO_DISPLAY_TRANSFORM_VERSION,
@@ -611,58 +619,30 @@ async function createDisplay(
     const displayBytes = completed.displayBytes;
     const derivativeId = completed.derivativeId;
     return async () => {
-      const claimed = await worker.client.rpc(
-        "claim_photo_card_backfill_lease",
-        { display_derivative_id: derivativeId },
-      );
-      if (claimed.error || !claimed.data?.[0]) {
-        throw new Error("Photo card rendition lease was not granted.");
-      }
-      try {
-        await storePhotoCardRenditions({
-          displayBytes,
-          displayDerivativeId: derivativeId,
-          displayObjectPath: lease.display_object_path,
-          identity: (objectPath) =>
-            objectIdentity(worker.client, lease.display_bucket_id, objectPath),
-          originalId: lease.original_id,
-          readBack: async (objectPath) =>
-            readStreamBytes(
-              await readObject(worker, lease.display_bucket_id, objectPath),
-            ),
-          record: async (card) => {
-            const { error: cardError } = await worker.client.rpc(
-              "record_photo_card_rendition",
-              {
-                card_width: card.cardWidth,
-                display_derivative_id: card.displayDerivativeId,
-                output_height: card.outputHeight,
-                output_sha256_hex: card.outputSha256Hex,
-                output_size_bytes: card.outputSizeBytes,
-                output_width: card.outputWidth,
-                storage_object_id: card.storageObjectId,
-                storage_object_version: card.storageObjectVersion,
-              },
-            );
-            if (cardError) {
-              throw new Error("Photo card rendition could not be recorded.");
-            }
-          },
-          upload: (objectPath, bytes, metadata) =>
-            uploadObject(
-              worker,
-              lease.display_bucket_id,
-              objectPath,
-              "image/webp",
-              metadata,
-              Readable.from(Buffer.from(bytes)),
-            ),
-        });
-      } finally {
-        await worker.client.rpc("release_photo_card_backfill_lease", {
-          display_derivative_id: derivativeId,
-        });
-      }
+      await runLeasedCardRendition({
+        claim: async () => {
+          const claimed = await worker.client.rpc(
+            "claim_photo_card_backfill_lease",
+            { display_derivative_id: derivativeId },
+          );
+          if (claimed.error || !claimed.data?.[0]) return null;
+          return claimed.data[0];
+        },
+        release: async () => {
+          await worker.client.rpc("release_photo_card_backfill_lease", {
+            display_derivative_id: derivativeId,
+          });
+        },
+        work: async () => {
+          await writePhotoCardRendition(worker, {
+            bucketId: lease.display_bucket_id,
+            displayBytes,
+            displayDerivativeId: derivativeId,
+            objectPath: lease.display_object_path,
+            originalId: lease.original_id,
+          });
+        },
+      });
     };
   } catch (error) {
     if (error instanceof PhotoByteValidationError) {
@@ -723,5 +703,149 @@ export async function processPhotoIntake(intakeId: string) {
     // per create/edit). Per-intake delivery here was N pushes for N photos.
   } finally {
     if (!scheduled) await worker.client.auth.signOut({ scope: "local" });
+  }
+}
+
+function cardRenditionPorts(
+  worker: Awaited<ReturnType<typeof authenticatedWorker>>,
+  bucketId: string,
+) {
+  return {
+    identity(objectPath: string) {
+      return objectIdentity(worker.client, bucketId, objectPath);
+    },
+    async readBack(objectPath: string) {
+      return readStreamBytes(await readObject(worker, bucketId, objectPath));
+    },
+    async record(card: StoredCardRecord) {
+      const { error: cardError } = await worker.client.rpc(
+        "record_photo_card_rendition",
+        {
+          card_width: card.cardWidth,
+          display_derivative_id: card.displayDerivativeId,
+          output_height: card.outputHeight,
+          output_sha256_hex: card.outputSha256Hex,
+          output_size_bytes: card.outputSizeBytes,
+          output_width: card.outputWidth,
+          storage_object_id: card.storageObjectId,
+          storage_object_version: card.storageObjectVersion,
+        },
+      );
+      if (cardError) {
+        throw new Error("Photo card rendition could not be recorded.");
+      }
+    },
+    upload(
+      objectPath: string,
+      bytes: Uint8Array,
+      metadata: CardRenditionMetadata,
+    ) {
+      return uploadObject(
+        worker,
+        bucketId,
+        objectPath,
+        "image/webp",
+        metadata,
+        Readable.from(Buffer.from(bytes)),
+      );
+    },
+  };
+}
+
+async function writePhotoCardRendition(
+  worker: Awaited<ReturnType<typeof authenticatedWorker>>,
+  input: {
+    bucketId: string;
+    displayBytes: Uint8Array;
+    displayDerivativeId: string;
+    objectPath: string;
+    originalId: string;
+  },
+) {
+  await storePhotoCardRenditions({
+    displayBytes: input.displayBytes,
+    displayDerivativeId: input.displayDerivativeId,
+    displayObjectPath: input.objectPath,
+    originalId: input.originalId,
+    ...cardRenditionPorts(worker, input.bucketId),
+  });
+}
+
+function photoCardBackfillIo(
+  worker: Awaited<ReturnType<typeof authenticatedWorker>>,
+): PhotoCardBackfillIo {
+  return {
+    async listCandidates(limit, after) {
+      const listed = await worker.client.rpc(
+        "list_photo_card_backfill_candidates",
+        {
+          after_display_derivative_id: after as string,
+          batch_limit: limit,
+        },
+      );
+      if (listed.error) throw new PhotoCardBackfillListError();
+      return (listed.data ?? []).map((row) => ({
+        id: row.display_derivative_id,
+      }));
+    },
+    claim(displayDerivativeId) {
+      return claimPhotoCardBackfillLease(
+        async () => {
+          const claimed = await worker.client.rpc(
+            "claim_photo_card_backfill_lease",
+            { display_derivative_id: displayDerivativeId },
+          );
+          return { data: claimed.data, error: claimed.error };
+        },
+        () =>
+          worker.client.rpc("release_photo_card_backfill_lease", {
+            display_derivative_id: displayDerivativeId,
+          }),
+        displayDerivativeId,
+      );
+    },
+    async release(displayDerivativeId) {
+      const released = await worker.client.rpc(
+        "release_photo_card_backfill_lease",
+        { display_derivative_id: displayDerivativeId },
+      );
+      if (released.error) throw new Error("release");
+    },
+    async readDisplay(lease) {
+      return readStreamBytes(
+        await readObject(worker, lease.bucketId, lease.objectPath),
+      );
+    },
+    upload(lease, objectPath, bytes, metadata) {
+      return cardRenditionPorts(worker, lease.bucketId).upload(
+        objectPath,
+        bytes,
+        metadata,
+      );
+    },
+    identity(lease, objectPath) {
+      return cardRenditionPorts(worker, lease.bucketId).identity(objectPath);
+    },
+    readBack(lease, objectPath) {
+      return cardRenditionPorts(worker, lease.bucketId).readBack(objectPath);
+    },
+    record(lease, card) {
+      return cardRenditionPorts(worker, lease.bucketId).record(card);
+    },
+  };
+}
+
+export async function withAuthenticatedPhotoWorker<T>(
+  work: (io: PhotoCardBackfillIo) => Promise<T>,
+): Promise<T> {
+  const worker = await authenticatedWorker();
+  try {
+    return await work(photoCardBackfillIo(worker));
+  } finally {
+    try {
+      await worker.client.auth.signOut({ scope: "local" });
+    } catch {
+      // Dropping the local session must not mask the backfill result.
+    }
   }
 }
