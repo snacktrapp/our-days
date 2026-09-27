@@ -320,6 +320,7 @@ describe("security proxy", () => {
     ["/_next/static/chunks/app.js", true],
     ["/_next/image?url=%2Fsample-family.jpg", true],
     ["/sw.js", false],
+    ["/our-days-retro-wordmark.svg", false],
     ["/manifest.webmanifest", true],
     ["/robots.txt", true],
     ["/sample-family.jpg", false],
@@ -345,6 +346,7 @@ describe("security proxy", () => {
   it.each([
     "apple-touch-icon.png",
     "our-days-wordmark.svg",
+    "our-days-retro-wordmark.svg",
     "icon-192.png",
     "icon-512.png",
     "icon-1024.png",

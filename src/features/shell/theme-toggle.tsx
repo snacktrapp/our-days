@@ -1,16 +1,17 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import {
+  JOURNAL_THEME_EVENT,
+  JOURNAL_THEME_STORAGE_KEY,
+} from "./journal-theme";
 
 type JournalTheme = "dark" | "light";
 
-const STORAGE_KEY = "our-days-theme";
-const THEME_EVENT = "our-days:theme-change";
-
 function applyTheme(theme: JournalTheme) {
   document.documentElement.dataset.theme = theme;
-  window.localStorage.setItem(STORAGE_KEY, theme);
-  window.dispatchEvent(new Event(THEME_EVENT));
+  window.localStorage.setItem(JOURNAL_THEME_STORAGE_KEY, theme);
+  window.dispatchEvent(new Event(JOURNAL_THEME_EVENT));
 }
 
 function currentTheme(): JournalTheme {
@@ -19,10 +20,10 @@ function currentTheme(): JournalTheme {
 }
 
 function subscribe(onStoreChange: () => void) {
-  window.addEventListener(THEME_EVENT, onStoreChange);
+  window.addEventListener(JOURNAL_THEME_EVENT, onStoreChange);
   window.addEventListener("storage", onStoreChange);
   return () => {
-    window.removeEventListener(THEME_EVENT, onStoreChange);
+    window.removeEventListener(JOURNAL_THEME_EVENT, onStoreChange);
     window.removeEventListener("storage", onStoreChange);
   };
 }

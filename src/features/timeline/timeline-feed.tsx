@@ -38,7 +38,19 @@ function Connection({ moment }: { moment: TimelineMomentViewModel }) {
         <span
           className="avatar-node avatar-node-image insight-byline-avatar"
           aria-hidden="true"
-        />
+        >
+          <svg viewBox="0 0 1024 1024">
+            <path
+              fillRule="evenodd"
+              d="M512 176a174 174 0 1 1 0 348 174 174 0 0 1 0-348Zm0 90a84 84 0 1 0 0 168 84 84 0 0 0 0-168Z"
+            />
+            <path d="M468 503h88v47h-88z" />
+            <path
+              fillRule="evenodd"
+              d="M372 534h166a154 154 0 0 1 0 308H372q-20 0-20-20V554q0-20 20-20Zm74 78v152h86a76 76 0 0 0 0-152Z"
+            />
+          </svg>
+        </span>
       ) : (
         <span
           className={`avatar-node dot-${moment.personAccent}`}
