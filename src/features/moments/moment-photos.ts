@@ -2,6 +2,12 @@ import type { TimelinePhotoView } from "@/features/timeline/timeline-view-model"
 
 export const maximumMomentPhotos = 6;
 
+// Phone cards at 390 CSS px and DPR 3 need about 1170 px. 1080 is the card
+// width; 640 is the smaller thumbnail width. Anything else is rejected.
+export const timelineCardPhotoWidths = [640, 1080] as const;
+export type TimelineCardPhotoWidth = (typeof timelineCardPhotoWidths)[number];
+export const timelineCardPhotoWidth = 1080 satisfies TimelineCardPhotoWidth;
+
 export type MomentPhotoDescriptor = Readonly<{
   id: string;
   sortOrder: number;
@@ -12,6 +18,29 @@ export type MomentPhotoDescriptor = Readonly<{
 export function photoDeliverySrc(momentId: string, photoId?: string) {
   if (!photoId) return `/api/media/moments/${momentId}`;
   return `/api/media/moments/${momentId}?photo=${encodeURIComponent(photoId)}`;
+}
+
+export function isTimelineCardPhotoWidth(
+  value: string | null,
+): value is `${TimelineCardPhotoWidth}` {
+  return value === "640" || value === "1080";
+}
+
+export function timelineCardPhotoSrc(momentId: string, photoId?: string) {
+  const params = new URLSearchParams();
+  if (photoId) params.set("photo", photoId);
+  params.set("w", String(timelineCardPhotoWidth));
+  return `/api/media/moments/${momentId}?${params.toString()}`;
+}
+
+// The delivery route serves the first photo by sort order when photo is
+// omitted, so the opening card can name this URL before enrichment.
+export function openingTimelinePhotoSrc(
+  rows: readonly { moment_id: string; moment_kind?: string }[],
+) {
+  const first = rows[0];
+  if (!first || first.moment_kind !== "photo") return null;
+  return timelineCardPhotoSrc(first.moment_id);
 }
 
 export function parseMomentPhotoRows(value: unknown): MomentPhotoDescriptor[] {

@@ -911,14 +911,32 @@ async function timelineEnrichmentReader(
 
 export function shareTimelineEnrichment(
   listing: Promise<ConnectedTimelineListing> | ConnectedTimelineListing,
+  slice?: Readonly<{ offset?: number; limit?: number }>,
 ) {
   return Promise.resolve(listing).then(async (resolved) => {
+    const offset = slice?.offset ?? 0;
+    const rows = slice
+      ? resolved.rows.slice(
+          offset,
+          slice.limit == null ? undefined : offset + slice.limit,
+        )
+      : resolved.rows;
+    const momentIds = rows.map((row) => row.moment_id).filter(Boolean);
+    if (momentIds.length === 0) return null;
     const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
-    return timelineEnrichmentReader(
-      supabase,
-      resolved.rows.map((row) => row.moment_id),
-    );
+    return timelineEnrichmentReader(supabase, momentIds);
   });
+}
+
+// /family may enrich the opening moment and the rest separately, and must
+// not enrich any moment twice.
+export function shareFamilyTimelineEnrichment(
+  listing: Promise<ConnectedTimelineListing> | ConnectedTimelineListing,
+) {
+  return {
+    opening: shareTimelineEnrichment(listing, { offset: 0, limit: 1 }),
+    remainder: shareTimelineEnrichment(listing, { offset: 1 }),
+  };
 }
 
 export async function loadConnectedTimelineListing(

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  isTimelineCardPhotoWidth,
   maximumMomentPhotos,
+  openingTimelinePhotoSrc,
   orderMomentPhotos,
   parseMomentPhotoRows,
   photoAlbum,
   photoDeliverySrc,
+  timelineCardPhotoSrc,
   timelinePhotosFor,
 } from "./moment-photos";
 
@@ -18,6 +21,30 @@ describe("moment photos", () => {
     expect(photoDeliverySrc("moment-1", "photo-2")).toBe(
       "/api/media/moments/moment-1?photo=photo-2",
     );
+  });
+
+  it("builds one card URL the opening preload and the cover image can share", () => {
+    expect(isTimelineCardPhotoWidth("1080")).toBe(true);
+    expect(isTimelineCardPhotoWidth("640")).toBe(true);
+    expect(isTimelineCardPhotoWidth("1920")).toBe(false);
+    expect(isTimelineCardPhotoWidth(null)).toBe(false);
+    expect(timelineCardPhotoSrc("moment-1")).toBe(
+      "/api/media/moments/moment-1?w=1080",
+    );
+    expect(timelineCardPhotoSrc("moment-1", "photo-2")).toBe(
+      "/api/media/moments/moment-1?photo=photo-2&w=1080",
+    );
+    expect(
+      openingTimelinePhotoSrc([
+        { moment_id: "thought-1", moment_kind: "thought" },
+        { moment_id: "moment-1", moment_kind: "photo" },
+      ]),
+    ).toBeNull();
+    expect(
+      openingTimelinePhotoSrc([
+        { moment_id: "moment-1", moment_kind: "photo" },
+      ]),
+    ).toBe("/api/media/moments/moment-1?w=1080");
   });
 
   it("parses and orders photo rows by sort_order", () => {
