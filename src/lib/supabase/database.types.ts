@@ -1096,6 +1096,7 @@ export type Database = {
         Args: { moment_id: string };
         Returns: {
           bucket_id: string;
+          card_renditions: Json;
           object_path: string;
           output_height: number;
           output_mime_type: string;
@@ -1481,6 +1482,19 @@ export type Database = {
           recorded_at: string;
           token_sha256_hex: string;
         }[];
+      };
+      record_photo_card_rendition: {
+        Args: {
+          card_width: number;
+          display_derivative_id: string;
+          output_height: number;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+          storage_object_id: string;
+          storage_object_version: string;
+        };
+        Returns: string;
       };
       read_invitation_delivery_auth: {
         Args: { invitation_job_id: string };

@@ -13,7 +13,7 @@ import {
 } from "@/lib/card-photo-rendition.server";
 import {
   openSignedPrivateObject,
-  readVerifiedPrivateBytes,
+  readCappedVerifiedPrivateBytes,
 } from "@/lib/private-media-delivery.server";
 import { normalizedSha256Hex } from "@/lib/private-media-delivery";
 import { upsertServerTiming } from "@/lib/server-timing";
@@ -66,6 +66,43 @@ function imageResponse(
 
 function elapsedSince(started: number) {
   return Math.max(0, performance.now() - started);
+}
+
+type StoredCard = {
+  bucket: string;
+  path: string;
+  mime: string;
+  size: unknown;
+  sha: string;
+};
+
+function storedCard(value: unknown, width: TimelineCardPhotoWidth) {
+  const rows = Array.isArray(value) ? value : null;
+  if (!rows) return null;
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as Record<string, unknown>;
+    if (Number(record.width) !== width) continue;
+    if (
+      record.bucket_id !== "our-days-display" ||
+      record.mime_type !== "image/webp" ||
+      typeof record.object_path !== "string" ||
+      record.object_path.length === 0
+    ) {
+      return null;
+    }
+    const sha = normalizedSha256Hex(record.sha256_hex);
+    if (!sha) return null;
+    const card: StoredCard = {
+      bucket: "our-days-display",
+      mime: "image/webp",
+      path: record.object_path,
+      sha,
+      size: record.size_bytes,
+    };
+    return card;
+  }
+  return null;
 }
 
 export async function GET(
@@ -169,12 +206,29 @@ export async function GET(
   if (cardWidth != null) {
     const sha = normalizedSha256Hex(descriptor.output_sha256_hex);
     if (!sha) return unavailable(mediaTiming(authMs, 0, 0));
+    const stored = storedCard(descriptor.card_renditions, cardWidth);
+    if (stored) {
+      const fetchStarted = performance.now();
+      const verified = await readCappedVerifiedPrivateBytes(
+        supabase.storage.from(stored.bucket),
+        stored.path,
+        { mime: stored.mime, sha: stored.sha, size: stored.size },
+      );
+      const fetchMs = elapsedSince(fetchStarted);
+      if (verified) {
+        return imageResponse(
+          verified,
+          "image/webp",
+          mediaTiming(authMs, fetchMs, 0),
+        );
+      }
+    }
     const cached = readCachedCardRendition(sha, cardWidth);
     if (cached) {
       return imageResponse(cached, "image/webp", mediaTiming(authMs, 0, 0));
     }
     const fetchStarted = performance.now();
-    const verified = await readVerifiedPrivateBytes(
+    const verified = await readCappedVerifiedPrivateBytes(
       supabase.storage.from(descriptor.bucket_id),
       descriptor.object_path,
       {

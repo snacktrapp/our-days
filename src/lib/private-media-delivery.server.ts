@@ -205,3 +205,65 @@ export async function readVerifiedPrivateBytes(
   if (!sha256HexMatches(digest, sha)) return null;
   return bytes;
 }
+
+// Stream the object and stop once the descriptor size is exceeded, including
+// when Storage omits Content-Length. Callers that must fall back on a bad
+// digest buffer the verified bytes and never emit a partial body.
+export async function readCappedVerifiedPrivateBytes(
+  bucket: SignedUrlBucket,
+  objectPath: string,
+  expected: PrivateObjectExpectation,
+) {
+  const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
+  if (error || !signed?.signedUrl) return null;
+  const upstream = await fetchSignedUrl(signed.signedUrl);
+  if (!upstream) return null;
+  if (upstream.status !== 200 || !upstream.body) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  if (!mediaTypeMatches(upstream.headers.get("content-type"), expected.mime)) {
+    await upstream.body.cancel();
+    return null;
+  }
+  const size = declaredByteSize(expected.size);
+  const sha = normalizedSha256Hex(expected.sha);
+  if (size == null || !sha) {
+    await upstream.body.cancel();
+    return null;
+  }
+  if (!contentLengthAgrees(upstream.headers, size)) {
+    await upstream.body.cancel();
+    return null;
+  }
+  const reader = upstream.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let seen = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      const value = next.value;
+      if (!value?.byteLength) continue;
+      if (seen + value.byteLength > size) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+      seen += value.byteLength;
+    }
+  } catch {
+    await reader.cancel().catch(() => undefined);
+    return null;
+  }
+  if (seen !== size) return null;
+  const bytes = new Uint8Array(seen);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (!sha256HexMatches(digest, sha)) return null;
+  return bytes;
+}

@@ -3,7 +3,10 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearCardRenditionCache } from "@/lib/card-photo-rendition.server";
+import {
+  clearCardRenditionCache,
+  rememberCardRendition,
+} from "@/lib/card-photo-rendition.server";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
@@ -454,5 +457,214 @@ describe("private photo delivery route", () => {
     expect(cached.status).toBe(200);
     expect(cached.headers.get("server-timing")).toContain("resize;dur=0");
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  function signObjects(
+    objects: Record<string, { bytes: Uint8Array; type?: string }>,
+  ) {
+    mocks.createSignedUrl.mockImplementation(async (path: string) => ({
+      data: {
+        signedUrl: `https://storage.example.test/${encodeURIComponent(path)}`,
+      },
+      error: null,
+    }));
+    mocks.fetch.mockImplementation(async (url: string) => {
+      const path = decodeURIComponent(
+        String(url).replace("https://storage.example.test/", ""),
+      );
+      const object = objects[path];
+      if (!object) return new Response(null, { status: 404 });
+      return new Response(Uint8Array.from(object.bytes), {
+        status: 200,
+        headers: {
+          "content-length": String(object.bytes.byteLength),
+          "content-type": object.type ?? "image/webp",
+        },
+      });
+    });
+  }
+
+  it("serves the stored card for an album frame without resizing", async () => {
+    clearCardRenditionCache();
+    const card = await sharp({
+      create: {
+        background: { b: 9, g: 8, r: 7 },
+        channels: 3,
+        height: 12,
+        width: 20,
+      },
+    })
+      .webp({ quality: 73 })
+      .toBuffer();
+    const cardSha = createHash("sha256").update(card).digest("hex");
+    const cardPath = `${secondDescriptor.object_path}.card-1080.webp`;
+    mocks.rpc.mockResolvedValue({
+      data: [
+        descriptor,
+        {
+          ...secondDescriptor,
+          card_renditions: [
+            {
+              bucket_id: "our-days-display",
+              mime_type: "image/webp",
+              object_path: cardPath,
+              output_height: 12,
+              output_width: 20,
+              sha256_hex: cardSha,
+              size_bytes: card.byteLength,
+              width: 1080,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+    signObjects({ [cardPath]: { bytes: card } });
+    const response = await request(
+      momentId,
+      `?photo=${secondDescriptor.photo_id}&w=1080`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(card);
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(cardPath, 60);
+  });
+
+  it("falls back to on-demand resize when no stored card exists", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          card_renditions: [],
+          output_mime_type: "image/webp",
+          output_sha256_hex: source.sha,
+          output_size_bytes: source.bytes.byteLength,
+        },
+      ],
+      error: null,
+    });
+    signObjects({
+      [descriptor.object_path]: { bytes: source.bytes },
+    });
+    const response = await request(momentId, "?w=1080");
+    expect(response.status).toBe(200);
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.equals(source.bytes)).toBe(false);
+    expect((await sharp(body).metadata()).width).toBe(1080);
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(
+      descriptor.object_path,
+      60,
+    );
+  });
+
+  it("falls back when the stored card digest does not match and serves no bad bytes", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    const claimed = Buffer.from("stored-card-bytes");
+    const bad = Buffer.from("stored-card-byte!");
+    const cardPath = `${descriptor.object_path}.card-1080.webp`;
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          card_renditions: [
+            {
+              bucket_id: "our-days-display",
+              mime_type: "image/webp",
+              object_path: cardPath,
+              output_height: 10,
+              output_width: 10,
+              sha256_hex: createHash("sha256").update(claimed).digest("hex"),
+              size_bytes: claimed.byteLength,
+              width: 1080,
+            },
+          ],
+          output_mime_type: "image/webp",
+          output_sha256_hex: source.sha,
+          output_size_bytes: source.bytes.byteLength,
+        },
+      ],
+      error: null,
+    });
+    signObjects({
+      [cardPath]: { bytes: bad },
+      [descriptor.object_path]: { bytes: source.bytes },
+    });
+    const response = await request(momentId, "?w=1080");
+    expect(response.status).toBe(200);
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.equals(bad)).toBe(false);
+    expect(body.equals(claimed)).toBe(false);
+    expect((await sharp(body).metadata()).width).toBe(1080);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the no-width response on the display bytes when a card exists", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          card_renditions: [
+            {
+              bucket_id: "our-days-display",
+              mime_type: "image/webp",
+              object_path: `${descriptor.object_path}.card-1080.webp`,
+              sha256_hex: "ab".repeat(32),
+              size_bytes: 4,
+              width: 1080,
+            },
+          ],
+          output_mime_type: "image/webp",
+          output_sha256_hex: source.sha,
+          output_size_bytes: source.bytes.byteLength,
+        },
+      ],
+      error: null,
+    });
+    signObjects({
+      [descriptor.object_path]: { bytes: source.bytes },
+    });
+    const response = await request(momentId, `?photo=${descriptor.photo_id}`);
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(source.bytes);
+    expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(mocks.createSignedUrl).toHaveBeenCalledWith(
+      descriptor.object_path,
+      60,
+    );
+  });
+
+  it("returns 404 before cache or storage when the moment is unauthorized or unknown", async () => {
+    clearCardRenditionCache();
+    rememberCardRendition(
+      descriptor.output_sha256_hex,
+      1080,
+      Uint8Array.from([7, 7, 7]),
+    );
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "Family session is unavailable" },
+    });
+    const denied = await request(momentId, "?w=1080");
+    expect(denied.status).toBe(404);
+    expect(await denied.text()).toBe("");
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+
+    mocks.createClient.mockClear();
+    const unknown = await request("not-a-uuid", "?w=1080");
+    expect(unknown.status).toBe(404);
+    expect(mocks.createClient).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

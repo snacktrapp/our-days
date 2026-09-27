@@ -2,11 +2,12 @@ import "server-only";
 
 import sharp from "sharp";
 import type { TimelineCardPhotoWidth } from "@/features/moments/moment-photos";
+import { renderCardWebp } from "../../scripts/lib/card-photo-rendition.mjs";
 
-const maxSourceEdge = 2560;
 const maxCachedEntries = 32;
 const maxCachedBytes = 16 * 1024 * 1024;
 const maxEntryBytes = 2 * 1024 * 1024;
+const maxCardSharp = 2;
 
 type CachedRendition = {
   sha: string;
@@ -14,10 +15,43 @@ type CachedRendition = {
   bytes: Uint8Array;
 };
 
+type RenderedCard = {
+  bytes: Uint8Array;
+  height: number;
+  width: number;
+};
+
 const cache: CachedRendition[] = [];
+let cardSharpActive = 0;
+const cardSharpWaiters: Array<() => void> = [];
+
+sharp.concurrency(1);
 
 function cachedBytes() {
   return cache.reduce((total, entry) => total + entry.bytes.byteLength, 0);
+}
+
+export function cardSharpActiveCount() {
+  return cardSharpActive;
+}
+
+export function withCardSharpPermit<T>(task: () => Promise<T>) {
+  const run = () => {
+    cardSharpActive += 1;
+    sharp.concurrency(1);
+    return Promise.resolve()
+      .then(task)
+      .finally(() => {
+        cardSharpActive -= 1;
+        cardSharpWaiters.shift()?.();
+      });
+  };
+  if (cardSharpActive < maxCardSharp) return run();
+  return new Promise<T>((resolve, reject) => {
+    cardSharpWaiters.push(() => {
+      run().then(resolve, reject);
+    });
+  });
 }
 
 export function readCachedCardRendition(
@@ -57,38 +91,28 @@ export function clearCardRenditionCache() {
   cache.length = 0;
 }
 
+async function renderCard(
+  bytes: Uint8Array,
+  width: TimelineCardPhotoWidth,
+): Promise<RenderedCard | null> {
+  try {
+    return await withCardSharpPermit(() => renderCardWebp(bytes, width));
+  } catch {
+    return null;
+  }
+}
+
 export async function renderCardPhoto(
   bytes: Uint8Array,
   width: TimelineCardPhotoWidth,
 ) {
-  try {
-    const source = Buffer.from(
-      bytes.buffer,
-      bytes.byteOffset,
-      bytes.byteLength,
-    );
-    const output = await sharp(source, {
-      animated: false,
-      failOn: "error",
-      limitInputPixels: maxSourceEdge * maxSourceEdge,
-      pages: 1,
-      sequentialRead: true,
-      unlimited: false,
-    })
-      .rotate()
-      .resize({
-        fit: "inside",
-        width,
-        withoutEnlargement: true,
-      })
-      .webp({
-        effort: 4,
-        quality: 73,
-        smartSubsample: true,
-      })
-      .toBuffer();
-    return new Uint8Array(output);
-  } catch {
-    return null;
-  }
+  const rendered = await renderCard(bytes, width);
+  return rendered?.bytes ?? null;
+}
+
+export async function renderCardPhotoDetails(
+  bytes: Uint8Array,
+  width: TimelineCardPhotoWidth,
+) {
+  return renderCard(bytes, width);
 }

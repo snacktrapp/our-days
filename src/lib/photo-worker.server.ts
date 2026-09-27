@@ -1,7 +1,12 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  rememberPhotoCardRenditions,
+  storePhotoCardRenditions,
+} from "@/lib/photo-card-rendition-store.server";
 import {
   PHOTO_DISPLAY_TRANSFORM_VERSION,
   validatePhotoDisplayByteStream,
@@ -213,6 +218,26 @@ async function uploadObject(
   if (!response.ok) {
     throw new PhotoWorkerError("Verified photo bytes could not be stored.");
   }
+}
+
+async function readStreamBytes(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const next = await reader.read();
+    if (next.done) break;
+    if (!next.value?.byteLength) continue;
+    chunks.push(next.value);
+    total += next.value.byteLength;
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 async function objectIdentity(
@@ -571,6 +596,60 @@ async function createDisplay(
             ) {
               throw new PhotoWorkerError(
                 "Photo display work could not be completed.",
+              );
+            }
+            const displayBytes = evidence.bytes as Uint8Array | undefined;
+            if (displayBytes?.byteLength) {
+              await rememberPhotoCardRenditions(() =>
+                storePhotoCardRenditions({
+                  displayBytes,
+                  displayDerivativeId: derivativeId,
+                  displayObjectPath: lease.display_object_path,
+                  identity: (objectPath) =>
+                    objectIdentity(
+                      worker.client,
+                      lease.display_bucket_id,
+                      objectPath,
+                    ),
+                  originalId: lease.original_id,
+                  readBack: async (objectPath) =>
+                    readStreamBytes(
+                      await readObject(
+                        worker,
+                        lease.display_bucket_id,
+                        objectPath,
+                      ),
+                    ),
+                  record: async (card) => {
+                    const { error: cardError } = await worker.client.rpc(
+                      "record_photo_card_rendition",
+                      {
+                        card_width: card.cardWidth,
+                        display_derivative_id: card.displayDerivativeId,
+                        output_height: card.outputHeight,
+                        output_sha256_hex: card.outputSha256Hex,
+                        output_size_bytes: card.outputSizeBytes,
+                        output_width: card.outputWidth,
+                        storage_object_id: card.storageObjectId,
+                        storage_object_version: card.storageObjectVersion,
+                      },
+                    );
+                    if (cardError) {
+                      throw new Error(
+                        "Photo card rendition could not be recorded.",
+                      );
+                    }
+                  },
+                  upload: (objectPath, bytes, metadata) =>
+                    uploadObject(
+                      worker,
+                      lease.display_bucket_id,
+                      objectPath,
+                      "image/webp",
+                      metadata,
+                      Readable.from(Buffer.from(bytes)),
+                    ),
+                }),
               );
             }
             return derivativeId;

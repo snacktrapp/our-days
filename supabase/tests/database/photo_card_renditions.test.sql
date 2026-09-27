@@ -1,0 +1,342 @@
+begin;
+
+select no_plan();
+
+select ok(
+  (select relrowsecurity and relforcerowsecurity
+     from pg_class where oid = 'private.photo_card_renditions'::regclass),
+  'photo card renditions enable and force RLS'
+);
+select is(
+  (select count(*)::bigint
+     from information_schema.role_table_grants
+    where table_schema = 'private'
+      and table_name = 'photo_card_renditions'
+      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')),
+  0::bigint,
+  'browser and service roles have no direct card-rendition privileges'
+);
+select is(
+  (select count(*)::bigint
+     from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'photo_card_renditions'),
+  0::bigint,
+  'the card ledger is not exposed as a public table'
+);
+select ok(
+  exists (
+    select 1
+      from pg_trigger
+     where tgname = 'photo_card_renditions_integrity'
+       and tgrelid = 'private.photo_card_renditions'::regclass
+       and not tgisinternal
+  ),
+  'photo card renditions have an immutability trigger'
+);
+select ok(
+  pg_get_function_result('public.get_photo_moment_delivery(uuid)'::regprocedure)
+    like '%card_renditions jsonb%',
+  'delivery returns card renditions beside the display descriptor'
+);
+select ok(
+  (select qual from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname =
+        'our_days_display_select_exact_active_derivative_lease')
+    like '%photo_card_path_is_readable%'
+  and (select qual from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+      and policyname =
+        'our_days_display_select_exact_active_derivative_lease')
+    not like '%allow_any_operation%',
+  'card reads use the path predicate without a Storage operation allow-list'
+);
+
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+values (
+  '10000000-0000-4000-8000-000000000096',
+  'photo-card-validator@example.test', statement_timestamp(), '{}'
+);
+insert into private.photo_validator_allowlist (auth_user_id)
+values ('10000000-0000-4000-8000-000000000096');
+
+set constraints all deferred;
+insert into private.photo_intakes (
+  id, circle_id, journal_person_id, requested_by_membership_id,
+  requester_authorization_version, request_key, object_path, state,
+  requested_at, expires_at, upload_request_key, expected_mime_type,
+  expected_size_bytes, expected_sha256, upload_claimed_at,
+  upload_expires_at, uploaded_at, validation_completed_at
+) values (
+  'e1000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001', statement_timestamp(),
+  'e2000000-0000-4000-8000-000000000001',
+  'intake/e1000000-0000-4000-8000-000000000001', 'verified',
+  statement_timestamp(), statement_timestamp() + interval '30 minutes',
+  'e3000000-0000-4000-8000-000000000001', 'image/jpeg', 12,
+  decode(repeat('a', 64), 'hex'), statement_timestamp(),
+  statement_timestamp() + interval '2 hours', statement_timestamp(),
+  statement_timestamp()
+);
+insert into private.photo_validation_jobs (
+  id, circle_id, intake_id, journal_person_id,
+  requested_by_membership_id, original_id, lease_attempt_id,
+  canonical_object_path, state, validator_auth_user_id, lease_key_hash,
+  lease_started_at, lease_expires_at, attempt_count,
+  source_storage_object_id, source_storage_object_version, completed_at
+) values (
+  'e4000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'e1000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
+  'e5000000-0000-4000-8000-000000000001',
+  'e6000000-0000-4000-8000-000000000001',
+  'original/e5000000-0000-4000-8000-000000000001/e6000000-0000-4000-8000-000000000001',
+  'verified', '10000000-0000-4000-8000-000000000096',
+  extensions.digest('fixture', 'sha256'), statement_timestamp(),
+  statement_timestamp() + interval '15 minutes', 1,
+  'e7000000-0000-4000-8000-000000000001', '', statement_timestamp()
+);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'e7000000-0000-4000-8000-000000000001', 'our-days-originals',
+  'original/e5000000-0000-4000-8000-000000000001/e6000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000096',
+  '{"mimetype":"image/jpeg","size":12}'::jsonb,
+  jsonb_build_object(
+    'validation_job_id', 'e4000000-0000-4000-8000-000000000001',
+    'intake_id', 'e1000000-0000-4000-8000-000000000001',
+    'original_id', 'e5000000-0000-4000-8000-000000000001',
+    'lease_attempt_id', 'e6000000-0000-4000-8000-000000000001',
+    'expected_mime_type', 'image/jpeg', 'expected_size_bytes', 12,
+    'expected_sha256', repeat('a', 64),
+    'verification_profile_version', 1
+  )
+);
+insert into private.photo_originals (
+  id, circle_id, validation_job_id, intake_id, journal_person_id,
+  recorded_by_membership_id, lease_attempt_id, object_path,
+  storage_object_id, storage_object_version, verified_mime_type,
+  verified_size_bytes, verified_sha256, verified_width, verified_height,
+  verified_channels, verified_pages, verification_profile_version
+) values (
+  'e5000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'e4000000-0000-4000-8000-000000000001',
+  'e1000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '40000000-0000-4000-8000-000000000001',
+  'e6000000-0000-4000-8000-000000000001',
+  'original/e5000000-0000-4000-8000-000000000001/e6000000-0000-4000-8000-000000000001',
+  'e7000000-0000-4000-8000-000000000001', '', 'image/jpeg', 12,
+  decode(repeat('a', 64), 'hex'), 4, 3, 3, 1, 1
+);
+set constraints all immediate;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select * from public.claim_photo_display_derivative(
+  'e5000000-0000-4000-8000-000000000001',
+  'ea000000-0000-4000-8000-000000000001'
+) \gset cardfix_
+reset role;
+
+set constraints all deferred;
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select set_config('storage.operation', 'object.upload', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'e8000000-0000-4000-8000-000000000001', 'our-days-display',
+  :'cardfix_display_object_path',
+  '10000000-0000-4000-8000-000000000096',
+  '{"mimetype":"image/webp","size":8}'::jsonb,
+  jsonb_build_object(
+    'derivative_job_id', :'cardfix_derivative_job_id',
+    'original_id', 'e5000000-0000-4000-8000-000000000001',
+    'derivative_id', split_part(:'cardfix_display_object_path', '/', 2),
+    'lease_attempt_id', :'cardfix_lease_attempt_id',
+    'source_storage_object_id', 'e7000000-0000-4000-8000-000000000001',
+    'source_storage_object_version', '',
+    'output_mime_type', 'image/webp',
+    'output_size_bytes', 8,
+    'output_sha256', repeat('b', 64),
+    'output_width', 2,
+    'output_height', 2,
+    'output_channels', 3,
+    'output_pages', 1,
+    'maximum_size_bytes', 12582912,
+    'transform_profile_version', 1
+  )
+);
+select public.complete_photo_display_derivative(
+  :'cardfix_derivative_job_id'::uuid,
+  'ea000000-0000-4000-8000-000000000001',
+  'e8000000-0000-4000-8000-000000000001', '', 8, repeat('b', 64),
+  2, 2, 3, 1
+) as derivative_id \gset carddone_
+reset role;
+set constraints all immediate;
+
+select is(
+  (select state from private.photo_derivative_jobs
+    where id = :'cardfix_derivative_job_id'::uuid),
+  'verified'::text,
+  'the card fixture completes a verified display derivative'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_card_path_is_uploadable(
+    :'cardfix_display_object_path' || '.card-1080.webp',
+    '10000000-0000-4000-8000-000000000096',
+    jsonb_build_object(
+      'card_width', 1080,
+      'display_derivative_id', :'carddone_derivative_id',
+      'original_id', 'e5000000-0000-4000-8000-000000000001',
+      'output_height', 2,
+      'output_mime_type', 'image/webp',
+      'output_sha256', repeat('c', 64),
+      'output_size_bytes', 6,
+      'output_width', 2
+    )
+  ),
+  true,
+  'the validator can upload the exact card path after the display is verified'
+);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'e9000000-0000-4000-8000-000000000001', 'our-days-display',
+  :'cardfix_display_object_path' || '.card-1080.webp',
+  '10000000-0000-4000-8000-000000000096',
+  '{"mimetype":"image/webp","size":6}'::jsonb,
+  jsonb_build_object(
+    'card_width', 1080,
+    'display_derivative_id', :'carddone_derivative_id',
+    'original_id', 'e5000000-0000-4000-8000-000000000001',
+    'output_height', 2,
+    'output_mime_type', 'image/webp',
+    'output_sha256', repeat('c', 64),
+    'output_size_bytes', 6,
+    'output_width', 2
+  )
+);
+select public.record_photo_card_rendition(
+  :'carddone_derivative_id'::uuid,
+  1080,
+  'e9000000-0000-4000-8000-000000000001',
+  '',
+  6,
+  repeat('c', 64),
+  2,
+  2
+) as id \gset cardrow_
+select is(
+  public.record_photo_card_rendition(
+    :'carddone_derivative_id'::uuid,
+    1080,
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    6,
+    repeat('c', 64),
+    2,
+    2
+  ),
+  :'cardrow_id'::uuid,
+  'recording the same card evidence is idempotent'
+);
+select throws_ok(
+  format(
+    'select public.record_photo_card_rendition(%L::uuid, 1080, %L::uuid, %L, 6, %L, 2, 2)',
+    :'carddone_derivative_id',
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    repeat('d', 64)
+  ),
+  '42501', 'Photo card rendition could not be recorded',
+  'a different card checksum cannot replace a recorded rendition'
+);
+select is(
+  private.photo_card_path_is_readable(
+    :'cardfix_display_object_path' || '.card-1080.webp'
+  ),
+  true,
+  'the validator can read the recorded card path'
+);
+reset role;
+
+select throws_ok(
+  format(
+    'update private.photo_card_renditions set output_width = 3 where id = %L::uuid',
+    :'cardrow_id'
+  ),
+  '42501', 'Photo card renditions are immutable',
+  'card ledger rows cannot be updated'
+);
+select throws_ok(
+  format(
+    'delete from private.photo_card_renditions where id = %L::uuid',
+    :'cardrow_id'
+  ),
+  '42501', 'Photo card renditions are immutable',
+  'card ledger rows cannot be deleted'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true
+);
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_card_path_is_uploadable(
+    :'cardfix_display_object_path' || '.card-1080.webp',
+    '10000000-0000-4000-8000-000000000001',
+    jsonb_build_object(
+      'card_width', 1080,
+      'display_derivative_id', :'carddone_derivative_id',
+      'original_id', 'e5000000-0000-4000-8000-000000000001',
+      'output_height', 2,
+      'output_mime_type', 'image/webp',
+      'output_sha256', repeat('c', 64),
+      'output_size_bytes', 6,
+      'output_width', 2
+    )
+  ),
+  false,
+  'a family identity cannot upload a card path'
+);
+select throws_ok(
+  format(
+    'select public.record_photo_card_rendition(%L::uuid, 1080, %L::uuid, %L, 6, %L, 2, 2)',
+    :'carddone_derivative_id',
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    repeat('c', 64)
+  ),
+  '42501', 'Photo card rendition could not be recorded',
+  'a family identity cannot record a card rendition'
+);
+select throws_ok(
+  $$select count(*) from private.photo_card_renditions$$,
+  '42501', 'permission denied for table photo_card_renditions',
+  'authenticated callers cannot read the card ledger'
+);
+reset role;
+
+select * from finish();
+rollback;
