@@ -5,8 +5,10 @@
  *
  * The family page matches main: it awaits access and the preview timeline
  * before it returns. loading.tsx streams the opening shell during that wait.
- * OUR_DAYS_LAB_BLOCK_BEFORE_SHELL no longer changes the page; both profiles
- * measure that same path. The full stylesheet stays render-blocking.
+ * The "before" profile sets OUR_DAYS_LAB_AUTH_BLOCKING so the proxy awaits
+ * OUR_DAYS_LAB_AUTH_DELAY_MS the way an unbounded getClaims used to. The
+ * "after" profile leaves that off, so a document GET is not stalled on it.
+ * The full stylesheet stays render-blocking.
  */
 import { spawn } from "node:child_process";
 import { chromium, devices } from "@playwright/test";
@@ -34,7 +36,9 @@ function labEnv(blocking) {
     OUR_DAYS_ENABLE_DESIGN_PREVIEW: "true",
     OUR_DAYS_LAB: "1",
     OUR_DAYS_LAB_JOURNAL_DELAY_MS: "1500",
+    OUR_DAYS_LAB_AUTH_DELAY_MS: "1500",
   };
+  if (blocking) env.OUR_DAYS_LAB_AUTH_BLOCKING = "1";
   delete env.OUR_DAYS_LAB_BLOCK_BEFORE_SHELL;
   delete env.VERCEL_ENV;
   if (blocking) {
@@ -166,6 +170,10 @@ async function sample(page) {
     const scan = () => {
       if (document.querySelector(".topbar")) note("shell");
       if (document.querySelector("article.moment")) note("post");
+      const photo = document.querySelector("article.moment img[src]");
+      if (photo instanceof HTMLImageElement && photo.getAttribute("src")) {
+        note("photo");
+      }
     };
     const arm = (target) => {
       scan();
@@ -245,6 +253,7 @@ async function sample(page) {
     ttfb: reading.ttfb,
     shellVisible: mark("shell"),
     firstPostVisible: mark("post"),
+    firstPhotoVisible: mark("photo"),
     bytesBeforeDataWait: bytesBeforeStall(sentAt, chunks),
     pullShell: reading.pullShell,
     hydrated: reading.hydrated,
@@ -258,9 +267,10 @@ async function measureProfile(browser, blocking) {
   try {
     await waitForServer(child);
     const document = await fetch(`${origin}/family`, {
-      headers: { "Accept-Encoding": "gzip" },
+      headers: { "Accept-Encoding": "gzip", Accept: "text/html" },
     });
     const html = await document.text();
+    const serverTiming = document.headers.get("server-timing");
     const stylesheetTags =
       html.match(/<link\b[^>]*\brel="stylesheet"[^>]*>/g) ?? [];
     const iphone = { ...devices["iPhone 13"] };
@@ -281,6 +291,7 @@ async function measureProfile(browser, blocking) {
     const field = (name) => median(samples.map((reading) => reading[name]));
     return {
       status: document.status,
+      serverTiming,
       blockingStylesheet: stylesheetTags.some(
         (tag) =>
           tag.includes('data-precedence="next"') &&
@@ -294,6 +305,7 @@ async function measureProfile(browser, blocking) {
         ttfb: field("ttfb"),
         shellVisible: field("shellVisible"),
         firstPostVisible: field("firstPostVisible"),
+        firstPhotoVisible: field("firstPhotoVisible"),
         bytesBeforeDataWait: field("bytesBeforeDataWait"),
       },
       last: samples.at(-1),

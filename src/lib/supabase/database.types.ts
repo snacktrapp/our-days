@@ -1041,6 +1041,10 @@ export type Database = {
         Args: { endpoint: string };
         Returns: boolean;
       };
+      enrich_timeline_page: {
+        Args: { moment_ids: string[] };
+        Returns: Json;
+      };
       finalize_video_moment: { Args: { request_id: string }; Returns: string };
       flag_photo_display_derivative_for_review: {
         Args: {
@@ -1107,6 +1111,21 @@ export type Database = {
         Returns: {
           moment_id: string;
           status: string;
+        }[];
+      };
+      get_photo_moments_delivery: {
+        Args: { moment_ids: string[] };
+        Returns: {
+          bucket_id: string;
+          moment_id: string;
+          object_path: string;
+          output_height: number;
+          output_mime_type: string;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+          photo_id: string;
+          sort_order: number;
         }[];
       };
       get_video_moment_delivery: {

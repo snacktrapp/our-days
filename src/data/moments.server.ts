@@ -93,6 +93,7 @@ export type ConnectedTimelineOptions = Readonly<{
   omitCompletion?: boolean;
   omitPagination?: boolean;
   sharedList?: Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
+  sharedEnrichment?: Promise<MomentPhotoClient | null>;
 }>;
 
 export type ConnectedTimelineListOptions = Readonly<{
@@ -824,6 +825,102 @@ export function sliceTimelineAfterNthMoment(
   return sliced;
 }
 
+type EnrichmentPayload = Readonly<{
+  photos: unknown[];
+  videos: unknown[];
+  posters: unknown[];
+  notes: unknown[];
+  reactions: unknown[];
+  hearts: unknown[];
+  mentions: unknown[];
+  authors: unknown[];
+}>;
+
+function isEnrichmentPayload(value: unknown): value is EnrichmentPayload {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const payload = value as Partial<EnrichmentPayload>;
+  return (
+    Array.isArray(payload.photos) &&
+    Array.isArray(payload.videos) &&
+    Array.isArray(payload.posters) &&
+    Array.isArray(payload.notes) &&
+    Array.isArray(payload.reactions) &&
+    Array.isArray(payload.hearts) &&
+    Array.isArray(payload.mentions) &&
+    Array.isArray(payload.authors)
+  );
+}
+
+function enrichmentQuery(rows: unknown[]) {
+  const query = {
+    select: () => query,
+    eq: () => query,
+    in: () => query,
+    is: () => query,
+    order: () => query,
+    then(
+      resolve: (value: { data: unknown[]; error: null }) => unknown,
+      reject?: (reason: unknown) => unknown,
+    ) {
+      return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+    },
+  };
+  return query;
+}
+
+function enrichmentReader(payload: EnrichmentPayload): MomentPhotoClient {
+  const tables: Record<string, unknown[]> = {
+    moment_photos: payload.photos,
+    moment_videos: payload.videos,
+    moment_video_posters: payload.posters,
+    moment_notes: payload.notes,
+    moment_reactions: payload.reactions,
+    moment_note_reactions: payload.hearts,
+  };
+  return {
+    from(table: string) {
+      return enrichmentQuery(tables[table] ?? []);
+    },
+    rpc(fn: string) {
+      if (fn === "list_visible_content_mentions") {
+        return Promise.resolve({ data: payload.mentions, error: null });
+      }
+      if (fn === "visible_moment_authors") {
+        return Promise.resolve({ data: payload.authors, error: null });
+      }
+      return Promise.resolve({ data: [], error: null });
+    },
+  } as unknown as MomentPhotoClient;
+}
+
+async function timelineEnrichmentReader(
+  supabase: MomentPhotoClient,
+  momentIds: readonly string[],
+) {
+  if (momentIds.length === 0 || typeof supabase.from !== "function")
+    return null;
+  if (typeof supabase.rpc !== "function") return null;
+  const { data, error } = await supabase.rpc("enrich_timeline_page", {
+    moment_ids: [...new Set(momentIds.filter(Boolean))],
+  });
+  if (error || !isEnrichmentPayload(data)) return null;
+  return enrichmentReader(data);
+}
+
+export function shareTimelineEnrichment(
+  listing: Promise<ConnectedTimelineListing> | ConnectedTimelineListing,
+) {
+  return Promise.resolve(listing).then(async (resolved) => {
+    const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
+    return timelineEnrichmentReader(
+      supabase,
+      resolved.rows.map((row) => row.moment_id),
+    );
+  });
+}
+
 export async function loadConnectedTimelineListing(
   access: AuthenticatedAccess,
   context: ConnectedJournalContext,
@@ -952,12 +1049,20 @@ export async function loadConnectedTimeline(
       (row) => row.moment_kind === "video" || row.moment_kind === "insight",
     )
     .map((row) => row.moment_id);
+  const enrichmentReader =
+    options.sharedEnrichment !== undefined
+      ? await options.sharedEnrichment
+      : await timelineEnrichmentReader(
+          supabase,
+          enrichRows.map((row) => row.moment_id),
+        );
+  const reader = enrichmentReader ?? supabase;
   const [photosByMoment, videoMetaByMoment, conversationsByMoment] =
     await Promise.all([
-      loadMomentPhotosByMomentId(supabase, photoMomentIds),
-      loadVideoMetaByMomentId(supabase, videoMomentIds),
+      loadMomentPhotosByMomentId(reader, photoMomentIds),
+      loadVideoMetaByMomentId(reader, videoMomentIds),
       loadMomentConversationsByMomentId(
-        supabase,
+        reader,
         {
           ...access,
           membershipIds: context.viewerMembershipIds?.length

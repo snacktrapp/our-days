@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import {
   byteSizeMatches,
   contentLengthAgrees,
   declaredByteSize,
-  fetchSignedPrivateObject,
   mediaTypeMatches,
   privateMediaRetrySrc,
   sha256HexMatches,
 } from "./private-media-delivery";
+import {
+  fetchSignedPrivateObject,
+  streamVerifiedBytes,
+} from "./private-media-delivery.server";
 
 describe("private media delivery checks", () => {
   it("accepts bigint or decimal-string sizes from PostgREST", () => {
@@ -118,6 +124,28 @@ describe("private media delivery checks", () => {
       ),
     ).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it("streams a matching object before the last chunk is released and stops a bad digest", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const good = streamVerifiedBytes(
+      new Response(bytes).body!,
+      bytes.byteLength,
+      digest,
+    );
+    expect(new Uint8Array(await new Response(good).arrayBuffer())).toEqual(
+      bytes,
+    );
+    const bad = streamVerifiedBytes(
+      new Response(bytes).body!,
+      bytes.byteLength,
+      "0".repeat(64),
+    );
+    await expect(new Response(bad).arrayBuffer()).rejects.toThrow(
+      /did not match its descriptor/u,
+    );
   });
 
   it("cache-busts a same-origin retry without dropping the photo id", () => {

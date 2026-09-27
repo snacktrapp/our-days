@@ -14,6 +14,7 @@ import {
   loadConnectedTimeline,
   loadMomentConversationsByMomentId,
   mapTimelineRow,
+  shareTimelineEnrichment,
 } from "./moments.server";
 
 type Row = Parameters<typeof mapTimelineRow>[0];
@@ -1103,6 +1104,256 @@ describe("connected timeline mapping", () => {
         moment: expect.objectContaining({ id: "second" }),
       }),
     ]);
+  });
+
+  it("enriches a page in one RPC", async () => {
+    const momentId = "10000000-0000-4000-8000-000000000099";
+    const photoId = "10000000-0000-4000-8000-000000000098";
+    const from = vi.fn(() => {
+      throw new Error("timeline enrichment fell back to per-table reads");
+    });
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "list_all_timeline_moments") {
+        return {
+          data: [row({ moment_id: momentId, moment_kind: "photo" })],
+          error: null,
+        };
+      }
+      if (fn === "enrich_timeline_page") {
+        return {
+          data: {
+            photos: [
+              {
+                id: photoId,
+                moment_id: momentId,
+                sort_order: 0,
+                display_width: 1200,
+                display_height: 800,
+              },
+            ],
+            videos: [],
+            posters: [],
+            notes: [
+              {
+                id: "note-1",
+                moment_id: momentId,
+                author_membership_id: "membership-molly",
+                body: "Look at this.",
+                revision: 1,
+                created_at: "2026-08-29T12:00:00Z",
+              },
+            ],
+            reactions: [],
+            hearts: [],
+            mentions: [],
+            authors: [
+              {
+                membership_id: "membership-molly",
+                display_name: "Molly",
+                accent_token: "sage",
+              },
+            ],
+          },
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({
+      from,
+      rpc,
+    } as never);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+    });
+    const moment = timeline.entries.find(
+      (entry) => entry.entryType === "moment",
+    );
+    expect(moment?.entryType).toBe("moment");
+    if (moment?.entryType !== "moment") return;
+    expect(moment.moment.kind).toBe("photo");
+    if (moment.moment.kind !== "photo") return;
+    expect(moment.moment.image.src).toBe(
+      `/api/media/moments/${momentId}?photo=${photoId}`,
+    );
+    expect(moment.moment.conversation.notes[0]?.body).toBe("Look at this.");
+    expect(moment.moment.conversation.notes[0]?.authorName).toBe("Molly");
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [momentId],
+    });
+    expect(rpc).not.toHaveBeenCalledWith(
+      "get_photo_moments_delivery",
+      expect.anything(),
+    );
+  });
+
+  it("enriches the opening card and the remainder from one RPC", async () => {
+    const firstId = "10000000-0000-4000-8000-000000000099";
+    const secondId = "10000000-0000-4000-8000-000000000097";
+    const firstPhotoId = "10000000-0000-4000-8000-000000000098";
+    const secondPhotoId = "10000000-0000-4000-8000-000000000096";
+    const from = vi.fn(() => {
+      throw new Error("timeline enrichment fell back to per-table reads");
+    });
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "enrich_timeline_page") {
+        return {
+          data: {
+            photos: [
+              {
+                id: firstPhotoId,
+                moment_id: firstId,
+                sort_order: 0,
+                display_width: 1200,
+                display_height: 800,
+              },
+              {
+                id: secondPhotoId,
+                moment_id: secondId,
+                sort_order: 0,
+                display_width: 800,
+                display_height: 600,
+              },
+            ],
+            videos: [],
+            posters: [],
+            notes: [],
+            reactions: [],
+            hearts: [],
+            mentions: [],
+            authors: [],
+          },
+          error: null,
+        };
+      }
+      return { data: [], error: null };
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({
+      from,
+      rpc,
+    } as never);
+    const listing = {
+      rows: [
+        row({ moment_id: firstId, moment_kind: "photo" }),
+        row({ moment_id: secondId, moment_kind: "photo" }),
+      ],
+      pageCount: 1,
+      personal: undefined,
+      requestedAllCircles: true,
+      queryPrefix: "/family",
+      hasMore: false,
+      paginationFailed: false,
+      firstPageFailed: false,
+      snapshotAt: "2026-08-30T10:00:01Z",
+    };
+    const enrichment = shareTimelineEnrichment(listing);
+
+    const [first, rest] = await Promise.all([
+      loadConnectedTimeline(familyAccess, familyContext, {
+        pages: 1,
+        allCircles: true,
+        enrichLimit: 1,
+        omitCompletion: true,
+        omitPagination: true,
+        sharedList: listing,
+        sharedEnrichment: enrichment,
+      }),
+      loadConnectedTimeline(familyAccess, familyContext, {
+        pages: 1,
+        allCircles: true,
+        enrichOffset: 1,
+        sharedList: listing,
+        sharedEnrichment: enrichment,
+      }),
+    ]);
+
+    const firstMoment = first.entries.find(
+      (entry) => entry.entryType === "moment",
+    );
+    const restMoment = rest.entries.find(
+      (entry) => entry.entryType === "moment",
+    );
+    expect(firstMoment?.entryType).toBe("moment");
+    expect(restMoment?.entryType).toBe("moment");
+    if (
+      firstMoment?.entryType !== "moment" ||
+      firstMoment.moment.kind !== "photo"
+    ) {
+      return;
+    }
+    if (
+      restMoment?.entryType !== "moment" ||
+      restMoment.moment.kind !== "photo"
+    ) {
+      return;
+    }
+    expect(firstMoment.moment.image.src).toBe(
+      `/api/media/moments/${firstId}?photo=${firstPhotoId}`,
+    );
+    expect(restMoment.moment.image.src).toBe(
+      `/api/media/moments/${secondId}?photo=${secondPhotoId}`,
+    );
+    expect(from).not.toHaveBeenCalled();
+    expect(
+      rpc.mock.calls.filter(([fn]) => fn === "enrich_timeline_page"),
+    ).toEqual([["enrich_timeline_page", { moment_ids: [firstId, secondId] }]]);
+  });
+
+  it("falls back to per-table reads when the shared enrichment RPC fails", async () => {
+    const momentId = "10000000-0000-4000-8000-000000000099";
+    const query = {
+      select: () => query,
+      eq: () => query,
+      in: () => query,
+      is: () => query,
+      order: () => query,
+      then(
+        resolve: (value: { data: unknown[]; error: null }) => unknown,
+        reject?: (reason: unknown) => unknown,
+      ) {
+        return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+      },
+    };
+    const from = vi.fn(() => query);
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "enrich_timeline_page") {
+        return { data: null, error: { message: "enrich failed" } };
+      }
+      return { data: [], error: null };
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({
+      from,
+      rpc,
+    } as never);
+    const listing = {
+      rows: [row({ moment_id: momentId, moment_kind: "photo" })],
+      pageCount: 1,
+      personal: undefined,
+      requestedAllCircles: true,
+      queryPrefix: "/family",
+      hasMore: false,
+      paginationFailed: false,
+      firstPageFailed: false,
+      snapshotAt: "2026-08-30T10:00:01Z",
+    };
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+      sharedList: listing,
+      sharedEnrichment: shareTimelineEnrichment(listing),
+    });
+
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [momentId],
+    });
+    expect(from).toHaveBeenCalledWith("moment_photos");
+    expect(
+      timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(1);
   });
 
   it("loads the All feed from list_all_timeline_moments", async () => {
