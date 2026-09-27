@@ -460,6 +460,30 @@ select {
   border-color: var(--accent);
 }
 
+/* Initials badges follow the accent picker. Photos keep their own image.
+   The commenter mark above stays the accent dot and does not also grow an initial. */
+:is(
+  .avatar-node:not(.avatar-node-image),
+  .person-avatar,
+  .post-author-avatar,
+  .memory-feature-avatar,
+  .mention-chip-mark,
+  .tag-person-dot,
+  .profile-orbit,
+  .family-mark-dot,
+  .settings-avatar:not(.settings-avatar-tile):not(.settings-avatar-add):not(
+      .is-pending
+    )
+) {
+  background: var(--accent);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.memory-feature-avatar {
+  color: var(--text) !important;
+}
+
 .auth-error,
 .field-error,
 .composer-error,
