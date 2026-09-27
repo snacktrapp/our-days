@@ -39,7 +39,6 @@ import {
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
 import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
-import { warmSignedPhotoUrls } from "@/lib/private-media-delivery.server";
 import { formatMomentClock } from "@/features/timeline/moment-time-label";
 import type { MentionDisplay } from "@/features/mentions/mention-draft";
 
@@ -94,6 +93,7 @@ export type ConnectedTimelineOptions = Readonly<{
   omitCompletion?: boolean;
   omitPagination?: boolean;
   sharedList?: Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
+  sharedEnrichment?: Promise<MomentPhotoClient | null>;
 }>;
 
 export type ConnectedTimelineListOptions = Readonly<{
@@ -909,22 +909,16 @@ async function timelineEnrichmentReader(
   return enrichmentReader(data);
 }
 
-async function warmTimelinePhotoUrls(
-  supabase: MomentPhotoClient,
-  momentIds: readonly string[],
+export function shareTimelineEnrichment(
+  listing: Promise<ConnectedTimelineListing> | ConnectedTimelineListing,
 ) {
-  const storage = supabase.storage;
-  if (!storage || typeof storage.from !== "function") return;
-  if (typeof supabase.rpc !== "function") return;
-  try {
-    const { data, error } = await supabase.rpc("get_photo_moments_delivery", {
-      moment_ids: [...new Set(momentIds.filter(Boolean))],
-    });
-    if (error || !data?.length) return;
-    await warmSignedPhotoUrls(storage, data);
-  } catch {
-    // Each photo route can still mint its own signed URL.
-  }
+  return Promise.resolve(listing).then(async (resolved) => {
+    const supabase = await createOurDaysServerClient({ readTimeoutMs: 8000 });
+    return timelineEnrichmentReader(
+      supabase,
+      resolved.rows.map((row) => row.moment_id),
+    );
+  });
 }
 
 export async function loadConnectedTimelineListing(
@@ -1055,10 +1049,13 @@ export async function loadConnectedTimeline(
       (row) => row.moment_kind === "video" || row.moment_kind === "insight",
     )
     .map((row) => row.moment_id);
-  const enrichmentReader = await timelineEnrichmentReader(
-    supabase,
-    enrichRows.map((row) => row.moment_id),
-  );
+  const enrichmentReader =
+    options.sharedEnrichment !== undefined
+      ? await options.sharedEnrichment
+      : await timelineEnrichmentReader(
+          supabase,
+          enrichRows.map((row) => row.moment_id),
+        );
   const reader = enrichmentReader ?? supabase;
   const [photosByMoment, videoMetaByMoment, conversationsByMoment] =
     await Promise.all([
@@ -1077,9 +1074,6 @@ export async function loadConnectedTimeline(
         enrichRows.map((row) => row.moment_id),
       ),
     ]);
-  if (enrichmentReader && photoMomentIds.length > 0) {
-    void warmTimelinePhotoUrls(supabase, photoMomentIds);
-  }
   const visibility = {
     viewerPersonId: access.personId,
     viewingJournalPersonId: options.journalPersonId,

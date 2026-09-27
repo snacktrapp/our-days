@@ -18,86 +18,7 @@ type SignedUrlBucket = {
     data: { signedUrl?: string | null } | null;
     error: unknown;
   }>;
-  createSignedUrls?: (
-    paths: string[],
-    expiresIn: number,
-  ) => Promise<{
-    data:
-      | {
-          error?: string | null;
-          path?: string | null;
-          signedUrl?: string | null;
-        }[]
-      | null;
-    error: unknown;
-  }>;
 };
-
-const signedUrlTtlMs = 45_000;
-const signedUrls = new Map<
-  string,
-  Readonly<{ url: string; expiresAt: number }>
->();
-
-function signedUrlCacheKey(bucketId: string, objectPath: string) {
-  return `${bucketId}\0${objectPath}`;
-}
-
-export function rememberSignedPrivateUrls(
-  entries: readonly { bucketId: string; path: string; signedUrl: string }[],
-) {
-  const expiresAt = Date.now() + signedUrlTtlMs;
-  for (const entry of entries) {
-    if (!entry.bucketId || !entry.path || !entry.signedUrl) continue;
-    signedUrls.set(signedUrlCacheKey(entry.bucketId, entry.path), {
-      url: entry.signedUrl,
-      expiresAt,
-    });
-  }
-}
-
-export function readSignedPrivateUrl(bucketId: string, path: string) {
-  const key = signedUrlCacheKey(bucketId, path);
-  const entry = signedUrls.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    signedUrls.delete(key);
-    return null;
-  }
-  return entry.url;
-}
-
-export function clearSignedPrivateUrls() {
-  signedUrls.clear();
-}
-
-export async function warmSignedPhotoUrls(
-  storage: {
-    from: (bucket: string) => SignedUrlBucket;
-  },
-  rows: readonly { bucket_id: string; object_path: string }[],
-) {
-  const pathsByBucket = new Map<string, string[]>();
-  for (const row of rows) {
-    if (!row.bucket_id || !row.object_path) continue;
-    const paths = pathsByBucket.get(row.bucket_id) ?? [];
-    if (!paths.includes(row.object_path)) paths.push(row.object_path);
-    pathsByBucket.set(row.bucket_id, paths);
-  }
-  for (const [bucket, paths] of pathsByBucket) {
-    const signer = storage.from(bucket);
-    if (!signer.createSignedUrls) continue;
-    const signed = await signer.createSignedUrls(paths, 60);
-    if (signed.error || !signed.data) continue;
-    rememberSignedPrivateUrls(
-      signed.data.flatMap((item) =>
-        item.path && item.signedUrl && !item.error
-          ? [{ bucketId: bucket, path: item.path, signedUrl: item.signedUrl }]
-          : [],
-      ),
-    );
-  }
-}
 
 export function streamVerifiedBytes(
   source: ReadableStream<Uint8Array>,
@@ -239,19 +160,9 @@ export async function fetchSignedPrivateObject(
 
 export async function openSignedPrivateObject(
   bucket: SignedUrlBucket,
-  bucketId: string,
   objectPath: string,
   expected: PrivateObjectExpectation,
 ) {
-  const cached = readSignedPrivateUrl(bucketId, objectPath);
-  if (cached) {
-    const upstream = await fetchSignedUrl(cached);
-    const opened = upstream
-      ? await openFetchedPrivateObject(upstream, expected)
-      : null;
-    if (opened) return opened;
-  }
-
   const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
   if (error || !signed?.signedUrl) return null;
   const upstream = await fetchSignedUrl(signed.signedUrl);

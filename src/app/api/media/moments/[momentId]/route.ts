@@ -80,7 +80,6 @@ export async function GET(
 
   const photo = await openSignedPrivateObject(
     supabase.storage.from(descriptor.bucket_id),
-    descriptor.bucket_id,
     descriptor.object_path,
     {
       size: descriptor.output_size_bytes,

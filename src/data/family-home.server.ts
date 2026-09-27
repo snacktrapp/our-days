@@ -18,12 +18,16 @@ import {
   connectedTimelineInteraction,
   loadConnectedTimeline,
   loadConnectedTimelineListing,
+  shareTimelineEnrichment,
   type ConnectedTimelineListing,
 } from "./moments.server";
 
 type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type SharedFamilyTimelineList =
   Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
+type SharedFamilyTimelineEnrichment = ReturnType<
+  typeof shareTimelineEnrichment
+>;
 
 function fallbackFamilyChrome(
   access: AuthenticatedAccess,
@@ -201,6 +205,12 @@ export function loadFamilyHomeTimelineList(
   );
 }
 
+export function loadFamilyHomeTimelineEnrichment(
+  timelineList: SharedFamilyTimelineList,
+) {
+  return shareTimelineEnrichment(timelineList);
+}
+
 export async function loadFamilyHomeOpeningTimeline(
   access: AuthenticatedAccess,
   context: Awaited<ReturnType<typeof loadConnectedJournalContext>>,
@@ -210,6 +220,7 @@ export async function loadFamilyHomeOpeningTimeline(
     circleId?: string;
   }>,
   timelineList?: SharedFamilyTimelineList,
+  sharedEnrichment?: SharedFamilyTimelineEnrichment,
 ): Promise<
   Readonly<{
     model: TimelineViewModel;
@@ -222,6 +233,7 @@ export async function loadFamilyHomeOpeningTimeline(
     context,
     options,
     timelineList,
+    sharedEnrichment,
   );
   const hasFirstMoment = first.entries.some(
     (entry) => entry.entryType === "moment",
@@ -245,6 +257,7 @@ export async function loadFamilyHomeFirstMoment(
     circleId?: string;
   }>,
   timelineList?: SharedFamilyTimelineList,
+  sharedEnrichment?: SharedFamilyTimelineEnrichment,
 ): Promise<TimelineViewModel> {
   try {
     return await loadConnectedTimeline(access, context, {
@@ -253,6 +266,7 @@ export async function loadFamilyHomeFirstMoment(
       omitCompletion: true,
       omitPagination: true,
       sharedList: timelineList,
+      ...(sharedEnrichment ? { sharedEnrichment } : {}),
     });
   } catch (error) {
     if (shouldTrapJournalHomeInInterrupt(error)) throw error;
@@ -269,12 +283,14 @@ export async function loadFamilyHomeRemainder(
     circleId?: string;
   }>,
   timelineList?: SharedFamilyTimelineList,
+  sharedEnrichment?: SharedFamilyTimelineEnrichment,
 ): Promise<TimelineViewModel> {
   try {
     return await loadConnectedTimeline(access, context, {
       ...familyHomeTimelineOptions(options),
       enrichOffset: 1,
       sharedList: timelineList,
+      ...(sharedEnrichment ? { sharedEnrichment } : {}),
     });
   } catch (error) {
     if (shouldTrapJournalHomeInInterrupt(error)) throw error;

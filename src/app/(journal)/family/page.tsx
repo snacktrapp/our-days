@@ -22,6 +22,7 @@ import {
   loadFamilyHomeChrome,
   loadFamilyHomeOpeningTimeline,
   loadFamilyHomeRemainder,
+  loadFamilyHomeTimelineEnrichment,
   loadFamilyHomeTimelineList,
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
@@ -122,14 +123,22 @@ async function FamilyTimeline({
     context,
     options,
   );
+  const sharedEnrichment = loadFamilyHomeTimelineEnrichment(sharedTimelineList);
   const remainder = loadFamilyHomeRemainder(
     access,
     context,
     options,
     sharedTimelineList,
+    sharedEnrichment,
   );
   const opening = await timePageData(() =>
-    loadFamilyHomeOpeningTimeline(access, context, options, sharedTimelineList),
+    loadFamilyHomeOpeningTimeline(
+      access,
+      context,
+      options,
+      sharedTimelineList,
+      sharedEnrichment,
+    ),
   );
   if (!opening.streamRemainder) {
     void remainder.catch(() => undefined);
