@@ -639,9 +639,17 @@ select {
   color: var(--text);
 }
 
-/* Header slot only (20px tall). Sign-in and other screens keep the standard wordmark. */
+/* Header slot only. The SVG is the OUR DAYS letters; sign-in keeps the standard mark.
+   The title spans the full bar, so auto margins center the wordmark on the header
+   rather than in the gap between unequal side controls. */
+.topbar > .title-switcher,
+.topbar > .title-lockup {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+}
 .topbar .our-days-wordmark {
-  width: 118px;
+  width: calc(20px * 1382 / 328);
   height: 20px;
   margin: 0 auto 4px;
   background: transparent url("/our-days-retro-wordmark.svg") center / contain
