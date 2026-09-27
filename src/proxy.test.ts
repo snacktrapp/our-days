@@ -298,6 +298,20 @@ describe("security proxy", () => {
     expect(response.headers.get("server-timing")).toMatch(/proxy;dur=/u);
   });
 
+  it("does not set Server-Timing on moment delivery, so the route can", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "publishable-test-key");
+    supabaseMocks.createServerClient.mockImplementation(() => ({
+      auth: { getClaims: () => Promise.resolve({ data: null, error: null }) },
+    }));
+    const response = await proxy(
+      new NextRequest(
+        "https://journal.example.com/api/media/moments/10000000-0000-4000-8000-000000000001?w=1080",
+      ),
+    );
+    expect(response.headers.get("server-timing")).toBeNull();
+  });
+
   it.each([
     ["/", true],
     ["/family", true],

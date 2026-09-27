@@ -1,6 +1,9 @@
 // @vitest-environment node
 
+import { createHash } from "node:crypto";
+import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { clearCardRenditionCache } from "@/lib/card-photo-rendition.server";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
@@ -37,10 +40,33 @@ const secondDescriptor = {
   sort_order: 1,
 };
 
-function request(id = momentId) {
-  return GET(new Request(`https://journal.example.test/api/media/${id}`), {
-    params: Promise.resolve({ momentId: id }),
-  });
+function request(id = momentId, search = "") {
+  return GET(
+    new Request(`https://journal.example.test/api/media/${id}${search}`),
+    {
+      params: Promise.resolve({ momentId: id }),
+    },
+  );
+}
+
+async function wideWebp(width = 1400, height = 900) {
+  const bytes = await sharp({
+    create: {
+      width,
+      height,
+      channels: 3,
+      background: { r: 30, g: 70, b: 120 },
+    },
+  })
+    .webp({ quality: 80 })
+    .withMetadata({
+      exif: { IFD0: { Copyright: "private-note" } },
+    })
+    .toBuffer();
+  return {
+    bytes,
+    sha: createHash("sha256").update(bytes).digest("hex"),
+  };
 }
 
 function signedBytes(
@@ -232,5 +258,201 @@ describe("private photo delivery route", () => {
     expect(octet.headers.get("content-type")).toBe("image/webp");
     expect(mocks.createSignedUrl).toHaveBeenCalled();
     expect(mocks.fetch).toHaveBeenCalled();
+  });
+
+  it("rejects a width outside the card allow-list with a neutral 404", async () => {
+    mocks.rpc.mockResolvedValue({ data: [descriptor], error: null });
+    const response = await request(momentId, "?w=200");
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+
+    const oversized = await request(momentId, "?w=1920");
+    expect(oversized.status).toBe(404);
+    expect(await oversized.text()).toBe("");
+  });
+
+  it("returns a neutral 404 when the resized source has the wrong size or MIME", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength + 1,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    const wrongSize = await request(momentId, "?w=1080");
+    expect(wrongSize.status).toBe(404);
+    expect(await wrongSize.text()).toBe("");
+
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/jpeg",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    const wrongMime = await request(momentId, "?w=640");
+    expect(wrongMime.status).toBe(404);
+    expect(await wrongMime.text()).toBe("");
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the unresized full-view path on the verified display bytes", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    const response = await request(momentId, `?photo=${descriptor.photo_id}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    expect(response.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(source.bytes);
+  });
+
+  it("does not serve a cached rendition when authorization fails", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    expect((await request(momentId, "?w=1080")).status).toBe(200);
+
+    mocks.rpc.mockResolvedValue({
+      data: null,
+      error: { message: "Family session is unavailable" },
+    });
+    const denied = await request(momentId, "?w=1080");
+    expect(denied.status).toBe(404);
+    expect(await denied.text()).toBe("");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("verifies the display derivative before resizing it to the card width", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    const response = await request(momentId, "?w=1080");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/webp");
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
+    const timing = response.headers.get("server-timing") ?? "";
+    expect(timing).toContain("auth;dur=");
+    expect(timing).toContain("fetch;dur=");
+    expect(timing).toContain("resize;dur=");
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.byteLength).toBeLessThan(source.bytes.byteLength);
+    const meta = await sharp(body).metadata();
+    expect(meta.format).toBe("webp");
+    expect(meta.width).toBe(1080);
+    expect(meta.exif).toBeUndefined();
+    expect(body.includes(Buffer.from("private-note"))).toBe(false);
+
+    const small = await wideWebp(400, 300);
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: small.bytes.byteLength,
+          output_sha256_hex: small.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...small.bytes], "image/webp");
+    const unscaled = await request(momentId, "?w=1080");
+    expect(unscaled.status).toBe(200);
+    const unscaledMeta = await sharp(
+      Buffer.from(await unscaled.arrayBuffer()),
+    ).metadata();
+    expect(unscaledMeta.width).toBe(400);
+    expect(unscaledMeta.height).toBe(300);
+  });
+
+  it("returns a neutral 404 when the bytes hashed for resize do not match", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: "a".repeat(64),
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    const response = await request(momentId, "?w=640");
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("");
+  });
+
+  it("reuses a verified card rendition without fetching the source again", async () => {
+    clearCardRenditionCache();
+    const source = await wideWebp();
+    mocks.rpc.mockResolvedValue({
+      data: [
+        {
+          ...descriptor,
+          output_size_bytes: source.bytes.byteLength,
+          output_sha256_hex: source.sha,
+          output_mime_type: "image/webp",
+        },
+      ],
+      error: null,
+    });
+    signedBytes([...source.bytes], "image/webp");
+    expect((await request(momentId, "?w=640")).status).toBe(200);
+    signedBytes([...source.bytes], "image/webp");
+    const cached = await request(momentId, "?w=640");
+    expect(cached.status).toBe(200);
+    expect(cached.headers.get("server-timing")).toContain("resize;dur=0");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 });

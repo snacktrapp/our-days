@@ -30,15 +30,20 @@ export function trackedTimingDocumentCount() {
   return inflight.size;
 }
 
-export function recordPageDataTiming(id: string, ms: number) {
-  const headers = inflight.get(id);
-  if (!headers) return;
+function metricDuration(headers: Headers, name: string) {
   const current = (headers.get("server-timing") ?? "")
     .split(",")
     .map((part) => part.trim())
-    .find((part) => part.startsWith(metricPrefix("db")));
-  const previous = current
-    ? Number(current.slice(metricPrefix("db").length))
-    : 0;
-  upsertServerTiming(headers, "db", previous + ms);
+    .find((part) => part.startsWith(metricPrefix(name)));
+  if (!current) return 0;
+  const parsed = Number(current.slice(metricPrefix(name).length));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function recordPageDataTiming(id: string, ms: number) {
+  const headers = inflight.get(id);
+  if (!headers) return;
+  const total = metricDuration(headers, "page-data") + ms;
+  upsertServerTiming(headers, "page-data", total);
+  upsertServerTiming(headers, "db", total);
 }

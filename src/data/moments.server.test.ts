@@ -14,6 +14,7 @@ import {
   loadConnectedTimeline,
   loadMomentConversationsByMomentId,
   mapTimelineRow,
+  shareFamilyTimelineEnrichment,
   shareTimelineEnrichment,
 } from "./moments.server";
 
@@ -1190,7 +1191,7 @@ describe("connected timeline mapping", () => {
     );
   });
 
-  it("enriches the opening card and the remainder from one RPC", async () => {
+  it("enriches the opening card and the remainder without repeating a moment", async () => {
     const firstId = "10000000-0000-4000-8000-000000000099";
     const secondId = "10000000-0000-4000-8000-000000000097";
     const firstPhotoId = "10000000-0000-4000-8000-000000000098";
@@ -1249,7 +1250,7 @@ describe("connected timeline mapping", () => {
       firstPageFailed: false,
       snapshotAt: "2026-08-30T10:00:01Z",
     };
-    const enrichment = shareTimelineEnrichment(listing);
+    const enrichments = shareFamilyTimelineEnrichment(listing);
 
     const [first, rest] = await Promise.all([
       loadConnectedTimeline(familyAccess, familyContext, {
@@ -1259,14 +1260,14 @@ describe("connected timeline mapping", () => {
         omitCompletion: true,
         omitPagination: true,
         sharedList: listing,
-        sharedEnrichment: enrichment,
+        sharedEnrichment: enrichments.opening,
       }),
       loadConnectedTimeline(familyAccess, familyContext, {
         pages: 1,
         allCircles: true,
         enrichOffset: 1,
         sharedList: listing,
-        sharedEnrichment: enrichment,
+        sharedEnrichment: enrichments.remainder,
       }),
     ]);
 
@@ -1299,7 +1300,72 @@ describe("connected timeline mapping", () => {
     expect(from).not.toHaveBeenCalled();
     expect(
       rpc.mock.calls.filter(([fn]) => fn === "enrich_timeline_page"),
-    ).toEqual([["enrich_timeline_page", { moment_ids: [firstId, secondId] }]]);
+    ).toHaveLength(2);
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [firstId],
+    });
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [secondId],
+    });
+  });
+
+  it("falls back to per-table reads when the opening enrichment RPC fails", async () => {
+    const momentId = "10000000-0000-4000-8000-000000000099";
+    const query = {
+      select: () => query,
+      eq: () => query,
+      in: () => query,
+      is: () => query,
+      order: () => query,
+      then(
+        resolve: (value: { data: unknown[]; error: null }) => unknown,
+        reject?: (reason: unknown) => unknown,
+      ) {
+        return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+      },
+    };
+    const from = vi.fn(() => query);
+    const rpc = vi.fn(async (fn: string) => {
+      if (fn === "enrich_timeline_page") {
+        return { data: null, error: { message: "enrich failed" } };
+      }
+      return { data: [], error: null };
+    });
+    vi.mocked(createOurDaysServerClient).mockResolvedValue({
+      from,
+      rpc,
+    } as never);
+    const listing = {
+      rows: [row({ moment_id: momentId, moment_kind: "photo" })],
+      pageCount: 1,
+      personal: undefined,
+      requestedAllCircles: true,
+      queryPrefix: "/family",
+      hasMore: false,
+      paginationFailed: false,
+      firstPageFailed: false,
+      snapshotAt: "2026-08-30T10:00:01Z",
+    };
+    const enrichments = shareFamilyTimelineEnrichment(listing);
+
+    const timeline = await loadConnectedTimeline(familyAccess, familyContext, {
+      pages: 1,
+      allCircles: true,
+      enrichLimit: 1,
+      sharedList: listing,
+      sharedEnrichment: enrichments.opening,
+    });
+
+    expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
+      moment_ids: [momentId],
+    });
+    expect(
+      rpc.mock.calls.filter(([fn]) => fn === "enrich_timeline_page"),
+    ).toHaveLength(1);
+    expect(from).toHaveBeenCalledWith("moment_photos");
+    expect(
+      timeline.entries.filter((entry) => entry.entryType === "moment"),
+    ).toHaveLength(1);
   });
 
   it("falls back to per-table reads when the shared enrichment RPC fails", async () => {

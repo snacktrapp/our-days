@@ -50,7 +50,16 @@ export function PrivatePhotoImage({
   const deliverySrc = privateMediaRetrySrc(src, attempt);
   const discoverInDocument = highPriority && deliverySrc.startsWith("/");
   const loadThroughBlob = !discoverInDocument || rescueWithBlob;
-  if (discoverInDocument && !rescueWithBlob) {
+  // Hydration must not call preload() again. The response is private/no-store,
+  // so a second preload after the document request finishes downloads the
+  // photo twice. The server link and the img already share one request.
+  const alreadyInDocument =
+    typeof document !== "undefined" &&
+    Boolean(
+      document.querySelector(`img[src="${deliverySrc}"]`) ||
+      document.querySelector(`link[rel="preload"][href="${deliverySrc}"]`),
+    );
+  if (discoverInDocument && !rescueWithBlob && !alreadyInDocument) {
     preload(deliverySrc, { as: "image", fetchPriority: "high" });
   }
   const { objectUrl, failed } = usePrivateMediaObjectUrl(

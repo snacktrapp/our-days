@@ -18,7 +18,7 @@ import {
   connectedTimelineInteraction,
   loadConnectedTimeline,
   loadConnectedTimelineListing,
-  shareTimelineEnrichment,
+  shareFamilyTimelineEnrichment,
   type ConnectedTimelineListing,
 } from "./moments.server";
 
@@ -26,8 +26,8 @@ type AuthenticatedAccess = Extract<JournalAccess, { mode: "authenticated" }>;
 type SharedFamilyTimelineList =
   Promise<ConnectedTimelineListing> | ConnectedTimelineListing;
 type SharedFamilyTimelineEnrichment = ReturnType<
-  typeof shareTimelineEnrichment
->;
+  typeof shareFamilyTimelineEnrichment
+>["opening"];
 
 function fallbackFamilyChrome(
   access: AuthenticatedAccess,
@@ -205,10 +205,10 @@ export function loadFamilyHomeTimelineList(
   );
 }
 
-export function loadFamilyHomeTimelineEnrichment(
+export function loadFamilyHomeTimelineEnrichments(
   timelineList: SharedFamilyTimelineList,
 ) {
-  return shareTimelineEnrichment(timelineList);
+  return shareFamilyTimelineEnrichment(timelineList);
 }
 
 export async function loadFamilyHomeOpeningTimeline(

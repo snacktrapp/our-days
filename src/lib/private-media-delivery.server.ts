@@ -169,3 +169,39 @@ export async function openSignedPrivateObject(
   if (!upstream) return null;
   return openFetchedPrivateObject(upstream, expected);
 }
+
+// Buffer the display derivative and accept it only when size, MIME, and
+// SHA-256 all match. Callers that resize must use this instead of the stream.
+export async function readVerifiedPrivateBytes(
+  bucket: SignedUrlBucket,
+  objectPath: string,
+  expected: PrivateObjectExpectation,
+) {
+  const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
+  if (error || !signed?.signedUrl) return null;
+  const upstream = await fetchSignedUrl(signed.signedUrl);
+  if (!upstream) return null;
+  if (upstream.status !== 200) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  if (!mediaTypeMatches(upstream.headers.get("content-type"), expected.mime)) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  const size = declaredByteSize(expected.size);
+  const sha = normalizedSha256Hex(expected.sha);
+  if (size == null || !sha) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  if (!contentLengthAgrees(upstream.headers, size)) {
+    await upstream.body?.cancel();
+    return null;
+  }
+  const bytes = new Uint8Array(await upstream.arrayBuffer());
+  if (bytes.byteLength !== size) return null;
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  if (!sha256HexMatches(digest, sha)) return null;
+  return bytes;
+}

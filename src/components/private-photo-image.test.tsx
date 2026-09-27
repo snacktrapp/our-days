@@ -52,6 +52,23 @@ describe("PrivatePhotoImage", () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it("does not preload a photo the document already requested", () => {
+    const src = "/api/media/moments/one?w=1080";
+    const existing = document.createElement("img");
+    existing.setAttribute("src", src);
+    existing.alt = "already painted";
+    document.body.appendChild(existing);
+    render(
+      <PrivatePhotoImage
+        src={src}
+        alt="Photo in Molly’s journal from Aug 1, 2026"
+        highPriority
+      />,
+    );
+    expect(document.querySelectorAll('link[rel="preload"]')).toHaveLength(0);
+    existing.remove();
+  });
+
   it("puts the first photo URL in the document and fetches a blob only after that load fails", async () => {
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:private-photo");
     const fetchMock = vi.fn(async () => ({

@@ -1,7 +1,9 @@
 import { Suspense } from "react";
+import { preload } from "react-dom";
 import { JournalChrome } from "@/features/shell/journal-chrome";
 import { NotificationCenter } from "@/features/shell/notification-center";
 import { OpeningJournalShell } from "@/features/shell/opening-journal-shell";
+import { openingTimelinePhotoSrc } from "@/features/moments/moment-photos";
 import { JournalPromos } from "@/features/timeline/journal-promos";
 import {
   hasSharedCircle,
@@ -22,7 +24,7 @@ import {
   loadFamilyHomeChrome,
   loadFamilyHomeOpeningTimeline,
   loadFamilyHomeRemainder,
-  loadFamilyHomeTimelineEnrichment,
+  loadFamilyHomeTimelineEnrichments,
   loadFamilyHomeTimelineList,
 } from "@/data/family-home.server";
 import { loadJournalActivityNotifications } from "@/data/journal-context.server";
@@ -103,7 +105,73 @@ async function FamilyTimelineRest({
   );
 }
 
-async function FamilyTimeline({
+async function FamilyFirstPhotoPreload({
+  timelineList,
+}: Readonly<{
+  timelineList: ReturnType<typeof loadFamilyHomeTimelineList>;
+}>) {
+  try {
+    const listing = await timelineList;
+    const src = openingTimelinePhotoSrc(listing.rows);
+    if (src) preload(src, { as: "image", fetchPriority: "high" });
+  } catch {
+    // The opening timeline reports a failed list.
+  }
+  return null;
+}
+
+async function FamilyTimelineBody({
+  access,
+  context,
+  options,
+  timelineList,
+  openingEnrichment,
+  remainder,
+}: Readonly<{
+  access: AuthenticatedAccess;
+  context: NonNullable<
+    Awaited<ReturnType<typeof loadFamilyHomeChrome>>["context"]
+  >;
+  options: Readonly<{
+    pages?: string;
+    snapshotAt?: string;
+    circleId?: string;
+  }>;
+  timelineList: ReturnType<typeof loadFamilyHomeTimelineList>;
+  openingEnrichment: ReturnType<
+    typeof loadFamilyHomeTimelineEnrichments
+  >["opening"];
+  remainder: ReturnType<typeof loadFamilyHomeRemainder>;
+}>) {
+  const opening = await timePageData(() =>
+    loadFamilyHomeOpeningTimeline(
+      access,
+      context,
+      options,
+      timelineList,
+      openingEnrichment,
+    ),
+  );
+  if (!opening.streamRemainder) {
+    void remainder.catch(() => undefined);
+  }
+  return (
+    <TimelineFeed
+      model={opening.model}
+      connectedActions={connectedActions}
+      conversationActions={conversationActions}
+      trailing={
+        opening.streamRemainder ? (
+          <Suspense fallback={null}>
+            <FamilyTimelineRest remainder={remainder} />
+          </Suspense>
+        ) : null
+      }
+    />
+  );
+}
+
+function FamilyTimeline({
   access,
   context,
   options,
@@ -123,39 +191,30 @@ async function FamilyTimeline({
     context,
     options,
   );
-  const sharedEnrichment = loadFamilyHomeTimelineEnrichment(sharedTimelineList);
+  const enrichments = loadFamilyHomeTimelineEnrichments(sharedTimelineList);
   const remainder = loadFamilyHomeRemainder(
     access,
     context,
     options,
     sharedTimelineList,
-    sharedEnrichment,
+    enrichments.remainder,
   );
-  const opening = await timePageData(() =>
-    loadFamilyHomeOpeningTimeline(
-      access,
-      context,
-      options,
-      sharedTimelineList,
-      sharedEnrichment,
-    ),
-  );
-  if (!opening.streamRemainder) {
-    void remainder.catch(() => undefined);
-  }
   return (
-    <TimelineFeed
-      model={opening.model}
-      connectedActions={connectedActions}
-      conversationActions={conversationActions}
-      trailing={
-        opening.streamRemainder ? (
-          <Suspense fallback={null}>
-            <FamilyTimelineRest remainder={remainder} />
-          </Suspense>
-        ) : null
-      }
-    />
+    <>
+      <Suspense fallback={null}>
+        <FamilyFirstPhotoPreload timelineList={sharedTimelineList} />
+      </Suspense>
+      <Suspense fallback={<RoutePendingSkeleton kind="timeline" />}>
+        <FamilyTimelineBody
+          access={access}
+          context={context}
+          options={options}
+          timelineList={sharedTimelineList}
+          openingEnrichment={enrichments.opening}
+          remainder={remainder}
+        />
+      </Suspense>
+    </>
   );
 }
 

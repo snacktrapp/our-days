@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
-import { photoAlbum } from "@/features/moments/moment-photos";
+import {
+  photoAlbum,
+  timelineCardPhotoSrc,
+} from "@/features/moments/moment-photos";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
@@ -22,6 +25,18 @@ import { VideoMomentMedia } from "./video-moment-media";
 import { MomentPlaceButton } from "./moment-place-meta";
 import { PostAuthor } from "./post-author";
 import { DoubleTapPhoto } from "./double-tap-photo";
+
+function privateTimelinePhotoSrc(
+  momentId: string,
+  photoId: string,
+  highPriority: boolean,
+) {
+  // The preloaded cover omits the photo id. Delivery already returns the
+  // first photo by sort order, which is the same frame enrichment orders first.
+  if (highPriority || photoId === momentId)
+    return timelineCardPhotoSrc(momentId);
+  return timelineCardPhotoSrc(momentId, photoId);
+}
 
 function PhotoFrameSizer({
   width,
@@ -221,7 +236,11 @@ export function MomentCard({
                   moment.image.delivery === "private" ? (
                     <PrivatePhotoImage
                       key={photo.id}
-                      src={photo.src}
+                      src={privateTimelinePhotoSrc(
+                        moment.id,
+                        photo.id,
+                        Boolean(preload && photoIndex === 0),
+                      )}
                       alt={photo.alt}
                       width={photo.width}
                       height={photo.height}

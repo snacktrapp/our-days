@@ -493,7 +493,7 @@ test("nearby album requests all photos before the cover finishes and retains the
     if (
       request.method() === "GET" &&
       request.url().includes("/api/media/moments/") &&
-      request.url().includes("photo=")
+      (request.url().includes("photo=") || request.url().includes("w="))
     )
       requests.push(request.url());
   });
