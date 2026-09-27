@@ -12,6 +12,7 @@ import {
 } from "./private-media-delivery";
 import {
   fetchSignedPrivateObject,
+  readCappedVerifiedPrivateBytes,
   streamVerifiedBytes,
 } from "./private-media-delivery.server";
 
@@ -146,6 +147,62 @@ describe("private media delivery checks", () => {
     await expect(new Response(bad).arrayBuffer()).rejects.toThrow(
       /did not match its descriptor/u,
     );
+  });
+
+  it("stops a capped download once the descriptor size is exceeded", async () => {
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.example.test/signed" },
+      error: null,
+    });
+    const chunks = [
+      Uint8Array.from([1, 2, 3]),
+      Uint8Array.from([4, 5]),
+      Uint8Array.from([6, 7, 8, 9]),
+    ];
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const next = chunks.shift();
+        if (!next) controller.close();
+        else controller.enqueue(next);
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { "content-type": "image/webp" },
+        }),
+      ),
+    );
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: 5 },
+      ),
+    ).resolves.toBeNull();
+
+    const exact = new Uint8Array([1, 2, 3, 4, 5]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(exact, {
+          status: 200,
+          headers: { "content-type": "image/webp" },
+        }),
+      ),
+    );
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: exact.byteLength },
+      ),
+    ).resolves.toEqual(exact);
+    vi.unstubAllGlobals();
   });
 
   it("cache-busts a same-origin retry without dropping the photo id", () => {

@@ -824,6 +824,7 @@ export async function validatePhotoDisplayByteStream(source, rawOptions) {
             validated,
           );
           return Object.freeze({
+            bytes,
             channels: validated.channels,
             height: validated.height,
             mimeType: validated.mimeType,
