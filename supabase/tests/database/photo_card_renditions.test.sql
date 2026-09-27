@@ -68,6 +68,31 @@ select is(
   'browser and service roles have no direct backfill-lease privileges'
 );
 select ok(
+  (select relrowsecurity and relforcerowsecurity
+     from pg_class
+    where oid = 'private.photo_card_backfill_lease_claims'::regclass),
+  'photo card backfill lease claims enable and force RLS'
+);
+select is(
+  (select count(*)::bigint
+     from information_schema.role_table_grants
+    where table_schema = 'private'
+      and table_name = 'photo_card_backfill_lease_claims'
+      and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')),
+  0::bigint,
+  'browser and service roles have no direct backfill-lease-claim privileges'
+);
+select ok(
+  exists (
+    select 1
+      from pg_trigger
+     where tgname = 'photo_card_backfill_lease_claims_append_only'
+       and tgrelid = 'private.photo_card_backfill_lease_claims'::regclass
+       and not tgisinternal
+  ),
+  'photo card backfill lease claims have an append-only trigger'
+);
+select ok(
   has_function_privilege(
     'authenticated',
     'public.list_photo_card_backfill_candidates(integer, uuid)',
@@ -107,9 +132,14 @@ insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values (
   '10000000-0000-4000-8000-000000000096',
   'photo-card-validator@example.test', statement_timestamp(), '{}'
+), (
+  '10000000-0000-4000-8000-000000000095',
+  'photo-card-other-validator@example.test', statement_timestamp(), '{}'
 );
 insert into private.photo_validator_allowlist (auth_user_id)
-values ('10000000-0000-4000-8000-000000000096');
+values
+  ('10000000-0000-4000-8000-000000000096'),
+  ('10000000-0000-4000-8000-000000000095');
 
 set constraints all deferred;
 insert into private.photo_intakes (
@@ -281,6 +311,37 @@ select is(
   :'carddone_derivative_id'::uuid,
   'the validator lists a display derivative missing a 1080 card'
 );
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_card_path_is_uploadable(
+    :'cardfix_display_object_path' || '.card-1080.webp',
+    '10000000-0000-4000-8000-000000000096',
+    jsonb_build_object(
+      'card_width', 1080,
+      'display_derivative_id', :'carddone_derivative_id',
+      'original_id', 'e5000000-0000-4000-8000-000000000001',
+      'output_height', 2,
+      'output_mime_type', 'image/webp',
+      'output_sha256', repeat('c', 64),
+      'output_size_bytes', 6,
+      'output_width', 2
+    )
+  ),
+  false,
+  'a worker with no lease cannot upload a card'
+);
+select throws_ok(
+  format(
+    'select public.record_photo_card_rendition(%L::uuid, 1080, %L::uuid, %L, 6, %L, 2, 2)',
+    :'carddone_derivative_id',
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    repeat('c', 64)
+  ),
+  '42501', 'Photo card rendition could not be recorded',
+  'a worker with no lease cannot record a card'
+);
+select set_config('storage.operation', 'object.get_authenticated', true);
 select is(
   (select state
      from public.claim_photo_card_backfill_lease(
@@ -289,6 +350,26 @@ select is(
   'leased'::text,
   'the validator claims a short per-photo backfill lease'
 );
+reset role;
+select id as first_claim_id
+  from private.photo_card_backfill_lease_claims
+ where display_derivative_id = :'carddone_derivative_id'::uuid
+   and validator_auth_user_id = '10000000-0000-4000-8000-000000000096'
+\gset cardclaim_
+select is(
+  (select count(*)::bigint
+     from private.photo_card_backfill_lease_claims
+    where display_derivative_id = :'carddone_derivative_id'::uuid
+      and validator_auth_user_id = '10000000-0000-4000-8000-000000000096'
+      and claimed_at is not null),
+  1::bigint,
+  'claiming a backfill lease records who claimed it and when'
+);
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select set_config('storage.operation', 'object.get_authenticated', true);
 select is(
   private.photo_display_backfill_path_is_readable(
     :'cardfix_display_object_path'
@@ -331,8 +412,101 @@ select is(
   true,
   'a leased worker can read a card path before its row exists'
 );
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000095', true
+);
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_card_path_is_uploadable(
+    :'cardfix_display_object_path' || '.card-1080.webp',
+    '10000000-0000-4000-8000-000000000095',
+    jsonb_build_object(
+      'card_width', 1080,
+      'display_derivative_id', :'carddone_derivative_id',
+      'original_id', 'e5000000-0000-4000-8000-000000000001',
+      'output_height', 2,
+      'output_mime_type', 'image/webp',
+      'output_sha256', repeat('c', 64),
+      'output_size_bytes', 6,
+      'output_width', 2
+    )
+  ),
+  false,
+  'another worker''s lease does not allow a card upload'
+);
+select throws_ok(
+  format(
+    'select public.record_photo_card_rendition(%L::uuid, 1080, %L::uuid, %L, 6, %L, 2, 2)',
+    :'carddone_derivative_id',
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    repeat('c', 64)
+  ),
+  '42501', 'Photo card rendition could not be recorded',
+  'another worker''s lease does not allow a card record'
+);
 reset role;
-
+update private.photo_card_backfill_leases
+   set lease_started_at = statement_timestamp() - interval '3 minutes',
+       lease_expires_at = statement_timestamp() - interval '1 minute'
+ where display_derivative_id = :'carddone_derivative_id'::uuid;
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
+);
+select set_config('storage.operation', 'object.upload', true);
+select is(
+  private.photo_card_path_is_uploadable(
+    :'cardfix_display_object_path' || '.card-1080.webp',
+    '10000000-0000-4000-8000-000000000096',
+    jsonb_build_object(
+      'card_width', 1080,
+      'display_derivative_id', :'carddone_derivative_id',
+      'original_id', 'e5000000-0000-4000-8000-000000000001',
+      'output_height', 2,
+      'output_mime_type', 'image/webp',
+      'output_sha256', repeat('c', 64),
+      'output_size_bytes', 6,
+      'output_width', 2
+    )
+  ),
+  false,
+  'a worker whose lease expired cannot upload a card'
+);
+select throws_ok(
+  format(
+    'select public.record_photo_card_rendition(%L::uuid, 1080, %L::uuid, %L, 6, %L, 2, 2)',
+    :'carddone_derivative_id',
+    'e9000000-0000-4000-8000-000000000001',
+    '',
+    repeat('c', 64)
+  ),
+  '42501', 'Photo card rendition could not be recorded',
+  'a worker whose lease expired cannot record a card'
+);
+select is(
+  (select state
+     from public.claim_photo_card_backfill_lease(
+       :'carddone_derivative_id'::uuid
+     )),
+  'leased'::text,
+  'the validator reclaims an expired backfill lease'
+);
+reset role;
+select is(
+  (select count(*)::bigint
+     from private.photo_card_backfill_lease_claims
+    where display_derivative_id = :'carddone_derivative_id'::uuid),
+  2::bigint,
+  'a later claim appends another row instead of overwriting the latest claim'
+);
+select is(
+  (select validator_auth_user_id::text
+     from private.photo_card_backfill_lease_claims
+    where id = :'cardclaim_first_claim_id'::uuid),
+  '10000000-0000-4000-8000-000000000096',
+  'a later claim leaves the earlier claim row in place'
+);
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub', '10000000-0000-4000-8000-000000000096', true
@@ -354,7 +528,7 @@ select is(
     )
   ),
   true,
-  'the validator can upload the exact card path after the display is verified'
+  'a lease holder can upload a card'
 );
 insert into storage.objects (
   id, bucket_id, name, owner_id, metadata, user_metadata
@@ -384,6 +558,10 @@ select public.record_photo_card_rendition(
   2,
   2
 ) as id \gset cardrow_
+select ok(
+  :'cardrow_id'::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  'a lease holder can record a card'
+);
 select is(
   public.record_photo_card_rendition(
     :'carddone_derivative_id'::uuid,
@@ -451,6 +629,22 @@ select throws_ok(
   ),
   '42501', 'Photo card renditions are immutable',
   'card ledger rows cannot be deleted'
+);
+select throws_ok(
+  format(
+    'update private.photo_card_backfill_lease_claims set claimed_at = statement_timestamp() where id = %L::uuid',
+    :'cardclaim_first_claim_id'
+  ),
+  '42501', 'Photo card backfill lease claims are append-only',
+  'backfill lease claims cannot be updated'
+);
+select throws_ok(
+  format(
+    'delete from private.photo_card_backfill_lease_claims where id = %L::uuid',
+    :'cardclaim_first_claim_id'
+  ),
+  '42501', 'Photo card backfill lease claims are append-only',
+  'backfill lease claims cannot be deleted'
 );
 
 set local role authenticated;

@@ -162,6 +162,27 @@ begin
          'output_size_bytes', parsed_size_bytes,
          'output_width', parsed_width
        )
+       and (
+         exists (
+           select 1
+             from private.photo_card_backfill_leases as lease
+            where lease.display_derivative_id = derivative.id
+              and lease.state = 'leased'
+              and lease.validator_auth_user_id = (select auth.uid())
+              and lease.lease_expires_at > statement_timestamp()
+         )
+         or exists (
+           select 1
+             from private.photo_derivative_jobs as held
+            where held.state = 'leased'
+              and held.validator_auth_user_id = (select auth.uid())
+              and held.lease_expires_at > statement_timestamp()
+              and (
+                held.derivative_id = derivative.id
+                or held.original_id = derivative.original_id
+              )
+         )
+       )
   );
 end;
 $$;
@@ -193,6 +214,41 @@ create table private.photo_card_backfill_leases (
 
 alter table private.photo_card_backfill_leases enable row level security;
 alter table private.photo_card_backfill_leases force row level security;
+
+-- One row per successful claim. The lease row is the current pointer and
+-- is updated on reclaim; these rows are never updated or deleted.
+create table private.photo_card_backfill_lease_claims (
+  id uuid primary key default extensions.gen_random_uuid(),
+  display_derivative_id uuid not null,
+  validator_auth_user_id uuid not null,
+  claimed_at timestamptz not null default statement_timestamp(),
+  lease_expires_at timestamptz not null,
+  constraint photo_card_backfill_lease_claims_derivative_fkey
+    foreign key (display_derivative_id)
+    references private.photo_display_derivatives (id) on delete restrict,
+  constraint photo_card_backfill_lease_claims_validator_fkey
+    foreign key (validator_auth_user_id)
+    references auth.users (id) on delete restrict
+);
+
+alter table private.photo_card_backfill_lease_claims enable row level security;
+alter table private.photo_card_backfill_lease_claims force row level security;
+
+create function private.enforce_photo_card_backfill_lease_claim_append_only()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception using errcode = '42501',
+    message = 'Photo card backfill lease claims are append-only';
+end;
+$$;
+
+create trigger photo_card_backfill_lease_claims_append_only
+before update or delete on private.photo_card_backfill_lease_claims
+for each row
+execute function private.enforce_photo_card_backfill_lease_claim_append_only();
 
 create function private.photo_card_path_is_readable(
   requested_object_path text
@@ -340,6 +396,31 @@ begin
 
   expected_path :=
     target.object_path || '.card-' || requested_card_width::text || '.webp';
+
+  if not (
+    exists (
+      select 1
+        from private.photo_card_backfill_leases as lease
+       where lease.display_derivative_id = target.id
+         and lease.state = 'leased'
+         and lease.validator_auth_user_id = current_user_id
+         and lease.lease_expires_at > statement_timestamp()
+    )
+    or exists (
+      select 1
+        from private.photo_derivative_jobs as held
+       where held.state = 'leased'
+         and held.validator_auth_user_id = current_user_id
+         and held.lease_expires_at > statement_timestamp()
+         and (
+           held.derivative_id = target.id
+           or held.original_id = target.original_id
+         )
+    )
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Photo card rendition could not be recorded';
+  end if;
 
   select card.* into existing
     from private.photo_card_renditions as card
@@ -525,6 +606,21 @@ begin
         <= statement_timestamp()
      or private.photo_card_backfill_leases.validator_auth_user_id
         = excluded.validator_auth_user_id;
+
+  insert into private.photo_card_backfill_lease_claims (
+    display_derivative_id, validator_auth_user_id, claimed_at, lease_expires_at
+  )
+  select lease.display_derivative_id, lease.validator_auth_user_id,
+    statement_timestamp(), lease.lease_expires_at
+    from private.photo_card_backfill_leases as lease
+   where lease.display_derivative_id = target.id
+     and lease.state = 'leased'
+     and lease.validator_auth_user_id = current_user_id
+     and lease.lease_expires_at > statement_timestamp();
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Photo card backfill lease could not be claimed';
+  end if;
 
   return query
   select target.bucket_id, target.id, lease.lease_expires_at,
@@ -896,6 +992,10 @@ $$;
 revoke all on table private.photo_card_renditions
   from public, anon, authenticated, service_role;
 revoke all on table private.photo_card_backfill_leases
+  from public, anon, authenticated, service_role;
+revoke all on table private.photo_card_backfill_lease_claims
+  from public, anon, authenticated, service_role;
+revoke all on function private.enforce_photo_card_backfill_lease_claim_append_only()
   from public, anon, authenticated, service_role;
 revoke all on function private.enforce_photo_card_rendition_insert()
   from public, anon, authenticated, service_role;
