@@ -638,3 +638,14 @@ select {
   background: var(--surface-2);
   color: var(--text);
 }
+
+/* Header slot only (20px tall). Sign-in and other screens keep the standard wordmark. */
+.topbar .our-days-wordmark {
+  width: 118px;
+  height: 20px;
+  margin: 0 auto 4px;
+  background: transparent url("/our-days-retro-wordmark.svg") center / contain
+    no-repeat;
+  mask: none;
+  -webkit-mask: none;
+}
