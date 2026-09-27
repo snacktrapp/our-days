@@ -1,17 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import {
   byteSizeMatches,
-  clearSignedPrivateUrls,
   contentLengthAgrees,
   declaredByteSize,
-  fetchSignedPrivateObject,
   mediaTypeMatches,
   privateMediaRetrySrc,
-  readSignedPrivateUrl,
   sha256HexMatches,
+} from "./private-media-delivery";
+import {
+  clearSignedPrivateUrls,
+  fetchSignedPrivateObject,
+  readSignedPrivateUrl,
   streamVerifiedBytes,
   warmSignedPhotoUrls,
-} from "./private-media-delivery";
+} from "./private-media-delivery.server";
 
 describe("private media delivery checks", () => {
   it("accepts bigint or decimal-string sizes from PostgREST", () => {

@@ -2,7 +2,7 @@ import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
 } from "../../../../../../config/our-days-environment";
-import { openSignedPrivateObject } from "@/lib/private-media-delivery";
+import { openSignedPrivateObject } from "@/lib/private-media-delivery.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =

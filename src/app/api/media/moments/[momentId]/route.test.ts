@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));

@@ -39,7 +39,7 @@ import {
   type MomentPhotoDescriptor,
 } from "@/features/moments/moment-photos";
 import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
-import { warmSignedPhotoUrls } from "@/lib/private-media-delivery";
+import { warmSignedPhotoUrls } from "@/lib/private-media-delivery.server";
 import { formatMomentClock } from "@/features/timeline/moment-time-label";
 import type { MentionDisplay } from "@/features/mentions/mention-draft";
 

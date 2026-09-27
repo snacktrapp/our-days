@@ -4,9 +4,9 @@ import {
 } from "../../../../../../../config/our-days-environment";
 import {
   byteSizeMatches,
-  fetchSignedPrivateObject,
   mediaTypeMatches,
 } from "@/lib/private-media-delivery";
+import { fetchSignedPrivateObject } from "@/lib/private-media-delivery.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 const uuidPattern =
