@@ -44,7 +44,11 @@ function finish(
   trackTiming: boolean,
 ) {
   const finished = applyActiveCircleCookie(request, response);
-  upsertServerTiming(finished.headers, "proxy", performance.now() - started);
+  // Moment delivery sets its own Server-Timing. A proxy value for the same
+  // header replaces the route value, so leave that response untouched.
+  if (!request.nextUrl.pathname.startsWith("/api/media/moments/")) {
+    upsertServerTiming(finished.headers, "proxy", performance.now() - started);
+  }
   if (trackTiming) trackDocumentHeaders(requestId, finished.headers);
   return finished;
 }
