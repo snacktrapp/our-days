@@ -1,0 +1,734 @@
+/*
+  Retro theme. Ported from theme/terminal-mono (terminal-mono.css) and scoped
+  to :root[data-appearance="retro"] so it cannot leak into Standard.
+  Standard keeps the existing light/dark data-theme values. Retro is dark-only:
+  the pre-paint script sets data-theme="dark" while this attribute is present,
+  without changing the saved Standard light/dark choice.
+  Hex values live in this block. Keep them aligned with retro-theme.ts.
+*/
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+:root[data-appearance="retro"] {
+  color-scheme: dark;
+  --bg: #14110f;
+  --surface: #1b1714;
+  --surface-2: #221c18;
+  --border: #2a2420;
+  --text: #ece3d8;
+  --text-muted: #a39688;
+  --text-faint: #6f655b;
+  --accent-orange: #e8743b;
+  --accent-green: #8cc26a;
+  --accent-amber: #e0a93f;
+  --accent-blue: #5eb4de;
+  --accent-pink: #f09ab8;
+  --accent-violet: #c4b0f5;
+  --accent: var(--accent-orange);
+  --accent-contrast: #14110f;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --danger: #e0604f;
+  --success: #8cc26a;
+  --warning: #e0a93f;
+  --info: #5eb4de;
+  --grid-surface: var(--bg);
+  --paper: var(--bg);
+  --ink: var(--text);
+  --muted: var(--text-muted);
+  --hairline: var(--border);
+  --line: var(--border);
+  --cream: var(--surface);
+  --surface-raised: var(--surface-2);
+  --teal: var(--accent);
+  --action: var(--accent);
+  --action-ink: var(--accent-contrast);
+  --clay: var(--danger);
+  --ochre: var(--accent);
+  --slate: var(--text-muted);
+  --moss: var(--success);
+  --nav-pill-fill: color-mix(in srgb, var(--surface) 94%, transparent);
+  --nav-pill-blur: 0px;
+  --journal-grid-line: transparent;
+  --header-drawer-shadow: none;
+  --overlay-popover-fill: var(--surface);
+  --overlay-popover-blur: 0px;
+  --selection-fill: var(--accent-soft);
+  --selection-border: color-mix(in srgb, var(--accent) 55%, var(--border));
+  --font-interface:
+    "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    monospace;
+  --font-record: var(--font-interface);
+  --font-serif: var(--font-interface);
+  --chrome-body: 400 15px / 1.5 var(--font-interface);
+  --chrome-title: 600 16px / 1.3 var(--font-interface);
+  --chrome-meta: 500 11px / 1.35 var(--font-interface);
+  --settings-label: 600 11px / 1.3 var(--font-interface);
+  --settings-row-title: 600 16px / 1.3 var(--font-interface);
+  --record-stamp-tracking: 0.08em;
+}
+
+:root[data-appearance="retro"][data-accent="orange"] {
+  --accent: var(--accent-orange);
+}
+
+:root[data-appearance="retro"][data-accent="green"] {
+  --accent: var(--accent-green);
+}
+
+:root[data-appearance="retro"][data-accent="amber"] {
+  --accent: var(--accent-amber);
+}
+
+:root[data-appearance="retro"][data-accent="blue"] {
+  --accent: var(--accent-blue);
+}
+
+:root[data-appearance="retro"][data-accent="pink"] {
+  --accent: var(--accent-pink);
+}
+
+:root[data-appearance="retro"][data-accent="violet"] {
+  --accent: var(--accent-violet);
+}
+
+/* Person themes must not replace the one accent. */
+:root[data-appearance="retro"] .app-shell[class*="theme-"] {
+  --accent: inherit;
+}
+
+:root[data-appearance="retro"]:not(.overlay-open),
+:root[data-appearance="retro"]:not(.overlay-open) body {
+  background-color: var(--bg);
+  background-image: none;
+  color: var(--text);
+}
+
+:root[data-appearance="retro"],
+:root[data-appearance="retro"] body,
+:root[data-appearance="retro"] body :where(*) {
+  font-family:
+    "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    monospace !important;
+}
+
+:root[data-appearance="retro"] body {
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-appearance="retro"] :focus-visible {
+  outline: 1px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+:root[data-appearance="retro"] .private-entry-content a,
+:root[data-appearance="retro"] .private-entry-backup a,
+:root[data-appearance="retro"] .timeline-pagination a,
+:root[data-appearance="retro"] .journal-banner a,
+:root[data-appearance="retro"] .activity-banner a,
+:root[data-appearance="retro"] .inline-note-summary a,
+:root[data-appearance="retro"] .card-copy a,
+:root[data-appearance="retro"] .notification-center a {
+  color: var(--accent);
+}
+
+:root[data-appearance="retro"] .topbar a,
+:root[data-appearance="retro"] .bottom-nav a,
+:root[data-appearance="retro"] .settings-row,
+:root[data-appearance="retro"] .settings-row-link,
+:root[data-appearance="retro"] .nav-item,
+:root[data-appearance="retro"] .quiet-button,
+:root[data-appearance="retro"] .settings-close-link,
+:root[data-appearance="retro"] .memory-feature,
+:root[data-appearance="retro"] .people-list > a,
+:root[data-appearance="retro"] .circle-back-link,
+:root[data-appearance="retro"] .memory-return {
+  color: var(--text);
+}
+
+:root[data-appearance="retro"] .nav-item.active,
+:root[data-appearance="retro"] .bottom-nav .nav-item.active {
+  color: var(--accent);
+}
+
+:root[data-appearance="retro"] .private-entry-oauth a,
+:root[data-appearance="retro"] .private-entry-content .private-entry-oauth a {
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .topbar,
+:root[data-appearance="retro"] .bottom-nav,
+:root[data-appearance="retro"] .moment-card,
+:root[data-appearance="retro"] .activity-banner,
+:root[data-appearance="retro"] .private-entry-card,
+:root[data-appearance="retro"] .composer-sheet,
+:root[data-appearance="retro"] .moment-detail-sheet,
+:root[data-appearance="retro"] .moment-detail-sticky-bar,
+:root[data-appearance="retro"] .settings-group,
+:root[data-appearance="retro"] .people-list,
+:root[data-appearance="retro"] .journal-banner,
+:root[data-appearance="retro"] .connected-moment-menu,
+:root[data-appearance="retro"] .inline-reaction-picker,
+:root[data-appearance="retro"] .photo-status-result,
+:root[data-appearance="retro"] .audience-edit-dialog,
+:root[data-appearance="retro"] .memory-feature,
+:root[data-appearance="retro"] .memory-collections > article,
+:root[data-appearance="retro"] .trash-list li {
+  border-color: var(--border);
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .composer-dialog,
+:root[data-appearance="retro"] .moment-detail-dialog,
+:root[data-appearance="retro"] dialog::backdrop {
+  background: color-mix(in srgb, var(--bg) 78%, black);
+}
+
+:root[data-appearance="retro"] .composer-sheet,
+:root[data-appearance="retro"] .moment-detail-sheet,
+:root[data-appearance="retro"] .moment-detail-sticky-bar,
+:root[data-appearance="retro"] .audience-edit-dialog,
+:root[data-appearance="retro"] .connected-moment-menu,
+:root[data-appearance="retro"] .private-entry-card {
+  background: var(--surface);
+  color: var(--text);
+}
+
+:root[data-appearance="retro"] .title-lockup .eyebrow,
+:root[data-appearance="retro"] .private-label,
+:root[data-appearance="retro"] .section-intro > span,
+:root[data-appearance="retro"] .memory-heading > span,
+:root[data-appearance="retro"] .memory-journey-heading > span,
+:root[data-appearance="retro"] .moment-kicker,
+:root[data-appearance="retro"] .thought-label,
+:root[data-appearance="retro"] .thought-more,
+:root[data-appearance="retro"] .moment-kind-meta,
+:root[data-appearance="retro"] .milestone-copy > span,
+:root[data-appearance="retro"] .composer-review-details dt,
+:root[data-appearance="retro"] .photo-date,
+:root[data-appearance="retro"] .date-marker span,
+:root[data-appearance="retro"] .nav-item,
+:root[data-appearance="retro"] .settings-section-label,
+:root[data-appearance="retro"] .person-copy small,
+:root[data-appearance="retro"] .chrome-meta,
+:root[data-appearance="retro"] .audience-chip-face,
+:root[data-appearance="retro"] .just-me-pill,
+:root[data-appearance="retro"] .elapsed-gap span {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:root[data-appearance="retro"] .settings-section-label,
+:root[data-appearance="retro"] .person-copy small,
+:root[data-appearance="retro"] .date-marker span,
+:root[data-appearance="retro"] .private-label,
+:root[data-appearance="retro"] .title-lockup .eyebrow {
+  color: var(--text-muted);
+}
+
+:root[data-appearance="retro"] .card-copy > p,
+:root[data-appearance="retro"] .milestone-copy > p,
+:root[data-appearance="retro"] .location-card .card-copy > p,
+:root[data-appearance="retro"] .inline-note-summary p:not(.inline-note-when),
+:root[data-appearance="retro"] .inline-note-summary li p:not(.inline-note-when),
+:root[data-appearance="retro"] .inline-note-summary strong,
+:root[data-appearance="retro"] .journal-banner-body,
+:root[data-appearance="retro"] .section-intro p,
+:root[data-appearance="retro"] .memory-heading p,
+:root[data-appearance="retro"] .memory-journey-heading p,
+:root[data-appearance="retro"] .private-entry-card > span:last-child,
+:root[data-appearance="retro"] .private-entry-content > p,
+:root[data-appearance="retro"] .thought-card p,
+:root[data-appearance="retro"] .composer-preview-note {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Comment rows read a step smaller than captions. Hearts, counts, and
+   timestamps keep their own sizes and stay centered on the author line. */
+:root[data-appearance="retro"] .inline-note-summary .inline-note-author strong,
+:root[data-appearance="retro"]
+  .inline-note-summary
+  li
+  p:not(.inline-note-when) {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+:root[data-appearance="retro"] textarea,
+:root[data-appearance="retro"] input,
+:root[data-appearance="retro"] select {
+  border-radius: 2px;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 16px;
+}
+
+:root[data-appearance="retro"] ::placeholder {
+  color: var(--text-faint);
+}
+
+:root[data-appearance="retro"] .save-moment,
+:root[data-appearance="retro"] .private-entry-backup button[type="submit"],
+:root[data-appearance="retro"] .retry-button,
+:root[data-appearance="retro"] .invite-button,
+:root[data-appearance="retro"] .private-entry-content button {
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .secondary-composer-action,
+:root[data-appearance="retro"] .inline-note-form button,
+:root[data-appearance="retro"] .inline-note-edit button {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .add-moment {
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .soft-actions .quick-reaction-trigger,
+:root[data-appearance="retro"] .soft-actions .heart-glyph,
+:root[data-appearance="retro"]
+  .inline-note-author
+  .inline-note-heart-trigger.is-caption,
+:root[data-appearance="retro"] .inline-note-heart .heart-glyph {
+  color: var(--text-muted);
+}
+
+:root[data-appearance="retro"]
+  .soft-actions
+  .quick-reaction-trigger[aria-pressed="true"],
+:root[data-appearance="retro"]
+  .soft-actions
+  .quick-reaction-trigger[aria-pressed="true"]
+  .heart-glyph,
+:root[data-appearance="retro"] .soft-actions button.held,
+:root[data-appearance="retro"] .soft-actions button.held .heart-glyph,
+:root[data-appearance="retro"]
+  .inline-note-author
+  .inline-note-heart-trigger.is-loved,
+:root[data-appearance="retro"]
+  .inline-note-author
+  .inline-note-heart-trigger.is-loved
+  .heart-glyph,
+:root[data-appearance="retro"] .post-love-burst .heart-glyph {
+  color: var(--accent);
+}
+
+:root[data-appearance="retro"] .audience-chip-face,
+:root[data-appearance="retro"] .just-me-pill,
+:root[data-appearance="retro"] .people-tags.post-to-chips label,
+:root[data-appearance="retro"] .journal-banner-cta-pill,
+:root[data-appearance="retro"] .photo-status-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+:root[data-appearance="retro"]
+  .people-tags.post-to-chips
+  label:has(input:checked),
+:root[data-appearance="retro"] .audience-chip-face,
+:root[data-appearance="retro"] .photo-status-chip,
+:root[data-appearance="retro"] .journal-banner-cta-pill {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+:root[data-appearance="retro"] .connection .audience-chip-face,
+:root[data-appearance="retro"] .moment-card .audience-chip-face,
+:root[data-appearance="retro"] .moment-card .just-me-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+:root[data-appearance="retro"] .mention-chip-row button {
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+:root[data-appearance="retro"] .photo-status-chip-copy {
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+:root[data-appearance="retro"] .photo-status-chip-detail {
+  color: var(--text-muted);
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+:root[data-appearance="retro"] .photo-status-chip-bar > span,
+:root[data-appearance="retro"] .photo-status-chip-bar.is-progress > span,
+:root[data-appearance="retro"] .photo-status-chip-indeterminate > span,
+:root[data-appearance="retro"]
+  .photo-status-chip-bar.is-progress.photo-status-chip-indeterminate
+  > span {
+  background: var(--accent);
+}
+
+:root[data-appearance="retro"] .photo-status-chip-bar-fill rect {
+  fill: var(--accent);
+}
+
+:root[data-appearance="retro"] .photo-frame,
+:root[data-appearance="retro"] .composer-photo-preview,
+:root[data-appearance="retro"] .video-frame {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+}
+
+:root[data-appearance="retro"] .photo-frame img,
+:root[data-appearance="retro"] .photo-frame video,
+:root[data-appearance="retro"] .composer-photo-preview img,
+:root[data-appearance="retro"] .composer-photo-preview video,
+:root[data-appearance="retro"] .video-frame img,
+:root[data-appearance="retro"] .video-frame video {
+  filter: none;
+  border-radius: 2px;
+}
+
+:root[data-appearance="retro"] [class][class*="dot-"] {
+  background: var(--surface-2);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .person-avatar,
+:root[data-appearance="retro"] .avatar-node,
+:root[data-appearance="retro"] .family-mark-dot,
+:root[data-appearance="retro"] .settings-avatar,
+:root[data-appearance="retro"] .profile-orbit,
+:root[data-appearance="retro"] .mention-chip-mark,
+:root[data-appearance="retro"] .comment-color-dot,
+:root[data-appearance="retro"] .memory-feature-avatar {
+  border-radius: 2px;
+}
+
+:root[data-appearance="retro"] .inline-note-author .comment-color-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Initials badges follow the accent picker. Photos keep their own image.
+   The commenter mark above stays the accent dot and does not also grow an initial. */
+:root[data-appearance="retro"]
+  :is(
+    .avatar-node:not(.avatar-node-image),
+    .person-avatar,
+    .post-author-avatar,
+    .memory-feature-avatar,
+    .mention-chip-mark,
+    .tag-person-dot,
+    .profile-orbit,
+    .family-mark-dot,
+    .settings-avatar:not(.settings-avatar-tile):not(.settings-avatar-add):not(
+        .is-pending
+      )
+  ) {
+  background: var(--accent);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+:root[data-appearance="retro"] .memory-feature-avatar {
+  color: var(--text) !important;
+}
+
+:root[data-appearance="retro"] .auth-error,
+:root[data-appearance="retro"] .field-error,
+:root[data-appearance="retro"] .composer-error,
+:root[data-appearance="retro"] .inline-conversation-error,
+:root[data-appearance="retro"] .trash-error,
+:root[data-appearance="retro"] .settings-action-error,
+:root[data-appearance="retro"] .timeline-pagination-error,
+:root[data-appearance="retro"] .private-entry-content .auth-error,
+:root[data-appearance="retro"] .notification-preference-message {
+  color: var(--danger) !important;
+}
+
+:root[data-appearance="retro"] .settings-preview-banner,
+:root[data-appearance="retro"] .settings-live-banner {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border-radius: 999px;
+}
+
+:root[data-appearance="retro"] .notification-dot {
+  background: var(--accent);
+  border-color: var(--bg);
+}
+
+:root[data-appearance="retro"] .notification-switch::after {
+  background: var(--text);
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"]
+  .notification-preference-row[aria-checked="true"]
+  .notification-switch,
+:root[data-appearance="retro"]
+  .notification-preference-row[aria-checked="true"]
+  .notification-switch {
+  background: var(--accent);
+}
+
+:root[data-appearance="retro"] .accent-picker-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px 14px;
+  border-bottom: 0;
+}
+
+:root[data-appearance="retro"] .accent-picker-row .settings-row-copy {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+:root[data-appearance="retro"] .accent-reset {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+:root[data-appearance="retro"] .accent-swatches {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root[data-appearance="retro"] .accent-swatch {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+:root[data-appearance="retro"] .accent-swatch[aria-checked="true"] {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
+}
+
+:root[data-appearance="retro"] .accent-swatch-orange {
+  background: var(--accent-orange);
+}
+
+:root[data-appearance="retro"] .accent-swatch-green {
+  background: var(--accent-green);
+}
+
+:root[data-appearance="retro"] .accent-swatch-amber {
+  background: var(--accent-amber);
+}
+
+:root[data-appearance="retro"] .accent-swatch-blue {
+  background: var(--accent-blue);
+}
+
+:root[data-appearance="retro"] .accent-swatch-pink {
+  background: var(--accent-pink);
+}
+
+:root[data-appearance="retro"] .accent-swatch-violet {
+  background: var(--accent-violet);
+}
+
+:root[data-appearance="retro"] .sheet-handle,
+:root[data-appearance="retro"] .activity-sheet .sheet-handle,
+:root[data-appearance="retro"] .activity-sheet-chrome .sheet-handle {
+  background: var(--text-faint);
+}
+
+:root[data-appearance="retro"] .sheet-close {
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+:root[data-appearance="retro"] .composer-field > span,
+:root[data-appearance="retro"] .composer-select-field > label,
+:root[data-appearance="retro"] .people-tags legend {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+:root[data-appearance="retro"] .composer-field > span small {
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+:root[data-appearance="retro"] .thought-label,
+:root[data-appearance="retro"] .thought-more,
+:root[data-appearance="retro"] .thought-card .moment-kind-meta,
+:root[data-appearance="retro"] .thought-card .moment-kind-meta-type,
+:root[data-appearance="retro"] .insight-source,
+:root[data-appearance="retro"] .bible-verse-copy a,
+:root[data-appearance="retro"] .optimistic-written-card .moment-kicker {
+  color: var(--accent);
+}
+
+:root[data-appearance="retro"]
+  .avatar-node.avatar-node-image.insight-byline-avatar {
+  background-color: var(--surface-2);
+  background-image: none;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .insight-byline-avatar svg {
+  width: 70%;
+  height: 70%;
+  display: block;
+  fill: currentColor;
+}
+
+:root[data-appearance="retro"] .composer-field input,
+:root[data-appearance="retro"] .composer-field select,
+:root[data-appearance="retro"] .composer-field textarea,
+:root[data-appearance="retro"] .composer-select-field select,
+:root[data-appearance="retro"] .photo-input,
+:root[data-appearance="retro"] .quick-compose textarea,
+:root[data-appearance="retro"] .inline-note-form textarea,
+:root[data-appearance="retro"] .inline-note-edit textarea,
+:root[data-appearance="retro"] .private-entry-content input,
+:root[data-appearance="retro"] .mention-pill textarea,
+:root[data-appearance="retro"]
+  .comment-sheet
+  .inline-note-form
+  .mention-pill
+  textarea {
+  border-radius: 2px;
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Header slot only. The SVG is the OUR DAYS letters; sign-in keeps the standard mark.
+   The title spans the full bar, so auto margins center the wordmark on the header
+   rather than in the gap between unequal side controls. */
+:root[data-appearance="retro"] .topbar > .title-switcher,
+:root[data-appearance="retro"] .topbar > .title-lockup {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: center;
+}
+:root[data-appearance="retro"] .topbar .our-days-wordmark {
+  width: calc(20px * 1382 / 328);
+  height: 20px;
+  margin: 0 auto 4px;
+  background: transparent url("/our-days-retro-wordmark.svg") center / contain
+    no-repeat;
+  mask: none;
+  -webkit-mask: none;
+}
+
+/* The insight glyph ships in the feed markup and stays hidden in Standard,
+   which keeps the OD background image. */
+.insight-byline-avatar > svg {
+  display: none;
+}
+
+/* Retro is dark-only. The Standard light/dark control stays in the header
+   for Standard and steps out of the way while Retro is on. */
+:root[data-appearance="retro"] .theme-toggle {
+  display: none;
+}
+
+/* Current journal posts are full-bleed. Recolor them through the variables
+   above and keep that edge-to-edge geometry, including card-size photos. */
+:root[data-appearance="retro"] .timeline .moment-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:root[data-appearance="retro"] .timeline .moment-card .photo-frame,
+:root[data-appearance="retro"] .timeline .moment-card .photo-frame img,
+:root[data-appearance="retro"] .timeline .moment-card .photo-frame video {
+  border: 0;
+  border-radius: 0;
+}

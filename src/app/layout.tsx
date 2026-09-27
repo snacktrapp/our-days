@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import Script from "next/script";
 import { connection } from "next/server";
+import { themeBootstrapScript } from "@/features/shell/retro-theme";
 import { journalPromoPrepaintScript } from "@/features/timeline/journal-promo-config";
 import { resolveMetadataBase } from "@/lib/metadata-base.server";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
+import "./retro.css";
 
 const metadataBase = resolveMetadataBase();
 
@@ -58,15 +59,7 @@ export const viewport: Viewport = {
 };
 
 const themeBootstrap = `
-  try {
-    var savedTheme = window.localStorage.getItem("our-days-theme");
-    var theme = savedTheme === "light" || savedTheme === "dark"
-      ? savedTheme
-      : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-    document.documentElement.dataset.theme = theme;
-  } catch (_) {
-    document.documentElement.dataset.theme = "dark";
-  }
+  ${themeBootstrapScript()}
   ${journalPromoPrepaintScript()}
 `;
 
@@ -81,13 +74,12 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Script
+        {/* Runs as the document parses, before the journal shell paints. */}
+        <script
           id="our-days-theme"
-          strategy="beforeInteractive"
           nonce={nonce || undefined}
-        >
-          {themeBootstrap}
-        </Script>
+          dangerouslySetInnerHTML={{ __html: themeBootstrap }}
+        />
         {children}
         <ServiceWorkerRegistration />
       </body>
