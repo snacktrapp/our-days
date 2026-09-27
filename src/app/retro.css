@@ -493,12 +493,12 @@
       )
   ) {
   background: var(--accent);
-  color: var(--text);
+  color: var(--bg);
   border-color: var(--accent);
 }
 
 :root[data-appearance="retro"] .memory-feature-avatar {
-  color: var(--text) !important;
+  color: var(--bg) !important;
 }
 
 :root[data-appearance="retro"] .auth-error,

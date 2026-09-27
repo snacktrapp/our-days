@@ -90,7 +90,7 @@ describe("retro theme", () => {
     );
     expect(screen.queryByRole("radio", { name: "Orange" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Retro" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Future" }));
 
     expect(document.documentElement.dataset.appearance).toBe("retro");
     expect(document.documentElement.dataset.theme).toBe("dark");
