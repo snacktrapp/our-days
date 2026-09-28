@@ -310,10 +310,19 @@ export async function fetchFoundSource(
   }
   if (lead.kind === "web" && lead.url) {
     const page = await readPublicPage(lead.url, signal);
+    const path = urlPath(lead.url);
     if (!page.page) {
       return {
         source: null,
-        attempts: [attempt(page.host, page.fetchStatus, page.httpStatus)],
+        attempts: [
+          attempt(
+            page.host,
+            page.fetchStatus,
+            page.httpStatus,
+            undefined,
+            path,
+          ),
+        ],
       };
     }
     return {
@@ -324,7 +333,7 @@ export async function fetchFoundSource(
         undefined,
         page.page.html,
       ),
-      attempts: [attempt(page.host, "ok", page.httpStatus)],
+      attempts: [attempt(page.host, "ok", page.httpStatus, undefined, path)],
     };
   }
   return { source: null, attempts: [attempt(undefined, "empty")] };

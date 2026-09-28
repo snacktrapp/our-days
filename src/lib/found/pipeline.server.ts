@@ -301,7 +301,7 @@ function missedTopic(query: string, candidates: readonly FoundCandidate[]) {
 function retryPrompt(query: string, lead: FoundLead, missing?: string) {
   const place = leadPlace(lead);
   if (missing) {
-    return `${query}\n\nThe page at ${place} did not contain "${missing}". Return a different lead. Prefer a public transcript page that includes that word, and set transcriptUrl to it.`;
+    return `${query}\n\nThe page at ${place} did not contain "${missing}". Do not return that same page. Return a different lead: a public transcript page on the show's own site that includes "${missing}", in url or transcriptUrl.`;
   }
   const topic = longestTopicWord(query);
   const about = topic ? ` The passage has to include "${topic}".` : "";
@@ -409,6 +409,7 @@ async function executeFoundSearch(
         })),
       );
       let opened = false;
+      let openedLead: FoundLead | null = null;
       for (const item of fetched) {
         if (signal.aborted) {
           throw new DOMException("The operation was aborted.", "AbortError");
@@ -421,6 +422,7 @@ async function executeFoundSearch(
           continue;
         }
         opened = true;
+        openedLead = item.lead;
         if (seen.has(source.identity)) {
           leadLogs.push(
             leadLog(item.lead, item.result.attempts, source, "duplicate"),
@@ -537,28 +539,27 @@ async function executeFoundSearch(
         if (candidates.length >= 3) break;
       }
       round += 1;
-      const missing =
-        fetched.length === 1 ? missedTopic(query, candidates) : undefined;
+      const missing = missedTopic(query, candidates);
       if (missing) {
         candidates.length = 0;
         cards = 0;
-        const last = leadLogs.at(-1);
-        if (last && !last.dropReason) {
-          leadLogs[leadLogs.length - 1] = {
-            ...last,
-            dropReason: "topic-miss",
-          };
+        for (let index = leadLogs.length - 1; index >= 0; index -= 1) {
+          const entry = leadLogs[index];
+          if (!entry || entry.dropReason) continue;
+          leadLogs[index] = { ...entry, dropReason: "topic-miss" };
+          break;
         }
       }
+      const promptLead = openedLead ?? fetched[0]?.lead;
       const onlyLeadFailed =
         round === 1 &&
         candidates.length === 0 &&
         fetched.length === 1 &&
         !opened;
-      if (round > 1 || (!onlyLeadFailed && !missing)) break;
+      if (round > 1 || !promptLead || (!onlyLeadFailed && !missing)) break;
       pending = (
         await deps.generateLeads(
-          retryPrompt(query, fetched[0]!.lead, missing),
+          retryPrompt(query, promptLead, missing),
           signal,
         )
       ).slice(0, 5);

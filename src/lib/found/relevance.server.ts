@@ -205,7 +205,10 @@ export function selectFoundPassages(
     });
   });
   tightened.sort(
-    (left, right) => right.score - left.score || left.start - right.start,
+    (left, right) =>
+      right.score - left.score ||
+      right.end - right.start - (left.end - left.start) ||
+      left.start - right.start,
   );
   const seen = new Set<string>();
   const chosen: RankedPassage[] = [];

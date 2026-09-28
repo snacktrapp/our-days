@@ -634,6 +634,85 @@ describe("Found search pipeline", () => {
     expect(result.candidates[0]?.quote).not.toContain("Twitter");
   });
 
+  it("asks again when a failed video is paired with a page that misses the topic", async () => {
+    const prompts: string[] = [];
+    const excellence =
+      "The pursuit of excellence deserves no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const result = await runFoundSearch(
+      "DHH discussing excellence with Lex",
+      {
+        generateLeads: async (query) => {
+          prompts.push(query);
+          if (prompts.length === 1) {
+            return [
+              {
+                kind: "youtube",
+                url: "https://www.youtube.com/watch?v=NYFGCESmikA",
+              },
+              {
+                kind: "web",
+                url: "https://lexfridman.com/dhh-david-heinemeier-hansson/",
+              },
+            ];
+          }
+          return [
+            {
+              kind: "web",
+              url: "https://lexfridman.com/dhh-2-transcript",
+              speaker: "DHH",
+            },
+          ];
+        },
+        fetchSource: async (lead) => {
+          if (lead.kind === "youtube") {
+            return {
+              source: null,
+              attempts: [
+                {
+                  host: "www.youtube.com",
+                  fetchStatus: "http",
+                  httpStatus: 400,
+                  step: "player",
+                  path: "/youtubei/v1/player",
+                },
+              ],
+            };
+          }
+          const transcript = lead.url?.includes("dhh-2-transcript");
+          return {
+            source: {
+              kind: "web",
+              identity: lead.url ?? "web",
+              text: transcript
+                ? excellence
+                : "Lex X / Twitter YouTube Transcript for DHH: Future of Programming with Lex Fridman.",
+              sourceUrl: lead.url ?? "https://lexfridman.com/",
+              speaker: "DHH",
+              fetchedTitle: transcript ? "DHH transcript" : "DHH episode",
+            },
+            attempts: [
+              {
+                host: "lexfridman.com",
+                fetchStatus: "ok",
+                httpStatus: 200,
+              },
+            ],
+          };
+        },
+        pickQuote: async () => ({ quote: excellence }),
+      },
+      5_000,
+    );
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain("lexfridman.com/dhh-david-heinemeier-hansson");
+    expect(prompts[1]).toContain('includes "excellence"');
+    expect(prompts[1]).not.toContain("watch");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates[0]?.quote).toContain("deserves no explanation");
+    expect(result.candidates[0]?.quote).not.toContain("Twitter");
+  });
+
   it("drops a second page that also misses the topic", async () => {
     const prompts: string[] = [];
     const result = await runFoundSearch(
