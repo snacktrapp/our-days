@@ -5,11 +5,13 @@ import { foundSpotUrl, type FoundCandidate } from "./found-types";
 type FoundCandidateBodyProps = Readonly<{
   candidate: FoundCandidate;
   showVerified?: boolean;
+  quoted?: boolean;
 }>;
 
 export function FoundCandidateBody({
   candidate,
   showVerified = false,
+  quoted = false,
 }: FoundCandidateBodyProps) {
   const hasSource = Boolean(
     candidate.sourceTitle ||
@@ -20,7 +22,9 @@ export function FoundCandidateBody({
   );
   return (
     <div className="found-candidate">
-      <blockquote className="found-card-quote">{candidate.quote}</blockquote>
+      <blockquote className="found-card-quote">
+        {quoted ? `“${candidate.quote}”` : candidate.quote}
+      </blockquote>
       {candidate.speaker ? (
         <p
           className={

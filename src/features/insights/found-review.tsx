@@ -36,7 +36,7 @@ export function FoundReview({
 }: FoundReviewProps) {
   return (
     <div className="found-review">
-      <FoundCandidateBody candidate={candidate} />
+      <FoundCandidateBody candidate={candidate} quoted />
       {circles.length > 0 ? (
         <PostToField
           circles={circles}

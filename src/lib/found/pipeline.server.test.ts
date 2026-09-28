@@ -42,7 +42,7 @@ describe("Found search pipeline", () => {
     expect(JSON.stringify(result)).not.toContain(foundFixtureRejectedQuote);
     expect(card.verifiedLabel).toBe(foundVerifiedTranscript);
     expect(card.sourceUrl).toBe(
-      "https://www.youtube.com/watch?v=abcdefghijk&t=6762",
+      "https://www.youtube.com/watch?v=abcdefghijk&t=6762s",
     );
     expect(card.rangeLabel).toBe("1:52:42–1:53:04");
     expect(card.videoId).toBeUndefined();
@@ -101,10 +101,9 @@ describe("Found search pipeline", () => {
       expect(result.candidates[0]?.quote).not.toBe(paraphrase);
       expect(timed.text).toContain(result.candidates[0]?.quote);
       expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedTranscript);
-      expect(result.candidates[0]?.sourceUrl).toContain(
-        "https://www.youtube.com/watch?v=NYFGCESmikA",
+      expect(result.candidates[0]?.sourceUrl).toBe(
+        "https://www.youtube.com/watch?v=NYFGCESmikA&t=6747s",
       );
-      expect(result.candidates[0]?.sourceUrl).toContain("t=6747");
       const logged = [...info.mock.calls, ...warn.mock.calls]
         .map((call) =>
           typeof call[0] === "string" ? call[0] : JSON.stringify(call[0]),
@@ -295,7 +294,7 @@ describe("Found search pipeline", () => {
     if (!result.ok) return;
     expect(result.candidates[0]?.quote).toBe(foundFixtureQuote);
     expect(result.candidates[0]?.sourceUrl).toBe(
-      "https://www.youtube.com/watch?v=abcdefghijk&t=6762",
+      "https://www.youtube.com/watch?v=abcdefghijk&t=6762s",
     );
     expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedTranscript);
     expect(result.candidates[0]?.rangeLabel).toBe("1:52:42–1:53:04");
@@ -439,10 +438,9 @@ describe("Found search pipeline", () => {
     expect(first.atLabel).toBe("at 1:52:27");
     expect(first.attribution).not.toBe("Source");
     expect(first.attribution).toContain("DHH");
-    expect(first.sourceUrl).toContain(
-      "https://www.youtube.com/watch?v=NYFGCESmikA",
+    expect(first.sourceUrl).toBe(
+      "https://www.youtube.com/watch?v=NYFGCESmikA&t=6747s",
     );
-    expect(first.sourceUrl).toContain("t=6747");
     const introIndex = result.candidates.findIndex((candidate) =>
       candidate.quote.includes("controversial"),
     );

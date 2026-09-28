@@ -99,14 +99,24 @@ function metaContent(tag: string) {
   return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? "");
 }
 
-/** og:title when the page published one, otherwise the document title. */
-export function pageTitleFromHtml(html: string) {
+function metaByName(html: string, name: string) {
   const metas = html.match(/<meta\b[^>]*>/gi) ?? [];
+  const pattern = new RegExp(
+    `\\b(?:property|name)\\s*=\\s*["']${name}["']`,
+    "i",
+  );
   for (const tag of metas) {
-    if (!/\b(?:property|name)\s*=\s*["']og:title["']/i.test(tag)) continue;
+    if (!pattern.test(tag)) continue;
     const content = metaContent(tag).slice(0, 200);
     if (content) return content;
   }
+  return undefined;
+}
+
+/** og:title when the page published one, otherwise the document title. */
+export function pageTitleFromHtml(html: string) {
+  const titled = metaByName(html, "og:title");
+  if (titled) return titled;
   const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
   if (!title?.[1]) return undefined;
   const text = decodeHtmlEntities(title[1].replace(/<[^>]+>/g, " ")).slice(
@@ -114,6 +124,24 @@ export function pageTitleFromHtml(html: string) {
     200,
   );
   return text || undefined;
+}
+
+export function pageSiteNameFromHtml(html: string) {
+  return metaByName(html, "og:site_name");
+}
+
+/** Drop a leading "Transcript for" and a trailing " - <site>" from a page title. */
+export function publisherDisplayTitle(title: string, siteName?: string) {
+  let text = title.trim().replace(/\s+/g, " ");
+  text = text.replace(/^transcript\s+for\b\s*/iu, "").trim();
+  const site = siteName?.trim().replace(/\s+/g, " ");
+  if (site) {
+    const suffix = ` - ${site}`;
+    if (text.toLowerCase().endsWith(suffix.toLowerCase())) {
+      text = text.slice(0, -suffix.length).trim();
+    }
+  }
+  return text.slice(0, 200) || undefined;
 }
 
 export function htmlToFoundText(html: string) {

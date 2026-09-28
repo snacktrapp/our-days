@@ -203,7 +203,7 @@ function withStartTime(url: string, startSeconds?: number) {
   try {
     const parsed = new URL(url);
     if (!parsed.searchParams.has("t")) {
-      parsed.searchParams.set("t", String(Math.floor(startSeconds)));
+      parsed.searchParams.set("t", `${Math.floor(startSeconds)}s`);
     }
     return parsed.toString();
   } catch {

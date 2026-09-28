@@ -9,7 +9,12 @@ import type {
   FoundFetchStatus,
   FoundLead,
 } from "./leads.server";
-import { pageTitleFromHtml, readPublicPage } from "./web.server";
+import {
+  pageSiteNameFromHtml,
+  pageTitleFromHtml,
+  publisherDisplayTitle,
+  readPublicPage,
+} from "./web.server";
 import {
   fetchYoutubeTranscript,
   normalizeYoutubeLead,
@@ -81,8 +86,25 @@ function attributeUrls(html: string) {
 }
 
 function htmlLinksToVideo(html: string, videoId: string, pageUrl: string) {
-  const id = youtubeVideoId(videoId);
-  if (!id || !html) return false;
+  return youtubeLinks(html, pageUrl).some((link) => link.id === videoId);
+}
+
+function youtubeClockSeconds(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^\d+$/u.test(trimmed)) return Number(trimmed);
+  const clock = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/iu.exec(trimmed);
+  if (!clock || (!clock[1] && !clock[2] && !clock[3])) return null;
+  return (
+    Number(clock[1] ?? 0) * 3600 +
+    Number(clock[2] ?? 0) * 60 +
+    Number(clock[3] ?? 0)
+  );
+}
+
+function youtubeLinks(html: string, pageUrl: string) {
+  const links: Array<{ id: string; seconds: number | null }> = [];
+  if (!html) return links;
   for (const raw of attributeUrls(html)) {
     let url: URL;
     try {
@@ -91,9 +113,60 @@ function htmlLinksToVideo(html: string, videoId: string, pageUrl: string) {
       continue;
     }
     if (!youtubeLinkHosts.has(url.hostname.toLowerCase())) continue;
-    if (youtubeVideoId(url.toString()) === id) return true;
+    const id = youtubeVideoId(url.toString());
+    if (!id) continue;
+    const seconds = youtubeClockSeconds(
+      url.searchParams.get("t") ?? url.searchParams.get("start") ?? "",
+    );
+    links.push({ id, seconds });
   }
-  return false;
+  return links;
+}
+
+function majorityVideoId(ids: readonly string[]) {
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      best = id;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/** Video id from timestamped YouTube links. A t=0 full-episode link loses to a later marker. */
+function timestampedVideoId(html: string, pageUrl: string) {
+  const timed = youtubeLinks(html, pageUrl).filter(
+    (link) => link.seconds !== null,
+  );
+  const positive = timed.filter((link) => (link.seconds ?? 0) > 0);
+  const pool = positive.length > 0 ? positive : timed;
+  return majorityVideoId(pool.map((link) => link.id));
+}
+
+function soleLinkedVideoId(html: string, pageUrl: string) {
+  const ids = [...new Set(youtubeLinks(html, pageUrl).map((link) => link.id))];
+  return ids.length === 1 ? ids[0] : undefined;
+}
+
+function resolvedTranscriptVideo(
+  html: string,
+  pageUrl: string,
+  leadVideoId: string | null,
+  hasClocks: boolean,
+) {
+  const stamped = hasClocks ? timestampedVideoId(html, pageUrl) : undefined;
+  const linked =
+    leadVideoId && htmlLinksToVideo(html, leadVideoId, pageUrl)
+      ? leadVideoId
+      : null;
+  if (stamped && hasClocks) return stamped;
+  if (linked) return linked;
+  if (!hasClocks) return undefined;
+  return soleLinkedVideoId(html, pageUrl);
 }
 
 function withFetchedDetails(
@@ -101,9 +174,17 @@ function withFetchedDetails(
   html: string | undefined,
   details: Readonly<{ title?: string; channel?: string }> | null,
 ): FetchedSource {
+  const siteName = html ? pageSiteNameFromHtml(html) : undefined;
+  const rawTitle = html ? pageTitleFromHtml(html) : undefined;
+  const pageTitle = rawTitle
+    ? publisherDisplayTitle(rawTitle, siteName)
+    : undefined;
   const fetchedTitle =
-    clean(html ? pageTitleFromHtml(html) : undefined) ?? clean(details?.title);
-  const channelName = clean(details?.channel);
+    clean(details?.title ? publisherDisplayTitle(details.title) : undefined) ??
+    clean(pageTitle);
+  const channelName =
+    clean(details?.channel) ??
+    (source.kind === "youtube" ? clean(siteName) : undefined);
   return {
     ...source,
     ...(fetchedTitle ? { fetchedTitle } : {}),
@@ -258,25 +339,29 @@ export async function fetchFoundSource(
         );
       } else {
         const timed = timedTranscriptFromPage(page.page.text);
+        const html = page.page.html ?? "";
+        const resolved = resolvedTranscriptVideo(
+          html,
+          page.page.url,
+          videoId,
+          timed.words.length > 0,
+        );
         if (!timed.text) {
           attempts.push(
             attempt(page.host, "empty", page.httpStatus, "transcript", path),
           );
-        } else if (
-          videoId &&
-          htmlLinksToVideo(page.page.html ?? "", videoId, page.page.url)
-        ) {
+        } else if (resolved) {
           attempts.push(
             attempt(page.host, "ok", page.httpStatus, "transcript", path),
           );
           source = youtubeSource(
-            videoId,
+            resolved,
             timed.text,
             normalized,
             timed.words,
             page.page.url,
-            page.page.html,
-            await youtubeDetails(videoId, signal),
+            html,
+            await youtubeDetails(resolved, signal),
           );
         } else if (videoId) {
           attempts.push(
@@ -287,7 +372,7 @@ export async function fetchFoundSource(
             timed.text,
             page.page.url,
             undefined,
-            page.page.html,
+            html,
           );
         } else {
           attempts.push(
@@ -298,7 +383,7 @@ export async function fetchFoundSource(
             timed.text,
             page.page.url,
             timed.words,
-            page.page.html,
+            html,
           );
         }
       }
@@ -325,13 +410,33 @@ export async function fetchFoundSource(
         ],
       };
     }
+    const html = page.page.html ?? "";
+    const timed = timedTranscriptFromPage(page.page.text);
+    const resolved =
+      timed.words.length > 0 && timed.text
+        ? resolvedTranscriptVideo(html, page.page.url, null, true)
+        : undefined;
+    if (resolved) {
+      return {
+        source: youtubeSource(
+          resolved,
+          timed.text,
+          lead,
+          timed.words,
+          page.page.url,
+          html,
+          await youtubeDetails(resolved, signal),
+        ),
+        attempts: [attempt(page.host, "ok", page.httpStatus, undefined, path)],
+      };
+    }
     return {
       source: webSource(
         lead,
         canonicalFoundText(page.page.text),
         page.page.url,
         undefined,
-        page.page.html,
+        html,
       ),
       attempts: [attempt(page.host, "ok", page.httpStatus, undefined, path)],
     };

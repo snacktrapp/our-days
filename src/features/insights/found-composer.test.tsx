@@ -124,6 +124,7 @@ describe("Found in the composer", () => {
     );
     await user.click(screen.getByRole("button", { name: "Find" }));
     expect(await screen.findByText(foundFixtureQuote)).toBeVisible();
+    expect(screen.queryByText(`“${foundFixtureQuote}”`)).toBeNull();
     expect(screen.getByText("Verified from transcript")).toBeVisible();
     expect(screen.getByText("— DHH")).toBeVisible();
     expect(
@@ -142,6 +143,8 @@ describe("Found in the composer", () => {
     await user.click(screen.getByRole("button", { name: "Use this" }));
     expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();
     expect(screen.queryByText("Verified from transcript")).toBeNull();
+    expect(screen.getByText(`“${foundFixtureQuote}”`)).toBeVisible();
+    expect(screen.queryByText(foundFixtureQuote)).toBeNull();
     await user.click(screen.getByRole("button", { name: /^Post$/ }));
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/insights",

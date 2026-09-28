@@ -11,6 +11,7 @@ import {
   htmlToFoundText,
   isBlockedAddress,
   pageTitleFromHtml,
+  publisherDisplayTitle,
 } from "./web.server";
 
 describe("Found source fetchers", () => {
@@ -40,6 +41,20 @@ describe("Found source fetchers", () => {
       pageTitleFromHtml("<html><title>Lex &amp; DHH</title><p>body</p></html>"),
     ).toBe("Lex & DHH");
     expect(pageTitleFromHtml("<p>no title</p>")).toBeUndefined();
+  });
+
+  it("strips a transcript prefix and the site suffix from a page title", () => {
+    expect(
+      publisherDisplayTitle(
+        "Transcript for DHH: Future of Programming, AI, Agentic Engineering, Vibe Coding & Linux | Lex Fridman Podcast #501 - Lex Fridman",
+        "Lex Fridman",
+      ),
+    ).toBe(
+      "DHH: Future of Programming, AI, Agentic Engineering, Vibe Coding & Linux | Lex Fridman Podcast #501",
+    );
+    expect(publisherDisplayTitle("Transcript for ", "Lex Fridman")).toBe(
+      undefined,
+    );
   });
 
   it("reads timed captions and ignores a non-youtube caption host", () => {
