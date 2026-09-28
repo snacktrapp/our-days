@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MomentComposer } from "@/features/composer/moment-composer";
@@ -81,6 +81,33 @@ describe("Found in the composer", () => {
       await screen.findByRole("button", { name: /Written entry/ }),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: /Found/ })).toBeNull();
+  });
+
+  it("submits on Enter and keeps a Shift+Enter line break", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, candidates: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness model={baseModel} />);
+    await user.click(screen.getByRole("button", { name: /Found/ }));
+    const field = screen.getByRole("textbox", {
+      name: "What are you looking for?",
+    });
+    expect(field.tagName).toBe("TEXTAREA");
+    await user.type(field, "DHH on Lex");
+    await user.keyboard("{Shift>}{Enter}{/Shift}still");
+    expect(field).toHaveValue("DHH on Lex\nstill");
+    expect(fetchMock).not.toHaveBeenCalled();
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0]?.[1] as { body: string }).body,
+    );
+    expect(body.query).toBe("DHH on Lex still");
   });
 
   it("defaults Just me and posts the verified quote without a verified mark", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FoundCandidateBody } from "./found-candidate";
 import {
   foundEmptyMessage,
@@ -9,6 +9,22 @@ import {
   type FoundCandidate,
 } from "./found-types";
 import { foundInsightRequestBody, type FoundInsightPost } from "./found-types";
+
+function fitFoundQuery(field: HTMLTextAreaElement) {
+  const style = getComputedStyle(field);
+  const line = Number.parseFloat(style.lineHeight) || 21;
+  const padding =
+    Number.parseFloat(style.paddingTop) +
+    Number.parseFloat(style.paddingBottom);
+  const border =
+    Number.parseFloat(style.borderTopWidth) +
+    Number.parseFloat(style.borderBottomWidth);
+  const min = Math.max(40, line + padding + border);
+  const max = line * 5 + padding + border;
+  field.style.height = "0px";
+  const next = Math.min(Math.max(field.scrollHeight + border, min), max);
+  field.style.height = `${next}px`;
+}
 
 export async function postFoundInsight(post: FoundInsightPost) {
   const response = await fetch("/api/insights", {
@@ -67,7 +83,12 @@ export function FoundSearchPanel({
 }: FoundSearchPanelProps) {
   const [searching, setSearching] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const queryRef = useRef<HTMLInputElement>(null);
+  const queryRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const field = queryRef.current;
+    if (field) fitFoundQuery(field);
+  }, [query]);
 
   const search = async () => {
     queryRef.current?.blur();
@@ -126,13 +147,26 @@ export function FoundSearchPanel({
       >
         <label htmlFor="found-query">What are you looking for?</label>
         <div className="found-search-row">
-          <input
+          <textarea
             ref={queryRef}
             id="found-query"
+            rows={1}
             value={query}
             maxLength={280}
+            enterKeyHint="search"
             disabled={searching}
             onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key !== "Enter" ||
+                event.shiftKey ||
+                event.nativeEvent.isComposing
+              ) {
+                return;
+              }
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }}
           />
           {searching ? (
             <button

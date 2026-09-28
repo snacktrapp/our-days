@@ -10687,14 +10687,15 @@ iframe.composer-location-map {
 }
 .found-search-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
-.found-search-form input {
+.found-search-form textarea {
   width: auto;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 40px;
+  max-height: calc(5 * 1.3em + 18px);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   background: var(--cream);
@@ -10704,6 +10705,10 @@ iframe.composer-location-map {
   font-weight: 400;
   line-height: 1.3;
   padding: 8px 12px;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 .found-find {
   position: relative;
