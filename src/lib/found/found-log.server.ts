@@ -14,6 +14,8 @@ export type FoundLeadLog = Readonly<{
   fetchStatus: "ok" | "empty" | "blocked" | "http";
   httpStatus?: number;
   dropReason?: string;
+  similarity?: number;
+  modelQuotePreview?: string;
   attempts: readonly Readonly<{
     host?: string;
     fetchStatus: "ok" | "empty" | "blocked" | "http";

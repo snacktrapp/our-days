@@ -1543,6 +1543,10 @@ export type Database = {
           token_sha256_hex: string;
         }[];
       };
+      refund_found_search: {
+        Args: { claim_id: string };
+        Returns: string;
+      };
       reject_photo_display_derivative: {
         Args: {
           derivative_job_id: string;

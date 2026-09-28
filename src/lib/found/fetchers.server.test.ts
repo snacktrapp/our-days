@@ -66,5 +66,13 @@ describe("Found migration", () => {
     expect(sql).not.toContain("40001");
     expect(sql).not.toContain("query_text");
     expect(sql).toContain("usage_date");
+    const refund = readFileSync(
+      "supabase/migrations/20260928180000_found_search_refund.sql",
+      "utf8",
+    );
+    expect(refund).not.toContain("40001");
+    expect(refund).not.toContain("query_text");
+    expect(refund).toContain("refund_found_search");
+    expect(refund).toContain("interval '10 minutes'");
   });
 });

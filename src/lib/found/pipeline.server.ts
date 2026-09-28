@@ -30,7 +30,11 @@ import type {
 } from "./leads.server";
 import { pickFoundQuote, proposeFoundLeads } from "./model.server";
 import { timestampsForSlice, type TimedWord } from "./vtt.server";
-import { assessFoundQuote, type SpanPick } from "./verify.server";
+import {
+  assessFoundQuote,
+  recoverNearQuote,
+  type SpanPick,
+} from "./verify.server";
 
 const windowChars = 12_000;
 
@@ -168,6 +172,7 @@ function leadLog(
   attempts: readonly FoundFetchAttempt[],
   source: FetchedSource | null,
   dropReason?: string,
+  near?: Readonly<{ similarity: number; modelQuotePreview?: string }>,
 ): FoundLeadLog {
   const okAttempt = attempts.find((item) => item.fetchStatus === "ok");
   const last = attempts[attempts.length - 1];
@@ -184,6 +189,10 @@ function leadLog(
     fetchStatus,
     ...(httpStatus !== undefined ? { httpStatus } : {}),
     ...(dropReason ? { dropReason } : {}),
+    ...(near ? { similarity: near.similarity } : {}),
+    ...(near?.modelQuotePreview
+      ? { modelQuotePreview: near.modelQuotePreview }
+      : {}),
     attempts,
   };
 }
@@ -287,6 +296,8 @@ async function executeFoundSearch(
         hintOffset(source, item.lead.hintSeconds),
       );
       let dropReason = "no-match";
+      let similarity: number | undefined;
+      let modelQuotePreview: string | undefined;
       let matched = false;
       for (const window of windows) {
         let pick: SpanPick | null = null;
@@ -305,16 +316,35 @@ async function executeFoundSearch(
         }
         if (!pick?.quote) continue;
         const assessed = assessFoundQuote(window.text, pick.quote);
-        if (!assessed.ok) {
-          dropReason = assessed.reason;
+        if (assessed.ok) {
+          candidates.push(
+            candidateFromMatch(source, assessed.located, window.offset),
+          );
+          cards = candidates.length;
+          seen.add(source.identity);
+          matched = true;
+          similarity = undefined;
+          modelQuotePreview = undefined;
+          break;
+        }
+        if (assessed.reason === "too-long") {
+          dropReason = "too-long";
+          continue;
+        }
+        const recovered = recoverNearQuote(window.text, pick.quote);
+        similarity = recovered.similarity;
+        modelQuotePreview = pick.quote.slice(0, 120);
+        if (!recovered.ok || !recovered.located) {
+          dropReason = "no-match";
           continue;
         }
         candidates.push(
-          candidateFromMatch(source, assessed.located, window.offset),
+          candidateFromMatch(source, recovered.located, window.offset),
         );
         cards = candidates.length;
         seen.add(source.identity);
         matched = true;
+        dropReason = "near-match-recovered";
         break;
       }
       leadLogs.push(
@@ -322,7 +352,12 @@ async function executeFoundSearch(
           item.lead,
           item.result.attempts,
           source,
-          matched ? undefined : dropReason,
+          matched && dropReason !== "near-match-recovered"
+            ? undefined
+            : dropReason,
+          similarity === undefined
+            ? undefined
+            : { similarity, modelQuotePreview },
         ),
       );
       if (candidates.length >= 3) break;

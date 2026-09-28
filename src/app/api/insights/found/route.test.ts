@@ -7,6 +7,7 @@ import {
 } from "@/features/insights/found-fixture";
 import {
   foundCapMessage,
+  foundEmptyMessage,
   foundMemberMessage,
   foundRestingMessage,
   foundUnavailableMessage,
@@ -139,6 +140,92 @@ describe("POST /api/insights/found", () => {
     const body = await response.json();
     expect(body).toEqual({ ok: false, message: foundUnavailableMessage });
     expect(body.candidates).toBeUndefined();
+  });
+
+  it("refunds a resting search when the claim has an id", async () => {
+    const claimId = "10000000-0000-4000-8000-000000000099";
+    mocks.leads.mockRejectedValue(new FoundBudgetError());
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "claim_found_search") return { data: claimId, error: null };
+      return { data: "refunded", error: null };
+    });
+    const response = await post("excellence");
+    expect(response.status).toBe(402);
+    expect(mocks.rpc).toHaveBeenCalledWith("refund_found_search", {
+      claim_id: claimId,
+    });
+  });
+
+  it("refunds an unavailable search", async () => {
+    const claimId = "10000000-0000-4000-8000-000000000098";
+    mocks.leads.mockRejectedValue(new FoundUnavailableError());
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "claim_found_search") return { data: claimId, error: null };
+      return { data: "refunded", error: null };
+    });
+    const response = await post("excellence");
+    expect(response.status).toBe(503);
+    expect(mocks.rpc).toHaveBeenCalledWith("refund_found_search", {
+      claim_id: claimId,
+    });
+  });
+
+  it("keeps the resting response when the refund function is not installed yet", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const claimId = "10000000-0000-4000-8000-000000000099";
+    mocks.leads.mockRejectedValue(new FoundBudgetError());
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "claim_found_search") return { data: claimId, error: null };
+      return {
+        data: null,
+        error: {
+          message: "Could not find the function public.refund_found_search",
+        },
+      };
+    });
+    try {
+      const response = await post("excellence");
+      expect(response.status).toBe(402);
+      await expect(response.json()).resolves.toEqual({
+        ok: false,
+        message: foundRestingMessage,
+      });
+      expect(warn.mock.calls.flat().join("\n")).toContain(
+        '"event":"found.refund"',
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("refunds an empty result and leaves a verified card counted", async () => {
+    const claimId = "10000000-0000-4000-8000-000000000099";
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "claim_found_search") return { data: claimId, error: null };
+      return { data: "refunded", error: null };
+    });
+    mocks.leads.mockResolvedValue([]);
+    const empty = await post("excellence");
+    expect(empty.status).toBe(200);
+    await expect(empty.json()).resolves.toEqual({
+      ok: false,
+      message: foundEmptyMessage,
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith("refund_found_search", {
+      claim_id: claimId,
+    });
+
+    mocks.rpc.mockClear();
+    mocks.leads.mockResolvedValue([
+      { kind: "bible", book: "Psalm", chapter: 23, startVerse: 1, endVerse: 1 },
+    ]);
+    const kept = await post("psalm");
+    expect(kept.status).toBe(200);
+    const body = await kept.json();
+    expect(body.ok).toBe(true);
+    expect(body.candidates[0].quote.length).toBeGreaterThan(0);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.rpc).toHaveBeenCalledWith("claim_found_search");
   });
 
   it("says Found is unavailable when the claim cannot be recorded", async () => {

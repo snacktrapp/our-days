@@ -62,6 +62,54 @@ function outcomeResponse(outcome: FoundSearchOutcome) {
   return response({ ok: true, candidates: outcome.candidates }, 200);
 }
 
+const claimIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+function foundClaimId(value: unknown) {
+  return typeof value === "string" && claimIdPattern.test(value) ? value : null;
+}
+
+async function refundFailedFoundSearch(
+  supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
+  claimId: string | null,
+) {
+  if (!claimId) {
+    console.warn(
+      JSON.stringify({
+        event: "found.refund",
+        result: "skipped",
+        reason: "no-claim-id",
+      }),
+    );
+    return;
+  }
+  try {
+    const refunded = await supabase.rpc("refund_found_search", {
+      claim_id: claimId,
+    });
+    if (refunded.error) {
+      console.warn(
+        JSON.stringify({
+          event: "found.refund",
+          result: "skipped",
+          reason: "rpc-error",
+          message: refunded.error.message.slice(0, 180),
+        }),
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Refund failed";
+    console.warn(
+      JSON.stringify({
+        event: "found.refund",
+        result: "skipped",
+        reason: "rpc-error",
+        message: message.slice(0, 180),
+      }),
+    );
+  }
+}
+
 export async function POST(request: Request) {
   if (!foundSearchIsEnabled()) {
     return response({ ok: false, message: "Found is disabled." }, 404);
@@ -115,15 +163,17 @@ export async function POST(request: Request) {
 
   const supabase = await createOurDaysServerClient();
   const claimed = await supabase.rpc("claim_found_search");
-  if (
-    claimed.error ||
-    (claimed.data !== "claimed" && claimed.data !== "capped")
-  ) {
+  const claimId = foundClaimId(claimed.data);
+  const claimAccepted =
+    claimed.data === "claimed" || claimed.data === "capped" || claimId !== null;
+  if (claimed.error || !claimAccepted) {
     return response({ ok: false, message: foundUnavailableMessage }, 503);
   }
   if (claimed.data === "capped") {
     return response({ ok: false, message: foundCapMessage }, 429);
   }
 
-  return outcomeResponse(await runFoundSearch(query, connectedFoundDeps()));
+  const outcome = await runFoundSearch(query, connectedFoundDeps());
+  if (!outcome.ok) await refundFailedFoundSearch(supabase, claimId);
+  return outcomeResponse(outcome);
 }

@@ -49,6 +49,77 @@ describe("Found search pipeline", () => {
     expect(foundFixtureEndSeconds).toBe(6784);
   });
 
+  it("recovers the source wording when the model paraphrases the excellence line", async () => {
+    const passage =
+      "The pursuit of excellence deserves no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const paraphrase =
+      "The pursuit of excellence needs no justification. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const page = `(01:52:27) ${passage} (01:53:04) and then the conversation moves on to the next idea entirely.`;
+    const timed = timedTranscriptFromPage(page);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = await runFoundSearch(
+        "zebra-query-token",
+        {
+          generateLeads: async () => [
+            {
+              kind: "youtube",
+              videoId: "NYFGCESmikA",
+              transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+              speaker: "DHH",
+              title: "Lex Fridman Podcast",
+            },
+          ],
+          fetchSource: async () => ({
+            source: {
+              kind: "youtube",
+              identity: "youtube:NYFGCESmikA",
+              text: timed.text,
+              sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+              videoId: "NYFGCESmikA",
+              speaker: "DHH",
+              title: "Lex Fridman Podcast",
+              timedWords: timed.words,
+            },
+            attempts: [
+              { host: "www.youtube.com", fetchStatus: "empty" },
+              { host: "lexfridman.com", fetchStatus: "ok" },
+            ],
+          }),
+          pickQuote: async () => ({ quote: paraphrase }),
+        },
+        5_000,
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.candidates[0]?.quote).toContain("deserves no explanation");
+      expect(result.candidates[0]?.quote).not.toContain(
+        "needs no justification",
+      );
+      expect(result.candidates[0]?.quote).not.toBe(paraphrase);
+      expect(timed.text).toContain(result.candidates[0]?.quote);
+      expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedTranscript);
+      expect(result.candidates[0]?.sourceUrl).toContain(
+        "https://www.youtube.com/watch?v=NYFGCESmikA",
+      );
+      expect(result.candidates[0]?.sourceUrl).toContain("t=6747");
+      const logged = [...info.mock.calls, ...warn.mock.calls]
+        .map((call) =>
+          typeof call[0] === "string" ? call[0] : JSON.stringify(call[0]),
+        )
+        .join("\n");
+      expect(logged).toContain('"dropReason":"near-match-recovered"');
+      expect(logged).toContain('"similarity":');
+      expect(logged).toContain(paraphrase.slice(0, 120));
+      expect(logged).not.toContain("zebra-query-token");
+      expect(logged).not.toContain("deserves no explanation");
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it("drops the card when a supplied quote is not in the source", async () => {
     const deps = fixtureFoundDeps();
     const result = await runFoundSearch(

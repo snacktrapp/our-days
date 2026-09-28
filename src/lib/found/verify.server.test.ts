@@ -13,6 +13,7 @@ import {
 import { foundWords } from "./normalize.server";
 import {
   locateContiguousQuote,
+  recoverNearQuote,
   sliceFromIndexes,
   verifySpan,
 } from "./verify.server";
@@ -94,6 +95,72 @@ describe("Found verification", () => {
     expect(formatFoundClock(6762)).toBe("1:52:42");
     expect(formatFoundRange(6762, 6784)).toBe("1:52:42–1:53:04");
     expect(formatFoundClock(90)).toBe("1:30");
+  });
+
+  it("recovers the DHH excellence passage from a two-word paraphrase", () => {
+    const excellence =
+      "The pursuit of excellence deserves no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const page = [
+      "DHH (01:52:27) First, let me quote the line.",
+      `“${excellence.split(". ")[0]}.”`,
+      "DHH (01:52:40) Wanting to make something as good and as fast and as beautiful as possible has no need for justification.",
+      "I thought if I could set up my entire system in 15 minutes, it would already be such a dramatic improvement over what came before it that I would be perfectly happy.",
+    ].join(" ");
+    const paraphrase =
+      "The pursuit of excellence needs no justification. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const oneWord =
+      "The pursuit of excellence needs no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    expect(locateContiguousQuote(page, paraphrase)).toBeNull();
+    const recovered = recoverNearQuote(page, paraphrase);
+    expect(recovered.ok).toBe(true);
+    expect(recovered.similarity).toBeGreaterThanOrEqual(0.85);
+    expect(recovered.located?.quote).toContain("deserves no explanation");
+    expect(recovered.located?.quote).not.toContain("needs no justification");
+    expect(page).toContain(recovered.located?.quote);
+    const single = recoverNearQuote(page, oneWord);
+    expect(single.ok).toBe(true);
+    expect(single.located?.quote).toContain("deserves no explanation");
+    expect(single.located?.quote).not.toContain("needs no explanation");
+  });
+
+  it("rejects an unrelated quote, another passage, and a common-word overlap", () => {
+    const page = [
+      "DHH (01:52:27) “The pursuit of excellence deserves no explanation.” Wanting to make something as good and as fast and as beautiful as possible has no need for justification.",
+      "I thought if I could set up my entire system in 15 minutes, it would already be such a dramatic improvement over what came before it that I would be perfectly happy.",
+    ].join(" ");
+    expect(
+      recoverNearQuote(
+        page,
+        "Bananas ripen slowly in a warm kitchen and then taste sweet after lunch today.",
+      ).ok,
+    ).toBe(false);
+    expect(
+      recoverNearQuote(
+        page,
+        "I remember the old computers took many minutes and the improvement was never something I would call perfectly happy.",
+      ).ok,
+    ).toBe(false);
+    expect(
+      recoverNearQuote(
+        page,
+        "The weather was cold and the train was late and the coffee was weak and the meeting ran long and nobody offered a real justification",
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("finds a passage at the end of a long transcript quickly", () => {
+    const passage =
+      "The pursuit of excellence deserves no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const page = `${"alpha beta ".repeat(19_000)} ${passage}`;
+    expect(page.length).toBeGreaterThan(200_000);
+    const started = Date.now();
+    const recovered = recoverNearQuote(
+      page,
+      "The pursuit of excellence needs no justification. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.",
+    );
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(recovered.ok).toBe(true);
+    expect(recovered.located?.quote).toContain("deserves no explanation");
   });
 
   it("drops rolling duplicate caption lines", () => {

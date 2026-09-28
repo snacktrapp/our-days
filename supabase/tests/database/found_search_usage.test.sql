@@ -118,24 +118,23 @@ select set_config(
   true
 );
 set local role authenticated;
-select is(
-  public.claim_found_search(),
-  'claimed',
-  'the first Found search of the day is claimed'
+select ok(
+  public.claim_found_search() ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  'the first Found search of the day returns a claim id'
 );
 select lives_ok(
   $$
     do $claims$
     begin
       for claim_index in 2..10 loop
-        if public.claim_found_search() is distinct from 'claimed' then
-          raise exception 'expected claimed';
+        if public.claim_found_search() !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+          raise exception 'expected claim id';
         end if;
       end loop;
     end
     $claims$;
   $$,
-  'claims 2 through 10 are claimed'
+  'claims 2 through 10 return a claim id'
 );
 select is(
   public.claim_found_search(),
