@@ -10756,6 +10756,14 @@ iframe.composer-location-map {
   border-radius: 12px;
   background: var(--cream);
 }
+.found-candidate {
+  display: grid;
+  gap: 8px;
+  font-family: var(--font-interface);
+  /* Resolved x-height of the UI font. Recorded lines inherit it so
+     SF Mono stays the same size instead of looking larger. */
+  font-size-adjust: ex-height from-font;
+}
 .found-thumb {
   width: 100%;
   height: auto;
@@ -10797,6 +10805,7 @@ iframe.composer-location-map {
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: baseline;
+  font-family: var(--font-record);
 }
 .found-spot {
   color: var(--action);

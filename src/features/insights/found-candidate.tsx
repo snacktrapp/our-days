@@ -19,7 +19,7 @@ export function FoundCandidateBody({
     candidate.videoId,
   );
   return (
-    <>
+    <div className="found-candidate">
       <blockquote className="found-card-quote">{candidate.quote}</blockquote>
       {candidate.speaker ? (
         <p
@@ -82,6 +82,6 @@ export function FoundCandidateBody({
       >
         Open at this spot
       </a>
-    </>
+    </div>
   );
 }
