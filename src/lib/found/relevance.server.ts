@@ -129,15 +129,12 @@ function sliceSpans(
 
 function passageScore(quote: string, topicWords: readonly string[]) {
   const present = new Set(foundWords(quote));
-  let count = 0;
   let weight = 0;
   for (const word of topicWords) {
     if (!present.has(word)) continue;
-    count += 1;
-    weight += word.length;
+    weight += word.length * word.length;
   }
-  if (count === 0) return 0;
-  return count * 100 + weight;
+  return weight;
 }
 
 function wordKey(quote: string) {
