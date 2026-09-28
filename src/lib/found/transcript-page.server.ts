@@ -5,6 +5,23 @@ import type { TimedWord } from "./vtt.server";
 
 const stampPattern = /[(\[](\d{1,2}):(\d{2}):(\d{2})[)\]]/gu;
 
+/** Keep punctuation and line breaks. Clock markers are removed by the caller. */
+function glue(hasText: boolean, gap: string) {
+  const lineBreak = /\n/u.test(gap);
+  const punct = gap.replace(/\s+/g, "").trim();
+  if (!hasText) return punct;
+  if (lineBreak) {
+    if (!punct) return "\n";
+    if (/^['’]+$/u.test(punct)) return `${punct}\n`;
+    if (/^[\p{P}\p{S}]+$/u.test(punct)) return `${punct}\n`;
+    return `\n${punct} `;
+  }
+  if (!punct) return " ";
+  if (/^['’]+$/u.test(punct)) return punct;
+  if (/^[\p{P}\p{S}]+$/u.test(punct)) return `${punct} `;
+  return ` ${punct} `;
+}
+
 function stampSeconds(hours: string, minutes: string, seconds: string) {
   const minute = Number(minutes);
   const second = Number(seconds);
@@ -38,11 +55,16 @@ export function timedTranscriptFromPage(raw: string) {
     cueStart: number | null,
     cueEnd: number | null,
   ) => {
-    for (const span of foundWordSpans(segment)) {
-      if (text.length > 0) text += " ";
+    const spans = foundWordSpans(segment);
+    spans.forEach((span, index) => {
+      const rawGap = segment.slice(
+        index === 0 ? 0 : spans[index - 1]!.end,
+        span.start,
+      );
+      text += glue(text.length > 0, rawGap);
       const start = text.length;
       text += segment.slice(span.start, span.end);
-      if (cueStart === null) continue;
+      if (cueStart === null) return;
       words.push({
         word: span.word,
         start,
@@ -50,6 +72,13 @@ export function timedTranscriptFromPage(raw: string) {
         cueStart,
         cueEnd: cueEnd ?? cueStart,
       });
+    });
+    if (spans.length === 0) return;
+    const rawTrailing = segment.slice(spans[spans.length - 1]!.end);
+    const trailing = rawTrailing.replace(/\s+/g, "");
+    if (trailing && /^[\p{P}\p{S}]+$/u.test(trailing)) text += trailing;
+    if (/\n/u.test(rawTrailing) && text.length > 0 && !text.endsWith("\n")) {
+      text += "\n";
     }
   };
 

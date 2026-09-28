@@ -73,6 +73,7 @@ const quoteSchema = jsonSchema<{ quote?: string; hintSeconds?: number }>({
 
 const leadSystem = `You locate where a real passage lives. You never write, quote, or paraphrase the passage.
 Use web search. Return at most 5 leads. Each lead is a place to read the words, not the words.
+Prefer the passage about the topic in the request. Skip an introduction, a summary, or a host lead-in when that topic is a later passage.
 - youtube: set videoId to the 11-character id and hintSeconds to the approximate start, if you know it. If the show publishes a transcript page, also set transcriptUrl to that https page, for example https://lexfridman.com/guest-transcript.
 - web: set url to an https page that contains the passage.
 - bible: World English Bible only. Use book "Psalm" (not "Psalms"), plus chapter, startVerse, and endVerse.
@@ -80,6 +81,7 @@ Leave every field that would contain the passage empty. If you are unsure, retur
 
 const quoteSystem = `You copy a passage that already appears in the window. Return that passage verbatim in quote.
 Do not paraphrase, translate, or add words. Omit timestamp markers such as (01:52:42) or [1:52:42].
+Prefer the passage about the topic in the request. Skip an introduction, a summary, or a host lead-in when a later passage in the window matches that topic.
 If the window does not contain a passage that answers the request, return an empty quote.
 If a timestamp for the start of the passage is visible, set hintSeconds to that start in seconds. Otherwise omit hintSeconds.`;
 

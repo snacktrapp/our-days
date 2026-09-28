@@ -123,7 +123,7 @@ describe("Found search pipeline", () => {
   it("drops the card when a supplied quote is not in the source", async () => {
     const deps = fixtureFoundDeps();
     const result = await runFoundSearch(
-      "excellence",
+      "unrelated subject matter",
       {
         ...deps,
         pickQuote: async () => ({
@@ -370,6 +370,82 @@ describe("Found search pipeline", () => {
     );
     expect(result.candidates[0]?.videoId).toBeUndefined();
     expect(result.candidates[0]?.sourceLabel).toBe("Read the source");
+    expect(result.candidates[0]?.attribution).not.toBe("Source");
+    expect(result.candidates[0]?.sourceSite).toBe("lexfridman.com");
+    expect(result.candidates[0]?.speaker).toBeUndefined();
+  });
+
+  it("ranks the excellence passage ahead of the Lex intro", async () => {
+    const intro =
+      "DHH is at times controversial, but he's always fearless, brilliant, and fun to talk to.";
+    const excellence =
+      "The pursuit of excellence deserves no explanation. Wanting to make something as good and as fast and as beautiful as possible has no need for justification.";
+    const page = [
+      `(00:00:12) ${intro}`,
+      `(01:52:27) ${excellence}`,
+      "(01:53:40) and then the conversation moves on to the next idea entirely.",
+    ].join("\n");
+    const timed = timedTranscriptFromPage(page);
+    const result = await runFoundSearch(
+      "DHH discussing excellence with Lex",
+      {
+        generateLeads: async () => [
+          {
+            kind: "youtube",
+            videoId: "NYFGCESmikA",
+            transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+            speaker: "DHH",
+            title: "Source",
+          },
+        ],
+        fetchSource: async () => ({
+          source: {
+            kind: "youtube",
+            identity: "youtube:NYFGCESmikA",
+            text: timed.text,
+            sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+            videoId: "NYFGCESmikA",
+            speaker: "DHH",
+            title: "Source",
+            fetchedTitle:
+              "DHH: Programming, philosophy, and the pursuit of excellence | Lex Fridman Podcast",
+            channelName: "Lex Fridman",
+            timedWords: timed.words,
+          },
+          attempts: [{ host: "lexfridman.com", fetchStatus: "ok" }],
+        }),
+        pickQuote: async () => ({ quote: intro }),
+      },
+      5_000,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates.length).toBeGreaterThan(0);
+    expect(result.candidates.length).toBeLessThanOrEqual(3);
+    const quotes = result.candidates.map((candidate) => candidate.quote);
+    expect(new Set(quotes).size).toBe(quotes.length);
+    const first = result.candidates[0]!;
+    expect(first.quote).toContain("deserves no explanation");
+    expect(first.quote).toContain("no need for justification");
+    expect(first.quote).not.toContain("controversial");
+    expect(first.speaker).toBe("DHH");
+    expect(first.speakerInSource).toBe(true);
+    expect(first.sourceTitle).toBe(
+      "DHH: Programming, philosophy, and the pursuit of excellence | Lex Fridman Podcast",
+    );
+    expect(first.sourceSite).toBe("YouTube");
+    expect(first.channelName).toBe("Lex Fridman");
+    expect(first.atLabel).toBe("at 1:52:27");
+    expect(first.attribution).not.toBe("Source");
+    expect(first.attribution).toContain("DHH");
+    expect(first.sourceUrl).toContain(
+      "https://www.youtube.com/watch?v=NYFGCESmikA",
+    );
+    expect(first.sourceUrl).toContain("t=6747");
+    const introIndex = result.candidates.findIndex((candidate) =>
+      candidate.quote.includes("controversial"),
+    );
+    if (introIndex !== -1) expect(introIndex).toBeGreaterThan(0);
   });
 
   it("logs lead outcomes without the query or the quote", async () => {

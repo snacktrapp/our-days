@@ -37,6 +37,9 @@ export type FetchedSource = Readonly<{
   sourceUrl: string;
   speaker?: string;
   title?: string;
+  /** Title read from the page or the YouTube video, not from the model. */
+  fetchedTitle?: string;
+  channelName?: string;
   videoId?: string;
   timedWords?: readonly TimedWord[];
   verseSpans?: readonly BibleVerseSpan[];

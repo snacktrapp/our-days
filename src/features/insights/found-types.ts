@@ -23,7 +23,59 @@ export type FoundCandidate = Readonly<{
   verifiedLabel: string;
   rangeLabel?: string;
   videoId?: string;
+  speaker?: string;
+  /** False when the speaker was only supplied by the model. */
+  speakerInSource?: boolean;
+  sourceTitle?: string;
+  sourceSite?: string;
+  channelName?: string;
+  /** Clock where the quote starts, for example "at 1:52:27". */
+  atLabel?: string;
 }>;
+
+function quoteWords(quote: string) {
+  return quote
+    .normalize("NFKC")
+    .split(/[^\p{L}\p{N}’']+/u)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function encodeFragmentWord(word: string) {
+  return encodeURIComponent(word).replace(/-/g, "%2D");
+}
+
+function isYouTubeUrl(value: string) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return (
+      host === "youtu.be" ||
+      host === "youtube.com" ||
+      host.endsWith(".youtube.com") ||
+      host === "youtube-nocookie.com" ||
+      host.endsWith(".youtube-nocookie.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** YouTube keeps its &t= link. A web page scrolls to the quote. */
+export function foundSpotUrl(sourceUrl: string, quote: string) {
+  if (isYouTubeUrl(sourceUrl)) return sourceUrl;
+  const words = quoteWords(quote);
+  if (words.length < 2) return sourceUrl;
+  const headCount = Math.min(5, words.length);
+  const tailCount = Math.min(5, words.length);
+  const head = words.slice(0, headCount);
+  const tail = words.slice(-tailCount);
+  const same = words.length <= 8 || head.join(" ") === tail.join(" ");
+  const text = same
+    ? head.map(encodeFragmentWord).join("%20")
+    : `${head.map(encodeFragmentWord).join("%20")},${tail.map(encodeFragmentWord).join("%20")}`;
+  const base = sourceUrl.split("#")[0] ?? sourceUrl;
+  return `${base}#:~:text=${text}`;
+}
 
 export type FoundInsightPost = Readonly<{
   quote: string;

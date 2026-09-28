@@ -10730,12 +10730,6 @@ iframe.composer-location-map {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.found-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: center;
-}
 .found-status {
   min-height: 1.2em;
   margin: 0;
@@ -10771,26 +10765,67 @@ iframe.composer-location-map {
 .found-card-quote,
 .found-review-quote {
   margin: 0;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--hairline);
   color: var(--ink);
-  font: var(--chrome-body);
+  font-family: var(--font-interface), sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
-.found-card-quote.is-clamped {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-}
-.found-more {
-  justify-self: start;
-  border: 0;
-  background: transparent;
+.found-speaker {
+  margin: 0;
   color: var(--ink);
-  font: var(--chrome-body);
-  cursor: pointer;
+  font-family: var(--font-interface), sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.found-speaker.is-quiet {
+  color: var(--muted);
+}
+.found-source {
+  display: grid;
+  gap: 6px;
+}
+.found-source-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-interface), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.found-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-record), ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.found-source-channel {
+  font-family: var(--font-interface), sans-serif;
 }
 .found-verified {
+  margin: 0;
   color: var(--muted);
+  font-family: var(--font-interface), sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.found-spot {
+  color: var(--ink);
+  font-family: var(--font-interface), sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 .found-review-quote {
   font-size: 1.05rem;

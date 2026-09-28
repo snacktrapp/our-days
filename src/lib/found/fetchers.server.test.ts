@@ -7,7 +7,11 @@ vi.mock("server-only", () => ({}));
 
 import { ebibleChapterUrl, loadBiblePassage } from "./bible.server";
 import { parseCaptionPayload } from "./youtube.server";
-import { htmlToFoundText, isBlockedAddress } from "./web.server";
+import {
+  htmlToFoundText,
+  isBlockedAddress,
+  pageTitleFromHtml,
+} from "./web.server";
 
 describe("Found source fetchers", () => {
   it("blocks private and link-local addresses", () => {
@@ -26,6 +30,16 @@ describe("Found source fetchers", () => {
     );
     expect(text).toContain("pursuit of excellence");
     expect(text).not.toContain("secret token");
+  });
+
+  it("reads og:title before the document title", () => {
+    const html =
+      '<html><meta content="DHH on Lex" property="og:title"><title>Fallback</title></html>';
+    expect(pageTitleFromHtml(html)).toBe("DHH on Lex");
+    expect(
+      pageTitleFromHtml("<html><title>Lex &amp; DHH</title><p>body</p></html>"),
+    ).toBe("Lex & DHH");
+    expect(pageTitleFromHtml("<p>no title</p>")).toBeUndefined();
   });
 
   it("reads timed captions and ignores a non-youtube caption host", () => {

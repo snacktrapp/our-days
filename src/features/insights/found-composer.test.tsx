@@ -92,6 +92,13 @@ describe("Found in the composer", () => {
       sourceLabel: "Listen" as const,
       verifiedLabel: "Verified from transcript",
       rangeLabel: "1:52:42–1:53:04",
+      speaker: "DHH",
+      speakerInSource: false,
+      sourceTitle:
+        "DHH: Programming, philosophy, and the pursuit of excellence",
+      sourceSite: "YouTube",
+      channelName: "Lex Fridman",
+      atLabel: "at 1:52:42",
     };
     const fetchMock = vi
       .fn()
@@ -118,6 +125,19 @@ describe("Found in the composer", () => {
     await user.click(screen.getByRole("button", { name: "Find" }));
     expect(await screen.findByText(foundFixtureQuote)).toBeVisible();
     expect(screen.getByText("Verified from transcript")).toBeVisible();
+    expect(screen.getByText("— DHH")).toBeVisible();
+    expect(
+      screen.getByText(
+        "DHH: Programming, philosophy, and the pursuit of excellence",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("YouTube")).toBeVisible();
+    expect(screen.getByText("Lex Fridman")).toBeVisible();
+    expect(screen.getByText("at 1:52:42")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Open at this spot" }),
+    ).toHaveAttribute("href", candidate.sourceUrl);
+    expect(screen.queryByText("Source")).toBeNull();
     expect(screen.queryByText(foundFixtureRejectedQuote)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Use this" }));
     expect(screen.getByRole("checkbox", { name: "Just me" })).toBeChecked();

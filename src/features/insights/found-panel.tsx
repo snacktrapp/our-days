@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FoundCandidateBody } from "./found-candidate";
 import {
   foundEmptyMessage,
   foundTimeoutMessage,
@@ -65,7 +66,6 @@ export function FoundSearchPanel({
   onUse,
 }: FoundSearchPanelProps) {
   const [searching, setSearching] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const queryRef = useRef<HTMLInputElement>(null);
 
@@ -159,59 +159,9 @@ export function FoundSearchPanel({
       <div className="found-cards">
         {candidates.map((candidate) => {
           const key = `${candidate.sourceUrl}:${candidate.quote.slice(0, 24)}`;
-          const open = expanded === key;
-          const long = candidate.quote.length > 180;
           return (
             <article className="found-card" key={key}>
-              {candidate.videoId ? (
-                // Same-origin proxy. A broken thumbnail stays hidden.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  className="found-thumb"
-                  src={`/api/insights/found/thumbnail?v=${candidate.videoId}`}
-                  alt=""
-                  width={320}
-                  height={180}
-                  onError={(event) => {
-                    event.currentTarget.hidden = true;
-                  }}
-                />
-              ) : null}
-              <p
-                className={
-                  open || !long
-                    ? "found-card-quote"
-                    : "found-card-quote is-clamped"
-                }
-              >
-                {candidate.quote}
-              </p>
-              {long ? (
-                <button
-                  type="button"
-                  className="found-more"
-                  onClick={() => setExpanded(open ? null : key)}
-                >
-                  {open ? "Less" : "More"}
-                </button>
-              ) : null}
-              <p className="found-card-meta">
-                <span className="found-verified">
-                  <span aria-hidden="true">✓ </span>
-                  {candidate.verifiedLabel}
-                </span>
-                <span>{candidate.attribution}</span>
-                {candidate.rangeLabel ? (
-                  <span>{candidate.rangeLabel}</span>
-                ) : null}
-                <a
-                  href={candidate.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {candidate.sourceLabel}
-                </a>
-              </p>
+              <FoundCandidateBody candidate={candidate} showVerified />
               <button
                 type="button"
                 className="save-moment"

@@ -72,6 +72,50 @@ export async function isPublicHttpsUrl(value: string) {
   return url;
 }
 
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, digits: string) => {
+      const code = Number(digits);
+      return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : " ";
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, digits: string) => {
+      const code = Number.parseInt(digits, 16);
+      return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : " ";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function metaContent(tag: string) {
+  const match = tag.match(
+    /\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i,
+  );
+  return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? "");
+}
+
+/** og:title when the page published one, otherwise the document title. */
+export function pageTitleFromHtml(html: string) {
+  const metas = html.match(/<meta\b[^>]*>/gi) ?? [];
+  for (const tag of metas) {
+    if (!/\b(?:property|name)\s*=\s*["']og:title["']/i.test(tag)) continue;
+    const content = metaContent(tag).slice(0, 200);
+    if (content) return content;
+  }
+  const title = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  if (!title?.[1]) return undefined;
+  const text = decodeHtmlEntities(title[1].replace(/<[^>]+>/g, " ")).slice(
+    0,
+    200,
+  );
+  return text || undefined;
+}
+
 export function htmlToFoundText(html: string) {
   return html
     .replace(/<!--[\s\S]*?-->/g, " ")

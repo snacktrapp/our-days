@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const captions = vi.hoisted(() => vi.fn());
 const page = vi.hoisted(() => vi.fn());
@@ -13,9 +13,11 @@ vi.mock("./youtube.server", async () => {
     );
   return { ...actual, fetchYoutubeTranscript: captions };
 });
-vi.mock("./web.server", () => ({
-  readPublicPage: page,
-}));
+vi.mock("./web.server", async () => {
+  const actual =
+    await vi.importActual<typeof import("./web.server")>("./web.server");
+  return { ...actual, readPublicPage: page };
+});
 
 import { foundFixtureQuote } from "@/features/insights/found-fixture";
 import { fetchFoundSource } from "./fetchers.server";
@@ -56,6 +58,11 @@ describe("YouTube publisher transcript fallback", () => {
   beforeEach(() => {
     captions.mockReset();
     page.mockReset();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it.each([
@@ -119,6 +126,15 @@ describe("YouTube publisher transcript fallback", () => {
     expect(
       result.source?.timedWords?.some((word) => word.cueStart === 6762),
     ).toBe(true);
+  });
+
+  it("keeps a fetched page title and ignores a bare Source title", async () => {
+    const result = await fromTranscript(
+      '<html><meta property="og:title" content="DHH on Lex Fridman"><a href="https://www.youtube.com/watch?v=abcdefghijk">watch</a></html>',
+    );
+    expect(result.source?.kind).toBe("youtube");
+    expect(result.source?.fetchedTitle).toBe("DHH on Lex Fridman");
+    expect(result.source?.title).toBe("Lex Fridman Podcast");
   });
 
   it("does not fetch a transcript page when captions already match", async () => {

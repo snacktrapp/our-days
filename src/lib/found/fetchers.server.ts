@@ -9,7 +9,7 @@ import type {
   FoundFetchStatus,
   FoundLead,
 } from "./leads.server";
-import { readPublicPage } from "./web.server";
+import { pageTitleFromHtml, readPublicPage } from "./web.server";
 import { fetchYoutubeTranscript, youtubeVideoId } from "./youtube.server";
 import { timedTranscriptFromPage } from "./transcript-page.server";
 import { transcriptFromCues } from "./vtt.server";
@@ -80,21 +80,67 @@ function htmlLinksToVideo(html: string, videoId: string, pageUrl: string) {
   return false;
 }
 
+function withFetchedDetails(
+  source: FetchedSource,
+  html: string | undefined,
+  details: Readonly<{ title?: string; channel?: string }> | null,
+): FetchedSource {
+  const fetchedTitle =
+    clean(html ? pageTitleFromHtml(html) : undefined) ?? clean(details?.title);
+  const channelName = clean(details?.channel);
+  return {
+    ...source,
+    ...(fetchedTitle ? { fetchedTitle } : {}),
+    ...(channelName ? { channelName } : {}),
+  };
+}
+
+async function youtubeDetails(videoId: string, signal: AbortSignal) {
+  const target = `https://www.youtube.com/watch?v=${videoId}`;
+  const url = `https://www.youtube.com/oembed?url=${encodeURIComponent(target)}&format=json`;
+  try {
+    const timeout = AbortSignal.timeout(2_000);
+    const response = await fetch(url, {
+      redirect: "manual",
+      signal: AbortSignal.any([signal, timeout]),
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as {
+      title?: unknown;
+      author_name?: unknown;
+    };
+    return {
+      ...(typeof body.title === "string" ? { title: body.title } : {}),
+      ...(typeof body.author_name === "string"
+        ? { channel: body.author_name }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function webSource(
   lead: FoundLead,
   text: string,
   sourceUrl: string,
   timedWords?: FetchedSource["timedWords"],
+  html?: string,
 ): FetchedSource {
-  return {
-    kind: "web",
-    identity: `web:${sourceUrl}`,
-    text,
-    sourceUrl,
-    speaker: clean(lead.speaker),
-    title: clean(lead.title),
-    ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
-  };
+  return withFetchedDetails(
+    {
+      kind: "web",
+      identity: `web:${sourceUrl}`,
+      text,
+      sourceUrl,
+      speaker: clean(lead.speaker),
+      title: clean(lead.title),
+      ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
+    },
+    html,
+    null,
+  );
 }
 
 function youtubeSource(
@@ -103,17 +149,23 @@ function youtubeSource(
   lead: FoundLead,
   timedWords: FetchedSource["timedWords"],
   sourceUrl: string,
+  html?: string,
+  details?: Readonly<{ title?: string; channel?: string }> | null,
 ): FetchedSource {
-  return {
-    kind: "youtube",
-    identity: `youtube:${videoId}`,
-    text,
-    sourceUrl,
-    speaker: clean(lead.speaker),
-    title: clean(lead.title),
-    videoId,
-    ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
-  };
+  return withFetchedDetails(
+    {
+      kind: "youtube",
+      identity: `youtube:${videoId}`,
+      text,
+      sourceUrl,
+      speaker: clean(lead.speaker),
+      title: clean(lead.title),
+      videoId,
+      ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
+    },
+    html,
+    details ?? null,
+  );
 }
 
 export async function fetchFoundSource(
@@ -164,6 +216,8 @@ export async function fetchFoundSource(
             lead,
             transcript.words,
             `https://www.youtube.com/watch?v=${videoId}`,
+            undefined,
+            await youtubeDetails(videoId, signal),
           );
         }
       }
@@ -187,13 +241,27 @@ export async function fetchFoundSource(
             lead,
             timed.words,
             page.page.url,
+            page.page.html,
+            await youtubeDetails(videoId, signal),
           );
         } else if (videoId) {
           attempts.push(attempt(page.host, "ok", page.httpStatus));
-          source = webSource(lead, timed.text, page.page.url);
+          source = webSource(
+            lead,
+            timed.text,
+            page.page.url,
+            undefined,
+            page.page.html,
+          );
         } else {
           attempts.push(attempt(page.host, "ok", page.httpStatus));
-          source = webSource(lead, timed.text, page.page.url, timed.words);
+          source = webSource(
+            lead,
+            timed.text,
+            page.page.url,
+            timed.words,
+            page.page.html,
+          );
         }
       }
     }
@@ -211,14 +279,13 @@ export async function fetchFoundSource(
       };
     }
     return {
-      source: {
-        kind: "web",
-        identity: `web:${page.page.url}`,
-        text: canonicalFoundText(page.page.text),
-        sourceUrl: page.page.url,
-        speaker: clean(lead.speaker),
-        title: clean(lead.title),
-      },
+      source: webSource(
+        lead,
+        canonicalFoundText(page.page.text),
+        page.page.url,
+        undefined,
+        page.page.html,
+      ),
       attempts: [attempt(page.host, "ok", page.httpStatus)],
     };
   }

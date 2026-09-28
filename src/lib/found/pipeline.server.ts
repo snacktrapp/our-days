@@ -2,6 +2,7 @@ import "server-only";
 
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import {
+  formatFoundClock,
   formatFoundRange,
   foundEmptyMessage,
   foundMaximumQuoteLength,
@@ -29,6 +30,12 @@ import type {
   FoundLead,
 } from "./leads.server";
 import { pickFoundQuote, proposeFoundLeads } from "./model.server";
+import { foundWords } from "./normalize.server";
+import {
+  foundTopicWords,
+  selectFoundPassages,
+  type RankedPassage,
+} from "./relevance.server";
 import { timestampsForSlice, type TimedWord } from "./vtt.server";
 import {
   assessFoundQuote,
@@ -62,18 +69,21 @@ export type FoundSearchOutcome =
 
 type TextWindow = Readonly<{ text: string; offset: number }>;
 
-function clipAttribution(value: string) {
-  const trimmed = value.trim().replace(/\s+/g, " ");
-  if (!trimmed) return "Source";
+function clipAttribution(value: string | undefined) {
+  const trimmed = value?.trim().replace(/\s+/g, " ") ?? "";
+  if (!trimmed || trimmed.toLowerCase() === "source") return null;
   if (trimmed.length <= 160) return trimmed;
   return `${trimmed.slice(0, 157).trimEnd()}…`;
 }
 
-function speakerAttribution(speaker?: string, title?: string) {
-  const left = speaker?.trim();
-  const right = title?.trim();
-  if (left && right) return clipAttribution(`${left} · ${right}`);
-  return clipAttribution(left || right || "Source");
+function namedParts(parts: Array<string | undefined>) {
+  const cleaned = parts
+    .map((part) => part?.trim().replace(/\s+/g, " "))
+    .filter((part): part is string => {
+      if (!part) return false;
+      return part.toLowerCase() !== "source";
+    });
+  return clipAttribution(cleaned.join(" · "));
 }
 
 function bibleAttribution(source: FetchedSource, start: number, end: number) {
@@ -90,6 +100,45 @@ function bibleAttribution(source: FetchedSource, start: number, end: number) {
         : `${first.book} ${first.chapter}:${first.verse}–${last.verse}`
       : `${first.book} ${first.chapter}:${first.verse}–${last.chapter}:${last.verse}`;
   return clipAttribution(`${reference} · World English Bible`);
+}
+
+function displayHost(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function realName(value: string | undefined) {
+  const trimmed = value?.trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.toLowerCase() === "source") return undefined;
+  return trimmed;
+}
+
+function speakerIsInSource(speaker: string, source: FetchedSource) {
+  const words = foundWords(speaker).filter((word) => word.length >= 2);
+  if (words.length === 0) return false;
+  const haystack = new Set(
+    foundWords(`${source.text}\n${source.fetchedTitle ?? ""}`),
+  );
+  return words.every((word) => haystack.has(word));
+}
+
+function presentationSite(source: FetchedSource): {
+  site?: string;
+  channel?: string;
+} {
+  if (source.kind === "bible") return { site: "ebible.org" };
+  if (source.kind === "youtube" || source.videoId) {
+    const channel = realName(source.channelName);
+    return {
+      site: "YouTube",
+      ...(channel ? { channel } : {}),
+    };
+  }
+  const site = displayHost(source.sourceUrl);
+  return site ? { site } : {};
 }
 
 function hintOffset(source: FetchedSource, hintSeconds?: number) {
@@ -211,11 +260,22 @@ function candidateFromMatch(
   );
   const sourceUrl = cardSourceUrl(source, timing?.startSeconds);
   const label = insightSourceLabel(sourceUrl);
+  const speaker = realName(source.speaker);
+  const fetchedTitle = realName(source.fetchedTitle);
+  const modelTitle = realName(source.title);
+  const site = presentationSite(source);
   const attribution =
-    source.kind === "bible"
-      ? (bibleAttribution(source, absoluteStart, absoluteEnd) ??
-        speakerAttribution(source.speaker, source.title))
-      : speakerAttribution(source.speaker, source.title);
+    (source.kind === "bible"
+      ? bibleAttribution(source, absoluteStart, absoluteEnd)
+      : null) ??
+    namedParts([speaker, fetchedTitle ?? modelTitle]) ??
+    namedParts([site.site]) ??
+    displayHost(source.sourceUrl) ??
+    (source.kind === "bible"
+      ? "World English Bible"
+      : source.kind === "youtube"
+        ? "YouTube"
+        : "Page");
   return {
     quote: located.quote,
     attribution,
@@ -227,9 +287,16 @@ function candidateFromMatch(
         : source.kind === "youtube" || source.timedWords
           ? foundVerifiedTranscript
           : foundVerifiedSource,
+    ...(speaker
+      ? { speaker, speakerInSource: speakerIsInSource(speaker, source) }
+      : {}),
+    ...(fetchedTitle ? { sourceTitle: fetchedTitle } : {}),
+    ...(site.site ? { sourceSite: site.site } : {}),
+    ...(site.channel ? { channelName: site.channel } : {}),
     ...(timing
       ? {
           rangeLabel: formatFoundRange(timing.startSeconds, timing.endSeconds),
+          atLabel: `at ${formatFoundClock(timing.startSeconds)}`,
         }
       : {}),
     ...(source.videoId ? { videoId: source.videoId } : {}),
@@ -298,7 +365,7 @@ async function executeFoundSearch(
       let dropReason = "no-match";
       let similarity: number | undefined;
       let modelQuotePreview: string | undefined;
-      let matched = false;
+      let modelPassage: RankedPassage | null = null;
       for (const window of windows) {
         let pick: SpanPick | null = null;
         try {
@@ -317,12 +384,12 @@ async function executeFoundSearch(
         if (!pick?.quote) continue;
         const assessed = assessFoundQuote(window.text, pick.quote);
         if (assessed.ok) {
-          candidates.push(
-            candidateFromMatch(source, assessed.located, window.offset),
-          );
-          cards = candidates.length;
-          seen.add(source.identity);
-          matched = true;
+          modelPassage = {
+            quote: assessed.located.quote,
+            start: assessed.located.start,
+            end: assessed.located.end,
+            offset: window.offset,
+          };
           similarity = undefined;
           modelQuotePreview = undefined;
           break;
@@ -338,26 +405,45 @@ async function executeFoundSearch(
           dropReason = "no-match";
           continue;
         }
-        candidates.push(
-          candidateFromMatch(source, recovered.located, window.offset),
-        );
-        cards = candidates.length;
-        seen.add(source.identity);
-        matched = true;
+        modelPassage = {
+          quote: recovered.located.quote,
+          start: recovered.located.start,
+          end: recovered.located.end,
+          offset: window.offset,
+        };
         dropReason = "near-match-recovered";
         break;
       }
+      const passages = selectFoundPassages(
+        source.text,
+        foundTopicWords(query),
+        modelPassage,
+      );
+      for (const passage of passages) {
+        if (candidates.length >= 3) break;
+        candidates.push(
+          candidateFromMatch(
+            source,
+            { quote: passage.quote, start: passage.start, end: passage.end },
+            passage.offset,
+          ),
+        );
+      }
+      cards = candidates.length;
+      if (passages.length > 0) seen.add(source.identity);
       leadLogs.push(
         leadLog(
           item.lead,
           item.result.attempts,
           source,
-          matched && dropReason !== "near-match-recovered"
-            ? undefined
-            : dropReason,
-          similarity === undefined
-            ? undefined
-            : { similarity, modelQuotePreview },
+          passages.length === 0
+            ? dropReason
+            : dropReason === "near-match-recovered"
+              ? dropReason
+              : undefined,
+          dropReason === "near-match-recovered" && similarity !== undefined
+            ? { similarity, modelQuotePreview }
+            : undefined,
         ),
       );
       if (candidates.length >= 3) break;

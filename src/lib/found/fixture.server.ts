@@ -31,6 +31,9 @@ export function fixtureFoundDeps(): FoundSearchDeps {
         sourceUrl: `https://www.youtube.com/watch?v=${foundFixtureVideoId}`,
         speaker: "DHH",
         title: "Lex Fridman Podcast",
+        fetchedTitle:
+          "DHH: Programming, philosophy, and the pursuit of excellence | Lex Fridman Podcast",
+        channelName: "Lex Fridman",
         timedWords: fixtureTranscript.words,
       },
       attempts: [{ host: "www.youtube.com", fetchStatus: "ok" }],

@@ -2,6 +2,7 @@
 
 import { PostToField } from "@/features/composer/post-to-field";
 import type { PostableCircle } from "@/features/composer/post-to";
+import { FoundCandidateBody } from "./found-candidate";
 import type { FoundCandidate } from "./found-types";
 
 type FoundReviewProps = Readonly<{
@@ -35,14 +36,7 @@ export function FoundReview({
 }: FoundReviewProps) {
   return (
     <div className="found-review">
-      <blockquote className="found-review-quote">{candidate.quote}</blockquote>
-      <p className="found-card-meta">
-        <cite>{candidate.attribution}</cite>
-        {candidate.rangeLabel ? <span>{candidate.rangeLabel}</span> : null}
-        <a href={candidate.sourceUrl} target="_blank" rel="noopener noreferrer">
-          {candidate.sourceLabel}
-        </a>
-      </p>
+      <FoundCandidateBody candidate={candidate} />
       {circles.length > 0 ? (
         <PostToField
           circles={circles}
