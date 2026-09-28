@@ -255,6 +255,17 @@
   color: var(--text-muted);
 }
 
+:root[data-appearance="retro"] .found-card-quote,
+:root[data-appearance="retro"] .found-review-quote,
+:root[data-appearance="retro"] .found-speaker,
+:root[data-appearance="retro"] .found-source-title,
+:root[data-appearance="retro"] .found-source-meta,
+:root[data-appearance="retro"] .found-verified,
+:root[data-appearance="retro"] .found-spot {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
 :root[data-appearance="retro"] .card-copy > p,
 :root[data-appearance="retro"] .milestone-copy > p,
 :root[data-appearance="retro"] .location-card .card-copy > p,
