@@ -8,6 +8,7 @@ import {
   foundMemberMessage,
   foundUnavailableMessage,
   parseFoundQuery,
+  parseFoundSourceKind,
 } from "@/features/insights/found-types";
 import { readJournalAccessState } from "@/lib/auth/journal-access";
 import { canCreateInsight } from "@/lib/circle-roles";
@@ -130,12 +131,13 @@ export async function POST(request: Request) {
       403,
     );
   }
-  const query = parseFoundQuery(
+  const body =
     payload && typeof payload === "object"
-      ? (payload as { query?: unknown }).query
-      : null,
-  );
-  if (!query) {
+      ? (payload as { query?: unknown; sourceKind?: unknown })
+      : null;
+  const query = parseFoundQuery(body?.query);
+  const sourceKind = parseFoundSourceKind(body?.sourceKind);
+  if (!query || !sourceKind) {
     return response(
       { ok: false, message: "Check the search and try again." },
       400,
@@ -143,7 +145,7 @@ export async function POST(request: Request) {
   }
 
   if (isDesignPreviewEnvironment(process.env)) {
-    return outcomeResponse(await runFixtureFoundSearch(query));
+    return outcomeResponse(await runFixtureFoundSearch(query, sourceKind));
   }
 
   const access = await readJournalAccessState();
@@ -158,7 +160,7 @@ export async function POST(request: Request) {
   }
 
   if (localJournalIsEnabled() || foundE2eFixture()) {
-    return outcomeResponse(await runFixtureFoundSearch(query));
+    return outcomeResponse(await runFixtureFoundSearch(query, sourceKind));
   }
 
   const supabase = await createOurDaysServerClient();
@@ -173,7 +175,12 @@ export async function POST(request: Request) {
     return response({ ok: false, message: foundCapMessage }, 429);
   }
 
-  const outcome = await runFoundSearch(query, connectedFoundDeps());
+  const outcome = await runFoundSearch(
+    query,
+    connectedFoundDeps(),
+    undefined,
+    sourceKind,
+  );
   if (!outcome.ok) await refundFailedFoundSearch(supabase, claimId);
   return outcomeResponse(outcome);
 }

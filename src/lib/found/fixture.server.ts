@@ -6,13 +6,45 @@ import {
   foundFixtureVideoId,
   foundFixtureVtt,
 } from "@/features/insights/found-fixture";
+import type { FoundSourceKind } from "@/features/insights/found-types";
 import type { FoundSearchDeps } from "./pipeline.server";
 import { runFoundSearch } from "./pipeline.server";
 import { parseVtt, transcriptFromCues } from "./vtt.server";
 
 const fixtureTranscript = transcriptFromCues(parseVtt(foundFixtureVtt));
 
-export function fixtureFoundDeps(): FoundSearchDeps {
+export const foundFixtureArticleQuote =
+  "A public article can hold a sentence that is worth keeping word for word.";
+export const foundFixtureArticleUrl = "https://example.com/a-kept-sentence";
+
+export function fixtureFoundDeps(
+  sourceKind: FoundSourceKind = "youtube",
+): FoundSearchDeps {
+  if (sourceKind === "text") {
+    return {
+      generateLeads: async () => [
+        {
+          kind: "web",
+          url: foundFixtureArticleUrl,
+          speaker: "Ada Lovelace",
+          title: "A note on the engine",
+        },
+      ],
+      fetchSource: async () => ({
+        source: {
+          kind: "web",
+          identity: "fixture:article",
+          text: foundFixtureArticleQuote,
+          sourceUrl: foundFixtureArticleUrl,
+          speaker: "Ada Lovelace",
+          title: "A note on the engine",
+          fetchedTitle: "A note on the engine",
+        },
+        attempts: [{ host: "example.com", fetchStatus: "ok" }],
+      }),
+      pickQuote: async () => ({ quote: foundFixtureArticleQuote }),
+    };
+  }
   return {
     generateLeads: async () => [
       {
@@ -34,6 +66,7 @@ export function fixtureFoundDeps(): FoundSearchDeps {
         fetchedTitle:
           "DHH: Programming, philosophy, and the pursuit of excellence | Lex Fridman Podcast",
         channelName: "Lex Fridman",
+        videoId: foundFixtureVideoId,
         timedWords: fixtureTranscript.words,
       },
       attempts: [{ host: "www.youtube.com", fetchStatus: "ok" }],
@@ -42,6 +75,9 @@ export function fixtureFoundDeps(): FoundSearchDeps {
   };
 }
 
-export function runFixtureFoundSearch(query: string) {
-  return runFoundSearch(query, fixtureFoundDeps(), 5_000);
+export function runFixtureFoundSearch(
+  query: string,
+  sourceKind: FoundSourceKind = "youtube",
+) {
+  return runFoundSearch(query, fixtureFoundDeps(sourceKind), 5_000, sourceKind);
 }

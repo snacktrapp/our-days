@@ -13,6 +13,13 @@ export const foundUnavailableMessage = "Found is unavailable.";
 export const foundMemberMessage =
   "Only an organizer or Operations can create an Insight.";
 
+export const foundSourceKinds = ["text", "youtube"] as const;
+export type FoundSourceKind = (typeof foundSourceKinds)[number];
+
+export function parseFoundSourceKind(value: unknown): FoundSourceKind | null {
+  return value === "text" || value === "youtube" ? value : null;
+}
+
 export const foundVerifiedTranscript = "Verified from transcript";
 export const foundVerifiedSource = "Verified from source";
 export const foundVerifiedBible = "Verified from the World English Bible";

@@ -7,6 +7,7 @@ import {
   foundTimeoutMessage,
   parseFoundQuery,
   type FoundCandidate,
+  type FoundSourceKind,
 } from "./found-types";
 import { foundInsightRequestBody, type FoundInsightPost } from "./found-types";
 
@@ -60,6 +61,7 @@ function isCandidate(value: unknown): value is FoundCandidate {
 }
 
 type FoundSearchPanelProps = Readonly<{
+  sourceKind: FoundSourceKind;
   query: string;
   candidates: readonly FoundCandidate[];
   message: string | null;
@@ -74,6 +76,7 @@ type FoundSearchPanelProps = Readonly<{
 }>;
 
 export function FoundSearchPanel({
+  sourceKind,
   query,
   candidates,
   message,
@@ -102,7 +105,7 @@ export function FoundSearchPanel({
       const response = await fetch("/api/insights/found", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ query: trimmed }),
+        body: JSON.stringify({ query: trimmed, sourceKind }),
         signal: controller.signal,
       });
       const payload = (await response.json().catch(() => null)) as {

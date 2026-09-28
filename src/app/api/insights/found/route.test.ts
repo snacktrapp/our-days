@@ -41,7 +41,11 @@ import { POST } from "./route";
 
 const site = "http://127.0.0.1:3102";
 
-function post(query: string, origin = site) {
+function post(
+  query: string,
+  origin = site,
+  sourceKind: "text" | "youtube" = "text",
+) {
   return POST(
     new Request(`${site}/api/insights/found`, {
       method: "POST",
@@ -49,7 +53,7 @@ function post(query: string, origin = site) {
         origin,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, sourceKind }),
     }),
   );
 }
@@ -242,11 +246,22 @@ describe("POST /api/insights/found", () => {
     process.env.OUR_DAYS_RESOURCE_MODE = "detached";
     process.env.OUR_DAYS_LOCAL_JOURNAL_MODE = "enabled";
     process.env.OUR_DAYS_FOUND_E2E = "fixture";
-    const response = await post("DHH on the pursuit of excellence on Lex");
+    const response = await post(
+      "DHH on the pursuit of excellence on Lex",
+      site,
+      "youtube",
+    );
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.ok).toBe(true);
     expect(body.candidates[0].quote).toBe(foundFixtureQuote);
+    expect(body.candidates[0].sourceUrl).toContain("youtube.com");
+    const article = await post("a kept sentence", site, "text");
+    const articleBody = await article.json();
+    expect(articleBody.candidates[0].sourceUrl).toBe(
+      "https://example.com/a-kept-sentence",
+    );
+    expect(articleBody.candidates[0].sourceUrl).not.toContain("youtube.com");
     expect(JSON.stringify(body)).not.toContain(foundFixtureRejectedQuote);
     expect(mocks.leads).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();

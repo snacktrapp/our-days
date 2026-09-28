@@ -76,11 +76,13 @@ describe("Found in the composer", () => {
       await screen.findByRole("button", { name: /Written entry/ }),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: /Found/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /YouTube clip/ })).toBeNull();
     rerender(<Harness model={{ ...baseModel, foundEnabled: false }} />);
     expect(
       await screen.findByRole("button", { name: /Written entry/ }),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: /Found/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /YouTube clip/ })).toBeNull();
   });
 
   it("submits on Enter and keeps a Shift+Enter line break", async () => {
@@ -150,6 +152,9 @@ describe("Found in the composer", () => {
       "DHH on Lex",
     );
     await user.click(screen.getByRole("button", { name: "Find" }));
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).sourceKind,
+    ).toBe("text");
     expect(await screen.findByText(foundFixtureQuote)).toBeVisible();
     expect(screen.queryByText(`“${foundFixtureQuote}”`)).toBeNull();
     expect(screen.getByText("Verified from transcript")).toBeVisible();

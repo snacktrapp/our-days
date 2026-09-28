@@ -20,7 +20,7 @@ test("an organizer can post a verified Found quote to Just me", async ({
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByRole("button", { name: /Found/ }).click();
+  await page.getByRole("button", { name: /YouTube clip/ }).click();
   await page
     .getByRole("textbox", { name: "What are you looking for?" })
     .fill("DHH on the pursuit of excellence on Lex");
@@ -53,7 +53,10 @@ test("an organizer can post a verified Found quote to Just me", async ({
     jordanPage.getByRole("button", { name: "Add", exact: true }),
   ).toBeVisible();
   await jordanPage.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(jordanPage.getByRole("button", { name: /Found/ })).toHaveCount(
+  await expect(
+    jordanPage.getByRole("button", { name: /YouTube clip/ }),
+  ).toHaveCount(0);
+  await expect(jordanPage.getByRole("button", { name: /^Found/ })).toHaveCount(
     0,
   );
   await jordanPage.keyboard.press("Escape");

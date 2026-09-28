@@ -15,7 +15,9 @@ import {
   foundVerifiedSource,
   foundVerifiedTranscript,
   type FoundCandidate,
+  type FoundSourceKind,
 } from "@/features/insights/found-types";
+import { youtubePlaybackFromSource } from "@/features/insights/youtube-source";
 import { FoundBudgetError, FoundUnavailableError } from "./errors.server";
 import { fetchFoundSource } from "./fetchers.server";
 import {
@@ -375,10 +377,34 @@ function candidateFromMatch(
   };
 }
 
+function leadMatchesSourceKind(lead: FoundLead, sourceKind: FoundSourceKind) {
+  return sourceKind === "youtube"
+    ? lead.kind === "youtube"
+    : lead.kind !== "youtube";
+}
+
+function candidateMatchesSourceKind(
+  candidate: FoundCandidate,
+  sourceKind: FoundSourceKind,
+) {
+  const video = youtubePlaybackFromSource(candidate.sourceUrl) !== null;
+  return sourceKind === "youtube" ? video : !video;
+}
+
+function scopedFoundQuery(query: string, sourceKind?: FoundSourceKind) {
+  if (!sourceKind) return query;
+  const rule =
+    sourceKind === "youtube"
+      ? "Return only youtube leads with a videoId. Do not return web or bible leads."
+      : "Return only web or bible leads. Do not return YouTube.";
+  return `${query}\n\n${rule}`;
+}
+
 async function executeFoundSearch(
   query: string,
   deps: FoundSearchDeps,
   signal: AbortSignal,
+  sourceKind?: FoundSourceKind,
 ): Promise<FoundSearchOutcome> {
   const leadLogs: FoundLeadLog[] = [];
   let cards = 0;
@@ -386,7 +412,28 @@ async function executeFoundSearch(
     const candidates: FoundCandidate[] = [];
     const seen = new Set<string>();
     const tried = new Set<string>();
-    let pending = (await deps.generateLeads(query, signal)).slice(0, 5);
+    const ask = (prompt: string) =>
+      deps.generateLeads(scopedFoundQuery(prompt, sourceKind), signal);
+    const takeLeads = async (prompt: string) => {
+      const raw = (await ask(prompt)).slice(0, 5);
+      if (!sourceKind) return raw;
+      const allowed = raw.filter((lead) =>
+        leadMatchesSourceKind(lead, sourceKind),
+      );
+      if (allowed.length > 0 || raw.length === 0) return allowed;
+      const again = (
+        await ask(`${prompt}\n\nThose leads were the wrong kind of source.`)
+      ).slice(0, 5);
+      return again.filter((lead) => leadMatchesSourceKind(lead, sourceKind));
+    };
+    const keepCandidate = (candidate: FoundCandidate) => {
+      if (sourceKind && !candidateMatchesSourceKind(candidate, sourceKind)) {
+        return false;
+      }
+      candidates.push(candidate);
+      return true;
+    };
+    let pending = await takeLeads(query);
     let round = 0;
     while (pending.length > 0 && candidates.length < 3) {
       if (signal.aborted) {
@@ -399,6 +446,10 @@ async function executeFoundSearch(
         const key = leadIdentity(normalized);
         if (tried.has(key)) continue;
         tried.add(key);
+        if (sourceKind && !leadMatchesSourceKind(normalized, sourceKind)) {
+          leadLogs.push(leadLog(normalized, [], null, "source-kind"));
+          continue;
+        }
         fresh.push(normalized);
       }
       if (fresh.length === 0) break;
@@ -442,7 +493,12 @@ async function executeFoundSearch(
             );
             continue;
           }
-          candidates.push(candidateFromMatch(source, direct.located, 0));
+          if (!keepCandidate(candidateFromMatch(source, direct.located, 0))) {
+            leadLogs.push(
+              leadLog(item.lead, item.result.attempts, source, "source-kind"),
+            );
+            continue;
+          }
           cards = candidates.length;
           seen.add(source.identity);
           leadLogs.push(leadLog(item.lead, item.result.attempts, source));
@@ -519,24 +575,27 @@ async function executeFoundSearch(
           foundTopicWords(query),
           modelPassage,
         );
+        let kept = 0;
         for (const passage of passages) {
           if (candidates.length >= 3) break;
-          candidates.push(
+          const accepted = keepCandidate(
             candidateFromMatch(
               source,
               { quote: passage.quote, start: passage.start, end: passage.end },
               passage.offset,
             ),
           );
+          if (accepted) kept += 1;
         }
+        if (passages.length > 0 && kept === 0) dropReason = "source-kind";
         cards = candidates.length;
-        if (passages.length > 0) seen.add(source.identity);
+        if (kept > 0) seen.add(source.identity);
         leadLogs.push(
           leadLog(
             item.lead,
             item.result.attempts,
             source,
-            passages.length === 0
+            passages.length === 0 || kept === 0
               ? dropReason
               : dropReason === "near-match-recovered"
                 ? dropReason
@@ -572,12 +631,10 @@ async function executeFoundSearch(
         !opened;
       const topicRetry = Boolean(missing) && round < 3;
       if (!promptLead || (!onlyLeadFailed && !topicRetry)) break;
-      pending = (
-        await deps.generateLeads(
-          retryPrompt(query, promptLead, missing),
-          signal,
-        )
-      ).slice(0, 5);
+      pending = (await ask(retryPrompt(query, promptLead, missing))).slice(
+        0,
+        5,
+      );
     }
     cards = candidates.length;
     if (candidates.length === 0) {
@@ -593,6 +650,7 @@ export async function runFoundSearch(
   query: string,
   deps: FoundSearchDeps,
   timeoutMs = foundSearchTimeoutMs,
+  sourceKind?: FoundSourceKind,
 ): Promise<FoundSearchOutcome> {
   return beginFoundRequest(async () => {
     const controller = new AbortController();
@@ -613,7 +671,7 @@ export async function runFoundSearch(
     controller.signal.addEventListener("abort", onAbort, { once: true });
     try {
       return await Promise.race([
-        executeFoundSearch(query, deps, controller.signal),
+        executeFoundSearch(query, deps, controller.signal, sourceKind),
         aborted,
       ]);
     } catch (error) {

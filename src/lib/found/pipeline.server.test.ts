@@ -45,7 +45,7 @@ describe("Found search pipeline", () => {
       "https://www.youtube.com/watch?v=abcdefghijk&t=6762s",
     );
     expect(card.rangeLabel).toBe("1:52:42–1:53:04");
-    expect(card.videoId).toBeUndefined();
+    expect(card.videoId).toBe("abcdefghijk");
     expect(foundFixtureStartSeconds).toBe(6762);
     expect(foundFixtureEndSeconds).toBe(6784);
   });
@@ -754,6 +754,39 @@ describe("Found search pipeline", () => {
     expect(prompts).toHaveLength(3);
     expect(prompts[2]).toContain("different episode");
     expect(result).toEqual({
+      ok: false,
+      reason: "empty",
+      message: foundEmptyMessage,
+    });
+  });
+
+  it("keeps YouTube clips and text searches on their own sources", async () => {
+    const youtube = await runFoundSearch(
+      "excellence",
+      fixtureFoundDeps("youtube"),
+      5_000,
+      "youtube",
+    );
+    const article = await runFoundSearch(
+      "a kept sentence",
+      fixtureFoundDeps("text"),
+      5_000,
+      "text",
+    );
+    expect(youtube.ok && youtube.candidates[0]?.sourceUrl).toContain(
+      "youtube.com/watch",
+    );
+    expect(article.ok && article.candidates[0]?.sourceUrl).toBe(
+      "https://example.com/a-kept-sentence",
+    );
+    expect(article.ok && article.candidates[0]?.videoId).toBeUndefined();
+    const crossed = await runFoundSearch(
+      "excellence",
+      fixtureFoundDeps("youtube"),
+      5_000,
+      "text",
+    );
+    expect(crossed).toEqual({
       ok: false,
       reason: "empty",
       message: foundEmptyMessage,
