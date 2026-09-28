@@ -1892,7 +1892,6 @@ export function MomentComposer({
               setReviewing(true);
               setSaveError(null);
             }}
-            onBack={() => setChoosingMode(true)}
           />
         ) : reviewing && copy ? (
           <div className="composer-review">

@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GatewayAuthenticationError,
+  GatewayForbiddenError,
   GatewayInternalServerError,
 } from "@ai-sdk/gateway";
 import { NoOutputGeneratedError } from "ai";
@@ -32,6 +33,29 @@ describe("Found model errors", () => {
     );
     await expect(
       proposeFoundLeads("excellence", new AbortController().signal),
+    ).rejects.toBeInstanceOf(FoundBudgetError);
+  });
+
+  it("maps a free-tier gateway error to resting", async () => {
+    generateText.mockRejectedValue(
+      new GatewayInternalServerError({
+        message: "Free tier users do not have access to this model",
+      }),
+    );
+    await expect(
+      proposeFoundLeads("psalm on rest", new AbortController().signal),
+    ).rejects.toBeInstanceOf(FoundBudgetError);
+  });
+
+  it("maps a billing 403 to resting", async () => {
+    generateText.mockRejectedValue(
+      new GatewayForbiddenError({
+        message: "Quota exceeded for this billing account",
+        statusCode: 403,
+      }),
+    );
+    await expect(
+      proposeFoundLeads("psalm on rest", new AbortController().signal),
     ).rejects.toBeInstanceOf(FoundBudgetError);
   });
 

@@ -110,6 +110,7 @@ describe("Found in the composer", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness model={baseModel} />);
     await user.click(screen.getByRole("button", { name: /Found/ }));
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
     await user.type(
       screen.getByRole("textbox", { name: "What are you looking for?" }),
       "DHH on Lex",

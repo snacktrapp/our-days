@@ -54,7 +54,6 @@ type FoundSearchPanelProps = Readonly<{
     }>,
   ) => void;
   onUse: (candidate: FoundCandidate) => void;
-  onBack: () => void;
 }>;
 
 export function FoundSearchPanel({
@@ -64,13 +63,14 @@ export function FoundSearchPanel({
   onQueryChange,
   onResult,
   onUse,
-  onBack,
 }: FoundSearchPanelProps) {
   const [searching, setSearching] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const queryRef = useRef<HTMLInputElement>(null);
 
   const search = async () => {
+    queryRef.current?.blur();
     const trimmed = parseFoundQuery(query);
     if (!trimmed || searching) return;
     abortRef.current?.abort();
@@ -125,32 +125,26 @@ export function FoundSearchPanel({
         }}
       >
         <label htmlFor="found-query">What are you looking for?</label>
-        <input
-          id="found-query"
-          value={query}
-          maxLength={280}
-          disabled={searching}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-        <div className="found-search-actions">
-          <button
-            type="button"
-            className="secondary-composer-action"
-            onClick={onBack}
-          >
-            Back
-          </button>
+        <div className="found-search-row">
+          <input
+            ref={queryRef}
+            id="found-query"
+            value={query}
+            maxLength={280}
+            disabled={searching}
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
           {searching ? (
             <button
               type="button"
-              className="secondary-composer-action"
+              className="found-find"
               onClick={() => abortRef.current?.abort()}
             >
               Cancel
             </button>
           ) : (
             <button
-              className="save-moment"
+              className="found-find"
               type="submit"
               disabled={!query.trim()}
             >
