@@ -75,14 +75,50 @@ describe("Found in the composer", () => {
     expect(
       await screen.findByRole("button", { name: /Written entry/ }),
     ).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Found/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Found$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /YouTube clip/ })).toBeNull();
     rerender(<Harness model={{ ...baseModel, foundEnabled: false }} />);
     expect(
       await screen.findByRole("button", { name: /Written entry/ }),
     ).toBeVisible();
-    expect(screen.queryByRole("button", { name: /Found/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Found$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /YouTube clip/ })).toBeNull();
+  });
+
+  it("drops a verified Bible passage into the verse pickers", async () => {
+    const user = userEvent.setup();
+    const candidate = {
+      quote: "My soul rests in God alone. My salvation is from him.",
+      attribution: "Psalm 62:1 · World English Bible",
+      sourceUrl: "https://ebible.org/engwebp/PSA062.htm",
+      sourceLabel: "Read the source" as const,
+      verifiedLabel: "Verified from the World English Bible",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, candidates: [candidate] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    render(<Harness model={baseModel} />);
+    await user.click(screen.getByRole("button", { name: /Bible verse/ }));
+    await user.type(
+      screen.getByRole("textbox", {
+        name: "Describe the verse you're looking for",
+      }),
+      "waiting quietly for God",
+    );
+    await user.click(screen.getByRole("button", { name: "Find" }));
+    await user.click(await screen.findByRole("button", { name: /Psalm 62:1/ }));
+    expect(screen.getByRole("button", { name: "Book, Psalm" })).toBeVisible();
+    const verse = await screen.findByRole("textbox", { name: "Verse text" });
+    expect((verse as HTMLTextAreaElement).value).toContain(
+      "rests in God alone",
+    );
+    expect(screen.queryByRole("button", { name: /^Found$/ })).toBeNull();
   });
 
   it("submits on Enter and keeps a Shift+Enter line break", async () => {
@@ -95,7 +131,7 @@ describe("Found in the composer", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness model={baseModel} />);
-    await user.click(screen.getByRole("button", { name: /Found/ }));
+    await user.click(screen.getByRole("button", { name: /YouTube clip/ }));
     const field = screen.getByRole("textbox", {
       name: "What are you looking for?",
     });
@@ -145,7 +181,7 @@ describe("Found in the composer", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
     render(<Harness model={baseModel} />);
-    await user.click(screen.getByRole("button", { name: /Found/ }));
+    await user.click(screen.getByRole("button", { name: /YouTube clip/ }));
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
     await user.type(
       screen.getByRole("textbox", { name: "What are you looking for?" }),
@@ -154,7 +190,7 @@ describe("Found in the composer", () => {
     await user.click(screen.getByRole("button", { name: "Find" }));
     expect(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).sourceKind,
-    ).toBe("text");
+    ).toBe("youtube");
     expect(await screen.findByText(foundFixtureQuote)).toBeVisible();
     expect(screen.queryByText(`“${foundFixtureQuote}”`)).toBeNull();
     expect(screen.getByText("Verified from transcript")).toBeVisible();

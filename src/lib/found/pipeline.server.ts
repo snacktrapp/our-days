@@ -378,9 +378,9 @@ function candidateFromMatch(
 }
 
 function leadMatchesSourceKind(lead: FoundLead, sourceKind: FoundSourceKind) {
-  return sourceKind === "youtube"
-    ? lead.kind === "youtube"
-    : lead.kind !== "youtube";
+  if (sourceKind === "youtube") return lead.kind === "youtube";
+  if (sourceKind === "bible") return lead.kind === "bible";
+  return lead.kind !== "youtube";
 }
 
 function candidateMatchesSourceKind(
@@ -388,7 +388,11 @@ function candidateMatchesSourceKind(
   sourceKind: FoundSourceKind,
 ) {
   const video = youtubePlaybackFromSource(candidate.sourceUrl) !== null;
-  return sourceKind === "youtube" ? video : !video;
+  if (sourceKind === "youtube") return video;
+  if (sourceKind === "bible") {
+    return !video && candidate.verifiedLabel === foundVerifiedBible;
+  }
+  return !video;
 }
 
 function scopedFoundQuery(query: string, sourceKind?: FoundSourceKind) {
@@ -396,7 +400,9 @@ function scopedFoundQuery(query: string, sourceKind?: FoundSourceKind) {
   const rule =
     sourceKind === "youtube"
       ? "Return only youtube leads with a videoId. Do not return web or bible leads."
-      : "Return only web or bible leads. Do not return YouTube.";
+      : sourceKind === "bible"
+        ? "Return only a World English Bible lead. Do not return youtube or web leads."
+        : "Return only web or bible leads. Do not return YouTube.";
   return `${query}\n\n${rule}`;
 }
 
@@ -609,10 +615,12 @@ async function executeFoundSearch(
       }
       round += 1;
       const missing =
-        missedTopic(query, candidates) ??
-        (pageMissedTopic && candidates.length === 0
-          ? longestTopicWord(query)
-          : undefined);
+        sourceKind === "bible"
+          ? undefined
+          : (missedTopic(query, candidates) ??
+            (pageMissedTopic && candidates.length === 0
+              ? longestTopicWord(query)
+              : undefined));
       if (missing) {
         candidates.length = 0;
         cards = 0;

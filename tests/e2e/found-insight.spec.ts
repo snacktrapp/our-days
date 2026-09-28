@@ -37,10 +37,9 @@ test("an organizer can post a verified Found quote to Just me", async ({
   const card = page.locator("article").filter({ hasText: foundFixtureQuote });
   await expect(card).toBeVisible();
   await expect(card.getByText("Verified")).toHaveCount(0);
-  await expect(card.getByRole("link", { name: "Listen" })).toHaveAttribute(
-    "href",
-    /[?&]t=6762(?:&|$)/,
-  );
+  await expect(
+    card.getByRole("link", { name: "Open at this spot" }),
+  ).toHaveAttribute("href", /[?&]t=6762s?(?:&|$)/);
 
   const jordan = await browser.newContext();
   const jordanPage = await jordan.newPage();

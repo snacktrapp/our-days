@@ -44,7 +44,7 @@ const site = "http://127.0.0.1:3102";
 function post(
   query: string,
   origin = site,
-  sourceKind: "text" | "youtube" = "text",
+  sourceKind: "text" | "bible" | "youtube" = "text",
 ) {
   return POST(
     new Request(`${site}/api/insights/found`, {
@@ -262,6 +262,14 @@ describe("POST /api/insights/found", () => {
       "https://example.com/a-kept-sentence",
     );
     expect(articleBody.candidates[0].sourceUrl).not.toContain("youtube.com");
+    const verse = await post("waiting quietly for God", site, "bible");
+    const verseBody = await verse.json();
+    expect(verseBody.ok).toBe(true);
+    expect(verseBody.candidates[0].attribution).toContain("Psalm 62:1");
+    expect(verseBody.candidates[0].quote).toContain("rests in God");
+    expect(verseBody.candidates[0].verifiedLabel).toContain(
+      "World English Bible",
+    );
     expect(JSON.stringify(body)).not.toContain(foundFixtureRejectedQuote);
     expect(mocks.leads).not.toHaveBeenCalled();
     expect(mocks.rpc).not.toHaveBeenCalled();

@@ -14,6 +14,7 @@ import {
   versesInChapter,
 } from "./bible-verse-catalog";
 import { ComposerPickerPanel } from "./composer-picker-panel";
+import { BibleVerseSearch } from "./bible-verse-search";
 
 // Composer spec: Bible verse stays its own † mode on the entry tab. Book,
 // chapter, starting verse, and ending verse use the same closed-row custom
@@ -26,6 +27,7 @@ type BibleVerseFieldsProps = Readonly<{
   value: BibleVerseSelection;
   onChange: (value: BibleVerseSelection, passage: BibleVerse | null) => void;
   bookTriggerRef?: React.RefObject<HTMLButtonElement | null>;
+  searchEnabled?: boolean;
 }>;
 
 type OpenPicker = "book" | "chapter" | "start" | "end" | null;
@@ -46,6 +48,7 @@ export function BibleVerseFields({
   value,
   onChange,
   bookTriggerRef,
+  searchEnabled = false,
 }: BibleVerseFieldsProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const passageRequestRef = useRef(0);
@@ -200,6 +203,9 @@ export function BibleVerseFields({
       ref={rootRef}
       className="composer-date-time-fields composer-bible-verse-fields"
     >
+      {searchEnabled ? (
+        <BibleVerseSearch onPick={(selection) => commit(selection)} />
+      ) : null}
       <div className="composer-date-time-triggers">
         <div className="composer-field composer-picker-field">
           <span>Book</span>

@@ -10,7 +10,9 @@ import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
 import { FoundYoutubeFrame } from "@/features/insights/found-youtube-frame";
+import { formatFoundClock } from "@/features/insights/found-types";
 import { insightSourceLabel } from "@/features/insights/insight-source";
+import { youtubePlaybackFromSource } from "@/features/insights/youtube-source";
 import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import { MentionText } from "@/features/mentions/mention-text";
 import type {
@@ -350,6 +352,56 @@ export function MomentCard({
     const sourceText =
       moment.sourceLabel ??
       (sourceHref ? insightSourceLabel(sourceHref) : undefined);
+    const playback = sourceHref ? youtubePlaybackFromSource(sourceHref) : null;
+    if (playback && sourceHref) {
+      return (
+        <div className="moment-card insight-card found-post-card">
+          <CardTopChrome
+            participants={null}
+            options={cardOptions(
+              moment,
+              interaction,
+              connectedActions,
+              connectedPosition,
+              connectedTotal,
+            )}
+          >
+            <span className="thought-label">Insight</span>
+          </CardTopChrome>
+          <blockquote className="found-card-quote">“{moment.text}”</blockquote>
+          {moment.attribution ? (
+            <p className="found-source-title">{moment.attribution}</p>
+          ) : null}
+          {playback.start > 0 ? (
+            <p className="found-source-meta">
+              <span>at {formatFoundClock(playback.start)}</span>
+            </p>
+          ) : null}
+          <a
+            className="found-spot"
+            href={sourceHref}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Open at this spot
+          </a>
+          <FoundYoutubeFrame sourceUrl={sourceHref} />
+          {moment.video ? (
+            <VideoMomentMedia
+              moment={{ id: moment.id, video: moment.video }}
+              label={`Clip attached to an Insight from ${moment.displayDate}`}
+            />
+          ) : null}
+          <CardActions
+            interaction={interaction}
+            moment={moment}
+            conversationActions={conversationActions}
+            connectedPosition={connectedPosition}
+            connectedTotal={connectedTotal}
+          />
+        </div>
+      );
+    }
     return (
       <div className="moment-card thought-card bible-verse-card insight-card">
         <CardTopChrome

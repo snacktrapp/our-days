@@ -7,6 +7,7 @@ import {
   foundFixtureVtt,
 } from "@/features/insights/found-fixture";
 import type { FoundSourceKind } from "@/features/insights/found-types";
+import { loadBiblePassage } from "./bible.server";
 import type { FoundSearchDeps } from "./pipeline.server";
 import { runFoundSearch } from "./pipeline.server";
 import { parseVtt, transcriptFromCues } from "./vtt.server";
@@ -20,6 +21,40 @@ export const foundFixtureArticleUrl = "https://example.com/a-kept-sentence";
 export function fixtureFoundDeps(
   sourceKind: FoundSourceKind = "youtube",
 ): FoundSearchDeps {
+  if (sourceKind === "bible") {
+    return {
+      generateLeads: async () => [
+        {
+          kind: "bible",
+          book: "Psalm",
+          chapter: 62,
+          startVerse: 1,
+          endVerse: 1,
+        },
+      ],
+      fetchSource: async () => {
+        const passage = await loadBiblePassage("Psalm", 62, 1, 1);
+        if (!passage) {
+          return {
+            source: null,
+            attempts: [{ host: "ebible.org", fetchStatus: "empty" as const }],
+          };
+        }
+        return {
+          source: {
+            kind: "bible" as const,
+            identity: "fixture:psalm-62-1",
+            text: passage.text,
+            sourceUrl: passage.sourceUrl,
+            title: "Psalm",
+            verseSpans: passage.verseSpans,
+          },
+          attempts: [{ host: "ebible.org", fetchStatus: "ok" as const }],
+        };
+      },
+      pickQuote: async () => ({ quote: "" }),
+    };
+  }
   if (sourceKind === "text") {
     return {
       generateLeads: async () => [

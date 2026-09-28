@@ -101,13 +101,7 @@ import {
 import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
 type ComposerMode =
-  Exclude<MomentKind, "insight"> | "bible-verse" | "found" | "youtube-clip";
-
-function isFoundComposerMode(
-  mode: ComposerMode | null,
-): mode is "found" | "youtube-clip" {
-  return mode === "found" || mode === "youtube-clip";
-}
+  Exclude<MomentKind, "insight"> | "bible-verse" | "youtube-clip";
 
 function defaultsCreateOccurredTime(mode: ComposerMode | null) {
   return mode === "photo" || mode === "video" || mode === "thought";
@@ -246,13 +240,6 @@ const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
     bodyPlaceholder: "Choose a passage to fill this entry…",
     bodyRequired: true,
   },
-  found: {
-    kindLabel: "Found",
-    title: "Found",
-    bodyLabel: "Quote",
-    bodyPlaceholder: "",
-    bodyRequired: false,
-  },
   "youtube-clip": {
     kindLabel: "YouTube clip",
     title: "YouTube clip",
@@ -373,7 +360,7 @@ export function MomentComposer({
     onAnimationEnd: onOverlayAnimationEnd,
   } = useOverlayPopoverClose("sheet-down", sheetCloseMs);
   const chooserSurface =
-    !mode || choosingMode || reviewing || isFoundComposerMode(mode);
+    !mode || choosingMode || reviewing || mode === "youtube-clip";
   const postableCircles = useMemo(
     () => model.postableCircles ?? [],
     [model.postableCircles],
@@ -584,9 +571,10 @@ export function MomentComposer({
         audience !== createDefault.audience ||
         selectedCircleIds.join(",") !== createDefault.circleIds.join(","),
       );
-  const isDirty = isFoundComposerMode(mode)
-    ? Boolean(foundQuery.trim() || foundCandidate)
-    : draftDirty;
+  const isDirty =
+    mode === "youtube-clip"
+      ? Boolean(foundQuery.trim() || foundCandidate)
+      : draftDirty;
   const selectedPhoto = photoItems[0] ?? null;
   const photoReady =
     mode === "video"
@@ -827,7 +815,7 @@ export function MomentComposer({
       else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
       else if (mode === "location")
         locationSearchRef.current?.focus({ preventScroll: true });
-      else if (isFoundComposerMode(mode))
+      else if (mode === "youtube-clip")
         editorHeadingRef.current?.focus({ preventScroll: true });
       else titleInputRef.current?.focus();
     } else chooserHeadingRef.current?.focus({ preventScroll: true });
@@ -1048,7 +1036,7 @@ export function MomentComposer({
       return;
     }
     resetDraft(nextMode);
-    if (isFoundComposerMode(nextMode)) {
+    if (nextMode === "youtube-clip") {
       setAudience("just_me");
       setSelectedCircleIds([]);
       setJournalPersonId(model.recorderPersonId);
@@ -1173,13 +1161,7 @@ export function MomentComposer({
   );
 
   const persistComposerDraft = async () => {
-    if (
-      !mode ||
-      isFoundComposerMode(mode) ||
-      editDraft ||
-      saving ||
-      savingDraft
-    )
+    if (!mode || mode === "youtube-clip" || editDraft || saving || savingDraft)
       return;
     const id = savedDraftId ?? crypto.randomUUID();
     const mediaFiles =
@@ -1606,7 +1588,7 @@ export function MomentComposer({
       return;
     }
 
-    if (isFoundComposerMode(mode) || !mode) return;
+    if (mode === "youtube-clip" || !mode) return;
 
     const savedMode = mode;
     const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
@@ -1864,12 +1846,6 @@ export function MomentComposer({
                     <small>Find a moment in a video</small>
                   </button>
                 ) : null}
-                {showFound ? (
-                  <button type="button" onClick={() => chooseMode("found")}>
-                    <strong>Found</strong>
-                    <small>Search articles and the Bible</small>
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -1890,7 +1866,7 @@ export function MomentComposer({
               </div>
             </>
           )
-        ) : isFoundComposerMode(mode) && reviewing && foundCandidate ? (
+        ) : mode === "youtube-clip" && reviewing && foundCandidate ? (
           <FoundReview
             candidate={foundCandidate}
             circles={postableCircles}
@@ -1907,9 +1883,9 @@ export function MomentComposer({
             }}
             onPost={() => void postFoundMoment()}
           />
-        ) : isFoundComposerMode(mode) ? (
+        ) : mode === "youtube-clip" ? (
           <FoundSearchPanel
-            sourceKind={mode === "youtube-clip" ? "youtube" : "text"}
+            sourceKind="youtube"
             query={foundQuery}
             candidates={foundCandidates}
             message={foundMessage}
@@ -2339,6 +2315,7 @@ export function MomentComposer({
                 <BibleVerseFields
                   value={verseSelection}
                   bookTriggerRef={verseBookTriggerRef}
+                  searchEnabled={showFound}
                   onChange={(next, passage) => {
                     setVerseSelection(next);
                     setTitle(passage?.reference ?? "");

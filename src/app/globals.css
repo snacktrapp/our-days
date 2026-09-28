@@ -10673,6 +10673,31 @@ iframe.composer-location-map {
   gap: 16px;
   padding: 4px 16px 24px;
 }
+.bible-verse-search {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.bible-verse-search-results {
+  display: grid;
+  gap: 8px;
+}
+.bible-verse-search-result {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.bible-verse-search-result:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
 .found-search-form,
 .found-status {
   flex: 0 0 auto;

@@ -747,10 +747,10 @@ describe("MomentCard insight treatment", () => {
       screen.getByText(/Morning sunlight is the most powerful stimulus/u),
     ).toBeVisible();
     expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Listen" })).toHaveAttribute(
-      "href",
-      insight.sourceUrl,
-    );
+    expect(
+      screen.getByRole("link", { name: "Open at this spot" }),
+    ).toHaveAttribute("href", insight.sourceUrl);
+    expect(screen.getByText("at 2:00")).toBeVisible();
     expect(container.querySelector(".avatar-node")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
     const play = screen.getByRole("button", { name: "Play video" });
