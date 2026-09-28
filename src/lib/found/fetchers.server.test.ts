@@ -73,6 +73,7 @@ describe("Found migration", () => {
     expect(refund).not.toContain("40001");
     expect(refund).not.toContain("query_text");
     expect(refund).toContain("refund_found_search");
+    expect(refund).toContain("usage.count < 50");
     expect(refund).toContain("interval '10 minutes'");
   });
 });

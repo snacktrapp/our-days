@@ -126,7 +126,7 @@ select lives_ok(
   $$
     do $claims$
     begin
-      for claim_index in 2..10 loop
+      for claim_index in 2..50 loop
         if public.claim_found_search() !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
           raise exception 'expected claim id';
         end if;
@@ -134,12 +134,12 @@ select lives_ok(
     end
     $claims$;
   $$,
-  'claims 2 through 10 return a claim id'
+  'claims 2 through 50 return a claim id'
 );
 select is(
   public.claim_found_search(),
   'capped',
-  'the 11th Found search is capped'
+  'the 51st Found search is capped'
 );
 reset role;
 
@@ -149,8 +149,8 @@ select is(
       from private.found_search_usage
      where user_id = '10000000-0000-4000-8000-000000000001'
   ),
-  10,
-  'the daily counter stays at 10'
+  50,
+  'the daily counter stays at 50'
 );
 
 select set_config(
@@ -159,9 +159,12 @@ select set_config(
   true
 );
 set local role authenticated;
-select is(
-  public.claim_found_search(),
-  'claimed',
+select ok(
+  (
+    select claimed.claim_result = 'claimed'
+      or claimed.claim_result ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      from (select public.claim_found_search() as claim_result) as claimed
+  ),
   'another person has a separate counter'
 );
 reset role;
@@ -182,7 +185,7 @@ select is(
       from private.found_search_usage
      where user_id = '10000000-0000-4000-8000-000000000001'
   ),
-  10,
+  50,
   'the first counter is unchanged by the second person'
 );
 

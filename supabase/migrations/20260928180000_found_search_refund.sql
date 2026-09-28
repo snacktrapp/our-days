@@ -19,6 +19,12 @@ alter table private.found_search_claims force row level security;
 revoke all on table private.found_search_claims
   from public, anon, authenticated, service_role;
 
+-- The original usage table stopped at 10. Live claims now allow 50.
+alter table private.found_search_usage
+  drop constraint found_search_usage_count_check,
+  add constraint found_search_usage_count_check
+    check ((count >= 0) and (count <= 50));
+
 create or replace function private.claim_found_search()
 returns text
 language plpgsql
@@ -40,7 +46,7 @@ begin
   values (current_user_id, usage_day, 1)
   on conflict (user_id, usage_date) do update
     set count = usage.count + 1
-    where usage.count < 10
+    where usage.count < 50
   returning count into next_count;
 
   if next_count is null then
