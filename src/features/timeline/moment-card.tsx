@@ -9,6 +9,7 @@ import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
 import { parseBibleVerseMoment } from "@/features/composer/bible-verse-catalog";
+import { FoundYoutubeFrame } from "@/features/insights/found-youtube-frame";
 import { insightSourceLabel } from "@/features/insights/insight-source";
 import { ExpandableThoughtCopy } from "./expandable-thought-copy";
 import { MentionText } from "@/features/mentions/mention-text";
@@ -385,6 +386,7 @@ export function MomentCard({
             ) : null}
           </cite>
         </ExpandableThoughtCopy>
+        {sourceHref ? <FoundYoutubeFrame sourceUrl={sourceHref} /> : null}
         {moment.video ? (
           <VideoMomentMedia
             moment={{ id: moment.id, video: moment.video }}

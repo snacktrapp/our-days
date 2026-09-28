@@ -10775,6 +10775,44 @@ iframe.composer-location-map {
   border-radius: 8px;
   background: var(--hairline);
 }
+.found-youtube {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 12px 0 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1c1916;
+  color: var(--cream);
+  cursor: pointer;
+}
+.found-youtube img,
+.found-youtube iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  background: #1c1916;
+}
+.found-youtube-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, #1c1916 42%, transparent);
+  color: var(--cream);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 .found-card-quote,
 .found-review-quote,
 .found-speaker,
