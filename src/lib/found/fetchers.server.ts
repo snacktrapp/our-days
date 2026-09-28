@@ -31,6 +31,34 @@ function attempt(
   };
 }
 
+function htmlLinksToVideo(html: string, videoId: string) {
+  const id = youtubeVideoId(videoId);
+  if (!id || !html) return false;
+  const pattern =
+    /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?[^"'<>\s]*\bv=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/giu;
+  for (const match of html.matchAll(pattern)) {
+    if (match[1] === id) return true;
+  }
+  return false;
+}
+
+function webSource(
+  lead: FoundLead,
+  text: string,
+  sourceUrl: string,
+  timedWords?: FetchedSource["timedWords"],
+): FetchedSource {
+  return {
+    kind: "web",
+    identity: `web:${sourceUrl}`,
+    text,
+    sourceUrl,
+    speaker: clean(lead.speaker),
+    title: clean(lead.title),
+    ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
+  };
+}
+
 function youtubeSource(
   videoId: string,
   text: string,
@@ -110,7 +138,7 @@ export async function fetchFoundSource(
         const timed = timedTranscriptFromPage(page.page.text);
         if (!timed.text) {
           attempts.push(attempt(page.host, "empty", page.httpStatus));
-        } else if (videoId) {
+        } else if (videoId && htmlLinksToVideo(page.page.html ?? "", videoId)) {
           attempts.push(attempt(page.host, "ok", page.httpStatus));
           source = youtubeSource(
             videoId,
@@ -119,17 +147,12 @@ export async function fetchFoundSource(
             timed.words,
             page.page.url,
           );
+        } else if (videoId) {
+          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          source = webSource(lead, timed.text, page.page.url);
         } else {
           attempts.push(attempt(page.host, "ok", page.httpStatus));
-          source = {
-            kind: "web",
-            identity: `web:${page.page.url}`,
-            text: timed.text,
-            sourceUrl: page.page.url,
-            speaker: clean(lead.speaker),
-            title: clean(lead.title),
-            ...(timed.words.length > 0 ? { timedWords: timed.words } : {}),
-          };
+          source = webSource(lead, timed.text, page.page.url, timed.words);
         }
       }
     }

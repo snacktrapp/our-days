@@ -88,15 +88,14 @@ function gatewayText(error: GatewayError) {
   return `${error.name} ${type} ${error.message}`.toLowerCase();
 }
 
-const spendStop =
-  /insufficient[\s_-]*funds|payment required|free[\s_-]*tier|no[\s_-]*credits?|quota|billing|do not have access to this model/u;
-
-function isSpendStop(error: GatewayError | APICallError) {
+function isInsufficientFunds(error: GatewayError | APICallError) {
   if (error.statusCode === 402) return true;
   const text = GatewayError.isInstance(error)
     ? gatewayText(error)
     : `${error.name} ${error.message}`.toLowerCase();
-  return spendStop.test(text);
+  return /insufficient[\s_-]*funds|payment required|free tier|paid credits|upgrade to paid/u.test(
+    text,
+  );
 }
 
 function knownModelError(error: unknown) {
@@ -106,10 +105,10 @@ function knownModelError(error: unknown) {
   ) {
     return new FoundUnavailableError();
   }
-  if (GatewayError.isInstance(error) && isSpendStop(error)) {
+  if (GatewayError.isInstance(error) && isInsufficientFunds(error)) {
     return new FoundBudgetError();
   }
-  if (APICallError.isInstance(error) && isSpendStop(error)) {
+  if (APICallError.isInstance(error) && isInsufficientFunds(error)) {
     return new FoundBudgetError();
   }
   return null;

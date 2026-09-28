@@ -103,7 +103,7 @@ export type PublicPageRead = Readonly<{
   host?: string;
   fetchStatus: "ok" | "empty" | "blocked" | "http";
   httpStatus?: number;
-  page: { url: string; text: string } | null;
+  page: { url: string; text: string; html: string } | null;
 }>;
 
 function pageHost(value: string) {
@@ -191,7 +191,7 @@ export async function readPublicPage(
       host: url.hostname,
       fetchStatus: "ok",
       httpStatus: response.status,
-      page: { url: url.toString(), text },
+      page: { url: url.toString(), text, html: body },
     };
   }
   return {

@@ -16,6 +16,7 @@ import {
   foundSearchTimeoutMs,
   foundTimeoutMessage,
   foundVerifiedBible,
+  foundVerifiedSource,
   foundVerifiedTranscript,
 } from "@/features/insights/found-types";
 import { FoundBudgetError } from "./errors.server";
@@ -260,6 +261,44 @@ describe("Found search pipeline", () => {
     expect(result.candidates[0]?.sourceUrl).toBe(
       "https://lexfridman.com/dhh-2-transcript",
     );
+    expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedTranscript);
+  });
+
+  it("labels an unconfirmed transcript as a source page", async () => {
+    const page =
+      "(01:52:42) the pursuit of excellence is a long game that rewards the people who stay with the work";
+    const timed = timedTranscriptFromPage(page);
+    const result = await runFoundSearch(
+      "excellence",
+      {
+        generateLeads: async () => [
+          {
+            kind: "youtube",
+            videoId: "abcdefghijk",
+            transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+          },
+        ],
+        fetchSource: async () => ({
+          source: {
+            kind: "web",
+            identity: "web:lex",
+            text: timed.text,
+            sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+          },
+          attempts: [{ host: "lexfridman.com", fetchStatus: "ok" }],
+        }),
+        pickQuote: async () => ({ quote: foundFixtureQuote }),
+      },
+      5_000,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedSource);
+    expect(result.candidates[0]?.sourceUrl).toBe(
+      "https://lexfridman.com/dhh-2-transcript",
+    );
+    expect(result.candidates[0]?.videoId).toBeUndefined();
+    expect(result.candidates[0]?.sourceLabel).toBe("Read the source");
   });
 
   it("logs lead outcomes without the query or the quote", async () => {
@@ -284,8 +323,13 @@ describe("Found search pipeline", () => {
       );
       expect(result.ok).toBe(false);
       const logged = [...info.mock.calls, ...warn.mock.calls]
-        .map((call) => JSON.stringify(call[0]))
+        .map((call) =>
+          typeof call[0] === "string" ? call[0] : JSON.stringify(call[0]),
+        )
         .join("\n");
+      expect(info).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(logged).toContain('"attempts":[');
       expect(logged).toContain('"leadCount":1');
       expect(logged).toContain('"fetchStatus":"http"');
       expect(logged).toContain('"httpStatus":403');

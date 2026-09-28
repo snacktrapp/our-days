@@ -3,7 +3,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GatewayAuthenticationError,
-  GatewayForbiddenError,
   GatewayInternalServerError,
 } from "@ai-sdk/gateway";
 import { NoOutputGeneratedError } from "ai";
@@ -37,25 +36,19 @@ describe("Found model errors", () => {
   });
 
   it("maps a free-tier gateway error to resting", async () => {
-    generateText.mockRejectedValue(
-      new GatewayInternalServerError({
-        message: "Free tier users do not have access to this model",
-      }),
-    );
+    const message =
+      "Free tier users do not have access to this model. Upgrade to paid credits";
+    generateText.mockRejectedValue(new GatewayInternalServerError({ message }));
     await expect(
       proposeFoundLeads("psalm on rest", new AbortController().signal),
     ).rejects.toBeInstanceOf(FoundBudgetError);
-  });
-
-  it("maps a billing 403 to resting", async () => {
-    generateText.mockRejectedValue(
-      new GatewayForbiddenError({
-        message: "Quota exceeded for this billing account",
-        statusCode: 403,
-      }),
-    );
+    generateText.mockRejectedValue(new GatewayInternalServerError({ message }));
     await expect(
-      proposeFoundLeads("psalm on rest", new AbortController().signal),
+      pickFoundQuote({
+        query: "psalm on rest",
+        window: "My soul rests in God alone.",
+        signal: new AbortController().signal,
+      }),
     ).rejects.toBeInstanceOf(FoundBudgetError);
   });
 
@@ -68,6 +61,28 @@ describe("Found model errors", () => {
     await expect(
       proposeFoundLeads("excellence", new AbortController().signal),
     ).rejects.toBeInstanceOf(FoundUnavailableError);
+  });
+
+  it("omits model output from the logged error", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const output =
+      "the pursuit of excellence is a long game that rewards the people who stay";
+    const error = new Error(`No object generated. ${output}`);
+    Object.assign(error, { text: output, responseBody: output });
+    generateText.mockRejectedValue(error);
+    try {
+      await expect(
+        proposeFoundLeads("zebra-query-token", new AbortController().signal),
+      ).resolves.toEqual([]);
+      const logged = warn.mock.calls
+        .map((entry) => JSON.stringify(entry[0]))
+        .join("\n");
+      expect(logged).toContain("No object generated");
+      expect(logged).not.toContain(output);
+      expect(logged).not.toContain("zebra-query-token");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("treats a schema miss as zero leads and logs the error name", async () => {

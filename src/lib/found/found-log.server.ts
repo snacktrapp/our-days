@@ -32,13 +32,33 @@ type FoundRequestStore = {
 
 const requests = new AsyncLocalStorage<FoundRequestStore>();
 
+function modelOutput(error: unknown): string[] {
+  if (!error || typeof error !== "object") return [];
+  const record = error as {
+    text?: unknown;
+    responseBody?: unknown;
+    cause?: unknown;
+  };
+  const parts: string[] = [];
+  if (typeof record.text === "string") parts.push(record.text);
+  if (typeof record.responseBody === "string") parts.push(record.responseBody);
+  if (record.cause && record.cause !== error) {
+    parts.push(...modelOutput(record.cause));
+  }
+  return parts;
+}
+
 function clippedMessage(error: unknown, secrets: readonly string[]) {
   const raw = error instanceof Error ? error.message : "Unknown model error";
   let message = raw;
+  for (const output of modelOutput(error)) {
+    if (output.length >= 8) message = message.split(output).join(" ");
+  }
   for (const secret of secrets) {
     if (secret.length >= 8) message = message.split(secret).join("[redacted]");
   }
-  return message.replace(/\s+/g, " ").trim().slice(0, 180);
+  message = message.replace(/\s+/g, " ").trim().slice(0, 180);
+  return message || "Model output omitted";
 }
 
 export function beginFoundRequest<T>(run: () => Promise<T>) {
@@ -96,9 +116,11 @@ export function finishFoundRequestLog() {
     cards: store.cards,
     ...(store.modelErrors.length > 0 ? { modelErrors: store.modelErrors } : {}),
   };
-  console.info(payload);
   const fetchTrouble = store.leads.some((lead) => lead.fetchStatus !== "ok");
+  const line = JSON.stringify(payload);
   if (store.modelErrors.length > 0 || fetchTrouble || store.cards === 0) {
-    console.warn(payload);
+    console.warn(line);
+  } else {
+    console.info(line);
   }
 }
