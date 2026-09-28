@@ -4,6 +4,8 @@ export const foundSearchTimeoutMs = 45_000;
 
 export const foundEmptyMessage =
   "Couldn't verify a match. Try naming the show, speaker, or roughly when.";
+export const foundSourceMessage =
+  "Couldn't open that source. Try again or add more detail.";
 export const foundTimeoutMessage = "That took too long. Try again.";
 export const foundCapMessage = "You've used today's Found searches.";
 export const foundRestingMessage = "Found is resting for today.";

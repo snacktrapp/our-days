@@ -13,6 +13,7 @@ import {
 import {
   foundEmptyMessage,
   foundRestingMessage,
+  foundSourceMessage,
   foundSearchTimeoutMs,
   foundTimeoutMessage,
   foundVerifiedBible,
@@ -468,7 +469,11 @@ describe("Found search pipeline", () => {
         },
         5_000,
       );
-      expect(result.ok).toBe(false);
+      expect(result).toEqual({
+        ok: false,
+        reason: "empty",
+        message: foundSourceMessage,
+      });
       const logged = [...info.mock.calls, ...warn.mock.calls]
         .map((call) =>
           typeof call[0] === "string" ? call[0] : JSON.stringify(call[0]),
@@ -489,6 +494,79 @@ describe("Found search pipeline", () => {
       info.mockRestore();
       warn.mockRestore();
     }
+  });
+
+  it("tries another lead when the only source cannot be opened", async () => {
+    const prompts: string[] = [];
+    const result = await runFoundSearch(
+      "excellence",
+      {
+        generateLeads: async (query) => {
+          prompts.push(query);
+          if (prompts.length === 1) {
+            return [
+              {
+                kind: "youtube",
+                url: "https://www.youtube.com/watch?v=NYFGCESmikA&list=PLtoolong&t=6747s",
+              },
+            ];
+          }
+          return [
+            {
+              kind: "web",
+              url: "https://lexfridman.com/dhh-2-transcript",
+              speaker: "DHH",
+            },
+          ];
+        },
+        fetchSource: async (lead) => {
+          if (lead.kind === "youtube") {
+            expect(lead.videoId).toBe("NYFGCESmikA");
+            expect(lead.url).toBe(
+              "https://www.youtube.com/watch?v=NYFGCESmikA",
+            );
+            return {
+              source: null,
+              attempts: [
+                {
+                  host: "www.youtube.com",
+                  fetchStatus: "http",
+                  httpStatus: 400,
+                  step: "player",
+                  path: "/youtubei/v1/player",
+                },
+              ],
+            };
+          }
+          return {
+            source: {
+              kind: "web",
+              identity: "web:lex",
+              text: foundFixtureQuote,
+              sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+              speaker: "DHH",
+              fetchedTitle: "DHH on Lex",
+            },
+            attempts: [
+              {
+                host: "lexfridman.com",
+                fetchStatus: "ok",
+                step: "transcript",
+                path: "/dhh-2-transcript",
+              },
+            ],
+          };
+        },
+        pickQuote: async () => ({ quote: foundFixtureQuote }),
+      },
+      5_000,
+    );
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain("www.youtube.com/watch");
+    expect(prompts[1]).not.toContain("list=");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates[0]?.quote).toBe(foundFixtureQuote);
   });
 
   it("returns the empty message when nothing verifies", async () => {

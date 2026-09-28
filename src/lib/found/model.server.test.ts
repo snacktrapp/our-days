@@ -117,6 +117,32 @@ describe("Found model errors", () => {
     }
   });
 
+  it("normalizes a YouTube lead to the watch id and keeps a transcript page", async () => {
+    generateText.mockResolvedValue({
+      output: {
+        leads: [
+          {
+            kind: "youtube",
+            url: "https://www.youtube.com/watch?v=NYFGCESmikA&list=PLtoolong&t=6747s",
+            transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+            speaker: "DHH",
+          },
+        ],
+      },
+    });
+    await expect(
+      proposeFoundLeads("excellence", new AbortController().signal),
+    ).resolves.toEqual([
+      {
+        kind: "youtube",
+        url: "https://www.youtube.com/watch?v=NYFGCESmikA",
+        videoId: "NYFGCESmikA",
+        transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+        speaker: "DHH",
+      },
+    ]);
+  });
+
   it("asks the picker for a verbatim quote with room for a long passage", async () => {
     generateText.mockResolvedValue({
       output: {

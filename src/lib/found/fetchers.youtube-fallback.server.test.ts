@@ -137,6 +137,61 @@ describe("YouTube publisher transcript fallback", () => {
     expect(result.source?.title).toBe("Lex Fridman Podcast");
   });
 
+  it("reads a publisher page from the lead url when captions fail", async () => {
+    captions.mockResolvedValue({
+      cues: null,
+      host: "www.youtube.com",
+      fetchStatus: "http",
+      httpStatus: 400,
+      attempts: [
+        {
+          host: "www.youtube.com",
+          fetchStatus: "http",
+          httpStatus: 400,
+          step: "player",
+          path: "/youtubei/v1/player",
+        },
+      ],
+    });
+    page.mockResolvedValue({
+      host: "lexfridman.com",
+      fetchStatus: "ok",
+      httpStatus: 200,
+      page: {
+        url: pageUrl,
+        text: lexPage,
+        html: '<a href="https://www.youtube.com/watch?v=abcdefghijk">watch</a>',
+      },
+    });
+    const result = await fetchFoundSource(
+      {
+        kind: "youtube",
+        videoId: "abcdefghijk",
+        url: "https://lexfridman.com/dhh-2-transcript",
+      },
+      new AbortController().signal,
+    );
+    expect(page).toHaveBeenCalledWith(pageUrl, expect.any(AbortSignal));
+    expect(result.source?.kind).toBe("youtube");
+    expect(result.source?.sourceUrl).toBe(pageUrl);
+    expect(result.attempts).toEqual([
+      {
+        host: "www.youtube.com",
+        fetchStatus: "http",
+        httpStatus: 400,
+        step: "player",
+        path: "/youtubei/v1/player",
+      },
+      {
+        host: "lexfridman.com",
+        fetchStatus: "ok",
+        httpStatus: 200,
+        step: "transcript",
+        path: "/dhh-2-transcript",
+      },
+    ]);
+  });
+
   it("does not fetch a transcript page when captions already match", async () => {
     captions.mockResolvedValue({
       cues: [

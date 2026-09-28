@@ -2,6 +2,8 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { FoundFetchAttempt } from "./leads.server";
+
 export type FoundModelErrorLog = Readonly<{
   stage: "leads" | "picker";
   name: string;
@@ -16,11 +18,9 @@ export type FoundLeadLog = Readonly<{
   dropReason?: string;
   similarity?: number;
   modelQuotePreview?: string;
-  attempts: readonly Readonly<{
-    host?: string;
-    fetchStatus: "ok" | "empty" | "blocked" | "http";
-    httpStatus?: number;
-  }>[];
+  step?: FoundFetchAttempt["step"];
+  path?: string;
+  attempts: readonly FoundFetchAttempt[];
 }>;
 
 type FoundRequestStore = {

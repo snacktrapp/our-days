@@ -12,6 +12,7 @@ import {
 import { FoundBudgetError, FoundUnavailableError } from "./errors.server";
 import { recordFoundModelError } from "./found-log.server";
 import type { FoundLead } from "./leads.server";
+import { normalizeYoutubeLead } from "./youtube.server";
 import type { SpanPick } from "./verify.server";
 
 /** Hunch, not a lock: cheap, fast, and tagged for tools plus structured output. */
@@ -149,7 +150,7 @@ function asLead(value: {
   }
   const hint = Number(value.hintSeconds);
   const transcriptUrl = httpsUrl(value.transcriptUrl);
-  return {
+  const lead: FoundLead = {
     kind: value.kind,
     ...(typeof value.url === "string" ? { url: value.url.trim() } : {}),
     ...(typeof value.videoId === "string"
@@ -168,6 +169,7 @@ function asLead(value: {
     ...(Number.isInteger(value.endVerse) ? { endVerse: value.endVerse } : {}),
     ...(transcriptUrl ? { transcriptUrl } : {}),
   };
+  return value.kind === "youtube" ? normalizeYoutubeLead(lead) : lead;
 }
 
 export async function proposeFoundLeads(

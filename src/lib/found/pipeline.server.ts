@@ -6,6 +6,7 @@ import {
   formatFoundRange,
   foundEmptyMessage,
   foundMaximumQuoteLength,
+  foundSourceMessage,
   foundRestingMessage,
   foundSearchTimeoutMs,
   foundTimeoutMessage,
@@ -30,6 +31,7 @@ import type {
   FoundLead,
 } from "./leads.server";
 import { pickFoundQuote, proposeFoundLeads } from "./model.server";
+import { normalizeYoutubeLead } from "./youtube.server";
 import { foundWords } from "./normalize.server";
 import {
   foundTopicWords,
@@ -225,18 +227,21 @@ function leadLog(
 ): FoundLeadLog {
   const okAttempt = attempts.find((item) => item.fetchStatus === "ok");
   const last = attempts[attempts.length - 1];
-  const fetchStatus = source ? "ok" : (last?.fetchStatus ?? "empty");
-  const httpStatus =
-    fetchStatus === "http"
-      ? (last?.httpStatus ?? okAttempt?.httpStatus)
-      : undefined;
+  const httpAttempt = [...attempts]
+    .reverse()
+    .find((item) => item.fetchStatus === "http");
+  const reported = source ? (okAttempt ?? last) : (httpAttempt ?? last);
+  const fetchStatus = source ? "ok" : (reported?.fetchStatus ?? "empty");
+  const httpStatus = fetchStatus === "http" ? reported?.httpStatus : undefined;
   return {
     sourceType: lead.kind,
-    ...(hostOf(source?.sourceUrl) || okAttempt?.host || last?.host
-      ? { host: hostOf(source?.sourceUrl) ?? okAttempt?.host ?? last?.host }
+    ...(hostOf(source?.sourceUrl) || reported?.host
+      ? { host: hostOf(source?.sourceUrl) ?? reported?.host }
       : {}),
     fetchStatus,
     ...(httpStatus !== undefined ? { httpStatus } : {}),
+    ...(reported?.step ? { step: reported.step } : {}),
+    ...(reported?.path ? { path: reported.path } : {}),
     ...(dropReason ? { dropReason } : {}),
     ...(near ? { similarity: near.similarity } : {}),
     ...(near?.modelQuotePreview
@@ -244,6 +249,45 @@ function leadLog(
       : {}),
     attempts,
   };
+}
+
+function leadIdentity(lead: FoundLead) {
+  const normalized =
+    lead.kind === "youtube" ? normalizeYoutubeLead(lead) : lead;
+  return [
+    normalized.kind,
+    normalized.videoId ?? "",
+    normalized.url ?? "",
+    normalized.transcriptUrl ?? "",
+    normalized.book ?? "",
+    normalized.chapter ?? "",
+    normalized.startVerse ?? "",
+    normalized.endVerse ?? "",
+  ].join("|");
+}
+
+function retryPrompt(query: string, lead: FoundLead) {
+  let place: string = lead.kind;
+  const raw = lead.url || lead.transcriptUrl;
+  if (raw) {
+    try {
+      const url = new URL(raw);
+      place = `${url.hostname}${url.pathname}`;
+    } catch {
+      place = lead.kind;
+    }
+  }
+  return `${query}\n\nThat source could not be opened (${place}). Return a different lead. If a public transcript page exists, set transcriptUrl to that https page.`;
+}
+
+function noCardMessage(logs: readonly FoundLeadLog[]) {
+  if (
+    logs.length > 0 &&
+    logs.every((lead) => lead.dropReason === "fetch-failed")
+  ) {
+    return foundSourceMessage;
+  }
+  return foundEmptyMessage;
 }
 
 function candidateFromMatch(
@@ -311,146 +355,173 @@ async function executeFoundSearch(
   const leadLogs: FoundLeadLog[] = [];
   let cards = 0;
   try {
-    const leads = (await deps.generateLeads(query, signal)).slice(0, 5);
-    if (signal.aborted) {
-      throw new DOMException("The operation was aborted.", "AbortError");
-    }
-    const fetched = await Promise.all(
-      leads.map(async (lead) => ({
-        lead,
-        result: await deps.fetchSource(lead, signal),
-      })),
-    );
     const candidates: FoundCandidate[] = [];
     const seen = new Set<string>();
-    for (const item of fetched) {
+    const tried = new Set<string>();
+    let pending = (await deps.generateLeads(query, signal)).slice(0, 5);
+    let round = 0;
+    while (pending.length > 0 && candidates.length < 3) {
       if (signal.aborted) {
         throw new DOMException("The operation was aborted.", "AbortError");
       }
-      const source = item.result.source;
-      if (!source) {
-        leadLogs.push(
-          leadLog(item.lead, item.result.attempts, null, "fetch-failed"),
-        );
-        continue;
+      const fresh: FoundLead[] = [];
+      for (const lead of pending) {
+        const normalized =
+          lead.kind === "youtube" ? normalizeYoutubeLead(lead) : lead;
+        const key = leadIdentity(normalized);
+        if (tried.has(key)) continue;
+        tried.add(key);
+        fresh.push(normalized);
       }
-      if (seen.has(source.identity)) {
-        leadLogs.push(
-          leadLog(item.lead, item.result.attempts, source, "duplicate"),
-        );
-        continue;
-      }
-      const direct =
-        source.kind === "bible" && source.text.length <= foundMaximumQuoteLength
-          ? assessFoundQuote(source.text, source.text)
-          : null;
-      if (direct) {
-        if (!direct.ok) {
+      if (fresh.length === 0) break;
+      const fetched = await Promise.all(
+        fresh.map(async (lead) => ({
+          lead,
+          result: await deps.fetchSource(lead, signal),
+        })),
+      );
+      let opened = false;
+      for (const item of fetched) {
+        if (signal.aborted) {
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
+        const source = item.result.source;
+        if (!source) {
           leadLogs.push(
-            leadLog(item.lead, item.result.attempts, source, direct.reason),
+            leadLog(item.lead, item.result.attempts, null, "fetch-failed"),
           );
           continue;
         }
-        candidates.push(candidateFromMatch(source, direct.located, 0));
-        cards = candidates.length;
-        seen.add(source.identity);
-        leadLogs.push(leadLog(item.lead, item.result.attempts, source));
-        if (candidates.length >= 3) break;
-        continue;
-      }
-      const windows = textWindows(
-        source.text,
-        hintOffset(source, item.lead.hintSeconds),
-      );
-      let dropReason = "no-match";
-      let similarity: number | undefined;
-      let modelQuotePreview: string | undefined;
-      let modelPassage: RankedPassage | null = null;
-      for (const window of windows) {
-        let pick: SpanPick | null = null;
-        try {
-          pick = await deps.pickQuote({
-            query,
-            window: window.text,
-            signal,
-          });
-        } catch (error) {
+        opened = true;
+        if (seen.has(source.identity)) {
           leadLogs.push(
-            leadLog(item.lead, item.result.attempts, source, "model-error"),
+            leadLog(item.lead, item.result.attempts, source, "duplicate"),
           );
-          cards = candidates.length;
-          throw error;
+          continue;
         }
-        if (!pick?.quote) continue;
-        const assessed = assessFoundQuote(window.text, pick.quote);
-        if (assessed.ok) {
+        const direct =
+          source.kind === "bible" &&
+          source.text.length <= foundMaximumQuoteLength
+            ? assessFoundQuote(source.text, source.text)
+            : null;
+        if (direct) {
+          if (!direct.ok) {
+            leadLogs.push(
+              leadLog(item.lead, item.result.attempts, source, direct.reason),
+            );
+            continue;
+          }
+          candidates.push(candidateFromMatch(source, direct.located, 0));
+          cards = candidates.length;
+          seen.add(source.identity);
+          leadLogs.push(leadLog(item.lead, item.result.attempts, source));
+          if (candidates.length >= 3) break;
+          continue;
+        }
+        const windows = textWindows(
+          source.text,
+          hintOffset(source, item.lead.hintSeconds),
+        );
+        let dropReason = "no-match";
+        let similarity: number | undefined;
+        let modelQuotePreview: string | undefined;
+        let modelPassage: RankedPassage | null = null;
+        for (const window of windows) {
+          let pick: SpanPick | null = null;
+          try {
+            pick = await deps.pickQuote({
+              query,
+              window: window.text,
+              signal,
+            });
+          } catch (error) {
+            leadLogs.push(
+              leadLog(item.lead, item.result.attempts, source, "model-error"),
+            );
+            cards = candidates.length;
+            throw error;
+          }
+          if (!pick?.quote) continue;
+          const assessed = assessFoundQuote(window.text, pick.quote);
+          if (assessed.ok) {
+            modelPassage = {
+              quote: assessed.located.quote,
+              start: assessed.located.start,
+              end: assessed.located.end,
+              offset: window.offset,
+            };
+            similarity = undefined;
+            modelQuotePreview = undefined;
+            break;
+          }
+          if (assessed.reason === "too-long") {
+            dropReason = "too-long";
+            continue;
+          }
+          const recovered = recoverNearQuote(window.text, pick.quote);
+          similarity = recovered.similarity;
+          modelQuotePreview = pick.quote.slice(0, 120);
+          if (!recovered.ok || !recovered.located) {
+            dropReason = "no-match";
+            continue;
+          }
           modelPassage = {
-            quote: assessed.located.quote,
-            start: assessed.located.start,
-            end: assessed.located.end,
+            quote: recovered.located.quote,
+            start: recovered.located.start,
+            end: recovered.located.end,
             offset: window.offset,
           };
-          similarity = undefined;
-          modelQuotePreview = undefined;
+          dropReason = "near-match-recovered";
           break;
         }
-        if (assessed.reason === "too-long") {
-          dropReason = "too-long";
-          continue;
+        const passages = selectFoundPassages(
+          source.text,
+          foundTopicWords(query),
+          modelPassage,
+        );
+        for (const passage of passages) {
+          if (candidates.length >= 3) break;
+          candidates.push(
+            candidateFromMatch(
+              source,
+              { quote: passage.quote, start: passage.start, end: passage.end },
+              passage.offset,
+            ),
+          );
         }
-        const recovered = recoverNearQuote(window.text, pick.quote);
-        similarity = recovered.similarity;
-        modelQuotePreview = pick.quote.slice(0, 120);
-        if (!recovered.ok || !recovered.located) {
-          dropReason = "no-match";
-          continue;
-        }
-        modelPassage = {
-          quote: recovered.located.quote,
-          start: recovered.located.start,
-          end: recovered.located.end,
-          offset: window.offset,
-        };
-        dropReason = "near-match-recovered";
-        break;
-      }
-      const passages = selectFoundPassages(
-        source.text,
-        foundTopicWords(query),
-        modelPassage,
-      );
-      for (const passage of passages) {
-        if (candidates.length >= 3) break;
-        candidates.push(
-          candidateFromMatch(
+        cards = candidates.length;
+        if (passages.length > 0) seen.add(source.identity);
+        leadLogs.push(
+          leadLog(
+            item.lead,
+            item.result.attempts,
             source,
-            { quote: passage.quote, start: passage.start, end: passage.end },
-            passage.offset,
+            passages.length === 0
+              ? dropReason
+              : dropReason === "near-match-recovered"
+                ? dropReason
+                : undefined,
+            dropReason === "near-match-recovered" && similarity !== undefined
+              ? { similarity, modelQuotePreview }
+              : undefined,
           ),
         );
+        if (candidates.length >= 3) break;
       }
-      cards = candidates.length;
-      if (passages.length > 0) seen.add(source.identity);
-      leadLogs.push(
-        leadLog(
-          item.lead,
-          item.result.attempts,
-          source,
-          passages.length === 0
-            ? dropReason
-            : dropReason === "near-match-recovered"
-              ? dropReason
-              : undefined,
-          dropReason === "near-match-recovered" && similarity !== undefined
-            ? { similarity, modelQuotePreview }
-            : undefined,
-        ),
-      );
-      if (candidates.length >= 3) break;
+      round += 1;
+      const onlyLeadFailed =
+        round === 1 &&
+        candidates.length === 0 &&
+        fetched.length === 1 &&
+        !opened;
+      if (!onlyLeadFailed) break;
+      pending = (
+        await deps.generateLeads(retryPrompt(query, fetched[0]!.lead), signal)
+      ).slice(0, 5);
     }
     cards = candidates.length;
     if (candidates.length === 0) {
-      return { ok: false, reason: "empty", message: foundEmptyMessage };
+      return { ok: false, reason: "empty", message: noCardMessage(leadLogs) };
     }
     return { ok: true, candidates };
   } finally {

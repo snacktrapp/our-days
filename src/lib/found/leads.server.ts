@@ -19,10 +19,15 @@ export type FoundLead = Readonly<{
 
 export type FoundFetchStatus = "ok" | "empty" | "blocked" | "http";
 
+export type FoundFetchStep = "timedtext" | "watch" | "player" | "transcript";
+
 export type FoundFetchAttempt = Readonly<{
   host?: string;
   fetchStatus: FoundFetchStatus;
   httpStatus?: number;
+  /** Which fetch failed or succeeded. Path is the URL path only. */
+  step?: FoundFetchStep;
+  path?: string;
 }>;
 
 export type FoundFetchResult = Readonly<{

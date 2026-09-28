@@ -10,7 +10,11 @@ import type {
   FoundLead,
 } from "./leads.server";
 import { pageTitleFromHtml, readPublicPage } from "./web.server";
-import { fetchYoutubeTranscript, youtubeVideoId } from "./youtube.server";
+import {
+  fetchYoutubeTranscript,
+  normalizeYoutubeLead,
+  youtubeVideoId,
+} from "./youtube.server";
 import { timedTranscriptFromPage } from "./transcript-page.server";
 import { transcriptFromCues } from "./vtt.server";
 
@@ -23,12 +27,24 @@ function attempt(
   host: string | undefined,
   fetchStatus: FoundFetchStatus,
   httpStatus?: number,
+  step?: FoundFetchAttempt["step"],
+  path?: string,
 ): FoundFetchAttempt {
   return {
     ...(host ? { host } : {}),
     fetchStatus,
     ...(httpStatus !== undefined ? { httpStatus } : {}),
+    ...(step ? { step } : {}),
+    ...(path ? { path } : {}),
   };
+}
+
+function urlPath(value: string) {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return undefined;
+  }
 }
 
 const youtubeLinkHosts = new Set([
@@ -197,23 +213,28 @@ export async function fetchFoundSource(
     };
   }
   if (lead.kind === "youtube") {
+    const normalized = normalizeYoutubeLead(lead);
     const attempts: FoundFetchAttempt[] = [];
     const videoId =
-      (lead.videoId ? youtubeVideoId(lead.videoId) : null) ??
-      (lead.url ? youtubeVideoId(lead.url) : null);
+      (normalized.videoId ? youtubeVideoId(normalized.videoId) : null) ??
+      (normalized.url ? youtubeVideoId(normalized.url) : null);
     let source: FetchedSource | null = null;
     if (videoId) {
       const captions = await fetchYoutubeTranscript(videoId, signal);
-      attempts.push(
-        attempt(captions.host, captions.fetchStatus, captions.httpStatus),
-      );
+      if (captions.attempts && captions.attempts.length > 0) {
+        attempts.push(...captions.attempts);
+      } else {
+        attempts.push(
+          attempt(captions.host, captions.fetchStatus, captions.httpStatus),
+        );
+      }
       if (captions.cues?.length) {
         const transcript = transcriptFromCues(captions.cues);
         if (transcript.text) {
           source = youtubeSource(
             videoId,
             transcript.text,
-            lead,
+            normalized,
             transcript.words,
             `https://www.youtube.com/watch?v=${videoId}`,
             undefined,
@@ -222,41 +243,58 @@ export async function fetchFoundSource(
         }
       }
     }
-    if (!source && lead.transcriptUrl) {
-      const page = await readPublicPage(lead.transcriptUrl, signal);
+    if (!source && normalized.transcriptUrl) {
+      const page = await readPublicPage(normalized.transcriptUrl, signal);
+      const path = urlPath(normalized.transcriptUrl);
       if (!page.page) {
-        attempts.push(attempt(page.host, page.fetchStatus, page.httpStatus));
+        attempts.push(
+          attempt(
+            page.host,
+            page.fetchStatus,
+            page.httpStatus,
+            "transcript",
+            path,
+          ),
+        );
       } else {
         const timed = timedTranscriptFromPage(page.page.text);
         if (!timed.text) {
-          attempts.push(attempt(page.host, "empty", page.httpStatus));
+          attempts.push(
+            attempt(page.host, "empty", page.httpStatus, "transcript", path),
+          );
         } else if (
           videoId &&
           htmlLinksToVideo(page.page.html ?? "", videoId, page.page.url)
         ) {
-          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          attempts.push(
+            attempt(page.host, "ok", page.httpStatus, "transcript", path),
+          );
           source = youtubeSource(
             videoId,
             timed.text,
-            lead,
+            normalized,
             timed.words,
             page.page.url,
             page.page.html,
             await youtubeDetails(videoId, signal),
           );
         } else if (videoId) {
-          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          attempts.push(
+            attempt(page.host, "ok", page.httpStatus, "transcript", path),
+          );
           source = webSource(
-            lead,
+            normalized,
             timed.text,
             page.page.url,
             undefined,
             page.page.html,
           );
         } else {
-          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          attempts.push(
+            attempt(page.host, "ok", page.httpStatus, "transcript", path),
+          );
           source = webSource(
-            lead,
+            normalized,
             timed.text,
             page.page.url,
             timed.words,
