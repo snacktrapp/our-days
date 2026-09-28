@@ -4,7 +4,7 @@ const localJournalURL = "http://127.0.0.1:3102";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: /local-journal\.spec\.ts/,
+  testMatch: /(?:local-journal|found-insight)\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
@@ -34,6 +34,8 @@ export default defineConfig({
       OUR_DAYS_INVITATION_DELIVERY_MODE: "disabled",
       OUR_DAYS_MEDIA_DELIVERY_MODE: "disabled",
       OUR_DAYS_PHOTO_POSTING_MODE: "disabled",
+      OUR_DAYS_FOUND_MODE: "enabled",
+      OUR_DAYS_FOUND_E2E: "fixture",
       OUR_DAYS_EXPECTED_SUPABASE_PROJECT_REF: "",
       OUR_DAYS_PRODUCTION_SUPABASE_PROJECT_REF: "",
       NEXT_PUBLIC_SUPABASE_URL: "",

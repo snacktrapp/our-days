@@ -58,6 +58,13 @@ import {
 import { startOptimisticMomentSave } from "./optimistic-moment-save";
 import { currentPickerTimeValue, DateTimeFields } from "./date-time-fields";
 import { PostToField } from "./post-to-field";
+import { canCreateInsight } from "@/lib/circle-roles";
+import {
+  FoundSearchPanel,
+  postFoundInsight,
+} from "@/features/insights/found-panel";
+import { FoundReview } from "@/features/insights/found-review";
+import type { FoundCandidate } from "@/features/insights/found-types";
 import {
   createPostToDefault,
   familyFeedHref,
@@ -93,7 +100,7 @@ import {
 } from "./entry-drafts";
 import { createPreviewEntryDraftActions } from "./preview-entry-drafts";
 
-type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse";
+type ComposerMode = Exclude<MomentKind, "insight"> | "bible-verse" | "found";
 
 function defaultsCreateOccurredTime(mode: ComposerMode | null) {
   return mode === "photo" || mode === "video" || mode === "thought";
@@ -232,6 +239,13 @@ const modeCopy: Readonly<Record<ComposerMode, ModeCopy>> = {
     bodyPlaceholder: "Choose a passage to fill this entry…",
     bodyRequired: true,
   },
+  found: {
+    kindLabel: "Found",
+    title: "Found",
+    bodyLabel: "Quote",
+    bodyPlaceholder: "",
+    bodyRequired: false,
+  },
   location: {
     kindLabel: "Location",
     title: "New location entry",
@@ -329,13 +343,22 @@ export function MomentComposer({
   );
   const [choosingMode, setChoosingMode] = useState(!editDraft);
   const [reviewing, setReviewing] = useState(false);
+  const [foundQuery, setFoundQuery] = useState("");
+  const [foundCandidates, setFoundCandidates] = useState<
+    readonly FoundCandidate[]
+  >([]);
+  const [foundMessage, setFoundMessage] = useState<string | null>(null);
+  const [foundCandidate, setFoundCandidate] = useState<FoundCandidate | null>(
+    null,
+  );
+  const [postingFound, setPostingFound] = useState(false);
   const {
     closing: overlayClosing,
     closingRef,
     requestClose: requestOverlayClose,
     onAnimationEnd: onOverlayAnimationEnd,
   } = useOverlayPopoverClose("sheet-down", sheetCloseMs);
-  const chooserSurface = !mode || choosingMode || reviewing;
+  const chooserSurface = !mode || choosingMode || reviewing || mode === "found";
   const postableCircles = useMemo(
     () => model.postableCircles ?? [],
     [model.postableCircles],
@@ -492,6 +515,10 @@ export function MomentComposer({
   const connectedPhotoAvailable = Boolean(
     connectedFamily && model.photoPostingEnabled && model.circleId,
   );
+  const showFound =
+    connectedExperience &&
+    model.foundEnabled === true &&
+    canCreateInsight(model.viewerRole);
   const resolvedPlaceName = mode === "location" ? title : place.label;
   const editingExistingMedia = Boolean(editDraft?.existingMedia);
   const existingPhotoSignature = (
@@ -505,7 +532,7 @@ export function MomentComposer({
   const currentPhotoSignature = photoItems
     .map((item) => item.existingPhotoId ?? item.file?.name ?? item.key)
     .join(",");
-  const isDirty = editDraft
+  const draftDirty = editDraft
     ? Boolean(shareToCircleId) ||
       body !== editDraft.body ||
       title !== editDraft.title ||
@@ -542,6 +569,10 @@ export function MomentComposer({
         audience !== createDefault.audience ||
         selectedCircleIds.join(",") !== createDefault.circleIds.join(","),
       );
+  const isDirty =
+    mode === "found"
+      ? Boolean(foundQuery.trim() || foundCandidate)
+      : draftDirty;
   const selectedPhoto = photoItems[0] ?? null;
   const photoReady =
     mode === "video"
@@ -615,6 +646,11 @@ export function MomentComposer({
       setMode(nextMode);
       setChoosingMode(false);
       setReviewing(false);
+      setFoundQuery("");
+      setFoundCandidates([]);
+      setFoundMessage(null);
+      setFoundCandidate(null);
+      setPostingFound(false);
       setBody("");
       setCaptionMentions([]);
       setShareToCircleId("");
@@ -669,8 +705,8 @@ export function MomentComposer({
 
   const close = useCallback(
     (discardDraft = false) => {
-      if (saving || closingRef.current) {
-        if (saving) clearSheetDrag();
+      if (saving || postingFound || closingRef.current) {
+        if (saving || postingFound) clearSheetDrag();
         return;
       }
       if (
@@ -706,6 +742,7 @@ export function MomentComposer({
       editDraft,
       isDirty,
       onRequestClose,
+      postingFound,
       requestOverlayClose,
       resetDraft,
       returnFocusRef,
@@ -776,6 +813,8 @@ export function MomentComposer({
       else if (mode === "bible-verse") verseBookTriggerRef.current?.focus();
       else if (mode === "location")
         locationSearchRef.current?.focus({ preventScroll: true });
+      else if (mode === "found")
+        editorHeadingRef.current?.focus({ preventScroll: true });
       else titleInputRef.current?.focus();
     } else chooserHeadingRef.current?.focus({ preventScroll: true });
   }, [choosingMode, mode, open, reviewing]);
@@ -995,6 +1034,11 @@ export function MomentComposer({
       return;
     }
     resetDraft(nextMode);
+    if (nextMode === "found") {
+      setAudience("just_me");
+      setSelectedCircleIds([]);
+      setJournalPersonId(model.recorderPersonId);
+    }
   };
 
   const toggleTaggedPerson = (personId: string) => {
@@ -1115,7 +1159,7 @@ export function MomentComposer({
   );
 
   const persistComposerDraft = async () => {
-    if (!mode || editDraft || saving || savingDraft) return;
+    if (!mode || mode === "found" || editDraft || saving || savingDraft) return;
     const id = savedDraftId ?? crypto.randomUUID();
     const mediaFiles =
       mode === "video" && photoFile
@@ -1541,6 +1585,8 @@ export function MomentComposer({
       return;
     }
 
+    if (mode === "found" || !mode) return;
+
     const savedMode = mode;
     const savedKind = savedMode === "bible-verse" ? "thought" : savedMode;
     const savedTitle = title.trim();
@@ -1673,6 +1719,41 @@ export function MomentComposer({
     copy?.kindLabel ?? "Moment",
   );
 
+  const postFoundMoment = async () => {
+    if (!foundCandidate || postingFound) return;
+    setPostingFound(true);
+    setSaveError(null);
+    const circleId =
+      audience === "just_me"
+        ? model.circleId
+        : (primaryCircle?.id ?? model.circleId);
+    const result = await postFoundInsight({
+      quote: foundCandidate.quote,
+      attribution: foundCandidate.attribution,
+      sourceUrl: foundCandidate.sourceUrl,
+      occurredOn,
+      audience,
+      ...(circleId ? { circleId } : {}),
+      circleIds: audience === "just_me" ? [] : orderedCircleIds,
+    });
+    if (!result.ok) {
+      setSaveError(result.error);
+      setPostingFound(false);
+      return;
+    }
+    const nextHref = momentSubmitHref({
+      editing: false,
+      audience,
+      journalPersonId,
+      stayHref: pathname,
+      momentId: result.momentId,
+    });
+    resetDraft();
+    onRequestClose();
+    router.replace(nextHref);
+    router.refresh();
+  };
+
   if (!dialogMounted) return null;
   if (typeof document === "undefined") return null;
 
@@ -1753,6 +1834,12 @@ export function MomentComposer({
                     <small>Choose a passage</small>
                   </button>
                 ) : null}
+                {showFound ? (
+                  <button type="button" onClick={() => chooseMode("found")}>
+                    <strong>Found</strong>
+                    <small>A real quote from a show, page, or the Bible</small>
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -1773,6 +1860,40 @@ export function MomentComposer({
               </div>
             </>
           )
+        ) : mode === "found" && reviewing && foundCandidate ? (
+          <FoundReview
+            candidate={foundCandidate}
+            circles={postableCircles}
+            selectedIds={orderedCircleIds}
+            justMe={audience === "just_me"}
+            justMeAllowed={justMeAllowed}
+            currentCircleId={model.circleId}
+            posting={postingFound}
+            error={saveError}
+            onPostToChange={choosePostTo}
+            onBack={() => {
+              setReviewing(false);
+              setSaveError(null);
+            }}
+            onPost={() => void postFoundMoment()}
+          />
+        ) : mode === "found" ? (
+          <FoundSearchPanel
+            query={foundQuery}
+            candidates={foundCandidates}
+            message={foundMessage}
+            onQueryChange={setFoundQuery}
+            onResult={(result) => {
+              setFoundCandidates(result.candidates);
+              setFoundMessage(result.message);
+            }}
+            onUse={(candidate) => {
+              setFoundCandidate(candidate);
+              setReviewing(true);
+              setSaveError(null);
+            }}
+            onBack={() => setChoosingMode(true)}
+          />
         ) : reviewing && copy ? (
           <div className="composer-review">
             <span id="composer-privacy" className="private-label">

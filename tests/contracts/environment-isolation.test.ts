@@ -6,6 +6,7 @@ import {
   journalPersistenceIsConnected,
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
+  foundSearchIsEnabled,
   photoPostingIsEnabled,
   resolvedSiteOrigin,
   supabaseResourceIsActive,
@@ -159,6 +160,47 @@ describe("Our Days environment isolation", () => {
         OUR_DAYS_PHOTO_POSTING_MODE: "disabled",
       }),
     ).toBe(false);
+  });
+
+  it("keeps Found off unless the mode is exactly enabled", () => {
+    expect(foundSearchIsEnabled({})).toBe(false);
+    expect(foundSearchIsEnabled({ OUR_DAYS_FOUND_MODE: "disabled" })).toBe(
+      false,
+    );
+    expect(
+      foundSearchIsEnabled({
+        OUR_DAYS_FOUND_MODE: "enabled",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_ENVIRONMENT: "local",
+      }),
+    ).toBe(true);
+    expect(
+      foundSearchIsEnabled({
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        OUR_DAYS_RESOURCE_MODE: "supabase",
+        OUR_DAYS_FOUND_MODE: "enabled",
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects a malformed Found mode without requiring supabase", () => {
+    expectUnsafe(
+      {
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_FOUND_MODE: "sometimes",
+      },
+      "OUR_DAYS_FOUND_MODE must be disabled or enabled",
+    );
+    expect(() =>
+      validateOurDaysEnvironment({
+        OUR_DAYS_ENVIRONMENT: "local",
+        OUR_DAYS_RESOURCE_MODE: "detached",
+        OUR_DAYS_FOUND_MODE: "enabled",
+        NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3000",
+      }),
+    ).not.toThrow(/OUR_DAYS_FOUND_MODE/u);
   });
 
   it("rejects malformed or detached photo-posting activation", () => {

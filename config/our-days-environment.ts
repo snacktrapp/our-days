@@ -482,6 +482,18 @@ export function validateOurDaysEnvironment(
   ) {
     issues.push("OUR_DAYS_LOCAL_JOURNAL_MODE must be disabled or enabled");
   }
+  const foundSearchMode = configuredValue(
+    environment,
+    "OUR_DAYS_FOUND_MODE",
+    issues,
+  );
+  if (
+    foundSearchMode &&
+    foundSearchMode !== "disabled" &&
+    foundSearchMode !== "enabled"
+  ) {
+    issues.push("OUR_DAYS_FOUND_MODE must be disabled or enabled");
+  }
   if (localJournalMode === "enabled") {
     if (environment.VERCEL === "1") {
       issues.push(
@@ -790,6 +802,12 @@ export function mediaDeliveryIsEnabled(
   if (environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "disabled") return false;
   if (environment.OUR_DAYS_MEDIA_DELIVERY_MODE === "enabled") return true;
   return isHostedVercelRuntime(environment);
+}
+
+export function foundSearchIsEnabled(
+  environment: ProcessEnvironment = process.env,
+) {
+  return environment.OUR_DAYS_FOUND_MODE === "enabled";
 }
 
 export function photoPostingIsEnabled(

@@ -13,6 +13,8 @@ export type MomentComposerViewModel = Readonly<{
   experience?: "preview" | "connected-written" | "connected-family";
   circleId?: string;
   photoPostingEnabled?: boolean;
+  foundEnabled?: boolean;
+  viewerRole?: string | null;
   previewToday: string;
   defaultJournalPersonId: string;
   recorderPersonId: string;

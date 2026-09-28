@@ -10658,3 +10658,85 @@ iframe.composer-location-map {
   background: var(--action);
   color: #fff;
 }
+
+.found-search,
+.found-review {
+  display: grid;
+  gap: 16px;
+  padding: 4px 16px 24px;
+}
+.found-search-form {
+  display: grid;
+  gap: 8px;
+}
+.found-search-form label {
+  color: var(--ink);
+  font: var(--chrome-body);
+}
+.found-search-form input {
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink);
+  font: var(--chrome-body);
+  padding: 12px;
+}
+.found-search-actions,
+.found-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+.found-status {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--muted);
+  font: var(--chrome-body);
+}
+.found-cards {
+  display: grid;
+  gap: 12px;
+}
+.found-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--cream);
+}
+.found-thumb {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: var(--hairline);
+}
+.found-card-quote,
+.found-review-quote {
+  margin: 0;
+  color: var(--ink);
+  font: var(--chrome-body);
+  white-space: pre-wrap;
+}
+.found-card-quote.is-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.found-more {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: var(--chrome-body);
+  cursor: pointer;
+}
+.found-verified {
+  color: var(--muted);
+}
+.found-review-quote {
+  font-size: 1.05rem;
+}

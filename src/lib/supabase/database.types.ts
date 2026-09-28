@@ -787,6 +787,7 @@ export type Database = {
           state: string;
         }[];
       };
+      claim_found_search: { Args: never; Returns: string };
       claim_mention_push_deliveries: {
         Args: { requested_moment_id: string; requested_note_id?: string };
         Returns: {
