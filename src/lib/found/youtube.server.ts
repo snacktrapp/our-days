@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { FoundFetchStatus } from "./leads.server";
 import type { CaptionCue } from "./vtt.server";
 
 const videoIdPattern = /^[A-Za-z0-9_-]{11}$/u;
@@ -154,33 +155,91 @@ async function readLimitedText(response: Response) {
   return text;
 }
 
+type YoutubeRead = Readonly<{
+  host: string;
+  fetchStatus: FoundFetchStatus;
+  httpStatus?: number;
+  body: string | null;
+}>;
+
+export type YoutubeTranscriptFetch = Readonly<{
+  cues: CaptionCue[] | null;
+  host: string;
+  fetchStatus: FoundFetchStatus;
+  httpStatus?: number;
+}>;
+
+function youtubeRead(
+  host: string,
+  fetchStatus: FoundFetchStatus,
+  httpStatus?: number,
+  body: string | null = null,
+): YoutubeRead {
+  return {
+    host,
+    fetchStatus,
+    ...(httpStatus !== undefined ? { httpStatus } : {}),
+    body,
+  };
+}
+
+function isBotWall(body: string) {
+  const value = body.toLowerCase();
+  return (
+    value.includes("login_required") ||
+    value.includes("confirm you're not a bot") ||
+    value.includes("confirm you’re not a bot")
+  );
+}
+
+function preferFailure(current: YoutubeRead | null, next: YoutubeRead) {
+  if (!current) return next;
+  if (current.fetchStatus === "http") return current;
+  if (next.fetchStatus === "http" || next.fetchStatus === "blocked")
+    return next;
+  if (current.fetchStatus === "blocked") return current;
+  return next;
+}
+
 async function fetchYoutubeText(
   url: string,
   signal: AbortSignal,
   init: RequestInit = {},
-) {
+): Promise<YoutubeRead> {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return null;
+    return youtubeRead("youtube.com", "blocked");
   }
-  if (parsed.protocol !== "https:" || !youtubeHost(parsed.hostname))
-    return null;
-  if (signal.aborted) return null;
-  const response = await fetch(parsed, {
-    ...init,
-    redirect: "manual",
-    signal,
-    headers: {
-      "user-agent": browserUserAgent,
-      "accept-language": "en",
-      ...(init.headers ?? {}),
-    },
-  });
-  if (response.status >= 300 && response.status < 400) return null;
-  if (!response.ok) return null;
-  return readLimitedText(response);
+  const host = parsed.hostname.toLowerCase();
+  if (parsed.protocol !== "https:" || !youtubeHost(parsed.hostname)) {
+    return youtubeRead(host, "blocked");
+  }
+  if (signal.aborted) return youtubeRead(host, "empty");
+  let response: Response;
+  try {
+    response = await fetch(parsed, {
+      ...init,
+      redirect: "manual",
+      signal,
+      headers: {
+        "user-agent": browserUserAgent,
+        "accept-language": "en",
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch {
+    return youtubeRead(host, "empty");
+  }
+  if (response.status >= 300 && response.status < 400) {
+    return youtubeRead(host, "http", response.status);
+  }
+  if (!response.ok) return youtubeRead(host, "http", response.status);
+  const body = await readLimitedText(response);
+  if (!body) return youtubeRead(host, "empty", response.status);
+  if (isBotWall(body)) return youtubeRead(host, "blocked", response.status);
+  return youtubeRead(host, "ok", response.status, body);
 }
 
 function captionUrl(base: string, videoId: string) {
@@ -191,27 +250,49 @@ function captionUrl(base: string, videoId: string) {
   return url;
 }
 
+function cuesFromRead(read: YoutubeRead) {
+  return read.body ? parseCaptionPayload(read.body) : [];
+}
+
+function asAttempt(read: YoutubeRead): YoutubeTranscriptFetch {
+  return {
+    cues: null,
+    host: read.host,
+    fetchStatus: read.fetchStatus,
+    ...(read.httpStatus !== undefined ? { httpStatus: read.httpStatus } : {}),
+  };
+}
+
 export async function fetchYoutubeTranscript(
   videoId: string,
   signal: AbortSignal,
-): Promise<CaptionCue[] | null> {
-  if (!videoIdPattern.test(videoId)) return null;
+): Promise<YoutubeTranscriptFetch> {
+  if (!videoIdPattern.test(videoId)) {
+    return { cues: null, host: "www.youtube.com", fetchStatus: "empty" };
+  }
+  let failure: YoutubeRead | null = null;
+  const note = (read: YoutubeRead) => {
+    failure = preferFailure(failure, read);
+  };
   const directUrls = [
     `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`,
     `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=json3`,
     `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=json3`,
   ];
   for (const url of directUrls) {
-    const body = await fetchYoutubeText(url, signal);
-    const cues = body ? parseCaptionPayload(body) : [];
-    if (cues.length > 0) return cues;
+    const read = await fetchYoutubeText(url, signal);
+    const cues = cuesFromRead(read);
+    if (cues.length > 0) {
+      return { cues, host: read.host, fetchStatus: "ok" };
+    }
+    note(read.body ? youtubeRead(read.host, "empty", read.httpStatus) : read);
   }
   const listed = await fetchYoutubeText(
     `https://www.youtube.com/api/timedtext?type=list&v=${videoId}`,
     signal,
   );
-  if (listed) {
-    const tracks = [...listed.matchAll(/<track\b([^>]*)\/?>/giu)];
+  if (listed.body) {
+    const tracks = [...listed.body.matchAll(/<track\b([^>]*)\/?>/giu)];
     const preferred =
       tracks.find((track) =>
         /lang_code="en(?:-[A-Za-z]+)?"/iu.test(track[1] ?? ""),
@@ -228,25 +309,44 @@ export async function fetchYoutubeTranscript(
         url.searchParams.set("fmt", "json3");
         if (name) url.searchParams.set("name", name);
         if (kind) url.searchParams.set("kind", kind);
-        const body = await fetchYoutubeText(url.toString(), signal);
-        const cues = body ? parseCaptionPayload(body) : [];
-        if (cues.length > 0) return cues;
+        const read = await fetchYoutubeText(url.toString(), signal);
+        const cues = cuesFromRead(read);
+        if (cues.length > 0) {
+          return { cues, host: read.host, fetchStatus: "ok" };
+        }
+        note(
+          read.body ? youtubeRead(read.host, "empty", read.httpStatus) : read,
+        );
+      } else {
+        note(youtubeRead(listed.host, "empty", listed.httpStatus));
       }
+    } else {
+      note(youtubeRead(listed.host, "empty", listed.httpStatus));
     }
+  } else {
+    note(listed);
   }
   for (const clientName of ["WEB", "ANDROID"] as const) {
-    const cues = await captionsFromPlayer(videoId, clientName, signal);
-    if (cues && cues.length > 0) return cues;
+    const player = await captionsFromPlayer(videoId, clientName, signal);
+    if (player.cues && player.cues.length > 0) {
+      return { cues: player.cues, host: player.host, fetchStatus: "ok" };
+    }
+    note(player);
   }
-  return captionsFromWatchPage(videoId, signal);
+  const watch = await captionsFromWatchPage(videoId, signal);
+  if (watch.cues && watch.cues.length > 0) {
+    return { cues: watch.cues, host: watch.host, fetchStatus: "ok" };
+  }
+  note(watch);
+  return asAttempt(failure ?? youtubeRead("www.youtube.com", "empty"));
 }
 
 async function captionsFromPlayer(
   videoId: string,
   clientName: "WEB" | "ANDROID",
   signal: AbortSignal,
-) {
-  const body = await fetchYoutubeText(
+): Promise<YoutubeRead & { cues: CaptionCue[] | null }> {
+  const read = await fetchYoutubeText(
     "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
     signal,
     {
@@ -266,9 +366,9 @@ async function captionsFromPlayer(
       }),
     },
   );
-  if (!body) return null;
+  if (!read.body) return { ...read, cues: null };
   try {
-    const parsed = JSON.parse(body) as {
+    const parsed = JSON.parse(read.body) as {
       captions?: {
         playerCaptionsTracklistRenderer?: {
           captionTracks?: Array<{ baseUrl?: string; languageCode?: string }>;
@@ -281,13 +381,30 @@ async function captionsFromPlayer(
       tracks.find((item) =>
         item.languageCode?.toLowerCase().startsWith("en"),
       ) ?? tracks[0];
-    if (!track?.baseUrl) return null;
+    if (!track?.baseUrl) {
+      return {
+        ...youtubeRead(read.host, "empty", read.httpStatus),
+        cues: null,
+      };
+    }
     const url = captionUrl(track.baseUrl, videoId);
-    if (!url) return null;
+    if (!url) {
+      return {
+        ...youtubeRead(read.host, "blocked", read.httpStatus),
+        cues: null,
+      };
+    }
     const captions = await fetchYoutubeText(url.toString(), signal);
-    return captions ? parseCaptionPayload(captions) : null;
+    const cues = cuesFromRead(captions);
+    if (cues.length > 0) return { ...captions, cues };
+    return {
+      ...(captions.body
+        ? youtubeRead(captions.host, "empty", captions.httpStatus)
+        : captions),
+      cues: null,
+    };
   } catch {
-    return null;
+    return { ...youtubeRead(read.host, "empty", read.httpStatus), cues: null };
   }
 }
 
@@ -320,14 +437,19 @@ function extractJsonArray(source: string, marker: string) {
   return null;
 }
 
-async function captionsFromWatchPage(videoId: string, signal: AbortSignal) {
-  const html = await fetchYoutubeText(
+async function captionsFromWatchPage(
+  videoId: string,
+  signal: AbortSignal,
+): Promise<YoutubeRead & { cues: CaptionCue[] | null }> {
+  const read = await fetchYoutubeText(
     `https://www.youtube.com/watch?v=${videoId}&hl=en`,
     signal,
   );
-  if (!html) return null;
-  const raw = extractJsonArray(html, '"captionTracks":');
-  if (!raw) return null;
+  if (!read.body) return { ...read, cues: null };
+  const raw = extractJsonArray(read.body, '"captionTracks":');
+  if (!raw) {
+    return { ...youtubeRead(read.host, "empty", read.httpStatus), cues: null };
+  }
   try {
     const tracks = JSON.parse(raw) as Array<{
       baseUrl?: string;
@@ -337,12 +459,29 @@ async function captionsFromWatchPage(videoId: string, signal: AbortSignal) {
       tracks.find((item) =>
         item.languageCode?.toLowerCase().startsWith("en"),
       ) ?? tracks[0];
-    if (!track?.baseUrl) return null;
+    if (!track?.baseUrl) {
+      return {
+        ...youtubeRead(read.host, "empty", read.httpStatus),
+        cues: null,
+      };
+    }
     const url = captionUrl(track.baseUrl.replace(/\\u0026/g, "&"), videoId);
-    if (!url) return null;
+    if (!url) {
+      return {
+        ...youtubeRead(read.host, "blocked", read.httpStatus),
+        cues: null,
+      };
+    }
     const captions = await fetchYoutubeText(url.toString(), signal);
-    return captions ? parseCaptionPayload(captions) : null;
+    const cues = cuesFromRead(captions);
+    if (cues.length > 0) return { ...captions, cues };
+    return {
+      ...(captions.body
+        ? youtubeRead(captions.host, "empty", captions.httpStatus)
+        : captions),
+      cues: null,
+    };
   } catch {
-    return null;
+    return { ...youtubeRead(read.host, "empty", read.httpStatus), cues: null };
   }
 }

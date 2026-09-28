@@ -29,7 +29,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/found/model.server", () => ({
   foundModelId: "google/gemini-3.5-flash-lite",
   proposeFoundLeads: mocks.leads,
-  pickFoundSpan: mocks.span,
+  pickFoundQuote: mocks.span,
 }));
 
 import {

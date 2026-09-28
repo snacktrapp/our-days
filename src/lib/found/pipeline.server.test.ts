@@ -22,10 +22,10 @@ import { FoundBudgetError } from "./errors.server";
 import { fixtureFoundDeps } from "./fixture.server";
 import { runFoundSearch } from "./pipeline.server";
 import type { FoundSearchDeps } from "./pipeline.server";
-import { locateContiguousQuote } from "./verify.server";
+import { timedTranscriptFromPage } from "./transcript-page.server";
 
 describe("Found search pipeline", () => {
-  it("keeps the source slice from caption indexes", async () => {
+  it("keeps the source slice when the quote matches", async () => {
     const result = await runFoundSearch(
       "excellence",
       fixtureFoundDeps(),
@@ -54,14 +54,10 @@ describe("Found search pipeline", () => {
       "excellence",
       {
         ...deps,
-        pickSpan: async ({ window }) => {
-          const located = locateContiguousQuote(window, foundFixtureQuote);
-          return {
-            quote: foundFixtureRejectedQuote,
-            start: located?.start ?? 0,
-            end: located?.end ?? 1,
-          };
-        },
+        pickQuote: async () => ({
+          quote: foundFixtureRejectedQuote,
+          hintSeconds: foundFixtureStartSeconds,
+        }),
       },
       5_000,
     );
@@ -77,9 +73,7 @@ describe("Found search pipeline", () => {
       generateLeads: async () => {
         throw new FoundBudgetError();
       },
-      pickSpan: async () => ({
-        start: 0,
-        end: 10,
+      pickQuote: async () => ({
         quote: foundFixtureRejectedQuote,
       }),
       fetchSource: async () => {
@@ -101,13 +95,16 @@ describe("Found search pipeline", () => {
         { kind: "web", url: "https://example.com/talk", title: "Talk" },
       ],
       fetchSource: async () => ({
-        kind: "web",
-        identity: "web:1",
-        text: foundFixtureQuote,
-        sourceUrl: "https://example.com/talk",
-        title: "Talk",
+        source: {
+          kind: "web",
+          identity: "web:1",
+          text: foundFixtureQuote,
+          sourceUrl: "https://example.com/talk",
+          title: "Talk",
+        },
+        attempts: [{ host: "example.com", fetchStatus: "ok" }],
       }),
-      pickSpan: ({ signal }) =>
+      pickQuote: ({ signal }) =>
         new Promise((_resolve, reject) => {
           signal.addEventListener("abort", () => {
             reject(
@@ -151,25 +148,27 @@ describe("Found search pipeline", () => {
         },
       ],
       fetchSource: async () => ({
-        kind: "bible",
-        identity: "bible:psalm-23",
-        text: passage,
-        sourceUrl: "https://ebible.org/engwebp/PSA023.htm",
-        verseSpans: [
-          { book: "Psalm", chapter: 23, verse: 1, start: 0, end: 62 },
-          {
-            book: "Psalm",
-            chapter: 23,
-            verse: 2,
-            start: 63,
-            end: passage.length,
-          },
-        ],
+        source: {
+          kind: "bible",
+          identity: "bible:psalm-23",
+          text: passage,
+          sourceUrl: "https://ebible.org/engwebp/PSA023.htm",
+          verseSpans: [
+            { book: "Psalm", chapter: 23, verse: 1, start: 0, end: 62 },
+            {
+              book: "Psalm",
+              chapter: 23,
+              verse: 2,
+              start: 63,
+              end: passage.length,
+            },
+          ],
+        },
+        attempts: [{ host: "ebible.org", fetchStatus: "ok" }],
       }),
-      pickSpan: async ({ window }) => ({
-        start: 0,
-        end: window.length,
-      }),
+      pickQuote: async () => {
+        throw new Error("a short Bible passage does not need the model");
+      },
     };
     const result = await runFoundSearch("a psalm about rest", deps, 5_000);
     expect(result.ok).toBe(true);
@@ -180,47 +179,132 @@ describe("Found search pipeline", () => {
     expect(result.candidates[0]?.attribution).toContain("World English Bible");
   });
 
-  it("drops a Bible card when the supplied quote is not in the catalog", async () => {
-    const passage =
-      "A Psalm by David. The LORD is my shepherd; I shall lack nothing. He makes me lie down in green pastures.";
+  it("links a publisher transcript to YouTube at the matched timestamp", async () => {
+    const page = [
+      "(00:00:12) Welcome back to the podcast with a few opening words today.",
+      "(01:52:42) the pursuit of excellence is a long game that rewards the people who stay with the work",
+      "[1:53:04] and then the conversation moves on to the next idea entirely.",
+    ].join(" ");
+    const timed = timedTranscriptFromPage(page);
     const result = await runFoundSearch(
-      "a psalm about rest",
+      "excellence",
       {
         generateLeads: async () => [
           {
-            kind: "bible",
-            book: "Psalm",
-            chapter: 23,
-            startVerse: 1,
-            endVerse: 2,
+            kind: "youtube",
+            videoId: "abcdefghijk",
+            transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+            speaker: "DHH",
+            title: "Lex Fridman Podcast",
           },
         ],
         fetchSource: async () => ({
-          kind: "bible",
-          identity: "bible:psalm-23",
-          text: passage,
-          sourceUrl: "https://ebible.org/engwebp/PSA023.htm",
+          source: {
+            kind: "youtube",
+            identity: "youtube:abcdefghijk",
+            text: timed.text,
+            sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+            videoId: "abcdefghijk",
+            speaker: "DHH",
+            title: "Lex Fridman Podcast",
+            timedWords: timed.words,
+          },
+          attempts: [
+            { host: "www.youtube.com", fetchStatus: "http", httpStatus: 400 },
+            { host: "lexfridman.com", fetchStatus: "ok" },
+          ],
         }),
-        pickSpan: async ({ window }) => ({
-          start: 0,
-          end: window.length,
-          quote: "A Psalm by David. The LORD is my cow; I shall lack nothing.",
-        }),
+        pickQuote: async () => ({ quote: foundFixtureQuote }),
       },
       5_000,
     );
-    expect(result).toEqual({
-      ok: false,
-      reason: "empty",
-      message: foundEmptyMessage,
-    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates[0]?.quote).toBe(foundFixtureQuote);
+    expect(result.candidates[0]?.sourceUrl).toBe(
+      "https://www.youtube.com/watch?v=abcdefghijk&t=6762",
+    );
+    expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedTranscript);
+    expect(result.candidates[0]?.rangeLabel).toBe("1:52:42–1:53:04");
+  });
+
+  it("keeps the transcript page when the episode has no video id", async () => {
+    const page =
+      "(01:52:42) the pursuit of excellence is a long game that rewards the people who stay with the work";
+    const timed = timedTranscriptFromPage(page);
+    const result = await runFoundSearch(
+      "excellence",
+      {
+        generateLeads: async () => [
+          {
+            kind: "youtube",
+            transcriptUrl: "https://lexfridman.com/dhh-2-transcript",
+          },
+        ],
+        fetchSource: async () => ({
+          source: {
+            kind: "web",
+            identity: "web:lex",
+            text: timed.text,
+            sourceUrl: "https://lexfridman.com/dhh-2-transcript",
+            timedWords: timed.words,
+          },
+          attempts: [{ host: "lexfridman.com", fetchStatus: "ok" }],
+        }),
+        pickQuote: async () => ({ quote: foundFixtureQuote }),
+      },
+      5_000,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.candidates[0]?.sourceUrl).toBe(
+      "https://lexfridman.com/dhh-2-transcript",
+    );
+  });
+
+  it("logs lead outcomes without the query or the quote", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = await runFoundSearch(
+        "zebra-query-token",
+        {
+          generateLeads: async () => [
+            { kind: "web", url: "https://example.com/talk" },
+          ],
+          fetchSource: async () => ({
+            source: null,
+            attempts: [
+              { host: "example.com", fetchStatus: "http", httpStatus: 403 },
+            ],
+          }),
+          pickQuote: async () => ({ quote: foundFixtureQuote }),
+        },
+        5_000,
+      );
+      expect(result.ok).toBe(false);
+      const logged = [...info.mock.calls, ...warn.mock.calls]
+        .map((call) => JSON.stringify(call[0]))
+        .join("\n");
+      expect(logged).toContain('"leadCount":1');
+      expect(logged).toContain('"fetchStatus":"http"');
+      expect(logged).toContain('"httpStatus":403');
+      expect(logged).toContain('"dropReason":"fetch-failed"');
+      expect(logged).toContain('"cards":0');
+      expect(logged).toContain('"host":"example.com"');
+      expect(logged).not.toContain("zebra-query-token");
+      expect(logged).not.toContain(foundFixtureQuote);
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
   });
 
   it("returns the empty message when nothing verifies", async () => {
     const deps: FoundSearchDeps = {
       generateLeads: async () => [],
-      pickSpan: async () => null,
-      fetchSource: async () => null,
+      pickQuote: async () => null,
+      fetchSource: async () => ({ source: null, attempts: [] }),
     };
     const result = await runFoundSearch("nothing", deps, 5_000);
     expect(result).toEqual({

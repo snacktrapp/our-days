@@ -2,9 +2,16 @@ import "server-only";
 
 import { canonicalFoundText } from "./normalize.server";
 import { loadBiblePassage } from "./bible.server";
-import type { FetchedSource, FoundLead } from "./leads.server";
-import { fetchPublicPage } from "./web.server";
+import type {
+  FetchedSource,
+  FoundFetchAttempt,
+  FoundFetchResult,
+  FoundFetchStatus,
+  FoundLead,
+} from "./leads.server";
+import { readPublicPage } from "./web.server";
 import { fetchYoutubeTranscript, youtubeVideoId } from "./youtube.server";
+import { timedTranscriptFromPage } from "./transcript-page.server";
 import { transcriptFromCues } from "./vtt.server";
 
 function clean(value: string | undefined) {
@@ -12,11 +19,43 @@ function clean(value: string | undefined) {
   return trimmed ? trimmed.slice(0, 200) : undefined;
 }
 
+function attempt(
+  host: string | undefined,
+  fetchStatus: FoundFetchStatus,
+  httpStatus?: number,
+): FoundFetchAttempt {
+  return {
+    ...(host ? { host } : {}),
+    fetchStatus,
+    ...(httpStatus !== undefined ? { httpStatus } : {}),
+  };
+}
+
+function youtubeSource(
+  videoId: string,
+  text: string,
+  lead: FoundLead,
+  timedWords: FetchedSource["timedWords"],
+  sourceUrl: string,
+): FetchedSource {
+  return {
+    kind: "youtube",
+    identity: `youtube:${videoId}`,
+    text,
+    sourceUrl,
+    speaker: clean(lead.speaker),
+    title: clean(lead.title),
+    videoId,
+    ...(timedWords && timedWords.length > 0 ? { timedWords } : {}),
+  };
+}
+
 export async function fetchFoundSource(
   lead: FoundLead,
   signal: AbortSignal,
-): Promise<FetchedSource | null> {
-  if (signal.aborted) return null;
+): Promise<FoundFetchResult> {
+  if (signal.aborted)
+    return { source: null, attempts: [attempt(undefined, "empty")] };
   if (lead.kind === "bible" && lead.book && lead.chapter) {
     const passage = await loadBiblePassage(
       lead.book,
@@ -24,47 +63,100 @@ export async function fetchFoundSource(
       lead.startVerse ?? 1,
       lead.endVerse ?? lead.startVerse ?? 1,
     );
-    if (!passage) return null;
+    if (!passage) {
+      return { source: null, attempts: [attempt("ebible.org", "empty")] };
+    }
     return {
-      kind: "bible",
-      identity: `bible:${passage.book}:${passage.chapter}:${passage.verseSpans[0]?.verse ?? 1}`,
-      text: passage.text,
-      sourceUrl: passage.sourceUrl,
-      title: passage.book,
-      verseSpans: passage.verseSpans,
+      source: {
+        kind: "bible",
+        identity: `bible:${passage.book}:${passage.chapter}:${passage.verseSpans[0]?.verse ?? 1}`,
+        text: passage.text,
+        sourceUrl: passage.sourceUrl,
+        title: passage.book,
+        verseSpans: passage.verseSpans,
+      },
+      attempts: [attempt("ebible.org", "ok")],
     };
   }
   if (lead.kind === "youtube") {
+    const attempts: FoundFetchAttempt[] = [];
     const videoId =
       (lead.videoId ? youtubeVideoId(lead.videoId) : null) ??
       (lead.url ? youtubeVideoId(lead.url) : null);
-    if (!videoId) return null;
-    const cues = await fetchYoutubeTranscript(videoId, signal);
-    if (!cues?.length) return null;
-    const transcript = transcriptFromCues(cues);
-    if (!transcript.text) return null;
-    return {
-      kind: "youtube",
-      identity: `youtube:${videoId}`,
-      text: transcript.text,
-      sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-      speaker: clean(lead.speaker),
-      title: clean(lead.title),
-      videoId,
-      timedWords: transcript.words,
-    };
+    let source: FetchedSource | null = null;
+    if (videoId) {
+      const captions = await fetchYoutubeTranscript(videoId, signal);
+      attempts.push(
+        attempt(captions.host, captions.fetchStatus, captions.httpStatus),
+      );
+      if (captions.cues?.length) {
+        const transcript = transcriptFromCues(captions.cues);
+        if (transcript.text) {
+          source = youtubeSource(
+            videoId,
+            transcript.text,
+            lead,
+            transcript.words,
+            `https://www.youtube.com/watch?v=${videoId}`,
+          );
+        }
+      }
+    }
+    if (!source && lead.transcriptUrl) {
+      const page = await readPublicPage(lead.transcriptUrl, signal);
+      if (!page.page) {
+        attempts.push(attempt(page.host, page.fetchStatus, page.httpStatus));
+      } else {
+        const timed = timedTranscriptFromPage(page.page.text);
+        if (!timed.text) {
+          attempts.push(attempt(page.host, "empty", page.httpStatus));
+        } else if (videoId) {
+          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          source = youtubeSource(
+            videoId,
+            timed.text,
+            lead,
+            timed.words,
+            page.page.url,
+          );
+        } else {
+          attempts.push(attempt(page.host, "ok", page.httpStatus));
+          source = {
+            kind: "web",
+            identity: `web:${page.page.url}`,
+            text: timed.text,
+            sourceUrl: page.page.url,
+            speaker: clean(lead.speaker),
+            title: clean(lead.title),
+            ...(timed.words.length > 0 ? { timedWords: timed.words } : {}),
+          };
+        }
+      }
+    }
+    if (attempts.length === 0) {
+      attempts.push(attempt("www.youtube.com", "empty"));
+    }
+    return { source, attempts };
   }
   if (lead.kind === "web" && lead.url) {
-    const page = await fetchPublicPage(lead.url, signal);
-    if (!page) return null;
+    const page = await readPublicPage(lead.url, signal);
+    if (!page.page) {
+      return {
+        source: null,
+        attempts: [attempt(page.host, page.fetchStatus, page.httpStatus)],
+      };
+    }
     return {
-      kind: "web",
-      identity: `web:${page.url}`,
-      text: canonicalFoundText(page.text),
-      sourceUrl: page.url,
-      speaker: clean(lead.speaker),
-      title: clean(lead.title),
+      source: {
+        kind: "web",
+        identity: `web:${page.page.url}`,
+        text: canonicalFoundText(page.page.text),
+        sourceUrl: page.page.url,
+        speaker: clean(lead.speaker),
+        title: clean(lead.title),
+      },
+      attempts: [attempt(page.host, "ok", page.httpStatus)],
     };
   }
-  return null;
+  return { source: null, attempts: [attempt(undefined, "empty")] };
 }

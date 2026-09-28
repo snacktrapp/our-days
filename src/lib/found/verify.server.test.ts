@@ -34,18 +34,16 @@ describe("Found verification", () => {
     expect(located?.quote.endsWith("stay")).toBe(true);
   });
 
-  it("drops a supplied quote that is not contiguous, even when indexes match", () => {
+  it("drops a supplied quote that is not contiguous and ignores offsets", () => {
     const source =
       "the pursuit of excellence is a long game that rewards the people who stay";
-    const located = locateContiguousQuote(source, source);
-    expect(located).not.toBeNull();
+    expect(locateContiguousQuote(source, source)).not.toBeNull();
     expect(
       verifySpan(source, {
         quote: source.replace("excellence", "mediocrity"),
-        start: located!.start,
-        end: located!.end,
       }),
     ).toBeNull();
+    expect(verifySpan(source, { hintSeconds: 1 })).toBeNull();
   });
 
   it("drops a match longer than 4000 characters instead of trimming it", () => {

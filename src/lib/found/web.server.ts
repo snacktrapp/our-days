@@ -99,26 +99,68 @@ export function htmlToFoundText(html: string) {
     .slice(0, textLimit);
 }
 
-export async function fetchPublicPage(value: string, signal: AbortSignal) {
+export type PublicPageRead = Readonly<{
+  host?: string;
+  fetchStatus: "ok" | "empty" | "blocked" | "http";
+  httpStatus?: number;
+  page: { url: string; text: string } | null;
+}>;
+
+function pageHost(value: string) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function readPublicPage(
+  value: string,
+  signal: AbortSignal,
+): Promise<PublicPageRead> {
   let current = value;
   for (let hop = 0; hop <= redirectLimit; hop += 1) {
+    const host = pageHost(current);
     const url = await isPublicHttpsUrl(current);
-    if (!url || signal.aborted) return null;
-    const response = await fetch(url, {
-      redirect: "manual",
-      signal,
-      headers: {
-        accept: "text/html, text/plain;q=0.9",
-        "user-agent": "OurDaysFound/1.0",
-      },
-    });
+    if (!url)
+      return { ...(host ? { host } : {}), fetchStatus: "blocked", page: null };
+    if (signal.aborted) {
+      return { host: url.hostname, fetchStatus: "empty", page: null };
+    }
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        redirect: "manual",
+        signal,
+        headers: {
+          accept: "text/html, text/plain;q=0.9",
+          "user-agent": "OurDaysFound/1.0",
+        },
+      });
+    } catch {
+      return { host: url.hostname, fetchStatus: "empty", page: null };
+    }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
-      if (!location) return null;
+      if (!location) {
+        return {
+          host: url.hostname,
+          fetchStatus: "http",
+          httpStatus: response.status,
+          page: null,
+        };
+      }
       current = new URL(location, url).toString();
       continue;
     }
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return {
+        host: url.hostname,
+        fetchStatus: "http",
+        httpStatus: response.status,
+        page: null,
+      };
+    }
     const type = (response.headers.get("content-type") ?? "").toLowerCase();
     if (
       type &&
@@ -126,15 +168,40 @@ export async function fetchPublicPage(value: string, signal: AbortSignal) {
       !type.includes("text/plain") &&
       !type.includes("application/xhtml+xml")
     ) {
-      return null;
+      return {
+        host: url.hostname,
+        fetchStatus: "empty",
+        httpStatus: response.status,
+        page: null,
+      };
     }
     const declared = Number(response.headers.get("content-length") ?? 0);
-    if (Number.isFinite(declared) && declared > pageByteLimit) return null;
+    if (Number.isFinite(declared) && declared > pageByteLimit) {
+      return { host: url.hostname, fetchStatus: "empty", page: null };
+    }
     const body = await response.text();
-    if (body.length > pageByteLimit) return null;
+    if (body.length > pageByteLimit) {
+      return { host: url.hostname, fetchStatus: "empty", page: null };
+    }
     const text = htmlToFoundText(body);
-    if (text.length < 40) return null;
-    return { url: url.toString(), text };
+    if (text.length < 40) {
+      return { host: url.hostname, fetchStatus: "empty", page: null };
+    }
+    return {
+      host: url.hostname,
+      fetchStatus: "ok",
+      httpStatus: response.status,
+      page: { url: url.toString(), text },
+    };
   }
-  return null;
+  return {
+    ...(pageHost(current) ? { host: pageHost(current) } : {}),
+    fetchStatus: "empty",
+    page: null,
+  };
+}
+
+export async function fetchPublicPage(value: string, signal: AbortSignal) {
+  const read = await readPublicPage(value, signal);
+  return read.page;
 }

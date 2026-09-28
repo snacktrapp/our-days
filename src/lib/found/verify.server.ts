@@ -21,10 +21,13 @@ export type LocatedQuote = Readonly<{
 }>;
 
 export type SpanPick = Readonly<{
-  start: number;
-  end: number;
   quote?: string;
+  hintSeconds?: number;
 }>;
+
+export type FoundQuoteAssessment =
+  | Readonly<{ ok: true; located: LocatedQuote }>
+  | Readonly<{ ok: false; reason: "no-match" | "too-long" }>;
 
 function quoteFromSpans(
   text: string,
@@ -42,11 +45,14 @@ function quoteFromSpans(
   return { quote, start, end };
 }
 
-/** Contiguous word-for-word match. The returned quote is a source slice. */
-export function locateContiguousQuote(
+/** Contiguous word-for-word match. A miss or a slice over 4000 characters drops. */
+export function assessFoundQuote(
   source: string,
   quote: string,
-): LocatedQuote | null {
+): FoundQuoteAssessment {
+  if (quote.length > foundMaximumQuoteLength) {
+    return { ok: false, reason: "too-long" };
+  }
   const text = canonicalFoundText(source);
   const sliceText =
     displayFoundText(source).length === text.length
@@ -54,8 +60,11 @@ export function locateContiguousQuote(
       : text;
   const sourceSpans = foundWordSpans(text);
   const quoteSpans = foundWordSpans(quote);
-  if (quoteSpans.length < foundMinimumWords) return null;
+  if (quoteSpans.length < foundMinimumWords) {
+    return { ok: false, reason: "no-match" };
+  }
   const limit = sourceSpans.length - quoteSpans.length;
+  let sawTooLong = false;
   for (let index = 0; index <= limit; index += 1) {
     let matches = true;
     for (let offset = 0; offset < quoteSpans.length; offset += 1) {
@@ -65,15 +74,30 @@ export function locateContiguousQuote(
       }
     }
     if (!matches) continue;
-    const located = quoteFromSpans(
-      sliceText,
-      sourceSpans,
-      index,
-      index + quoteSpans.length - 1,
-    );
-    if (located) return located;
+    const from = index;
+    const through = index + quoteSpans.length - 1;
+    const located = quoteFromSpans(sliceText, sourceSpans, from, through);
+    if (located) return { ok: true, located };
+    const start = sourceSpans[from]?.start;
+    const end = sourceSpans[through]?.end;
+    if (
+      start !== undefined &&
+      end !== undefined &&
+      end - start > foundMaximumQuoteLength
+    ) {
+      sawTooLong = true;
+    }
   }
-  return null;
+  return { ok: false, reason: sawTooLong ? "too-long" : "no-match" };
+}
+
+/** Contiguous word-for-word match. The returned quote is a source slice. */
+export function locateContiguousQuote(
+  source: string,
+  quote: string,
+): LocatedQuote | null {
+  const assessed = assessFoundQuote(source, quote);
+  return assessed.ok ? assessed.located : null;
 }
 
 /** Indexes pick a source slice. They never contribute outside wording. */
@@ -98,16 +122,13 @@ export function sliceFromIndexes(
 }
 
 /**
- * A supplied quote must sit in the source. A miss drops the card. Indexes
- * are used only when the model did not supply wording.
+ * A supplied quote must sit in the source. A miss drops the card.
+ * Offsets are never a fallback.
  */
 export function verifySpan(
   source: string,
   pick: SpanPick | null | undefined,
 ): LocatedQuote | null {
-  if (!pick) return null;
-  if (pick.quote !== undefined) {
-    return locateContiguousQuote(source, pick.quote);
-  }
-  return sliceFromIndexes(source, pick.start, pick.end);
+  if (!pick?.quote) return null;
+  return locateContiguousQuote(source, pick.quote);
 }

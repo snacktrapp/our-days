@@ -6,6 +6,7 @@ import type { TimedWord } from "./vtt.server";
 export type FoundLead = Readonly<{
   kind: "youtube" | "web" | "bible";
   url?: string;
+  transcriptUrl?: string;
   videoId?: string;
   speaker?: string;
   title?: string;
@@ -14,6 +15,19 @@ export type FoundLead = Readonly<{
   chapter?: number;
   startVerse?: number;
   endVerse?: number;
+}>;
+
+export type FoundFetchStatus = "ok" | "empty" | "blocked" | "http";
+
+export type FoundFetchAttempt = Readonly<{
+  host?: string;
+  fetchStatus: FoundFetchStatus;
+  httpStatus?: number;
+}>;
+
+export type FoundFetchResult = Readonly<{
+  source: FetchedSource | null;
+  attempts: readonly FoundFetchAttempt[];
 }>;
 
 export type FetchedSource = Readonly<{

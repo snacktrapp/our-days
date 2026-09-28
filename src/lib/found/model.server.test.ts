@@ -5,6 +5,7 @@ import {
   GatewayAuthenticationError,
   GatewayInternalServerError,
 } from "@ai-sdk/gateway";
+import { NoOutputGeneratedError } from "ai";
 
 const generateText = vi.hoisted(() => vi.fn());
 
@@ -15,7 +16,7 @@ vi.mock("ai", async () => {
 });
 
 import { FoundBudgetError, FoundUnavailableError } from "./errors.server";
-import { proposeFoundLeads } from "./model.server";
+import { pickFoundQuote, proposeFoundLeads } from "./model.server";
 
 describe("Found model errors", () => {
   beforeEach(() => {
@@ -43,5 +44,65 @@ describe("Found model errors", () => {
     await expect(
       proposeFoundLeads("excellence", new AbortController().signal),
     ).rejects.toBeInstanceOf(FoundUnavailableError);
+  });
+
+  it("treats a schema miss as zero leads and logs the error name", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    generateText.mockRejectedValue(
+      new NoOutputGeneratedError({
+        message: "No object generated for zebra-query-token.",
+      }),
+    );
+    try {
+      await expect(
+        proposeFoundLeads("zebra-query-token", new AbortController().signal),
+      ).resolves.toEqual([]);
+      const call = generateText.mock.calls[0]?.[0] as {
+        prepareStep?: (input: { stepNumber: number }) => {
+          toolChoice?: string;
+          activeTools?: string[];
+        };
+      };
+      expect(call.prepareStep?.({ stepNumber: 0 })).toEqual({});
+      expect(call.prepareStep?.({ stepNumber: 3 })).toEqual({
+        activeTools: [],
+        toolChoice: "none",
+      });
+      const logged = warn.mock.calls
+        .map((entry) => JSON.stringify(entry[0]))
+        .join("\n");
+      expect(logged).toContain("AI_NoOutputGeneratedError");
+      expect(logged).not.toContain("zebra-query-token");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("asks the picker for a verbatim quote with room for a long passage", async () => {
+    generateText.mockResolvedValue({
+      output: {
+        quote:
+          "the pursuit of excellence is a long game that rewards the people who stay",
+        hintSeconds: 6762,
+      },
+    });
+    const pick = await pickFoundQuote({
+      query: "excellence",
+      window:
+        "the pursuit of excellence is a long game that rewards the people who stay",
+      signal: new AbortController().signal,
+    });
+    expect(pick).toEqual({
+      quote:
+        "the pursuit of excellence is a long game that rewards the people who stay",
+      hintSeconds: 6762,
+    });
+    const call = generateText.mock.calls[0]?.[0] as {
+      maxOutputTokens?: number;
+      system?: string;
+    };
+    expect(call.maxOutputTokens).toBe(1200);
+    expect(call.system).not.toContain("UTF-16");
+    expect(call.system).toContain("verbatim");
   });
 });
