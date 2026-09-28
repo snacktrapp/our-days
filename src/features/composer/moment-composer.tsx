@@ -1837,7 +1837,9 @@ export function MomentComposer({
                 {showFound ? (
                   <button type="button" onClick={() => chooseMode("found")}>
                     <strong>Found</strong>
-                    <small>A real quote from a show, page, or the Bible</small>
+                    <small>
+                      Search videos and articles for something to post.
+                    </small>
                   </button>
                 ) : null}
                 <button
