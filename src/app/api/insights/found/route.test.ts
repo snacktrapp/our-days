@@ -14,7 +14,6 @@ import {
 
 const mocks = vi.hoisted(() => ({
   readAccess: vi.fn(),
-  readMemberships: vi.fn(),
   rpc: vi.fn(),
   leads: vi.fn(),
   span: vi.fn(),
@@ -23,7 +22,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth/journal-access", () => ({
   readJournalAccessState: mocks.readAccess,
-  readJournalCircleMemberships: mocks.readMemberships,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: async () => ({ rpc: mocks.rpc }),
@@ -34,7 +32,10 @@ vi.mock("@/lib/found/model.server", () => ({
   pickFoundSpan: mocks.span,
 }));
 
-import { FoundBudgetError } from "@/lib/found/errors.server";
+import {
+  FoundBudgetError,
+  FoundUnavailableError,
+} from "@/lib/found/errors.server";
 import { POST } from "./route";
 
 const site = "http://127.0.0.1:3102";
@@ -66,7 +67,6 @@ describe("POST /api/insights/found", () => {
     delete process.env.OUR_DAYS_FOUND_E2E;
     delete process.env.VERCEL;
     mocks.readAccess.mockReset();
-    mocks.readMemberships.mockReset();
     mocks.rpc.mockReset();
     mocks.leads.mockReset();
     mocks.span.mockReset();
@@ -78,9 +78,6 @@ describe("POST /api/insights/found", () => {
       personId: "p1",
       role: "organizer",
     });
-    mocks.readMemberships.mockResolvedValue([
-      { membershipId: "m1", circleId: "c1", personId: "p1", role: "organizer" },
-    ]);
     mocks.rpc.mockResolvedValue({ data: "claimed", error: null });
   });
 
@@ -98,7 +95,7 @@ describe("POST /api/insights/found", () => {
     });
   });
 
-  it("returns 403 for a member and does not search", async () => {
+  it("returns 403 for the active circle and does not spend a search", async () => {
     mocks.readAccess.mockResolvedValue({
       mode: "authenticated",
       membershipId: "m2",
@@ -106,9 +103,6 @@ describe("POST /api/insights/found", () => {
       personId: "p2",
       role: "member",
     });
-    mocks.readMemberships.mockResolvedValue([
-      { membershipId: "m2", circleId: "c1", personId: "p2", role: "member" },
-    ]);
     const response = await post("excellence");
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
@@ -135,6 +129,15 @@ describe("POST /api/insights/found", () => {
     expect(response.status).toBe(402);
     const body = await response.json();
     expect(body).toEqual({ ok: false, message: foundRestingMessage });
+    expect(body.candidates).toBeUndefined();
+  });
+
+  it("says Found is unavailable when the gateway cannot authenticate", async () => {
+    mocks.leads.mockRejectedValue(new FoundUnavailableError());
+    const response = await post("excellence");
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body).toEqual({ ok: false, message: foundUnavailableMessage });
     expect(body.candidates).toBeUndefined();
   });
 

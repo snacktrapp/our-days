@@ -8,9 +8,14 @@ import { foundFixtureVtt } from "@/features/insights/found-fixture";
 import {
   formatFoundClock,
   formatFoundRange,
+  foundMaximumQuoteLength,
 } from "@/features/insights/found-types";
 import { foundWords } from "./normalize.server";
-import { locateContiguousQuote } from "./verify.server";
+import {
+  locateContiguousQuote,
+  sliceFromIndexes,
+  verifySpan,
+} from "./verify.server";
 import { parseVtt, transcriptFromCues, timestampsForSlice } from "./vtt.server";
 
 const shepherd = "The LORD is my shepherd; I shall lack nothing extra today.";
@@ -27,6 +32,27 @@ describe("Found verification", () => {
     expect(located?.quote).toContain("“pursuit”");
     expect(located?.quote).toContain("excellence");
     expect(located?.quote.endsWith("stay")).toBe(true);
+  });
+
+  it("drops a supplied quote that is not contiguous, even when indexes match", () => {
+    const source =
+      "the pursuit of excellence is a long game that rewards the people who stay";
+    const located = locateContiguousQuote(source, source);
+    expect(located).not.toBeNull();
+    expect(
+      verifySpan(source, {
+        quote: source.replace("excellence", "mediocrity"),
+        start: located!.start,
+        end: located!.end,
+      }),
+    ).toBeNull();
+  });
+
+  it("drops a match longer than 4000 characters instead of trimming it", () => {
+    const source = Array.from({ length: 900 }, () => "alpha").join(" ");
+    expect(source.length).toBeGreaterThan(foundMaximumQuoteLength);
+    expect(locateContiguousQuote(source, source)).toBeNull();
+    expect(sliceFromIndexes(source, 0, source.length)).toBeNull();
   });
 
   it("rejects one changed word", () => {

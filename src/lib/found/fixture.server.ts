@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   foundFixtureQuote,
-  foundFixtureRejectedQuote,
   foundFixtureStartSeconds,
   foundFixtureVideoId,
   foundFixtureVtt,
@@ -36,11 +35,8 @@ export function fixtureFoundDeps(): FoundSearchDeps {
     }),
     pickSpan: async ({ window }) => {
       const located = locateContiguousQuote(window, foundFixtureQuote);
-      return {
-        quote: foundFixtureRejectedQuote,
-        start: located?.start ?? -1,
-        end: located?.end ?? -1,
-      };
+      if (!located) return { start: -1, end: -1 };
+      return { start: located.start, end: located.end };
     },
   };
 }

@@ -9,10 +9,7 @@ import {
   foundUnavailableMessage,
   parseFoundQuery,
 } from "@/features/insights/found-types";
-import {
-  readJournalAccessState,
-  readJournalCircleMemberships,
-} from "@/lib/auth/journal-access";
+import { readJournalAccessState } from "@/lib/auth/journal-access";
 import { canCreateInsight } from "@/lib/circle-roles";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import {
@@ -54,7 +51,12 @@ function foundE2eFixture() {
 
 function outcomeResponse(outcome: FoundSearchOutcome) {
   if (!outcome.ok) {
-    const status = outcome.reason === "resting" ? 402 : 200;
+    const status =
+      outcome.reason === "resting"
+        ? 402
+        : outcome.reason === "unavailable"
+          ? 503
+          : 200;
     return response({ ok: false, message: outcome.message }, status);
   }
   return response({ ok: true, candidates: outcome.candidates }, 200);
@@ -103,11 +105,7 @@ export async function POST(request: Request) {
   if (access.mode !== "authenticated") {
     return response({ ok: false, message: "Found is disabled." }, 403);
   }
-  const memberships = await readJournalCircleMemberships();
-  const allowed =
-    canCreateInsight(access.role) ||
-    memberships.some((membership) => canCreateInsight(membership.role));
-  if (!allowed) {
+  if (!canCreateInsight(access.role)) {
     return response({ ok: false, message: foundMemberMessage }, 403);
   }
 

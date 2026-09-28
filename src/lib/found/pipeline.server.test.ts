@@ -22,9 +22,10 @@ import { FoundBudgetError } from "./errors.server";
 import { fixtureFoundDeps } from "./fixture.server";
 import { runFoundSearch } from "./pipeline.server";
 import type { FoundSearchDeps } from "./pipeline.server";
+import { locateContiguousQuote } from "./verify.server";
 
 describe("Found search pipeline", () => {
-  it("drops a model quote that is not in the transcript and keeps the source slice", async () => {
+  it("keeps the source slice from caption indexes", async () => {
     const result = await runFoundSearch(
       "excellence",
       fixtureFoundDeps(),
@@ -45,6 +46,30 @@ describe("Found search pipeline", () => {
     expect(card.videoId).toBeUndefined();
     expect(foundFixtureStartSeconds).toBe(6762);
     expect(foundFixtureEndSeconds).toBe(6784);
+  });
+
+  it("drops the card when a supplied quote is not in the source", async () => {
+    const deps = fixtureFoundDeps();
+    const result = await runFoundSearch(
+      "excellence",
+      {
+        ...deps,
+        pickSpan: async ({ window }) => {
+          const located = locateContiguousQuote(window, foundFixtureQuote);
+          return {
+            quote: foundFixtureRejectedQuote,
+            start: located?.start ?? 0,
+            end: located?.end ?? 1,
+          };
+        },
+      },
+      5_000,
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "empty",
+      message: foundEmptyMessage,
+    });
   });
 
   it("returns resting and no cards when the gateway budget stops", async () => {
@@ -144,7 +169,6 @@ describe("Found search pipeline", () => {
       pickSpan: async ({ window }) => ({
         start: 0,
         end: window.length,
-        quote: "A Psalm by David. The LORD is my cow; I shall lack nothing.",
       }),
     };
     const result = await runFoundSearch("a psalm about rest", deps, 5_000);
@@ -154,6 +178,42 @@ describe("Found search pipeline", () => {
     expect(result.candidates[0]?.quote).not.toContain("cow");
     expect(result.candidates[0]?.verifiedLabel).toBe(foundVerifiedBible);
     expect(result.candidates[0]?.attribution).toContain("World English Bible");
+  });
+
+  it("drops a Bible card when the supplied quote is not in the catalog", async () => {
+    const passage =
+      "A Psalm by David. The LORD is my shepherd; I shall lack nothing. He makes me lie down in green pastures.";
+    const result = await runFoundSearch(
+      "a psalm about rest",
+      {
+        generateLeads: async () => [
+          {
+            kind: "bible",
+            book: "Psalm",
+            chapter: 23,
+            startVerse: 1,
+            endVerse: 2,
+          },
+        ],
+        fetchSource: async () => ({
+          kind: "bible",
+          identity: "bible:psalm-23",
+          text: passage,
+          sourceUrl: "https://ebible.org/engwebp/PSA023.htm",
+        }),
+        pickSpan: async ({ window }) => ({
+          start: 0,
+          end: window.length,
+          quote: "A Psalm by David. The LORD is my cow; I shall lack nothing.",
+        }),
+      },
+      5_000,
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "empty",
+      message: foundEmptyMessage,
+    });
   });
 
   it("returns the empty message when nothing verifies", async () => {

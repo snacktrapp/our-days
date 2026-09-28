@@ -33,21 +33,13 @@ function quoteFromSpans(
   through: number,
 ): LocatedQuote | null {
   if (through < from) return null;
-  const count = through - from + 1;
-  if (count < foundMinimumWords) return null;
-  let last = through;
-  while (last >= from) {
-    const start = spans[from]?.start;
-    const end = spans[last]?.end;
-    if (start === undefined || end === undefined) return null;
-    const quote = text.slice(start, end);
-    if (quote.length <= foundMaximumQuoteLength && quote.trim()) {
-      if (last - from + 1 < foundMinimumWords) return null;
-      return { quote, start, end };
-    }
-    last -= 1;
-  }
-  return null;
+  if (through - from + 1 < foundMinimumWords) return null;
+  const start = spans[from]?.start;
+  const end = spans[through]?.end;
+  if (start === undefined || end === undefined) return null;
+  const quote = text.slice(start, end);
+  if (!quote.trim() || quote.length > foundMaximumQuoteLength) return null;
+  return { quote, start, end };
 }
 
 /** Contiguous word-for-word match. The returned quote is a source slice. */
@@ -106,17 +98,16 @@ export function sliceFromIndexes(
 }
 
 /**
- * A supplied quote is kept only when it sits in the source. Otherwise the
- * index span is used, and that span is still source text.
+ * A supplied quote must sit in the source. A miss drops the card. Indexes
+ * are used only when the model did not supply wording.
  */
 export function verifySpan(
   source: string,
   pick: SpanPick | null | undefined,
 ): LocatedQuote | null {
   if (!pick) return null;
-  if (pick.quote) {
-    const located = locateContiguousQuote(source, pick.quote);
-    if (located) return located;
+  if (pick.quote !== undefined) {
+    return locateContiguousQuote(source, pick.quote);
   }
   return sliceFromIndexes(source, pick.start, pick.end);
 }

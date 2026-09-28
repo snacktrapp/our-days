@@ -7,12 +7,13 @@ import {
   foundRestingMessage,
   foundSearchTimeoutMs,
   foundTimeoutMessage,
+  foundUnavailableMessage,
   foundVerifiedBible,
   foundVerifiedSource,
   foundVerifiedTranscript,
   type FoundCandidate,
 } from "@/features/insights/found-types";
-import { FoundBudgetError } from "./errors.server";
+import { FoundBudgetError, FoundUnavailableError } from "./errors.server";
 import { fetchFoundSource } from "./fetchers.server";
 import type { FetchedSource, FoundLead } from "./leads.server";
 import { pickFoundSpan, proposeFoundLeads } from "./model.server";
@@ -39,7 +40,7 @@ export type FoundSearchOutcome =
   | Readonly<{ ok: true; candidates: readonly FoundCandidate[] }>
   | Readonly<{
       ok: false;
-      reason: "empty" | "timeout" | "resting";
+      reason: "empty" | "timeout" | "resting" | "unavailable";
       message: string;
     }>;
 
@@ -231,6 +232,13 @@ export async function runFoundSearch(
   } catch (error) {
     if (error instanceof FoundBudgetError) {
       return { ok: false, reason: "resting", message: foundRestingMessage };
+    }
+    if (error instanceof FoundUnavailableError) {
+      return {
+        ok: false,
+        reason: "unavailable",
+        message: foundUnavailableMessage,
+      };
     }
     if (controller.signal.aborted || isAbort(error)) {
       return { ok: false, reason: "timeout", message: foundTimeoutMessage };

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { GatewayAuthenticationError, GatewayError } from "@ai-sdk/gateway";
 import {
   APICallError,
   Output,
@@ -8,7 +9,7 @@ import {
   jsonSchema,
   stepCountIs,
 } from "ai";
-import { FoundBudgetError } from "./errors.server";
+import { FoundBudgetError, FoundUnavailableError } from "./errors.server";
 import type { FoundLead } from "./leads.server";
 import type { SpanPick } from "./verify.server";
 
@@ -79,7 +80,26 @@ The slice must already be in the window. Do not rewrite, translate, or add words
 If the window does not contain a passage that answers the request, return start -1 and end -1.
 Do not include the passage in any other field.`;
 
+function gatewayText(error: GatewayError) {
+  const type = "type" in error ? String(error.type) : "";
+  return `${error.name} ${type} ${error.message}`.toLowerCase();
+}
+
+function isInsufficientFunds(error: GatewayError) {
+  if (error.statusCode === 402) return true;
+  return /insufficient[\s_-]*funds|payment required/u.test(gatewayText(error));
+}
+
 function rethrowKnown(error: unknown): never {
+  if (
+    GatewayAuthenticationError.isInstance(error) ||
+    (GatewayError.isInstance(error) && error.statusCode === 401)
+  ) {
+    throw new FoundUnavailableError();
+  }
+  if (GatewayError.isInstance(error) && isInsufficientFunds(error)) {
+    throw new FoundBudgetError();
+  }
   if (APICallError.isInstance(error) && error.statusCode === 402) {
     throw new FoundBudgetError();
   }

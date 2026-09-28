@@ -8,3 +8,12 @@ export class FoundBudgetError extends Error {
     this.name = "FoundBudgetError";
   }
 }
+
+export class FoundUnavailableError extends Error {
+  readonly statusCode = 503;
+
+  constructor() {
+    super("Found is unavailable.");
+    this.name = "FoundUnavailableError";
+  }
+}
