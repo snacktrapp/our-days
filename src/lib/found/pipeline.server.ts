@@ -303,7 +303,9 @@ function retryPrompt(query: string, lead: FoundLead, missing?: string) {
   if (missing) {
     return `${query}\n\nThe page at ${place} did not contain "${missing}". Return a different lead. Prefer a public transcript page that includes that word, and set transcriptUrl to it.`;
   }
-  return `${query}\n\nThat source could not be opened (${place}). Return a different lead. If a public transcript page exists, set transcriptUrl to that https page.`;
+  const topic = longestTopicWord(query);
+  const about = topic ? ` The passage has to include "${topic}".` : "";
+  return `${query}\n\nThat source could not be opened (${place}). Do not return that same page. Return a different lead: a public transcript page on the show's own site, in url or transcriptUrl.${about}`;
 }
 
 function noCardMessage(logs: readonly FoundLeadLog[]) {
@@ -536,9 +538,7 @@ async function executeFoundSearch(
       }
       round += 1;
       const missing =
-        round === 1 && fetched.length === 1
-          ? missedTopic(query, candidates)
-          : undefined;
+        fetched.length === 1 ? missedTopic(query, candidates) : undefined;
       if (missing) {
         candidates.length = 0;
         cards = 0;
@@ -555,7 +555,7 @@ async function executeFoundSearch(
         candidates.length === 0 &&
         fetched.length === 1 &&
         !opened;
-      if (!onlyLeadFailed && !missing) break;
+      if (round > 1 || (!onlyLeadFailed && !missing)) break;
       pending = (
         await deps.generateLeads(
           retryPrompt(query, fetched[0]!.lead, missing),

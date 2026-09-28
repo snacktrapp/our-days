@@ -563,6 +563,8 @@ describe("Found search pipeline", () => {
     );
     expect(prompts).toHaveLength(2);
     expect(prompts[1]).toContain("www.youtube.com/watch");
+    expect(prompts[1]).toContain("Do not return that same page");
+    expect(prompts[1]).toContain('include "excellence"');
     expect(prompts[1]).not.toContain("list=");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -630,6 +632,54 @@ describe("Found search pipeline", () => {
     if (!result.ok) return;
     expect(result.candidates[0]?.quote).toContain("deserves no explanation");
     expect(result.candidates[0]?.quote).not.toContain("Twitter");
+  });
+
+  it("drops a second page that also misses the topic", async () => {
+    const prompts: string[] = [];
+    const result = await runFoundSearch(
+      "DHH discussing excellence with Lex",
+      {
+        generateLeads: async (query) => {
+          prompts.push(query);
+          return [
+            {
+              kind: "web" as const,
+              url:
+                prompts.length === 1
+                  ? "https://lexfridman.com/dhh-david-heinemeier-hansson/"
+                  : "https://lexfridman.com/other",
+            },
+          ];
+        },
+        fetchSource: async (lead) => ({
+          source: {
+            kind: "web" as const,
+            identity: lead.url ?? "web",
+            text: "Lex X / Twitter YouTube Transcript for DHH with Lex Fridman.",
+            sourceUrl: lead.url ?? "https://lexfridman.com/",
+            speaker: "DHH",
+            fetchedTitle: "DHH on Lex",
+          },
+          attempts: [
+            {
+              host: "lexfridman.com",
+              fetchStatus: "ok" as const,
+              httpStatus: 200,
+            },
+          ],
+        }),
+        pickQuote: async () => ({
+          quote: "Lex X / Twitter YouTube Transcript for DHH with Lex Fridman.",
+        }),
+      },
+      5_000,
+    );
+    expect(prompts).toHaveLength(2);
+    expect(result).toEqual({
+      ok: false,
+      reason: "empty",
+      message: foundEmptyMessage,
+    });
   });
 
   it("returns the empty message when nothing verifies", async () => {
