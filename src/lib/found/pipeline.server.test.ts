@@ -753,7 +753,8 @@ describe("Found search pipeline", () => {
       },
       5_000,
     );
-    expect(prompts).toHaveLength(2);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[2]).toContain("different episode");
     expect(result).toEqual({
       ok: false,
       reason: "empty",

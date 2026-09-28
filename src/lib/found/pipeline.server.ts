@@ -301,7 +301,7 @@ function missedTopic(query: string, candidates: readonly FoundCandidate[]) {
 function retryPrompt(query: string, lead: FoundLead, missing?: string) {
   const place = leadPlace(lead);
   if (missing) {
-    return `${query}\n\nThe page at ${place} did not contain "${missing}". Do not return that same page. Return a different lead: a public transcript page on the show's own site that includes "${missing}", in url or transcriptUrl.`;
+    return `${query}\n\nThe page at ${place} did not contain "${missing}". Do not return that page. Search for a different episode. Return the public transcript page on the show's own site that includes "${missing}", in url or transcriptUrl.`;
   }
   const topic = longestTopicWord(query);
   const about = topic ? ` The passage has to include "${topic}".` : "";
@@ -410,6 +410,7 @@ async function executeFoundSearch(
       );
       let opened = false;
       let openedLead: FoundLead | null = null;
+      let pageMissedTopic = false;
       for (const item of fetched) {
         if (signal.aborted) {
           throw new DOMException("The operation was aborted.", "AbortError");
@@ -446,6 +447,15 @@ async function executeFoundSearch(
           seen.add(source.identity);
           leadLogs.push(leadLog(item.lead, item.result.attempts, source));
           if (candidates.length >= 3) break;
+          continue;
+        }
+        const topicWord = longestTopicWord(query);
+        if (topicWord && !source.text.toLowerCase().includes(topicWord)) {
+          pageMissedTopic = true;
+          seen.add(source.identity);
+          leadLogs.push(
+            leadLog(item.lead, item.result.attempts, source, "topic-miss"),
+          );
           continue;
         }
         const windows = textWindows(
@@ -539,7 +549,11 @@ async function executeFoundSearch(
         if (candidates.length >= 3) break;
       }
       round += 1;
-      const missing = missedTopic(query, candidates);
+      const missing =
+        missedTopic(query, candidates) ??
+        (pageMissedTopic && candidates.length === 0
+          ? longestTopicWord(query)
+          : undefined);
       if (missing) {
         candidates.length = 0;
         cards = 0;
@@ -556,7 +570,8 @@ async function executeFoundSearch(
         candidates.length === 0 &&
         fetched.length === 1 &&
         !opened;
-      if (round > 1 || !promptLead || (!onlyLeadFailed && !missing)) break;
+      const topicRetry = Boolean(missing) && round < 3;
+      if (!promptLead || (!onlyLeadFailed && !topicRetry)) break;
       pending = (
         await deps.generateLeads(
           retryPrompt(query, promptLead, missing),
