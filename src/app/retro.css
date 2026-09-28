@@ -697,8 +697,10 @@
   justify-self: center;
 }
 :root[data-appearance="retro"] .topbar .our-days-wordmark {
-  width: calc(20px * 1382 / 328);
-  height: 20px;
+  /* Same rendered width as the standard header mark (.our-days-wordmark is 104px).
+     Height follows the pixel SVG so the letters scale together and stay centered. */
+  width: 104px;
+  height: calc(104px * 328 / 1382);
   margin: 0 auto 4px;
   background: transparent url("/our-days-retro-wordmark.svg") center / contain
     no-repeat;
