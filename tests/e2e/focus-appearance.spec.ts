@@ -1,5 +1,61 @@
 import { expect, test } from "./test";
 
+test("Future theme hides tap and programmatic focus rings and keeps keyboard rings", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("our-days-appearance", "retro");
+    window.localStorage.setItem("our-days-accent", "violet");
+  });
+  await page.goto("/family");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-appearance",
+    "retro",
+  );
+
+  const heart = page.getByRole("button", { name: /Open notifications/u });
+  await heart.click();
+  const activityHeading = page.getByRole("heading", { name: "Activity" });
+  await expect(activityHeading).toBeFocused();
+  await expect(activityHeading).toHaveCSS("outline-style", "none");
+  await expect(activityHeading).toHaveCSS("box-shadow", "none");
+
+  await page
+    .getByRole("dialog", { name: "Activity" })
+    .click({ position: { x: 20, y: 20 } });
+  await expect(page.getByRole("dialog", { name: "Activity" })).toBeHidden();
+  await expect(heart).toBeFocused();
+  await expect(heart).toHaveCSS("outline-style", "none");
+  await expect(heart).toHaveCSS("box-shadow", "none");
+
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const newMoment = page.getByRole("heading", { name: "New moment" });
+  await expect(newMoment).toBeFocused();
+  await expect(newMoment).toHaveCSS("outline-style", "none");
+  await expect(newMoment).toHaveCSS("box-shadow", "none");
+
+  let sawKeyboardRing = false;
+  for (let step = 0; step < 8; step += 1) {
+    await page.keyboard.press("Tab");
+    const focused = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!element || element === document.body) return null;
+      const style = getComputedStyle(element);
+      return {
+        outlineStyle: style.outlineStyle,
+        outlineColor: style.outlineColor,
+      };
+    });
+    if (focused?.outlineStyle === "solid") {
+      expect(focused.outlineColor).toBe("rgb(196, 176, 245)");
+      sawKeyboardRing = true;
+      break;
+    }
+  }
+  expect(sawKeyboardRing).toBe(true);
+});
+
 test("restored feed focus and controls never paint a focus ring", async ({
   page,
 }) => {

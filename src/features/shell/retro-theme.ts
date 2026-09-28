@@ -197,5 +197,42 @@ export function themeBootstrapScript() {
     }
   } catch (_) {
     document.documentElement.dataset.theme = "dark";
-  }`;
+  }
+  ${focusModalityScript()}`;
+}
+
+/**
+ * Distinguishes real keyboard navigation from taps and programmatic focus.
+ * WebKit reports both as :focus-visible, so Future's accent ring is gated on
+ * data-modality="keyboard". Pointer and touch clear that flag before focus
+ * moves, including when a sheet restores focus to its trigger.
+ */
+export function focusModalityScript() {
+  return `(function () {
+    try {
+      var root = document.documentElement;
+      var keyboardKeys = {
+        Tab: 1,
+        Escape: 1,
+        ArrowUp: 1,
+        ArrowDown: 1,
+        ArrowLeft: 1,
+        ArrowRight: 1,
+        Home: 1,
+        End: 1,
+        PageUp: 1,
+        PageDown: 1
+      };
+      document.addEventListener("keydown", function (event) {
+        if (event.metaKey || event.altKey || event.ctrlKey) return;
+        if (keyboardKeys[event.key]) root.dataset.modality = "keyboard";
+      }, true);
+      var markPointer = function () {
+        root.dataset.modality = "pointer";
+      };
+      document.addEventListener("pointerdown", markPointer, true);
+      document.addEventListener("mousedown", markPointer, true);
+      document.addEventListener("touchstart", markPointer, true);
+    } catch (_) {}
+  })();`;
 }
