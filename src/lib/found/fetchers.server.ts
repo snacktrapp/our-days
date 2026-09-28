@@ -31,13 +31,51 @@ function attempt(
   };
 }
 
-function htmlLinksToVideo(html: string, videoId: string) {
+const youtubeLinkHosts = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+  "www.youtube-nocookie.com",
+  "youtube-nocookie.com",
+]);
+
+function decodeAttribute(value: string) {
+  return value
+    .replace(/&#x0*26;|&#0*38;/gi, "&")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function attributeUrls(html: string) {
+  const visible = html.replace(/<!--[\s\S]*?(?:-->|$)/g, " ");
+  const pattern =
+    /\b(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>`]+))/giu;
+  const urls: string[] = [];
+  for (const match of visible.matchAll(pattern)) {
+    const value = decodeAttribute(
+      match[1] ?? match[2] ?? match[3] ?? "",
+    ).trim();
+    if (value) urls.push(value);
+  }
+  return urls;
+}
+
+function htmlLinksToVideo(html: string, videoId: string, pageUrl: string) {
   const id = youtubeVideoId(videoId);
   if (!id || !html) return false;
-  const pattern =
-    /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?[^"'<>\s]*\bv=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])/giu;
-  for (const match of html.matchAll(pattern)) {
-    if (match[1] === id) return true;
+  for (const raw of attributeUrls(html)) {
+    let url: URL;
+    try {
+      url = new URL(raw, pageUrl);
+    } catch {
+      continue;
+    }
+    if (!youtubeLinkHosts.has(url.hostname.toLowerCase())) continue;
+    if (youtubeVideoId(url.toString()) === id) return true;
   }
   return false;
 }
@@ -138,7 +176,10 @@ export async function fetchFoundSource(
         const timed = timedTranscriptFromPage(page.page.text);
         if (!timed.text) {
           attempts.push(attempt(page.host, "empty", page.httpStatus));
-        } else if (videoId && htmlLinksToVideo(page.page.html ?? "", videoId)) {
+        } else if (
+          videoId &&
+          htmlLinksToVideo(page.page.html ?? "", videoId, page.page.url)
+        ) {
           attempts.push(attempt(page.host, "ok", page.httpStatus));
           source = youtubeSource(
             videoId,

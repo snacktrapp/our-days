@@ -18,7 +18,12 @@ export function youtubeVideoId(value: string) {
       const id = url.pathname.split("/").filter(Boolean)[0] ?? "";
       return videoIdPattern.test(id) ? id : null;
     }
-    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+    if (
+      host === "youtube.com" ||
+      host.endsWith(".youtube.com") ||
+      host === "youtube-nocookie.com" ||
+      host.endsWith(".youtube-nocookie.com")
+    ) {
       const fromQuery = url.searchParams.get("v");
       if (fromQuery && videoIdPattern.test(fromQuery)) return fromQuery;
       const parts = url.pathname.split("/").filter(Boolean);
