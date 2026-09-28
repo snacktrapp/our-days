@@ -266,16 +266,42 @@ function leadIdentity(lead: FoundLead) {
   ].join("|");
 }
 
-function retryPrompt(query: string, lead: FoundLead) {
-  let place: string = lead.kind;
+function leadPlace(lead: FoundLead) {
   const raw = lead.url || lead.transcriptUrl;
   if (raw) {
     try {
       const url = new URL(raw);
-      place = `${url.hostname}${url.pathname}`;
+      return `${url.hostname}${url.pathname}`;
     } catch {
-      place = lead.kind;
+      return lead.kind;
     }
+  }
+  return lead.kind;
+}
+
+function longestTopicWord(query: string) {
+  const words = foundTopicWords(query);
+  const longest = words.reduce<string>(
+    (best, word) => (word.length > best.length ? word : best),
+    "",
+  );
+  return longest.length >= 6 ? longest : undefined;
+}
+
+function missedTopic(query: string, candidates: readonly FoundCandidate[]) {
+  const word = longestTopicWord(query);
+  if (!word || candidates.length === 0) return undefined;
+  const blob = candidates
+    .map((candidate) => candidate.quote)
+    .join(" ")
+    .toLowerCase();
+  return blob.includes(word) ? undefined : word;
+}
+
+function retryPrompt(query: string, lead: FoundLead, missing?: string) {
+  const place = leadPlace(lead);
+  if (missing) {
+    return `${query}\n\nThe page at ${place} did not contain "${missing}". Return a different lead. Prefer a public transcript page that includes that word, and set transcriptUrl to it.`;
   }
   return `${query}\n\nThat source could not be opened (${place}). Return a different lead. If a public transcript page exists, set transcriptUrl to that https page.`;
 }
@@ -509,14 +535,32 @@ async function executeFoundSearch(
         if (candidates.length >= 3) break;
       }
       round += 1;
+      const missing =
+        round === 1 && fetched.length === 1
+          ? missedTopic(query, candidates)
+          : undefined;
+      if (missing) {
+        candidates.length = 0;
+        cards = 0;
+        const last = leadLogs.at(-1);
+        if (last && !last.dropReason) {
+          leadLogs[leadLogs.length - 1] = {
+            ...last,
+            dropReason: "topic-miss",
+          };
+        }
+      }
       const onlyLeadFailed =
         round === 1 &&
         candidates.length === 0 &&
         fetched.length === 1 &&
         !opened;
-      if (!onlyLeadFailed) break;
+      if (!onlyLeadFailed && !missing) break;
       pending = (
-        await deps.generateLeads(retryPrompt(query, fetched[0]!.lead), signal)
+        await deps.generateLeads(
+          retryPrompt(query, fetched[0]!.lead, missing),
+          signal,
+        )
       ).slice(0, 5);
     }
     cards = candidates.length;
