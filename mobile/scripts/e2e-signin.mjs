@@ -217,6 +217,65 @@ await step("transient 401 (PGRST303) right after verify does not sign out", asyn
   await supabase.auth.signOut({ scope: "local" });
 });
 
+await step("PGRST303 on the first request to every endpoint is retried by the app client", async () => {
+  // Shape of Brian's failures (1:01:58 and 1:44:36 PM PT): verify 200, then
+  // the first REST calls get 401 PGRST303 while a parallel one passes.
+  resetStore();
+  const app = await freshApp("pgrst303");
+  const supabase = app.getSupabase();
+  const seen = new Set();
+  let injected = 0;
+  const wrapped = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input.url;
+    const path = new URL(url).pathname;
+    if (path.startsWith("/rest/v1/") && !seen.has(path)) {
+      seen.add(path);
+      injected += 1;
+      requestLog.push({ url, status: 401 });
+      return new Response(
+        JSON.stringify({ code: "PGRST303", details: null, hint: null, message: "JWT issued at future" }),
+        { status: 401, headers: { "content-type": "application/json", "proxy-status": "PostgREST; error=PGRST303" } },
+      );
+    }
+    return wrapped(input, init);
+  };
+  const before = requestLog.length;
+  try {
+    let sleeps = 0;
+    const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+      storage: secureSessionStorage,
+      storageKey,
+      sleep: async () => {
+        sleeps += 1;
+      },
+    });
+    assert.equal(result.ok, true, result.ok ? "" : result.message);
+    assert.equal(sleeps, 0, "circle check passed on its first auth-flow attempt (fetch-level retry)");
+    const [circles] = await Promise.all([
+      journal.loadCircles(supabase, result.session.user.id),
+      supabase.from("circles").select("id").limit(1).throwOnError(),
+    ]);
+    assert.ok(circles.length > 0);
+    assert.ok(injected >= 2, `injected ${injected} PGRST303 responses`);
+    assert.ok(!requestLog.slice(before).some((r) => r.url.includes("/auth/v1/logout")));
+    console.log(`       ${injected} injected PGRST303 responses, all retried; no /logout`);
+  } finally {
+    globalThis.fetch = wrapped;
+  }
+  await supabase.auth.signOut({ scope: "local" });
+});
+
+await step("OTA config matches build 5 (runtime 0.1.0, production channel)", async () => {
+  const fs = await import("node:fs");
+  const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));
+  const easJson = JSON.parse(fs.readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
+  assert.equal(appJson.expo.runtimeVersion?.policy, "appVersion");
+  assert.equal(appJson.expo.version, "0.1.0", "runtime version must stay 0.1.0 for build 5 OTAs");
+  assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
+  assert.equal(easJson.build.production.channel, "production");
+});
+
 await step("wrong code returns a visible error", async () => {
   resetStore();
   const app = await freshApp("wrong");

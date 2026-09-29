@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 
+import { applyUpdateAtLaunch } from "../lib/app-updates";
 import { verifyEmailCode } from "../lib/auth-flow";
 import { authStorageKey, siteOrigin } from "../lib/config";
 import { validEmail } from "../lib/journal";
@@ -41,6 +42,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [authError, setAuthError] = useState<string | null>(null);
   const intentionalSignOut = useRef(false);
   const verifying = useRef(false);
+
+  useEffect(() => {
+    // Never reload under a sign-in in progress.
+    void applyUpdateAtLaunch(() => !verifying.current);
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;

@@ -10,6 +10,7 @@ import {
   supabasePublishableKey,
   supabaseUrl,
 } from "./config";
+import { createRetryingFetch } from "./pgrst-retry";
 import { secureSessionStorage } from "./secure-session";
 
 let client: SupabaseClient | null = null;
@@ -18,6 +19,7 @@ export function getSupabase() {
   if (!isConfigured()) return null;
   if (!client) {
     client = createClient(supabaseUrl, supabasePublishableKey, {
+      global: { fetch: createRetryingFetch() },
       auth: {
         storage: secureSessionStorage,
         autoRefreshToken: true,

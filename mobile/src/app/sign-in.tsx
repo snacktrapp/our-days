@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { sentMessage, useAuth } from "../components/auth-provider";
+import { runningVersionLabel } from "../lib/app-updates";
 import { colors, record } from "../lib/theme";
 
 export default function SignInScreen() {
@@ -132,6 +133,7 @@ export default function SignInScreen() {
           <Text style={styles.again}>Send another code</Text>
         </Pressable>
       ) : null}
+      <Text style={styles.version}>{runningVersionLabel()}</Text>
     </KeyboardAvoidingView>
   );
 }
@@ -203,6 +205,11 @@ const styles = StyleSheet.create({
     color: colors.actionInk,
     fontSize: 16,
     fontWeight: "600",
+  },
+  version: {
+    ...record,
+    fontSize: 11,
+    marginTop: 12,
   },
   again: {
     color: colors.action,
