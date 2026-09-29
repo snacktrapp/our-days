@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "store",
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://snwmwzbeajfrateksolo.supabase.co",
+        "EXPO_PUBLIC_SITE_URL": "https://our-days-neon.vercel.app"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "channel": "production",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://snwmwzbeajfrateksolo.supabase.co",
+        "EXPO_PUBLIC_SITE_URL": "https://our-days-neon.vercel.app"
+      }
+    }
+  },
+  "submit": {
+    "preview": {},
+    "production": {}
+  }
+}

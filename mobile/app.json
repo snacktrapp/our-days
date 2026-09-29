@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Our Days",
+    "slug": "our-days",
+    "scheme": "ourdays",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#101216",
+    "ios": {
+      "bundleIdentifier": "com.snacktrapp.ourdays",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.snacktrapp.ourdays",
+      "adaptiveIcon": {
+        "backgroundColor": "#101216",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-image"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
