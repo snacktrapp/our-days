@@ -16,6 +16,7 @@ export const colors = {
   surface: "#242b35",
   action: "#79adff",
   actionInk: "#101216",
+  danger: "#ff9b8f",
 } as const;
 
 export const recordFont: TextStyle["fontFamily"] = Platform.select({

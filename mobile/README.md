@@ -93,3 +93,16 @@ npx eas-cli@latest update --channel production --environment production --messag
 ```
 
 `--environment production` pulls `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from EAS. The Supabase URL and site URL fall back to the defaults in `src/lib/config.ts`.
+
+## Before every build upload or OTA update
+
+```bash
+npm run typecheck
+npm run lint
+SUPABASE_ACCESS_TOKEN=... npm run e2e:signin   # live email-code sign-in, session persistence, restart, first API calls
+```
+
+`scripts/e2e-signin.mjs` runs the app's real auth modules under Node with
+`expo-secure-store` replaced by a double that enforces the 2048-byte limit. It
+signs in as the Operations test account (override with `E2E_TEST_EMAIL`) and
+refuses personal accounts.

@@ -8,10 +8,13 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e:signin": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/e2e-signin.mjs",
+    "lint": "expo lint"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.4",
+    "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
     "expo-image": "~57.0.5",
@@ -28,6 +31,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
     "typescript": "~6.0.3"
   }
 }

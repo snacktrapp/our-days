@@ -21,6 +21,8 @@ export function PrivateImage({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    // Intentional reset when the source changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFailed(false);
   }, [path, headers]);
 

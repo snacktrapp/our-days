@@ -85,6 +85,7 @@ export default function JournalScreen() {
 
   useEffect(() => {
     if (!session) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
       setMediaHeaders(null);
       return;
     }
@@ -104,6 +105,7 @@ export default function JournalScreen() {
   useEffect(() => {
     if (!supabase || !session?.user.id) return;
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
     setLoading(true);
     loadCircles(supabase, session.user.id)
       .then((memberships) => {

@@ -3,13 +3,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 
-import { siteOrigin } from "../lib/config";
-import { validCode, validEmail } from "../lib/journal";
+import { verifyEmailCode } from "../lib/auth-flow";
+import { authStorageKey, siteOrigin } from "../lib/config";
+import { validEmail } from "../lib/journal";
+import { secureSessionStorage } from "../lib/secure-session";
 import { getSupabase } from "../lib/supabase";
 
 type AuthResult = Readonly<{ ok: true } | { ok: false; message: string }>;
@@ -18,6 +21,9 @@ type AuthValue = Readonly<{
   ready: boolean;
   configured: boolean;
   session: Session | null;
+  /** Last sign-in or session failure. Lives here so it survives screen remounts. */
+  authError: string | null;
+  clearAuthError: () => void;
   sendCode: (email: string) => Promise<AuthResult>;
   verifyCode: (email: string, code: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
@@ -30,14 +36,14 @@ const sentMessage =
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const supabase = useMemo(() => getSupabase(), []);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => !supabase);
   const [session, setSession] = useState<Session | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const intentionalSignOut = useRef(false);
+  const verifying = useRef(false);
 
   useEffect(() => {
-    if (!supabase) {
-      setReady(true);
-      return;
-    }
+    if (!supabase) return;
     let active = true;
     supabase.auth
       .getSession()
@@ -46,10 +52,22 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         setSession(data.session);
         setReady(true);
       })
-      .catch(() => {
-        if (active) setReady(true);
+      .catch((error: unknown) => {
+        if (!active) return;
+        setAuthError(
+          `Your saved sign-in could not be read (${String(error)}). Please sign in again.`,
+        );
+        setReady(true);
       });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      if (
+        event === "SIGNED_OUT" &&
+        !intentionalSignOut.current &&
+        !verifying.current
+      ) {
+        setAuthError("You were signed out. Please sign in again.");
+      }
+      if (event === "SIGNED_OUT") intentionalSignOut.current = false;
       setSession(next);
     });
     return () => {
@@ -94,54 +112,38 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
             message: "Add the publishable key before signing in.",
           };
         }
-        const normalized = email.trim().toLowerCase();
-        if (!validEmail(normalized) || !validCode(code)) {
-          return { ok: false, message: "Enter the six-digit code." };
-        }
+        setAuthError(null);
+        verifying.current = true;
         try {
-          const { error } = await supabase.auth.verifyOtp({
-            email: normalized,
-            token: code.trim(),
-            type: "email",
+          const result = await verifyEmailCode(supabase, email, code, {
+            storage: secureSessionStorage,
+            storageKey: authStorageKey(),
           });
-          if (error) {
-            return {
-              ok: false,
-              message:
-                "That code is not available. Request a new code and try again.",
-            };
+          if (!result.ok) {
+            setAuthError(result.message);
+            return result;
           }
-          const { data, error: membershipError } = await supabase
-            .from("circle_memberships")
-            .select("circle_id")
-            .limit(2);
-          if (membershipError) {
-            await supabase.auth.signOut({ scope: "local" });
-            return {
-              ok: false,
-              message: "Our Days is temporarily unavailable. Please try again.",
-            };
-          }
-          if (!data || data.length === 0) {
-            await supabase.auth.signOut({ scope: "local" });
-            return {
-              ok: false,
-              message: "This account does not have access to a circle.",
-            };
-          }
+          setSession(result.session);
           return { ok: true };
-        } catch {
-          return {
-            ok: false,
-            message: "Our Days is temporarily unavailable. Please try again.",
-          };
+        } catch (error) {
+          const message = `Sign-in failed unexpectedly (${String(error)}).`;
+          setAuthError(message);
+          return { ok: false, message };
+        } finally {
+          verifying.current = false;
         }
       },
       async signOut() {
+        intentionalSignOut.current = true;
+        setAuthError(null);
         await supabase?.auth.signOut();
       },
+      authError,
+      clearAuthError() {
+        setAuthError(null);
+      },
     }),
-    [ready, session, supabase],
+    [authError, ready, session, supabase],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

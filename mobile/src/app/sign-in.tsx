@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -16,7 +15,15 @@ import { sentMessage, useAuth } from "../components/auth-provider";
 import { colors, record } from "../lib/theme";
 
 export default function SignInScreen() {
-  const { ready, configured, session, sendCode, verifyCode } = useAuth();
+  const {
+    ready,
+    configured,
+    session,
+    authError,
+    clearAuthError,
+    sendCode,
+    verifyCode,
+  } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -24,9 +31,12 @@ export default function SignInScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (ready && session) return <Redirect href="/journal" />;
+  // Hold the redirect while verify runs so the journal does not mount (and
+  // query) before the sign-in checks finish.
+  if (ready && session && !busy) return <Redirect href="/journal" />;
 
   async function onSend() {
+    clearAuthError();
     setBusy(true);
     const result = await sendCode(email);
     setBusy(false);
@@ -40,9 +50,11 @@ export default function SignInScreen() {
 
   async function onVerify() {
     setBusy(true);
+    setMessage(null);
     const result = await verifyCode(email, code);
     setBusy(false);
-    if (!result.ok) setMessage(result.message);
+    // Failures are shown through authError, which survives remounts.
+    if (result.ok) setMessage(null);
   }
 
   return (
@@ -90,7 +102,13 @@ export default function SignInScreen() {
           editable={!busy}
         />
       ) : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {authError ? (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {authError}
+        </Text>
+      ) : message ? (
+        <Text style={styles.message}>{message}</Text>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         disabled={busy || !configured}
@@ -164,6 +182,12 @@ const styles = StyleSheet.create({
     ...record,
     fontSize: 13,
     lineHeight: 18,
+  },
+  error: {
+    color: colors.danger,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
   },
   button: {
     alignItems: "center",
