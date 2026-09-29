@@ -81,3 +81,15 @@ npx eas-cli@latest submit --platform ios --profile production
 ```
 
 `submit` stops until someone connects an Apple Developer account in EAS. Do not invent credentials.
+
+## Over-the-air updates (EAS Update)
+
+`expo-updates` is installed and `app.json` points at the EAS Update URL with `runtimeVersion.policy = "appVersion"`. The `production` build profile uses the `production` channel. A build only receives updates if it was built with `expo-updates` and has the same app `version` (runtime `0.1.0` today). Changing native code or app `version` needs a new store build.
+
+Ship a JS-only change to production builds:
+
+```bash
+npx eas-cli@latest update --channel production --environment production --message "describe the change"
+```
+
+`--environment production` pulls `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from EAS. The Supabase URL and site URL fall back to the defaults in `src/lib/config.ts`.

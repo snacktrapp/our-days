@@ -4,6 +4,9 @@
     "slug": "our-days",
     "scheme": "ourdays",
     "version": "0.1.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -44,6 +47,9 @@
       "eas": {
         "projectId": "df91faac-3cbe-4544-bc59-1849757d20fe"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/df91faac-3cbe-4544-bc59-1849757d20fe"
     }
   }
 }
