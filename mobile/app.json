@@ -37,6 +37,13 @@
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "owner": "beelinetech",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "df91faac-3cbe-4544-bc59-1849757d20fe"
+      }
     }
   }
 }
