@@ -45,3 +45,25 @@ export async function searchPlaces(query: string, signal?: AbortSignal) {
     ];
   });
 }
+
+/** Reverse lookup used by “Use my location” (`/api/maps/geocode?lat&lng`). */
+export async function reversePlace(latitude: number, longitude: number) {
+  const response = await fetch(
+    `${siteOrigin}/api/maps/geocode?${new URLSearchParams({
+      lat: String(latitude),
+      lng: String(longitude),
+    })}`,
+    { headers: { origin: siteOrigin } },
+  );
+  if (!response.ok) return "";
+  const payload: unknown = await response.json();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "label" in payload &&
+    typeof payload.label === "string"
+  ) {
+    return payload.label;
+  }
+  return "";
+}

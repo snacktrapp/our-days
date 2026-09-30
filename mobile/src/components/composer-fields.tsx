@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { CircleMembership } from "../lib/journal";
-import { searchPlaces, type GeocodedPlace, type PlaceSelection } from "../lib/places";
+import { reversePlace, searchPlaces, type GeocodedPlace, type PlaceSelection } from "../lib/places";
 import { peopleCountLabel, type CirclePerson } from "../lib/roster";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, tracking } from "../lib/tokens";
@@ -348,6 +348,48 @@ function TimeColumn({
   );
 }
 
+async function locateHere(
+  setMessage: (value: string | null) => void,
+  onPlace: (value: PlaceSelection) => void,
+) {
+  setMessage(null);
+  try {
+    let latitude: number;
+    let longitude: number;
+    if (Platform.OS === "web") {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 30_000,
+          timeout: 12_000,
+        });
+      });
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+    } else {
+      const Location = await import("expo-location");
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) {
+        setMessage("Location isn’t available right now.");
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+    }
+    const named = await reversePlace(latitude, longitude);
+    onPlace({
+      label: named || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      latitude,
+      longitude,
+    });
+  } catch {
+    setMessage("Location isn’t available right now.");
+  }
+}
+
 export function PlaceFields({
   value,
   onChange,
@@ -361,7 +403,8 @@ export function PlaceFields({
   const [suggestions, setSuggestions] = useState<readonly GeocodedPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const canLocate = Platform.OS === "web" && typeof navigator !== "undefined" && "geolocation" in navigator;
+  const canLocate =
+    Platform.OS !== "web" || (typeof navigator !== "undefined" && "geolocation" in navigator);
 
   useEffect(() => {
     if (search.trim().length < 2) return;
@@ -417,19 +460,11 @@ export function PlaceFields({
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            setMessage(null);
-            navigator.geolocation.getCurrentPosition(
-              (position) => {
-                const latitude = position.coords.latitude;
-                const longitude = position.coords.longitude;
-                const label = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-                setSearch(label);
-                setSuggestions([]);
-                onChange({ label, latitude, longitude });
-              },
-              () => setMessage("Location isn’t available right now."),
-              { enableHighAccuracy: true, maximumAge: 30_000, timeout: 12_000 },
-            );
+            void locateHere(setMessage, (next) => {
+              setSearch(next.label);
+              setSuggestions([]);
+              onChange(next);
+            });
           }}
         >
           <Text style={[face(colors, 400, "record"), { color: colors.action, fontSize: 13 }]}>⌖ Use my location</Text>

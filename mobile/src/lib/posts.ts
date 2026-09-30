@@ -63,7 +63,7 @@ type InsightSessionDraft = {
 const chips: UploadChip[] = [];
 const listeners = new Set<() => void>();
 const insightDrafts: InsightSessionDraft[] = [];
-const retryInputs = new Map<string, PhotoUploadInput>();
+const retryInputs = new Map<string, PhotoUploadInput | VideoUploadInput>();
 const maximumPhotoBytes = 25 * 1024 * 1024;
 const tusChunkBytes = 6 * 1024 * 1024;
 
@@ -830,5 +830,136 @@ export async function retryUpload(supabase: SupabaseClient, id: string) {
   const input = retryInputs.get(id);
   if (!input) return { ok: false as const, message: "That photo is no longer on this device." };
   dismissUpload(id);
-  return uploadPhotoMoment(supabase, input);
+  return "durationMs" in input
+    ? uploadVideoMoment(supabase, input)
+    : uploadPhotoMoment(supabase, input);
+}
+
+const maximumVideoBytes = 100 * 1024 * 1024;
+const maximumVideoDurationMs = 120_500;
+const videoMimes = new Set(["video/mp4", "video/quicktime", "video/x-m4v", "video/webm"]);
+
+export type VideoUploadInput = PhotoUploadInput &
+  Readonly<{
+    durationMs: number;
+    name?: string;
+  }>;
+
+function videoMime(declared: string, name: string) {
+  const normalized = declared.trim().toLowerCase();
+  if (videoMimes.has(normalized)) return normalized;
+  const extension = name.split(".").pop()?.toLowerCase() ?? "";
+  const fromName =
+    extension === "mp4"
+      ? "video/mp4"
+      : extension === "mov"
+        ? "video/quicktime"
+        : extension === "m4v"
+          ? "video/x-m4v"
+          : extension === "webm"
+            ? "video/webm"
+            : null;
+  return fromName;
+}
+
+/** Same reserve → resumable upload → finalize path as `src/features/composer/video-upload.ts`. */
+export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUploadInput) {
+  const id = randomId();
+  const detail = dateLabel(input.occurredOn);
+  retryInputs.set(id, input);
+  const update = (patch: Partial<UploadChip> & { label: string }) =>
+    putChip({
+      id,
+      detail,
+      progress: null,
+      failed: false,
+      done: false,
+      ...patch,
+    });
+  update({ label: "Uploading…", progress: 0 });
+  try {
+    const mimeType = videoMime(input.mimeType, input.name ?? "");
+    if (!mimeType) throw new Error("Choose an MP4, MOV, M4V, or WebM video.");
+    if (input.bytes.byteLength < 1) throw new Error("That video is empty. Choose another one.");
+    if (input.bytes.byteLength > maximumVideoBytes) {
+      throw new Error("Choose a video smaller than 100 MB.");
+    }
+    if (
+      !Number.isInteger(input.durationMs) ||
+      input.durationMs < 1 ||
+      input.durationMs > maximumVideoDurationMs
+    ) {
+      throw new Error("Choose a video about 2 minutes or shorter.");
+    }
+    const requestKey = randomId();
+    const { data: reserved, error: reserveError } = await supabase.rpc("reserve_video_moment", {
+      body: input.body,
+      circle_id: input.circleId,
+      duration_ms: input.durationMs,
+      expected_mime_type: mimeType,
+      expected_size_bytes: input.bytes.byteLength,
+      journal_person_id: input.journalPersonId,
+      occurred_at: input.occurredAt ?? undefined,
+      occurred_on: input.occurredOn,
+      occurred_timezone: input.occurredTimezone ?? undefined,
+      place_name: input.placeName?.trim() ?? "",
+      request_key: requestKey,
+      tagged_person_ids: [...(input.taggedPersonIds ?? [])],
+      audience: input.audience,
+      ...(input.audience === "family" && input.circleIds?.length
+        ? { circle_ids: [...input.circleIds] }
+        : {}),
+    });
+    const reservation = firstRow(reserved) as
+      | {
+          bucket_id?: string;
+          object_path?: string;
+          request_id?: string;
+          moment_id?: string;
+          state?: string;
+        }
+      | null;
+    if (reserveError || !reservation?.request_id || !reservation.moment_id) {
+      throw new Error(message(reserveError, "That video moment could not be prepared."));
+    }
+    if (reservation.state !== "published") {
+      if (!reservation.bucket_id || !reservation.object_path) {
+        throw new Error("That video moment could not be prepared.");
+      }
+      await uploadWithTus(
+        reservation.bucket_id,
+        reservation.object_path,
+        input.bytes,
+        mimeType,
+        {
+          video_request_id: reservation.request_id,
+          request_key: requestKey,
+          expected_mime_type: mimeType,
+          expected_size_bytes: input.bytes.byteLength,
+          duration_ms: input.durationMs,
+        },
+        (fraction) => update({ label: percentLabel(fraction), progress: fraction }),
+      );
+      const { data: momentId, error: finalizeError } = await supabase.rpc("finalize_video_moment", {
+        request_id: reservation.request_id,
+      });
+      if (finalizeError || momentId !== reservation.moment_id) {
+        throw new Error("The upload finished, but the video could not yet be added. Try again.");
+      }
+    }
+    update({ label: "Added to timeline", detail, progress: null, failed: false, done: true });
+    retryInputs.delete(id);
+    return { ok: true as const, momentId: reservation.moment_id };
+  } catch (error) {
+    update({
+      label: "Upload failed",
+      detail: error instanceof Error ? error.message : "Upload failed",
+      progress: null,
+      failed: true,
+    });
+    return {
+      ok: false as const,
+      message: error instanceof Error ? error.message : "Upload failed",
+    };
+  }
 }

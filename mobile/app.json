@@ -3,7 +3,7 @@
     "name": "Our Days",
     "slug": "our-days",
     "scheme": "ourdays",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -37,7 +37,21 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-image",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Our Days uses your photo library so you can add pictures and videos to your family journal.",
+          "cameraPermission": "Our Days uses the camera so you can take a picture or video for your family journal.",
+          "microphonePermission": "Our Days uses the microphone so a video you record for your family includes sound."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Our Days uses your location while you add a place, so your family journal can name where you are."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

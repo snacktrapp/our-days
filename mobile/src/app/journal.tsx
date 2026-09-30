@@ -29,6 +29,7 @@ import { writePref } from "../lib/appearance";
 import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
 import { siteOrigin } from "../lib/config";
 import { circleToday } from "../lib/dates";
+import { readLastPostedCircle } from "../lib/last-posted-circle";
 import {
   loadCircles,
   loadTimelinePage,
@@ -126,6 +127,7 @@ export default function JournalScreen() {
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
   const homeCircleId = readActiveCircleCookie();
+  const [lastPostedCircleId, setLastPostedCircleId] = useState<string | null>(null);
   const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -182,6 +184,11 @@ export default function JournalScreen() {
     },
     [supabase],
   );
+
+  useEffect(() => {
+    if (!session?.user.id || Platform.OS === "web") return;
+    void readLastPostedCircle(session.user.id).then(setLastPostedCircleId);
+  }, [session?.user.id]);
 
   useEffect(
     () =>
@@ -595,9 +602,20 @@ export default function JournalScreen() {
         <AddSheet
           circles={circles}
           justMeDefault={kind === "personal"}
-          activeCircleId={kind === "circle" ? scope : homeCircleId}
+          activeCircleId={
+            kind === "circle"
+              ? scope
+              : kind === "personal"
+                ? homeCircleId
+                : Platform.OS === "web"
+                  ? homeCircleId
+                  : (lastPostedCircleId ?? circles[0]?.circleId ?? null)
+          }
           onClose={() => setAddOpen(false)}
-          onPosted={(audience: Audience) => {
+          onPosted={(audience: Audience, postedCircleId: string) => {
+            if (Platform.OS !== "web" && audience === "family") {
+              setLastPostedCircleId(postedCircleId);
+            }
             const next = audience === "just_me" ? youScope : allScope;
             setAddOpen(false);
             setScope(next);

@@ -26,6 +26,8 @@ import {
 } from "../lib/bible";
 import { circleToday } from "../lib/dates";
 import type { CircleMembership } from "../lib/journal";
+import { rememberPostedCircle } from "../lib/last-posted-circle";
+import { pickJournalMedia } from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
   createFamilyMoment,
@@ -35,6 +37,7 @@ import {
   loadEntryDraft,
   saveEntryDraft,
   uploadPhotoMoment,
+  uploadVideoMoment,
   type Audience,
   type DraftListItem,
 } from "../lib/posts";
@@ -62,8 +65,7 @@ const choices = [
   { id: "insight" as const, title: "Insight", detail: "Quote, attribution, and source" },
 ];
 
-const pickerMissing =
-  "Photo library and camera need expo-image-picker, which is not in runtime 0.2.0. That needs a new TestFlight build.";
+const pickerMissing = "Photo library and camera need the Our Days 0.3.0 TestFlight build.";
 
 /**
  * Web New moment order is Photo or video, Written entry, Bible verse, Drafts.
@@ -84,7 +86,7 @@ export function AddSheet({
   /** The circle feed that is open. All circles leaves this empty. */
   activeCircleId?: string | null;
   onClose: () => void;
-  onPosted: (audience: Audience) => void;
+  onPosted: (audience: Audience, circleId: string) => void;
   initialMode?: Mode;
   previewPeople?: Readonly<Record<string, readonly CirclePerson[]>>;
 }>) {
@@ -123,6 +125,8 @@ export function AddSheet({
   const [reference, setReference] = useState("");
   const [picker, setPicker] = useState<Picker>(null);
   const [catalogReady, setCatalogReady] = useState(false);
+  const [photoKind, setPhotoKind] = useState<"photo" | "video">("photo");
+  const [photoDuration, setPhotoDuration] = useState<number | null>(null);
   const [photoName, setPhotoName] = useState<string | null>(null);
   const [photoBytes, setPhotoBytes] = useState<ArrayBuffer | null>(null);
   const [photoMime, setPhotoMime] = useState("image/jpeg");
@@ -214,7 +218,8 @@ export function AddSheet({
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
   }
 
   async function postInsight() {
@@ -244,7 +249,8 @@ export function AddSheet({
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
   }
 
   async function postPhoto() {
@@ -257,7 +263,7 @@ export function AddSheet({
     }
     setBusy(true);
     setError(null);
-    const result = await uploadPhotoMoment(supabase, {
+    const shared = {
       bytes: photoBytes,
       mimeType: photoMime,
       circleId: circle.circleId,
@@ -270,37 +276,46 @@ export function AddSheet({
       taggedPersonIds: taggedIds,
       audience: audience(),
       circleIds: justMe ? [] : [circle.circleId],
-    });
+    };
+    const result =
+      photoKind === "video"
+        ? await uploadVideoMoment(supabase, {
+            ...shared,
+            name: photoName ?? "video.mp4",
+            durationMs: photoDuration ?? 0,
+          })
+        : await uploadPhotoMoment(supabase, shared);
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
+  }
+
+  async function rememberCircle() {
+    if (justMe || !circle) return;
+    const session = (await getSupabase()?.auth.getSession())?.data.session;
+    if (!session?.user.id) return;
+    await rememberPostedCircle(session.user.id, circle.circleId);
   }
 
   function pickPhoto(camera: boolean) {
-    const doc = globalThis.document;
-    if (!doc) {
-      setError(pickerMissing);
-      return;
-    }
-    const input = doc.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp";
-    if (camera) input.setAttribute("capture", "environment");
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      void file.arrayBuffer().then((bytes) => {
-        setPhotoBytes(bytes);
-        setPhotoMime(file.type || "image/jpeg");
-        setPhotoName(file.name);
+    void pickJournalMedia(camera)
+      .then((picked) => {
+        if (!picked) return;
+        setPhotoBytes(picked.bytes);
+        setPhotoMime(picked.mimeType);
+        setPhotoName(picked.name);
+        setPhotoKind(picked.kind);
+        setPhotoDuration(picked.durationMs);
         setError(null);
+      })
+      .catch((error: unknown) => {
+        setError(error instanceof Error ? error.message : pickerMissing);
       });
-    };
-    input.click();
   }
 
   async function choosePassage(next: BibleVerseSelection) {
@@ -373,6 +388,8 @@ export function AddSheet({
     setVerse(draft.verse);
     setPhotoBytes(null);
     setPhotoName(null);
+    setPhotoKind("photo");
+    setPhotoDuration(null);
     setMode(
       draft.kind === "bible-verse"
         ? "bible"
