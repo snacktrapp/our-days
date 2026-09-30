@@ -77,6 +77,7 @@ export function JournalHeader({
   const { colors } = theme;
   const hidden = offset > 0 && !open && !interactive;
   const titleFace = face(colors, 400, "record");
+  const radius = colors.appearance === "retro" ? 2 : chromeRadius;
 
   return (
     <View
@@ -85,9 +86,8 @@ export function JournalHeader({
         styles.topbar,
         {
           top: insets.top + floatGap,
-          backgroundColor: colors.navFill,
           borderColor: colors.hairline,
-          borderRadius: colors.appearance === "retro" ? 2 : chromeRadius,
+          borderRadius: radius,
           ...barShadow(colors),
           transform: [{ translateY: -offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
@@ -99,7 +99,7 @@ export function JournalHeader({
         },
       ]}
     >
-      <BarBlur />
+      <BarSurface radius={radius} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Settings"
@@ -226,6 +226,7 @@ export function JournalNav({
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const label = face(colors, 600, "record");
+  const radius = colors.appearance === "retro" ? 2 : chromeRadius;
   return (
     <View
       accessibilityRole="tablist"
@@ -234,9 +235,8 @@ export function JournalNav({
         styles.nav,
         {
           bottom: insets.bottom + floatGap,
-          backgroundColor: colors.navFill,
           borderColor: colors.hairline,
-          borderRadius: colors.appearance === "retro" ? 2 : chromeRadius,
+          borderRadius: radius,
           ...barShadow(colors),
           transform: [{ translateY: offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
@@ -248,7 +248,7 @@ export function JournalNav({
         },
       ]}
     >
-      <BarBlur />
+      <BarSurface radius={radius} />
       <NavItem
         label="Journal"
         active
@@ -290,22 +290,33 @@ function barShadow(colors: ThemeColors) {
   };
 }
 
-function BarBlur() {
+/**
+ * Blur and fill live in one clipped layer. On iOS a BlurView ignores the
+ * parent's borderRadius unless that layer also has overflow hidden and the
+ * same radius. The header menu stays outside this layer so it can hang open.
+ */
+function BarSurface({ radius }: Readonly<{ radius: number }>) {
   const { colors } = useAppTheme();
-  if (Platform.OS === "web" || colors.navBlur <= 0) return null;
   return (
-    <>
-      <BlurView
-        pointerEvents="none"
-        intensity={colors.navBlur * 5}
-        tint={colors.scheme === "light" ? "light" : "dark"}
-        style={[StyleSheet.absoluteFill, { borderRadius: chromeRadius }]}
-      />
+    <View
+      pointerEvents="none"
+      collapsable={false}
+      style={[styles.barClip, { borderRadius: radius }]}
+    >
+      {Platform.OS !== "web" && colors.navBlur > 0 ? (
+        <BlurView
+          intensity={colors.navBlur * 5}
+          tint={colors.scheme === "light" ? "light" : "dark"}
+          style={[styles.barClipFill, { borderRadius: radius }]}
+        />
+      ) : null}
       <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.navFill }]}
+        style={[
+          styles.barClipFill,
+          { backgroundColor: colors.navFill, borderRadius: radius },
+        ]}
       />
-    </>
+    </View>
   );
 }
 
@@ -466,6 +477,22 @@ export function AppearanceSheet({
 }
 
 const styles = StyleSheet.create({
+  barClip: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: "hidden",
+  },
+  barClipFill: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: "hidden",
+  },
   topbar: {
     position: "absolute",
     left: inlineGap,
@@ -582,7 +609,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderWidth: 1,
     borderRadius: chromeRadius,
-    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
   },
