@@ -2,6 +2,7 @@ import { Image, type ImageStyle } from "expo-image";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
+import { mediaMaxHeight } from "../lib/media-frame";
 import { mediaUrl } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
@@ -16,7 +17,7 @@ export function PrivateImage({
   height,
   label,
   headers,
-  frameWidth,
+  frameWidth: _frameWidth,
   mat,
 }: Readonly<{
   path: string;
@@ -29,7 +30,7 @@ export function PrivateImage({
   mat?: string;
 }>) {
   const { colors } = useAppTheme();
-  const { height: screenHeight } = useWindowDimensions();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -38,19 +39,24 @@ export function PrivateImage({
     setFailed(false);
   }, [path]);
 
+  const ground = mat ?? colors.cream;
   const imageWidth = width && width > 0 ? width : 4;
   const imageHeight = height && height > 0 ? height : 3;
-  const ground = mat ?? colors.cream;
-  // globals.css --timeline-media-max-height and the photo-frame sizer viewBox.
-  const maxHeight = Math.min(screenHeight * 0.9, Math.min(frameWidth, 430) * (16 / 9));
-  const frameHeight = Math.round(Math.min(maxHeight, (frameWidth * imageHeight) / imageWidth));
+  // Width is 100% of the card. Height comes from that width via aspectRatio,
+  // the same way the web SVG sizer does. An explicit height from the window
+  // width is taller whenever the frame is narrower than the window.
+  const frameStyle = {
+    aspectRatio: imageWidth / imageHeight,
+    maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
+    backgroundColor: ground,
+  };
 
   if (failed || !headers) {
     return (
       <View
         style={[
           styles.frame,
-          { height: frameHeight, backgroundColor: ground },
+          frameStyle,
         ]}
       >
         <Text style={[styles.fallback, face(colors, 400, "record"), { color: colors.muted }]}>
@@ -61,7 +67,7 @@ export function PrivateImage({
   }
 
   return (
-    <View style={[styles.frame, { height: frameHeight, backgroundColor: ground }]}>
+    <View style={[styles.frame, frameStyle]}>
       <Image
         source={{ uri: mediaUrl(path), headers, cacheKey: path }}
         style={styles.image as ImageStyle}
