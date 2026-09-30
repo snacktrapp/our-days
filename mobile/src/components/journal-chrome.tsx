@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 import {
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -136,52 +137,17 @@ export function JournalHeader({
               {title}
             </Text>
             {locked ? null : (
-              <View style={styles.chevron}>
+              <View
+                style={[
+                  styles.chevron,
+                  open ? { transform: [{ rotate: "180deg" }] } : null,
+                ]}
+              >
                 <ChevronDown color={colors.ink} />
               </View>
             )}
           </View>
         </Pressable>
-        {open && !locked ? (
-          <View
-            style={[
-              styles.menu,
-              {
-                backgroundColor: colors.cream,
-                borderColor: colors.hairline,
-                borderRadius: colors.appearance === "retro" ? 2 : 10,
-                shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
-              },
-            ]}
-          >
-            {items.map((item) => (
-              <Pressable
-                key={item.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: item.selected }}
-                onPress={() => onSelect(item.id)}
-                style={({ pressed }) => [
-                  styles.menuRow,
-                  pressed && { backgroundColor: colors.selectionFill },
-                ]}
-              >
-                <View style={styles.checkSlot}>
-                  {item.selected ? <CheckIcon color={colors.ink} /> : null}
-                </View>
-                <Text
-                  style={[
-                    styles.menuLabel,
-                    face(colors, item.selected ? 650 : 500, "record"),
-                    { color: item.selected ? colors.ink : colors.muted },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
       </View>
       <View style={styles.actions}>
         <Pressable
@@ -219,6 +185,49 @@ export function JournalHeader({
         )}
       </View>
     </View>
+    {open && !locked ? (
+      <View
+        accessibilityRole="menu"
+        style={[
+          styles.menu,
+          {
+            backgroundColor: colors.cream,
+            borderColor: colors.hairline,
+            borderRadius: 10,
+            shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
+          },
+        ]}
+      >
+        <ScrollView bounces={false} style={styles.menuScroll}>
+          {items.map((item) => (
+            <Pressable
+              key={item.id}
+              accessibilityRole="menuitem"
+              accessibilityState={{ selected: item.selected }}
+              onPress={() => onSelect(item.id)}
+              style={({ pressed }) => [
+                styles.menuRow,
+                pressed && { backgroundColor: colors.selectionFill },
+              ]}
+            >
+              <View style={styles.checkSlot}>
+                {item.selected ? <CheckIcon color={colors.ink} /> : null}
+              </View>
+              <Text
+                style={[
+                  styles.menuLabel,
+                  face(colors, item.selected ? 650 : 500, "record"),
+                  { color: item.selected ? colors.ink : colors.muted },
+                ]}
+                numberOfLines={1}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+    ) : null}
     </View>
   );
 }
@@ -489,18 +498,21 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: "absolute",
-    top: chromeHeight + 4,
+    top: chromeHeight + 10,
+    alignSelf: "center",
     width: 220,
     maxWidth: "100%",
     padding: 4,
     borderWidth: 1,
     borderRadius: 10,
     shadowColor: "#000",
-    shadowOpacity: 0.32,
-    shadowRadius: 21,
+    shadowRadius: 42,
     shadowOffset: { width: 0, height: 18 },
     elevation: 12,
-    zIndex: 30,
+    zIndex: 40,
+  },
+  menuScroll: {
+    maxHeight: 360,
   },
   menuRow: {
     minHeight: 44,

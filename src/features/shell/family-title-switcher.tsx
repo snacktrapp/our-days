@@ -91,7 +91,8 @@ export function FamilyTitleSwitcher({
       }
     : model;
   const items = switcher.filter(
-    (item) => item.kind === "you" || item.kind === "all",
+    (item) =>
+      item.kind === "you" || item.kind === "all" || item.kind === "group",
   );
 
   useEffect(() => {

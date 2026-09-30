@@ -14,7 +14,7 @@ test("route-based journal navigation preserves the approved views", async ({
     page
       .getByRole("navigation", { name: "Choose a journal" })
       .getByRole("link"),
-  ).toHaveText(["Just me", "All circles"]);
+  ).toHaveText(["Just me", "All circles", "All our days"]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.locator("[data-moment-kind]")).toHaveCount(7);

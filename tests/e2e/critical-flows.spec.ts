@@ -56,13 +56,17 @@ test("family journal paints and opens its journal selector @critical", async ({
     name: "Choose a journal",
   });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("link")).toHaveText(["Just me", "All circles"]);
+  await expect(dialog.getByRole("link")).toHaveText([
+    "Just me",
+    "All circles",
+    "All our days",
+  ]);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const triggerBox = await trigger.boundingBox();
   const menuBox = await dialog.boundingBox();
   expect(menuBox!.y).toBeGreaterThanOrEqual(triggerBox!.y + triggerBox!.height);
   expect(menuBox!.y - (triggerBox!.y + triggerBox!.height)).toBeLessThan(40);
-  expect(menuBox!.height).toBeLessThan(130);
+  expect(menuBox!.height).toBeLessThan(220);
   await page.screenshot({
     path: test.info().outputPath("header-selector.png"),
   });

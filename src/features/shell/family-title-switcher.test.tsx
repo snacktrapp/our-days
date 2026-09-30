@@ -58,7 +58,7 @@ describe("FamilyTitleSwitcher", () => {
     sessionStorage.clear();
   });
 
-  it("opens a compact inline selector with only two choices", async () => {
+  it("opens a compact inline selector with Just me, All circles, and each circle", async () => {
     await openSwitcher();
     const menu = screen.getByRole("navigation", {
       name: "Choose a journal",
@@ -67,7 +67,7 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(
       Array.from(menu.querySelectorAll("a")).map((a) => a.textContent),
-    ).toEqual(["Just me", "All circles"]);
+    ).toEqual(["Just me", "All circles", "Trapp Family"]);
     expect(screen.getByRole("link", { name: "All circles" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -108,6 +108,8 @@ describe("FamilyTitleSwitcher", () => {
     expect(screen.getByRole("link", { name: "Just me" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(screen.getByRole("link", { name: "All circles" })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("link", { name: "Trapp Family" })).toHaveFocus();
     await user.tab();
     expect(screen.queryByRole("navigation")).toBeNull();
     expect(
