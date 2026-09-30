@@ -1,75 +1,138 @@
+import * as SecureStore from "expo-secure-store";
 import { Redirect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { MomentCard } from "../components/moment-card";
 import { useAuth } from "../components/auth-provider";
+import { GridBackground } from "../components/grid-background";
+import {
+  AppearanceSheet,
+  JournalHeader,
+  JournalNav,
+  type SwitcherItem,
+} from "../components/journal-chrome";
+import { MentionsBanner } from "../components/journal-banner";
+import { FeedMoment } from "../components/moment-card";
+import { writePref } from "../lib/appearance";
+import { circleToday } from "../lib/dates";
 import {
   loadCircles,
   loadTimelinePage,
-  postThought,
-  validThought,
   type CircleMembership,
   type TimelineMoment,
   type TimelinePage,
 } from "../lib/journal";
+import { formatPlainDate } from "../lib/moment-time";
 import { getSupabase, mediaRequestHeaders } from "../lib/supabase";
-import { colors, record } from "../lib/theme";
+import { useAppTheme } from "../lib/theme";
+import {
+  chromeHeight,
+  face,
+  floatGap,
+  stageChromeInset,
+  timelineBottomPad,
+  timelineInset,
+  tracking,
+} from "../lib/tokens";
 
-const allCircles = "all";
+const mentionsKey = "our-days:mentions-announcement";
+const allScope = "all";
+const youScope = "you";
+
+type FeedRow =
+  | Readonly<{ kind: "date"; id: string; label: string; divider: boolean }>
+  | Readonly<{ kind: "moment"; id: string; moment: TimelineMoment }>
+  | Readonly<{ kind: "end"; id: string }>;
+
+function buildRows(
+  moments: readonly TimelineMoment[],
+  today: string,
+  hasMore: boolean,
+): readonly FeedRow[] {
+  if (moments.length === 0) return [];
+  const rows: FeedRow[] = [];
+  let previous: string | undefined;
+  for (const moment of moments) {
+    if (moment.occurredOn !== previous) {
+      rows.push({
+        kind: "date",
+        id: `date-${moment.occurredOn}`,
+        label: formatPlainDate(moment.occurredOn, today),
+        divider: Boolean(previous) && previous?.slice(0, 4) !== moment.occurredOn.slice(0, 4),
+      });
+      previous = moment.occurredOn;
+    }
+    rows.push({ kind: "moment", id: moment.id, moment });
+  }
+  if (!hasMore) rows.push({ kind: "end", id: "end" });
+  return rows;
+}
 
 export default function JournalScreen() {
   const { ready, session, signOut } = useAuth();
+  const theme = useAppTheme();
+  const { colors } = theme;
   const insets = useSafeAreaInsets();
   const supabase = useMemo(() => getSupabase(), []);
   const [circles, setCircles] = useState<readonly CircleMembership[]>([]);
-  const [selected, setSelected] = useState<string>(allCircles);
+  const [scope, setScope] = useState(allScope);
   const [moments, setMoments] = useState<readonly TimelineMoment[]>([]);
   const [page, setPage] = useState<TimelinePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [postCircleId, setPostCircleId] = useState<string | null>(null);
-  const [posting, setPosting] = useState(false);
-  const [postMessage, setPostMessage] = useState<string | null>(null);
   const [mediaHeaders, setMediaHeaders] = useState<
     Record<string, string> | null | undefined
   >(undefined);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [chromeOffset, setChromeOffset] = useState(0);
+  const [pull, setPull] = useState(0);
+  const [showMentions, setShowMentions] = useState(false);
+  const yRef = useRef(0);
+  const offsetRef = useRef(0);
 
-  const circleById = useMemo(
-    () => new Map(circles.map((circle) => [circle.circleId, circle])),
+  const viewerYear = new Date().getFullYear();
+  const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = circleToday(viewerZone);
+  const distance = insets.top + floatGap + chromeHeight + 24;
+  const circleNames = useMemo(
+    () => new Map(circles.map((circle) => [circle.circleId, circle.name])),
     [circles],
   );
-  const activeCircle =
-    selected === allCircles ? null : circleById.get(selected);
-  const destination =
-    circleById.get(
-      selected === allCircles ? (postCircleId ?? circles[0]?.circleId ?? "") : selected,
-    ) ?? null;
+  const membershipIds = useMemo(
+    () => circles.map((circle) => circle.membershipId),
+    [circles],
+  );
 
   const loadFirstPage = useCallback(
-    async (circleId: string, memberships: readonly CircleMembership[]) => {
+    async (nextScope: string, memberships: readonly CircleMembership[]) => {
       if (!supabase) return;
-      setLoading(true);
       setError(null);
       try {
         const next = await loadTimelinePage(supabase, {
-          circleId: circleId === allCircles ? null : circleId,
+          circleId: null,
           fallbackCircleId: memberships[0]?.circleId,
+          viewerMembershipIds: memberships.map((circle) => circle.membershipId),
+          personal:
+            nextScope === youScope
+              ? memberships.map((circle) => ({
+                  circleId: circle.circleId,
+                  personId: circle.personId,
+                }))
+              : undefined,
         });
-        if (next.fellBackToCircleId) setSelected(next.fellBackToCircleId);
         setMoments(next.moments);
         setPage(next);
       } catch {
@@ -78,6 +141,7 @@ export default function JournalScreen() {
         setError("The timeline could not be loaded.");
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     },
     [supabase],
@@ -85,7 +149,7 @@ export default function JournalScreen() {
 
   useEffect(() => {
     if (!session) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when the session drops
       setMediaHeaders(null);
       return;
     }
@@ -103,16 +167,29 @@ export default function JournalScreen() {
   }, [session]);
 
   useEffect(() => {
+    let active = true;
+    mentionDismissed()
+      .then((dismissed) => {
+        if (active) setShowMentions(!dismissed);
+      })
+      .catch(() => {
+        if (active) setShowMentions(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!supabase || !session?.user.id) return;
     let active = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on session change
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset when the session changes
     setLoading(true);
     loadCircles(supabase, session.user.id)
       .then((memberships) => {
         if (!active) return;
         setCircles(memberships);
-        setPostCircleId(memberships[0]?.circleId ?? null);
-        return loadFirstPage(allCircles, memberships);
+        return loadFirstPage(allScope, memberships);
       })
       .catch(() => {
         if (!active) return;
@@ -129,10 +206,18 @@ export default function JournalScreen() {
     setLoadingMore(true);
     try {
       const next = await loadTimelinePage(supabase, {
-        circleId: selected === allCircles ? null : selected,
+        circleId: null,
         cursor: page.cursor,
         snapshotAt: page.snapshotAt,
         fallbackCircleId: circles[0]?.circleId,
+        viewerMembershipIds: membershipIds,
+        personal:
+          scope === youScope
+            ? circles.map((circle) => ({
+                circleId: circle.circleId,
+                personId: circle.personId,
+              }))
+            : undefined,
       });
       setMoments((current) => [...current, ...next.moments]);
       setPage(next);
@@ -143,109 +228,178 @@ export default function JournalScreen() {
     }
   }
 
-  async function onPost() {
-    if (!supabase || !destination || !validThought(draft)) {
-      setPostMessage("Check the moment and try again.");
+  async function refresh() {
+    setRefreshing(true);
+    await loadFirstPage(scope, circles);
+  }
+
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = event.nativeEvent.contentOffset.y;
+    setPull(y < 0 ? Math.min(80, -y) : 0);
+    if (y <= 0 || switcherOpen || appearanceOpen) {
+      if (offsetRef.current !== 0) {
+        offsetRef.current = 0;
+        setChromeOffset(0);
+      }
+      yRef.current = Math.max(0, y);
       return;
     }
-    setPosting(true);
-    setPostMessage(null);
-    try {
-      await postThought(supabase, {
-        circleId: destination.circleId,
-        journalPersonId: destination.personId,
-        body: draft,
-        timeZone: destination.timeZone,
-      });
-      setDraft("");
-      setPostMessage("Moment saved.");
-      await loadFirstPage(
-        selected === allCircles ? allCircles : destination.circleId,
-        circles,
-      );
-    } catch {
-      setPostMessage(
-        "That moment could not be saved. Your draft is still here.",
-      );
-    } finally {
-      setPosting(false);
+    const delta = y - yRef.current;
+    yRef.current = y;
+    const next = Math.max(0, Math.min(distance, y, offsetRef.current + delta));
+    if (Math.abs(next - offsetRef.current) >= 1) {
+      offsetRef.current = next;
+      setChromeOffset(next);
     }
   }
 
   if (ready && !session) return <Redirect href="/sign-in" />;
 
-  const title = activeCircle?.name ?? "All circles";
+  const title = scope === youScope ? "Just me" : "All circles";
+  const items: readonly SwitcherItem[] = [
+    { id: youScope, label: "Just me", selected: scope === youScope },
+    { id: allScope, label: "All circles", selected: scope === allScope },
+  ];
+  const rows = buildRows(moments, today, Boolean(page?.hasMore));
+  const chromeHidden = chromeOffset >= distance && !switcherOpen;
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.screen, { paddingTop: insets.top }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>Circles</Text>
-          <Text style={styles.title} accessibilityRole="header">
-            {title}
-          </Text>
-          <Text style={styles.count}>
-            {moments.length} {moments.length === 1 ? "moment" : "moments"}
-          </Text>
+    <View style={[styles.screen, { backgroundColor: colors.gridSurface }]}>
+      <GridBackground color={colors.gridLine} />
+      {pull > 8 || refreshing ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.pull,
+            {
+              top: insets.top + stageChromeInset,
+              opacity: pull > 64 ? 0.8 : 0.45,
+              transform: [{ scale: pull > 64 ? 1 : 0.72 }],
+            },
+          ]}
+        >
+          <View style={[styles.pullMark, { backgroundColor: colors.action }]} />
         </View>
-        <Pressable accessibilityRole="button" onPress={() => void signOut()}>
-          <Text style={styles.signOut}>Sign out</Text>
-        </Pressable>
-      </View>
-      <View style={styles.switcher}>
-        <Chip
-          label="All circles"
-          selected={selected === allCircles}
-          disabled={loading}
-          onPress={() => {
-            setSelected(allCircles);
-            void loadFirstPage(allCircles, circles);
-          }}
-        />
-        {circles.map((circle) => (
-          <Chip
-            key={circle.circleId}
-            label={circle.name}
-            selected={selected === circle.circleId}
-            disabled={loading}
-            onPress={() => {
-              setSelected(circle.circleId);
-              void loadFirstPage(circle.circleId, circles);
-            }}
-          />
-        ))}
-      </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      ) : null}
       {loading ? (
-        <View style={styles.waiting}>
-          <ActivityIndicator color={colors.action} />
+        <View style={{ paddingTop: insets.top + stageChromeInset + 18 }}>
+          <Skeleton />
+          <Skeleton short />
         </View>
       ) : (
         <FlatList
-          data={moments}
-          keyExtractor={(moment) => moment.id}
-          contentContainerStyle={styles.list}
+          data={rows}
+          keyExtractor={(row) => row.id}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          onScrollEndDrag={() => {
+            if (pull >= 64) void refresh();
+          }}
+          contentContainerStyle={{
+            paddingTop: insets.top + stageChromeInset + 4,
+            paddingBottom: insets.bottom + stageChromeInset + timelineBottomPad,
+            paddingHorizontal: timelineInset,
+            flexGrow: rows.length === 0 ? 1 : undefined,
+          }}
+          ListHeaderComponent={
+            showMentions && !error ? (
+              <MentionsBanner
+                onDismiss={() => {
+                  setShowMentions(false);
+                  void writePref(mentionsKey, "dismissed");
+                }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
-            error ? null : (
-              <Text style={styles.empty}>
-                Your circle’s story starts here. Write a small moment and it
-                will find its place on this line.
-              </Text>
+            error ? (
+              <View
+                style={[
+                  styles.empty,
+                  { borderColor: colors.hairline, backgroundColor: colors.paper },
+                ]}
+              >
+                <Text style={[styles.emptyTitle, face(colors, 600, "serif"), { color: colors.ink }]}>
+                  This journal couldn’t open.
+                </Text>
+                <Text style={[styles.emptyBody, face(colors, 400), { color: colors.muted }]}>
+                  Try again, or choose another page.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setLoading(true);
+                    void loadFirstPage(scope, circles);
+                  }}
+                  style={[styles.retry, { backgroundColor: colors.ink }]}
+                >
+                  <Text style={[face(colors, 600), { color: colors.cream, fontSize: 14 }]}>
+                    Try again
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.empty,
+                  { borderColor: colors.hairline, backgroundColor: colors.paper },
+                ]}
+              >
+                <Text style={[styles.emptyTitle, face(colors, 500, "serif"), { color: colors.ink }]}>
+                  Your circle’s story starts here
+                </Text>
+                <Text style={[styles.emptyBody, face(colors, 400), { color: colors.muted }]}>
+                  Write a small moment and it will find its place on this line.
+                </Text>
+              </View>
             )
           }
           renderItem={({ item }) => (
-            <MomentCard
-              moment={item}
-              showCircle={selected === allCircles}
-              circleName={
-                circleById.get(item.circleId)?.name ??
-                circleById.get(item.linkedCircleIds[0] ?? "")?.name
-              }
-              headers={mediaHeaders}
-            />
+            <Rail>
+              {item.kind === "date" ? (
+                <View style={[styles.date, item.divider && styles.dateDivider]}>
+                  <Text
+                    style={[
+                      styles.dateLabel,
+                      face(colors, 600, "record"),
+                      {
+                        color: colors.dateInk,
+                        backgroundColor: colors.paper,
+                        borderColor: colors.line,
+                        letterSpacing: tracking(8, 0.15),
+                      },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+              ) : item.kind === "end" ? (
+                <View style={styles.date}>
+                  <Text
+                    style={[
+                      styles.dateLabel,
+                      face(colors, 600, "record"),
+                      {
+                        color: colors.dateInk,
+                        backgroundColor: colors.paper,
+                        borderColor: colors.line,
+                        letterSpacing: tracking(8, 0.15),
+                      },
+                    ]}
+                  >
+                    Earliest entry
+                  </Text>
+                </View>
+              ) : (
+                <FeedMoment
+                  moment={item.moment}
+                  circleNames={circleNames}
+                  headers={mediaHeaders}
+                  viewerYear={viewerYear}
+                  viewerZone={viewerZone}
+                />
+              )}
+            </Rail>
           )}
           ListFooterComponent={
             page?.hasMore ? (
@@ -253,226 +407,182 @@ export default function JournalScreen() {
                 accessibilityRole="button"
                 disabled={loadingMore}
                 onPress={() => void loadEarlier()}
-                style={styles.earlier}
+                style={[
+                  styles.earlier,
+                  { borderColor: colors.hairline, backgroundColor: colors.paper },
+                ]}
               >
-                <Text style={styles.earlierLabel}>
-                  {loadingMore ? "Loading" : "Earlier moments"}
+                <Text style={[face(colors, 600), { color: colors.ink, fontSize: 14 }]}>
+                  {loadingMore ? "Loading" : "Show earlier days"}
                 </Text>
               </Pressable>
-            ) : moments.length > 0 ? (
-              <Text style={styles.end}>The beginning</Text>
             ) : null
           }
         />
       )}
-      <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
-        {selected === allCircles && circles.length > 1 ? (
-          <View style={styles.postTo}>
-            <Text style={styles.postToLabel}>Post to</Text>
-            {circles.map((circle) => (
-              <Chip
-                key={`post-${circle.circleId}`}
-                label={circle.name}
-                selected={destination?.circleId === circle.circleId}
-                onPress={() => setPostCircleId(circle.circleId)}
-              />
-            ))}
-          </View>
-        ) : null}
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          multiline
-          placeholder="A thought"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="Thought"
-          style={styles.draft}
-          editable={!posting}
-        />
-        {postMessage ? <Text style={styles.postMessage}>{postMessage}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          disabled={posting || !validThought(draft)}
-          onPress={() => void onPost()}
-          style={[
-            styles.post,
-            (posting || !validThought(draft)) && styles.postDisabled,
-          ]}
-        >
-          <Text style={styles.postLabel}>{posting ? "Saving" : "Post"}</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+      {switcherOpen ? (
+        <Pressable style={styles.scrim} onPress={() => setSwitcherOpen(false)} />
+      ) : null}
+      <JournalHeader
+        title={title}
+        items={items}
+        open={switcherOpen}
+        onToggle={() => setSwitcherOpen((current) => !current)}
+        onSelect={(id) => {
+          setSwitcherOpen(false);
+          if (id === scope) return;
+          setScope(id);
+          setLoading(true);
+          void loadFirstPage(id, circles);
+        }}
+        onOpenAppearance={() => {
+          setSwitcherOpen(false);
+          setAppearanceOpen(true);
+        }}
+        offset={chromeOffset}
+        interactive={switcherOpen || appearanceOpen}
+      />
+      <JournalNav offset={chromeOffset} hidden={chromeHidden} />
+      <AppearanceSheet
+        visible={appearanceOpen}
+        onClose={() => setAppearanceOpen(false)}
+        onSignOut={() => {
+          setAppearanceOpen(false);
+          void signOut();
+        }}
+      />
+    </View>
   );
 }
 
-function Chip({
-  label,
-  selected,
-  disabled,
-  onPress,
-}: Readonly<{
-  label: string;
-  selected: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}>) {
+async function mentionDismissed() {
+  if (Platform.OS === "web") {
+    return globalThis.localStorage?.getItem(mentionsKey) === "dismissed";
+  }
+  const value = await SecureStore.getItemAsync(mentionsKey);
+  return value === "dismissed";
+}
+
+function Rail({ children }: Readonly<{ children: ReactNode }>) {
+  const { colors } = useAppTheme();
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
-    >
-      <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-        {label}
-      </Text>
-    </Pressable>
+    <View>
+      <View
+        pointerEvents="none"
+        style={[styles.rail, { backgroundColor: colors.line }]}
+      />
+      {children}
+    </View>
+  );
+}
+
+function Skeleton({ short = false }: Readonly<{ short?: boolean }>) {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={[
+        styles.skeleton,
+        short && styles.skeletonShort,
+        { backgroundColor: colors.cream, borderColor: colors.hairline },
+      ]}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.paper,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+  pull: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 22,
+    alignItems: "center",
+    zIndex: 5,
   },
-  headerCopy: {
-    flex: 1,
-    gap: 2,
+  pullMark: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
   },
-  eyebrow: {
-    ...record,
-    fontSize: 11,
-    letterSpacing: 0.6,
+  rail: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "50%",
+    width: 1,
+  },
+  date: {
+    height: 42,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    zIndex: 2,
+  },
+  dateDivider: {
+    height: 58,
+    justifyContent: "center",
+  },
+  dateLabel: {
+    overflow: "hidden",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderRadius: 5,
+    fontSize: 8,
     textTransform: "uppercase",
   },
-  title: {
-    color: colors.ink,
-    fontSize: 22,
-    fontWeight: "600",
-  },
-  count: {
-    ...record,
-    fontSize: 12,
-  },
-  signOut: {
-    color: colors.action,
-    fontSize: 14,
-    paddingTop: 4,
-  },
-  switcher: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  empty: {
+    width: "88%",
+    alignSelf: "center",
+    marginTop: 22,
     paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  chip: {
+    paddingVertical: 18,
     borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 18,
+    alignItems: "center",
+    gap: 6,
   },
-  chipSelected: {
-    borderColor: colors.action,
-    backgroundColor: colors.surface,
+  emptyTitle: {
+    fontSize: 19,
+    textAlign: "center",
   },
-  chipLabel: {
-    ...record,
-    fontSize: 12,
-    color: colors.muted,
-  },
-  chipLabelSelected: {
-    color: colors.ink,
-  },
-  error: {
-    ...record,
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-    color: colors.muted,
+  emptyBody: {
     fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
   },
-  waiting: {
-    flex: 1,
+  retry: {
+    minWidth: 110,
+    minHeight: 44,
+    marginTop: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  list: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  empty: {
-    color: colors.muted,
-    fontSize: 16,
-    lineHeight: 23,
-    paddingVertical: 24,
-  },
   earlier: {
-    alignItems: "center",
-    paddingVertical: 16,
-  },
-  earlierLabel: {
-    ...record,
-    fontSize: 12,
-  },
-  end: {
-    ...record,
-    paddingVertical: 18,
-    fontSize: 12,
-    textAlign: "center",
-  },
-  composer: {
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.hairline,
-    backgroundColor: colors.cream,
-  },
-  postTo: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
-  },
-  postToLabel: {
-    ...record,
-    fontSize: 11,
-  },
-  draft: {
+    alignSelf: "center",
     minHeight: 44,
-    maxHeight: 120,
-    color: colors.ink,
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  postMessage: {
-    ...record,
-    fontSize: 12,
-  },
-  post: {
-    alignSelf: "flex-end",
+    marginTop: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    borderWidth: 1,
     borderRadius: 999,
-    backgroundColor: colors.action,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  postDisabled: {
-    opacity: 0.45,
+  skeleton: {
+    height: 168,
+    marginHorizontal: 18,
+    marginBottom: 18,
+    borderRadius: 22,
+    borderWidth: 1,
   },
-  postLabel: {
-    color: colors.actionInk,
-    fontSize: 14,
-    fontWeight: "600",
+  skeletonShort: {
+    height: 92,
+  },
+  scrim: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 15,
   },
 });

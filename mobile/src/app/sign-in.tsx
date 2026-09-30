@@ -5,15 +5,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { sentMessage, useAuth } from "../components/auth-provider";
+import { GridBackground } from "../components/grid-background";
+import { Wordmark } from "../components/wordmark";
 import { runningVersionLabel } from "../lib/app-updates";
-import { colors, record } from "../lib/theme";
+import { useAppTheme } from "../lib/theme";
+import { face } from "../lib/tokens";
 
 export default function SignInScreen() {
   const {
@@ -25,15 +29,13 @@ export default function SignInScreen() {
     sendCode,
     verifyCode,
   } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Hold the redirect while verify runs so the journal does not mount (and
-  // query) before the sign-in checks finish.
   if (ready && session && !busy) return <Redirect href="/journal" />;
 
   async function onSend() {
@@ -54,86 +56,170 @@ export default function SignInScreen() {
     setMessage(null);
     const result = await verifyCode(email, code);
     setBusy(false);
-    // Failures are shown through authError, which survives remounts.
     if (result.ok) setMessage(null);
   }
 
+  const label = face(colors, 650);
+  const body = face(colors, 400);
+
   return (
     <KeyboardAvoidingView
-      style={[styles.screen, { paddingTop: insets.top + 32 }]}
+      style={[styles.screen, { backgroundColor: colors.gridSurface }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.eyebrow}>Our Days</Text>
-      <Text style={styles.title}>Sign in</Text>
-      <Text style={styles.copy}>
-        Use the same email code the journal sends on the web. There is no
-        password.
-      </Text>
-      {configured ? null : (
-        <Text style={styles.warning}>
-          Set EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in mobile/.env before
-          signing in. The project URL is already the Our Days Supabase project.
-        </Text>
-      )}
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoComplete="email"
-        autoCorrect={false}
-        keyboardType="email-address"
-        textContentType="emailAddress"
-        placeholder="Email"
-        placeholderTextColor={colors.muted}
-        accessibilityLabel="Email"
-        style={styles.input}
-        editable={!busy}
-      />
-      {sent ? (
-        <TextInput
-          value={code}
-          onChangeText={setCode}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          maxLength={6}
-          placeholder="Six-digit code"
-          placeholderTextColor={colors.muted}
-          accessibilityLabel="Six-digit code"
-          style={[styles.input, styles.code]}
-          editable={!busy}
-        />
-      ) : null}
-      {authError ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {authError}
-        </Text>
-      ) : message ? (
-        <Text style={styles.message}>{message}</Text>
-      ) : null}
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy || !configured}
-        onPress={() => void (sent ? onVerify() : onSend())}
-        style={[styles.button, (busy || !configured) && styles.buttonDisabled]}
+      <GridBackground color={colors.gridLine} />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
       >
-        {busy ? (
-          <ActivityIndicator color={colors.actionInk} />
-        ) : (
-          <Text style={styles.buttonLabel}>
-            {sent ? "Sign in" : "Email me a code"}
-          </Text>
-        )}
-      </Pressable>
-      {sent ? (
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={() => void onSend()}
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.cream,
+              borderColor: colors.hairline,
+            },
+          ]}
         >
-          <Text style={styles.again}>Send another code</Text>
-        </Pressable>
-      ) : null}
-      <Text style={styles.version}>{runningVersionLabel()}</Text>
+          <View style={styles.wordmark}>
+            <Wordmark color={colors.ink} width={168} />
+          </View>
+          <Text style={[styles.title, face(colors, 600), { color: colors.ink }]}>
+            Open your journal.
+          </Text>
+          <Text style={[styles.copy, body, { color: colors.muted }]}>
+            Use the Google or X account that received your invitation.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign in with Google"
+            style={[styles.oauth, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+          >
+            {/* TODO(noop): Google sign-in. See src/lib/noop-controls.ts */}
+            <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
+              Sign in with Google
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign in with X"
+            style={[styles.oauth, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+          >
+            {/* TODO(noop): X sign-in. See src/lib/noop-controls.ts */}
+            <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
+              Sign in with X
+            </Text>
+          </Pressable>
+          <View style={[styles.backup, { borderTopColor: colors.hairline }]}>
+            <Text style={[styles.copy, body, { color: colors.muted }]}>
+              Or email a private sign-in code
+            </Text>
+            <Text style={[styles.hint, body, { color: colors.muted }]}>
+              Enter the email address that received your invitation.
+            </Text>
+            {configured ? null : (
+              <Text style={[styles.warning, body, { color: colors.ink }]}>
+                Set EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in mobile/.env before
+                signing in. The project URL is already the Our Days Supabase
+                project.
+              </Text>
+            )}
+            <Text style={[styles.fieldLabel, label, { color: colors.muted }]}>
+              Email address
+            </Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholder="Email"
+              placeholderTextColor={colors.muted}
+              accessibilityLabel="Email address"
+              style={[
+                styles.input,
+                face(colors, 400),
+                {
+                  color: colors.ink,
+                  borderColor: colors.hairline,
+                  backgroundColor: colors.surface,
+                },
+              ]}
+              editable={!busy}
+            />
+            {sent ? (
+              <>
+                <Text style={[styles.fieldLabel, label, { color: colors.muted }]}>
+                  Six-digit code
+                </Text>
+                <TextInput
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  placeholder="000000"
+                  placeholderTextColor={colors.muted}
+                  accessibilityLabel="Six-digit code"
+                  style={[
+                    styles.input,
+                    face(colors, 600, "record"),
+                    {
+                      color: colors.ink,
+                      borderColor: colors.hairline,
+                      backgroundColor: colors.surface,
+                      letterSpacing: 4,
+                    },
+                  ]}
+                  editable={!busy}
+                />
+              </>
+            ) : null}
+            {authError ? (
+              <Text accessibilityRole="alert" style={[styles.error, face(colors, 600), { color: colors.danger }]}>
+                {authError}
+              </Text>
+            ) : message ? (
+              <Text style={[styles.status, body, { color: colors.muted }]}>{message}</Text>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy || !configured}
+              onPress={() => void (sent ? onVerify() : onSend())}
+              style={[
+                styles.submit,
+                { backgroundColor: colors.action, borderColor: colors.action },
+                (busy || !configured) && styles.disabled,
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator color={colors.actionInk} />
+              ) : (
+                <Text style={[styles.submitLabel, face(colors, 650), { color: colors.actionInk }]}>
+                  {sent ? "Sign in" : "Email me a code"}
+                </Text>
+              )}
+            </Pressable>
+            {sent ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void onSend()}
+                style={styles.again}
+              >
+                <Text style={[body, { color: colors.action, fontSize: 13 }]}>
+                  Send another code
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <Text style={[styles.version, face(colors, 400, "record"), { color: colors.muted }]}>
+          {runningVersionLabel()}
+        </Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -141,78 +227,117 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    gap: 14,
-    paddingHorizontal: 24,
-    backgroundColor: colors.paper,
   },
-  eyebrow: {
-    ...record,
-    fontSize: 12,
-    letterSpacing: 0.4,
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 390,
+    alignSelf: "center",
+    paddingTop: 28,
+    paddingHorizontal: 22,
+    paddingBottom: 24,
+    borderWidth: 1,
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 21,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 8,
+  },
+  wordmark: {
+    alignItems: "center",
+    marginBottom: 24,
   },
   title: {
-    color: colors.ink,
-    fontSize: 28,
-    fontWeight: "600",
+    fontSize: 20,
+    lineHeight: 26,
+    textAlign: "center",
   },
   copy: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
+    marginTop: 14,
+    marginBottom: 14,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
   },
-  warning: {
-    color: colors.ink,
+  hint: {
+    marginTop: -8,
+    marginBottom: 14,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  oauth: {
+    minHeight: 48,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  oauthLabel: {
     fontSize: 14,
-    lineHeight: 20,
+  },
+  backup: {
+    marginTop: 12,
+    paddingTop: 18,
+    borderTopWidth: 1,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    marginBottom: 6,
   },
   input: {
+    minHeight: 48,
+    marginBottom: 12,
+    paddingHorizontal: 13,
     borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.ink,
-    backgroundColor: colors.cream,
+    borderRadius: 7,
     fontSize: 16,
   },
-  code: {
-    ...record,
-    fontSize: 20,
-    color: colors.ink,
-  },
-  message: {
-    ...record,
+  warning: {
+    marginBottom: 12,
     fontSize: 13,
     lineHeight: 18,
   },
+  status: {
+    marginBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
   error: {
-    color: colors.danger,
+    marginBottom: 8,
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "600",
   },
-  button: {
+  submit: {
+    minHeight: 48,
+    marginTop: 3,
+    borderWidth: 1,
+    borderRadius: 7,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: colors.action,
   },
-  buttonDisabled: {
+  submitLabel: {
+    fontSize: 14,
+  },
+  disabled: {
     opacity: 0.5,
   },
-  buttonLabel: {
-    color: colors.actionInk,
-    fontSize: 16,
-    fontWeight: "600",
+  again: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   version: {
-    ...record,
+    marginTop: 16,
     fontSize: 11,
-    marginTop: 12,
-  },
-  again: {
-    color: colors.action,
-    fontSize: 14,
+    textAlign: "center",
   },
 });
