@@ -1,27 +1,13 @@
-import { Redirect } from "expo-router";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import JournalScreen from "./journal";
+import SignInScreen from "./sign-in";
 
 import { useAuth } from "../components/auth-provider";
-import { useAppTheme } from "../lib/theme";
+import { coldStartSurface } from "../lib/cold-start";
 
 export default function Index() {
   const { ready, session } = useAuth();
-  const { colors } = useAppTheme();
-  if (!ready) {
-    return (
-      <View style={[styles.waiting, { backgroundColor: colors.paper }]}>
-        <ActivityIndicator color={colors.action} />
-      </View>
-    );
-  }
-  if (!session) return <Redirect href="/sign-in" />;
-  return <Redirect href="/journal" />;
+  const surface = coldStartSurface(ready, Boolean(session));
+  if (surface === "splash") return null;
+  if (surface === "sign-in") return <SignInScreen />;
+  return <JournalScreen />;
 }
-
-const styles = StyleSheet.create({
-  waiting: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

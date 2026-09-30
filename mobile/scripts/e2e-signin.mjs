@@ -66,6 +66,45 @@ await step("journal module loads under plain Node", async () => {
   assert.equal(typeof loaded.photoDeliveryPath, "function");
 });
 
+await step("cold open shows the feed once and does not reload after it is visible", async () => {
+  const cold = await import("../src/lib/cold-start.ts");
+  const mounts = cold.feedMountsOnColdStart([
+    { ready: false, signedIn: false },
+    { ready: false, signedIn: true },
+    { ready: true, signedIn: true },
+    { ready: true, signedIn: true },
+  ]);
+  assert.equal(mounts, 1, "session restore must not enter the feed twice");
+  assert.equal(cold.coldStartSurface(false, true), "splash");
+  assert.equal(cold.coldStartSurface(true, true), "feed");
+  assert.equal(cold.coldStartSurface(true, false), "sign-in");
+  assert.equal(
+    cold.shouldReloadUpdate({
+      dev: false,
+      enabled: true,
+      available: true,
+      isNew: true,
+      elapsedMs: 200,
+      windowMs: 10_000,
+      revealed: true,
+    }),
+    false,
+    "an OTA reload after the feed is visible would launch it again",
+  );
+  assert.equal(
+    cold.shouldReloadUpdate({
+      dev: false,
+      enabled: true,
+      available: true,
+      isNew: true,
+      elapsedMs: 200,
+      windowMs: 10_000,
+      revealed: false,
+    }),
+    true,
+  );
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;

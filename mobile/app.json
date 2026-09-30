@@ -51,7 +51,8 @@
         {
           "locationWhenInUsePermission": "Our Days uses your location while you add a place, so your family journal can name where you are."
         }
-      ]
+      ],
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": false
