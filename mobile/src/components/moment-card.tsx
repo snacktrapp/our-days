@@ -311,11 +311,10 @@ const previewLines = 5;
 const quoteLineHeight = 27;
 
 /**
- * Same rule as thoughtCopyOverflows + `.bible-verse-copy`: the unclamped
- * block is a grid with a 12px gap, and an insight source is a 44px target.
- * Overflow is scroll height greater than five line boxes. Clamping switches
- * to one inline flow with a five-line clamp, which is when the byline sits
- * on the quote.
+ * Unclamped copy is a grid with a 12px gap (`.bible-verse-copy`).
+ * The source link's 44px min-height is only a hit target; it is not a
+ * centered row. Clamped copy is one five-line flow, so the byline wraps
+ * inline after the quote.
  */
 function FlowCopy({
   text,
@@ -386,7 +385,7 @@ function FlowCopy({
       >
         {quoteNode()}
         {tailNode() ? (
-          <View style={sourceLabel ? styles.sourceLine : undefined}>{tailNode()}</View>
+          <View style={sourceLabel ? styles.overflowProbe : undefined}>{tailNode()}</View>
         ) : null}
       </View>
       {clamp ? (
@@ -1104,11 +1103,13 @@ const styles = StyleSheet.create({
   copyGrid: {
     gap: 12,
   },
-  // .insight-source is a 44px target. That height is the attribution row,
-  // so the quote-to-byline grid gap and the byline-to-media gap match the web.
-  sourceLine: {
+  // Hidden probe matches the unclamped cite's 44px hit target so See more
+  // appears on the same quotes as the web. The visible byline does not.
+  overflowProbe: {
     minHeight: 44,
-    justifyContent: "center",
+  },
+  sourceLine: {
+    paddingBottom: 16,
   },
   quote: {
     fontSize: 18,
@@ -1147,7 +1148,7 @@ const styles = StyleSheet.create({
   moreHit: {
     minHeight: 44,
     marginTop: -6,
-    marginBottom: -10,
+    marginBottom: 0,
     justifyContent: "center",
     alignItems: "flex-start",
   },
