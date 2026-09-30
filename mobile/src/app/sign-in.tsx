@@ -100,7 +100,9 @@ export default function SignInScreen() {
             style={[
               styles.copy,
               body,
-              { color: colors.appearance === "retro" ? colors.ink : colors.muted },
+              colors.appearance === "retro"
+                ? { color: colors.ink, fontSize: 15, lineHeight: 23 }
+                : { color: colors.muted },
             ]}
           >
             Use the Google or X account that received your invitation.
@@ -302,8 +304,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 20,
-    paddingTop: 19,
-    paddingBottom: 29,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   input: {
-    minHeight: 52,
+    minHeight: 50,
     marginBottom: 9,
     paddingVertical: 12,
     paddingHorizontal: 13,

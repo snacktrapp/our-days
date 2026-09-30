@@ -673,16 +673,21 @@ function VideoPoster({
   );
 }
 
-/** Same three tight dots as globals.css `.inline-note-more-dots` (13×3). */
+/** globals.css `.connected-moment-menu-trigger`: “•••” at 15px, tracking -0.18em. */
 function Overflow({ color }: Readonly<{ color: string }>) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Moment options" style={styles.overflow}>
       {/* TODO(noop): moment menu. See src/lib/noop-controls.ts */}
-      <View style={styles.overflowDots}>
-        {[0, 1, 2].map((dot) => (
-          <View key={dot} style={[styles.overflowDot, { backgroundColor: color }]} />
-        ))}
-      </View>
+      <Text
+        style={{
+          color,
+          fontSize: 15,
+          lineHeight: 15,
+          letterSpacing: tracking(15, -0.18),
+        }}
+      >
+        •••
+      </Text>
     </Pressable>
   );
 }
@@ -909,7 +914,17 @@ function NoteRow({
               },
             ]}
           />
-          <Text style={[styles.noteName, face(colors, 600), { color: colors.ink }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.noteName,
+              face(colors, 600),
+              {
+                color: colors.ink,
+                fontSize: colors.appearance === "retro" ? 11 : 10,
+              },
+            ]}
+            numberOfLines={1}
+          >
             {note.authorName}
           </Text>
         </View>
@@ -1143,18 +1158,6 @@ const styles = StyleSheet.create({
   with: {
     fontSize: 11,
     lineHeight: 15,
-  },
-  overflowDots: {
-    width: 13,
-    height: 3,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  overflowDot: {
-    width: 2,
-    height: 2,
-    borderRadius: 1,
   },
   overflow: {
     position: "absolute",

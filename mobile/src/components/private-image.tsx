@@ -1,6 +1,6 @@
 import { Image, type ImageStyle } from "expo-image";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { mediaUrl } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
@@ -29,6 +29,7 @@ export function PrivateImage({
   mat?: string;
 }>) {
   const { colors } = useAppTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -37,10 +38,12 @@ export function PrivateImage({
     setFailed(false);
   }, [path]);
 
-  const ratio = width && height && height > 0 ? width / height : 4 / 3;
+  const imageWidth = width && width > 0 ? width : 4;
+  const imageHeight = height && height > 0 ? height : 3;
   const ground = mat ?? colors.cream;
-  const maxHeight = Math.min(frameWidth * (16 / 9), 852 * 0.9);
-  const frameHeight = Math.min(maxHeight, frameWidth / ratio);
+  // globals.css --timeline-media-max-height and the photo-frame sizer viewBox.
+  const maxHeight = Math.min(screenHeight * 0.9, Math.min(frameWidth, 430) * (16 / 9));
+  const frameHeight = Math.round(Math.min(maxHeight, (frameWidth * imageHeight) / imageWidth));
 
   if (failed || !headers) {
     return (

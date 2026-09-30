@@ -260,16 +260,16 @@ export function JournalNav({
       <NavItem
         label="Add"
         color={colors.action}
-        idle={colors.muted}
+        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
         face={label}
-        icon={<NavAdd color={colors.muted} />}
+        icon={<NavAdd color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
       />
       <NavItem
         label="Circles"
         color={colors.action}
-        idle={colors.muted}
+        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
         face={label}
-        icon={<NavCircles color={colors.muted} />}
+        icon={<NavCircles color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
       />
     </View>
   );
