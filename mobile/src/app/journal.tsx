@@ -320,21 +320,12 @@ export default function JournalScreen() {
       : kind === "circle"
         ? (selectedCircle?.name ?? "Circle")
         : "All circles";
+  // family-title-switcher.tsx only renders kind "you" and "all", in that
+  // order, even when the account belongs to more circles. Just me loads the
+  // personal journal; All circles loads the combined feed.
   const items: readonly SwitcherItem[] = [
     { id: youScope, label: "Just me", selected: kind === "personal" },
     { id: allScope, label: "All circles", selected: kind === "all" },
-    ...circles.flatMap((circle, index) => {
-      if (circles.findIndex((item) => item.circleId === circle.circleId) !== index) {
-        return [];
-      }
-      return [
-        {
-          id: circle.circleId,
-          label: circle.name,
-          selected: scope === circle.circleId,
-        },
-      ];
-    }),
   ];
   const listed = moments.filter((moment) =>
     momentListedInFeed({ audience: moment.audience, feed: kind }),
