@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import {
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -76,11 +77,14 @@ export function FeedMoment({
           <Text
             style={[
               styles.chip,
-              face(colors, 600, "record"),
+              face(colors, colors.appearance === "retro" ? 700 : 600, "record"),
+              colors.appearance === "retro" ? styles.chipRetro : null,
               {
-                color: colors.muted,
-                borderColor: colors.hairline,
-                letterSpacing: tracking(7, 0.02),
+                color: colors.appearance === "retro" ? colors.action : colors.muted,
+                borderColor: colors.appearance === "retro" ? colors.action : colors.hairline,
+                backgroundColor:
+                  colors.appearance === "retro" ? colors.selectionFill : "transparent",
+                letterSpacing: tracking(colors.appearance === "retro" ? 10 : 7, colors.appearance === "retro" ? 0.08 : 0.02),
               },
             ]}
           >
@@ -89,8 +93,22 @@ export function FeedMoment({
         </View>
         <View style={styles.avatarColumn}>
           {insight ? (
-            <View style={[styles.avatar, { backgroundColor: colors.ink }]}>
-              <InsightMark color={colors.paper} size={18} />
+            <View
+              style={[
+                styles.avatar,
+                colors.appearance === "retro"
+                  ? {
+                      backgroundColor: colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.hairline,
+                    }
+                  : { backgroundColor: "#1b2028" },
+              ]}
+            >
+              <InsightMark
+                color={colors.appearance === "retro" ? colors.action : "#edf0f5"}
+                size={colors.appearance === "retro" ? 16 : 24}
+              />
             </View>
           ) : (
             <View
@@ -154,7 +172,7 @@ function CardBody({
         <View style={styles.copy}>
           <AuthorRow moment={moment} />
           {moment.body ? (
-            <MentionBody
+            <ClampedMention
               text={moment.body}
               mentions={moment.mentions}
               serif={false}
@@ -174,7 +192,7 @@ function CardBody({
           {moment.placeName || moment.title || "A remembered place"}
         </PlaceTitle>
         {moment.body ? (
-          <MentionBody text={moment.body} mentions={moment.mentions} serif />
+          <ClampedMention text={moment.body} mentions={moment.mentions} serif />
         ) : null}
         <Conversation moment={moment} />
       </View>
@@ -215,7 +233,7 @@ function Thought({
   return (
     <View style={styles.thought}>
       {insight ? (
-        <View style={styles.authorLine}>
+        <View style={styles.kickerRow}>
           <Text
             style={[
               styles.kicker,
@@ -231,31 +249,16 @@ function Thought({
         <AuthorRow moment={moment} />
       )}
       {bible ? (
-        <View style={styles.verse}>
-          <Quote text={bible.verse} />
-          <Text
-            style={[
-              styles.cite,
-              face(colors, 400, "record"),
-              { color: colors.muted, letterSpacing: tracking(9, 0.05) },
-            ]}
-          >
-            {bible.reference} · World English Bible
-          </Text>
-        </View>
+        <BibleCopy verse={bible.verse} reference={`${bible.reference} · World English Bible`} />
       ) : insight ? (
         <Quote
+          spaced
           text={moment.body}
-          trailing={
-            moment.title || moment.sourceUrl
-              ? `${moment.title}${
-                  moment.sourceUrl
-                    ? ` · ${insightSourceLabel(moment.sourceUrl)}`
-                    : ""
-                }`
-              : undefined
+          cite={moment.title || undefined}
+          sourceLabel={
+            moment.sourceUrl ? insightSourceLabel(moment.sourceUrl) : undefined
           }
-          onTrailingPress={
+          onSource={
             moment.sourceUrl
               ? () => {
                   if (moment.sourceUrl) void Linking.openURL(moment.sourceUrl);
@@ -264,7 +267,7 @@ function Thought({
           }
         />
       ) : (
-        <Quote text={moment.body} mentions={moment.mentions} />
+        <Quote spaced text={moment.body} mentions={moment.mentions} />
       )}
       {poster ? (
         <View style={styles.insightClip}>
@@ -283,37 +286,93 @@ function Thought({
   );
 }
 
-function Quote({
-  text,
-  mentions = [],
-  trailing,
-  onTrailingPress,
-}: Readonly<{
-  text: string;
-  mentions?: readonly MentionSpan[];
-  trailing?: string;
-  onTrailingPress?: () => void;
-}>) {
+function BibleCopy({
+  verse,
+  reference,
+}: Readonly<{ verse: string; reference: string }>) {
   const { colors } = useAppTheme();
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
-  const cite = trailing ? (
-    <Text
-      style={[
-        styles.cite,
-        face(colors, 400, "record"),
-        { color: colors.muted, letterSpacing: tracking(9, 0.05) },
-      ]}
-      onPress={onTrailingPress}
-    >
-      {trailing}
-    </Text>
-  ) : null;
+  const clamped = overflows && !expanded;
   return (
-    <View>
+    <View style={styles.verse}>
+      <Quote
+        text={verse}
+        cite={clamped ? reference : undefined}
+        clamp={clamped}
+        onLayoutHeight={(height) => {
+          // The citation sits under the verse. Five lines of verse already
+          // overflow the shared five-line clamp once that line is included.
+          if (height > 27 * 4 + 12) setOverflows(true);
+        }}
+      />
+      {clamped ? null : (
+        <Text
+          style={[
+            styles.cite,
+            face(colors, 400, "record"),
+            { color: colors.muted, letterSpacing: tracking(9, 0.05) },
+          ]}
+        >
+          {reference}
+        </Text>
+      )}
+      {overflows ? (
+        <SeeMore expanded={expanded} onPress={() => setExpanded((current) => !current)} />
+      ) : null}
+    </View>
+  );
+}
+
+function Quote({
+  text,
+  mentions = [],
+  cite,
+  sourceLabel,
+  onSource,
+  spaced = false,
+  clamp = false,
+  onLayoutHeight,
+}: Readonly<{
+  text: string;
+  mentions?: readonly MentionSpan[];
+  cite?: string;
+  sourceLabel?: string;
+  onSource?: () => void;
+  spaced?: boolean;
+  clamp?: boolean;
+  onLayoutHeight?: (height: number) => void;
+}>) {
+  const { colors } = useAppTheme();
+  const quoteRef = useRef<Text>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const id = requestAnimationFrame(() => {
+      const node = quoteRef.current as unknown as HTMLElement | null;
+      if (!node) return;
+      const line = Number.parseFloat(getComputedStyle(node).lineHeight) || 27;
+      if (node.scrollHeight > line * 5 + 1) setOverflows(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [text, cite, sourceLabel]);
+  const citeStyle = [
+    styles.cite,
+    face(colors, 400, "record"),
+    { color: colors.muted, letterSpacing: tracking(9, 0.05) },
+  ];
+  return (
+    <View style={spaced ? styles.quoteSpace : undefined}>
       <Text
+        ref={quoteRef}
         style={[styles.quote, face(colors, 400, "serif"), { color: colors.ink }]}
-        numberOfLines={overflows && !expanded ? 5 : undefined}
+        numberOfLines={clamp || (overflows && !expanded) ? 5 : undefined}
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height;
+          onLayoutHeight?.(height);
+          if (height > 27 * 5 + 2) setOverflows(true);
+        }}
         onTextLayout={(event) => {
           if (event.nativeEvent.lines.length > 5) setOverflows(true);
         }}
@@ -328,21 +387,80 @@ function Quote({
             <Text key={piece.key}>{piece.text}</Text>
           ),
         )}
-        ”{cite ? " " : null}
-        {cite}
-      </Text>
-      {overflows ? (
-        <Pressable onPress={() => setExpanded((current) => !current)}>
+        ”
+        {cite ? <Text style={citeStyle}>{` ${cite}`}</Text> : null}
+        {sourceLabel ? (
           <Text
-            style={[
-              styles.more,
-              face(colors, 750, "record"),
-              { color: colors.clay, letterSpacing: tracking(9, 0.14) },
-            ]}
-          >
-            {expanded ? "See less" : "See more"}
-          </Text>
-        </Pressable>
+            style={[citeStyle, styles.sourceLink]}
+            onPress={onSource}
+          >{` · ${sourceLabel}`}</Text>
+        ) : null}
+      </Text>
+      {overflows && !onLayoutHeight ? (
+        <SeeMore expanded={expanded} onPress={() => setExpanded((current) => !current)} />
+      ) : null}
+    </View>
+  );
+}
+
+function SeeMore({
+  expanded,
+  onPress,
+}: Readonly<{ expanded: boolean; onPress: () => void }>) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable onPress={onPress} style={styles.moreHit}>
+      <Text
+        style={[
+          styles.more,
+          face(colors, 750, "record"),
+          { color: colors.clay, letterSpacing: tracking(9, 0.14) },
+        ]}
+      >
+        {expanded ? "See less" : "See more"}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ClampedMention(
+  props: Readonly<{
+    text: string;
+    mentions: readonly MentionSpan[];
+    serif: boolean;
+    quoted?: boolean;
+    compact?: boolean;
+  }>,
+) {
+  const bodyRef = useRef<Text>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const id = requestAnimationFrame(() => {
+      const node = bodyRef.current as unknown as HTMLElement | null;
+      if (!node) return;
+      const line = Number.parseFloat(getComputedStyle(node).lineHeight) || 21;
+      if (node.scrollHeight > line * 5 + 1) setOverflows(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [props.text]);
+  return (
+    <View>
+      <MentionBody
+        textRef={bodyRef}
+        {...props}
+        numberOfLines={overflows && !expanded ? 5 : undefined}
+        onLayout={(event) => {
+          const line = props.compact ? 20 : props.serif ? 27 : 21;
+          if (event.nativeEvent.layout.height > line * 5 + 2) setOverflows(true);
+        }}
+        onTextLayout={(count) => {
+          if (count > 5) setOverflows(true);
+        }}
+      />
+      {overflows ? (
+        <SeeMore expanded={expanded} onPress={() => setExpanded((current) => !current)} />
       ) : null}
     </View>
   );
@@ -353,23 +471,31 @@ function MentionBody({
   mentions,
   serif,
   quoted = false,
+  compact = false,
   numberOfLines,
   onTextLayout,
+  onLayout,
+  textRef,
 }: Readonly<{
   text: string;
   mentions: readonly MentionSpan[];
   serif: boolean;
   quoted?: boolean;
+  compact?: boolean;
   numberOfLines?: number;
   onTextLayout?: (lineCount: number) => void;
+  onLayout?: (event: { nativeEvent: { layout: { height: number } } }) => void;
+  textRef?: Ref<Text>;
 }>) {
   const { colors } = useAppTheme();
   const type = face(colors, 400, serif ? "serif" : "interface");
   const pieces = mentionPieces(text, mentions);
   return (
     <Text
+      ref={textRef}
+      onLayout={onLayout}
       style={[
-        serif ? styles.quote : styles.caption,
+        serif ? styles.quote : compact ? styles.commentBody : styles.caption,
         type,
         { color: colors.ink },
       ]}
@@ -582,7 +708,7 @@ function Milestone({ moment }: Readonly<{ moment: TimelineMoment }>) {
           {moment.title || "A milestone"}
         </Text>
         {moment.body ? (
-          <MentionBody text={moment.body} mentions={moment.mentions} serif />
+          <ClampedMention text={moment.body} mentions={moment.mentions} serif />
         ) : null}
       </View>
       <Conversation moment={moment} />
@@ -671,10 +797,12 @@ function NoteRow({
   return (
     <View style={styles.note}>
       <View style={styles.noteAuthor}>
-        <Text style={[styles.noteName, face(colors, 600), { color: colors.ink }]} numberOfLines={1}>
-          <Text style={{ color: dotColor(note.authorAccent, colors) }}>● </Text>
-          {note.authorName}
-        </Text>
+        <View style={styles.noteWho}>
+          <View style={[styles.commentDot, { backgroundColor: dotColor(note.authorAccent, colors) }]} />
+          <Text style={[styles.noteName, face(colors, 600), { color: colors.ink }]} numberOfLines={1}>
+            {note.authorName}
+          </Text>
+        </View>
         <Text style={[styles.noteWhen, face(colors, 400, "record"), { color: colors.muted }]}>
           {stamp}
         </Text>
@@ -695,7 +823,9 @@ function NoteRow({
           ) : null}
         </Pressable>
       </View>
-      <MentionBody text={note.body} mentions={note.mentions} serif={false} />
+      <View style={styles.noteBody}>
+        <ClampedMention text={note.body} mentions={note.mentions} serif={false} compact />
+      </View>
       {open ? (
         <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, marginTop: 4 }]}>
           {lovedBy(note.heartNames)}
@@ -756,6 +886,11 @@ const styles = StyleSheet.create({
     fontSize: 7,
     lineHeight: 9,
   },
+  chipRetro: {
+    fontSize: 10,
+    lineHeight: 13,
+    textTransform: "uppercase",
+  },
   metaName: {
     fontSize: 10,
     lineHeight: 13,
@@ -772,13 +907,17 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingHorizontal: 15,
     paddingBottom: 12,
-    gap: 8,
   },
   thought: {
     paddingTop: 19,
     paddingHorizontal: 17,
     paddingBottom: 14,
-    gap: 10,
+  },
+  quoteSpace: {
+    marginTop: 10,
+  },
+  sourceLink: {
+    textDecorationLine: "underline",
   },
   quote: {
     fontSize: 18,
@@ -801,16 +940,37 @@ const styles = StyleSheet.create({
     lineHeight: 10,
     textTransform: "uppercase",
   },
+  kickerRow: {
+    position: "relative",
+    width: "100%",
+    minHeight: 20,
+    justifyContent: "center",
+    paddingRight: 28,
+  },
+  moreHit: {
+    minHeight: 44,
+    marginTop: -6,
+    marginBottom: -10,
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
   more: {
     fontSize: 9,
     lineHeight: 12,
     textTransform: "uppercase",
-    marginTop: 6,
+  },
+  commentBody: {
+    fontSize: 13,
+    lineHeight: 20,
   },
   authorLine: {
+    position: "relative",
+    width: "100%",
+    minHeight: 20,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    paddingRight: 28,
   },
   author: {
     flex: 1,
@@ -849,8 +1009,12 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   overflow: {
+    position: "absolute",
+    right: 0,
+    top: "50%",
     width: 44,
     height: 44,
+    marginTop: -22,
     alignItems: "flex-end",
     justifyContent: "center",
   },
@@ -910,7 +1074,6 @@ const styles = StyleSheet.create({
   },
   conversation: {
     marginTop: 6,
-    paddingBottom: 4,
   },
   actions: {
     flexDirection: "row",
@@ -930,16 +1093,31 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   note: {
+    position: "relative",
     paddingLeft: 11,
     marginTop: 8,
-    gap: 2,
+  },
+  commentDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   noteAuthor: {
-    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingRight: 4,
+    minHeight: 16,
+    paddingRight: 52,
+  },
+  noteWho: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  noteBody: {
+    marginTop: 2,
   },
   noteName: {
     fontSize: 10,
@@ -949,9 +1127,11 @@ const styles = StyleSheet.create({
     fontSize: 8,
   },
   noteHeart: {
-    marginLeft: "auto",
+    position: "absolute",
+    top: -14,
+    right: 0,
     minWidth: 44,
-    minHeight: 44,
+    height: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",

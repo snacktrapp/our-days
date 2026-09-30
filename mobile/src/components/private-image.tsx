@@ -29,10 +29,10 @@ export function PrivateImage({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    // Intentional reset when the source changes.
+    // Intentional reset when the photo changes, not when the cookie object does.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFailed(false);
-  }, [path, headers]);
+  }, [path]);
 
   const ratio = width && height && height > 0 ? width / height : 4 / 3;
   const maxHeight = Math.min(frameWidth * (16 / 9), 852 * 0.9);
@@ -56,14 +56,13 @@ export function PrivateImage({
   return (
     <View style={[styles.frame, { height: frameHeight, backgroundColor: colors.cream }]}>
       <Image
-        source={{ uri: mediaUrl(path), headers }}
+        source={{ uri: mediaUrl(path), headers, cacheKey: path }}
         style={styles.image as ImageStyle}
         contentFit="contain"
-        cachePolicy="none"
+        cachePolicy="memory-disk"
         accessibilityLabel={label}
         onError={() => setFailed(true)}
       />
-      <View pointerEvents="none" style={styles.scrim} />
     </View>
   );
 }
@@ -78,14 +77,6 @@ const styles = StyleSheet.create({
   image: {
     width: "100%",
     height: "100%",
-  },
-  scrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 48,
-    backgroundColor: "rgba(4, 10, 7, 0.22)",
   },
   fallback: {
     fontSize: 11,

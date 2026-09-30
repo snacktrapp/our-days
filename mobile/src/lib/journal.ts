@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { circleToday } from "./dates";
 import { personInitial, type MentionSpan } from "./feed-format";
-import { profileAccent } from "./tokens";
+import { profileAccent } from "./profile-accent";
 
 const pageSize = 20;
 

@@ -15,9 +15,16 @@ import {
 import { sentMessage, useAuth } from "../components/auth-provider";
 import { GridBackground } from "../components/grid-background";
 import { Wordmark } from "../components/wordmark";
-import { runningVersionLabel } from "../lib/app-updates";
 import { useAppTheme } from "../lib/theme";
-import { face } from "../lib/tokens";
+import { face, type ColorScheme } from "../lib/tokens";
+
+/** globals.css color-mix(cream 88%, transparent) on the OAuth buttons. */
+function oauthSurface(scheme: ColorScheme) {
+  return {
+    backgroundColor:
+      scheme === "light" ? "rgba(255, 255, 255, 0.9)" : "rgba(27, 32, 40, 0.88)",
+  };
+}
 
 export default function SignInScreen() {
   const {
@@ -90,10 +97,11 @@ export default function SignInScreen() {
           <Text style={[styles.copy, body, { color: colors.muted }]}>
             Use the Google or X account that received your invitation.
           </Text>
+          <View style={styles.oauthList}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sign in with Google"
-            style={[styles.oauth, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+            style={[styles.oauth, oauthSurface(colors.scheme), { borderColor: colors.hairline }]}
           >
             {/* TODO(noop): Google sign-in. See src/lib/noop-controls.ts */}
             <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
@@ -103,15 +111,16 @@ export default function SignInScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sign in with X"
-            style={[styles.oauth, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+            style={[styles.oauth, oauthSurface(colors.scheme), { borderColor: colors.hairline }]}
           >
             {/* TODO(noop): X sign-in. See src/lib/noop-controls.ts */}
             <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
               Sign in with X
             </Text>
           </Pressable>
+          </View>
           <View style={[styles.backup, { borderTopColor: colors.hairline }]}>
-            <Text style={[styles.copy, body, { color: colors.muted }]}>
+            <Text style={[styles.backupCopy, body, { color: colors.muted }]}>
               Or email a private sign-in link
             </Text>
             <Text style={[styles.hint, body, { color: colors.muted }]}>
@@ -144,7 +153,8 @@ export default function SignInScreen() {
                 {
                   color: colors.ink,
                   borderColor: colors.hairline,
-                  backgroundColor: colors.surface,
+                  backgroundColor:
+                    colors.scheme === "light" ? colors.cream : colors.surface,
                 },
               ]}
               editable={!busy}
@@ -169,7 +179,8 @@ export default function SignInScreen() {
                     {
                       color: colors.ink,
                       borderColor: colors.hairline,
-                      backgroundColor: colors.surface,
+                      backgroundColor:
+                        colors.scheme === "light" ? colors.cream : colors.surface,
                       letterSpacing: 4,
                     },
                   ]}
@@ -217,9 +228,6 @@ export default function SignInScreen() {
           </View>
         </View>
       </ScrollView>
-      <Text style={[styles.version, face(colors, 400, "record"), { color: colors.muted }]}>
-        {runningVersionLabel()}
-      </Text>
     </KeyboardAvoidingView>
   );
 }
@@ -259,22 +267,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   copy: {
-    marginTop: 14,
+    marginTop: 20,
     marginBottom: 14,
     fontSize: 13,
     lineHeight: 19,
     textAlign: "center",
   },
   hint: {
-    marginTop: -8,
-    marginBottom: 14,
+    marginTop: 0,
+    marginBottom: 12,
     fontSize: 13,
     lineHeight: 19,
     textAlign: "center",
   },
+  oauthList: {
+    gap: 11,
+  },
   oauth: {
     minHeight: 48,
-    marginBottom: 8,
     borderWidth: 1,
     borderRadius: 7,
     alignItems: "center",
@@ -284,17 +294,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   backup: {
-    marginTop: 12,
+    marginTop: 20,
     paddingTop: 18,
     borderTopWidth: 1,
   },
+  backupCopy: {
+    marginTop: 0,
+    marginBottom: 12,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
   fieldLabel: {
     fontSize: 11,
-    marginBottom: 6,
+    marginBottom: 9,
   },
   input: {
-    minHeight: 48,
-    marginBottom: 12,
+    minHeight: 50,
+    marginBottom: 9,
+    paddingVertical: 12,
     paddingHorizontal: 13,
     borderWidth: 1,
     borderRadius: 7,
@@ -334,13 +352,5 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-  },
-  version: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 12,
-    fontSize: 11,
-    textAlign: "center",
   },
 });

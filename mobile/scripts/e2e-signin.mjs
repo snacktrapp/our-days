@@ -60,6 +60,12 @@ async function step(name, fn) {
   }
 }
 
+await step("journal module loads under plain Node", async () => {
+  const loaded = await import("../src/lib/journal.ts");
+  assert.equal(typeof loaded.loadTimelinePage, "function");
+  assert.equal(typeof loaded.photoDeliveryPath, "function");
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
@@ -266,12 +272,16 @@ await step("PGRST303 on the first request to every endpoint is retried by the ap
   await supabase.auth.signOut({ scope: "local" });
 });
 
-await step("OTA config matches build 5 (runtime 0.1.0, production channel)", async () => {
+await step("OTA runtime is 0.2.0 so build 5 cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));
   const easJson = JSON.parse(fs.readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
   assert.equal(appJson.expo.runtimeVersion?.policy, "appVersion");
-  assert.equal(appJson.expo.version, "0.1.0", "runtime version must stay 0.1.0 for build 5 OTAs");
+  assert.equal(
+    appJson.expo.version,
+    "0.2.0",
+    "runtime follows the app version; 0.2.0 must not be delivered to build 5",
+  );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");
 });

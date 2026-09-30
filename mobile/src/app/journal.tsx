@@ -24,6 +24,7 @@ import {
 import { MentionsBanner } from "../components/journal-banner";
 import { FeedMoment } from "../components/moment-card";
 import { writePref } from "../lib/appearance";
+import { siteOrigin } from "../lib/config";
 import { circleToday } from "../lib/dates";
 import {
   loadCircles,
@@ -107,6 +108,7 @@ export default function JournalScreen() {
   const [chromeOffset, setChromeOffset] = useState(0);
   const [pull, setPull] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
+  const [unseenActivity, setUnseenActivity] = useState(false);
   const yRef = useRef(0);
   const offsetRef = useRef(0);
 
@@ -173,6 +175,25 @@ export default function JournalScreen() {
       active = false;
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!mediaHeaders) return;
+    let active = true;
+    fetch(`${siteOrigin}/api/activity`, { headers: mediaHeaders, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const body = (await response.json()) as { items?: { id?: string }[] };
+        const ids = (body.items ?? []).flatMap((item) =>
+          typeof item.id === "string" ? [item.id] : [],
+        );
+        const seen = await readSeenNotifications();
+        if (active) setUnseenActivity(ids.some((id) => !seen.has(id)));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [mediaHeaders]);
 
   useEffect(() => {
     let active = true;
@@ -295,7 +316,13 @@ export default function JournalScreen() {
   const chromeHidden = chromeOffset >= distance && !switcherOpen;
 
   return (
-    <View style={[styles.screen, { backgroundColor: colors.gridSurface }]}>
+    <View
+      style={[
+        styles.screen,
+        { backgroundColor: colors.gridSurface },
+        Platform.OS === "web" ? styles.screenWeb : null,
+      ]}
+    >
       <GridBackground color={colors.gridLine} />
       {pull > 8 || refreshing ? (
         <View
@@ -319,6 +346,7 @@ export default function JournalScreen() {
         </View>
       ) : (
         <FlatList
+          style={styles.list}
           data={rows}
           keyExtractor={(row) => row.id}
           onScroll={onScroll}
@@ -327,7 +355,7 @@ export default function JournalScreen() {
             if (pull >= 64) void refresh();
           }}
           contentContainerStyle={{
-            paddingTop: insets.top + stageChromeInset + 4,
+            paddingTop: insets.top + stageChromeInset,
             paddingBottom: insets.bottom + stageChromeInset + timelineBottomPad,
             paddingHorizontal: timelineInset,
             flexGrow: rows.length === 0 ? 1 : undefined,
@@ -473,6 +501,7 @@ export default function JournalScreen() {
         }}
         offset={chromeOffset}
         interactive={switcherOpen || appearanceOpen}
+        unseen={unseenActivity}
       />
       <JournalNav offset={chromeOffset} hidden={chromeHidden} />
       <AppearanceSheet
@@ -485,6 +514,25 @@ export default function JournalScreen() {
       />
     </View>
   );
+}
+
+const seenNotificationsKey = "our-days:seen-notifications";
+
+async function readSeenNotifications() {
+  const raw =
+    Platform.OS === "web"
+      ? (globalThis.localStorage?.getItem(seenNotificationsKey) ?? null)
+      : await SecureStore.getItemAsync(seenNotificationsKey);
+  try {
+    const parsed = JSON.parse(raw ?? "[]") as unknown;
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [],
+    );
+  } catch {
+    return new Set<string>();
+  }
 }
 
 async function mentionDismissed() {
@@ -523,6 +571,14 @@ function Skeleton({ short = false }: Readonly<{ short?: boolean }>) {
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+  },
+  screenWeb: {
+    height: "100%",
+    maxHeight: "100%",
+    overflow: "hidden",
+  },
+  list: {
     flex: 1,
   },
   pull: {

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -56,6 +57,7 @@ export function JournalHeader({
   onOpenAppearance,
   offset,
   interactive,
+  unseen = false,
 }: Readonly<{
   title: string;
   items: readonly SwitcherItem[];
@@ -65,6 +67,7 @@ export function JournalHeader({
   onOpenAppearance: () => void;
   offset: number;
   interactive: boolean;
+  unseen?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
@@ -79,9 +82,15 @@ export function JournalHeader({
         styles.topbar,
         {
           top: insets.top + floatGap,
-          backgroundColor: colors.navFill,
+          backgroundColor: Platform.OS === "web" ? colors.navFill : colors.cream,
           borderColor: colors.hairline,
           transform: [{ translateY: -offset }],
+          ...(Platform.OS === "web"
+            ? {
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+              }
+            : null),
         },
       ]}
     >
@@ -101,7 +110,9 @@ export function JournalHeader({
           onPress={onToggle}
           style={styles.titleButton}
         >
-          <Wordmark color={colors.ink} width={104} />
+          <View style={styles.wordmark}>
+            <Wordmark color={colors.ink} width={104} />
+          </View>
           <View style={styles.titleRow}>
             <Text
               style={[
@@ -165,19 +176,29 @@ export function JournalHeader({
         >
           {/* TODO(noop): notification list. See src/lib/noop-controls.ts */}
           <NotificationMark color={colors.muted} />
+          {unseen ? (
+            <View
+              style={[
+                styles.unread,
+                { backgroundColor: colors.clay },
+              ]}
+            />
+          ) : null}
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Use ${colors.scheme === "dark" ? "light" : "dark"} appearance`}
-          onPress={theme.toggleScheme}
-          style={styles.iconHit}
-        >
-          {colors.scheme === "dark" ? (
-            <SunIcon color={colors.muted} />
-          ) : (
-            <MoonIcon color={colors.muted} />
-          )}
-        </Pressable>
+        {colors.appearance === "retro" ? null : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Use ${colors.scheme === "dark" ? "light" : "dark"} appearance`}
+            onPress={theme.toggleScheme}
+            style={styles.iconHit}
+          >
+            {colors.scheme === "dark" ? (
+              <SunIcon color={colors.muted} />
+            ) : (
+              <MoonIcon color={colors.muted} />
+            )}
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -198,9 +219,15 @@ export function JournalNav({
         styles.nav,
         {
           bottom: insets.bottom + floatGap,
-          backgroundColor: colors.navFill,
+          backgroundColor: Platform.OS === "web" ? colors.navFill : colors.cream,
           borderColor: colors.hairline,
           transform: [{ translateY: offset }],
+          ...(Platform.OS === "web"
+            ? {
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+              }
+            : null),
         },
       ]}
     >
@@ -412,12 +439,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  unread: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   titleSlot: {
     position: "absolute",
     left: 88,
     right: 88,
     top: 0,
     bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  wordmark: {
+    height: 20,
+    marginBottom: 4,
     alignItems: "center",
     justifyContent: "center",
   },

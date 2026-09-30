@@ -40,9 +40,28 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
       <Pressable
         accessibilityRole="button"
         onPress={onDismiss}
-        style={[styles.cta, { backgroundColor: colors.action }]}
+        style={[
+          styles.cta,
+          colors.appearance === "retro"
+            ? {
+                backgroundColor: colors.selectionFill,
+                borderWidth: 1,
+                borderColor: colors.action,
+              }
+            : { backgroundColor: colors.action },
+        ]}
       >
-        <Text style={[face(colors, 650), { color: colors.actionInk, fontSize: 13 }]}>
+        <Text
+          style={[
+            face(colors, colors.appearance === "retro" ? 700 : 650),
+            {
+              color: colors.appearance === "retro" ? colors.action : colors.actionInk,
+              fontSize: 13,
+              textTransform: colors.appearance === "retro" ? "uppercase" : "none",
+              letterSpacing: colors.appearance === "retro" ? 1 : 0,
+            },
+          ]}
+        >
           Got it
         </Text>
       </Pressable>
@@ -61,10 +80,10 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
 const styles = StyleSheet.create({
   banner: {
     marginTop: 6,
-    marginBottom: 10,
+    marginBottom: 14,
     marginHorizontal: inlineGap - 16,
     paddingTop: 14,
-    paddingBottom: 10,
+    paddingBottom: 14,
     paddingHorizontal: 14,
     borderWidth: 1,
     borderRadius: 18,

@@ -1,6 +1,6 @@
 {
   "name": "our-days-mobile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -9,12 +9,11 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "e2e:signin": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/e2e-signin.mjs",
+    "e2e:signin": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/e2e-signin.mjs",
     "lint": "expo lint"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.4",
-    "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
     "expo-font": "~57.0.4",
@@ -36,6 +35,7 @@
   "devDependencies": {
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   }
 }
