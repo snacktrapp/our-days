@@ -8,7 +8,9 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type TextStyle,
 } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 import {
   audienceChipLabel,
@@ -249,10 +251,12 @@ function Thought({
         <AuthorRow moment={moment} />
       )}
       {bible ? (
-        <BibleCopy verse={bible.verse} reference={`${bible.reference} · World English Bible`} />
+        <FlowCopy
+          text={bible.verse}
+          cite={`${bible.reference} · World English Bible`}
+        />
       ) : insight ? (
-        <Quote
-          spaced
+        <FlowCopy
           text={moment.body}
           cite={moment.title || undefined}
           sourceLabel={
@@ -267,7 +271,7 @@ function Thought({
           }
         />
       ) : (
-        <Quote spaced text={moment.body} mentions={moment.mentions} />
+        <FlowCopy text={moment.body} mentions={moment.mentions} />
       )}
       {poster ? (
         <View style={styles.insightClip}>
@@ -286,36 +290,95 @@ function Thought({
   );
 }
 
-function BibleCopy({
-  verse,
-  reference,
-}: Readonly<{ verse: string; reference: string }>) {
+const previewLines = 5;
+const quoteLineHeight = 27;
+
+/**
+ * Same rule as thoughtCopyOverflows + `.bible-verse-copy`: the unclamped
+ * block is a grid with a 12px gap, and an insight source is a 44px target.
+ * Overflow is scroll height greater than five line boxes. Clamping switches
+ * to one inline flow with a five-line clamp, which is when the byline sits
+ * on the quote.
+ */
+function FlowCopy({
+  text,
+  mentions = [],
+  cite,
+  sourceLabel,
+  onSource,
+}: Readonly<{
+  text: string;
+  mentions?: readonly MentionSpan[];
+  cite?: string;
+  sourceLabel?: string;
+  onSource?: () => void;
+}>) {
   const { colors } = useAppTheme();
+  const measureRef = useRef<View>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
-  const clamped = overflows && !expanded;
+  const clamp = overflows && !expanded;
+  useEffect(() => {
+    const node = measureRef.current as unknown as HTMLElement | null;
+    if (!node) return;
+    const read = () => {
+      const height = node.offsetHeight || node.scrollHeight || 0;
+      if (height > quoteLineHeight * previewLines + 1) setOverflows(true);
+    };
+    read();
+    const id = requestAnimationFrame(read);
+    return () => cancelAnimationFrame(id);
+  }, [text, cite, sourceLabel]);
+  const citeStyle = [
+    styles.cite,
+    face(colors, 400, "record"),
+    { color: colors.muted, letterSpacing: tracking(9, 0.05) },
+  ];
+  const quoteNode = () => <QuoteText text={text} mentions={mentions} />;
+  const tailNode = () =>
+    cite || sourceLabel ? (
+      <Text style={citeStyle}>
+        {cite ?? ""}
+        {sourceLabel ? (
+          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+            {cite ? " · " : ""}
+            {sourceLabel}
+          </Text>
+        ) : null}
+      </Text>
+    ) : null;
+
   return (
-    <View style={styles.verse}>
-      <Quote
-        text={verse}
-        cite={clamped ? reference : undefined}
-        clamp={clamped}
-        onLayoutHeight={(height) => {
-          // The citation sits under the verse. Five lines of verse already
-          // overflow the shared five-line clamp once that line is included.
-          if (height > 27 * 4 + 12) setOverflows(true);
+    <View style={styles.quoteSpace}>
+      <View
+        ref={measureRef}
+        pointerEvents="none"
+        style={styles.copyMeasure}
+        onLayout={(event) => {
+          if (event.nativeEvent.layout.height > quoteLineHeight * previewLines + 1) {
+            setOverflows(true);
+          }
         }}
-      />
-      {clamped ? null : (
-        <Text
-          style={[
-            styles.cite,
-            face(colors, 400, "record"),
-            { color: colors.muted, letterSpacing: tracking(9, 0.05) },
-          ]}
-        >
-          {reference}
-        </Text>
+      >
+        {quoteNode()}
+        {tailNode() ? (
+          <View style={sourceLabel ? styles.sourceMeasure : undefined}>{tailNode()}</View>
+        ) : null}
+      </View>
+      {clamp ? (
+        <QuoteText
+          text={text}
+          mentions={mentions}
+          cite={cite}
+          sourceLabel={sourceLabel}
+          onSource={onSource}
+          lines={previewLines}
+        />
+      ) : (
+        <View style={styles.copyGrid}>
+          {quoteNode()}
+          {tailNode()}
+        </View>
       )}
       {overflows ? (
         <SeeMore expanded={expanded} onPress={() => setExpanded((current) => !current)} />
@@ -324,82 +387,64 @@ function BibleCopy({
   );
 }
 
-function Quote({
+function QuoteText({
   text,
-  mentions = [],
+  mentions,
   cite,
   sourceLabel,
   onSource,
-  spaced = false,
-  clamp = false,
-  onLayoutHeight,
+  lines,
 }: Readonly<{
   text: string;
-  mentions?: readonly MentionSpan[];
+  mentions: readonly MentionSpan[];
   cite?: string;
   sourceLabel?: string;
   onSource?: () => void;
-  spaced?: boolean;
-  clamp?: boolean;
-  onLayoutHeight?: (height: number) => void;
+  lines?: number;
 }>) {
   const { colors } = useAppTheme();
-  const quoteRef = useRef<Text>(null);
-  const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const id = requestAnimationFrame(() => {
-      const node = quoteRef.current as unknown as HTMLElement | null;
-      if (!node) return;
-      const line = Number.parseFloat(getComputedStyle(node).lineHeight) || 27;
-      if (node.scrollHeight > line * 5 + 1) setOverflows(true);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [text, cite, sourceLabel]);
   const citeStyle = [
     styles.cite,
     face(colors, 400, "record"),
     { color: colors.muted, letterSpacing: tracking(9, 0.05) },
   ];
+  const inline = lines != null;
+  const pieces = mentionPieces(text, mentions);
   return (
-    <View style={spaced ? styles.quoteSpace : undefined}>
-      <Text
-        ref={quoteRef}
-        style={[styles.quote, face(colors, 400, "serif"), { color: colors.ink }]}
-        numberOfLines={clamp || (overflows && !expanded) ? 5 : undefined}
-        onLayout={(event) => {
-          const height = event.nativeEvent.layout.height;
-          onLayoutHeight?.(height);
-          if (height > 27 * 5 + 2) setOverflows(true);
-        }}
-        onTextLayout={(event) => {
-          if (event.nativeEvent.lines.length > 5) setOverflows(true);
-        }}
-      >
-        “
-        {mentionPieces(text, mentions).map((piece) =>
-          piece.mention ? (
-            <Text key={piece.key} style={[face(colors, 600), { color: colors.action }]}>
-              {piece.text}
-            </Text>
-          ) : (
-            <Text key={piece.key}>{piece.text}</Text>
-          ),
-        )}
-        ”
-        {cite ? <Text style={citeStyle}>{` ${cite}`}</Text> : null}
-        {sourceLabel ? (
-          <Text
-            style={[citeStyle, styles.sourceLink]}
-            onPress={onSource}
-          >{` · ${sourceLabel}`}</Text>
-        ) : null}
-      </Text>
-      {overflows && !onLayoutHeight ? (
-        <SeeMore expanded={expanded} onPress={() => setExpanded((current) => !current)} />
+    <Text
+      style={[
+        styles.quote,
+        face(colors, 400, "serif"),
+        { color: colors.ink, whiteSpace: "pre-line" } as unknown as TextStyle,
+        lines
+          ? ({
+              display: "-webkit-box",
+              overflow: "hidden",
+              WebkitLineClamp: lines,
+              WebkitBoxOrient: "vertical",
+            } as unknown as TextStyle)
+          : null,
+      ]}
+      numberOfLines={lines}
+    >
+      “
+      {pieces.map((piece) =>
+        piece.mention ? (
+          <Text key={piece.key} style={[face(colors, 600), { color: colors.action }]}>
+            {piece.text}
+          </Text>
+        ) : (
+          piece.text
+        ),
+      )}
+      ”
+      {inline && cite ? <Text style={citeStyle}>{` ${cite}`}</Text> : null}
+      {inline && sourceLabel ? (
+        <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+          {` · ${sourceLabel}`}
+        </Text>
       ) : null}
-    </View>
+    </Text>
   );
 }
 
@@ -574,6 +619,41 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
   );
 }
 
+function VideoPoster({
+  moment,
+  headers,
+  frameWidth,
+}: Readonly<{
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
+  frameWidth: number;
+}>) {
+  const { colors } = useAppTheme();
+  return (
+    <View>
+      {moment.hasPoster ? (
+        <PrivateImage
+          path={videoPosterPath(moment.id)}
+          width={moment.posterWidth}
+          height={moment.posterHeight}
+          label={`Video in ${moment.personName}’s journal from ${moment.occurredOn}`}
+          headers={headers}
+          frameWidth={frameWidth}
+          mat="#050b08"
+        />
+      ) : (
+        <View style={[styles.videoFallback, { height: Math.min(frameWidth * (9 / 16), 852 * 0.9) }]} />
+      )}
+      <View style={styles.videoBar} pointerEvents="none">
+        <Svg width={16} height={16} viewBox="0 0 16 16">
+          <Path d="M5 3.2v9.6L13 8 5 3.2Z" fill="#fff" />
+        </Svg>
+        <Text style={[face(colors, 400), styles.videoTime]}>0:00</Text>
+      </View>
+    </View>
+  );
+}
+
 function Overflow() {
   const { colors } = useAppTheme();
   return (
@@ -593,24 +673,11 @@ function Media({
   headers?: Record<string, string> | null;
   frameWidth: number;
 }>) {
-  const { colors } = useAppTheme();
   const [index, setIndex] = useState(0);
   if (moment.kind === "video") {
-    if (!moment.hasPoster) {
-      return (
-        <View style={[styles.videoFallback, { backgroundColor: colors.cream }]}>
-          <Text style={[face(colors, 600, "record"), { color: colors.muted, fontSize: 11 }]}>
-            Video
-          </Text>
-        </View>
-      );
-    }
     return (
-      <PrivateImage
-        path={videoPosterPath(moment.id)}
-        width={moment.posterWidth}
-        height={moment.posterHeight}
-        label={`Video in ${moment.personName}’s journal from ${moment.occurredOn}`}
+      <VideoPoster
+        moment={moment}
         headers={headers}
         frameWidth={frameWidth}
       />
@@ -919,6 +986,20 @@ const styles = StyleSheet.create({
   sourceLink: {
     textDecorationLine: "underline",
   },
+  copyMeasure: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    opacity: 0,
+    gap: 12,
+  },
+  copyGrid: {
+    gap: 12,
+  },
+  sourceMeasure: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
   quote: {
     fontSize: 18,
     lineHeight: 27,
@@ -1027,9 +1108,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   videoFallback: {
-    minHeight: 120,
+    width: "100%",
+    backgroundColor: "#050b08",
+  },
+  videoBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 36,
+    paddingHorizontal: 10,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.62)",
+  },
+  videoTime: {
+    color: "#fff",
+    fontSize: 12,
   },
   dots: {
     position: "absolute",

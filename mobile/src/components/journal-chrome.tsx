@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import { useState, type ReactNode } from "react";
 import {
   Modal,
@@ -31,6 +32,7 @@ import {
   SettingsGear,
   SunIcon,
 } from "./icons";
+import { RetroWordmark } from "./retro-wordmark";
 import { Wordmark } from "./wordmark";
 
 export type SwitcherItem = Readonly<{
@@ -82,18 +84,19 @@ export function JournalHeader({
         styles.topbar,
         {
           top: insets.top + floatGap,
-          backgroundColor: Platform.OS === "web" ? colors.navFill : colors.cream,
+          backgroundColor: colors.navFill,
           borderColor: colors.hairline,
           transform: [{ translateY: -offset }],
-          ...(Platform.OS === "web"
+          ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
+                backdropFilter: `blur(${colors.navBlur}px)`,
+                WebkitBackdropFilter: `blur(${colors.navBlur}px)`,
               }
             : null),
         },
       ]}
     >
+      <BarBlur />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Settings"
@@ -111,7 +114,11 @@ export function JournalHeader({
           style={styles.titleButton}
         >
           <View style={styles.wordmark}>
-            <Wordmark color={colors.ink} width={104} />
+            {colors.appearance === "retro" ? (
+              <RetroWordmark />
+            ) : (
+              <Wordmark color={colors.ink} width={104} />
+            )}
           </View>
           <View style={styles.titleRow}>
             <Text
@@ -219,18 +226,19 @@ export function JournalNav({
         styles.nav,
         {
           bottom: insets.bottom + floatGap,
-          backgroundColor: Platform.OS === "web" ? colors.navFill : colors.cream,
+          backgroundColor: colors.navFill,
           borderColor: colors.hairline,
           transform: [{ translateY: offset }],
-          ...(Platform.OS === "web"
+          ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
+                backdropFilter: `blur(${colors.navBlur}px)`,
+                WebkitBackdropFilter: `blur(${colors.navBlur}px)`,
               }
             : null),
         },
       ]}
     >
+      <BarBlur />
       <NavItem
         label="Journal"
         active
@@ -254,6 +262,26 @@ export function JournalNav({
         icon={<NavCircles color={colors.muted} />}
       />
     </View>
+  );
+}
+
+/** iOS blur under the same fill the web paints with backdrop-filter. Retro’s blur is 0. */
+function BarBlur() {
+  const { colors } = useAppTheme();
+  if (Platform.OS === "web" || colors.navBlur <= 0) return null;
+  return (
+    <>
+      <BlurView
+        pointerEvents="none"
+        intensity={colors.navBlur * 5}
+        tint={colors.scheme === "light" ? "light" : "dark"}
+        style={[StyleSheet.absoluteFill, { borderRadius: chromeRadius }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.navFill }]}
+      />
+    </>
   );
 }
 
@@ -534,6 +562,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderWidth: 1,
     borderRadius: chromeRadius,
+    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     shadowColor: "#000",

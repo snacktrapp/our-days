@@ -17,6 +17,7 @@ export function PrivateImage({
   label,
   headers,
   frameWidth,
+  mat,
 }: Readonly<{
   path: string;
   width?: number;
@@ -24,6 +25,8 @@ export function PrivateImage({
   label: string;
   headers?: Record<string, string> | null;
   frameWidth: number;
+  /** Video frames use #050b08. Photos use cream. */
+  mat?: string;
 }>) {
   const { colors } = useAppTheme();
   const [failed, setFailed] = useState(false);
@@ -35,6 +38,7 @@ export function PrivateImage({
   }, [path]);
 
   const ratio = width && height && height > 0 ? width / height : 4 / 3;
+  const ground = mat ?? colors.cream;
   const maxHeight = Math.min(frameWidth * (16 / 9), 852 * 0.9);
   const frameHeight = Math.min(maxHeight, frameWidth / ratio);
 
@@ -43,7 +47,7 @@ export function PrivateImage({
       <View
         style={[
           styles.frame,
-          { height: frameHeight, backgroundColor: colors.cream },
+          { height: frameHeight, backgroundColor: ground },
         ]}
       >
         <Text style={[styles.fallback, face(colors, 400, "record"), { color: colors.muted }]}>
@@ -54,7 +58,7 @@ export function PrivateImage({
   }
 
   return (
-    <View style={[styles.frame, { height: frameHeight, backgroundColor: colors.cream }]}>
+    <View style={[styles.frame, { height: frameHeight, backgroundColor: ground }]}>
       <Image
         source={{ uri: mediaUrl(path), headers, cacheKey: path }}
         style={styles.image as ImageStyle}
