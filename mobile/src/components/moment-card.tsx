@@ -1142,12 +1142,14 @@ const styles = StyleSheet.create({
     paddingRight: 28,
   },
   clampedQuote: {
-    height: quoteLineHeight * previewLines,
+    maxHeight: quoteLineHeight * previewLines,
     overflow: "hidden",
   },
   moreHit: {
     minHeight: 44,
-    marginTop: -6,
+    // -1px under the last line puts SEE MORE about 17px below the byline.
+    // The label stays centered, so the video remains about 16px under SEE MORE.
+    marginTop: -1,
     marginBottom: 0,
     justifyContent: "center",
     alignItems: "flex-start",
