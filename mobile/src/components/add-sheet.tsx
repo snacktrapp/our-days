@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -24,8 +25,9 @@ import {
   versesInChapter,
   type BibleVerseSelection,
 } from "../lib/bible";
+import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
-import type { CircleMembership } from "../lib/journal";
+import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
 import { rememberPostedCircle } from "../lib/last-posted-circle";
 import { pickJournalMedia } from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
@@ -53,6 +55,12 @@ import {
   PeopleFields,
   PlaceFields,
 } from "./composer-fields";
+import {
+  ComposerScroller,
+  DismissKeyboardPressable,
+  KeyboardForm,
+  useComposerInput,
+} from "./keyboard-form";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
 type Picker = "book" | "chapter" | "start" | "end" | null;
@@ -97,8 +105,14 @@ export function AddSheet({
   const [body, setBody] = useState("");
   const [title, setTitle] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
-  const [occurredOn, setOccurredOn] = useState(
-    circleToday(circles[0]?.timeZone ?? "UTC"),
+  const audienceCircles = useMemo(() => postableCircles(circles), [circles]);
+  const [occurredOn, setOccurredOn] = useState(() =>
+    circleToday(
+      circles.find((item) => item.circleId === initialAudienceCircleId(circles, activeCircleId))
+        ?.timeZone ??
+        circles[0]?.timeZone ??
+        "UTC",
+    ),
   );
   const [occurredTime, setOccurredTime] = useState(
     initialMode === "bible" ? "" : currentPickerTimeValue(),
@@ -115,11 +129,8 @@ export function AddSheet({
       ),
   );
   const [justMe, setJustMe] = useState(justMeDefault);
-  const [circleId, setCircleId] = useState(
-    () =>
-      circles.find((item) => item.circleId === activeCircleId)?.circleId ??
-      circles[0]?.circleId ??
-      "",
+  const [circleId, setCircleId] = useState(() =>
+    initialAudienceCircleId(circles, activeCircleId),
   );
   const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
   const [reference, setReference] = useState("");
@@ -136,7 +147,10 @@ export function AddSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const radius = colors.appearance === "retro" ? 2 : 14;
-  const circle = circles.find((item) => item.circleId === circleId) ?? circles[0];
+  const audienceId = audienceCircles.some((item) => item.circleId === circleId)
+    ? circleId
+    : initialAudienceCircleId(circles, activeCircleId);
+  const circle = audienceCircles.find((item) => item.circleId === audienceId);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -416,10 +430,12 @@ export function AddSheet({
   const retro = colors.appearance === "retro";
   const labelColor = retro ? colors.muted : colors.scheme === "dark" ? "#c4cbc7" : colors.muted;
   const topGap = Math.max(20, insets.top);
-  const sheetHeight =
-    mode == null
-      ? Math.max(windowHeight * 0.5, 300)
-      : Math.min(windowHeight * 0.88, windowHeight - topGap);
+  const sheetHeight = composerSheetHeight({
+    windowHeight,
+    topGap,
+    keyboardInset: 0,
+    choosing: mode == null,
+  });
   const scrimColor = retro
     ? "#100d0c"
     : colors.scheme === "light"
@@ -430,11 +446,16 @@ export function AddSheet({
   );
 
   return (
-    <View style={[styles.scrim, { backgroundColor: scrimColor }]}>
+    <KeyboardForm>
+    <KeyboardAvoidingView
+      style={[styles.scrim, { backgroundColor: scrimColor }]}
+      behavior="padding"
+      enabled={mode != null}
+    >
       {Platform.OS === "web" ? null : (
         <BlurView intensity={40} tint={colors.scheme === "light" ? "light" : "dark"} style={styles.blur} />
       )}
-      <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={onClose} />
+      <Pressable accessibilityLabel="Close" style={[styles.scrimTap, { minHeight: topGap }]} onPress={onClose} />
       <View
         style={[
           styles.sheet,
@@ -447,11 +468,13 @@ export function AddSheet({
           },
         ]}
       >
-        <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
-        <View style={styles.bar}>
+        <DismissKeyboardPressable accessible={false}>
+          <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
+        </DismissKeyboardPressable>
+        <DismissKeyboardPressable style={styles.bar}>
           <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]}>{titleText}</Text>
-        </View>
-        <ScrollView style={styles.scroller} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        </DismissKeyboardPressable>
+        <ComposerScroller contentStyle={styles.body}>
           {mode == null ? (
             <View style={styles.grid}>
               {choices.map((choice) => (
@@ -545,6 +568,7 @@ export function AddSheet({
               ) : null}
               {mode === "insight" ? (
                 <Field
+                  fieldId="attribution"
                   label="Attribution"
                   labelColor={labelColor}
                   value={title}
@@ -554,6 +578,7 @@ export function AddSheet({
               ) : null}
               {mode === "insight" ? (
                 <Field
+                  fieldId="source"
                   label="Source URL"
                   labelColor={labelColor}
                   value={sourceUrl}
@@ -565,6 +590,7 @@ export function AddSheet({
                 <Text style={[face(colors, 600), { color: colors.ink }]}>{reference}</Text>
               ) : null}
               <Field
+                fieldId="body"
                 label={mode === "bible" ? "Verse text" : mode === "insight" ? "Quote" : mode === "photo" ? "Note" : "Entry"}
                 labelColor={labelColor}
                 value={body}
@@ -588,10 +614,10 @@ export function AddSheet({
                 onTimeChange={setOccurredTime}
               />
               <AudienceChips
-                circles={circles}
+                circles={audienceCircles}
                 counts={counts}
                 justMe={justMe}
-                circleId={circle?.circleId ?? ""}
+                circleId={audienceId}
                 onJustMe={setJustMe}
                 onCircle={(id) => {
                   setJustMe(false);
@@ -616,7 +642,7 @@ export function AddSheet({
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
             </View>
           ) : null}
-        </ScrollView>
+        </ComposerScroller>
         {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
           <View
             style={[
@@ -697,7 +723,8 @@ export function AddSheet({
           </View>
         ) : null}
       </View>
-    </View>
+    </KeyboardAvoidingView>
+    </KeyboardForm>
   );
 }
 
@@ -721,6 +748,7 @@ function Field({
   placeholder,
   multiline = false,
   accentBorder = false,
+  fieldId,
   onChange,
 }: Readonly<{
   label: string;
@@ -729,9 +757,11 @@ function Field({
   placeholder: string;
   multiline?: boolean;
   accentBorder?: boolean;
+  fieldId: string;
   onChange: (value: string) => void;
 }>) {
   const { colors } = useAppTheme();
+  const input = useComposerInput(fieldId, multiline);
   return (
     <View style={styles.form}>
       <Text
@@ -744,6 +774,7 @@ function Field({
         {label}
       </Text>
       <TextInput
+        {...input}
         value={value}
         placeholder={placeholder}
         placeholderTextColor={colors.faint}
@@ -890,11 +921,15 @@ const styles = StyleSheet.create({
     left: 0,
   },
   scrimTap: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
   },
   sheet: {
     borderTopWidth: 1,
     paddingTop: 8,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
   },
   handle: {
     alignSelf: "center",
@@ -919,7 +954,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
   },
-  scroller: { flex: 1 },
   footer: {
     borderTopWidth: 1,
     paddingTop: 10,

@@ -105,6 +105,34 @@ await step("cold open shows the feed once and does not reload after it is visibl
   );
 });
 
+await step("archived circles stay off Who can see this", async () => {
+  const journal = await import("../src/lib/journal.ts");
+  const keyboard = await import("../src/lib/composer-keyboard.ts");
+  const circles = [
+    { circleId: "home", name: "Home", archivedAt: null },
+    { circleId: "empty", name: "Empty", archivedAt: "2026-09-23T01:13:39Z" },
+  ];
+  assert.deepEqual(
+    journal.postableCircles(circles).map((circle) => circle.name),
+    ["Home"],
+  );
+  assert.equal(journal.initialAudienceCircleId(circles, "empty"), "home");
+  assert.equal(journal.initialAudienceCircleId(circles, "home"), "home");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "body", 1), "place");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "place", 1), null);
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "place", -1), "body");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "body", -1), null);
+  assert.equal(
+    keyboard.composerSheetHeight({
+      windowHeight: 852,
+      topGap: 59,
+      keyboardInset: 336,
+      choosing: false,
+    }),
+    852 - 59 - 336,
+  );
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;

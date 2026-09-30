@@ -6,6 +6,7 @@ import { reversePlace, searchPlaces, type GeocodedPlace, type PlaceSelection } f
 import { peopleCountLabel, type CirclePerson } from "../lib/roster";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, tracking } from "../lib/tokens";
+import { useComposerInput } from "./keyboard-form";
 
 type TimeParts = Readonly<{ hour: number; minute: number; period: "AM" | "PM" }>;
 
@@ -405,6 +406,7 @@ export function PlaceFields({
   const [message, setMessage] = useState<string | null>(null);
   const canLocate =
     Platform.OS !== "web" || (typeof navigator !== "undefined" && "geolocation" in navigator);
+  const placeInput = useComposerInput("place");
 
   useEffect(() => {
     if (search.trim().length < 2) return;
@@ -433,6 +435,7 @@ export function PlaceFields({
     <View style={styles.stack}>
       <FieldLabel optional>Add a place</FieldLabel>
       <TextInput
+        {...placeInput}
         value={search}
         placeholder="Search or locate"
         placeholderTextColor={colors.faint}
