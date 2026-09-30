@@ -272,9 +272,19 @@ export function JournalNav({
         active={journalActive}
         onPress={onJournalPress}
         color={colors.action}
-        idle={colors.muted}
+        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
         face={label}
-        icon={<NavFamily color={journalActive ? colors.action : colors.muted} />}
+        icon={
+          <NavFamily
+            color={
+              journalActive
+                ? colors.action
+                : colors.appearance === "retro"
+                  ? colors.ink
+                  : colors.muted
+            }
+          />
+        }
       />
       <NavItem
         label="Add"

@@ -1136,6 +1136,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingRight: 28,
+    marginBottom: 8,
   },
   author: {
     flex: 1,
