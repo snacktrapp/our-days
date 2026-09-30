@@ -390,14 +390,16 @@ function FlowCopy({
         ) : null}
       </View>
       {clamp ? (
-        <QuoteText
-          text={text}
-          mentions={mentions}
-          cite={cite}
-          sourceLabel={sourceLabel}
-          onSource={onSource}
-          lines={previewLines}
-        />
+        <View style={styles.clampedQuote}>
+          <QuoteText
+            text={text}
+            mentions={mentions}
+            cite={cite}
+            sourceLabel={sourceLabel}
+            onSource={onSource}
+            lines={previewLines}
+          />
+        </View>
       ) : (
         <View style={styles.copyGrid}>
           {quoteNode()}
@@ -499,8 +501,8 @@ function SeeMore({
       <Text
         style={[
           styles.more,
-          face(colors, 750, "record"),
-          { color: colors.clay, letterSpacing: tracking(9, 0.14) },
+          face(colors, 600, "record"),
+          { color: colors.clay, letterSpacing: tracking(8, 0.18) },
         ]}
       >
         {expanded ? "See less" : "See more"}
@@ -1138,6 +1140,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingRight: 28,
   },
+  clampedQuote: {
+    height: quoteLineHeight * previewLines,
+    overflow: "hidden",
+  },
   moreHit: {
     minHeight: 44,
     marginTop: -6,
@@ -1146,8 +1152,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   more: {
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 8,
+    lineHeight: 10.4,
     textTransform: "uppercase",
   },
   commentBody: {
