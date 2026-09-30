@@ -631,27 +631,43 @@ async function uploadWithTus(
   }
 }
 
+function runsInBrowser() {
+  return (
+    typeof document !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    navigator.product !== "ReactNative"
+  );
+}
+
 async function requestPhotoProcessing(intakeId: string) {
   const { getSupabase } = await import("./supabase");
   const supabase = getSupabase();
   const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-  if (!session) return null;
+  if (!session?.access_token) {
+    throw new Error("Your private session needs to be renewed.");
+  }
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    authorization: `Bearer ${session.access_token}`,
+  };
+  // React Native can set Origin and Cookie. A browser forbids both and sends
+  // its own Origin, so Expo web matches the web app: no manual cookie or origin.
+  if (!runsInBrowser()) {
+    headers.cookie = sessionCookieHeader(authStorageKey(), session);
+    headers.origin = siteOrigin;
+  }
   const response = await fetch(`${siteOrigin}/api/photos/process`, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      cookie: sessionCookieHeader(authStorageKey(), session),
-      origin: siteOrigin,
-    },
+    headers,
     body: JSON.stringify({ intakeId }),
   });
-  if (response.status === 409) {
-    let text = "This photo needs attention before it can be added.";
+  if (!response.ok) {
+    let text = "Upload failed";
     try {
       const body = (await response.json()) as { message?: string };
       if (body.message) text = body.message;
     } catch {
-      // Keep the stable message.
+      // A 404 from the origin check has no message.
     }
     throw new Error(text);
   }

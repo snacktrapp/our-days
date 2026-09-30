@@ -73,6 +73,7 @@ const pickerMissing =
 export function AddSheet({
   circles,
   justMeDefault,
+  activeCircleId,
   onClose,
   onPosted,
   initialMode = null,
@@ -80,6 +81,8 @@ export function AddSheet({
 }: Readonly<{
   circles: readonly CircleMembership[];
   justMeDefault: boolean;
+  /** The circle feed that is open. All circles leaves this empty. */
+  activeCircleId?: string | null;
   onClose: () => void;
   onPosted: (audience: Audience) => void;
   initialMode?: Mode;
@@ -110,7 +113,12 @@ export function AddSheet({
       ),
   );
   const [justMe, setJustMe] = useState(justMeDefault);
-  const [circleId, setCircleId] = useState(circles[0]?.circleId ?? "");
+  const [circleId, setCircleId] = useState(
+    () =>
+      circles.find((item) => item.circleId === activeCircleId)?.circleId ??
+      circles[0]?.circleId ??
+      "",
+  );
   const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
   const [reference, setReference] = useState("");
   const [picker, setPicker] = useState<Picker>(null);
@@ -589,75 +597,88 @@ export function AddSheet({
                 />
               )}
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
-              <View style={styles.split}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={busy}
-                  onPress={() => {
-                    if (mode === "bible") {
-                      if (!reference || !body.trim()) {
-                        setError("Choose a passage");
-                        return;
-                      }
-                      void postNote(formatBibleVerseMoment(reference, body));
-                      return;
-                    }
-                    if (mode === "insight") {
-                      void postInsight();
-                      return;
-                    }
-                    if (mode === "photo") {
-                      void postPhoto();
-                      return;
-                    }
-                    void postNote(body);
-                  }}
-                  style={[
-                    styles.post,
-                    {
-                      backgroundColor: colors.action,
-                      borderColor: colors.action,
-                      borderRadius: retro ? 2 : 7,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      face(colors, retro ? 700 : 650),
-                      {
-                        color: colors.actionInk,
-                        letterSpacing: retro ? tracking(15, 0.08) : 0,
-                        textTransform: retro ? "uppercase" : "none",
-                      },
-                    ]}
-                  >
-                    {busy ? "Saving…" : "Post"}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={busy}
-                  onPress={() => void persistDraft()}
-                  style={[
-                    styles.draft,
-                    retro
-                      ? {
-                          borderWidth: 1,
-                          borderColor: colors.hairline,
-                          borderRadius: 2,
-                          backgroundColor: colors.surface,
-                        }
-                      : null,
-                  ]}
-                >
-                  <Text style={[face(colors, retro ? 700 : 650), { color: retro ? colors.ink : colors.muted }]}>
-                    {busy ? "Saving draft…" : "Save draft"}
-                  </Text>
-                </Pressable>
-              </View>
             </View>
           ) : null}
         </ScrollView>
+        {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
+          <View
+            style={[
+              styles.footer,
+              {
+                borderTopColor: colors.hairline,
+                backgroundColor: colors.cream,
+                paddingBottom: Math.max(10, insets.bottom),
+              },
+            ]}
+          >
+            <View style={styles.split}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  if (mode === "bible") {
+                    if (!reference || !body.trim()) {
+                      setError("Choose a passage");
+                      return;
+                    }
+                    void postNote(formatBibleVerseMoment(reference, body));
+                    return;
+                  }
+                  if (mode === "insight") {
+                    void postInsight();
+                    return;
+                  }
+                  if (mode === "photo") {
+                    void postPhoto();
+                    return;
+                  }
+                  void postNote(body);
+                }}
+                style={[
+                  styles.post,
+                  {
+                    backgroundColor: colors.action,
+                    borderColor: colors.action,
+                    borderRadius: retro ? 2 : 7,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    face(colors, retro ? 700 : 650),
+                    {
+                      color: colors.actionInk,
+                      letterSpacing: retro ? tracking(15, 0.08) : 0,
+                      textTransform: retro ? "uppercase" : "none",
+                    },
+                  ]}
+                >
+                  {busy ? "Saving…" : "Post"}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => void persistDraft()}
+                style={[
+                  styles.draft,
+                  retro
+                    ? {
+                        borderWidth: 1,
+                        borderColor: colors.hairline,
+                        borderRadius: 2,
+                        backgroundColor: colors.surface,
+                      }
+                    : null,
+                ]}
+              >
+                <Text style={[face(colors, retro ? 700 : 650), { color: retro ? colors.ink : colors.muted }]}>
+                  {busy ? "Saving draft…" : "Save draft"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -857,7 +878,6 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopWidth: 1,
     paddingTop: 8,
-    paddingHorizontal: 20,
   },
   handle: {
     alignSelf: "center",
@@ -871,6 +891,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    paddingHorizontal: 20,
   },
   back: {
     minHeight: 44,
@@ -882,9 +903,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   scroller: { flex: 1 },
+  footer: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    boxShadow: "0 -10px 24px rgba(0,0,0,0.18)",
+  },
   body: {
     paddingTop: 8,
     paddingBottom: 24,
+    paddingHorizontal: 20,
     gap: 12,
   },
   grid: {

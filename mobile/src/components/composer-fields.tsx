@@ -105,15 +105,9 @@ export function FieldLabel({
     >
       {children}
       {optional ? (
-        <Text
-          style={{
-            color: colors.ochre,
-            fontSize: retro ? 10 : 7,
-            letterSpacing: tracking(retro ? 10 : 7, 0.12),
-            textTransform: "uppercase",
-          }}
-        >
-          {" · "}Optional
+        <Text style={{ fontSize: retro ? 10 : 7, letterSpacing: tracking(retro ? 10 : 7, 0.12) }}>
+          <Text style={{ color: colors.ochre }}> · </Text>
+          <Text style={{ color: colors.muted, textTransform: "uppercase" }}>Optional</Text>
         </Text>
       ) : null}
     </Text>
@@ -410,7 +404,7 @@ export function PlaceFields({
         }}
         style={[
           styles.input,
-          face(colors, 400),
+          face(colors, 400, "record"),
           {
             color: colors.ink,
             borderColor: colors.hairline,
@@ -593,12 +587,24 @@ export function PeopleFields({
                 {
                   borderColor: selected ? colors.action : colors.hairline,
                   backgroundColor: selected ? colors.selectionFill : retro ? "transparent" : colors.cream,
-                  borderRadius: retro ? 2 : 13,
+                  borderRadius: 13,
                 },
               ]}
             >
-              <View style={[styles.dot, { backgroundColor: dotColor(person.accent, colors) }]}>
-                <Text style={[face(colors, 700), { color: dotInk(person.accent, colors), fontSize: 9 }]}>
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: retro ? colors.action : dotColor(person.accent, colors),
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    face(colors, 700),
+                    { color: retro ? colors.actionInk : dotInk(person.accent, colors), fontSize: 9 },
+                  ]}
+                >
                   {person.initial}
                 </Text>
               </View>

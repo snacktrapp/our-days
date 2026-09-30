@@ -283,6 +283,7 @@ await step("operations user posts a test-circle note, sees it on All circles, th
   });
   assert.equal(result.ok, true, result.ok ? "" : result.message);
   const posts = await import("../src/lib/posts.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
   const circles = await journal.loadCircles(supabase, result.session.user.id);
   const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
   const circle = circles.find((item) => item.name === circleName);
@@ -292,8 +293,7 @@ await step("operations user posts a test-circle note, sees it on All circles, th
     journalPersonId: circle.personId,
     circleId: circle.circleId,
     body,
-    occurredOn: new Date().toISOString().slice(0, 10),
-    occurredTimezone: circle.timeZone,
+    occurredOn: circleToday(circle.timeZone),
     audience: "family",
     circleIds: [circle.circleId],
   });

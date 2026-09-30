@@ -56,6 +56,21 @@ import {
 const mentionsKey = "our-days:mentions-announcement";
 const allScope = "all";
 const youScope = "you";
+const activeCircleCookie = "our-days-active-circle";
+
+/** Same cookie the web uses for the journal's current circle. */
+function readActiveCircleCookie() {
+  if (Platform.OS !== "web" || typeof document === "undefined") return null;
+  const match = document.cookie.match(
+    new RegExp(`(?:^|;\\s*)${activeCircleCookie}=([^;]+)`),
+  );
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
 
 function feedKind(scope: string) {
   if (scope === allScope) return "all" as const;
@@ -110,6 +125,7 @@ export default function JournalScreen() {
     Record<string, string> | null | undefined
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
+  const homeCircleId = readActiveCircleCookie();
   const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -579,6 +595,7 @@ export default function JournalScreen() {
         <AddSheet
           circles={circles}
           justMeDefault={kind === "personal"}
+          activeCircleId={kind === "circle" ? scope : homeCircleId}
           onClose={() => setAddOpen(false)}
           onPosted={(audience: Audience) => {
             const next = audience === "just_me" ? youScope : allScope;
