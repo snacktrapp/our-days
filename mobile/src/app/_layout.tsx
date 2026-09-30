@@ -1,11 +1,17 @@
+import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Platform } from "react-native";
 
-import { AuthProvider } from "../components/auth-provider";
+import { AuthProvider, useAuth } from "../components/auth-provider";
+import { applyUpdateAtLaunch } from "../lib/app-updates";
 import { ThemeProvider, useAppTheme } from "../lib/theme";
+
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Expo web and fast refresh have no native splash to hold.
+});
 
 export default function RootLayout() {
   const [fontsReady, fontError] = useFonts({
@@ -16,10 +22,30 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        {fontsReady || fontError ? <ThemedStack /> : null}
+        <BootGate fontsReady={fontsReady || Boolean(fontError)}>
+          <ThemedStack />
+        </BootGate>
       </AuthProvider>
     </ThemeProvider>
   );
+}
+
+function BootGate({
+  fontsReady,
+  children,
+}: Readonly<{ fontsReady: boolean; children: ReactNode }>) {
+  const { ready } = useAuth();
+  const revealed = useRef(false);
+  useEffect(() => {
+    void applyUpdateAtLaunch(() => revealed.current);
+  }, []);
+  useEffect(() => {
+    if (!fontsReady || !ready) return;
+    revealed.current = true;
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, [fontsReady, ready]);
+  if (!fontsReady || !ready) return null;
+  return children;
 }
 
 function ThemedStack() {
@@ -42,6 +68,11 @@ function ThemedStack() {
       <Stack
         screenOptions={{
           headerShown: false,
+          // Auth used to replace `/` with `/journal` after the session
+          // restored. The stack plays that replace as a push, so the feed
+          // paints and then slides in from the right. Nothing in this app
+          // needs a stack transition.
+          animation: "none",
           contentStyle: { backgroundColor: colors.gridSurface },
         }}
       />

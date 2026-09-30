@@ -66,6 +66,129 @@ await step("journal module loads under plain Node", async () => {
   assert.equal(typeof loaded.photoDeliveryPath, "function");
 });
 
+await step("cold open shows the feed once and does not reload after it is visible", async () => {
+  const cold = await import("../src/lib/cold-start.ts");
+  const mounts = cold.feedMountsOnColdStart([
+    { ready: false, signedIn: false },
+    { ready: false, signedIn: true },
+    { ready: true, signedIn: true },
+    { ready: true, signedIn: true },
+  ]);
+  assert.equal(mounts, 1, "session restore must not enter the feed twice");
+  assert.equal(cold.coldStartSurface(false, true), "splash");
+  assert.equal(cold.coldStartSurface(true, true), "feed");
+  assert.equal(cold.coldStartSurface(true, false), "sign-in");
+  assert.equal(
+    cold.shouldReloadUpdate({
+      dev: false,
+      enabled: true,
+      available: true,
+      isNew: true,
+      elapsedMs: 200,
+      windowMs: 10_000,
+      revealed: true,
+    }),
+    false,
+    "an OTA reload after the feed is visible would launch it again",
+  );
+  assert.equal(
+    cold.shouldReloadUpdate({
+      dev: false,
+      enabled: true,
+      available: true,
+      isNew: true,
+      elapsedMs: 200,
+      windowMs: 10_000,
+      revealed: false,
+    }),
+    true,
+  );
+});
+
+await step("archived circles stay off Who can see this", async () => {
+  const journal = await import("../src/lib/journal.ts");
+  const keyboard = await import("../src/lib/composer-keyboard.ts");
+  const circles = [
+    { circleId: "home", name: "Home", archivedAt: null },
+    { circleId: "empty", name: "Empty", archivedAt: "2026-09-23T01:13:39Z" },
+  ];
+  assert.deepEqual(
+    journal.postableCircles(circles).map((circle) => circle.name),
+    ["Home"],
+  );
+  assert.equal(journal.initialAudienceCircleId(circles, "empty"), "home");
+  assert.equal(journal.initialAudienceCircleId(circles, "home"), "home");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "body", 1), "place");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "place", 1), null);
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "place", -1), "body");
+  assert.equal(keyboard.adjacentComposerField(["body", "place"], "body", -1), null);
+  assert.equal(
+    keyboard.composerSheetHeight({
+      windowHeight: 852,
+      topGap: 59,
+      keyboardInset: 336,
+      choosing: false,
+    }),
+    852 - 59 - 336,
+  );
+});
+
+await step("photo menu matches the web and people stay in join order", async () => {
+  const media = await import("../src/lib/pick-media.ts");
+  const roster = await import("../src/lib/roster.ts");
+  assert.deepEqual(media.mediaMenuOptions, [
+    "Photo Library",
+    "Take Photo or Video",
+    "Choose Files",
+  ]);
+  assert.equal(media.mediaSourceForMenuIndex(0), "library");
+  assert.equal(media.mediaSourceForMenuIndex(1), "camera");
+  assert.equal(media.mediaSourceForMenuIndex(2), "files");
+  assert.equal(media.mediaSourceForMenuIndex(3), null);
+  const mvhd = new Uint8Array(28);
+  mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
+  new DataView(mvhd.buffer).setUint32(16, 1000);
+  new DataView(mvhd.buffer).setUint32(20, 2500);
+  assert.equal(media.mp4DurationMs(mvhd), 2500);
+  const ordered = roster.orderTaggablePeople([
+    { id: "bea", name: "Bea", createdAt: "2026-02-01T00:00:00Z" },
+    { id: "ada", name: "Ada", createdAt: "2026-01-01T00:00:00Z" },
+  ]);
+  assert.deepEqual(
+    ordered.map((person) => person.name),
+    ["Ada", "Bea"],
+  );
+});
+
+await step("sheet drag springs back when short and confirms unsaved text", async () => {
+  const sheet = await import("../src/lib/sheet-dismiss.ts");
+  assert.equal(sheet.canStartSheetDismiss(40, true), true);
+  assert.equal(sheet.canStartSheetDismiss(40, false), false);
+  assert.equal(sheet.canStartSheetDismiss(0, false), true);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 20, velocityY: 0 }), false);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: sheet.sheetDismissThresholdPx, velocityY: 0 }), true);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 24, velocityY: sheet.sheetDismissVelocity }), true);
+  assert.equal(
+    sheet.sheetDismissShouldCommit({ dy: 120, velocityY: -sheet.sheetDismissVelocity }),
+    false,
+  );
+  const initial = {
+    body: "",
+    title: "",
+    sourceUrl: "",
+    place: "",
+    tags: "",
+    photo: false,
+    verse: "",
+    occurredOn: "2026-09-30",
+    occurredTime: "22:00",
+    justMe: false,
+    circleId: "home",
+  };
+  assert.equal(sheet.sheetHasUnsavedChanges(initial, initial), false);
+  assert.equal(sheet.sheetHasUnsavedChanges({ ...initial, body: "A note" }, initial), true);
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
@@ -311,15 +434,15 @@ await step("operations user posts a test-circle note, sees it on All circles, th
   await supabase.auth.signOut({ scope: "local" });
 });
 
-await step("OTA runtime is 0.2.0 so build 5 cannot receive this JS", async () => {
+await step("OTA runtime is 0.3.0 so build 6 cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));
   const easJson = JSON.parse(fs.readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
   assert.equal(appJson.expo.runtimeVersion?.policy, "appVersion");
   assert.equal(
     appJson.expo.version,
-    "0.2.0",
-    "runtime follows the app version; 0.2.0 must not be delivered to build 5",
+    "0.3.0",
+    "runtime follows the app version; 0.3.0 must not be delivered to build 6",
   );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");

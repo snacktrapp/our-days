@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActionSheetIOS,
+  Alert,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -24,8 +29,11 @@ import {
   versesInChapter,
   type BibleVerseSelection,
 } from "../lib/bible";
+import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
-import type { CircleMembership } from "../lib/journal";
+import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
+import { rememberPostedCircle } from "../lib/last-posted-circle";
+import { mediaMenuOptions, mediaSourceForMenuIndex, pickJournalMedia, type MediaSource } from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
   createFamilyMoment,
@@ -35,11 +43,13 @@ import {
   loadEntryDraft,
   saveEntryDraft,
   uploadPhotoMoment,
+  uploadVideoMoment,
   type Audience,
   type DraftListItem,
 } from "../lib/posts";
 import { loadRosters, type CirclePerson } from "../lib/roster";
 import { getSupabase } from "../lib/supabase";
+import { sheetHasUnsavedChanges, type SheetDraft } from "../lib/sheet-dismiss";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
 import {
@@ -50,6 +60,13 @@ import {
   PeopleFields,
   PlaceFields,
 } from "./composer-fields";
+import {
+  ComposerScroller,
+  DismissKeyboardPressable,
+  KeyboardForm,
+  useComposerInput,
+} from "./keyboard-form";
+import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
 type Picker = "book" | "chapter" | "start" | "end" | null;
@@ -61,9 +78,6 @@ const choices = [
   { id: "drafts" as const, title: "Drafts", detail: "Unfinished entries" },
   { id: "insight" as const, title: "Insight", detail: "Quote, attribution, and source" },
 ];
-
-const pickerMissing =
-  "Photo library and camera need expo-image-picker, which is not in runtime 0.2.0. That needs a new TestFlight build.";
 
 /**
  * Web New moment order is Photo or video, Written entry, Bible verse, Drafts.
@@ -84,7 +98,7 @@ export function AddSheet({
   /** The circle feed that is open. All circles leaves this empty. */
   activeCircleId?: string | null;
   onClose: () => void;
-  onPosted: (audience: Audience) => void;
+  onPosted: (audience: Audience, circleId: string) => void;
   initialMode?: Mode;
   previewPeople?: Readonly<Record<string, readonly CirclePerson[]>>;
 }>) {
@@ -95,8 +109,14 @@ export function AddSheet({
   const [body, setBody] = useState("");
   const [title, setTitle] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
-  const [occurredOn, setOccurredOn] = useState(
-    circleToday(circles[0]?.timeZone ?? "UTC"),
+  const audienceCircles = useMemo(() => postableCircles(circles), [circles]);
+  const [occurredOn, setOccurredOn] = useState(() =>
+    circleToday(
+      circles.find((item) => item.circleId === initialAudienceCircleId(circles, activeCircleId))
+        ?.timeZone ??
+        circles[0]?.timeZone ??
+        "UTC",
+    ),
   );
   const [occurredTime, setOccurredTime] = useState(
     initialMode === "bible" ? "" : currentPickerTimeValue(),
@@ -113,16 +133,15 @@ export function AddSheet({
       ),
   );
   const [justMe, setJustMe] = useState(justMeDefault);
-  const [circleId, setCircleId] = useState(
-    () =>
-      circles.find((item) => item.circleId === activeCircleId)?.circleId ??
-      circles[0]?.circleId ??
-      "",
+  const [circleId, setCircleId] = useState(() =>
+    initialAudienceCircleId(circles, activeCircleId),
   );
   const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
   const [reference, setReference] = useState("");
   const [picker, setPicker] = useState<Picker>(null);
   const [catalogReady, setCatalogReady] = useState(false);
+  const [photoKind, setPhotoKind] = useState<"photo" | "video">("photo");
+  const [photoDuration, setPhotoDuration] = useState<number | null>(null);
   const [photoName, setPhotoName] = useState<string | null>(null);
   const [photoBytes, setPhotoBytes] = useState<ArrayBuffer | null>(null);
   const [photoMime, setPhotoMime] = useState("image/jpeg");
@@ -132,7 +151,10 @@ export function AddSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const radius = colors.appearance === "retro" ? 2 : 14;
-  const circle = circles.find((item) => item.circleId === circleId) ?? circles[0];
+  const audienceId = audienceCircles.some((item) => item.circleId === circleId)
+    ? circleId
+    : initialAudienceCircleId(circles, activeCircleId);
+  const circle = audienceCircles.find((item) => item.circleId === audienceId);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -214,7 +236,8 @@ export function AddSheet({
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
   }
 
   async function postInsight() {
@@ -244,7 +267,8 @@ export function AddSheet({
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
   }
 
   async function postPhoto() {
@@ -257,7 +281,7 @@ export function AddSheet({
     }
     setBusy(true);
     setError(null);
-    const result = await uploadPhotoMoment(supabase, {
+    const shared = {
       bytes: photoBytes,
       mimeType: photoMime,
       circleId: circle.circleId,
@@ -270,37 +294,72 @@ export function AddSheet({
       taggedPersonIds: taggedIds,
       audience: audience(),
       circleIds: justMe ? [] : [circle.circleId],
-    });
+    };
+    const result =
+      photoKind === "video"
+        ? await uploadVideoMoment(supabase, {
+            ...shared,
+            name: photoName ?? "video.mp4",
+            durationMs: photoDuration ?? 0,
+          })
+        : await uploadPhotoMoment(supabase, shared);
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
-    onPosted(audience());
+    await rememberCircle();
+    onPosted(audience(), circle.circleId);
   }
 
-  function pickPhoto(camera: boolean) {
-    const doc = globalThis.document;
-    if (!doc) {
-      setError(pickerMissing);
+  async function rememberCircle() {
+    if (justMe || !circle) return;
+    const session = (await getSupabase()?.auth.getSession())?.data.session;
+    if (!session?.user.id) return;
+    await rememberPostedCircle(session.user.id, circle.circleId);
+  }
+
+  function takeMedia(source: MediaSource) {
+    void pickJournalMedia(source)
+      .then((picked) => {
+        if (!picked) return;
+        setPhotoBytes(picked.bytes);
+        setPhotoMime(picked.mimeType);
+        setPhotoName(picked.name);
+        setPhotoKind(picked.kind);
+        setPhotoDuration(picked.durationMs);
+        setError(null);
+      })
+      .catch((error: unknown) => {
+        setError(error instanceof Error ? error.message : "That photo could not be read.");
+      });
+  }
+
+  function chooseMedia() {
+    if (Platform.OS === "web") {
+      takeMedia("files");
       return;
     }
-    const input = doc.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp";
-    if (camera) input.setAttribute("capture", "environment");
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      void file.arrayBuffer().then((bytes) => {
-        setPhotoBytes(bytes);
-        setPhotoMime(file.type || "image/jpeg");
-        setPhotoName(file.name);
-        setError(null);
-      });
-    };
-    input.click();
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [...mediaMenuOptions, "Cancel"],
+          cancelButtonIndex: mediaMenuOptions.length,
+        },
+        (index) => {
+          const source = mediaSourceForMenuIndex(index);
+          if (source) takeMedia(source);
+        },
+      );
+      return;
+    }
+    Alert.alert("Choose photo or video", undefined, [
+      { text: "Photo Library", onPress: () => takeMedia("library") },
+      { text: "Take Photo or Video", onPress: () => takeMedia("camera") },
+      { text: "Choose Files", onPress: () => takeMedia("files") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   async function choosePassage(next: BibleVerseSelection) {
@@ -373,6 +432,8 @@ export function AddSheet({
     setVerse(draft.verse);
     setPhotoBytes(null);
     setPhotoName(null);
+    setPhotoKind("photo");
+    setPhotoDuration(null);
     setMode(
       draft.kind === "bible-verse"
         ? "bible"
@@ -382,6 +443,20 @@ export function AddSheet({
             ? "insight"
             : "thought",
     );
+    baseline.current = {
+      body: draft.body,
+      title: draft.kind === "bible-verse" ? "" : draft.title,
+      sourceUrl: draft.sourceUrl,
+      place: "",
+      tags: "",
+      photo: false,
+      verse: draft.verse.book ?? "",
+      occurredOn: draft.occurredOn || occurredOn,
+      occurredTime,
+      justMe: draft.audience === "just_me",
+      circleId: draft.circleId || audienceId,
+    };
+    seeded.current = true;
   }
 
   const titleText =
@@ -399,10 +474,12 @@ export function AddSheet({
   const retro = colors.appearance === "retro";
   const labelColor = retro ? colors.muted : colors.scheme === "dark" ? "#c4cbc7" : colors.muted;
   const topGap = Math.max(20, insets.top);
-  const sheetHeight =
-    mode == null
-      ? Math.max(windowHeight * 0.5, 300)
-      : Math.min(windowHeight * 0.88, windowHeight - topGap);
+  const sheetHeight = composerSheetHeight({
+    windowHeight,
+    topGap,
+    keyboardInset: 0,
+    choosing: mode == null,
+  });
   const scrimColor = retro
     ? "#100d0c"
     : colors.scheme === "light"
@@ -411,14 +488,106 @@ export function AddSheet({
   const visiblePeople = (roster.get(circle?.circleId ?? "") ?? []).filter(
     (person) => person.id !== circle?.personId,
   );
+  const scrollTop = useRef(0);
+  const chromeHeight = useRef(88);
+  const sheetTop = useRef(0);
+  const sheetHeightRef = useRef(sheetHeight);
+  const baseline = useRef<SheetDraft | null>(null);
+  const seeded = useRef(false);
+  const sheetNode = useRef<View>(null);
+  useEffect(() => {
+    sheetHeightRef.current = sheetHeight;
+  }, [sheetHeight]);
+  useEffect(() => {
+    if (seeded.current) return;
+    if (circles.length > 0 && !audienceId) return;
+    baseline.current = {
+      body: "",
+      title: "",
+      sourceUrl: "",
+      place: "",
+      tags: "",
+      photo: false,
+      verse: "",
+      occurredOn,
+      occurredTime,
+      justMe,
+      circleId: audienceId,
+    };
+    seeded.current = true;
+  }, [audienceId, circles.length, justMe, occurredOn, occurredTime]);
+  const unsaved = () => {
+    const initial = baseline.current;
+    if (!initial) return false;
+    return sheetHasUnsavedChanges(
+      {
+        body,
+        title,
+        sourceUrl,
+        place: place.label,
+        tags: taggedIds.join(","),
+        photo: photoBytes != null,
+        verse: verse.book ?? "",
+        occurredOn,
+        occurredTime,
+        justMe,
+        circleId: audienceId,
+      },
+      initial,
+    );
+  };
+  const closeSheet = () => {
+    Keyboard.dismiss();
+    onClose();
+  };
+  const confirmClose = (then: () => void) => {
+    if (!unsaved()) {
+      then();
+      return;
+    }
+    Alert.alert("Discard this unfinished moment?", undefined, [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: then },
+    ]);
+  };
+  const onCommit = useRef<Parameters<typeof useSheetDrag>[0]["onCommit"]["current"]>(() => undefined);
+  useEffect(() => {
+    onCommit.current = ({ springBack, dismiss }) => {
+      if (unsaved()) {
+        springBack();
+        confirmClose(closeSheet);
+        return;
+      }
+      dismiss(closeSheet);
+    };
+  });
+  const { translateY, panHandlers } = useSheetDrag({
+    scrollTop,
+    chromeHeight,
+    sheetTop,
+    sheetHeight: sheetHeightRef,
+    onCommit,
+  });
 
   return (
-    <View style={[styles.scrim, { backgroundColor: scrimColor }]}>
+    <KeyboardForm>
+    <KeyboardAvoidingView
+      style={[styles.scrim, { backgroundColor: scrimColor }]}
+      behavior="padding"
+      enabled={mode != null}
+    >
       {Platform.OS === "web" ? null : (
         <BlurView intensity={40} tint={colors.scheme === "light" ? "light" : "dark"} style={styles.blur} />
       )}
-      <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={onClose} />
-      <View
+      <Pressable accessibilityLabel="Close" style={[styles.scrimTap, { minHeight: topGap }]} onPress={() => confirmClose(closeSheet)} />
+      <Animated.View
+        ref={sheetNode}
+        {...panHandlers}
+        onLayout={() => {
+          sheetNode.current?.measureInWindow((_x, y) => {
+            sheetTop.current = y;
+          });
+        }}
         style={[
           styles.sheet,
           {
@@ -427,14 +596,28 @@ export function AddSheet({
             borderColor: colors.hairline,
             borderTopLeftRadius: radius,
             borderTopRightRadius: radius,
+            transform: [{ translateY }],
           },
         ]}
       >
-        <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
-        <View style={styles.bar}>
+        <View
+          onLayout={(event) => {
+            chromeHeight.current = event.nativeEvent.layout.height;
+          }}
+        >
+        <DismissKeyboardPressable accessible={false} style={styles.handleHit}>
+          <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
+        </DismissKeyboardPressable>
+        <DismissKeyboardPressable style={styles.bar}>
           <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]}>{titleText}</Text>
+        </DismissKeyboardPressable>
         </View>
-        <ScrollView style={styles.scroller} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ComposerScroller
+          contentStyle={styles.body}
+          onOffset={(y) => {
+            scrollTop.current = y;
+          }}
+        >
           {mode == null ? (
             <View style={styles.grid}>
               {choices.map((choice) => (
@@ -496,22 +679,39 @@ export function AddSheet({
           {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
             <View style={styles.form}>
               {mode === "photo" ? (
-                <View style={styles.split}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => pickPhoto(false)}
-                    style={[styles.secondary, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose photo or video"
+                  onPress={chooseMedia}
+                  style={[
+                    styles.photoDrop,
+                    {
+                      borderColor: retro ? colors.hairline : `${colors.clay}94`,
+                      backgroundColor: retro
+                        ? colors.surface
+                        : colors.scheme === "light"
+                          ? colors.cream
+                          : colors.paper,
+                      borderRadius: retro ? 2 : 8,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      face(colors, 700),
+                      {
+                        color: "#60574e",
+                        fontSize: 11,
+                        letterSpacing: tracking(11, 0.04),
+                      },
+                    ]}
                   >
-                    <Text style={[face(colors, 650), { color: colors.ink }]}>Library</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => pickPhoto(true)}
-                    style={[styles.secondary, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
-                  >
-                    <Text style={[face(colors, 650), { color: colors.ink }]}>Camera</Text>
-                  </Pressable>
-                </View>
+                    Choose photo or video
+                  </Text>
+                  <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, lineHeight: 17 }]}>
+                    The original uploads privately to this family.
+                  </Text>
+                </Pressable>
               ) : null}
               {photoName && mode === "photo" ? (
                 <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>{photoName}</Text>
@@ -528,6 +728,7 @@ export function AddSheet({
               ) : null}
               {mode === "insight" ? (
                 <Field
+                  fieldId="attribution"
                   label="Attribution"
                   labelColor={labelColor}
                   value={title}
@@ -537,6 +738,7 @@ export function AddSheet({
               ) : null}
               {mode === "insight" ? (
                 <Field
+                  fieldId="source"
                   label="Source URL"
                   labelColor={labelColor}
                   value={sourceUrl}
@@ -548,6 +750,7 @@ export function AddSheet({
                 <Text style={[face(colors, 600), { color: colors.ink }]}>{reference}</Text>
               ) : null}
               <Field
+                fieldId="body"
                 label={mode === "bible" ? "Verse text" : mode === "insight" ? "Quote" : mode === "photo" ? "Note" : "Entry"}
                 labelColor={labelColor}
                 value={body}
@@ -571,10 +774,10 @@ export function AddSheet({
                 onTimeChange={setOccurredTime}
               />
               <AudienceChips
-                circles={circles}
+                circles={audienceCircles}
                 counts={counts}
                 justMe={justMe}
-                circleId={circle?.circleId ?? ""}
+                circleId={audienceId}
                 onJustMe={setJustMe}
                 onCircle={(id) => {
                   setJustMe(false);
@@ -599,7 +802,7 @@ export function AddSheet({
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
             </View>
           ) : null}
-        </ScrollView>
+        </ComposerScroller>
         {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
           <View
             style={[
@@ -679,8 +882,9 @@ export function AddSheet({
             </View>
           </View>
         ) : null}
-      </View>
-    </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
+    </KeyboardForm>
   );
 }
 
@@ -704,6 +908,7 @@ function Field({
   placeholder,
   multiline = false,
   accentBorder = false,
+  fieldId,
   onChange,
 }: Readonly<{
   label: string;
@@ -712,9 +917,11 @@ function Field({
   placeholder: string;
   multiline?: boolean;
   accentBorder?: boolean;
+  fieldId: string;
   onChange: (value: string) => void;
 }>) {
   const { colors } = useAppTheme();
+  const input = useComposerInput(fieldId, multiline);
   return (
     <View style={styles.form}>
       <Text
@@ -727,6 +934,7 @@ function Field({
         {label}
       </Text>
       <TextInput
+        {...input}
         value={value}
         placeholder={placeholder}
         placeholderTextColor={colors.faint}
@@ -873,18 +1081,25 @@ const styles = StyleSheet.create({
     left: 0,
   },
   scrimTap: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
   },
   sheet: {
     borderTopWidth: 1,
     paddingTop: 8,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
+  },
+  handleHit: {
+    alignItems: "center",
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   handle: {
-    alignSelf: "center",
     width: 38,
     height: 4,
     borderRadius: 999,
-    marginBottom: 8,
   },
   bar: {
     minHeight: 44,
@@ -902,7 +1117,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
   },
-  scroller: { flex: 1 },
   footer: {
     borderTopWidth: 1,
     paddingTop: 10,
@@ -989,6 +1203,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  photoDrop: {
+    minHeight: 82,
+    padding: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    gap: 6,
     justifyContent: "center",
   },
   secondary: {

@@ -17,7 +17,32 @@ export type CircleMembership = Readonly<{
   role: string;
   name: string;
   timeZone: string;
+  /** Set when the circle is archived. Archived circles stay on the timeline and off the composer. */
+  archivedAt: string | null;
 }>;
+
+/**
+ * Circles offered under “Who can see this?”.
+ * The web drops archived circles in `loadConnectedJournalContext`
+ * (`src/data/journal-context.server.ts`) before `PostToField` renders them.
+ */
+export function postableCircles<T extends { archivedAt?: string | null }>(
+  circles: readonly T[],
+) {
+  return circles.filter((circle) => !circle.archivedAt);
+}
+
+export function initialAudienceCircleId(
+  circles: readonly { circleId: string; archivedAt?: string | null }[],
+  activeCircleId?: string | null,
+) {
+  const visible = postableCircles(circles);
+  return (
+    visible.find((circle) => circle.circleId === activeCircleId)?.circleId ??
+    visible[0]?.circleId ??
+    ""
+  );
+}
 
 export type TimelinePhoto = Readonly<{
   id: string;
@@ -163,7 +188,7 @@ export async function loadCircles(
 
   const { data: circles, error: circleError } = await supabase
     .from("circles")
-    .select("id, name, time_zone")
+    .select("id, name, time_zone, archived_at")
     .in("id", circleIds);
   if (circleError) throw circleError;
 
@@ -177,6 +202,7 @@ export async function loadCircles(
       role: membership.role,
       name: circle?.name ?? "Circle",
       timeZone: circle?.time_zone ?? "UTC",
+      archivedAt: typeof circle?.archived_at === "string" ? circle.archived_at : null,
     };
   });
 }

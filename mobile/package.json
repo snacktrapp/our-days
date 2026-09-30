@@ -1,6 +1,6 @@
 {
   "name": "our-days-mobile",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -17,11 +17,15 @@
     "expo": "~57.0.26",
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.20",
+    "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-image": "~57.0.5",
+    "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.11",
+    "expo-location": "~57.0.20",
     "expo-router": "~57.0.24",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.24",
     "react": "19.2.3",
