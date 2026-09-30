@@ -34,12 +34,14 @@ import { PrivateImage } from "./private-image";
 export function FeedMoment({
   moment,
   circleNames,
+  feedCircleId,
   headers,
   viewerYear,
   viewerZone,
 }: Readonly<{
   moment: TimelineMoment;
   circleNames: ReadonlyMap<string, string>;
+  feedCircleId?: string | null;
   headers?: Record<string, string> | null;
   viewerYear: number;
   viewerZone: string;
@@ -51,6 +53,7 @@ export function FeedMoment({
     linkedCircleIds: moment.linkedCircleIds,
     circleId: moment.circleId,
     circleNames,
+    feedCircleId,
   });
   const showZone =
     moment.kind !== "insight" &&

@@ -124,22 +124,74 @@ export function mentionPieces(
   return pieces;
 }
 
-export function audienceChipLabel(input: Readonly<{
-  audience: string;
-  linkedCircleIds: readonly string[];
-  circleId: string;
-  circleNames: ReadonlyMap<string, string>;
+/**
+ * Same decisions as src/features/moments/moment-audience.ts.
+ * A just_me moment still has moments.circle_id (often "Home") and may have
+ * no moment_circles rows. The chip never uses that circle id.
+ */
+export function normalizeMomentAudience(value: unknown) {
+  return value === "just_me" ? "just_me" : "family";
+}
+
+export function audienceCircleIds(input: Readonly<{
+  audience: unknown;
+  linkedCircleIds?: readonly string[] | null;
+  circleId?: string | null;
 }>) {
-  if (input.audience === "just_me") return "Just me";
-  const ids =
-    input.linkedCircleIds.length > 0 ? input.linkedCircleIds : [input.circleId];
-  const names = ids.flatMap((id) => {
-    const name = input.circleNames.get(id)?.trim();
+  if (normalizeMomentAudience(input.audience) === "just_me") return [];
+  const linked = input.linkedCircleIds?.filter(Boolean) ?? [];
+  if (linked.length > 0) return [...linked];
+  return input.circleId ? [input.circleId] : [];
+}
+
+function compactAudienceCircleLabel(
+  ids: readonly string[],
+  names?: ReadonlyMap<string, string>,
+) {
+  const known = ids.flatMap((id) => {
+    const name = names?.get(id)?.trim();
     return name ? [name] : [];
   });
-  if (ids.length <= 1) return names[0] ?? "1 circle";
-  if (ids.length === 2) return names[0] ? `${names[0]} +1` : "2 circles";
+  if (ids.length <= 1) return known[0] ?? "1 circle";
+  if (ids.length === 2) return known[0] ? `${known[0]} +1` : "2 circles";
   return `${ids.length} circles`;
+}
+
+export function audienceChipLabel(input: Readonly<{
+  audience: unknown;
+  linkedCircleIds?: readonly string[] | null;
+  circleId?: string | null;
+  circleNames?: ReadonlyMap<string, string>;
+  /** Set on a single-circle feed. Null on All circles and Just me. */
+  feedCircleId?: string | null;
+}>) {
+  if (normalizeMomentAudience(input.audience) === "just_me") return "Just me";
+  const ids = audienceCircleIds(input);
+  const labeledIds = ids.length > 0 ? ids : [];
+  if (input.feedCircleId) {
+    const others = labeledIds.filter((id) => id !== input.feedCircleId);
+    if (others.length > 0) {
+      return `Also · ${compactAudienceCircleLabel(others, input.circleNames)}`;
+    }
+  }
+  return compactAudienceCircleLabel(
+    labeledIds.length > 0 ? labeledIds : ["_"],
+    input.circleNames,
+  );
+}
+
+/**
+ * Where a saved post is listed. Mirrors the timeline RPCs:
+ * list_all_timeline_moments includes the viewer's just_me posts;
+ * list_timeline_moments for one circle (no journal person) keeps family only;
+ * the personal journal includes that person's just_me posts.
+ */
+export function momentListedInFeed(input: Readonly<{
+  audience: unknown;
+  feed: "all" | "circle" | "personal";
+}>) {
+  if (normalizeMomentAudience(input.audience) !== "just_me") return true;
+  return input.feed !== "circle";
 }
 
 export const visibleNoteLimit = 4;

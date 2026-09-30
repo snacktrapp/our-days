@@ -443,14 +443,19 @@ async function enrichMoments(
       occurredAt: row.occurred_at,
       occurredTimezone: row.occurred_timezone ?? undefined,
       timePrecision: row.time_precision ?? undefined,
-      audience: row.moment_audience ?? "family",
+      audience: row.moment_audience === "just_me" ? "just_me" : "family",
       sourceUrl: row.source_url ?? undefined,
       placeName: row.place_name ?? undefined,
       latitude: typeof row.latitude === "number" ? row.latitude : undefined,
       longitude: typeof row.longitude === "number" ? row.longitude : undefined,
       recorderName: row.recorder_person_name ?? undefined,
       circleId: row.moment_circle_id,
-      linkedCircleIds: row.linked_circle_ids ?? [row.moment_circle_id],
+      linkedCircleIds:
+        row.moment_audience === "just_me"
+          ? []
+          : row.linked_circle_ids && row.linked_circle_ids.length > 0
+            ? row.linked_circle_ids
+            : [row.moment_circle_id],
       photos: photosByMoment.get(row.moment_id) ?? [],
       hasPoster: posters.has(row.moment_id),
       posterWidth: poster?.width,

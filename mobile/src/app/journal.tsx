@@ -32,6 +32,7 @@ import {
   type TimelineMoment,
   type TimelinePage,
 } from "../lib/journal";
+import { momentListedInFeed } from "../lib/feed-format";
 import { formatPlainDate } from "../lib/moment-time";
 import { getSupabase, mediaRequestHeaders } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
@@ -48,6 +49,12 @@ import {
 const mentionsKey = "our-days:mentions-announcement";
 const allScope = "all";
 const youScope = "you";
+
+function feedKind(scope: string) {
+  if (scope === allScope) return "all" as const;
+  if (scope === youScope) return "personal" as const;
+  return "circle" as const;
+}
 
 type FeedRow =
   | Readonly<{ kind: "date"; id: string; label: string; divider: boolean }>
@@ -121,12 +128,13 @@ export default function JournalScreen() {
       if (!supabase) return;
       setError(null);
       try {
+        const kind = feedKind(nextScope);
         const next = await loadTimelinePage(supabase, {
-          circleId: null,
-          fallbackCircleId: memberships[0]?.circleId,
+          circleId: kind === "circle" ? nextScope : null,
+          fallbackCircleId: kind === "all" ? memberships[0]?.circleId : undefined,
           viewerMembershipIds: memberships.map((circle) => circle.membershipId),
           personal:
-            nextScope === youScope
+            kind === "personal"
               ? memberships.map((circle) => ({
                   circleId: circle.circleId,
                   personId: circle.personId,
@@ -205,14 +213,15 @@ export default function JournalScreen() {
     if (!supabase || !page?.hasMore || !page.cursor || loadingMore) return;
     setLoadingMore(true);
     try {
+      const kind = feedKind(scope);
       const next = await loadTimelinePage(supabase, {
-        circleId: null,
+        circleId: kind === "circle" ? scope : null,
         cursor: page.cursor,
         snapshotAt: page.snapshotAt,
-        fallbackCircleId: circles[0]?.circleId,
+        fallbackCircleId: kind === "all" ? circles[0]?.circleId : undefined,
         viewerMembershipIds: membershipIds,
         personal:
-          scope === youScope
+          kind === "personal"
             ? circles.map((circle) => ({
                 circleId: circle.circleId,
                 personId: circle.personId,
@@ -255,12 +264,34 @@ export default function JournalScreen() {
 
   if (ready && !session) return <Redirect href="/sign-in" />;
 
-  const title = scope === youScope ? "Just me" : "All circles";
+  const kind = feedKind(scope);
+  const selectedCircle = circles.find((circle) => circle.circleId === scope);
+  const title =
+    kind === "personal"
+      ? "Just me"
+      : kind === "circle"
+        ? (selectedCircle?.name ?? "Circle")
+        : "All circles";
   const items: readonly SwitcherItem[] = [
-    { id: youScope, label: "Just me", selected: scope === youScope },
-    { id: allScope, label: "All circles", selected: scope === allScope },
+    { id: youScope, label: "Just me", selected: kind === "personal" },
+    { id: allScope, label: "All circles", selected: kind === "all" },
+    ...circles.flatMap((circle, index) => {
+      if (circles.findIndex((item) => item.circleId === circle.circleId) !== index) {
+        return [];
+      }
+      return [
+        {
+          id: circle.circleId,
+          label: circle.name,
+          selected: scope === circle.circleId,
+        },
+      ];
+    }),
   ];
-  const rows = buildRows(moments, today, Boolean(page?.hasMore));
+  const listed = moments.filter((moment) =>
+    momentListedInFeed({ audience: moment.audience, feed: kind }),
+  );
+  const rows = buildRows(listed, today, Boolean(page?.hasMore));
   const chromeHidden = chromeOffset >= distance && !switcherOpen;
 
   return (
@@ -394,6 +425,7 @@ export default function JournalScreen() {
                 <FeedMoment
                   moment={item.moment}
                   circleNames={circleNames}
+                  feedCircleId={kind === "circle" ? scope : null}
                   headers={mediaHeaders}
                   viewerYear={viewerYear}
                   viewerZone={viewerZone}
