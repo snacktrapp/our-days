@@ -272,6 +272,44 @@ await step("PGRST303 on the first request to every endpoint is retried by the ap
   await supabase.auth.signOut({ scope: "local" });
 });
 
+await step("operations user posts a test-circle note, sees it on All circles, then deletes it", async () => {
+  resetStore();
+  const app = await freshApp("post-note");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const posts = await import("../src/lib/posts.ts");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  assert.ok(circles.length > 0, "test user needs a circle");
+  const circle = circles[0];
+  const body = `E2E note ${Date.now()}`;
+  const created = await posts.createWrittenMoment(supabase, {
+    journalPersonId: circle.personId,
+    circleId: circle.circleId,
+    body,
+    occurredOn: new Date().toISOString().slice(0, 10),
+    occurredTimezone: circle.timeZone,
+    audience: "family",
+    circleIds: [circle.circleId],
+  });
+  assert.equal(created.ok, true, created.ok ? "" : created.message);
+  const page = await journal.loadTimelinePage(supabase, {
+    circleId: null,
+    viewerMembershipIds: circles.map((item) => item.membershipId),
+  });
+  assert.ok(
+    page.moments.some((moment) => moment.body.includes(body)),
+    "new note should appear on All circles",
+  );
+  const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
+  assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+  await supabase.auth.signOut({ scope: "local" });
+});
+
 await step("OTA runtime is 0.2.0 so build 5 cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));

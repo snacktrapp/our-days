@@ -23,7 +23,10 @@ import {
 import { SettingsScreen } from "../components/settings-screen";
 import { MentionsBanner } from "../components/journal-banner";
 import { FeedMoment } from "../components/moment-card";
+import { AddSheet } from "../components/add-sheet";
+import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
+import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
 import { siteOrigin } from "../lib/config";
 import { circleToday } from "../lib/dates";
 import {
@@ -106,6 +109,8 @@ export default function JournalScreen() {
   const [mediaHeaders, setMediaHeaders] = useState<
     Record<string, string> | null | undefined
   >(undefined);
+  const [addOpen, setAddOpen] = useState(false);
+  const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profile, setProfile] = useState<ViewerProfile | null>(null);
@@ -115,6 +120,7 @@ export default function JournalScreen() {
   const [unseenActivity, setUnseenActivity] = useState(false);
   const yRef = useRef(0);
   const offsetRef = useRef(0);
+  const publishedUploads = useRef(new Set<string>());
 
   const viewerYear = new Date().getFullYear();
   const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -159,6 +165,20 @@ export default function JournalScreen() {
       }
     },
     [supabase],
+  );
+
+  useEffect(
+    () =>
+      subscribeUploads(() => {
+        const next = listUploads();
+        setUploads(next);
+        const fresh = next.some((chip) => chip.done && !publishedUploads.current.has(chip.id));
+        for (const chip of next) {
+          if (chip.done) publishedUploads.current.add(chip.id);
+        }
+        if (fresh) void loadFirstPage(scope, circles);
+      }),
+    [circles, loadFirstPage, scope],
   );
 
   useEffect(() => {
@@ -546,7 +566,29 @@ export default function JournalScreen() {
         hidden={chromeHidden}
         journalActive={!settingsOpen}
         onJournalPress={() => setSettingsOpen(false)}
+        onAddPress={() => {
+          setSettingsOpen(false);
+          setSwitcherOpen(false);
+          setAddOpen(true);
+        }}
       />
+      {uploads.length > 0 ? (
+        <UploadShelf chips={uploads} top={insets.top + floatGap + chromeHeight + 8} />
+      ) : null}
+      {addOpen ? (
+        <AddSheet
+          circles={circles}
+          justMeDefault={kind === "personal"}
+          onClose={() => setAddOpen(false)}
+          onPosted={(audience: Audience) => {
+            const next = audience === "just_me" ? youScope : allScope;
+            setAddOpen(false);
+            setScope(next);
+            setLoading(true);
+            void loadFirstPage(next, circles);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
