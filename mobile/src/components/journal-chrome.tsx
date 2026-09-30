@@ -1,10 +1,11 @@
 import { BlurView } from "expo-blur";
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,9 +65,12 @@ export function JournalHeader({
   locked?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const theme = useAppTheme();
   const { colors } = theme;
   const hidden = offset > 0 && !open && !interactive;
+  const menuWidth = Math.min(220, windowWidth - 32);
+  const [anchor, setAnchor] = useState({ width: 0, height: 0 });
   const titleFace = face(colors, 400, "record");
   const radius = colors.appearance === "retro" ? 2 : chromeRadius;
 
@@ -109,6 +113,17 @@ export function JournalHeader({
         <SettingsGear color={colors.muted} />
       </Pressable>
       <View style={styles.titleSlot} pointerEvents="box-none">
+        <View
+          style={styles.titleAnchor}
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setAnchor((current) =>
+              current.width === width && current.height === height
+                ? current
+                : { width, height },
+            );
+          }}
+        >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={locked ? title : "Choose a journal"}
@@ -136,7 +151,12 @@ export function JournalHeader({
               {title}
             </Text>
             {locked ? null : (
-              <View style={styles.chevron}>
+              <View
+                style={[
+                  styles.chevron,
+                  open ? { transform: [{ rotate: "180deg" }] } : null,
+                ]}
+              >
                 <ChevronDown color={colors.ink} />
               </View>
             )}
@@ -146,42 +166,81 @@ export function JournalHeader({
           <View
             style={[
               styles.menu,
+              Platform.OS === "web" ? null : menuChrome(colors),
               {
-                backgroundColor: colors.cream,
-                borderColor: colors.hairline,
-                borderRadius: colors.appearance === "retro" ? 2 : 10,
-                shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
+                width: menuWidth,
+                top: anchor.height + 10,
+                left: (anchor.width - menuWidth) / 2,
               },
             ]}
           >
-            {items.map((item) => (
-              <Pressable
-                key={item.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: item.selected }}
-                onPress={() => onSelect(item.id)}
-                style={({ pressed }) => [
-                  styles.menuRow,
-                  pressed && { backgroundColor: colors.selectionFill },
-                ]}
-              >
-                <View style={styles.checkSlot}>
-                  {item.selected ? <CheckIcon color={colors.ink} /> : null}
-                </View>
-                <Text
-                  style={[
-                    styles.menuLabel,
-                    face(colors, item.selected ? 650 : 500, "record"),
-                    { color: item.selected ? colors.ink : colors.muted },
+            <View
+              style={[
+                styles.menuSurface,
+                Platform.OS === "web" ? menuChrome(colors) : null,
+                {
+                  borderColor: colors.hairline,
+                  backgroundColor:
+                    colors.appearance === "retro"
+                      ? colors.cream
+                      : creamWash(colors.cream, colors.scheme),
+                  ...(Platform.OS === "web" && colors.appearance !== "retro"
+                    ? {
+                        backdropFilter: "blur(18px)",
+                        WebkitBackdropFilter: "blur(18px)",
+                      }
+                    : null),
+                },
+              ]}
+            >
+              {Platform.OS !== "web" && colors.appearance !== "retro" ? (
+                <BlurView
+                  pointerEvents="none"
+                  intensity={90}
+                  tint={colors.scheme === "light" ? "light" : "dark"}
+                  style={styles.menuBlur}
+                />
+              ) : null}
+              {items.map((item) => (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: item.selected }}
+                  onPress={() => onSelect(item.id)}
+                  style={({ pressed }) => [
+                    styles.menuRow,
+                    pressed && {
+                      backgroundColor: accentPress(colors.action),
+                      transform: [{ scale: 0.985 }],
+                    },
                   ]}
-                  numberOfLines={1}
                 >
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
+                  {({ pressed }) => (
+                    <>
+                      <View style={styles.checkSlot}>
+                        {item.selected ? <CheckIcon color={colors.ink} /> : null}
+                      </View>
+                      <Text
+                        style={[
+                          styles.menuLabel,
+                          face(colors, item.selected ? 650 : 500, "record"),
+                          {
+                            color:
+                              item.selected || pressed ? colors.ink : colors.muted,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.label}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : null}
+        </View>
       </View>
       <View style={styles.actions}>
         <Pressable
@@ -303,6 +362,61 @@ export function JournalNav({
     </View>
     </View>
   );
+}
+
+/** --overlay-popover-fill: cream at 88% (dark) or 90% (light). */
+function creamWash(cream: string, scheme: ThemeColors["scheme"]) {
+  return hexAlpha(cream, scheme === "light" ? 0.9 : 0.88);
+}
+
+/** `.title-switcher nav a:active` uses color-mix(accent 18%, transparent). */
+function accentPress(action: string) {
+  return hexAlpha(action, 0.18);
+}
+
+function hexAlpha(hex: string, alpha: number) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  const red = Number.parseInt(hex.slice(1, 3), 16);
+  const green = Number.parseInt(hex.slice(3, 5), 16);
+  const blue = Number.parseInt(hex.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+/**
+ * `.title-switcher nav` uses --header-drawer-shadow. Retro sets that to none.
+ * On iOS the shadow stays on the outer menu so the clipped blur inside does
+ * not square it off. Expo web paints boxShadow on the surface.
+ */
+function menuChrome(colors: ThemeColors) {
+  if (colors.appearance === "retro") {
+    return Platform.OS === "web"
+      ? { boxShadow: "none" }
+      : { shadowOpacity: 0, elevation: 0 };
+  }
+  if (Platform.OS === "web") {
+    return {
+      boxShadow:
+        colors.scheme === "light"
+          ? "0 18px 42px rgba(25, 35, 52, 0.18)"
+          : "0 18px 42px rgba(0, 0, 0, 0.32)",
+    };
+  }
+  if (colors.scheme === "light") {
+    return {
+      shadowColor: "rgb(25, 35, 52)",
+      shadowOpacity: 0.18,
+      shadowRadius: 42,
+      shadowOffset: { width: 0, height: 18 },
+      elevation: 8,
+    };
+  }
+  return {
+    shadowColor: "#000",
+    shadowOpacity: 0.32,
+    shadowRadius: 42,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 12,
+  };
 }
 
 /** iOS blur under the same fill the web paints with backdrop-filter. Retro’s blur is 0. */
@@ -449,8 +563,10 @@ const styles = StyleSheet.create({
     right: 88,
     top: 0,
     bottom: 0,
+    zIndex: 2,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
   },
   wordmark: {
     height: 20,
@@ -458,8 +574,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  titleButton: {
+  titleAnchor: {
+    position: "relative",
     alignSelf: "center",
+    alignItems: "center",
+    maxWidth: "100%",
+  },
+  titleButton: {
     alignItems: "center",
     maxWidth: "100%",
   },
@@ -489,18 +610,21 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: "absolute",
-    top: chromeHeight + 4,
-    width: 220,
-    maxWidth: "100%",
+    zIndex: 30,
+    borderRadius: 10,
+  },
+  menuSurface: {
     padding: 4,
     borderWidth: 1,
     borderRadius: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.32,
-    shadowRadius: 21,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 12,
-    zIndex: 30,
+    overflow: "hidden",
+  },
+  menuBlur: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   menuRow: {
     minHeight: 44,
