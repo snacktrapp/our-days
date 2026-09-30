@@ -379,7 +379,7 @@ function FlowCopy({
       >
         {quoteNode()}
         {tailNode() ? (
-          <View style={sourceLabel ? styles.sourceMeasure : undefined}>{tailNode()}</View>
+          <View style={sourceLabel ? styles.sourceLine : undefined}>{tailNode()}</View>
         ) : null}
       </View>
       {clamp ? (
@@ -394,7 +394,11 @@ function FlowCopy({
       ) : (
         <View style={styles.copyGrid}>
           {quoteNode()}
-          {tailNode()}
+          {sourceLabel ? (
+            <View style={styles.sourceLine}>{tailNode()}</View>
+          ) : (
+            tailNode()
+          )}
         </View>
       )}
       {overflows ? (
@@ -1077,7 +1081,9 @@ const styles = StyleSheet.create({
   copyGrid: {
     gap: 12,
   },
-  sourceMeasure: {
+  // .insight-source is a 44px target. That height is the attribution row,
+  // so the quote-to-byline grid gap and the byline-to-media gap match the web.
+  sourceLine: {
     minHeight: 44,
     justifyContent: "center",
   },
@@ -1094,7 +1100,7 @@ const styles = StyleSheet.create({
   },
   cite: {
     fontSize: 9,
-    lineHeight: 13,
+    lineHeight: 13.5,
   },
   verse: {
     gap: 12,
@@ -1194,7 +1200,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   insightClip: {
-    marginTop: 4,
+    marginTop: 0,
   },
   videoFallback: {
     width: "100%",
