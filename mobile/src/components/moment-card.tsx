@@ -351,15 +351,22 @@ function FlowCopy({
     face(colors, 400, "record"),
     { color: colors.muted, letterSpacing: tracking(9, 0.05) },
   ];
+  const linkColor =
+    colors.appearance === "retro" ? colors.action : colors.muted;
   const quoteNode = () => <QuoteText text={text} mentions={mentions} />;
   const tailNode = () =>
     cite || sourceLabel ? (
       <Text style={citeStyle}>
         {cite ?? ""}
         {sourceLabel ? (
-          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+          <Text style={citeStyle}>
             {cite ? " · " : ""}
-            {sourceLabel}
+            <Text
+              style={[citeStyle, styles.sourceLink, { color: linkColor }]}
+              onPress={onSource}
+            >
+              {sourceLabel}
+            </Text>
           </Text>
         ) : null}
       </Text>
@@ -463,7 +470,17 @@ function QuoteText({
       {inline && sourceLabel ? (
         <Text style={citeStyle}>
           {" · "}
-          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+          <Text
+            style={[
+              citeStyle,
+              styles.sourceLink,
+              {
+                color:
+                  colors.appearance === "retro" ? colors.action : colors.muted,
+              },
+            ]}
+            onPress={onSource}
+          >
             {sourceLabel}
           </Text>
         </Text>
@@ -690,16 +707,20 @@ function VideoPoster({
 
 /** globals.css `.connected-moment-menu-trigger`: “•••” at 15px, tracking -0.18em. */
 function Overflow({ color }: Readonly<{ color: string }>) {
+  const { colors } = useAppTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Moment options" style={styles.overflow}>
       {/* TODO(noop): moment menu. See src/lib/noop-controls.ts */}
       <Text
-        style={{
-          color,
-          fontSize: 15,
-          lineHeight: 15,
-          letterSpacing: tracking(15, -0.18),
-        }}
+        style={[
+          face(colors, 400),
+          {
+            color,
+            fontSize: 15,
+            lineHeight: 15,
+            letterSpacing: tracking(15, -0.18),
+          },
+        ]}
       >
         •••
       </Text>
