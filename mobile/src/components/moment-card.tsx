@@ -311,11 +311,10 @@ const previewLines = 5;
 const quoteLineHeight = 27;
 
 /**
- * Same rule as thoughtCopyOverflows + `.bible-verse-copy`: the unclamped
- * block is a grid with a 12px gap, and an insight source is a 44px target.
- * Overflow is scroll height greater than five line boxes. Clamping switches
- * to one inline flow with a five-line clamp, which is when the byline sits
- * on the quote.
+ * Unclamped copy is a grid with a 12px gap (`.bible-verse-copy`).
+ * The source link's 44px min-height is only a hit target; it is not a
+ * centered row. Clamped copy is one five-line flow, so the byline wraps
+ * inline after the quote.
  */
 function FlowCopy({
   text,
@@ -351,15 +350,22 @@ function FlowCopy({
     face(colors, 400, "record"),
     { color: colors.muted, letterSpacing: tracking(9, 0.05) },
   ];
+  const linkColor =
+    colors.appearance === "retro" ? colors.action : colors.muted;
   const quoteNode = () => <QuoteText text={text} mentions={mentions} />;
   const tailNode = () =>
     cite || sourceLabel ? (
       <Text style={citeStyle}>
         {cite ?? ""}
         {sourceLabel ? (
-          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+          <Text style={citeStyle}>
             {cite ? " · " : ""}
-            {sourceLabel}
+            <Text
+              style={[citeStyle, styles.sourceLink, { color: linkColor }]}
+              onPress={onSource}
+            >
+              {sourceLabel}
+            </Text>
           </Text>
         ) : null}
       </Text>
@@ -379,18 +385,20 @@ function FlowCopy({
       >
         {quoteNode()}
         {tailNode() ? (
-          <View style={sourceLabel ? styles.sourceLine : undefined}>{tailNode()}</View>
+          <View style={sourceLabel ? styles.overflowProbe : undefined}>{tailNode()}</View>
         ) : null}
       </View>
       {clamp ? (
-        <QuoteText
-          text={text}
-          mentions={mentions}
-          cite={cite}
-          sourceLabel={sourceLabel}
-          onSource={onSource}
-          lines={previewLines}
-        />
+        <View style={styles.clampedQuote}>
+          <QuoteText
+            text={text}
+            mentions={mentions}
+            cite={cite}
+            sourceLabel={sourceLabel}
+            onSource={onSource}
+            lines={previewLines}
+          />
+        </View>
       ) : (
         <View style={styles.copyGrid}>
           {quoteNode()}
@@ -463,7 +471,17 @@ function QuoteText({
       {inline && sourceLabel ? (
         <Text style={citeStyle}>
           {" · "}
-          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+          <Text
+            style={[
+              citeStyle,
+              styles.sourceLink,
+              {
+                color:
+                  colors.appearance === "retro" ? colors.action : colors.muted,
+              },
+            ]}
+            onPress={onSource}
+          >
             {sourceLabel}
           </Text>
         </Text>
@@ -482,8 +500,8 @@ function SeeMore({
       <Text
         style={[
           styles.more,
-          face(colors, 750, "record"),
-          { color: colors.clay, letterSpacing: tracking(9, 0.14) },
+          face(colors, 600, "record"),
+          { color: colors.clay, letterSpacing: tracking(8, 0.18) },
         ]}
       >
         {expanded ? "See less" : "See more"}
@@ -690,16 +708,20 @@ function VideoPoster({
 
 /** globals.css `.connected-moment-menu-trigger`: “•••” at 15px, tracking -0.18em. */
 function Overflow({ color }: Readonly<{ color: string }>) {
+  const { colors } = useAppTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Moment options" style={styles.overflow}>
       {/* TODO(noop): moment menu. See src/lib/noop-controls.ts */}
       <Text
-        style={{
-          color,
-          fontSize: 15,
-          lineHeight: 15,
-          letterSpacing: tracking(15, -0.18),
-        }}
+        style={[
+          face(colors, 400),
+          {
+            color,
+            fontSize: 15,
+            lineHeight: 15,
+            letterSpacing: tracking(15, -0.18),
+          },
+        ]}
       >
         •••
       </Text>
@@ -1081,11 +1103,13 @@ const styles = StyleSheet.create({
   copyGrid: {
     gap: 12,
   },
-  // .insight-source is a 44px target. That height is the attribution row,
-  // so the quote-to-byline grid gap and the byline-to-media gap match the web.
-  sourceLine: {
+  // Hidden probe matches the unclamped cite's 44px hit target so See more
+  // appears on the same quotes as the web. The visible byline does not.
+  overflowProbe: {
     minHeight: 44,
-    justifyContent: "center",
+  },
+  sourceLine: {
+    paddingBottom: 16,
   },
   quote: {
     fontSize: 18,
@@ -1117,16 +1141,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingRight: 28,
   },
+  clampedQuote: {
+    maxHeight: quoteLineHeight * previewLines,
+    overflow: "hidden",
+  },
   moreHit: {
     minHeight: 44,
-    marginTop: -6,
-    marginBottom: -10,
+    // -1px under the last line puts SEE MORE about 17px below the byline.
+    // The label stays centered, so the video remains about 16px under SEE MORE.
+    marginTop: -1,
+    marginBottom: 0,
     justifyContent: "center",
     alignItems: "flex-start",
   },
   more: {
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 8,
+    lineHeight: 10.4,
     textTransform: "uppercase",
   },
   commentBody: {
