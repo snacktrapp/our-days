@@ -29,6 +29,7 @@ import {
 } from "react-native";
 
 import { adjacentComposerField } from "../lib/composer-keyboard";
+import { setSheetTouchingField } from "../lib/sheet-dismiss";
 
 export const composerAccessoryId = "our-days-composer-accessory";
 
@@ -81,6 +82,9 @@ export function useComposerInput(id: string, multiline = false) {
     ref,
     inputAccessoryViewID: Platform.OS === "ios" ? composerAccessoryId : undefined,
     onFocus: () => form?.onFieldFocus(id, ref.current),
+    onTouchStart: () => setSheetTouchingField(true),
+    onTouchEnd: () => setSheetTouchingField(false),
+    onTouchCancel: () => setSheetTouchingField(false),
     ...(multiline
       ? { scrollEnabled: false as const }
       : {
@@ -226,7 +230,12 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
 export function ComposerScroller({
   children,
   contentStyle,
-}: Readonly<{ children: ReactNode; contentStyle?: StyleProp<ViewStyle> }>) {
+  onOffset,
+}: Readonly<{
+  children: ReactNode;
+  contentStyle?: StyleProp<ViewStyle>;
+  onOffset?: (y: number) => void;
+}>) {
   const form = useKeyboardForm();
   return (
     <ScrollView
@@ -237,7 +246,12 @@ export function ComposerScroller({
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       automaticallyAdjustKeyboardInsets
-      onScroll={form?.onScroll}
+      bounces={false}
+      overScrollMode="never"
+      onScroll={(event) => {
+        form?.onScroll(event);
+        onOffset?.(event.nativeEvent.contentOffset.y);
+      }}
       scrollEventThrottle={16}
     >
       <TouchableWithoutFeedback onPress={form?.dismiss ?? Keyboard.dismiss} accessible={false}>

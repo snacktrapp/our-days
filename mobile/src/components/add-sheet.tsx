@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
+  Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -47,6 +49,7 @@ import {
 } from "../lib/posts";
 import { loadRosters, type CirclePerson } from "../lib/roster";
 import { getSupabase } from "../lib/supabase";
+import { sheetHasUnsavedChanges, type SheetDraft } from "../lib/sheet-dismiss";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
 import {
@@ -63,6 +66,7 @@ import {
   KeyboardForm,
   useComposerInput,
 } from "./keyboard-form";
+import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
 type Picker = "book" | "chapter" | "start" | "end" | null;
@@ -439,6 +443,20 @@ export function AddSheet({
             ? "insight"
             : "thought",
     );
+    baseline.current = {
+      body: draft.body,
+      title: draft.kind === "bible-verse" ? "" : draft.title,
+      sourceUrl: draft.sourceUrl,
+      place: "",
+      tags: "",
+      photo: false,
+      verse: draft.verse.book ?? "",
+      occurredOn: draft.occurredOn || occurredOn,
+      occurredTime,
+      justMe: draft.audience === "just_me",
+      circleId: draft.circleId || audienceId,
+    };
+    seeded.current = true;
   }
 
   const titleText =
@@ -470,6 +488,86 @@ export function AddSheet({
   const visiblePeople = (roster.get(circle?.circleId ?? "") ?? []).filter(
     (person) => person.id !== circle?.personId,
   );
+  const scrollTop = useRef(0);
+  const chromeHeight = useRef(88);
+  const sheetTop = useRef(0);
+  const sheetHeightRef = useRef(sheetHeight);
+  const baseline = useRef<SheetDraft | null>(null);
+  const seeded = useRef(false);
+  const sheetNode = useRef<View>(null);
+  useEffect(() => {
+    sheetHeightRef.current = sheetHeight;
+  }, [sheetHeight]);
+  useEffect(() => {
+    if (seeded.current) return;
+    if (circles.length > 0 && !audienceId) return;
+    baseline.current = {
+      body: "",
+      title: "",
+      sourceUrl: "",
+      place: "",
+      tags: "",
+      photo: false,
+      verse: "",
+      occurredOn,
+      occurredTime,
+      justMe,
+      circleId: audienceId,
+    };
+    seeded.current = true;
+  }, [audienceId, circles.length, justMe, occurredOn, occurredTime]);
+  const unsaved = () => {
+    const initial = baseline.current;
+    if (!initial) return false;
+    return sheetHasUnsavedChanges(
+      {
+        body,
+        title,
+        sourceUrl,
+        place: place.label,
+        tags: taggedIds.join(","),
+        photo: photoBytes != null,
+        verse: verse.book ?? "",
+        occurredOn,
+        occurredTime,
+        justMe,
+        circleId: audienceId,
+      },
+      initial,
+    );
+  };
+  const closeSheet = () => {
+    Keyboard.dismiss();
+    onClose();
+  };
+  const confirmClose = (then: () => void) => {
+    if (!unsaved()) {
+      then();
+      return;
+    }
+    Alert.alert("Discard this unfinished moment?", undefined, [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: then },
+    ]);
+  };
+  const onCommit = useRef<Parameters<typeof useSheetDrag>[0]["onCommit"]["current"]>(() => undefined);
+  useEffect(() => {
+    onCommit.current = ({ springBack, dismiss }) => {
+      if (unsaved()) {
+        springBack();
+        confirmClose(closeSheet);
+        return;
+      }
+      dismiss(closeSheet);
+    };
+  });
+  const { translateY, panHandlers } = useSheetDrag({
+    scrollTop,
+    chromeHeight,
+    sheetTop,
+    sheetHeight: sheetHeightRef,
+    onCommit,
+  });
 
   return (
     <KeyboardForm>
@@ -481,8 +579,15 @@ export function AddSheet({
       {Platform.OS === "web" ? null : (
         <BlurView intensity={40} tint={colors.scheme === "light" ? "light" : "dark"} style={styles.blur} />
       )}
-      <Pressable accessibilityLabel="Close" style={[styles.scrimTap, { minHeight: topGap }]} onPress={onClose} />
-      <View
+      <Pressable accessibilityLabel="Close" style={[styles.scrimTap, { minHeight: topGap }]} onPress={() => confirmClose(closeSheet)} />
+      <Animated.View
+        ref={sheetNode}
+        {...panHandlers}
+        onLayout={() => {
+          sheetNode.current?.measureInWindow((_x, y) => {
+            sheetTop.current = y;
+          });
+        }}
         style={[
           styles.sheet,
           {
@@ -491,16 +596,28 @@ export function AddSheet({
             borderColor: colors.hairline,
             borderTopLeftRadius: radius,
             borderTopRightRadius: radius,
+            transform: [{ translateY }],
           },
         ]}
       >
-        <DismissKeyboardPressable accessible={false}>
+        <View
+          onLayout={(event) => {
+            chromeHeight.current = event.nativeEvent.layout.height;
+          }}
+        >
+        <DismissKeyboardPressable accessible={false} style={styles.handleHit}>
           <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
         </DismissKeyboardPressable>
         <DismissKeyboardPressable style={styles.bar}>
           <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]}>{titleText}</Text>
         </DismissKeyboardPressable>
-        <ComposerScroller contentStyle={styles.body}>
+        </View>
+        <ComposerScroller
+          contentStyle={styles.body}
+          onOffset={(y) => {
+            scrollTop.current = y;
+          }}
+        >
           {mode == null ? (
             <View style={styles.grid}>
               {choices.map((choice) => (
@@ -765,7 +882,7 @@ export function AddSheet({
             </View>
           </View>
         ) : null}
-      </View>
+      </Animated.View>
     </KeyboardAvoidingView>
     </KeyboardForm>
   );
@@ -974,12 +1091,15 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minHeight: 0,
   },
+  handleHit: {
+    alignItems: "center",
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
   handle: {
-    alignSelf: "center",
     width: 38,
     height: 4,
     borderRadius: 999,
-    marginBottom: 8,
   },
   bar: {
     minHeight: 44,

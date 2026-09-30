@@ -160,6 +160,35 @@ await step("photo menu matches the web and people stay in join order", async () 
   );
 });
 
+await step("sheet drag springs back when short and confirms unsaved text", async () => {
+  const sheet = await import("../src/lib/sheet-dismiss.ts");
+  assert.equal(sheet.canStartSheetDismiss(40, true), true);
+  assert.equal(sheet.canStartSheetDismiss(40, false), false);
+  assert.equal(sheet.canStartSheetDismiss(0, false), true);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 20, velocityY: 0 }), false);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: sheet.sheetDismissThresholdPx, velocityY: 0 }), true);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 24, velocityY: sheet.sheetDismissVelocity }), true);
+  assert.equal(
+    sheet.sheetDismissShouldCommit({ dy: 120, velocityY: -sheet.sheetDismissVelocity }),
+    false,
+  );
+  const initial = {
+    body: "",
+    title: "",
+    sourceUrl: "",
+    place: "",
+    tags: "",
+    photo: false,
+    verse: "",
+    occurredOn: "2026-09-30",
+    occurredTime: "22:00",
+    justMe: false,
+    circleId: "home",
+  };
+  assert.equal(sheet.sheetHasUnsavedChanges(initial, initial), false);
+  assert.equal(sheet.sheetHasUnsavedChanges({ ...initial, body: "A note" }, initial), true);
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
