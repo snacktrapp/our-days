@@ -7,7 +7,6 @@ export const noopControls = [
   "Sign in with X",
   "Settings gear opens the settings page. Profile color saves. Theme, accent, and sign out work. Notifications and Recently removed are visible and do not navigate.",
   "Notification heart",
-  "Add in the bottom nav",
   "Circles in the bottom nav",
   "Comment button on a post",
   "Heart on a post (shows the saved reaction, does not write)",

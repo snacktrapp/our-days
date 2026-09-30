@@ -287,11 +287,13 @@ export function JournalNav({
   hidden,
   journalActive = true,
   onJournalPress,
+  onAddPress,
 }: Readonly<{
   offset: number;
   hidden: boolean;
   journalActive?: boolean;
   onJournalPress?: () => void;
+  onAddPress?: () => void;
 }>) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -350,6 +352,7 @@ export function JournalNav({
         color={colors.action}
         idle={colors.appearance === "retro" ? colors.ink : colors.muted}
         face={label}
+        onPress={onAddPress}
         icon={<NavAdd color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
       />
       <NavItem

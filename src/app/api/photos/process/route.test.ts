@@ -121,6 +121,33 @@ describe("private photo processing route", () => {
     expect(mocks.createClient).not.toHaveBeenCalled();
   });
 
+  it("accepts the Expo web loopback origin only outside hosted environments", async () => {
+    const response = await request(
+      { intakeId },
+      {
+        host: "localhost:3215",
+        origin: "http://localhost:8081",
+      },
+    );
+    expect(response.status).toBe(200);
+
+    mocks.createClient.mockClear();
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("OUR_DAYS_ENVIRONMENT", "production");
+    expect(
+      (
+        await request(
+          { intakeId },
+          {
+            host: "journal.example.test",
+            origin: "http://localhost:8081",
+          },
+        )
+      ).status,
+    ).toBe(404);
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
+
   it("accepts hosted Preview origin even when Vercel forwards a ported host", async () => {
     const previewHost =
       "our-days-git-cursor-local-journal-n-6b5630-snacktrapps-projects.vercel.app";
