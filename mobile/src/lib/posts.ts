@@ -149,6 +149,52 @@ export async function createWrittenMoment(
   return { ok: true, momentId: data };
 }
 
+/** Connected notes, verses, and places. Same RPC the web composer calls. */
+export async function createFamilyMoment(
+  supabase: SupabaseClient,
+  input: Readonly<{
+    journalPersonId: string;
+    circleId: string;
+    body: string;
+    placeName?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    taggedPersonIds?: readonly string[];
+    occurredOn: string;
+    occurredAt?: string | null;
+    occurredTimezone?: string | null;
+    audience: Audience;
+    circleIds?: readonly string[];
+  }>,
+): Promise<PostResult> {
+  const { data, error } = await supabase.rpc("create_family_moment", {
+    circle_id: input.circleId,
+    journal_person_id: input.journalPersonId,
+    moment_kind: "thought",
+    moment_title: "",
+    moment_body: input.body.trim(),
+    place_name: input.placeName?.trim() ?? "",
+    tagged_person_ids: [...(input.taggedPersonIds ?? [])],
+    occurred_on: input.occurredOn,
+    occurred_at: input.occurredAt ?? undefined,
+    occurred_timezone: input.occurredTimezone ?? undefined,
+    audience: input.audience,
+    ...(input.latitude != null && input.longitude != null
+      ? { latitude: input.latitude, longitude: input.longitude }
+      : {}),
+    ...(input.audience === "family" && input.circleIds?.length
+      ? { circle_ids: [...input.circleIds] }
+      : {}),
+  });
+  if (error || typeof data !== "string") {
+    return {
+      ok: false,
+      message: message(error, "That moment could not be saved. Your draft is still here."),
+    };
+  }
+  return { ok: true, momentId: data };
+}
+
 export async function createInsightMoment(
   supabase: SupabaseClient,
   input: Readonly<{
@@ -310,7 +356,12 @@ export async function saveEntryDraft(
     circleIds: readonly string[];
     journalPersonId: string | null;
     occurredOn: string;
+    occurredTime?: string;
     occurredTimezone: string;
+    placeName?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    taggedPersonIds?: readonly string[];
     verse: DraftRecord["verse"];
   }>,
 ): Promise<PostResult> {
@@ -338,9 +389,12 @@ export async function saveEntryDraft(
     audience: input.audience,
     circle_ids: [...input.circleIds],
     journal_person_id: input.journalPersonId ?? undefined,
-    tagged_person_ids: [],
-    place_name: "",
+    tagged_person_ids: [...(input.taggedPersonIds ?? [])],
+    place_name: (input.placeName ?? "").slice(0, 200),
+    latitude: input.latitude ?? undefined,
+    longitude: input.longitude ?? undefined,
     occurred_on: input.occurredOn,
+    occurred_time: input.occurredTime || undefined,
     occurred_timezone: input.occurredTimezone,
     media: [],
     verse: input.verse,
@@ -379,7 +433,10 @@ export type PhotoUploadInput = Readonly<{
   journalPersonId: string;
   body: string;
   occurredOn: string;
+  occurredAt?: string | null;
   occurredTimezone?: string | null;
+  placeName?: string;
+  taggedPersonIds?: readonly string[];
   audience: Audience;
   circleIds?: readonly string[];
 }>;
@@ -682,10 +739,11 @@ export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUp
       circle_id: input.circleId,
       journal_person_id: input.journalPersonId,
       occurred_on: input.occurredOn,
+      occurred_at: input.occurredAt ?? undefined,
       occurred_timezone: input.occurredTimezone ?? undefined,
-      place_name: "",
+      place_name: input.placeName?.trim() ?? "",
       request_key: requestKey,
-      tagged_person_ids: [],
+      tagged_person_ids: [...(input.taggedPersonIds ?? [])],
       audience: input.audience,
       ...(input.audience === "family" && input.circleIds?.length
         ? { circle_ids: [...input.circleIds] }

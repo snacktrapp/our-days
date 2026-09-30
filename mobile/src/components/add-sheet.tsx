@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -23,9 +26,10 @@ import {
 } from "../lib/bible";
 import { circleToday } from "../lib/dates";
 import type { CircleMembership } from "../lib/journal";
+import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
+  createFamilyMoment,
   createInsightMoment,
-  createWrittenMoment,
   deleteEntryDraft,
   listEntryDrafts,
   loadEntryDraft,
@@ -34,9 +38,18 @@ import {
   type Audience,
   type DraftListItem,
 } from "../lib/posts";
+import { loadRosters, type CirclePerson } from "../lib/roster";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
+import {
+  AudienceChips,
+  currentPickerTimeValue,
+  DateTimeFields,
+  occurredInstant,
+  PeopleFields,
+  PlaceFields,
+} from "./composer-fields";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
 type Picker = "book" | "chapter" | "start" | "end" | null;
@@ -63,14 +76,17 @@ export function AddSheet({
   onClose,
   onPosted,
   initialMode = null,
+  previewPeople,
 }: Readonly<{
   circles: readonly CircleMembership[];
   justMeDefault: boolean;
   onClose: () => void;
   onPosted: (audience: Audience) => void;
   initialMode?: Mode;
+  previewPeople?: Readonly<Record<string, readonly CirclePerson[]>>;
 }>) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { colors } = useAppTheme();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [body, setBody] = useState("");
@@ -78,6 +94,20 @@ export function AddSheet({
   const [sourceUrl, setSourceUrl] = useState("");
   const [occurredOn, setOccurredOn] = useState(
     circleToday(circles[0]?.timeZone ?? "UTC"),
+  );
+  const [occurredTime, setOccurredTime] = useState(
+    initialMode === "bible" ? "" : currentPickerTimeValue(),
+  );
+  const [place, setPlace] = useState<PlaceSelection>(emptyPlace);
+  const [taggedIds, setTaggedIds] = useState<readonly string[]>([]);
+  const [roster, setRoster] = useState<ReadonlyMap<string, readonly CirclePerson[]>>(
+    () => new Map(Object.entries(previewPeople ?? {})),
+  );
+  const [counts, setCounts] = useState<ReadonlyMap<string, number>>(
+    () =>
+      new Map(
+        Object.entries(previewPeople ?? {}).map(([id, people]) => [id, people.length]),
+      ),
   );
   const [justMe, setJustMe] = useState(justMeDefault);
   const [circleId, setCircleId] = useState(circles[0]?.circleId ?? "");
@@ -103,6 +133,19 @@ export function AddSheet({
   }, [mode]);
 
   useEffect(() => {
+    if (previewPeople) return;
+    const supabase = getSupabase();
+    if (!supabase || circles.length === 0) return;
+    void loadRosters(
+      supabase,
+      circles.map((item) => item.circleId),
+    ).then((loaded) => {
+      setRoster(new Map([...loaded].map(([id, value]) => [id, value.people])));
+      setCounts(new Map([...loaded].map(([id, value]) => [id, value.memberCount])));
+    });
+  }, [circles, previewPeople]);
+
+  useEffect(() => {
     if (mode !== "bible") return;
     void loadBibleCatalog().then(() => setCatalogReady(true));
   }, [mode]);
@@ -124,21 +167,36 @@ export function AddSheet({
     return supabase;
   }
 
+  function when() {
+    const instant = occurredInstant(occurredOn, occurredTime);
+    if (!instant) {
+      setError("Check the time and try again.");
+      return null;
+    }
+    return instant;
+  }
+
   async function postNote(nextBody: string) {
     const supabase = requireCircle();
-    if (!supabase || !circle) return;
+    const instant = when();
+    if (!supabase || !circle || !instant) return;
     if (!nextBody.trim()) {
       setError("Write the entry before posting.");
       return;
     }
     setBusy(true);
     setError(null);
-    const result = await createWrittenMoment(supabase, {
+    const result = await createFamilyMoment(supabase, {
       journalPersonId: circle.personId,
       circleId: circle.circleId,
       body: nextBody,
+      placeName: place.label,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      taggedPersonIds: taggedIds,
       occurredOn,
-      occurredTimezone: circle.timeZone,
+      occurredAt: instant.occurredAt,
+      occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
       audience: audience(),
       circleIds: justMe ? [] : [circle.circleId],
     });
@@ -153,7 +211,8 @@ export function AddSheet({
 
   async function postInsight() {
     const supabase = requireCircle();
-    if (!supabase || !circle) return;
+    const instant = when();
+    if (!supabase || !circle || !instant) return;
     if (!body.trim() || !title.trim()) {
       setError("Check the Insight and try again.");
       return;
@@ -166,7 +225,8 @@ export function AddSheet({
       attribution: title,
       sourceUrl,
       occurredOn,
-      occurredTimezone: circle.timeZone,
+      occurredAt: instant.occurredAt,
+      occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
       audience: audience(),
       circleIds: justMe ? [] : [circle.circleId],
     });
@@ -181,7 +241,8 @@ export function AddSheet({
 
   async function postPhoto() {
     const supabase = requireCircle();
-    if (!supabase || !circle) return;
+    const instant = when();
+    if (!supabase || !circle || !instant) return;
     if (!photoBytes) {
       setError("Choose a photo first.");
       return;
@@ -195,7 +256,10 @@ export function AddSheet({
       journalPersonId: circle.personId,
       body: body.trim(),
       occurredOn,
-      occurredTimezone: circle.timeZone,
+      occurredAt: instant.occurredAt,
+      occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
+      placeName: place.label,
+      taggedPersonIds: taggedIds,
       audience: audience(),
       circleIds: justMe ? [] : [circle.circleId],
     });
@@ -266,7 +330,12 @@ export function AddSheet({
       circleIds: justMe ? [] : circle ? [circle.circleId] : [],
       journalPersonId: circle.personId,
       occurredOn,
+      occurredTime,
       occurredTimezone: circle.timeZone,
+      placeName: place.label,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      taggedPersonIds: taggedIds,
       verse,
     });
     setBusy(false);
@@ -319,23 +388,35 @@ export function AddSheet({
             : mode === "drafts"
               ? "Drafts"
               : "New moment";
-  const labelColor =
-    colors.appearance === "retro"
-      ? colors.muted
-      : colors.scheme === "dark"
-        ? "#c4cbc7"
-        : colors.muted;
+  const retro = colors.appearance === "retro";
+  const labelColor = retro ? colors.muted : colors.scheme === "dark" ? "#c4cbc7" : colors.muted;
+  const topGap = Math.max(20, insets.top);
+  const sheetHeight =
+    mode == null
+      ? Math.max(windowHeight * 0.5, 300)
+      : Math.min(windowHeight * 0.88, windowHeight - topGap);
+  const scrimColor = retro
+    ? "#100d0c"
+    : colors.scheme === "light"
+      ? "rgba(32,39,33,0.42)"
+      : "rgba(0,5,3,0.72)";
+  const visiblePeople = (roster.get(circle?.circleId ?? "") ?? []).filter(
+    (person) => person.id !== circle?.personId,
+  );
 
   return (
-    <View style={styles.scrim}>
+    <View style={[styles.scrim, { backgroundColor: scrimColor }]}>
+      {Platform.OS === "web" ? null : (
+        <BlurView intensity={40} tint={colors.scheme === "light" ? "light" : "dark"} style={styles.blur} />
+      )}
       <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={onClose} />
       <View
         style={[
           styles.sheet,
           {
-            backgroundColor: colors.paper,
+            height: sheetHeight,
+            backgroundColor: retro ? colors.cream : colors.paper,
             borderColor: colors.hairline,
-            paddingBottom: insets.bottom + 16,
             borderTopLeftRadius: radius,
             borderTopRightRadius: radius,
           },
@@ -343,17 +424,9 @@ export function AddSheet({
       >
         <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
         <View style={styles.bar}>
-          {mode ? (
-            <Pressable accessibilityRole="button" onPress={() => setMode(null)} style={styles.back}>
-              <Text style={[face(colors, 600), { color: colors.muted, fontSize: 13 }]}>Back</Text>
-            </Pressable>
-          ) : null}
           <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]}>{titleText}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose}>
-            <Text style={[face(colors, 600), { color: colors.muted, fontSize: 13 }]}>Close</Text>
-          </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.scroller} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {mode == null ? (
             <View style={styles.grid}>
               {choices.map((choice) => (
@@ -361,10 +434,7 @@ export function AddSheet({
                   key={choice.id}
                   accessibilityRole="button"
                   onPress={() => setMode(choice.id)}
-                  style={[
-                    styles.choice,
-                    { borderColor: colors.hairline, backgroundColor: colors.cream },
-                  ]}
+                  style={[styles.choice, { borderColor: colors.hairline, backgroundColor: "transparent" }]}
                 >
                   <View style={styles.choiceTitle}>
                     <Text style={[face(colors, 650), { color: colors.ink, fontSize: 13 }]}>
@@ -376,7 +446,7 @@ export function AddSheet({
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={[face(colors, 400), styles.detail, { color: colors.muted }]}>
+                  <Text style={[face(colors, 400, "record"), styles.detail, { color: colors.muted }]}>
                     {choice.detail}
                   </Text>
                 </Pressable>
@@ -481,28 +551,43 @@ export function AddSheet({
                       : "Add context…"
                 }
                 multiline
+                accentBorder={retro}
                 onChange={setBody}
               />
-              <Field
-                label="Moment date"
-                labelColor={labelColor}
-                value={occurredOn}
-                placeholder="YYYY-MM-DD"
-                onChange={setOccurredOn}
+              <DateTimeFields
+                date={occurredOn}
+                maxDate={circleToday(circle?.timeZone ?? "UTC")}
+                time={occurredTime}
+                timeOptional={mode === "bible"}
+                onDateChange={setOccurredOn}
+                onTimeChange={setOccurredTime}
               />
-              <AudienceField
+              <AudienceChips
                 circles={circles}
+                counts={counts}
                 justMe={justMe}
                 circleId={circle?.circleId ?? ""}
-                labelColor={labelColor}
                 onJustMe={setJustMe}
                 onCircle={(id) => {
                   setJustMe(false);
                   setCircleId(id);
-                  const next = circles.find((item) => item.circleId === id);
-                  if (next) setOccurredOn(circleToday(next.timeZone));
+                  setTaggedIds([]);
                 }}
               />
+              {mode === "insight" ? null : (
+                <PlaceFields value={place} onChange={setPlace} />
+              )}
+              {mode === "insight" ? null : (
+                <PeopleFields
+                  people={visiblePeople}
+                  selectedIds={taggedIds}
+                  onToggle={(id) =>
+                    setTaggedIds((current) =>
+                      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+                    )
+                  }
+                />
+              )}
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
               <View style={styles.split}>
                 <Pressable
@@ -527,14 +612,45 @@ export function AddSheet({
                     }
                     void postNote(body);
                   }}
-                  style={[styles.post, { backgroundColor: colors.action, borderColor: colors.action }]}
+                  style={[
+                    styles.post,
+                    {
+                      backgroundColor: colors.action,
+                      borderColor: colors.action,
+                      borderRadius: retro ? 2 : 7,
+                    },
+                  ]}
                 >
-                  <Text style={[face(colors, 650), { color: colors.actionInk }]}>
+                  <Text
+                    style={[
+                      face(colors, retro ? 700 : 650),
+                      {
+                        color: colors.actionInk,
+                        letterSpacing: retro ? tracking(15, 0.08) : 0,
+                        textTransform: retro ? "uppercase" : "none",
+                      },
+                    ]}
+                  >
                     {busy ? "Saving…" : "Post"}
                   </Text>
                 </Pressable>
-                <Pressable accessibilityRole="button" disabled={busy} onPress={() => void persistDraft()} style={styles.draft}>
-                  <Text style={[face(colors, 650), { color: colors.muted }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => void persistDraft()}
+                  style={[
+                    styles.draft,
+                    retro
+                      ? {
+                          borderWidth: 1,
+                          borderColor: colors.hairline,
+                          borderRadius: 2,
+                          backgroundColor: colors.surface,
+                        }
+                      : null,
+                  ]}
+                >
+                  <Text style={[face(colors, retro ? 700 : 650), { color: retro ? colors.ink : colors.muted }]}>
                     {busy ? "Saving draft…" : "Save draft"}
                   </Text>
                 </Pressable>
@@ -559,74 +675,6 @@ function draftLabel(draft: DraftListItem) {
   return draft.previewText ? `${kind} · ${draft.previewText}` : kind;
 }
 
-function AudienceField({
-  circles,
-  justMe,
-  circleId,
-  labelColor,
-  onJustMe,
-  onCircle,
-}: Readonly<{
-  circles: readonly CircleMembership[];
-  justMe: boolean;
-  circleId: string;
-  labelColor: string;
-  onJustMe: (value: boolean) => void;
-  onCircle: (id: string) => void;
-}>) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={styles.form}>
-      <Text
-        style={[
-          face(colors, 600, "record"),
-          styles.legend,
-          { color: labelColor, letterSpacing: tracking(colors.appearance === "retro" ? 11 : 9, 0.08) },
-        ]}
-      >
-        Who can see this?
-      </Text>
-      <View style={styles.chips}>
-        {circles.map((circle) => {
-          const selected = !justMe && circle.circleId === circleId;
-          return (
-            <Pressable
-              key={circle.circleId}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: selected }}
-              onPress={() => onCircle(circle.circleId)}
-              style={[
-                styles.chip,
-                {
-                  borderColor: selected ? colors.action : colors.hairline,
-                  backgroundColor: selected ? colors.selectionFill : "transparent",
-                },
-              ]}
-            >
-              <Text style={[face(colors, 400, "record"), { color: colors.ink, fontSize: 14 }]}>
-                {circle.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: justMe }}
-          onPress={() => onJustMe(true)}
-          style={[
-            styles.chip,
-            {
-              borderColor: justMe ? colors.action : colors.hairline,
-              backgroundColor: justMe ? colors.selectionFill : "transparent",
-            },
-          ]}
-        >
-          <Text style={[face(colors, 400, "record"), { color: colors.ink, fontSize: 14 }]}>Just me</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
 
 function Field({
   label,
@@ -634,6 +682,7 @@ function Field({
   value,
   placeholder,
   multiline = false,
+  accentBorder = false,
   onChange,
 }: Readonly<{
   label: string;
@@ -641,6 +690,7 @@ function Field({
   value: string;
   placeholder: string;
   multiline?: boolean;
+  accentBorder?: boolean;
   onChange: (value: string) => void;
 }>) {
   const { colors } = useAppTheme();
@@ -663,12 +713,15 @@ function Field({
         onChangeText={onChange}
         style={[
           styles.input,
-          face(colors, 400),
+          face(colors, 400, multiline ? "serif" : "interface"),
           {
             color: colors.ink,
-            borderColor: colors.hairline,
+            borderColor: accentBorder ? colors.action : colors.hairline,
             backgroundColor: colors.surface,
-            minHeight: multiline ? 96 : 44,
+            minHeight: multiline ? 120 : 44,
+            borderRadius: colors.appearance === "retro" ? 2 : multiline ? 8 : 7,
+            fontSize: multiline ? 17 : 15,
+            lineHeight: multiline ? 25 : undefined,
           },
         ]}
       />
@@ -789,13 +842,19 @@ const styles = StyleSheet.create({
     left: 0,
     zIndex: 40,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,5,3,0.72)",
+    ...(Platform.OS === "web" ? { backdropFilter: "blur(8px)" } : null),
+  },
+  blur: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   scrimTap: {
     flex: 1,
   },
   sheet: {
-    maxHeight: "92%",
     borderTopWidth: 1,
     paddingTop: 8,
     paddingHorizontal: 20,
@@ -822,6 +881,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
   },
+  scroller: { flex: 1 },
   body: {
     paddingTop: 8,
     paddingBottom: 24,
@@ -830,17 +890,17 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
   },
   choice: {
-    width: "48%",
+    width: "47%",
     minHeight: 80,
     paddingVertical: 11,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 8,
     justifyContent: "flex-start",
-    gap: 3,
+    gap: 4,
   },
   choiceTitle: {
     flexDirection: "row",
@@ -848,7 +908,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   form: { gap: 8 },
-  detail: { fontSize: 10, lineHeight: 14 },
+  detail: { fontSize: 9, lineHeight: 12 },
   legend: {
     fontSize: 9,
     textTransform: "uppercase",

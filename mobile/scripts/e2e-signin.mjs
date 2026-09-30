@@ -284,8 +284,9 @@ await step("operations user posts a test-circle note, sees it on All circles, th
   assert.equal(result.ok, true, result.ok ? "" : result.message);
   const posts = await import("../src/lib/posts.ts");
   const circles = await journal.loadCircles(supabase, result.session.user.id);
-  assert.ok(circles.length > 0, "test user needs a circle");
-  const circle = circles[0];
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
   const body = `E2E note ${Date.now()}`;
   const created = await posts.createWrittenMoment(supabase, {
     journalPersonId: circle.personId,
