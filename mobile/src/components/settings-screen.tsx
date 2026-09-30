@@ -112,12 +112,22 @@ function ProfileGroup({
           style={[
             styles.avatar,
             {
-              backgroundColor: dotColor(accent, colors),
+              backgroundColor:
+                colors.appearance === "retro" ? colors.action : dotColor(accent, colors),
               borderRadius: colors.appearance === "retro" ? 2 : 20,
             },
           ]}
         >
-          <Text style={[face(colors, 700), styles.avatarLetter, { color: dotInk(accent, colors) }]}>
+          <Text
+            style={[
+              face(colors, 700),
+              styles.avatarLetter,
+              {
+                color:
+                  colors.appearance === "retro" ? colors.actionInk : dotInk(accent, colors),
+              },
+            ]}
+          >
             {profile.initial}
           </Text>
         </View>
@@ -310,12 +320,24 @@ function AccentRow() {
               accessibilityLabel={id}
               accessibilityState={{ selected }}
               onPress={() => theme.setAccent(id as AccentId)}
-              style={[
-                styles.accentSwatch,
-                { backgroundColor: retroAccentHex[id], borderColor: colors.hairline },
-                selected && { borderColor: colors.ink, borderWidth: 2 },
-              ]}
-            />
+              style={styles.accentHit}
+            >
+              <View
+                style={[
+                  styles.accentFrame,
+                  selected
+                    ? { borderColor: colors.ink, borderWidth: 1, padding: 2 }
+                    : { borderWidth: 0, padding: 0 },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.accentSwatch,
+                    { backgroundColor: retroAccentHex[id], borderColor: colors.hairline },
+                  ]}
+                />
+              </View>
+            </Pressable>
           );
         })}
       </View>
@@ -327,7 +349,6 @@ function NotificationsRow() {
   const { colors } = useAppTheme();
   return (
     <View style={[styles.plainRow, { opacity: 0.72 }]}>
-      <View style={[styles.hairline, { backgroundColor: colors.hairline }]} />
       <View style={styles.copy}>
         <Text
           style={[
@@ -367,7 +388,6 @@ function PlainRow({
   const { colors } = useAppTheme();
   return (
     <View style={styles.plainRow}>
-      <View style={[styles.hairline, { backgroundColor: colors.hairline }]} />
       <View style={styles.copy}>
         <Text
           style={[
@@ -552,9 +572,16 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
-  accentSwatch: {
+  accentHit: {
     width: 44,
     height: 44,
+  },
+  accentFrame: {
+    flex: 1,
+    borderRadius: 4,
+  },
+  accentSwatch: {
+    flex: 1,
     borderWidth: 1,
     borderRadius: 2,
   },
