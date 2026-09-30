@@ -1074,10 +1074,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 27,
     letterSpacing: -0.18,
+    flexShrink: 1,
   },
   caption: {
     fontSize: 14,
     lineHeight: 21,
+    flexShrink: 1,
   },
   cite: {
     fontSize: 9,
@@ -1113,6 +1115,7 @@ const styles = StyleSheet.create({
   commentBody: {
     fontSize: 13,
     lineHeight: 20,
+    flexShrink: 1,
   },
   authorLine: {
     position: "relative",
@@ -1144,16 +1147,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     flexShrink: 1,
+    minWidth: 0,
   },
   place: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     flexShrink: 1,
+    minWidth: 0,
   },
   placeName: {
     fontSize: 11,
     flexShrink: 1,
+    minWidth: 0,
   },
   with: {
     fontSize: 11,
@@ -1173,6 +1179,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
     letterSpacing: -0.4,
+    flexShrink: 1,
   },
   insightClip: {
     marginTop: 4,
@@ -1235,7 +1242,8 @@ const styles = StyleSheet.create({
   },
   milestoneCopy: {
     flex: 1,
-    minWidth: 120,
+    flexBasis: 0,
+    minWidth: 0,
     gap: 8,
   },
   conversation: {
@@ -1257,6 +1265,8 @@ const styles = StyleSheet.create({
   },
   reactionNames: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 11,
     lineHeight: 16,
     paddingTop: 12,
@@ -1294,6 +1304,7 @@ const styles = StyleSheet.create({
   noteName: {
     fontSize: 10,
     flexShrink: 1,
+    minWidth: 0,
   },
   noteWhen: {
     fontSize: 8,

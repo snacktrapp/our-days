@@ -83,13 +83,23 @@ export function JournalHeader({
     <View
       pointerEvents={hidden ? "none" : "auto"}
       style={[
-        styles.topbar,
+        styles.barHost,
         {
           top: insets.top + floatGap,
+          // Transform stays on this empty host. On iOS a transform makes the
+          // view's own background a rectangle behind the rounded border.
+          ...(offset > 0 ? { transform: [{ translateY: -offset }] } : null),
+        },
+      ]}
+    >
+    <View
+      style={[
+        styles.topbar,
+        {
           borderColor: colors.hairline,
           borderRadius: radius,
+          backgroundColor: colors.navFill,
           ...barShadow(colors),
-          transform: [{ translateY: -offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
                 backdropFilter: `blur(${colors.navBlur}px)`,
@@ -216,6 +226,7 @@ export function JournalHeader({
         )}
       </View>
     </View>
+    </View>
   );
 }
 
@@ -229,16 +240,24 @@ export function JournalNav({
   const radius = colors.appearance === "retro" ? 2 : chromeRadius;
   return (
     <View
-      accessibilityRole="tablist"
       pointerEvents={hidden ? "none" : "auto"}
+      style={[
+        styles.barHost,
+        {
+          bottom: insets.bottom + floatGap,
+          ...(offset > 0 ? { transform: [{ translateY: offset }] } : null),
+        },
+      ]}
+    >
+    <View
+      accessibilityRole="tablist"
       style={[
         styles.nav,
         {
-          bottom: insets.bottom + floatGap,
           borderColor: colors.hairline,
           borderRadius: radius,
+          backgroundColor: colors.navFill,
           ...barShadow(colors),
-          transform: [{ translateY: offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
                 backdropFilter: `blur(${colors.navBlur}px)`,
@@ -272,6 +291,7 @@ export function JournalNav({
         icon={<NavCircles color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
       />
     </View>
+    </View>
   );
 }
 
@@ -301,7 +321,10 @@ function BarSurface({ radius }: Readonly<{ radius: number }>) {
     <View
       pointerEvents="none"
       collapsable={false}
-      style={[styles.barClip, { borderRadius: radius }]}
+      style={[
+        styles.barClip,
+        { borderRadius: radius, backgroundColor: colors.navFill },
+      ]}
     >
       {Platform.OS !== "web" && colors.navBlur > 0 ? (
         <BlurView
@@ -370,35 +393,56 @@ export function AppearanceSheet({
 }>) {
   const theme = useAppTheme();
   const { colors } = theme;
+  const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  // Sits on the header the way the web drawer does: 10px under the pill,
+  // same side inset, transparent scrim (tap outside closes). No fade.
+  const radius = colors.appearance === "retro" ? 2 : 18;
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.scrim} onPress={onClose}>
+      <View style={styles.scrim}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close settings"
+          onPress={onClose}
+          style={styles.scrimHit}
+        />
+        <View
           style={[
             styles.sheet,
-            { backgroundColor: colors.cream, borderColor: colors.hairline },
+            {
+              top: insets.top + floatGap + chromeHeight + 10,
+              backgroundColor: colors.cream,
+              borderColor: colors.hairline,
+              borderRadius: radius,
+              shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
+            },
           ]}
-          onPress={() => undefined}
         >
-          <Text style={[styles.sheetTitle, face(colors, 600), { color: colors.ink }]}>
-            Theme
-          </Text>
-          <Text style={[styles.sheetMeta, face(colors, 400, "record"), { color: colors.muted }]}>
-            This device only
-          </Text>
-          <View
-            accessibilityRole="radiogroup"
-            style={[
-              styles.choices,
-              { borderColor: colors.hairline, backgroundColor: colors.selectionFill },
-            ]}
-          >
+          <View style={styles.themeRow}>
+            <View style={styles.themeCopy}>
+              <Text style={[styles.sheetTitle, face(colors, 600), { color: colors.ink }]}>
+                Theme
+              </Text>
+              <Text
+                style={[styles.sheetMeta, face(colors, 400), { color: colors.muted }]}
+              >
+                This device only
+              </Text>
+            </View>
+            <View
+              accessibilityRole="radiogroup"
+              style={[
+                styles.choices,
+                { borderColor: colors.hairline, backgroundColor: colors.selectionFill },
+              ]}
+            >
             {(
               [
                 ["standard", "Standard"],
@@ -431,9 +475,10 @@ export function AppearanceSheet({
                 </Pressable>
               );
             })}
+            </View>
           </View>
           {theme.appearance === "retro" ? (
-            <View style={styles.swatches}>
+            <View style={[styles.swatches, { borderTopColor: colors.hairline }]}>
               {accentOrder.map((id) => {
                 const selected = theme.accent === id;
                 return (
@@ -464,14 +509,14 @@ export function AppearanceSheet({
               setBusy(true);
               onSignOut();
             }}
-            style={styles.signOut}
+            style={[styles.signOut, { borderTopColor: colors.hairline }]}
           >
             <Text style={[face(colors, 600), { color: colors.muted, fontSize: 14 }]}>
               {busy ? "Signing out" : "Sign out"}
             </Text>
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -493,11 +538,13 @@ const styles = StyleSheet.create({
     left: 0,
     overflow: "hidden",
   },
-  topbar: {
+  barHost: {
     position: "absolute",
     left: inlineGap,
     right: inlineGap,
     zIndex: 20,
+  },
+  topbar: {
     height: chromeHeight,
     minHeight: chromeHeight,
     paddingHorizontal: 8,
@@ -538,13 +585,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   titleButton: {
+    alignSelf: "center",
     alignItems: "center",
     maxWidth: "100%",
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "center",
     maxWidth: "100%",
   },
   title: {
@@ -552,11 +600,12 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     textTransform: "uppercase",
     textAlign: "center",
+    flexGrow: 0,
     flexShrink: 1,
   },
   chevron: {
-    position: "absolute",
-    left: "100%",
+    width: 14,
+    height: 14,
     marginLeft: 4,
   },
   actions: {
@@ -600,10 +649,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   nav: {
-    position: "absolute",
-    left: inlineGap,
-    right: inlineGap,
-    zIndex: 20,
     height: chromeHeight,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -625,31 +670,59 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   scrim: {
-    flex: 1,
-    backgroundColor: "rgba(6, 12, 10, 0.46)",
-    justifyContent: "flex-start",
-    paddingTop: 96,
-    paddingHorizontal: 24,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  scrimHit: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   sheet: {
+    position: "absolute",
+    left: inlineGap,
+    right: inlineGap,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 16,
-    gap: 10,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowRadius: 21,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 12,
+  },
+  themeRow: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 16,
+    paddingRight: 12,
+  },
+  themeCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   sheetTitle: {
     fontSize: 15,
+    lineHeight: 20,
   },
   sheetMeta: {
-    fontSize: 11,
-    marginTop: -6,
+    fontSize: 12,
+    lineHeight: 17,
   },
   choices: {
     flexDirection: "row",
     borderWidth: 1,
     borderRadius: 999,
     padding: 2,
-    alignSelf: "flex-start",
+    flexShrink: 0,
   },
   choice: {
     minHeight: 32,
@@ -662,6 +735,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderTopWidth: 1,
   },
   swatch: {
     width: 44,
@@ -670,8 +746,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   signOut: {
-    minHeight: 44,
+    minHeight: 56,
+    paddingHorizontal: 16,
     alignItems: "flex-start",
     justifyContent: "center",
+    borderTopWidth: 1,
   },
 });

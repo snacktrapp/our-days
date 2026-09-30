@@ -22,30 +22,34 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
         },
       ]}
     >
-      <View style={[styles.badge, { backgroundColor: colors.selectionFill }]}>
-        <Text style={[styles.glyph, face(colors, 500), { color: colors.action }]}>@</Text>
+      <View style={styles.copyRow}>
+        <View style={[styles.badge, { backgroundColor: colors.selectionFill }]}>
+          <Text style={[styles.glyph, face(colors, 500), { color: colors.action }]}>@</Text>
+        </View>
+        <View style={styles.copy}>
+          <Text
+            style={[
+              styles.title,
+              face(colors, 650),
+              { color: colors.ink, letterSpacing: tracking(15, -0.01) },
+            ]}
+          >
+            Tag your people
+          </Text>
+          <Text
+            style={[
+              styles.body,
+              face(colors, 400),
+              colors.appearance === "retro"
+                ? { color: colors.ink, fontSize: 15, lineHeight: 23 }
+                : { color: colors.muted },
+            ]}
+          >
+            Type @ in a comment or caption to mention someone in the circle. They’ll
+            get a notice so they don’t miss it.
+          </Text>
+        </View>
       </View>
-      <Text
-        style={[
-          styles.title,
-          face(colors, 650),
-          { color: colors.ink, letterSpacing: tracking(15, -0.01) },
-        ]}
-      >
-        Tag your people
-      </Text>
-      <Text
-        style={[
-          styles.body,
-          face(colors, 400),
-          colors.appearance === "retro"
-            ? { color: colors.ink, fontSize: 15, lineHeight: 23 }
-            : { color: colors.muted },
-        ]}
-      >
-        Type @ in a comment or caption to mention someone in the circle. They’ll
-        get a notice so they don’t miss it.
-      </Text>
       <Pressable
         accessibilityRole="button"
         onPress={onDismiss}
@@ -89,16 +93,24 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
 const styles = StyleSheet.create({
   banner: {
     marginTop: 6,
-    marginBottom: 14,
+    marginBottom: 10,
     marginHorizontal: inlineGap - 16,
     paddingTop: 14,
-    paddingBottom: 14,
+    paddingBottom: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
     borderRadius: 18,
+    overflow: "hidden",
+  },
+  copyRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "flex-start",
     columnGap: 12,
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
   },
   badge: {
     width: 32,
@@ -111,20 +123,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   title: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: 15,
     lineHeight: 19,
     paddingRight: 26,
   },
   body: {
-    width: "100%",
-    marginLeft: 44,
-    marginTop: -14,
+    flexShrink: 1,
     fontSize: 13,
     lineHeight: 18,
   },
   cta: {
-    marginTop: 8,
+    alignSelf: "flex-start",
+    marginTop: 6,
     minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 999,
