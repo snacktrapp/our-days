@@ -132,6 +132,21 @@ export function MoonIcon({ color, size = 19 }: IconProps) {
 }
 
 /** src/features/shell/family-title-switcher.tsx chevron */
+/** src/features/family-settings/settings-directory.tsx SettingsChevron */
+export function ChevronRight({ color, size = 14 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="m6 4 4 4-4 4"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function ChevronDown({ color, size = 14 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">

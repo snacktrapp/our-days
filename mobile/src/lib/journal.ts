@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { circleToday } from "./dates";
 import { personInitial, type MentionSpan } from "./feed-format";
-import { profileAccent } from "./profile-accent";
+import {
+  isProfileColorToken,
+  profileAccent,
+  type ProfileColorToken,
+} from "./profile-accent";
 
 const pageSize = 20;
 
@@ -568,6 +572,45 @@ export function photoDeliveryPath(momentId: string, photoId?: string) {
 
 export function videoPosterPath(momentId: string) {
   return `/api/media/videos/${momentId}/poster`;
+}
+
+export type ViewerProfile = Readonly<{
+  id: string;
+  name: string;
+  initial: string;
+  accentToken: string;
+}>;
+
+/** The signed-in person's name and profile color. people select is already granted. */
+export async function loadViewerProfile(
+  supabase: SupabaseClient,
+  personId: string,
+): Promise<ViewerProfile | null> {
+  const { data, error } = await supabase
+    .from("people")
+    .select("id, display_name, accent_token")
+    .eq("id", personId)
+    .maybeSingle();
+  if (error || !data?.id) return null;
+  const name = typeof data.display_name === "string" && data.display_name ? data.display_name : "You";
+  return {
+    id: data.id,
+    name,
+    initial: personInitial(name),
+    accentToken: typeof data.accent_token === "string" ? data.accent_token : "slate",
+  };
+}
+
+/** Same RPC the web settings page calls: public.set_my_profile_color. */
+export async function saveProfileColor(
+  supabase: SupabaseClient,
+  color: ProfileColorToken,
+): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  const failure = { ok: false as const, message: "Your color couldn’t be saved. Try again." };
+  if (!isProfileColorToken(color)) return failure;
+  const { data, error } = await supabase.rpc("set_my_profile_color", { color });
+  if (error || !data) return failure;
+  return { ok: true, message: "Color saved." };
 }
 
 export async function postThought(

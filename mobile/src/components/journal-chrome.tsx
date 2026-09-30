@@ -1,7 +1,6 @@
 import { BlurView } from "expo-blur";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,9 +16,7 @@ import {
   face,
   floatGap,
   inlineGap,
-  retroAccentHex,
   tracking,
-  type AccentId,
   type ThemeColors,
 } from "../lib/tokens";
 import {
@@ -42,15 +39,6 @@ export type SwitcherItem = Readonly<{
   selected: boolean;
 }>;
 
-const accentOrder: readonly AccentId[] = [
-  "orange",
-  "green",
-  "amber",
-  "blue",
-  "pink",
-  "violet",
-];
-
 export function JournalHeader({
   title,
   items,
@@ -61,6 +49,7 @@ export function JournalHeader({
   offset,
   interactive,
   unseen = false,
+  locked = false,
 }: Readonly<{
   title: string;
   items: readonly SwitcherItem[];
@@ -71,6 +60,8 @@ export function JournalHeader({
   offset: number;
   interactive: boolean;
   unseen?: boolean;
+  /** Settings uses the static web title: wordmark and label, no chevron. */
+  locked?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
@@ -98,7 +89,6 @@ export function JournalHeader({
         {
           borderColor: colors.hairline,
           borderRadius: radius,
-          backgroundColor: colors.navFill,
           ...barShadow(colors),
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
@@ -121,8 +111,9 @@ export function JournalHeader({
       <View style={styles.titleSlot} pointerEvents="box-none">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Choose a journal"
-          accessibilityState={{ expanded: open }}
+          accessibilityLabel={locked ? title : "Choose a journal"}
+          accessibilityState={locked ? undefined : { expanded: open }}
+          disabled={locked}
           onPress={onToggle}
           style={styles.titleButton}
         >
@@ -144,12 +135,14 @@ export function JournalHeader({
             >
               {title}
             </Text>
-            <View style={styles.chevron}>
-              <ChevronDown color={colors.ink} />
-            </View>
+            {locked ? null : (
+              <View style={styles.chevron}>
+                <ChevronDown color={colors.ink} />
+              </View>
+            )}
           </View>
         </Pressable>
-        {open ? (
+        {open && !locked ? (
           <View
             style={[
               styles.menu,
@@ -233,7 +226,14 @@ export function JournalHeader({
 export function JournalNav({
   offset,
   hidden,
-}: Readonly<{ offset: number; hidden: boolean }>) {
+  journalActive = true,
+  onJournalPress,
+}: Readonly<{
+  offset: number;
+  hidden: boolean;
+  journalActive?: boolean;
+  onJournalPress?: () => void;
+}>) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const label = face(colors, 600, "record");
@@ -256,7 +256,6 @@ export function JournalNav({
         {
           borderColor: colors.hairline,
           borderRadius: radius,
-          backgroundColor: colors.navFill,
           ...barShadow(colors),
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
@@ -270,11 +269,12 @@ export function JournalNav({
       <BarSurface radius={radius} />
       <NavItem
         label="Journal"
-        active
+        active={journalActive}
+        onPress={onJournalPress}
         color={colors.action}
         idle={colors.muted}
         face={label}
-        icon={<NavFamily color={colors.action} />}
+        icon={<NavFamily color={journalActive ? colors.action : colors.muted} />}
       />
       <NavItem
         label="Add"
@@ -311,9 +311,9 @@ function barShadow(colors: ThemeColors) {
 }
 
 /**
- * Blur and fill live in one clipped layer. On iOS a BlurView ignores the
- * parent's borderRadius unless that layer also has overflow hidden and the
- * same radius. The header menu stays outside this layer so it can hang open.
+ * One clipped layer: the blur, then the web fill painted once on top of it.
+ * A second fill on the pill or this clip stacks the same rgba and kills the
+ * translucency. The header menu stays outside so it can hang open.
  */
 function BarSurface({ radius }: Readonly<{ radius: number }>) {
   const { colors } = useAppTheme();
@@ -323,7 +323,7 @@ function BarSurface({ radius }: Readonly<{ radius: number }>) {
       collapsable={false}
       style={[
         styles.barClip,
-        { borderRadius: radius, backgroundColor: colors.navFill },
+        { borderRadius: radius },
       ]}
     >
       {Platform.OS !== "web" && colors.navBlur > 0 ? (
@@ -346,6 +346,7 @@ function BarSurface({ radius }: Readonly<{ radius: number }>) {
 function NavItem({
   label,
   active = false,
+  onPress,
   color,
   idle,
   face: type,
@@ -353,6 +354,7 @@ function NavItem({
 }: Readonly<{
   label: string;
   active?: boolean;
+  onPress?: () => void;
   color: string;
   idle: string;
   face: ReturnType<typeof face>;
@@ -362,6 +364,7 @@ function NavItem({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
+      onPress={onPress}
       style={styles.navItem}
     >
       {/* TODO(noop): Add and Circles do not navigate. See noop-controls.ts */}
@@ -379,145 +382,6 @@ function NavItem({
         {label}
       </Text>
     </Pressable>
-  );
-}
-
-export function AppearanceSheet({
-  visible,
-  onClose,
-  onSignOut,
-}: Readonly<{
-  visible: boolean;
-  onClose: () => void;
-  onSignOut: () => void;
-}>) {
-  const theme = useAppTheme();
-  const { colors } = theme;
-  const insets = useSafeAreaInsets();
-  const [busy, setBusy] = useState(false);
-  // Sits on the header the way the web drawer does: 10px under the pill,
-  // same side inset, transparent scrim (tap outside closes). No fade.
-  const radius = colors.appearance === "retro" ? 2 : 18;
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.scrim}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close settings"
-          onPress={onClose}
-          style={styles.scrimHit}
-        />
-        <View
-          style={[
-            styles.sheet,
-            {
-              top: insets.top + floatGap + chromeHeight + 10,
-              backgroundColor: colors.cream,
-              borderColor: colors.hairline,
-              borderRadius: radius,
-              shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
-            },
-          ]}
-        >
-          <View style={styles.themeRow}>
-            <View style={styles.themeCopy}>
-              <Text style={[styles.sheetTitle, face(colors, 600), { color: colors.ink }]}>
-                Theme
-              </Text>
-              <Text
-                style={[styles.sheetMeta, face(colors, 400), { color: colors.muted }]}
-              >
-                This device only
-              </Text>
-            </View>
-            <View
-              accessibilityRole="radiogroup"
-              style={[
-                styles.choices,
-                { borderColor: colors.hairline, backgroundColor: colors.selectionFill },
-              ]}
-            >
-            {(
-              [
-                ["standard", "Standard"],
-                ["retro", "Future"],
-              ] as const
-            ).map(([id, name]) => {
-              const selected = theme.appearance === id;
-              return (
-                <Pressable
-                  key={id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  onPress={() => theme.setAppearance(id)}
-                  style={[
-                    styles.choice,
-                    selected && { backgroundColor: colors.ink },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      face(colors, 600),
-                      {
-                        color: selected ? colors.paper : colors.muted,
-                        fontSize: 12,
-                      },
-                    ]}
-                  >
-                    {name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            </View>
-          </View>
-          {theme.appearance === "retro" ? (
-            <View style={[styles.swatches, { borderTopColor: colors.hairline }]}>
-              {accentOrder.map((id) => {
-                const selected = theme.accent === id;
-                return (
-                  <Pressable
-                    key={id}
-                    accessibilityRole="radio"
-                    accessibilityLabel={id}
-                    accessibilityState={{ selected }}
-                    onPress={() => theme.setAccent(id)}
-                    style={[
-                      styles.swatch,
-                      { borderRadius: 2 },
-                      {
-                        backgroundColor: retroAccentHex[id],
-                        borderColor: colors.hairline,
-                      },
-                      selected && { borderColor: colors.ink, borderWidth: 2 },
-                    ]}
-                  />
-                );
-              })}
-            </View>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => {
-              setBusy(true);
-              onSignOut();
-            }}
-            style={[styles.signOut, { borderTopColor: colors.hairline }]}
-          >
-            <Text style={[face(colors, 600), { color: colors.muted, fontSize: 14 }]}>
-              {busy ? "Signing out" : "Sign out"}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -668,88 +532,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     lineHeight: 10,
     textTransform: "uppercase",
-  },
-  scrim: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  scrimHit: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  sheet: {
-    position: "absolute",
-    left: inlineGap,
-    right: inlineGap,
-    borderWidth: 1,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowRadius: 21,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 12,
-  },
-  themeRow: {
-    minHeight: 56,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingLeft: 16,
-    paddingRight: 12,
-  },
-  themeCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  sheetTitle: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  sheetMeta: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  choices: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 999,
-    padding: 2,
-    flexShrink: 0,
-  },
-  choice: {
-    minHeight: 32,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  swatches: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-  },
-  swatch: {
-    width: 44,
-    height: 44,
-    borderWidth: 1,
-    borderRadius: 2,
-  },
-  signOut: {
-    minHeight: 56,
-    paddingHorizontal: 16,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    borderTopWidth: 1,
   },
 });

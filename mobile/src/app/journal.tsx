@@ -16,11 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../components/auth-provider";
 import { GridBackground } from "../components/grid-background";
 import {
-  AppearanceSheet,
   JournalHeader,
   JournalNav,
   type SwitcherItem,
 } from "../components/journal-chrome";
+import { SettingsScreen } from "../components/settings-screen";
 import { MentionsBanner } from "../components/journal-banner";
 import { FeedMoment } from "../components/moment-card";
 import { writePref } from "../lib/appearance";
@@ -29,9 +29,12 @@ import { circleToday } from "../lib/dates";
 import {
   loadCircles,
   loadTimelinePage,
+  loadViewerProfile,
+  saveProfileColor,
   type CircleMembership,
   type TimelineMoment,
   type TimelinePage,
+  type ViewerProfile,
 } from "../lib/journal";
 import { momentListedInFeed } from "../lib/feed-format";
 import { formatPlainDate } from "../lib/moment-time";
@@ -104,7 +107,8 @@ export default function JournalScreen() {
     Record<string, string> | null | undefined
   >(undefined);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profile, setProfile] = useState<ViewerProfile | null>(null);
   const [chromeOffset, setChromeOffset] = useState(0);
   const [pull, setPull] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
@@ -258,15 +262,33 @@ export default function JournalScreen() {
     }
   }
 
+  useEffect(() => {
+    if (!supabase) return;
+    const personId =
+      circles.find((circle) => circle.circleId === scope)?.personId ??
+      circles[0]?.personId;
+    if (!personId) return;
+    let active = true;
+    loadViewerProfile(supabase, personId)
+      .then((next) => {
+        if (active) setProfile(next);
+      })
+      .catch(() => {
+        if (active) setProfile(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [supabase, circles, scope]);
+
   async function refresh() {
     setRefreshing(true);
     await loadFirstPage(scope, circles);
   }
 
-  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const y = event.nativeEvent.contentOffset.y;
+  function applyScroll(y: number) {
     setPull(y < 0 ? Math.min(80, -y) : 0);
-    if (y <= 0 || switcherOpen || appearanceOpen) {
+    if (y <= 0 || switcherOpen) {
       if (offsetRef.current !== 0) {
         offsetRef.current = 0;
         setChromeOffset(0);
@@ -283,12 +305,17 @@ export default function JournalScreen() {
     }
   }
 
+  function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    applyScroll(event.nativeEvent.contentOffset.y);
+  }
+
   if (ready && !session) return <Redirect href="/sign-in" />;
 
   const kind = feedKind(scope);
   const selectedCircle = circles.find((circle) => circle.circleId === scope);
-  const title =
-    kind === "personal"
+  const title = settingsOpen
+    ? "Settings"
+    : kind === "personal"
       ? "Just me"
       : kind === "circle"
         ? (selectedCircle?.name ?? "Circle")
@@ -339,7 +366,24 @@ export default function JournalScreen() {
           <View style={[styles.pullMark, { backgroundColor: colors.action }]} />
         </View>
       ) : null}
-      {loading ? (
+      {settingsOpen ? (
+        <SettingsScreen
+          profile={profile}
+          onScroll={applyScroll}
+          onSaveColor={async (color) => {
+            if (!supabase) return { ok: false, message: "Your color couldn’t be saved. Try again." };
+            const result = await saveProfileColor(supabase, color);
+            if (result.ok) {
+              setProfile((current) => (current ? { ...current, accentToken: color } : current));
+            }
+            return result;
+          }}
+          onSignOut={() => {
+            setSettingsOpen(false);
+            void signOut();
+          }}
+        />
+      ) : loading ? (
         <View style={{ paddingTop: insets.top + stageChromeInset + 18 }}>
           <Skeleton />
           <Skeleton short />
@@ -497,20 +541,20 @@ export default function JournalScreen() {
         }}
         onOpenAppearance={() => {
           setSwitcherOpen(false);
-          setAppearanceOpen(true);
+          offsetRef.current = 0;
+          setChromeOffset(0);
+          setSettingsOpen(true);
         }}
         offset={chromeOffset}
-        interactive={switcherOpen || appearanceOpen}
+        interactive={switcherOpen}
+        locked={settingsOpen}
         unseen={unseenActivity}
       />
-      <JournalNav offset={chromeOffset} hidden={chromeHidden} />
-      <AppearanceSheet
-        visible={appearanceOpen}
-        onClose={() => setAppearanceOpen(false)}
-        onSignOut={() => {
-          setAppearanceOpen(false);
-          void signOut();
-        }}
+      <JournalNav
+        offset={chromeOffset}
+        hidden={chromeHidden}
+        journalActive={!settingsOpen}
+        onJournalPress={() => setSettingsOpen(false)}
       />
     </View>
   );

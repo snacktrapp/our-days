@@ -22,6 +22,7 @@ import {
   visibleNotes,
   type MentionSpan,
 } from "../lib/feed-format";
+import { mediaMaxHeight } from "../lib/media-frame";
 import {
   photoDeliveryPath,
   videoPosterPath,
@@ -648,6 +649,7 @@ function VideoPoster({
   frameWidth: number;
 }>) {
   const { colors } = useAppTheme();
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   return (
     <View>
       {moment.hasPoster ? (
@@ -661,7 +663,16 @@ function VideoPoster({
           mat="#050b08"
         />
       ) : (
-        <View style={[styles.videoFallback, { height: Math.min(frameWidth * (9 / 16), 852 * 0.9) }]} />
+        <View
+          style={[
+            styles.videoFallback,
+            {
+              width: "100%",
+              aspectRatio: 16 / 9,
+              maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
+            },
+          ]}
+        />
       )}
       <View style={styles.videoBar} pointerEvents="none">
         <Svg width={16} height={16} viewBox="0 0 16 16">
