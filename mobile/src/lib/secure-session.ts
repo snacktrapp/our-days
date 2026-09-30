@@ -63,7 +63,26 @@ async function clearChunks(key: string) {
  * Supabase session JSON is larger than one SecureStore value.
  * Chunks use the same key alphabet SecureStore allows (letters, digits, ., -, _).
  */
-export const secureSessionStorage: SupportedStorage = {
+const browserStorage: SupportedStorage | null =
+  typeof document !== "undefined" && typeof localStorage !== "undefined"
+    ? {
+        getItem: (key) => Promise.resolve(localStorage.getItem(key)),
+        setItem: (key, value) => {
+          localStorage.setItem(key, value);
+          return Promise.resolve();
+        },
+        removeItem: (key) => {
+          localStorage.removeItem(key);
+          return Promise.resolve();
+        },
+      }
+    : null;
+
+/**
+ * iOS keeps the chunked keychain adapter. Expo web has no SecureStore, so the
+ * same session JSON lives in localStorage for browser checks only.
+ */
+export const secureSessionStorage: SupportedStorage = browserStorage ?? {
   async getItem(key) {
     const single = await readChunk(key);
     if (single != null) return single;

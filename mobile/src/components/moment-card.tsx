@@ -241,28 +241,25 @@ function Thought({
           </Text>
         </View>
       ) : insight ? (
-        <View style={styles.verse}>
-          <Quote text={moment.body} />
-          <Text
-            style={[
-              styles.cite,
-              face(colors, 400, "record"),
-              { color: colors.muted, letterSpacing: tracking(9, 0.05) },
-            ]}
-          >
-            {moment.title}
-            {moment.sourceUrl ? (
-              <Text
-                style={{ textDecorationLine: "underline" }}
-                onPress={() => {
+        <Quote
+          text={moment.body}
+          trailing={
+            moment.title || moment.sourceUrl
+              ? `${moment.title}${
+                  moment.sourceUrl
+                    ? ` · ${insightSourceLabel(moment.sourceUrl)}`
+                    : ""
+                }`
+              : undefined
+          }
+          onTrailingPress={
+            moment.sourceUrl
+              ? () => {
                   if (moment.sourceUrl) void Linking.openURL(moment.sourceUrl);
-                }}
-              >
-                {` · ${insightSourceLabel(moment.sourceUrl)}`}
-              </Text>
-            ) : null}
-          </Text>
-        </View>
+                }
+              : undefined
+          }
+        />
       ) : (
         <Quote text={moment.body} mentions={moment.mentions} />
       )}
@@ -286,22 +283,51 @@ function Thought({
 function Quote({
   text,
   mentions = [],
-}: Readonly<{ text: string; mentions?: readonly MentionSpan[] }>) {
+  trailing,
+  onTrailingPress,
+}: Readonly<{
+  text: string;
+  mentions?: readonly MentionSpan[];
+  trailing?: string;
+  onTrailingPress?: () => void;
+}>) {
   const { colors } = useAppTheme();
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
+  const cite = trailing ? (
+    <Text
+      style={[
+        styles.cite,
+        face(colors, 400, "record"),
+        { color: colors.muted, letterSpacing: tracking(9, 0.05) },
+      ]}
+      onPress={onTrailingPress}
+    >
+      {trailing}
+    </Text>
+  ) : null;
   return (
     <View>
-      <MentionBody
-        text={text}
-        mentions={mentions}
-        serif
-        quoted
+      <Text
+        style={[styles.quote, face(colors, 400, "serif"), { color: colors.ink }]}
         numberOfLines={overflows && !expanded ? 5 : undefined}
-        onTextLayout={(lineCount) => {
-          if (lineCount > 5) setOverflows(true);
+        onTextLayout={(event) => {
+          if (event.nativeEvent.lines.length > 5) setOverflows(true);
         }}
-      />
+      >
+        “
+        {mentionPieces(text, mentions).map((piece) =>
+          piece.mention ? (
+            <Text key={piece.key} style={[face(colors, 600), { color: colors.action }]}>
+              {piece.text}
+            </Text>
+          ) : (
+            <Text key={piece.key}>{piece.text}</Text>
+          ),
+        )}
+        ”{cite ? " " : null}
+        {cite}
+      </Text>
       {overflows ? (
         <Pressable onPress={() => setExpanded((current) => !current)}>
           <Text
@@ -726,7 +752,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     fontSize: 7,
     lineHeight: 9,
-    textTransform: "uppercase",
   },
   metaName: {
     fontSize: 10,

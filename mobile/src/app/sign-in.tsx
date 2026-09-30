@@ -112,7 +112,7 @@ export default function SignInScreen() {
           </Pressable>
           <View style={[styles.backup, { borderTopColor: colors.hairline }]}>
             <Text style={[styles.copy, body, { color: colors.muted }]}>
-              Or email a private sign-in code
+              Or email a private sign-in link
             </Text>
             <Text style={[styles.hint, body, { color: colors.muted }]}>
               Enter the email address that received your invitation.
@@ -135,7 +135,7 @@ export default function SignInScreen() {
               autoCorrect={false}
               keyboardType="email-address"
               textContentType="emailAddress"
-              placeholder="Email"
+              placeholder=""
               placeholderTextColor={colors.muted}
               accessibilityLabel="Email address"
               style={[
@@ -198,7 +198,7 @@ export default function SignInScreen() {
                 <ActivityIndicator color={colors.actionInk} />
               ) : (
                 <Text style={[styles.submitLabel, face(colors, 650), { color: colors.actionInk }]}>
-                  {sent ? "Sign in" : "Email me a code"}
+                  {sent ? "Sign in" : "Email me a sign-in link"}
                 </Text>
               )}
             </Pressable>
@@ -216,10 +216,10 @@ export default function SignInScreen() {
             ) : null}
           </View>
         </View>
-        <Text style={[styles.version, face(colors, 400, "record"), { color: colors.muted }]}>
-          {runningVersionLabel()}
-        </Text>
       </ScrollView>
+      <Text style={[styles.version, face(colors, 400, "record"), { color: colors.muted }]}>
+        {runningVersionLabel()}
+      </Text>
     </KeyboardAvoidingView>
   );
 }
@@ -336,7 +336,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   version: {
-    marginTop: 16,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 12,
     fontSize: 11,
     textAlign: "center",
   },
