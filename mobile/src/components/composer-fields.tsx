@@ -462,6 +462,7 @@ export function PlaceFields({
       {canLocate ? (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Use my location"
           onPress={() => {
             void locateHere(setMessage, (next) => {
               setSearch(next.label);
@@ -469,8 +470,14 @@ export function PlaceFields({
               onChange(next);
             });
           }}
+          style={styles.locate}
         >
-          <Text style={[face(colors, 400, "record"), { color: colors.action, fontSize: 13 }]}>⌖ Use my location</Text>
+          <Text style={[face(colors, 400, "record"), styles.locateText, { color: colors.action }]} accessibilityElementsHidden>
+            ⌖
+          </Text>
+          <Text style={[face(colors, 400, "record"), styles.locateText, { color: colors.action }]}>
+            Use my location
+          </Text>
         </Pressable>
       ) : null}
       {searching ? <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>Looking up places…</Text> : null}
@@ -678,6 +685,15 @@ const styles = StyleSheet.create({
   timeOption: { minHeight: 32, justifyContent: "center" },
   timeActions: { flexDirection: "row", justifyContent: "space-between", minHeight: 44, alignItems: "center" },
   input: { borderWidth: 1, minHeight: 44, paddingHorizontal: 12, fontSize: 16 },
+  locate: {
+    minHeight: 44,
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+  },
+  locateText: { fontSize: 13 },
   suggestion: { minHeight: 44, justifyContent: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   chip: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, justifyContent: "center" },

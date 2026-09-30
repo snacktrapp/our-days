@@ -24,6 +24,14 @@ function isOperations(role: string | null | undefined, directoryKind: string | n
   return role === "operations" || directoryKind === "operations";
 }
 
+/**
+ * Who else was part of this follows the web roster: people ordered by
+ * `created_at` ascending (`journal-context.server.ts` loads that order).
+ */
+export function orderTaggablePeople<T extends { createdAt: string }>(people: readonly T[]) {
+  return [...people].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
 /** People and counts for the circle chips and “Who else was part of this?”. */
 export async function loadRosters(
   supabase: SupabaseClient,
@@ -39,29 +47,39 @@ export async function loadRosters(
         .in("circle_id", [...circleIds]),
       supabase
         .from("people")
-        .select("id, display_name, accent_token, circle_id")
-        .in("circle_id", [...circleIds]),
+        .select("id, display_name, accent_token, circle_id, created_at")
+        .in("circle_id", [...circleIds])
+        .order("created_at", { ascending: true }),
     ]);
   if (membershipError || peopleError) return rosters;
   const membershipByPerson = new Map(
     (memberships ?? []).map((row) => [`${row.circle_id}:${row.person_id}`, row]),
   );
   for (const circleId of circleIds) {
-    const visible = (people ?? []).flatMap((person) => {
-      if (person.circle_id !== circleId || !person.id || !person.display_name) return [];
-      const membership = membershipByPerson.get(`${circleId}:${person.id}`);
-      if (membership?.status && membership.status !== "active") return [];
-      if (isOperations(membership?.role, membership?.directory_kind)) return [];
-      return [
-        {
-          id: person.id,
-          name: person.display_name,
-          initial: initialFor(person.display_name),
-          accent: profileAccent(person.accent_token),
-          circleId,
-        },
-      ];
-    });
+    const visible = orderTaggablePeople(
+      (people ?? []).flatMap((person) => {
+        if (person.circle_id !== circleId || !person.id || !person.display_name) return [];
+        const membership = membershipByPerson.get(`${circleId}:${person.id}`);
+        if (membership?.status && membership.status !== "active") return [];
+        if (isOperations(membership?.role, membership?.directory_kind)) return [];
+        return [
+          {
+            id: person.id,
+            name: person.display_name,
+            initial: initialFor(person.display_name),
+            accent: profileAccent(person.accent_token),
+            circleId,
+            createdAt: typeof person.created_at === "string" ? person.created_at : "",
+          },
+        ];
+      }),
+    ).map((person) => ({
+      id: person.id,
+      name: person.name,
+      initial: person.initial,
+      accent: person.accent,
+      circleId: person.circleId,
+    }));
     rosters.set(circleId, { people: visible, memberCount: visible.length });
   }
   return rosters;

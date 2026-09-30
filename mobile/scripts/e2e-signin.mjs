@@ -133,6 +133,33 @@ await step("archived circles stay off Who can see this", async () => {
   );
 });
 
+await step("photo menu matches the web and people stay in join order", async () => {
+  const media = await import("../src/lib/pick-media.ts");
+  const roster = await import("../src/lib/roster.ts");
+  assert.deepEqual(media.mediaMenuOptions, [
+    "Photo Library",
+    "Take Photo or Video",
+    "Choose Files",
+  ]);
+  assert.equal(media.mediaSourceForMenuIndex(0), "library");
+  assert.equal(media.mediaSourceForMenuIndex(1), "camera");
+  assert.equal(media.mediaSourceForMenuIndex(2), "files");
+  assert.equal(media.mediaSourceForMenuIndex(3), null);
+  const mvhd = new Uint8Array(28);
+  mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
+  new DataView(mvhd.buffer).setUint32(16, 1000);
+  new DataView(mvhd.buffer).setUint32(20, 2500);
+  assert.equal(media.mp4DurationMs(mvhd), 2500);
+  const ordered = roster.orderTaggablePeople([
+    { id: "bea", name: "Bea", createdAt: "2026-02-01T00:00:00Z" },
+    { id: "ada", name: "Ada", createdAt: "2026-01-01T00:00:00Z" },
+  ]);
+  assert.deepEqual(
+    ordered.map((person) => person.name),
+    ["Ada", "Bea"],
+  );
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;

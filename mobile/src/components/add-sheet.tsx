@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActionSheetIOS,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,7 +31,7 @@ import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
 import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
 import { rememberPostedCircle } from "../lib/last-posted-circle";
-import { pickJournalMedia } from "../lib/pick-media";
+import { mediaMenuOptions, mediaSourceForMenuIndex, pickJournalMedia, type MediaSource } from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
   createFamilyMoment,
@@ -72,8 +74,6 @@ const choices = [
   { id: "drafts" as const, title: "Drafts", detail: "Unfinished entries" },
   { id: "insight" as const, title: "Insight", detail: "Quote, attribution, and source" },
 ];
-
-const pickerMissing = "Photo library and camera need the Our Days 0.3.0 TestFlight build.";
 
 /**
  * Web New moment order is Photo or video, Written entry, Bible verse, Drafts.
@@ -316,8 +316,8 @@ export function AddSheet({
     await rememberPostedCircle(session.user.id, circle.circleId);
   }
 
-  function pickPhoto(camera: boolean) {
-    void pickJournalMedia(camera)
+  function takeMedia(source: MediaSource) {
+    void pickJournalMedia(source)
       .then((picked) => {
         if (!picked) return;
         setPhotoBytes(picked.bytes);
@@ -328,8 +328,34 @@ export function AddSheet({
         setError(null);
       })
       .catch((error: unknown) => {
-        setError(error instanceof Error ? error.message : pickerMissing);
+        setError(error instanceof Error ? error.message : "That photo could not be read.");
       });
+  }
+
+  function chooseMedia() {
+    if (Platform.OS === "web") {
+      takeMedia("files");
+      return;
+    }
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [...mediaMenuOptions, "Cancel"],
+          cancelButtonIndex: mediaMenuOptions.length,
+        },
+        (index) => {
+          const source = mediaSourceForMenuIndex(index);
+          if (source) takeMedia(source);
+        },
+      );
+      return;
+    }
+    Alert.alert("Choose photo or video", undefined, [
+      { text: "Photo Library", onPress: () => takeMedia("library") },
+      { text: "Take Photo or Video", onPress: () => takeMedia("camera") },
+      { text: "Choose Files", onPress: () => takeMedia("files") },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   async function choosePassage(next: BibleVerseSelection) {
@@ -536,22 +562,39 @@ export function AddSheet({
           {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
             <View style={styles.form}>
               {mode === "photo" ? (
-                <View style={styles.split}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => pickPhoto(false)}
-                    style={[styles.secondary, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Choose photo or video"
+                  onPress={chooseMedia}
+                  style={[
+                    styles.photoDrop,
+                    {
+                      borderColor: retro ? colors.hairline : `${colors.clay}94`,
+                      backgroundColor: retro
+                        ? colors.surface
+                        : colors.scheme === "light"
+                          ? colors.cream
+                          : colors.paper,
+                      borderRadius: retro ? 2 : 8,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      face(colors, 700),
+                      {
+                        color: "#60574e",
+                        fontSize: 11,
+                        letterSpacing: tracking(11, 0.04),
+                      },
+                    ]}
                   >
-                    <Text style={[face(colors, 650), { color: colors.ink }]}>Library</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => pickPhoto(true)}
-                    style={[styles.secondary, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
-                  >
-                    <Text style={[face(colors, 650), { color: colors.ink }]}>Camera</Text>
-                  </Pressable>
-                </View>
+                    Choose photo or video
+                  </Text>
+                  <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, lineHeight: 17 }]}>
+                    The original uploads privately to this family.
+                  </Text>
+                </Pressable>
               ) : null}
               {photoName && mode === "photo" ? (
                 <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>{photoName}</Text>
@@ -1040,6 +1083,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  photoDrop: {
+    minHeight: 82,
+    padding: 14,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    gap: 6,
     justifyContent: "center",
   },
   secondary: {
