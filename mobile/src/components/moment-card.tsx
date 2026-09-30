@@ -30,9 +30,25 @@ import {
 } from "../lib/journal";
 import { formatConversationStamp, formatRecordedMomentHeader } from "../lib/moment-time";
 import { useAppTheme } from "../lib/theme";
-import { dotColor, dotInk, face, momentGap, timelineInset, tracking } from "../lib/tokens";
+import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
 import { PrivateImage } from "./private-image";
+
+function retroFace(colors: ThemeColors, accent: string) {
+  if (colors.appearance === "retro") {
+    return {
+      backgroundColor: colors.action,
+      borderRadius: 2,
+      borderWidth: 1,
+      borderColor: colors.action,
+    };
+  }
+  return { backgroundColor: dotColor(accent, colors) };
+}
+
+function retroInk(colors: ThemeColors, accent: string) {
+  return colors.appearance === "retro" ? colors.actionInk : dotInk(accent, colors);
+}
 
 export function FeedMoment({
   moment,
@@ -113,17 +129,17 @@ export function FeedMoment({
               />
             </View>
           ) : (
-            <View
-              style={[
-                styles.avatar,
-                { backgroundColor: dotColor(accent, colors) },
-              ]}
-            >
+        <View
+          style={[
+            styles.avatar,
+            retroFace(colors, accent),
+          ]}
+        >
               <Text
                 style={[
                   styles.avatarLetter,
                   face(colors, 700),
-                  { color: dotInk(accent, colors) },
+                  { color: retroInk(colors, accent) },
                 ]}
               >
                 {moment.personInitial}
@@ -245,7 +261,7 @@ function Thought({
           >
             Insight
           </Text>
-          {moment.canChange ? <Overflow /> : null}
+          {moment.canChange ? <Overflow color={colors.muted} /> : null}
         </View>
       ) : (
         <AuthorRow moment={moment} />
@@ -440,8 +456,11 @@ function QuoteText({
       ”
       {inline && cite ? <Text style={citeStyle}>{` ${cite}`}</Text> : null}
       {inline && sourceLabel ? (
-        <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
-          {` · ${sourceLabel}`}
+        <Text style={citeStyle}>
+          {" · "}
+          <Text style={[citeStyle, styles.sourceLink]} onPress={onSource}>
+            {sourceLabel}
+          </Text>
         </Text>
       ) : null}
     </Text>
@@ -575,14 +594,14 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
         <View
           style={[
             styles.authorAvatar,
-            { backgroundColor: dotColor(moment.personAccent, colors) },
+            retroFace(colors, moment.personAccent),
           ]}
         >
           <Text
             style={[
               styles.authorLetter,
               face(colors, 700),
-              { color: dotInk(moment.personAccent, colors) },
+              { color: retroInk(colors, moment.personAccent) },
             ]}
           >
             {moment.personInitial}
@@ -614,7 +633,7 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
           with {moment.taggedPeopleLabel}
         </Text>
       ) : null}
-      {moment.canChange ? <Overflow /> : null}
+      {moment.canChange ? <Overflow color={colors.muted} /> : null}
     </View>
   );
 }
@@ -654,12 +673,16 @@ function VideoPoster({
   );
 }
 
-function Overflow() {
-  const { colors } = useAppTheme();
+/** Same three tight dots as globals.css `.inline-note-more-dots` (13×3). */
+function Overflow({ color }: Readonly<{ color: string }>) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Moment options" style={styles.overflow}>
       {/* TODO(noop): moment menu. See src/lib/noop-controls.ts */}
-      <Text style={[face(colors, 400), { color: colors.muted, fontSize: 18 }]}>•••</Text>
+      <View style={styles.overflowDots}>
+        {[0, 1, 2].map((dot) => (
+          <View key={dot} style={[styles.overflowDot, { backgroundColor: color }]} />
+        ))}
+      </View>
     </Pressable>
   );
 }
@@ -804,7 +827,7 @@ function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
   const hidden = hiddenNoteCount(moment.notes.length);
 
   return (
-    <View style={styles.conversation}>
+    <View style={[styles.conversation, notes.length > 0 && styles.conversationNotes]}>
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
@@ -820,7 +843,16 @@ function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
           style={styles.actionHit}
         >
           {/* TODO(noop): heart write. See src/lib/noop-controls.ts */}
-          <HeartGlyph color={colors.clay} filled={loved} />
+          <HeartGlyph
+            color={
+              colors.appearance === "retro"
+                ? loved
+                  ? colors.action
+                  : colors.muted
+                : colors.clay
+            }
+            filled={loved}
+          />
         </Pressable>
         <Text
           style={[styles.reactionNames, face(colors, 400), { color: colors.ink }]}
@@ -865,7 +897,18 @@ function NoteRow({
     <View style={styles.note}>
       <View style={styles.noteAuthor}>
         <View style={styles.noteWho}>
-          <View style={[styles.commentDot, { backgroundColor: dotColor(note.authorAccent, colors) }]} />
+          <View
+            style={[
+              styles.commentDot,
+              colors.appearance === "retro" && styles.commentDotRetro,
+              {
+                backgroundColor:
+                  colors.appearance === "retro"
+                    ? colors.action
+                    : dotColor(note.authorAccent, colors),
+              },
+            ]}
+          />
           <Text style={[styles.noteName, face(colors, 600), { color: colors.ink }]} numberOfLines={1}>
             {note.authorName}
           </Text>
@@ -882,7 +925,19 @@ function NoteRow({
           onPress={note.heartCount > 0 ? onToggleHearts : undefined}
           style={styles.noteHeart}
         >
-          <HeartGlyph color={note.heartedByViewer ? colors.clay : colors.muted} filled={note.heartedByViewer} size={15} />
+          <HeartGlyph
+            color={
+              colors.appearance === "retro"
+                ? note.heartedByViewer
+                  ? colors.action
+                  : colors.muted
+                : note.heartedByViewer
+                  ? colors.clay
+                  : colors.muted
+            }
+            filled={note.heartedByViewer}
+            size={15}
+          />
           {note.heartCount > 0 ? (
             <Text style={[face(colors, 400), { color: colors.muted, fontSize: 11 }]}>
               {note.heartCount}
@@ -1089,6 +1144,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
+  overflowDots: {
+    width: 13,
+    height: 3,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  overflowDot: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+  },
   overflow: {
     position: "absolute",
     right: 0,
@@ -1171,6 +1238,9 @@ const styles = StyleSheet.create({
   conversation: {
     marginTop: 6,
   },
+  conversationNotes: {
+    paddingBottom: 16,
+  },
   actions: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1197,6 +1267,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  commentDotRetro: {
+    borderRadius: 2,
   },
   noteAuthor: {
     flexDirection: "row",

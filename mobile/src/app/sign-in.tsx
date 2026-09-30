@@ -80,13 +80,15 @@ export default function SignInScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View
-          style={[
-            styles.card,
-            {
-              backgroundColor: colors.cream,
-              borderColor: colors.hairline,
-            },
-          ]}
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.cream,
+                borderColor: colors.hairline,
+                borderRadius: colors.appearance === "retro" ? 2 : 10,
+                shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
+              },
+            ]}
         >
           <View style={styles.wordmark}>
             <Wordmark color={colors.ink} width={168} />
@@ -94,27 +96,65 @@ export default function SignInScreen() {
           <Text style={[styles.title, face(colors, 600), { color: colors.ink }]}>
             Open your journal.
           </Text>
-          <Text style={[styles.copy, body, { color: colors.muted }]}>
+          <Text
+            style={[
+              styles.copy,
+              body,
+              { color: colors.appearance === "retro" ? colors.ink : colors.muted },
+            ]}
+          >
             Use the Google or X account that received your invitation.
           </Text>
           <View style={styles.oauthList}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sign in with Google"
-            style={[styles.oauth, oauthSurface(colors.scheme), { borderColor: colors.hairline }]}
+            style={[
+              styles.oauth,
+              colors.appearance === "retro"
+                ? { backgroundColor: colors.action, borderColor: colors.action, borderRadius: 2 }
+                : oauthSurface(colors.scheme),
+              colors.appearance === "retro" ? null : { borderColor: colors.hairline },
+            ]}
           >
             {/* TODO(noop): Google sign-in. See src/lib/noop-controls.ts */}
-            <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
+            <Text
+              style={[
+                styles.oauthLabel,
+                face(colors, colors.appearance === "retro" ? 700 : 650),
+                {
+                  color: colors.appearance === "retro" ? colors.actionInk : colors.ink,
+                  textTransform: colors.appearance === "retro" ? "uppercase" : "none",
+                  letterSpacing: colors.appearance === "retro" ? 1.1 : 0,
+                },
+              ]}
+            >
               Sign in with Google
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Sign in with X"
-            style={[styles.oauth, oauthSurface(colors.scheme), { borderColor: colors.hairline }]}
+            style={[
+              styles.oauth,
+              colors.appearance === "retro"
+                ? { backgroundColor: colors.action, borderColor: colors.action, borderRadius: 2 }
+                : oauthSurface(colors.scheme),
+              colors.appearance === "retro" ? null : { borderColor: colors.hairline },
+            ]}
           >
             {/* TODO(noop): X sign-in. See src/lib/noop-controls.ts */}
-            <Text style={[styles.oauthLabel, face(colors, 650), { color: colors.ink }]}>
+            <Text
+              style={[
+                styles.oauthLabel,
+                face(colors, colors.appearance === "retro" ? 700 : 650),
+                {
+                  color: colors.appearance === "retro" ? colors.actionInk : colors.ink,
+                  textTransform: colors.appearance === "retro" ? "uppercase" : "none",
+                  letterSpacing: colors.appearance === "retro" ? 1.1 : 0,
+                },
+              ]}
+            >
               Sign in with X
             </Text>
           </Pressable>
@@ -153,8 +193,13 @@ export default function SignInScreen() {
                 {
                   color: colors.ink,
                   borderColor: colors.hairline,
+                  borderRadius: colors.appearance === "retro" ? 2 : 7,
                   backgroundColor:
-                    colors.scheme === "light" ? colors.cream : colors.surface,
+                    colors.appearance === "retro"
+                      ? colors.surface
+                      : colors.scheme === "light"
+                        ? colors.cream
+                        : colors.surface,
                 },
               ]}
               editable={!busy}
@@ -179,8 +224,11 @@ export default function SignInScreen() {
                     {
                       color: colors.ink,
                       borderColor: colors.hairline,
+                      borderRadius: colors.appearance === "retro" ? 2 : 7,
                       backgroundColor:
-                        colors.scheme === "light" ? colors.cream : colors.surface,
+                        colors.appearance === "retro" || colors.scheme !== "light"
+                          ? colors.surface
+                          : colors.cream,
                       letterSpacing: 4,
                     },
                   ]}
@@ -201,14 +249,28 @@ export default function SignInScreen() {
               onPress={() => void (sent ? onVerify() : onSend())}
               style={[
                 styles.submit,
-                { backgroundColor: colors.action, borderColor: colors.action },
+                {
+                  backgroundColor: colors.action,
+                  borderColor: colors.action,
+                  borderRadius: colors.appearance === "retro" ? 2 : 7,
+                },
                 (busy || !configured) && styles.disabled,
               ]}
             >
               {busy ? (
                 <ActivityIndicator color={colors.actionInk} />
               ) : (
-                <Text style={[styles.submitLabel, face(colors, 650), { color: colors.actionInk }]}>
+                <Text
+                  style={[
+                    styles.submitLabel,
+                    face(colors, colors.appearance === "retro" ? 700 : 650),
+                    {
+                      color: colors.actionInk,
+                      textTransform: colors.appearance === "retro" ? "uppercase" : "none",
+                      letterSpacing: colors.appearance === "retro" ? 1.1 : 0,
+                    },
+                  ]}
+                >
                   {sent ? "Sign in" : "Email me a sign-in link"}
                 </Text>
               )}
@@ -240,7 +302,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingTop: 19,
+    paddingBottom: 29,
   },
   card: {
     width: "100%",
@@ -310,7 +373,7 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
   input: {
-    minHeight: 50,
+    minHeight: 52,
     marginBottom: 9,
     paddingVertical: 12,
     paddingHorizontal: 13,

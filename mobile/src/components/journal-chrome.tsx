@@ -20,6 +20,7 @@ import {
   retroAccentHex,
   tracking,
   type AccentId,
+  type ThemeColors,
 } from "../lib/tokens";
 import {
   CheckIcon,
@@ -86,6 +87,8 @@ export function JournalHeader({
           top: insets.top + floatGap,
           backgroundColor: colors.navFill,
           borderColor: colors.hairline,
+          borderRadius: colors.appearance === "retro" ? 2 : chromeRadius,
+          ...barShadow(colors),
           transform: [{ translateY: -offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
@@ -143,6 +146,8 @@ export function JournalHeader({
               {
                 backgroundColor: colors.cream,
                 borderColor: colors.hairline,
+                borderRadius: colors.appearance === "retro" ? 2 : 10,
+                shadowOpacity: colors.appearance === "retro" ? 0 : 0.32,
               },
             ]}
           >
@@ -187,7 +192,10 @@ export function JournalHeader({
             <View
               style={[
                 styles.unread,
-                { backgroundColor: colors.clay },
+                {
+                  backgroundColor:
+                    colors.appearance === "retro" ? colors.action : colors.clay,
+                },
               ]}
             />
           ) : null}
@@ -228,6 +236,8 @@ export function JournalNav({
           bottom: insets.bottom + floatGap,
           backgroundColor: colors.navFill,
           borderColor: colors.hairline,
+          borderRadius: colors.appearance === "retro" ? 2 : chromeRadius,
+          ...barShadow(colors),
           transform: [{ translateY: offset }],
           ...(Platform.OS === "web" && colors.navBlur > 0
             ? {
@@ -266,6 +276,20 @@ export function JournalNav({
 }
 
 /** iOS blur under the same fill the web paints with backdrop-filter. Retro’s blur is 0. */
+function barShadow(colors: ThemeColors) {
+  if (colors.appearance === "retro") {
+    return { shadowOpacity: 0, elevation: 0 };
+  }
+  const light = colors.scheme === "light";
+  return {
+    shadowColor: light ? "rgb(58, 44, 31)" : "#000",
+    shadowOpacity: light ? 0.12 : 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: light ? 2 : 8,
+  };
+}
+
 function BarBlur() {
   const { colors } = useAppTheme();
   if (Platform.OS === "web" || colors.navBlur <= 0) return null;
@@ -410,6 +434,7 @@ export function AppearanceSheet({
                     onPress={() => theme.setAccent(id)}
                     style={[
                       styles.swatch,
+                      { borderRadius: 2 },
                       {
                         backgroundColor: retroAccentHex[id],
                         borderColor: colors.hairline,
@@ -455,11 +480,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
   },
   iconHit: {
     width: 44,
@@ -565,11 +585,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
   },
   navItem: {
     flex: 1,

@@ -18,6 +18,7 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
         {
           backgroundColor: colors.cream,
           borderColor: colors.hairline,
+          borderRadius: colors.appearance === "retro" ? 2 : 18,
         },
       ]}
     >
@@ -33,7 +34,15 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
       >
         Tag your people
       </Text>
-      <Text style={[styles.body, face(colors, 400), { color: colors.muted }]}>
+      <Text
+        style={[
+          styles.body,
+          face(colors, 400),
+          colors.appearance === "retro"
+            ? { color: colors.ink, fontSize: 15, lineHeight: 23 }
+            : { color: colors.muted },
+        ]}
+      >
         Type @ in a comment or caption to mention someone in the circle. They’ll
         get a notice so they don’t miss it.
       </Text>
