@@ -57,7 +57,7 @@
           "locationWhenInUsePermission": "Our Days uses your location while you add a place, so your family journal can name where you are.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "Our Days does not track your movement. iOS asks for this notice because the location tools used to name a place include motion support.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false,
