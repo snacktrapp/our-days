@@ -23,6 +23,9 @@ import {
 import { SettingsScreen } from "../components/settings-screen";
 import { MentionsBanner } from "../components/journal-banner";
 import { FeedMoment } from "../components/moment-card";
+import { ShareSheet } from "../components/share-sheet";
+import { dismissShareDraft, subscribeShareDraft } from "../components/share-bridge";
+import type { ShareDraft } from "../lib/share-entry";
 import { AddSheet } from "../components/add-sheet";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
@@ -135,6 +138,7 @@ export default function JournalScreen() {
   const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareDraft, setShareDraft] = useState<ShareDraft | null>(null);
   const [profile, setProfile] = useState<ViewerProfile | null>(null);
   const [chromeOffset, setChromeOffset] = useState(0);
   const [pull, setPull] = useState(0);
@@ -200,6 +204,8 @@ export default function JournalScreen() {
     },
     [supabase],
   );
+
+  useEffect(() => subscribeShareDraft(setShareDraft), []);
 
   useEffect(() => {
     if (!session?.user.id || Platform.OS === "web") return;
@@ -683,6 +689,19 @@ export default function JournalScreen() {
       />
       {uploads.length > 0 ? (
         <UploadShelf chips={uploads} top={insets.top + floatGap + chromeHeight + 8} />
+      ) : null}
+      {shareDraft && session ? (
+        <ShareSheet
+          draft={shareDraft}
+          circles={circles}
+          onClose={() => dismissShareDraft()}
+          onPosted={() => {
+            dismissShareDraft();
+            setScope(allScope);
+            setLoading(true);
+            void loadFirstPage(allScope, circles);
+          }}
+        />
       ) : null}
       {addOpen ? (
         <AddSheet

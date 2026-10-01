@@ -73,6 +73,20 @@
         }
       ],
       [
+        "expo-share-intent",
+        {
+          "iosShareExtensionName": "Add to Our Days",
+          "disableAndroid": true,
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 1,
+            "NSExtensionActivationSupportsMovieWithMaxCount": 1
+          }
+        }
+      ],
+      [
         "expo-video",
         {
           "supportsBackgroundPlayback": false,

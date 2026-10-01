@@ -310,6 +310,47 @@ await step("push taps open All circles on the post or comment, and permission wa
   assert.equal(push.landingFromPushData({}), null);
 });
 
+await step("a share becomes a photo, video, or link and still needs a circle", async () => {
+  const share = await import("../src/lib/share-entry.ts");
+  const photo = share.draftFromShareIntent({
+    type: "media",
+    files: [{ path: "file:///tmp/porch.jpg", mimeType: "image/jpeg", fileName: "porch.jpg" }],
+  });
+  assert.equal(photo?.kind, "photo");
+  assert.equal(share.shareNeedsJpeg(photo), false);
+  const heic = share.draftFromShareIntent({
+    type: "media",
+    files: [{ path: "file:///tmp/IMG_0001.HEIC", mimeType: "image/heic", fileName: "IMG_0001.HEIC" }],
+  });
+  assert.equal(heic?.kind, "photo");
+  assert.equal(share.shareNeedsJpeg(heic), true, "HEIC from Photos is re-encoded as JPEG before upload");
+  const heicNoMime = share.draftFromShareIntent({
+    type: "media",
+    files: [{ path: "file:///tmp/IMG_0002.heic", fileName: "IMG_0002.heic" }],
+  });
+  assert.equal(share.shareNeedsJpeg(heicNoMime), true);
+  const video = share.draftFromShareIntent({
+    type: "media",
+    files: [{
+      path: "file:///tmp/clip.mov",
+      mimeType: "video/quicktime",
+      fileName: "clip.mov",
+      duration: 4000,
+    }],
+  });
+  assert.equal(video?.kind, "video");
+  if (video?.kind === "video") assert.equal(video.durationMs, 4000);
+  const link = share.draftFromShareIntent({
+    type: "weburl",
+    webUrl: "https://example.com/story",
+    text: "https://example.com/story",
+  });
+  assert.equal(link?.kind, "link");
+  assert.equal(share.draftFromShareIntent({ text: "  ", files: [] }), null);
+  assert.equal(share.shareCircleChosen(""), false);
+  assert.equal(share.shareCircleChosen("circle-1"), true);
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
@@ -769,7 +810,7 @@ await step("OTA runtime is 0.5.0 so build 9 (runtime 0.4.0) cannot receive this 
   assert.equal(
     appJson.expo.version,
     "0.5.0",
-    "runtime follows the app version; 0.5.0 JS (expo-notifications) must not be delivered to build 9",
+    "runtime follows the app version; 0.5.0 JS (expo-notifications, share extension) must not be delivered to build 9",
   );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");
