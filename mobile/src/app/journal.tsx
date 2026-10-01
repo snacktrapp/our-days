@@ -27,10 +27,13 @@ import { ShareSheet } from "../components/share-sheet";
 import { dismissShareDraft, subscribeShareDraft } from "../components/share-bridge";
 import type { ShareDraft } from "../lib/share-entry";
 import { AddSheet } from "../components/add-sheet";
+import { ActivitySheet } from "../components/activity-sheet";
 import { CirclesScreen } from "../components/circles-screen";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
 import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
+import { loadActivity, readSeenActivityIds, type ActivityItem } from "../lib/activity";
+import { readNotificationTarget } from "../../../src/lib/activity-notifications";
 import { circleToday } from "../lib/dates";
 import { readLastPostedCircle } from "../lib/last-posted-circle";
 import {
@@ -134,6 +137,15 @@ export default function JournalScreen() {
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
   const [circlesOpen, setCirclesOpen] = useState(false);
+  const [personJournal, setPersonJournal] = useState<{
+    circleId: string;
+    personId: string;
+    name: string;
+  } | null>(null);
+  const personRef = useRef(personJournal);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityItems, setActivityItems] = useState<readonly ActivityItem[]>([]);
+  const [seenActivity, setSeenActivity] = useState<readonly string[]>(() => readSeenActivityIds());
   const homeCircleId = readActiveCircleCookie();
   const [lastPostedCircleId, setLastPostedCircleId] = useState<string | null>(null);
   const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
@@ -178,18 +190,20 @@ export default function JournalScreen() {
       if (!supabase) return;
       setError(null);
       try {
+        const person = personRef.current;
         const kind = feedKind(nextScope);
         const next = await loadTimelinePage(supabase, {
-          circleId: kind === "circle" ? nextScope : null,
-          fallbackCircleId: kind === "all" ? memberships[0]?.circleId : undefined,
+          circleId: person ? person.circleId : kind === "circle" ? nextScope : null,
+          journalPersonId: person?.personId,
+          fallbackCircleId: person || kind !== "all" ? undefined : memberships[0]?.circleId,
           viewerMembershipIds: memberships.map((circle) => circle.membershipId),
           personal:
-            kind === "personal"
-              ? memberships.map((circle) => ({
+            person || kind !== "personal"
+              ? undefined
+              : memberships.map((circle) => ({
                   circleId: circle.circleId,
                   personId: circle.personId,
-                }))
-              : undefined,
+                })),
         });
         setMoments(next.moments);
         setPage(next);
@@ -284,20 +298,22 @@ export default function JournalScreen() {
     if (!supabase || !page?.hasMore || !page.cursor || loadingMore) return;
     setLoadingMore(true);
     try {
+      const person = personRef.current;
       const kind = feedKind(scope);
       const next = await loadTimelinePage(supabase, {
-        circleId: kind === "circle" ? scope : null,
+        circleId: person ? person.circleId : kind === "circle" ? scope : null,
+        journalPersonId: person?.personId,
         cursor: page.cursor,
         snapshotAt: page.snapshotAt,
-        fallbackCircleId: kind === "all" ? circles[0]?.circleId : undefined,
+        fallbackCircleId: person || kind !== "all" ? undefined : circles[0]?.circleId,
         viewerMembershipIds: membershipIds,
         personal:
-          kind === "personal"
-            ? circles.map((circle) => ({
+          person || kind !== "personal"
+            ? undefined
+            : circles.map((circle) => ({
                 circleId: circle.circleId,
                 personId: circle.personId,
-              }))
-            : undefined,
+              })),
       });
       setMoments((current) => [...current, ...next.moments]);
       setPage(next);
@@ -326,6 +342,21 @@ export default function JournalScreen() {
       active = false;
     };
   }, [supabase, circles, scope]);
+
+  useEffect(() => {
+    if (!supabase || (!circlesOpen && !personJournal)) return;
+    let active = true;
+    void loadActivity(supabase, circles)
+      .then((items) => {
+        if (active) setActivityItems(items);
+      })
+      .catch(() => {
+        if (active) setActivityItems([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [circles, circlesOpen, personJournal, supabase]);
 
   async function refresh() {
     setRefreshing(true);
@@ -410,15 +441,24 @@ export default function JournalScreen() {
 
   const kind = feedKind(scope);
   const selectedCircle = circles.find((circle) => circle.circleId === scope);
+  const viewingOwnJournal = Boolean(
+    personJournal &&
+      circles.some(
+        (circle) =>
+          circle.circleId === personJournal.circleId && circle.personId === personJournal.personId,
+      ),
+  );
   const title = settingsOpen
     ? "Settings"
     : circlesOpen
       ? "Circles"
-      : kind === "personal"
-        ? "Just me"
-        : kind === "circle"
-          ? (selectedCircle?.name ?? "Circle")
-          : "All circles";
+      : personJournal
+        ? personJournal.name
+        : kind === "personal"
+          ? "Just me"
+          : kind === "circle"
+            ? (selectedCircle?.name ?? "Circle")
+            : "All circles";
   // family-title-switcher.tsx only renders kind "you" and "all", in that
   // order, even when the account belongs to more circles. Just me loads the
   // personal journal; All circles loads the combined feed.
@@ -434,7 +474,10 @@ export default function JournalScreen() {
     { id: youScope, label: "Just me", selected: kind === "personal" },
   ];
   const listed = moments.filter((moment) =>
-    momentListedInFeed({ audience: moment.audience, feed: kind }),
+    momentListedInFeed({
+      audience: moment.audience,
+      feed: personJournal ? (viewingOwnJournal ? "personal" : "circle") : kind,
+    }),
   );
   const rows = buildRows(listed, today, Boolean(page?.hasMore));
   const chromeHidden = chromeOffset >= distance && !switcherOpen;
@@ -489,8 +532,20 @@ export default function JournalScreen() {
       ) : circlesOpen ? (
         <CirclesScreen
           circles={circles}
+          accentToken={profile?.accentToken}
           onScroll={applyScroll}
+          onOpenPerson={(circleId, personId, name) => {
+            const next = { circleId, personId, name };
+            personRef.current = next;
+            setPersonJournal(next);
+            setCirclesOpen(false);
+            setSettingsOpen(false);
+            setLoading(true);
+            void loadFirstPage(circleId, circles);
+          }}
           onOpenJournal={(circleId) => {
+            personRef.current = null;
+            setPersonJournal(null);
             setCirclesOpen(false);
             setScope(circleId);
             setLoading(true);
@@ -532,14 +587,35 @@ export default function JournalScreen() {
             flexGrow: rows.length === 0 ? 1 : undefined,
           }}
           ListHeaderComponent={
-            !loading && showMentions && !error ? (
+            <>
+            {personJournal && !circlesOpen && !settingsOpen ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Circles"
+                onPress={() => {
+                  setSettingsOpen(false);
+                  setSwitcherOpen(false);
+                  setAddOpen(false);
+                  setCirclesOpen(true);
+                  offsetRef.current = 0;
+                  setChromeOffset(0);
+                }}
+                style={styles.backToCircles}
+              >
+                <Text style={[face(colors, 400, "record"), { color: colors.muted, fontSize: 12 }]}>
+                  ‹ Circles
+                </Text>
+              </Pressable>
+            ) : null}
+            {!loading && showMentions && !error ? (
               <MentionsBanner
                 onDismiss={() => {
                   setShowMentions(false);
                   void writePref(mentionsKey, "dismissed");
                 }}
               />
-            ) : null
+            ) : null}
+            </>
           }
           ListEmptyComponent={
             loading ? null : error ? (
@@ -688,16 +764,52 @@ export default function JournalScreen() {
         }}
         offset={chromeOffset}
         interactive={switcherOpen}
-        locked={settingsOpen || circlesOpen}
+        locked={settingsOpen || circlesOpen || Boolean(personJournal)}
+        onOpenActivity={
+          (circlesOpen || personJournal) && !settingsOpen ? () => setActivityOpen(true) : undefined
+        }
+        activityUnread={activityItems.some((item) => !seenActivity.includes(item.id))}
       />
+      {activityOpen ? (
+        <ActivitySheet
+          circles={circles}
+          onClose={() => {
+            setSeenActivity(readSeenActivityIds());
+            setActivityOpen(false);
+          }}
+          onOpen={(href) => {
+            const target = readNotificationTarget(href);
+            setSeenActivity(readSeenActivityIds());
+            setActivityOpen(false);
+            personRef.current = null;
+            setPersonJournal(null);
+            setCirclesOpen(false);
+            setSettingsOpen(false);
+            if (!target) return;
+            landingPages.current = 0;
+            setLanding(target);
+            setScope(allScope);
+            setLoading(true);
+            void loadFirstPage(allScope, circles);
+          }}
+        />
+      ) : null}
       <JournalNav
         offset={chromeOffset}
         hidden={chromeHidden}
-        journalActive={!settingsOpen && !circlesOpen}
-        circlesActive={circlesOpen && !settingsOpen}
+        journalActive={!settingsOpen && !circlesOpen && !personJournal}
+        circlesActive={!settingsOpen && (circlesOpen || Boolean(personJournal))}
         onJournalPress={() => {
+          const wasPerson = personRef.current;
+          personRef.current = null;
+          setPersonJournal(null);
           setSettingsOpen(false);
           setCirclesOpen(false);
+          if (wasPerson) {
+            setScope(allScope);
+            setLoading(true);
+            void loadFirstPage(allScope, circles);
+          }
         }}
         onAddPress={() => {
           setSettingsOpen(false);
@@ -875,5 +987,11 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFill,
     zIndex: 15,
+  },
+  backToCircles: {
+    alignSelf: "flex-start",
+    minHeight: 32,
+    marginBottom: 8,
+    justifyContent: "center",
   },
 });

@@ -34,6 +34,7 @@ import {
 } from "../lib/circle-directory";
 import { circleNameError, createCircle, createCircleSourceId } from "../lib/circles";
 import { type CircleMembership } from "../lib/journal";
+import { profileAccent } from "../lib/profile-accent";
 import { requestCircleInvitation, validInvitationEmail } from "../lib/invites";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
@@ -43,14 +44,19 @@ import { ChevronRight, NavCircles } from "./icons";
 export function CirclesScreen({
   circles,
   onOpenJournal,
+  onOpenPerson,
   onCirclesChanged,
   onScroll,
+  accentToken,
   preview,
   initialSheet,
 }: Readonly<{
   circles: readonly CircleMembership[];
   onOpenJournal: (circleId: string) => void;
+  onOpenPerson: (circleId: string, personId: string, name: string) => void;
   onCirclesChanged: () => Promise<void> | void;
+  /** Page accent for the Everyone tile. Web uses the recorder's profile color. */
+  accentToken?: string | null;
   onScroll?: (y: number) => void;
   /** Design-preview directory. Skips the network load. */
   preview?: ReadonlyMap<string, CircleDirectory>;
@@ -122,7 +128,9 @@ export function CirclesScreen({
             sources={active.filter(
               (other) => other.circleId !== circle.circleId && hasOrganizerPrivilege(other.role),
             )}
+            accentToken={accentToken}
             onOpenJournal={() => onOpenJournal(circle.circleId)}
+            onOpenPerson={(personId, name) => onOpenPerson(circle.circleId, personId, name)}
             onInvite={() => setSheet({ kind: "invite", circleId: circle.circleId })}
             onSettings={() => setSheet({ kind: "settings", circleId: circle.circleId })}
             onMember={(memberId) => setSheet({ kind: "member", circleId: circle.circleId, memberId })}
@@ -306,7 +314,9 @@ function CircleSection({
   directory,
   loading,
   sources,
+  accentToken,
   onOpenJournal,
+  onOpenPerson,
   onInvite,
   onSettings,
   onMember,
@@ -317,7 +327,9 @@ function CircleSection({
   directory: CircleDirectory | undefined;
   loading: boolean;
   sources: readonly CircleMembership[];
+  accentToken?: string | null;
   onOpenJournal: () => void;
+  onOpenPerson: (personId: string, name: string) => void;
   onInvite: () => void;
   onSettings: () => void;
   onMember: (memberId: string) => void;
@@ -350,7 +362,7 @@ function CircleSection({
           subtitle={subtitle}
           accessibilityLabel={`Open ${circle.name} circle feed`}
           onPress={onOpenJournal}
-          leading={<TileAvatar />}
+          leading={<TileAvatar accentToken={accentToken} />}
           chevron
         />
         {members.map((member) => (
@@ -360,6 +372,11 @@ function CircleSection({
             you={member.id === circle.personId}
             showMore={memberShowsMore(member, circle.membershipId, canManage)}
             onMore={() => onMember(member.id)}
+            onOpen={
+              member.role === "operations"
+                ? undefined
+                : () => onOpenPerson(member.id, member.name)
+            }
             separator
           />
         ))}
@@ -402,12 +419,14 @@ function MemberRow({
   showMore,
   separator,
   onMore,
+  onOpen,
 }: Readonly<{
   member: DirectoryMember;
   you: boolean;
   showMore: boolean;
   separator?: boolean;
   onMore: () => void;
+  onOpen?: () => void;
 }>) {
   const subtitle = memberSubtitle(member);
   const title = `${member.name}${you ? " · You" : ""}`;
@@ -416,6 +435,9 @@ function MemberRow({
       title={title}
       subtitle={subtitle}
       separator={separator}
+      chevron={Boolean(onOpen)}
+      accessibilityLabel={onOpen ? `${member.name} — open journal` : undefined}
+      onPress={onOpen}
       leading={<PersonAvatar initial={member.initial} accent={member.accent} />}
       more={
         showMore
@@ -494,7 +516,10 @@ function DirectoryRow({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={more.label}
-            onPress={more.onPress}
+            onPress={(event) => {
+              event.stopPropagation();
+              more.onPress();
+            }}
             style={styles.moreHit}
           >
             <Text style={[styles.moreGlyph, { color: colors.muted }]}>···</Text>
@@ -508,16 +533,13 @@ function DirectoryRow({
       </View>
     </>
   );
-  const rowStyle = styles.row;
-  if (!onPress) {
-    return <View style={rowStyle}>{body}</View>;
-  }
+  if (!onPress) return <View style={styles.row}>{body}</View>;
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={more ? undefined : "button"}
       accessibilityLabel={accessibilityLabel ?? title}
       onPress={onPress}
-      style={rowStyle}
+      style={styles.row}
     >
       {body}
     </Pressable>
@@ -584,20 +606,21 @@ function PageActions({
   );
 }
 
-function TileAvatar() {
+function TileAvatar({ accentToken }: Readonly<{ accentToken?: string | null }>) {
   const { colors } = useAppTheme();
   const retro = colors.appearance === "retro";
+  const accent = retro ? colors.action : dotColor(profileAccent(accentToken), colors);
   return (
     <View
       style={[
         styles.avatar,
         {
           borderRadius: retro ? 2 : 12,
-          backgroundColor: mixHex(colors.cream, colors.action, 0.16),
+          backgroundColor: mixHex(colors.cream, accent, 0.16),
         },
       ]}
     >
-      <NavCircles color={colors.action} size={22} />
+      <NavCircles color={accent} size={22} />
     </View>
   );
 }

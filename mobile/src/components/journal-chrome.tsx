@@ -28,6 +28,7 @@ import {
   NavAdd,
   NavCircles,
   NavFamily,
+  NotificationMark,
   SettingsGear,
   SunIcon,
 } from "./icons";
@@ -50,6 +51,8 @@ export function JournalHeader({
   offset,
   interactive,
   locked = false,
+  onOpenActivity,
+  activityUnread = false,
 }: Readonly<{
   title: string;
   items: readonly SwitcherItem[];
@@ -59,6 +62,9 @@ export function JournalHeader({
   onOpenAppearance: () => void;
   offset: number;
   interactive: boolean;
+  /** Circles uses the same header heart as the web notification center. */
+  onOpenActivity?: () => void;
+  activityUnread?: boolean;
   /** Settings uses the static web title: wordmark and label, no chevron. */
   locked?: boolean;
 }>) {
@@ -227,6 +233,19 @@ export function JournalHeader({
         </View>
       </View>
       <View style={styles.actions}>
+        {onOpenActivity ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={activityUnread ? "Open notifications, new" : "Open notifications"}
+            onPress={onOpenActivity}
+            style={styles.iconHit}
+          >
+            <NotificationMark color={colors.muted} />
+            {activityUnread ? (
+              <View style={[styles.unread, { backgroundColor: colors.clay }]} />
+            ) : null}
+          </Pressable>
+        ) : null}
         {colors.appearance === "retro" ? null : (
           <Pressable
             accessibilityRole="button"
