@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,6 +22,12 @@ import {
 } from "../lib/tokens";
 import { ChevronRight } from "./icons";
 import { InviteSendSheet } from "./invite-sheet";
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  pushOptedOut,
+  pushPermissionState,
+} from "../lib/push";
 
 /**
  * Web account settings: src/features/family-settings/account-screen.tsx
@@ -371,35 +377,95 @@ function AccentRow() {
 
 function NotificationsRow() {
   const { colors } = useAppTheme();
+  const [on, setOn] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void pushPermissionState().then(async (state) => {
+      if (cancelled) return;
+      setBlocked(state === "denied");
+      if (state !== "granted" || (await pushOptedOut())) {
+        setOn(false);
+        return;
+      }
+      const saved = await enablePushNotifications();
+      if (!cancelled) setOn(saved.ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subtitle = blocked
+    ? "Off in iOS Settings."
+    : on
+      ? "On for this iPhone."
+      : "Comments, mentions, hearts, and new posts.";
+
   return (
-    <View style={[styles.plainRow, { opacity: 0.72 }]}>
-      <View style={styles.copy}>
-        <Text
-          style={[
-            face(colors, 600),
-            styles.rowTitle,
-            { color: colors.ink, fontSize: colors.appearance === "retro" ? 16 : 15 },
-          ]}
-        >
-          Notifications
-        </Text>
-        {/* TODO(noop): Push is not wired. Web shows this when push is unconfigured. */}
-        <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
-          Not available yet.
-        </Text>
-      </View>
-      <View
+    <View>
+      <Pressable
         accessibilityRole="switch"
-        accessibilityState={{ checked: false, disabled: true }}
-        style={[styles.switchTrack, { backgroundColor: colors.line }]}
+        accessibilityLabel="Notifications"
+        accessibilityState={{ checked: on, disabled: blocked || busy }}
+        disabled={blocked || busy}
+        onPress={() => {
+          if (busy || blocked) return;
+          setBusy(true);
+          setMessage(null);
+          void (on ? disablePushNotifications() : enablePushNotifications()).then((result) => {
+            setBusy(false);
+            if (result.ok) {
+              setOn(!on);
+              setBlocked(false);
+              return;
+            }
+            if ("blocked" in result && result.blocked) setBlocked(true);
+            setOn(false);
+            setMessage(result.message);
+          });
+        }}
+        style={[styles.plainRow, blocked ? { opacity: 0.72 } : null]}
       >
+        <View style={styles.copy}>
+          <Text
+            style={[
+              face(colors, 600),
+              styles.rowTitle,
+              { color: colors.ink, fontSize: colors.appearance === "retro" ? 16 : 15 },
+            ]}
+          >
+            Notifications
+          </Text>
+          <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
+            {subtitle}
+          </Text>
+        </View>
         <View
           style={[
-            styles.switchKnob,
-            { backgroundColor: colors.appearance === "retro" ? colors.ink : "#f4f6f2" },
+            styles.switchTrack,
+            { backgroundColor: on ? colors.action : colors.line },
           ]}
-        />
-      </View>
+        >
+          <View
+            style={[
+              styles.switchKnob,
+              {
+                left: on ? 20 : 2,
+                backgroundColor: colors.appearance === "retro" ? colors.ink : "#f4f6f2",
+              },
+            ]}
+          />
+        </View>
+      </Pressable>
+      {message ? (
+        <Text style={[face(colors, 400), styles.hint, { color: colors.muted, paddingHorizontal: 16, paddingBottom: 8 }]}>
+          {message}
+        </Text>
+      ) : null}
     </View>
   );
 }

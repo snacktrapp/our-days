@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type Ref } from "react";
 import {
   Linking,
   Alert,
@@ -68,6 +68,7 @@ export type JournalViewer = Readonly<{
 }>;
 
 const emptyViewer: JournalViewer = { name: "You", accent: "slate", membershipIds: [] };
+const OpenThreadContext = createContext(false);
 
 export function FeedMoment({
   moment,
@@ -78,6 +79,7 @@ export function FeedMoment({
   viewerZone,
   viewer = emptyViewer,
   onScreen = true,
+  openThread = false,
 }: Readonly<{
   moment: TimelineMoment;
   circleNames: ReadonlyMap<string, string>;
@@ -87,6 +89,7 @@ export function FeedMoment({
   viewerZone: string;
   viewer?: JournalViewer;
   onScreen?: boolean;
+  openThread?: boolean;
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
@@ -112,6 +115,7 @@ export function FeedMoment({
   const accent = moment.personAccent;
 
   return (
+    <OpenThreadContext.Provider value={openThread}>
     <View style={styles.moment}>
       <View style={styles.connection}>
         <View style={styles.connectionSide}>
@@ -200,6 +204,7 @@ export function FeedMoment({
         />
       </View>
     </View>
+    </OpenThreadContext.Provider>
   );
 }
 
@@ -878,6 +883,12 @@ function Conversation({
   const hidden = hiddenNoteCount(notes.length);
   const mentionsOn =
     moment.audience !== "just_me" && moment.kind !== "insight";
+  const openThread = useContext(OpenThreadContext);
+  const [openedThread, setOpenedThread] = useState(false);
+  if (openThread && !openedThread) {
+    setOpenedThread(true);
+    setShowAll(true);
+  }
 
   async function toggleLove() {
     const supabase = getSupabase();

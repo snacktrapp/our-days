@@ -42,6 +42,8 @@ import {
 } from "../lib/journal";
 import { momentListedInFeed } from "../lib/feed-format";
 import { formatPlainDate } from "../lib/moment-time";
+import { disablePushNotifications, subscribeNotificationOpens } from "../lib/push";
+import type { PushLanding } from "../lib/push-landing";
 import { getSupabase, mediaRequestHeaders } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import {
@@ -145,6 +147,14 @@ export default function JournalScreen() {
   const yRef = useRef(0);
   const offsetRef = useRef(0);
   const publishedUploads = useRef(new Set<string>());
+  const [landing, setLanding] = useState<PushLanding | null>(null);
+  const listRef = useRef<FlatList<FeedRow>>(null);
+  const landingPages = useRef(0);
+  const circlesRef = useRef(circles);
+  const loadFirstPageRef = useRef<
+    (nextScope: string, memberships: readonly CircleMembership[]) => Promise<void>
+  >(async () => undefined);
+  const loadEarlierRef = useRef<() => Promise<void>>(async () => undefined);
 
   const viewerYear = new Date().getFullYear();
   const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -375,6 +385,40 @@ export default function JournalScreen() {
     [],
   );
 
+  useEffect(() => {
+    circlesRef.current = circles;
+    loadFirstPageRef.current = loadFirstPage;
+    loadEarlierRef.current = loadEarlier;
+  });
+
+  useEffect(() => subscribeNotificationOpens((target) => {
+    landingPages.current = 0;
+    setSettingsOpen(false);
+    setSwitcherOpen(false);
+    setLanding(target);
+    setScope(allScope);
+    setLoading(true);
+    void loadFirstPageRef.current?.(allScope, circlesRef.current);
+  }), []);
+
+  useEffect(() => {
+    if (!landing || loading || scope !== allScope || loadingMore) return;
+    const listedNow = moments.filter((moment) =>
+      momentListedInFeed({ audience: moment.audience, feed: "all" }),
+    );
+    const built = buildRows(listedNow, today, Boolean(page?.hasMore));
+    const index = built.findIndex(
+      (row) => row.kind === "moment" && row.moment.id === landing.momentId,
+    );
+    if (index >= 0) {
+      listRef.current?.scrollToIndex({ index, viewPosition: 0 });
+      return;
+    }
+    if (!page?.hasMore || landingPages.current >= 4) return;
+    landingPages.current += 1;
+    void loadEarlierRef.current();
+  }, [landing, loading, loadingMore, moments, page?.hasMore, scope, today]);
+
   if (ready && !session) return <Redirect href="/sign-in" />;
 
   const kind = feedKind(scope);
@@ -438,14 +482,25 @@ export default function JournalScreen() {
           }}
           onSignOut={() => {
             setSettingsOpen(false);
-            void signOut();
+            // Remove this iPhone's token while the session can still do it, but never hold up sign-out.
+            void Promise.race([
+              disablePushNotifications(false),
+              new Promise((resolve) => setTimeout(resolve, 3000)),
+            ]).finally(() => signOut());
           }}
         />
       ) : (
         <FlatList
+          ref={listRef}
           style={styles.list}
           data={rows}
           keyExtractor={(row) => row.id}
+          onScrollToIndexFailed={(info) => {
+            listRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: false,
+            });
+          }}
           accessibilityState={{ busy: loading }}
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -563,6 +618,9 @@ export default function JournalScreen() {
                     membershipIds: circles.map((circle) => circle.membershipId),
                   }}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
+                  openThread={
+                    landing?.openThread === true && landing.momentId === item.moment.id
+                  }
                 />
               )}
             </Rail>

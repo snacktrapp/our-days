@@ -11,6 +11,8 @@ config.watchFolders = [
     path.resolve(projectRoot, "../src/features/composer/data"),
     // Comment @mentions share the web's draft helpers.
     path.resolve(projectRoot, "../src/features/mentions"),
+    // Push taps share the web's notification hrefs (src/lib/activity-notifications.ts).
+    path.resolve(projectRoot, "../src/lib"),
   ]),
 ];
 
