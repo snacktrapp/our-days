@@ -8,7 +8,7 @@ import {
   supabaseUrl,
 } from "./config";
 import { sha256Hex } from "./sha256";
-import { persistVideoPoster, type VideoPoster } from "./video-poster";
+import { persistVideoPoster, type VideoPoster } from "./video-poster-store";
 
 export type Audience = "family" | "just_me";
 

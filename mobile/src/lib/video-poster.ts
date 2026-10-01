@@ -1,20 +1,10 @@
 import { requireOptionalNativeModule } from "expo";
 import { Platform } from "react-native";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { maximumPosterBytes, minimumPosterBytes, type VideoPoster } from "./video-poster-store";
 
-/** Same ceiling the poster RPC enforces. */
-const maximumPosterBytes = 2 * 1024 * 1024;
-/** A solid or near-black frame compresses far below a real picture. */
-const minimumPosterBytes = 2_500;
+export { persistVideoPoster, type VideoPoster } from "./video-poster-store";
+
 const posterTimes = [0.18, 0.36, 0.72, 1.2];
-
-export type VideoPoster = Readonly<{
-  bytes: ArrayBuffer;
-  width: number;
-  height: number;
-  /** Local file the composer tile can show. Null when only bytes were captured. */
-  uri: string | null;
-}>;
 
 type ThumbPlayer = {
   muted: boolean;
@@ -108,34 +98,4 @@ export async function captureDeviceVideoPoster(uri: string): Promise<VideoPoster
       // The player is only a thumbnail source.
     }
   }
-}
-
-/** Upload `poster/{momentId}` and record it, the same RPC the web composer uses. */
-export async function persistVideoPoster(
-  supabase: SupabaseClient,
-  momentId: string,
-  poster: VideoPoster,
-) {
-  if (poster.bytes.byteLength < minimumPosterBytes || poster.bytes.byteLength > maximumPosterBytes) {
-    return false;
-  }
-  if (poster.width < 1 || poster.height < 1) return false;
-  const path = `poster/${momentId}`;
-  const { error: uploadError } = await supabase.storage.from("our-days-videos").upload(path, new Uint8Array(poster.bytes), {
-    contentType: "image/jpeg",
-    cacheControl: "3600",
-    upsert: false,
-  });
-  if (
-    uploadError &&
-    !/already exists|duplicate|resource already/iu.test(uploadError.message)
-  ) {
-    return false;
-  }
-  const { error: attachError } = await supabase.rpc("attach_video_moment_poster", {
-    moment_id: momentId,
-    width_px: poster.width,
-    height_px: poster.height,
-  });
-  return !attachError;
 }

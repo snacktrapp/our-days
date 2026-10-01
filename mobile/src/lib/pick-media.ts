@@ -1,4 +1,4 @@
-import { captureDeviceVideoPoster, type VideoPoster } from "./video-poster";
+import type { VideoPoster } from "./video-poster-store";
 
 const webAccept =
   "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm";
@@ -295,7 +295,10 @@ async function itemFromAsset(asset: {
   if (!asset.video && !mimeType.startsWith("image/")) {
     throw new Error("Choose a JPEG, PNG, or WebP photo, or an MP4, MOV, M4V, or WebM video.");
   }
-  const poster = asset.video ? await captureDeviceVideoPoster(asset.uri) : null;
+  // Loaded on demand: video-poster pulls in expo-video and React Native.
+  const poster = asset.video
+    ? await (await import("./video-poster")).captureDeviceVideoPoster(asset.uri)
+    : null;
   return {
     bytes,
     mimeType,
