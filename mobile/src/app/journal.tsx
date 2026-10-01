@@ -63,6 +63,11 @@ import {
 } from "../lib/tokens";
 
 const mentionsKey = "our-days:mentions-announcement";
+/**
+ * SecureStore only accepts letters, digits, ".", "-" and "_" in keys, so the
+ * web key (with ":") threw on iOS and the dismissal never stuck.
+ */
+const mentionsStoreKey = Platform.OS === "web" ? mentionsKey : "our-days.mentions-announcement";
 /** Pause a clip once the row is almost entirely off the screen. */
 const momentViewability = { itemVisiblePercentThreshold: 10 };
 const allScope = "all";
@@ -640,7 +645,7 @@ export default function JournalScreen() {
               <MentionsBanner
                 onDismiss={() => {
                   setShowMentions(false);
-                  void writePref(mentionsKey, "dismissed");
+                  void writePref(mentionsStoreKey, "dismissed");
                 }}
               />
             ) : null}
@@ -907,7 +912,7 @@ async function mentionDismissed() {
   if (Platform.OS === "web") {
     return globalThis.localStorage?.getItem(mentionsKey) === "dismissed";
   }
-  const value = await SecureStore.getItemAsync(mentionsKey);
+  const value = await SecureStore.getItemAsync(mentionsStoreKey);
   return value === "dismissed";
 }
 

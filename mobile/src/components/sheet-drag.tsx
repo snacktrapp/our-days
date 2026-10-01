@@ -1,5 +1,12 @@
 import { useEffect, useState, type RefObject } from "react";
-import { Animated, Easing, Keyboard, PanResponder, type PanResponderGestureState } from "react-native";
+import {
+  Animated,
+  Easing,
+  Keyboard,
+  PanResponder,
+  type LayoutChangeEvent,
+  type PanResponderGestureState,
+} from "react-native";
 
 import {
   canStartSheetDismiss,
@@ -113,4 +120,95 @@ export function useSheetDrag(input: DragInput) {
   );
 
   return { translateY, panHandlers: responder.panHandlers };
+}
+
+type ChromeDismissInput = {
+  onCommit: RefObject<(actions: SheetDragActions) => void>;
+};
+
+type ChromeTouch = { nativeEvent: { pageX: number; pageY: number; timestamp: number } };
+
+/** Gesture state and geometry live in this closure, outside render. */
+function createChromeDismiss(input: ChromeDismissInput) {
+  const translateY = new Animated.Value(0);
+  const geometry = { height: 320 };
+  const drag = { tracking: false, active: false, x0: 0, y0: 0, dy: 0, lastY: 0, lastT: 0, vy: 0 };
+  const finish = () => {
+    const active = drag.active;
+    drag.tracking = false;
+    drag.active = false;
+    if (!active) return;
+    const downward = Math.max(0, drag.dy);
+    const springBack = () => springToRest(translateY);
+    if (!sheetDismissShouldCommit({ dy: downward, velocityY: drag.vy })) {
+      springBack();
+      return;
+    }
+    input.onCommit.current?.({
+      springBack,
+      dismiss: (done) => slideAway(translateY, Math.max(240, geometry.height + 48), done),
+    });
+  };
+  // Raw touch events on the header, not PanResponder: inside a React Native
+  // Modal on iOS the responder system never offered the move to the sheet.
+  // A touch keeps reporting to the view it started in, so a drag that starts
+  // on the header is followed all the way down.
+  const touchHandlers = {
+    onTouchStart: (event: ChromeTouch) => {
+      const { pageX, pageY, timestamp } = event.nativeEvent;
+      drag.tracking = true;
+      drag.active = false;
+      drag.x0 = pageX;
+      drag.y0 = pageY;
+      drag.dy = 0;
+      drag.lastY = pageY;
+      drag.lastT = timestamp;
+      drag.vy = 0;
+    },
+    onTouchMove: (event: ChromeTouch) => {
+      if (!drag.tracking) return;
+      const { pageX, pageY, timestamp } = event.nativeEvent;
+      const dy = pageY - drag.y0;
+      const dx = pageX - drag.x0;
+      if (!drag.active) {
+        if (dy < sheetDismissAxisPx || Math.abs(dx) > Math.abs(dy)) {
+          if (dy < -sheetDismissAxisPx || Math.abs(dx) > sheetDismissAxisPx * 2) drag.tracking = false;
+          return;
+        }
+        drag.active = true;
+      }
+      const elapsed = timestamp - drag.lastT;
+      if (elapsed > 0) drag.vy = ((pageY - drag.lastY) / elapsed) * 1000;
+      drag.lastY = pageY;
+      drag.lastT = timestamp;
+      drag.dy = dy;
+      translateY.setValue(Math.max(0, dy));
+    },
+    onTouchEnd: finish,
+    onTouchCancel: finish,
+  };
+  return {
+    translateY,
+    sheetProps: {
+      onLayout: (event: LayoutChangeEvent) => {
+        geometry.height = event.nativeEvent.layout.height;
+      },
+    },
+    chromeProps: {
+      collapsable: false,
+      ...touchHandlers,
+    },
+  };
+}
+
+/**
+ * Swipe down on a sheet's grab bar or header to close it, whether or not the
+ * keyboard is up. The rest of the sheet does not use this gesture.
+ *
+ * Spread `sheetProps` on the sheet's Animated.View and `chromeProps` on the
+ * header View. Only drags that start inside the header move the sheet.
+ */
+export function useChromeDismiss(input: ChromeDismissInput) {
+  const [chrome] = useState(() => createChromeDismiss(input));
+  return { translateY: chrome.translateY, sheetProps: chrome.sheetProps, chromeProps: chrome.chromeProps };
 }

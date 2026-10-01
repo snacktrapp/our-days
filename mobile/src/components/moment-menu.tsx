@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from "react";
-import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { MenuView } from "@expo/ui/community/menu";
 
 import type { TimelineMoment } from "../lib/journal";
@@ -8,7 +8,7 @@ import { trashWrittenMoment, updateWrittenMoment } from "../lib/posts";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
-import { KeyboardDoneBar } from "./keyboard-form";
+import { useChromeDismiss } from "./sheet-drag";
 
 export const MomentChangeContext = createContext<{
   onChange: (moment: TimelineMoment) => void;
@@ -32,7 +32,58 @@ export function MomentOverflow({
   const [body, setBody] = useState(moment.body);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const onCommit = useRef<Parameters<typeof useChromeDismiss>[0]["onCommit"]["current"]>(() => undefined);
+  const { translateY, sheetProps, chromeProps } = useChromeDismiss({ onCommit });
+
+  // This menu stays mounted between edits, so a sheet that was swiped away
+  // would reopen still slid off screen. Start each edit at rest.
+  useEffect(() => {
+    if (editing) translateY.setValue(0);
+  }, [editing, translateY]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    onCommit.current = ({ springBack, dismiss }) => {
+      const close = () => {
+        Keyboard.dismiss();
+        setEditing(false);
+      };
+      if (body.trim() === moment.body.trim()) {
+        dismiss(close);
+        return;
+      }
+      springBack();
+      Alert.alert("Discard these edits?", undefined, [
+        { text: "Keep editing", style: "cancel" },
+        { text: "Discard", style: "destructive", onPress: close },
+      ]);
+    };
+  });
+
   if (actions.length === 0) return null;
+
+  function requestClose() {
+    if (body.trim() === moment.body.trim()) {
+      Keyboard.dismiss();
+      setEditing(false);
+      return;
+    }
+    Alert.alert("Discard these edits?", undefined, [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: () => { Keyboard.dismiss(); setEditing(false); } },
+    ]);
+  }
 
   function remove() {
     Alert.alert("Delete this moment?", undefined, [
@@ -131,21 +182,37 @@ export function MomentOverflow({
         </Pressable>
       )}
       {editing ? (
-        <Modal transparent animationType="slide" onRequestClose={() => setEditing(false)}>
+        <Modal transparent animationType="slide" onRequestClose={requestClose}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={[styles.editScrim, { backgroundColor: colors.scheme === "light" ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)" }]}
           >
-            <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={() => { Keyboard.dismiss(); setEditing(false); }} />
-            <View style={[styles.editSheet, { backgroundColor: colors.paper, borderColor: colors.hairline }]}>
-              <View style={styles.editBar}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => setEditing(false)}>
-                  <Text style={[face(colors, 400), { color: colors.ink, fontSize: 17 }]}>Cancel</Text>
-                </Pressable>
-                <Text style={[face(colors, 650), { color: colors.ink, fontSize: 17 }]}>Edit</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Save" disabled={busy || !body.trim()} onPress={() => void save()}>
-                  <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: body.trim() ? 1 : 0.4 }]}>{busy ? "Saving…" : "Save"}</Text>
-                </Pressable>
+            <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={requestClose} />
+            <Animated.View
+              {...sheetProps}
+              style={[
+                styles.editSheet,
+                {
+                  backgroundColor: colors.paper,
+                  borderColor: colors.hairline,
+                  paddingBottom: keyboardOpen ? 8 : 16,
+                  transform: [{ translateY }],
+                },
+              ]}
+            >
+              <View {...chromeProps}>
+                <View style={styles.handleHit} accessibilityLabel="Drag down to close">
+                  <View style={[styles.handle, { backgroundColor: colors.scheme === "light" ? "#c5c9c6" : "#526158" }]} />
+                </View>
+                <View style={styles.editBar}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={requestClose}>
+                    <Text style={[face(colors, 400), { color: colors.ink, fontSize: 17 }]}>Cancel</Text>
+                  </Pressable>
+                  <Text style={[face(colors, 650), { color: colors.ink, fontSize: 17 }]}>Edit</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Save" disabled={busy || !body.trim()} onPress={() => void save()}>
+                    <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: body.trim() ? 1 : 0.4 }]}>{busy ? "Saving…" : "Save"}</Text>
+                  </Pressable>
+                </View>
               </View>
               <TextInput
                 value={body}
@@ -156,9 +223,8 @@ export function MomentOverflow({
                 style={[face(colors, 400, "serif"), styles.editInput, { color: colors.ink, borderColor: colors.hairline }]}
               />
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
-            </View>
+            </Animated.View>
           </KeyboardAvoidingView>
-          <KeyboardDoneBar />
         </Modal>
       ) : null}
     </>
@@ -181,7 +247,9 @@ const styles = {
     justifyContent: "center" as const,
   },
   editScrim: { flex: 1, justifyContent: "flex-end" as const },
-  editSheet: { borderTopWidth: 1, padding: 16, gap: 12, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
+  editSheet: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 0, gap: 12, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
+  handleHit: { alignItems: "center" as const, paddingTop: 10, paddingBottom: 6 },
+  handle: { width: 38, height: 4, borderRadius: 999 },
   editBar: { minHeight: 44, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
   editInput: { minHeight: 120, maxHeight: 260, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 17, lineHeight: 25 },
 };
