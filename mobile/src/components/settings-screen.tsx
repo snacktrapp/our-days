@@ -8,7 +8,7 @@ import {
   profileColorName,
   type ProfileColorToken,
 } from "../lib/profile-accent";
-import type { ViewerProfile } from "../lib/journal";
+import type { CircleMembership, ViewerProfile } from "../lib/journal";
 import { useAppTheme } from "../lib/theme";
 import {
   accentIds,
@@ -21,6 +21,7 @@ import {
   type AccentId,
 } from "../lib/tokens";
 import { ChevronRight } from "./icons";
+import { InviteSendSheet } from "./invite-sheet";
 
 /**
  * Web account settings: src/features/family-settings/account-screen.tsx
@@ -28,11 +29,13 @@ import { ChevronRight } from "./icons";
  */
 export function SettingsScreen({
   profile,
+  circles = [],
   onSaveColor,
   onSignOut,
   onScroll,
 }: Readonly<{
   profile: ViewerProfile | null;
+  circles?: readonly CircleMembership[];
   onSaveColor: (color: ProfileColorToken) => Promise<{ ok: boolean; message: string }>;
   onSignOut: () => void;
   onScroll?: (y: number) => void;
@@ -40,6 +43,8 @@ export function SettingsScreen({
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const radius = colors.appearance === "retro" ? 2 : 18;
+  const [inviting, setInviting] = useState(false);
+  const canInvite = circles.some((circle) => circle.role === "organizer" && !circle.archivedAt);
   return (
     <ScrollView
       style={styles.fill}
@@ -68,6 +73,24 @@ export function SettingsScreen({
         <ThemeRow />
         {colors.appearance === "retro" ? <AccentRow /> : null}
         <NotificationsRow />
+        {canInvite ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Invite someone"
+            onPress={() => setInviting(true)}
+            style={styles.plainRow}
+          >
+            <View style={styles.copy}>
+              <Text style={[face(colors, 600), styles.rowTitle, { color: colors.ink, fontSize: 15 }]}>
+                Invite someone
+              </Text>
+              <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
+                Send a private invitation to this circle.
+              </Text>
+            </View>
+            <ChevronRight color={colors.muted} />
+          </Pressable>
+        ) : null}
         {/* TODO(noop): Recently removed does not open trash. See noop-controls.ts */}
         <PlainRow
           title="Recently removed"
@@ -78,6 +101,7 @@ export function SettingsScreen({
       <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
         <SignOutRow onSignOut={onSignOut} />
       </View>
+      {inviting ? <InviteSendSheet circles={circles} onClose={() => setInviting(false)} /> : null}
     </ScrollView>
   );
 }
