@@ -11,22 +11,37 @@ const acceptedTypes = [
   "video/webm",
 ] as const;
 
-/** The iOS file-input menu, in the order WebKit shows it. */
-export const mediaMenuOptions = [
-  "Photo Library",
-  "Take Photo or Video",
-  "Choose Files",
+/**
+ * The photo chooser, in the order the web file input shows it.
+ * `symbol` is the SF Symbol on the iOS pull-down menu.
+ */
+export const mediaMenuItems = [
+  { id: "library", title: "Photo Library", symbol: "photo.on.rectangle" },
+  { id: "camera", title: "Take Photo or Video", symbol: "camera" },
+  { id: "files", title: "Choose Files", symbol: "folder" },
 ] as const;
 
-export type MediaSource = "library" | "camera" | "files";
+export type MediaSource = (typeof mediaMenuItems)[number]["id"];
+
+export const mediaMenuOptions = mediaMenuItems.map((item) => item.title);
 
 const maximumVideoDurationMs = 120_500;
 
 export function mediaSourceForMenuIndex(index: number): MediaSource | null {
-  if (index === 0) return "library";
-  if (index === 1) return "camera";
-  if (index === 2) return "files";
-  return null;
+  return mediaMenuItems[index]?.id ?? null;
+}
+
+export function mediaSourceForMenuId(id: string): MediaSource | null {
+  return mediaMenuItems.find((item) => item.id === id)?.id ?? null;
+}
+
+/**
+ * The pull-down menu needs the ExpoUI native module from the runtime 0.6.0
+ * build. Runtime 0.5.0 does not have it, so an over-the-air update keeps the
+ * action sheet.
+ */
+export function usesNativeMediaMenu(platform: string, nativeModulePresent: boolean) {
+  return platform === "ios" && nativeModulePresent;
 }
 
 /**
