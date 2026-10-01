@@ -665,15 +665,15 @@ await step("test circle video poster is readable and playback starts from its of
   await supabase.auth.signOut({ scope: "local" });
 });
 
-await step("OTA runtime is 0.3.0 so build 6 cannot receive this JS", async () => {
+await step("OTA runtime is 0.4.0 so builds 6-7 (runtime 0.2.0/0.3.0) cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));
   const easJson = JSON.parse(fs.readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
   assert.equal(appJson.expo.runtimeVersion?.policy, "appVersion");
   assert.equal(
     appJson.expo.version,
-    "0.3.0",
-    "runtime follows the app version; 0.3.0 must not be delivered to build 6",
+    "0.4.0",
+    "runtime follows the app version; 0.4.0 JS (expo-video) must not be delivered to build 7",
   );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");

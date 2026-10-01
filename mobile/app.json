@@ -3,7 +3,7 @@
     "name": "Our Days",
     "slug": "our-days",
     "scheme": "ourdays",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -35,7 +35,12 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-image",
       "expo-font",
       [
