@@ -1144,7 +1144,7 @@ function Conversation({
       {composer ? (
         <CommentSheet
           title={composer === "new" ? "Add comment" : "Edit comment"}
-          context={`${moment.personName} · ${kind}`}
+          context={commentContext(moment.personName, kind, moment.body || moment.title || "")}
           initialBody={composer === "new" ? "" : composer.body}
           initialMentions={
             composer === "new"
@@ -1225,16 +1225,15 @@ function NoteRow({
             accessibilityRole="button"
             accessibilityLabel="Edit comment"
             onPress={onEdit}
+            hitSlop={14}
             style={styles.noteMore}
           >
-            <Text
-              style={[
-                face(colors, 400),
-                { color: colors.muted, fontSize: 16, letterSpacing: tracking(16, -0.04) },
-              ]}
-            >
-              •••
-            </Text>
+            {/* Web .inline-note-more-dots: three 2px dots in a 13x3 box. */}
+            <View style={styles.noteDots}>
+              {[0, 1, 2].map((dot) => (
+                <View key={dot} style={[styles.noteDot, { backgroundColor: colors.muted }]} />
+              ))}
+            </View>
           </Pressable>
         ) : null}
         <View style={styles.noteHeart} pointerEvents="box-none">
@@ -1266,7 +1265,7 @@ function NoteRow({
               onPress={onToggleHearts}
               style={styles.noteHeartCount}
             >
-              <Text style={[face(colors, 400, "record"), { color: colors.muted, fontSize: 11 }]}>
+              <Text style={[styles.noteWhen, face(colors, 400, "record"), { color: colors.muted }]}>
                 {note.heartCount}
               </Text>
             </Pressable>
@@ -1283,6 +1282,13 @@ function NoteRow({
       ) : null}
     </View>
   );
+}
+
+/** Web: `${personName} · ${kindLabel} · ${conciseLabel(text)}` (48 characters). */
+function commentContext(person: string, kind: string, text: string) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  const label = flat.length <= 48 ? flat : `${flat.slice(0, 47).trimEnd()}…`;
+  return label ? `${person} · ${kind} · ${label}` : `${person} · ${kind}`;
 }
 
 function lovedBy(names: readonly string[]) {
@@ -1647,6 +1653,7 @@ const styles = StyleSheet.create({
     right: 0,
     width: 44,
     height: 44,
+    paddingRight: 6,
     alignItems: "flex-end",
     justifyContent: "center",
   },
@@ -1663,10 +1670,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noteMore: {
-    width: 28,
-    height: 28,
+    width: 16,
+    height: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  noteDots: {
+    width: 13,
+    height: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  noteDot: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
   },
   showMore: {
     minHeight: 44,
