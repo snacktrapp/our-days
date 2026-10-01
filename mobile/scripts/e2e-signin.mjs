@@ -492,9 +492,19 @@ await step("comment and heart a test-circle post, then clean up", async () => {
         (item) => item.reactionId === "held-close" && item.isCurrentMember,
       ),
     );
+    const unreacted = await conversation.setMomentReaction(supabase, {
+      momentId: created.momentId,
+      reactionId: null,
+    });
+    assert.equal(unreacted.ok, true, unreacted.ok ? "" : unreacted.message);
+    const unloved = await conversation.setMomentNoteHeart(supabase, {
+      noteId: noted.noteId,
+      hearted: false,
+    });
+    assert.equal(unloved.ok, true, unloved.ok ? "" : unloved.message);
     const trashedNote = await conversation.trashMomentNote(supabase, {
       noteId: noted.noteId,
-      revision: loved.revision ?? saved.revision,
+      revision: saved.revision,
     });
     assert.equal(trashedNote.ok, true, trashedNote.ok ? "" : trashedNote.message);
   } finally {
