@@ -287,6 +287,10 @@ await step("Just me stays off circle feeds, invitations parse, and YouTube is an
     invites.invitationRedirectUrl("https://our-days-neon.vercel.app"),
     "https://our-days-neon.vercel.app/auth/callback",
   );
+  assert.equal(invites.defaultInviteCircleId(["home", "test"], "test"), "test");
+  assert.equal(invites.defaultInviteCircleId(["home", "test"], null), "");
+  assert.equal(invites.defaultInviteCircleId(["home", "test"], "not-organizer"), "");
+  assert.equal(invites.defaultInviteCircleId(["test"], null), "test");
   const clip = "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120";
   assert.equal(youtube.loneYoutubeClip(clip), clip);
   assert.equal(youtube.loneYoutubeClip("A note https://www.youtube.com/watch?v=abc"), null);

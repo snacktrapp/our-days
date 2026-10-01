@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   acceptCircleInvitation,
+  defaultInviteCircleId,
   requestCircleInvitation,
 } from "../lib/invites";
 import { postableCircles, type CircleMembership } from "../lib/journal";
@@ -20,15 +21,23 @@ import { face } from "../lib/tokens";
 
 export function InviteSendSheet({
   circles,
+  viewedCircleId = null,
   onClose,
 }: Readonly<{
   circles: readonly CircleMembership[];
+  /** The circle feed open behind settings, if any. */
+  viewedCircleId?: string | null;
   onClose: () => void;
 }>) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const organizers = postableCircles(circles).filter((circle) => circle.role === "organizer");
-  const [circleId, setCircleId] = useState(organizers[0]?.circleId ?? "");
+  const [circleId, setCircleId] = useState(() =>
+    defaultInviteCircleId(
+      organizers.map((circle) => circle.circleId),
+      viewedCircleId,
+    ),
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -37,6 +46,10 @@ export function InviteSendSheet({
   async function send() {
     const supabase = getSupabase();
     if (!supabase || busy) return;
+    if (!circleId) {
+      setMessage("Choose which circle to invite them to.");
+      return;
+    }
     setBusy(true);
     const result = await requestCircleInvitation(supabase, {
       circleId,
@@ -57,7 +70,9 @@ export function InviteSendSheet({
       <View style={[styles.sheet, { backgroundColor: colors.cream, paddingBottom: Math.max(16, insets.bottom) }]}>
         <Text style={[face(colors, 650), styles.title, { color: colors.ink }]}>Invite someone</Text>
         <Text style={[face(colors, 400), { color: colors.muted, fontSize: 14 }]}>
-          They’ll get a private invitation for this circle.
+          {circleId
+            ? "They’ll get a private invitation for this circle."
+            : "Choose which circle to invite them to."}
         </Text>
         <View style={styles.chips}>
           {organizers.map((circle) => {
@@ -97,9 +112,10 @@ export function InviteSendSheet({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Send invitation"
-          disabled={busy}
+          accessibilityState={{ disabled: busy || !circleId }}
+          disabled={busy || !circleId}
           onPress={() => void send()}
-          style={[styles.post, { backgroundColor: colors.action }]}
+          style={[styles.post, { backgroundColor: colors.action, opacity: circleId ? 1 : 0.5 }]}
         >
           <Text style={[face(colors, 650), { color: colors.actionInk, fontSize: 16 }]}>
             {busy ? "Sending…" : "Send invitation"}
