@@ -36,6 +36,12 @@ export function MomentOverflow({
   const onCommit = useRef<Parameters<typeof useChromeDismiss>[0]["onCommit"]["current"]>(() => undefined);
   const { translateY, sheetProps, chromeProps } = useChromeDismiss({ onCommit });
 
+  // This menu stays mounted between edits, so a sheet that was swiped away
+  // would reopen still slid off screen. Start each edit at rest.
+  useEffect(() => {
+    if (editing) translateY.setValue(0);
+  }, [editing, translateY]);
+
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";

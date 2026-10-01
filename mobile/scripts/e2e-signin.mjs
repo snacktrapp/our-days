@@ -769,6 +769,10 @@ await step("sheets over the feed keep taps with the keyboard up, and sign-out st
     assert.match(read(file), /<View \{\.\.\.chromeProps\}>/);
     assert.doesNotMatch(read(file), /\{\.\.\.panHandlers\}/);
   }
+  // The edit-post menu stays mounted, so each edit must start with the sheet at rest.
+  assert.match(read("../src/components/moment-menu.tsx"), /if \(editing\) translateY\.setValue\(0\)/);
+  // Header drag uses raw touches; PanResponder moves never reach a sheet inside a Modal on iOS.
+  assert.match(read("../src/components/sheet-drag.tsx"), /onTouchMove: \(event: ChromeTouch\)/);
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /Previous field/);
   assert.match(read("../src/components/auth-provider.tsx"), /auth\.signOut\(\{ scope: "local" \}\)/);
 });
