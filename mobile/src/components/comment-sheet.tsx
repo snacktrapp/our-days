@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlurView } from "expo-blur";
 import {
   Alert,
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -27,7 +28,8 @@ import { dotColor, face } from "../lib/tokens";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { KeyboardDoneBar, composerKeyboardDismissMode } from "./keyboard-form";
+import { composerKeyboardDismissMode } from "./keyboard-form";
+import { useChromeDismiss } from "./sheet-drag";
 
 export function CommentSheet({
   title,
@@ -56,11 +58,30 @@ export function CommentSheet({
 }>) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [body, setBody] = useState(initialBody);
   const [mentions, setMentions] = useState<readonly DraftMention[]>(initialMentions);
   const [cursor, setCursor] = useState(initialBody.length);
   const query = mentionQueryAt(body, cursor, mentions);
   const suggestions = query && members.length > 0 ? filterMentionCandidates(members, query.query).slice(0, 6) : [];
+  const sheetHeight = useRef(420);
+  const onCommit = useRef<Parameters<typeof useChromeDismiss>[0]["onCommit"]["current"]>(() => undefined);
+  const posting = useRef(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pending) posting.current = false;
+  }, [pending]);
 
   function requestClose() {
     if (pending) return;
@@ -74,10 +95,36 @@ export function CommentSheet({
     ]);
   }
 
+  useEffect(() => {
+    onCommit.current = ({ springBack, dismiss }) => {
+      if (pending) {
+        springBack();
+        return;
+      }
+      if (!body.trim()) {
+        dismiss(() => {
+          Keyboard.dismiss();
+          onDismiss();
+        });
+        return;
+      }
+      springBack();
+      requestClose();
+    };
+  });
+
+  const { translateY, panHandlers } = useChromeDismiss({ sheetHeight, onCommit });
+
   const retro = colors.appearance === "retro";
   const light = colors.scheme === "light" && !retro;
   const scrimColor = retro ? "#100d0c" : light ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)";
   const canPost = !pending && body.trim().length > 0;
+
+  function submit() {
+    if (posting.current || !canPost) return;
+    posting.current = true;
+    onSubmit(body.trim(), mentions);
+  }
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={requestClose} statusBarTranslucent>
@@ -93,7 +140,10 @@ export function CommentSheet({
           style={styles.scrimTap}
           onPress={() => (Keyboard.isVisible() ? Keyboard.dismiss() : requestClose())}
         />
-        <View
+        <Animated.View
+          onLayout={(event) => {
+            sheetHeight.current = event.nativeEvent.layout.height;
+          }}
           style={[
             styles.sheet,
             {
@@ -101,14 +151,17 @@ export function CommentSheet({
               borderColor: colors.hairline,
               borderTopLeftRadius: retro ? 2 : 14,
               borderTopRightRadius: retro ? 2 : 14,
-              paddingBottom: Math.max(21, insets.bottom),
+              paddingBottom: keyboardOpen ? 8 : Math.max(21, insets.bottom),
+              transform: [{ translateY }],
             },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          <Pressable accessible={false} onPress={() => Keyboard.dismiss()}>
+          <View {...panHandlers}>
+            <View style={styles.handleHit} accessibilityRole="adjustable" accessibilityLabel="Drag down to close">
+              <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
+            </View>
             <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{title}</Text>
-          </Pressable>
+          </View>
           <Text
             numberOfLines={2}
             style={[face(colors, 400), styles.context, { color: colors.muted, fontSize: 13, lineHeight: 18 }]}
@@ -226,7 +279,8 @@ export function CommentSheet({
               accessibilityRole="button"
               accessibilityLabel={pending ? "Saving…" : editing ? "Save" : "Post"}
               disabled={!canPost}
-              onPress={() => onSubmit(body.trim(), mentions)}
+              onPress={submit}
+              onPressIn={submit}
               style={[styles.send, { backgroundColor: colors.action, opacity: canPost ? 1 : 0.38 }]}
             >
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -243,9 +297,8 @@ export function CommentSheet({
           {error ? (
             <Text style={[face(colors, 400), styles.error, { color: colors.clay }]}>{error}</Text>
           ) : null}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
-      <KeyboardDoneBar />
     </Modal>
   );
 }
@@ -270,16 +323,18 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
   },
+  handleHit: {
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
   handle: {
-    position: "absolute",
-    top: 10,
-    alignSelf: "center",
     width: 38,
     height: 4,
     borderRadius: 999,
   },
   title: {
-    marginTop: 28,
+    marginTop: 4,
     paddingHorizontal: 20,
     fontSize: 17,
     lineHeight: 20.4,

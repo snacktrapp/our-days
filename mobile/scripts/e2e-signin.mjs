@@ -761,6 +761,8 @@ await step("sheets over the feed keep taps with the keyboard up, and sign-out st
   assert.match(read("../src/components/moment-menu.tsx"), /<KeyboardAvoidingView/);
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /<InputAccessoryView/);
   assert.match(read("../src/components/keyboard-form.tsx"), />\s*Done\s*</);
+  assert.doesNotMatch(read("../src/components/comment-sheet.tsx"), /KeyboardDoneBar/);
+  assert.doesNotMatch(read("../src/components/moment-menu.tsx"), /KeyboardDoneBar/);
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /Previous field/);
   assert.match(read("../src/components/auth-provider.tsx"), /auth\.signOut\(\{ scope: "local" \}\)/);
 });
