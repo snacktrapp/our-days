@@ -188,14 +188,20 @@ export function albumPhotoHeightRatio(width?: number, height?: number) {
   return height / width;
 }
 
-/** Cover fills the frame from 2:1 through 3:4, and crops anything taller.
- *  Wider than 2:1 is contained on the theme background. */
+/** Cover fills the frame from 2:1 through 3:4. Anything outside that
+ *  (taller than 3:4, or wider than 2:1) is contained on the theme background. */
 export function albumFrameFit(
   width?: number,
   height?: number,
 ): "cover" | "contain" {
   const ratio = albumPhotoHeightRatio(width, height);
-  if (ratio == null || ratio < albumFrameMinHeightRatio) return "contain";
+  if (
+    ratio == null ||
+    ratio < albumFrameMinHeightRatio ||
+    ratio > albumFrameMaxHeightRatio
+  ) {
+    return "contain";
+  }
   return "cover";
 }
 

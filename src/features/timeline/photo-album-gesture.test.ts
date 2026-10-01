@@ -144,11 +144,11 @@ describe("album frame height", () => {
     );
   });
 
-  it("covers 3:4 and taller portraits, and contains only wider than 2:1", () => {
+  it("covers through 3:4 and contains taller portraits and wider than 2:1", () => {
     expect(albumFrameFit(1920, 1080)).toBe("cover");
     expect(albumFrameFit(1200, 900)).toBe("cover");
     expect(albumFrameFit(900, 1200)).toBe("cover");
-    expect(albumFrameFit(900, 1600)).toBe("cover");
+    expect(albumFrameFit(900, 1600)).toBe("contain");
     expect(albumFrameFit(3000, 800)).toBe("contain");
     expect(albumFrameFit(undefined, undefined)).toBe("contain");
     expect(clampedAlbumFrameBox(900, 1600)).toEqual({
