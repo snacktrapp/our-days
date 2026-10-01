@@ -91,7 +91,8 @@ export function useComposerInput(id: string, multiline = false) {
     ...(multiline
       ? { scrollEnabled: false as const }
       : {
-          returnKeyType: last ? ("done" as const) : ("next" as const),
+          // "done" draws a blue ✓ key on iOS 26+; the bar's Done is the only one.
+          returnKeyType: last ? ("default" as const) : ("next" as const),
           submitBehavior: "submit" as const,
           onSubmitEditing: () => form?.submit(id),
         }),
