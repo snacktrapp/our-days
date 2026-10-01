@@ -425,15 +425,15 @@ describe("PhotoCardPager", () => {
         "is-cover",
       );
       expect(document.querySelector('[data-photo-index="1"]')).toHaveClass(
-        "is-contain",
+        "is-cover",
       );
 
       settleSlide();
 
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
-      // 900×1200 is taller than 4:5, so a 400px-wide frame clamps to 1.25×.
-      expect(stage()?.dataset.frameHeight).toBe("500.00");
+      // 900×1200 is 3:4, so a 400px-wide frame is exactly 4/3 × width.
+      expect(stage()?.dataset.frameHeight).toBe("533.33");
     } finally {
       if (clientWidth) {
         Object.defineProperty(

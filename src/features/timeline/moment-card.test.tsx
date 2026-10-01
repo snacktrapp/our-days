@@ -419,7 +419,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("clamps a too-tall album cover to 4:5 before the first swipe", () => {
+  it("clamps a too-tall album cover to 3:4 before the first swipe", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -458,7 +458,7 @@ describe("MomentCard timeline media", () => {
     );
     expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
       "viewBox",
-      "0 0 10000 12500",
+      "0 0 10000 13333",
     );
   });
 

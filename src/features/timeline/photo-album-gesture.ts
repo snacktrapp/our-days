@@ -171,9 +171,9 @@ export function clampDragDx(
     : Math.max(0, Math.min(width, dx));
 }
 
-/** Tallest album frame is 4:5 (height = 1.25 × width). Shortest is 2:1. */
+/** Tallest album frame is 3:4 (height = 4/3 × width). Shortest is 2:1. */
 export const albumFrameMinHeightRatio = 0.5;
-export const albumFrameMaxHeightRatio = 1.25;
+export const albumFrameMaxHeightRatio = 4 / 3;
 
 export function clampAlbumHeightRatio(heightOverWidth: number) {
   if (!Number.isFinite(heightOverWidth) || heightOverWidth <= 0) return 0.75;
@@ -188,16 +188,14 @@ export function albumPhotoHeightRatio(width?: number, height?: number) {
   return height / width;
 }
 
-/** Cover fills the frame when the photo is inside the clamp. Contain past it. */
+/** Cover fills the frame from 2:1 through 3:4, and crops anything taller.
+ *  Wider than 2:1 is contained on the theme background. */
 export function albumFrameFit(
   width?: number,
   height?: number,
 ): "cover" | "contain" {
   const ratio = albumPhotoHeightRatio(width, height);
-  if (ratio == null) return "contain";
-  if (ratio < albumFrameMinHeightRatio || ratio > albumFrameMaxHeightRatio) {
-    return "contain";
-  }
+  if (ratio == null || ratio < albumFrameMinHeightRatio) return "contain";
   return "cover";
 }
 

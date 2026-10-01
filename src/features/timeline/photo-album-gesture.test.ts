@@ -113,18 +113,18 @@ describe("pairTransform", () => {
 });
 
 describe("album frame height", () => {
-  it("matches the slide ratio inside the clamp and caps 4:5 and 2:1", () => {
+  it("matches the slide ratio inside the clamp and caps 3:4 and 2:1", () => {
     expect(albumGestureFrameHeight(390, 9 / 16, 9 / 16, "idle", 0)).toBeCloseTo(
       390 * (9 / 16),
     );
     expect(albumGestureFrameHeight(390, 3 / 4, 3 / 4, "idle", 0)).toBeCloseTo(
       390 * 0.75,
     );
-    expect(albumGestureFrameHeight(390, 5 / 4, 5 / 4, "idle", 0)).toBeCloseTo(
-      390 * 1.25,
+    expect(albumGestureFrameHeight(390, 4 / 3, 4 / 3, "idle", 0)).toBeCloseTo(
+      390 * (4 / 3),
     );
     expect(albumGestureFrameHeight(390, 16 / 9, 16 / 9, "idle", 0)).toBeCloseTo(
-      390 * 1.25,
+      390 * (4 / 3),
     );
     expect(albumGestureFrameHeight(390, 1 / 3, 1 / 3, "idle", 0)).toBeCloseTo(
       390 * 0.5,
@@ -144,16 +144,20 @@ describe("album frame height", () => {
     );
   });
 
-  it("covers inside the clamp and contains past it", () => {
+  it("covers 3:4 and taller portraits, and contains only wider than 2:1", () => {
     expect(albumFrameFit(1920, 1080)).toBe("cover");
     expect(albumFrameFit(1200, 900)).toBe("cover");
-    expect(albumFrameFit(800, 1000)).toBe("cover");
-    expect(albumFrameFit(900, 1600)).toBe("contain");
+    expect(albumFrameFit(900, 1200)).toBe("cover");
+    expect(albumFrameFit(900, 1600)).toBe("cover");
     expect(albumFrameFit(3000, 800)).toBe("contain");
     expect(albumFrameFit(undefined, undefined)).toBe("contain");
     expect(clampedAlbumFrameBox(900, 1600)).toEqual({
       width: 10000,
-      height: 12500,
+      height: 13333,
+    });
+    expect(clampedAlbumFrameBox(900, 1200)).toEqual({
+      width: 900,
+      height: 1200,
     });
     expect(clampedAlbumFrameBox(1920, 1080)).toEqual({
       width: 1920,
