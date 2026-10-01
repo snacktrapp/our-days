@@ -846,6 +846,74 @@ export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUp
   }
 }
 
+/**
+ * Extra photos on a moment already reserved by uploadPhotoMoment.
+ * Uses attach_photo_to_moment and the same claim → upload → process path.
+ * Does not add upload chips; the first photo's chip is unchanged.
+ */
+export async function attachExtraPhotos(
+  supabase: SupabaseClient,
+  momentId: string,
+  photos: readonly { bytes: ArrayBuffer; mimeType: string }[],
+) {
+  for (const photo of photos) {
+    try {
+      const mimeType = inspectPhoto(photo.bytes, photo.mimeType);
+      const sha256 = sha256Hex(photo.bytes);
+      const requestKey = randomId();
+      const uploadKey = randomId();
+      const { data: reserved, error: reserveError } = await supabase.rpc("attach_photo_to_moment", {
+        existing_moment_id: momentId,
+        request_key: requestKey,
+      });
+      const reservation = firstRow(reserved) as { intake_id?: string } | null;
+      if (reserveError || !reservation?.intake_id) {
+        return { ok: false as const, message: "An extra photo could not be added." };
+      }
+      const { data: claimed, error: claimError } = await supabase.rpc("claim_photo_intake_upload", {
+        expected_mime_type: mimeType,
+        expected_sha256_hex: sha256,
+        expected_size_bytes: photo.bytes.byteLength,
+        intake_id: reservation.intake_id,
+        upload_request_key: uploadKey,
+      });
+      const claim = firstRow(claimed) as
+        | { bucket_id?: string; object_path?: string; state?: string }
+        | null;
+      if (claimError || !claim?.bucket_id || !claim.object_path) {
+        return { ok: false as const, message: "An extra photo could not be added." };
+      }
+      if (claim.state !== "uploaded_unverified") {
+        await uploadWithTus(
+          claim.bucket_id,
+          claim.object_path,
+          photo.bytes,
+          mimeType,
+          {
+            expected_mime_type: mimeType,
+            expected_sha256: sha256,
+            expected_size_bytes: photo.bytes.byteLength,
+            intake_id: reservation.intake_id,
+            upload_request_key: uploadKey,
+          },
+          () => undefined,
+        );
+      }
+      const { error: ackError } = await supabase.rpc("acknowledge_photo_intake", {
+        intake_id: reservation.intake_id,
+      });
+      if (ackError) return { ok: false as const, message: "An extra photo could not be added." };
+      await requestPhotoProcessing(reservation.intake_id);
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : "An extra photo could not be added.",
+      };
+    }
+  }
+  return { ok: true as const };
+}
+
 function percentLabel(fraction: number) {
   const percent = Math.max(0, Math.min(99, Math.round(fraction * 100)));
   return percent > 0 ? `Uploading… ${percent}%` : "Uploading…";

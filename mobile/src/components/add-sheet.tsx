@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -28,7 +29,13 @@ import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
 import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
 import { rememberPostedCircle } from "../lib/last-posted-circle";
-import { pickJournalMedia, type MediaSource } from "../lib/pick-media";
+import {
+  maximumMomentPhotos,
+  pickJournalMediaList,
+  releasePreview,
+  type MediaSource,
+  type PickedMedia,
+} from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
   createFamilyMoment,
@@ -37,6 +44,7 @@ import {
   listEntryDrafts,
   loadEntryDraft,
   saveEntryDraft,
+  attachExtraPhotos,
   uploadPhotoMoment,
   uploadVideoMoment,
   type Audience,
@@ -64,6 +72,7 @@ import {
 } from "./keyboard-form";
 import { PassageSheet } from "./bible-picker-sheet";
 import { MediaChooser } from "./media-chooser";
+import { MediaStill } from "./media-preview";
 import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
@@ -135,11 +144,7 @@ export function AddSheet({
   const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
   const [reference, setReference] = useState("");
   const [passageOpen, setPassageOpen] = useState(false);
-  const [photoKind, setPhotoKind] = useState<"photo" | "video">("photo");
-  const [photoDuration, setPhotoDuration] = useState<number | null>(null);
-  const [photoName, setPhotoName] = useState<string | null>(null);
-  const [photoBytes, setPhotoBytes] = useState<ArrayBuffer | null>(null);
-  const [photoMime, setPhotoMime] = useState("image/jpeg");
+  const [mediaItems, setMediaItems] = useState<readonly PickedMedia[]>([]);
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
   const [draftSession, setDraftSession] = useState(false);
   const [drafts, setDrafts] = useState<readonly DraftListItem[]>([]);
@@ -296,15 +301,16 @@ export function AddSheet({
     const supabase = requireCircle();
     const instant = when();
     if (!supabase || !circle || !instant) return;
-    if (!photoBytes) {
+    const first = mediaItems[0];
+    if (!first) {
       setError("Choose a photo first.");
       return;
     }
     setBusy(true);
     setError(null);
     const shared = {
-      bytes: photoBytes,
-      mimeType: photoMime,
+      bytes: first.bytes,
+      mimeType: first.mimeType,
       circleId: circle.circleId,
       journalPersonId: circle.personId,
       body: body.trim(),
@@ -317,13 +323,25 @@ export function AddSheet({
       circleIds: justMe ? [] : [circle.circleId],
     };
     const result =
-      photoKind === "video"
+      first.kind === "video"
         ? await uploadVideoMoment(supabase, {
             ...shared,
-            name: photoName ?? "video.mp4",
-            durationMs: photoDuration ?? 0,
+            name: first.name || "video.mp4",
+            durationMs: first.durationMs ?? 0,
           })
         : await uploadPhotoMoment(supabase, shared);
+    if (result.ok && first.kind === "photo" && mediaItems.length > 1) {
+      const extra = await attachExtraPhotos(
+        supabase,
+        result.momentId,
+        mediaItems.slice(1).map((item) => ({ bytes: item.bytes, mimeType: item.mimeType })),
+      );
+      if (!extra.ok) {
+        setBusy(false);
+        setError(extra.message);
+        return;
+      }
+    }
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
@@ -341,20 +359,48 @@ export function AddSheet({
     await rememberPostedCircle(session.user.id, circle.circleId);
   }
 
-  function takeMedia(source: MediaSource) {
-    void pickJournalMedia(source)
+  function replaceMedia(next: readonly PickedMedia[]) {
+    setMediaItems((current) => {
+      for (const item of current) releasePreview(item);
+      return next;
+    });
+  }
+
+  function takeMedia(source: MediaSource, intent: "replace" | "add") {
+    const adding = intent === "add" && mediaItems.some((item) => item.kind === "photo");
+    const limit = adding ? maximumMomentPhotos - mediaItems.length : maximumMomentPhotos;
+    void pickJournalMediaList(source, {
+      multiple: source !== "camera",
+      limit: Math.max(1, limit),
+    })
       .then((picked) => {
-        if (!picked) return;
-        setPhotoBytes(picked.bytes);
-        setPhotoMime(picked.mimeType);
-        setPhotoName(picked.name);
-        setPhotoKind(picked.kind);
-        setPhotoDuration(picked.durationMs);
+        if (picked.length === 0) return;
+        const video = picked.find((item) => item.kind === "video");
+        if (video) {
+          if (adding) {
+            for (const item of picked) releasePreview(item);
+            setError("Choose photos or a video, not both.");
+            return;
+          }
+          replaceMedia([video]);
+        } else if (adding) {
+          setMediaItems((current) => [...current, ...picked].slice(0, maximumMomentPhotos));
+        } else {
+          replaceMedia(picked.filter((item) => item.kind === "photo"));
+        }
         setError(null);
       })
       .catch((error: unknown) => {
         setError(error instanceof Error ? error.message : "That photo could not be read.");
       });
+  }
+
+  function removeMedia(index: number) {
+    setMediaItems((current) => {
+      const removed = current[index];
+      if (removed) releasePreview(removed);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   }
 
   async function choosePassage(next: BibleVerseSelection) {
@@ -429,10 +475,10 @@ export function AddSheet({
     if (draft.circleId) setCircleId(draft.circleId);
     if (draft.occurredOn) setOccurredOn(draft.occurredOn);
     setVerse(draft.verse);
-    setPhotoBytes(null);
-    setPhotoName(null);
-    setPhotoKind("photo");
-    setPhotoDuration(null);
+    setMediaItems((current) => {
+      for (const item of current) releasePreview(item);
+      return [];
+    });
     setMode(
       draft.kind === "bible-verse"
         ? "bible"
@@ -525,7 +571,7 @@ export function AddSheet({
         sourceUrl,
         place: place.label,
         tags: taggedIds.join(","),
-        photo: photoBytes != null,
+        photo: mediaItems.length > 0,
         verse: verse.book ?? "",
         occurredOn,
         occurredTime,
@@ -736,38 +782,12 @@ export function AddSheet({
           {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
             <View style={styles.form}>
               {mode === "photo" ? (
-                <MediaChooser
-                  accessibilityLabel={
-                    photoName ? `Add photo or video, ${photoName}` : "Add photo or video"
-                  }
+                <PhotoPicker
+                  items={mediaItems}
+                  retro={retro}
                   onPick={takeMedia}
-                  style={({ pressed }) => [
-                    styles.photoDrop,
-                    {
-                      borderColor: "transparent",
-                      backgroundColor: pressed
-                        ? colors.selectionFill
-                        : retro
-                          ? colors.surface
-                          : colors.scheme === "light"
-                            ? colors.surface
-                            : colors.surface,
-                      borderRadius: retro ? 2 : 16,
-                      transform: [{ scale: pressed ? 0.985 : 1 }],
-                    },
-                  ]}
-                >
-                  <Ionicons name="camera" size={42} color={colors.action} />
-                  <Text style={[face(colors, 700), styles.photoLabel, { color: colors.ink }]}>
-                    Add photo or video
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[face(colors, 400), styles.photoCaption, { color: colors.muted }]}
-                  >
-                    {photoName ?? "Private to this family"}
-                  </Text>
-                </MediaChooser>
+                  onRemove={removeMedia}
+                />
               ) : null}
               {mode === "bible" ? (
                 <PassageRow
@@ -1013,6 +1033,102 @@ function PassageRow({
   );
 }
 
+function PhotoPicker({
+  items,
+  retro,
+  onPick,
+  onRemove,
+}: Readonly<{
+  items: readonly PickedMedia[];
+  retro: boolean;
+  onPick: (source: MediaSource, intent: "replace" | "add") => void;
+  onRemove: (index: number) => void;
+}>) {
+  const { colors } = useAppTheme();
+  const radius = retro ? 2 : 16;
+  const tileColor = retro || colors.scheme === "light" ? colors.surface : colors.surface;
+  if (items.length === 0) {
+    return (
+      <MediaChooser
+        accessibilityLabel="Add photo or video"
+        onPick={(source) => onPick(source, "replace")}
+        style={({ pressed }) => [
+          styles.photoDrop,
+          {
+            borderColor: "transparent",
+            backgroundColor: pressed ? colors.selectionFill : tileColor,
+            borderRadius: radius,
+            transform: [{ scale: pressed ? 0.985 : 1 }],
+          },
+        ]}
+      >
+        <Ionicons name="camera" size={42} color={colors.action} />
+        <Text style={[face(colors, 700), styles.photoLabel, { color: colors.ink }]}>Add photo or video</Text>
+        <Text style={[face(colors, 400), styles.photoCaption, { color: colors.muted }]}>
+          Private to this family
+        </Text>
+      </MediaChooser>
+    );
+  }
+  if (items.length === 1) {
+    const item = items[0];
+    if (!item) return null;
+    return (
+      <View style={[styles.previewFrame, { borderRadius: radius }]}>
+        <MediaChooser
+          accessibilityLabel={item.kind === "video" ? "Replace video" : "Replace photo"}
+          onPick={(source) => onPick(source, "replace")}
+          style={styles.previewFill}
+        >
+          <MediaStill item={item} />
+        </MediaChooser>
+        <RemoveMark
+          label={item.kind === "video" ? "Remove video" : "Remove photo"}
+          onPress={() => onRemove(0)}
+        />
+      </View>
+    );
+  }
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.strip}
+    >
+      {items.map((item, index) => (
+        <View key={`${item.previewUri}-${index}`} style={[styles.thumb, { borderRadius: radius }]}>
+          <MediaStill item={item} />
+          <RemoveMark label={`Remove photo ${index + 1}`} onPress={() => onRemove(index)} />
+        </View>
+      ))}
+      {items.length < maximumMomentPhotos ? (
+        <MediaChooser
+          accessibilityLabel="Add photo"
+          onPick={(source) => onPick(source, "add")}
+          style={({ pressed }) => [
+            styles.addTile,
+            {
+              borderRadius: radius,
+              borderColor: colors.action,
+              backgroundColor: pressed ? colors.selectionFill : tileColor,
+            },
+          ]}
+        >
+          <Ionicons name="add" size={28} color={colors.action} />
+        </MediaChooser>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+function RemoveMark({ label, onPress }: Readonly<{ label: string; onPress: () => void }>) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.remove}>
+      <Text style={styles.removeGlyph}>×</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   scrim: {
     position: "absolute",
@@ -1180,6 +1296,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     textAlign: "center",
+  },
+  previewFrame: {
+    height: 168,
+    overflow: "hidden",
+  },
+  previewFill: {
+    flex: 1,
+  },
+  strip: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  thumb: {
+    width: 88,
+    height: 88,
+    overflow: "hidden",
+  },
+  addTile: {
+    width: 88,
+    height: 88,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  remove: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  removeGlyph: {
+    color: "#fff",
+    fontSize: 18,
+    lineHeight: 20,
   },
   secondary: {
     flex: 1,
