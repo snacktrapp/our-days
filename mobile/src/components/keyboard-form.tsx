@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { BlurView } from "expo-blur";
 import {
   Dimensions,
   Keyboard,
@@ -28,9 +29,13 @@ import {
 import { adjacentComposerField } from "../lib/composer-keyboard";
 import { setSheetTouchingField } from "../lib/sheet-dismiss";
 import { useAppTheme } from "../lib/theme";
+import { fontInterface, fontWeight } from "../lib/tokens";
 
 export const composerAccessoryId = "our-days-composer-accessory";
 const keyboardBarHeight = 44;
+
+/** Drag the composer to dismiss the keyboard. iOS tracks the finger; other platforms dismiss on drag. */
+export const composerKeyboardDismissMode = Platform.OS === "ios" ? "interactive" : "on-drag";
 
 type FocusFn = () => void;
 
@@ -86,7 +91,8 @@ export function useComposerInput(id: string, multiline = false) {
     ...(multiline
       ? { scrollEnabled: false as const }
       : {
-          returnKeyType: last ? ("done" as const) : ("next" as const),
+          // "done" draws a blue ✓ key on iOS 26+; the bar's Done is the only one.
+          returnKeyType: last ? ("default" as const) : ("next" as const),
           submitBehavior: "submit" as const,
           onSubmitEditing: () => form?.submit(id),
         }),
@@ -209,25 +215,65 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
     [dismiss, onFieldFocus, register, submit],
   );
 
-  const index = focusedId == null ? -1 : ids.indexOf(focusedId);
+  // InputAccessoryView never appears on iOS 27, so the bar stays a plain view
+  // pinned to the top of the keyboard. On web, a focused field is enough.
+  const showBar = Platform.OS === "ios" ? keyboardHeight > 0 : focusedId != null || keyboardHeight > 0;
 
   return (
     <KeyboardFormContext.Provider value={value}>
       <FieldOrderContext.Provider value={ids}>
       {children}
-      {Platform.OS === "ios" && keyboardHeight > 0 && focusedId != null ? (
+      {showBar ? (
         <View pointerEvents="box-none" style={[styles.barDock, { bottom: keyboardHeight }]}>
-          <ComposerKeyboardBar
-            previousDisabled={index <= 0}
-            nextDisabled={index < 0 || index >= ids.length - 1}
-            onPrevious={() => focusId(adjacentComposerField(ids, focusedId, -1))}
-            onNext={() => focusId(adjacentComposerField(ids, focusedId, 1))}
-            onDone={dismiss}
-          />
+          <ComposerKeyboardBar onDone={dismiss} />
         </View>
       ) : null}
       </FieldOrderContext.Provider>
     </KeyboardFormContext.Provider>
+  );
+}
+
+/** Same Done bar for sheets that are not the new-entry composer. */
+export function KeyboardDoneBar() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [webFocused, setWebFocused] = useState(false);
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const onFocus = (event: Event) => {
+      const tag = (event.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") setWebFocused(true);
+    };
+    const onBlur = (event: FocusEvent) => {
+      const next = event.relatedTarget as HTMLElement | null;
+      const tag = next?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      setWebFocused(false);
+    };
+    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onBlur);
+    return () => {
+      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onBlur);
+    };
+  }, []);
+  const visible = Platform.OS === "ios" ? keyboardHeight > 0 : webFocused || keyboardHeight > 0;
+  if (!visible) return null;
+  return (
+    <View pointerEvents="box-none" style={[styles.barDock, { bottom: keyboardHeight }]}>
+      <ComposerKeyboardBar onDone={() => Keyboard.dismiss()} />
+    </View>
   );
 }
 
@@ -249,7 +295,7 @@ export function ComposerScroller({
       style={styles.scroller}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+      keyboardDismissMode={composerKeyboardDismissMode}
       automaticallyAdjustKeyboardInsets
       bounces={false}
       overScrollMode="never"
@@ -260,81 +306,56 @@ export function ComposerScroller({
       scrollEventThrottle={16}
     >
       <View style={[styles.fill, contentStyle]}>
-        {Platform.OS === "web" ? (
-          children
-        ) : (
-          <>
-            <Pressable
-              accessible={false}
-              style={styles.dismissBackdrop}
-              onPress={dismiss}
-            />
-            <View pointerEvents="box-none" style={styles.fill}>
-              {children}
-            </View>
-          </>
-        )}
+        <Pressable
+          accessible={false}
+          style={styles.dismissBackdrop}
+          onPress={dismiss}
+        />
+        <View pointerEvents="box-none" style={styles.fill}>
+          {children}
+        </View>
       </View>
     </ScrollView>
   );
 }
 
-/** iOS / WebKit form accessory: previous, next, and a check that dismisses. */
-export function ComposerKeyboardBar({
-  previousDisabled,
-  nextDisabled,
-  onPrevious,
-  onNext,
-  onDone,
-}: Readonly<{
-  previousDisabled: boolean;
-  nextDisabled: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
-  onDone: () => void;
-}>) {
+/** Minimal keyboard accessory: one right-aligned Done control. */
+export function ComposerKeyboardBar({ onDone }: Readonly<{ onDone: () => void }>) {
   const { colors } = useAppTheme();
   const dark = colors.scheme === "dark" || colors.appearance === "retro";
-  const tint = dark ? "#0a84ff" : "#007aff";
-  const disabled = dark ? "#636366" : "#8e8e93";
   return (
     <View
       style={[
         styles.bar,
-        {
-          backgroundColor: dark ? "#1c1c1e" : "#d1d3d9",
-          borderTopColor: dark ? "#3a3a3c" : "#b8bac0",
-        },
+        { backgroundColor: dark ? "rgba(28,28,30,0.78)" : "rgba(249,249,250,0.82)" },
       ]}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Previous field"
-        accessibilityState={{ disabled: previousDisabled }}
-        disabled={previousDisabled}
-        onPress={onPrevious}
-        style={styles.hit}
-      >
-        <Text style={[styles.chevron, { color: previousDisabled ? disabled : tint }]}>⌃</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Next field"
-        accessibilityState={{ disabled: nextDisabled }}
-        disabled={nextDisabled}
-        onPress={onNext}
-        style={styles.hit}
-      >
-        <Text style={[styles.chevron, { color: nextDisabled ? disabled : tint }]}>⌄</Text>
-      </Pressable>
-      <View style={styles.spacer} />
+      {Platform.OS === "ios" ? (
+        <BlurView
+          pointerEvents="none"
+          intensity={80}
+          tint={dark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Done"
         onPress={onDone}
-        style={styles.hit}
+        onPressIn={onDone}
+        style={styles.doneHit}
       >
-        <Text style={[styles.done, { color: tint }]}>✓</Text>
+        <Text
+          style={{
+            fontFamily: fontInterface,
+            fontWeight: fontWeight(600),
+            fontSize: 17,
+            lineHeight: 22,
+            color: colors.action,
+          }}
+        >
+          Done
+        </Text>
       </Pressable>
     </View>
   );
@@ -349,18 +370,16 @@ const styles = StyleSheet.create({
   bar: {
     height: 44,
     width: "100%",
-    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    overflow: "hidden",
   },
-  hit: {
-    width: 46,
+  doneHit: {
+    minWidth: 44,
     height: 44,
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "center",
   },
-  chevron: { fontSize: 22, lineHeight: 26 },
-  done: { fontSize: 22, lineHeight: 26, fontWeight: "600" },
-  spacer: { flex: 1 },
 });

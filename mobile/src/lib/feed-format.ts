@@ -23,6 +23,21 @@ export function shortPlaceLabel(value: string) {
   return comma > 0 ? trimmed.slice(0, comma).trim() : trimmed;
 }
 
+const coordinatePair = /^-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/u;
+const coordinateFragment = /^-?\d+\.\d+$/u;
+
+/**
+ * Place text for a card header. A stored "35.1276, -120.6308" is not a name;
+ * shortPlaceLabel would otherwise keep "35.1276".
+ */
+export function displayPlaceLabel(value: string | null | undefined, short = true) {
+  const trimmed = value?.trim().slice(0, 160) ?? "";
+  if (!trimmed || coordinatePair.test(trimmed)) return "";
+  const label = short ? shortPlaceLabel(trimmed) : trimmed;
+  if (!label || coordinatePair.test(label) || coordinateFragment.test(label)) return "";
+  return label;
+}
+
 export function personInitial(name: string) {
   return Array.from(name.trim())[0]?.toLocaleUpperCase("en-US") ?? "•";
 }

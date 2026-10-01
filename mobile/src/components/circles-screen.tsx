@@ -40,6 +40,7 @@ import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, stageChromeInset, tracking, type ThemeColors } from "../lib/tokens";
 import { ChevronRight, NavCircles } from "./icons";
+import { KeyboardDoneBar, composerKeyboardDismissMode } from "./keyboard-form";
 
 export function CirclesScreen({
   circles,
@@ -743,11 +744,16 @@ function ManagementSheet({
           >
             <Text style={{ color: colors.muted, fontSize: 28, lineHeight: 32 }}>×</Text>
           </Pressable>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={composerKeyboardDismissMode}
+            contentContainerStyle={styles.sheetBody}
+          >
             {children}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </Modal>
   );
 }
@@ -1165,7 +1171,11 @@ function InviteDrawer({
         >
           <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
           <Text style={[face(colors, 650), styles.inviteTitle, { color: colors.ink }]}>Invite someone</Text>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.inviteBody}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={composerKeyboardDismissMode}
+            contentContainerStyle={styles.inviteBody}
+          >
             <Text style={[face(colors, 400, "record"), { color: colors.muted, fontSize: 11 }]}>{circleName}</Text>
             {draft ? (
               <>
@@ -1254,6 +1264,7 @@ function InviteDrawer({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </Modal>
   );
 }

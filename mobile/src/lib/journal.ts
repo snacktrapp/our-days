@@ -241,6 +241,11 @@ function text(value: unknown) {
   return typeof value === "string" ? value : undefined;
 }
 
+function finiteCoordinate(value: unknown) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function isEnrichment(value: unknown): value is Enrichment {
   const record = asRecord(value);
   if (!record) return false;
@@ -507,8 +512,8 @@ async function enrichMoments(
       audience: row.moment_audience === "just_me" ? "just_me" : "family",
       sourceUrl: row.source_url ?? undefined,
       placeName: row.place_name ?? undefined,
-      latitude: typeof row.latitude === "number" ? row.latitude : undefined,
-      longitude: typeof row.longitude === "number" ? row.longitude : undefined,
+      latitude: finiteCoordinate(row.latitude),
+      longitude: finiteCoordinate(row.longitude),
       recorderName: row.recorder_person_name ?? undefined,
       circleId: row.moment_circle_id,
       linkedCircleIds:

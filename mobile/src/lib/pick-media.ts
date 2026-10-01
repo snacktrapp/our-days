@@ -81,7 +81,28 @@ export type PickedMedia = Readonly<{
   name: string;
   kind: "photo" | "video";
   durationMs: number | null;
+  /** File or blob URL the tile can draw. */
+  previewUri: string;
+  /** A still of the first video frame, when this platform can make one. */
+  posterUri: string | null;
 }>;
+
+export const maximumMomentPhotos = 6;
+
+/** `0:09`, `1:05`. Null when the length was not reported. */
+export function formatMediaDuration(durationMs: number | null) {
+  if (durationMs == null || !Number.isFinite(durationMs) || durationMs < 0) return null;
+  const total = Math.round(durationMs / 1000);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+export function releasePreview(item: PickedMedia) {
+  for (const uri of [item.previewUri, item.posterUri]) {
+    if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+  }
+}
 
 async function readUri(uri: string) {
   const response = await fetch(uri);
@@ -89,24 +110,41 @@ async function readUri(uri: string) {
   return response.arrayBuffer();
 }
 
-function videoDurationMs(file: File) {
+function captureVideoPreview(file: File) {
   const doc = globalThis.document;
-  if (!doc) return Promise.resolve(null);
-  return new Promise<number>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const video = doc.createElement("video");
-    video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      const ms = Math.round(video.duration * 1000);
-      URL.revokeObjectURL(url);
-      resolve(ms);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Choose a video about 2 minutes or shorter."));
-    };
-    video.src = url;
-  });
+  if (!doc) {
+    return Promise.reject(new Error("Choose a video about 2 minutes or shorter."));
+  }
+  const previewUri = URL.createObjectURL(file);
+  return new Promise<{ durationMs: number; posterUri: string | null; previewUri: string }>(
+    (resolve, reject) => {
+      const video = doc.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.onloadeddata = () => {
+        const durationMs = Math.round(video.duration * 1000);
+        const canvas = doc.createElement("canvas");
+        canvas.width = video.videoWidth || 16;
+        canvas.height = video.videoHeight || 9;
+        let posterUri: string | null = null;
+        try {
+          canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (blob) posterUri = URL.createObjectURL(blob);
+            resolve({ durationMs, posterUri, previewUri });
+          }, "image/jpeg", 0.85);
+        } catch {
+          resolve({ durationMs, posterUri, previewUri });
+        }
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(previewUri);
+        reject(new Error("Choose a video about 2 minutes or shorter."));
+      };
+      video.src = previewUri;
+    },
+  );
 }
 
 function mimeFromName(name: string) {
@@ -141,35 +179,58 @@ function assertVideoLength(durationMs: number | null) {
   }
 }
 
-function pickOnWeb(camera: boolean) {
+async function mediaFromFile(file: File): Promise<PickedMedia> {
+  const video = file.type.startsWith("video/") || mimeFromName(file.name).startsWith("video/");
+  const bytes = await file.arrayBuffer();
+  if (video) {
+    const preview = await captureVideoPreview(file);
+    assertVideoLength(preview.durationMs);
+    return {
+      bytes,
+      mimeType: file.type || "video/mp4",
+      name: file.name,
+      kind: "video",
+      durationMs: preview.durationMs,
+      previewUri: preview.previewUri,
+      posterUri: preview.posterUri,
+    };
+  }
+  return {
+    bytes,
+    mimeType: file.type || "image/jpeg",
+    name: file.name,
+    kind: "photo",
+    durationMs: null,
+    previewUri: URL.createObjectURL(file),
+    posterUri: null,
+  };
+}
+
+function pickOnWeb(camera: boolean, multiple: boolean, limit: number) {
   const doc = globalThis.document;
   if (!doc) {
     return Promise.reject(new Error("That photo could not be read."));
   }
-  return new Promise<PickedMedia | null>((resolve, reject) => {
+  return new Promise<readonly PickedMedia[]>((resolve, reject) => {
     const input = doc.createElement("input");
     input.type = "file";
     input.accept = webAccept;
+    input.multiple = multiple && !camera;
     if (camera) input.setAttribute("capture", "environment");
     input.onchange = () => {
-      const file = input.files?.[0];
-      if (!file) {
-        resolve(null);
+      const files = [...(input.files ?? [])].slice(0, Math.max(1, limit));
+      if (files.length === 0) {
+        resolve([]);
         return;
       }
-      void file
-        .arrayBuffer()
-        .then(async (bytes) => {
-          const video = file.type.startsWith("video/");
-          const durationMs = video ? await videoDurationMs(file) : null;
-          resolve({
-            bytes,
-            mimeType: file.type || (video ? "video/mp4" : "image/jpeg"),
-            name: file.name,
-            kind: video ? "video" : "photo",
-            durationMs,
-          });
-        })
+      const hasVideo = files.some((file) => file.type.startsWith("video/"));
+      const hasPhoto = files.some((file) => !file.type.startsWith("video/"));
+      if (hasVideo && hasPhoto) {
+        reject(new Error("Choose photos or a video, not both."));
+        return;
+      }
+      void Promise.all(files.map((file) => mediaFromFile(file)))
+        .then(resolve)
         .catch((error: unknown) => {
           reject(error instanceof Error ? error : new Error("That photo could not be read."));
         });
@@ -178,38 +239,70 @@ function pickOnWeb(camera: boolean) {
   });
 }
 
-async function pickDocument(): Promise<PickedMedia | null> {
-  const DocumentPicker = await import("expo-document-picker");
-  const result = await DocumentPicker.getDocumentAsync({
-    type: [...acceptedTypes],
-    copyToCacheDirectory: true,
-    multiple: false,
-  });
-  if (result.canceled || !result.assets[0]) return null;
-  const asset = result.assets[0];
+async function itemFromAsset(asset: {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  durationMs: number | null;
+  video: boolean;
+}): Promise<PickedMedia> {
   const bytes = await readUri(asset.uri);
-  const mimeType = asset.mimeType || mimeFromName(asset.name);
-  const video = mimeType.startsWith("video/");
-  if (!video && !mimeType.startsWith("image/")) {
+  const mimeType = asset.mimeType || (asset.video ? "video/mp4" : "image/jpeg");
+  const durationMs = asset.video ? (asset.durationMs ?? mp4DurationMs(new Uint8Array(bytes))) : null;
+  if (asset.video) assertVideoLength(durationMs);
+  if (!asset.video && !mimeType.startsWith("image/")) {
     throw new Error("Choose a JPEG, PNG, or WebP photo, or an MP4, MOV, M4V, or WebM video.");
   }
-  const durationMs = video ? mp4DurationMs(new Uint8Array(bytes)) : null;
-  if (video) assertVideoLength(durationMs);
   return {
     bytes,
     mimeType,
     name: asset.name,
-    kind: video ? "video" : "photo",
+    kind: asset.video ? "video" : "photo",
     durationMs,
+    previewUri: asset.uri,
+    posterUri: null,
   };
 }
 
-/** Library, camera, or Files. Photos and videos use the web’s size and length limits. */
-export async function pickJournalMedia(source: MediaSource): Promise<PickedMedia | null> {
-  if (typeof document !== "undefined" && navigator.product !== "ReactNative") {
-    return pickOnWeb(source === "camera");
+async function pickDocument(multiple: boolean, limit: number): Promise<readonly PickedMedia[]> {
+  const DocumentPicker = await import("expo-document-picker");
+  const result = await DocumentPicker.getDocumentAsync({
+    type: [...acceptedTypes],
+    copyToCacheDirectory: true,
+    multiple,
+  });
+  if (result.canceled || result.assets.length === 0) return [];
+  const assets = result.assets.slice(0, Math.max(1, limit));
+  const items = await Promise.all(
+    assets.map((asset) => {
+      const mimeType = asset.mimeType || mimeFromName(asset.name);
+      return itemFromAsset({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType,
+        durationMs: null,
+        video: mimeType.startsWith("video/"),
+      });
+    }),
+  );
+  if (items.some((item) => item.kind === "video") && items.some((item) => item.kind === "photo")) {
+    for (const item of items) releasePreview(item);
+    throw new Error("Choose photos or a video, not both.");
   }
-  if (source === "files") return pickDocument();
+  return items;
+}
+
+/** Library, camera, or Files. Photos and videos use the web’s size and length limits. */
+export async function pickJournalMediaList(
+  source: MediaSource,
+  options?: Readonly<{ multiple?: boolean; limit?: number }>,
+): Promise<readonly PickedMedia[]> {
+  const multiple = options?.multiple === true && source !== "camera";
+  const limit = Math.max(1, Math.min(options?.limit ?? (multiple ? maximumMomentPhotos : 1), maximumMomentPhotos));
+  if (typeof document !== "undefined" && navigator.product !== "ReactNative") {
+    return pickOnWeb(source === "camera", multiple, limit);
+  }
+  if (source === "files") return pickDocument(multiple, limit);
   const ImagePicker = await import("expo-image-picker");
   const camera = source === "camera";
   if (camera) {
@@ -227,23 +320,35 @@ export async function pickJournalMedia(source: MediaSource): Promise<PickedMedia
   const result = await launch({
     mediaTypes: ["images", "videos"],
     quality: 1,
+    allowsMultipleSelection: multiple,
+    selectionLimit: multiple ? limit : 1,
     // Web allows 120.5s. The picker limit is whole seconds, so the byte check is exact.
     videoMaxDuration: 121,
     preferredAssetRepresentationMode:
       ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     exif: false,
   });
-  if (result.canceled || !result.assets[0]) return null;
-  const asset = result.assets[0];
-  const video = asset.type === "video" || asset.mimeType?.startsWith("video/") === true;
-  const bytes = await readUri(asset.uri);
-  const durationMs = video && typeof asset.duration === "number" ? Math.round(asset.duration) : null;
-  if (video) assertVideoLength(durationMs);
-  return {
-    bytes,
-    mimeType: asset.mimeType || (video ? "video/mp4" : "image/jpeg"),
-    name: asset.fileName || (video ? "video.mp4" : "photo.jpg"),
-    kind: video ? "video" : "photo",
-    durationMs,
-  };
+  if (result.canceled || result.assets.length === 0) return [];
+  const items = await Promise.all(
+    result.assets.slice(0, limit).map((asset) => {
+      const video = asset.type === "video" || asset.mimeType?.startsWith("video/") === true;
+      return itemFromAsset({
+        uri: asset.uri,
+        name: asset.fileName || (video ? "video.mp4" : "photo.jpg"),
+        mimeType: asset.mimeType,
+        durationMs: video && typeof asset.duration === "number" ? Math.round(asset.duration) : null,
+        video,
+      });
+    }),
+  );
+  if (items.some((item) => item.kind === "video") && items.some((item) => item.kind === "photo")) {
+    for (const item of items) releasePreview(item);
+    throw new Error("Choose photos or a video, not both.");
+  }
+  return items;
+}
+
+export async function pickJournalMedia(source: MediaSource): Promise<PickedMedia | null> {
+  const items = await pickJournalMediaList(source, { multiple: false, limit: 1 });
+  return items[0] ?? null;
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BlurView } from "expo-blur";
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -25,6 +26,8 @@ import { useAppTheme } from "../lib/theme";
 import { dotColor, face } from "../lib/tokens";
 import Svg, { Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { KeyboardDoneBar, composerKeyboardDismissMode } from "./keyboard-form";
 
 export function CommentSheet({
   title,
@@ -85,7 +88,11 @@ export function CommentSheet({
         {Platform.OS === "web" ? null : (
           <BlurView intensity={40} tint={light ? "light" : "dark"} style={StyleSheet.absoluteFill} />
         )}
-        <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={requestClose} />
+        <Pressable
+          accessibilityLabel="Close"
+          style={styles.scrimTap}
+          onPress={() => (Keyboard.isVisible() ? Keyboard.dismiss() : requestClose())}
+        />
         <View
           style={[
             styles.sheet,
@@ -99,7 +106,9 @@ export function CommentSheet({
           ]}
         >
           <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{title}</Text>
+          <Pressable accessible={false} onPress={() => Keyboard.dismiss()}>
+            <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{title}</Text>
+          </Pressable>
           <Text
             numberOfLines={2}
             style={[face(colors, 400), styles.context, { color: colors.muted, fontSize: 13, lineHeight: 18 }]}
@@ -110,6 +119,7 @@ export function CommentSheet({
             <ScrollView
               horizontal
               keyboardShouldPersistTaps="always"
+              keyboardDismissMode={composerKeyboardDismissMode}
               showsHorizontalScrollIndicator={false}
               style={styles.chipRow}
               contentContainerStyle={styles.chipRowContent}
@@ -235,6 +245,7 @@ export function CommentSheet({
           ) : null}
         </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </Modal>
   );
 }

@@ -15,7 +15,7 @@ export function UploadShelf({
   top: number;
 }>) {
   const { colors } = useAppTheme();
-  const chip = chips.find((item) => item.failed) ?? chips.find((item) => !item.done) ?? chips[0];
+  const chip = chips.find((item) => item.failed) ?? chips.find((item) => !item.done);
   if (!chip) return null;
   const radius = colors.appearance === "retro" ? 2 : chromeRadius;
   return (

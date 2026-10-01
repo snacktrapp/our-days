@@ -89,6 +89,15 @@ export function dismissUpload(id: string) {
   emit();
 }
 
+/** Tell the feed a post landed, then drop the chip so no confirmation card stays up. */
+function publishChip(id: string) {
+  const current = chips.find((chip) => chip.id === id);
+  if (current && !current.done) {
+    putChip({ ...current, progress: null, failed: false, done: true });
+  }
+  dismissUpload(id);
+}
+
 function randomId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -104,8 +113,19 @@ function firstRow<T>(data: T | readonly T[] | null) {
   return data;
 }
 
+const friendlyCodes: Readonly<Record<string, string>> = {
+  PHOTO_ACCOUNT_OPEN_QUOTA:
+    "A few of your photos are still finishing. Try again in a few minutes.",
+  PHOTO_CIRCLE_OPEN_QUOTA:
+    "This circle has several photos still finishing. Try again in a few minutes.",
+};
+
 function message(error: { message?: string } | null, fallback: string) {
-  return error?.message && error.message.length < 180 ? error.message : fallback;
+  const text = error?.message;
+  if (!text) return fallback;
+  const code = Object.keys(friendlyCodes).find((key) => text.includes(key));
+  if (code) return friendlyCodes[code] ?? fallback;
+  return text.length < 180 ? text : fallback;
 }
 
 function putChip(next: UploadChip) {
@@ -721,14 +741,7 @@ async function finishPhoto(supabase: SupabaseClient, intakeId: string, chipId: s
     const { data } = await supabase.rpc("get_photo_moment_status", { intake_id: intakeId });
     const status = firstRow(data) as { status?: string } | null;
     if (status?.status === "published") {
-      update({
-        label: "Added to timeline",
-        detail,
-        progress: null,
-        failed: false,
-        done: true,
-      });
-      retryInputs.delete(chipId);
+      publishChip(chipId);
       return;
     }
     if (status?.status === "needs_attention" || status?.status === "cancelled") {
@@ -844,6 +857,74 @@ export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUp
       message: error instanceof Error ? error.message : "Upload failed",
     };
   }
+}
+
+/**
+ * Extra photos on a moment already reserved by uploadPhotoMoment.
+ * Uses attach_photo_to_moment and the same claim → upload → process path.
+ * Does not add upload chips; the first photo's chip is unchanged.
+ */
+export async function attachExtraPhotos(
+  supabase: SupabaseClient,
+  momentId: string,
+  photos: readonly { bytes: ArrayBuffer; mimeType: string }[],
+) {
+  for (const photo of photos) {
+    try {
+      const mimeType = inspectPhoto(photo.bytes, photo.mimeType);
+      const sha256 = sha256Hex(photo.bytes);
+      const requestKey = randomId();
+      const uploadKey = randomId();
+      const { data: reserved, error: reserveError } = await supabase.rpc("attach_photo_to_moment", {
+        existing_moment_id: momentId,
+        request_key: requestKey,
+      });
+      const reservation = firstRow(reserved) as { intake_id?: string } | null;
+      if (reserveError || !reservation?.intake_id) {
+        return { ok: false as const, message: "An extra photo could not be added." };
+      }
+      const { data: claimed, error: claimError } = await supabase.rpc("claim_photo_intake_upload", {
+        expected_mime_type: mimeType,
+        expected_sha256_hex: sha256,
+        expected_size_bytes: photo.bytes.byteLength,
+        intake_id: reservation.intake_id,
+        upload_request_key: uploadKey,
+      });
+      const claim = firstRow(claimed) as
+        | { bucket_id?: string; object_path?: string; state?: string }
+        | null;
+      if (claimError || !claim?.bucket_id || !claim.object_path) {
+        return { ok: false as const, message: "An extra photo could not be added." };
+      }
+      if (claim.state !== "uploaded_unverified") {
+        await uploadWithTus(
+          claim.bucket_id,
+          claim.object_path,
+          photo.bytes,
+          mimeType,
+          {
+            expected_mime_type: mimeType,
+            expected_sha256: sha256,
+            expected_size_bytes: photo.bytes.byteLength,
+            intake_id: reservation.intake_id,
+            upload_request_key: uploadKey,
+          },
+          () => undefined,
+        );
+      }
+      const { error: ackError } = await supabase.rpc("acknowledge_photo_intake", {
+        intake_id: reservation.intake_id,
+      });
+      if (ackError) return { ok: false as const, message: "An extra photo could not be added." };
+      await requestPhotoProcessing(reservation.intake_id);
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : "An extra photo could not be added.",
+      };
+    }
+  }
+  return { ok: true as const };
 }
 
 function percentLabel(fraction: number) {
@@ -972,8 +1053,7 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
         throw new Error("The upload finished, but the video could not yet be added. Try again.");
       }
     }
-    update({ label: "Added to timeline", detail, progress: null, failed: false, done: true });
-    retryInputs.delete(id);
+    publishChip(id);
     return { ok: true as const, momentId: reservation.moment_id };
   } catch (error) {
     update({

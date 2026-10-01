@@ -17,6 +17,7 @@ import { sentMessage, useAuth } from "../components/auth-provider";
 import { InviteAcceptForm } from "../components/invite-sheet";
 import { invitationTokenFromLink } from "../lib/invites";
 import { GridBackground } from "../components/grid-background";
+import { KeyboardDoneBar } from "../components/keyboard-form";
 import { Wordmark } from "../components/wordmark";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
@@ -79,14 +80,16 @@ export default function SignInScreen() {
   const body = face(colors, 400);
 
   return (
+    <View style={[styles.screen, { backgroundColor: colors.gridSurface }]}>
     <KeyboardAvoidingView
-      style={[styles.screen, { backgroundColor: colors.gridSurface }]}
+      style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <GridBackground color={colors.gridLine} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
       >
         <View
             style={[
@@ -266,6 +269,8 @@ export default function SignInScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    <KeyboardDoneBar />
+    </View>
   );
 }
 

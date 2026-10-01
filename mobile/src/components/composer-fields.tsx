@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { CircleMembership } from "../lib/journal";
-import { reversePlace, searchPlaces, type GeocodedPlace, type PlaceSelection } from "../lib/places";
+import {
+  looksLikeCoordinates,
+  reversePlace,
+  searchPlaces,
+  type GeocodedPlace,
+  type PlaceSelection,
+} from "../lib/places";
 import { peopleCountLabel, type CirclePerson } from "../lib/roster";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, tracking } from "../lib/tokens";
@@ -381,8 +387,12 @@ async function locateHere(
       longitude = position.coords.longitude;
     }
     const named = await reversePlace(latitude, longitude);
+    if (!named || looksLikeCoordinates(named)) {
+      setMessage("Couldn’t name this place.");
+      return;
+    }
     onPlace({
-      label: named || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      label: named,
       latitude,
       longitude,
     });
@@ -404,16 +414,26 @@ export function PlaceFields({
   const [suggestions, setSuggestions] = useState<readonly GeocodedPlace[]>([]);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const skipSearchRef = useRef<string | null>(null);
   const canLocate =
     Platform.OS !== "web" || (typeof navigator !== "undefined" && "geolocation" in navigator);
   const placeInput = useComposerInput("place");
 
   useEffect(() => {
-    if (search.trim().length < 2) return;
+    if (skipSearchRef.current !== null) {
+      const skipped = skipSearchRef.current;
+      skipSearchRef.current = null;
+      if (skipped === search) return;
+    }
+    const trimmed = search.trim();
+    // Coordinate strings 502 on the current geocode proxy (MapTiler rejects
+    // reverse queries sent with limit=5). Skip them so a failed locate cannot
+    // surface a search error.
+    if (trimmed.length < 2 || looksLikeCoordinates(trimmed)) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setSearching(true);
-      void searchPlaces(search.trim(), controller.signal)
+      void searchPlaces(trimmed, controller.signal)
         .then((places) => {
           setSuggestions(places);
           setMessage(places.length === 0 ? "No matching places." : null);
@@ -421,7 +441,7 @@ export function PlaceFields({
         .catch((error: unknown) => {
           if (error instanceof Error && error.name === "AbortError") return;
           setSuggestions([]);
-          setMessage("Place search isn’t available right now.");
+          setMessage("Couldn’t look up places.");
         })
         .finally(() => setSearching(false));
     }, 280);
@@ -465,8 +485,11 @@ export function PlaceFields({
           accessibilityLabel="Use my location"
           onPress={() => {
             void locateHere(setMessage, (next) => {
+              skipSearchRef.current = next.label;
               setSearch(next.label);
               setSuggestions([]);
+              setSearching(false);
+              setMessage(null);
               onChange(next);
             });
           }}

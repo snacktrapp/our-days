@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from "react";
-import { Animated, Easing, PanResponder, type PanResponderGestureState } from "react-native";
+import { Animated, Easing, Keyboard, PanResponder, type PanResponderGestureState } from "react-native";
 
 import {
   canStartSheetDismiss,
@@ -42,18 +42,27 @@ function slideAway(translateY: Animated.Value, distance: number, done: () => voi
 }
 
 let latestDrag: DragInput | null = null;
+/** The gesture that put the keyboard away; it never moves the sheet too. */
+let keyboardGesture: number | null = null;
 
 function claimGesture(gesture: PanResponderGestureState, pageY: number) {
   const input = latestDrag;
   if (!input) return false;
   const local = pageY - input.sheetTop.current;
   const fromChrome = local >= 0 && local <= input.chromeHeight.current;
-  return (
+  const downward =
     !isSheetTouchingField() &&
     gesture.dy >= sheetDismissAxisPx &&
-    Math.abs(gesture.dx) <= Math.abs(gesture.dy) &&
-    canStartSheetDismiss(input.scrollTop.current, fromChrome)
-  );
+    Math.abs(gesture.dx) <= Math.abs(gesture.dy);
+  // With the keyboard up, pulling the form down puts the keyboard away first
+  // (like Messages); only the grab bar or header moves the sheet.
+  if (keyboardGesture === gesture.stateID) return false;
+  if (downward && !fromChrome && Keyboard.isVisible()) {
+    keyboardGesture = gesture.stateID;
+    Keyboard.dismiss();
+    return false;
+  }
+  return downward && canStartSheetDismiss(input.scrollTop.current, fromChrome);
 }
 
 function releaseGesture(translateY: Animated.Value, dy: number, vy: number) {

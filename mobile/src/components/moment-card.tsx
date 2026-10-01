@@ -14,14 +14,15 @@ import {
 
 import {
   audienceChipLabel,
+  displayPlaceLabel,
   hiddenNoteCount,
   insightSourceLabel,
   mentionPieces,
   parseBibleVerse,
-  shortPlaceLabel,
   visibleNotes,
   type MentionSpan,
 } from "../lib/feed-format";
+import { reversePlace } from "../lib/places";
 import {
   photoDeliveryPath,
   type FeedNote,
@@ -83,6 +84,7 @@ export function FeedMoment({
   onMomentRemove,
   onScreen = true,
   openThread = false,
+  highlighted = false,
 }: Readonly<{
   moment: TimelineMoment;
   circleNames: ReadonlyMap<string, string>;
@@ -95,6 +97,7 @@ export function FeedMoment({
   onMomentRemove?: (id: string) => void;
   onScreen?: boolean;
   openThread?: boolean;
+  highlighted?: boolean;
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
@@ -205,7 +208,13 @@ export function FeedMoment({
           </Text>
         </View>
       </View>
-      <View style={[styles.card, { backgroundColor: colors.cream }]}>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.cream },
+          highlighted ? { borderWidth: 1, borderColor: colors.action } : null,
+        ]}
+      >
         <CardBody
           moment={moment}
           headers={headers}
@@ -261,9 +270,7 @@ function CardBody({
     return (
       <View style={styles.copy}>
         <AuthorRow moment={moment} />
-        <PlaceTitle>
-          {moment.placeName || moment.title || "A remembered place"}
-        </PlaceTitle>
+        <LocationHeading moment={moment} />
         {moment.body ? (
           <ClampedMention text={moment.body} mentions={moment.mentions} serif />
         ) : null}
@@ -279,6 +286,11 @@ function CardBody({
   return (
     <Thought moment={moment} headers={headers} viewer={viewer} onScreen={onScreen} />
   );
+}
+
+function LocationHeading({ moment }: Readonly<{ moment: TimelineMoment }>) {
+  const place = useResolvedPlace(moment, false);
+  return <PlaceTitle>{place || "A remembered place"}</PlaceTitle>;
 }
 
 function PlaceTitle({ children }: Readonly<{ children: string }>) {
@@ -663,9 +675,29 @@ function MentionBody({
   );
 }
 
+function useResolvedPlace(moment: TimelineMoment, short: boolean) {
+  const stored = displayPlaceLabel(moment.placeName, short) || (short ? "" : displayPlaceLabel(moment.title, false));
+  const [resolved, setResolved] = useState<{ id: string; label: string } | null>(null);
+  const needsName = !stored && displayPlaceLabel(moment.placeName, false) === "" && Boolean(moment.placeName?.trim());
+  useEffect(() => {
+    if (!needsName || moment.latitude == null || moment.longitude == null) return;
+    let active = true;
+    void reversePlace(moment.latitude, moment.longitude).then((name) => {
+      if (!active) return;
+      const label = displayPlaceLabel(name, short);
+      if (label) setResolved({ id: moment.id, label });
+    });
+    return () => {
+      active = false;
+    };
+  }, [needsName, moment.id, moment.latitude, moment.longitude, short]);
+  if (stored) return stored;
+  return resolved?.id === moment.id ? resolved.label : "";
+}
+
 function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
   const { colors } = useAppTheme();
-  const place = moment.placeName ? shortPlaceLabel(moment.placeName) : "";
+  const place = useResolvedPlace(moment, true);
   return (
     <View style={styles.authorLine}>
       <View style={styles.author}>
