@@ -267,7 +267,11 @@ describe("PhotoCardPager", () => {
       photos: [album.photos[0]],
     });
 
-    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    const img = screen.getByRole("img", { name: "First porch" });
+    expect(img).toBeVisible();
+    const drag = new Event("dragstart", { bubbles: true, cancelable: true });
+    img.dispatchEvent(drag);
+    expect(drag.defaultPrevented).toBe(false);
     expect(
       screen.queryByRole("button", { name: "Next photo" }),
     ).not.toBeInTheDocument();
@@ -512,6 +516,14 @@ describe("PhotoCardPager", () => {
     } finally {
       restoreWidth();
     }
+  });
+
+  it("cancels the browser image drag so a mouse swipe can finish", () => {
+    renderPager();
+    const img = screen.getByRole("img", { name: "First porch" });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    img.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it("follows a horizontal drag live, then snaps past the threshold", () => {

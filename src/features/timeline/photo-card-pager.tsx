@@ -594,6 +594,10 @@ export function PhotoCardPager({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onDragStart={(event) => {
+        // A mouse swipe otherwise becomes a native image drag and cancels the pointer.
+        if (photos.length > 1) event.preventDefault();
+      }}
       onPointerCancel={() => {
         const currentPair = pairRef.current;
         pointerRef.current = null;
