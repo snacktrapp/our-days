@@ -283,6 +283,10 @@ await step("Just me stays off circle feeds, invitations parse, and YouTube is an
   assert.equal(invites.invitationTokenFromLink(`https://our-days.example/invite#${token}`), token);
   assert.equal(invites.invitationTokenFromLink(`ourdays://invite?token=${token}`), token);
   assert.equal(invites.invitationTokenFromLink("https://our-days.example/invite"), null);
+  assert.equal(
+    invites.invitationRedirectUrl("https://our-days-neon.vercel.app"),
+    "https://our-days-neon.vercel.app/auth/callback",
+  );
   const clip = "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120";
   assert.equal(youtube.loneYoutubeClip(clip), clip);
   assert.equal(youtube.loneYoutubeClip("A note https://www.youtube.com/watch?v=abc"), null);

@@ -1,4 +1,6 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import { siteOrigin, supabasePublishableKey, supabaseUrl } from "./config";
 
 function newRequestKey() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -39,7 +41,42 @@ export function validInvitationCode(value: string) {
   return codePattern.test(value.trim());
 }
 
-/** Same RPC the web uses from Invite someone. The worker sends the email. */
+/**
+ * Where the invited person's sign-in link lands. Same as the web's
+ * sendInvitedMagicLink: /auth/callback is on the hosted redirect allowlist.
+ */
+export function invitationRedirectUrl(origin: string = siteOrigin) {
+  return new URL("/auth/callback", origin).toString();
+}
+
+/**
+ * The web's invite email is a Supabase sign-in link sent right after the
+ * request is queued (src/features/family-settings/family-settings-actions.ts).
+ * There is no worker, so iOS must send it too. A throwaway implicit client
+ * keeps the organizer's own session and PKCE verifier untouched, and the
+ * recipient's browser can redeem the link.
+ */
+async function sendInvitedSignInLink(email: string) {
+  try {
+    const mailer = createClient(supabaseUrl, supabasePublishableKey, {
+      auth: {
+        flowType: "implicit",
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
+    const { error } = await mailer.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false, emailRedirectTo: invitationRedirectUrl() },
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/** Same RPC the web uses from Invite someone, then the same sign-in email. */
 export async function requestCircleInvitation(
   supabase: SupabaseClient,
   input: Readonly<{ circleId: string; displayName: string; email: string }>,
@@ -61,6 +98,9 @@ export async function requestCircleInvitation(
   if (!queued && !alreadyQueued) {
     return { ok: false as const, message: "That invitation could not be sent. Try again." };
   }
+  // The web reports success even if the email call fails; the request stays
+  // queued and the organizer can withdraw and resend. Match that.
+  await sendInvitedSignInLink(email);
   return { ok: true as const, message: "Private invitation requested." };
 }
 
