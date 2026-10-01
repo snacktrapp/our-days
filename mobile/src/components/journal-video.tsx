@@ -26,6 +26,7 @@ import { getSupabase, mediaUrl } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
 import {
+  showsCustomSpeaker,
   usesNativePlaybackControls,
   videoAspectRatio,
   videoSurfaceAction,
@@ -174,16 +175,15 @@ function SpeakerGlyph({ muted }: Readonly<{ muted: boolean }>) {
 
 function SpeakerButton({
   muted,
-  lifted,
   onPress,
-}: Readonly<{ muted: boolean; lifted: boolean; onPress: () => void }>) {
+}: Readonly<{ muted: boolean; onPress: () => void }>) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={muted ? "Unmute" : "Mute"}
       onPress={onPress}
       hitSlop={4}
-      style={[styles.speakerHit, lifted ? styles.speakerLifted : null]}
+      style={styles.speakerHit}
     >
       <View style={styles.speakerChip}>
         <SpeakerGlyph muted={muted} />
@@ -412,7 +412,9 @@ function PlayingClip({
           )}
         </View>
       ) : null}
-      <SpeakerButton muted={muted} lifted={nativeChrome} onPress={onMute} />
+      {showsCustomSpeaker(nativeChrome) ? (
+        <SpeakerButton muted={muted} onPress={onMute} />
+      ) : null}
     </View>
   );
 }
@@ -598,9 +600,6 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
-  },
-  speakerLifted: {
-    bottom: 52,
   },
   speakerChip: {
     width: 32,

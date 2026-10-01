@@ -104,12 +104,17 @@ export function videoPlaybackPlan(
 }
 
 /**
- * iOS uses AVPlayerViewController’s inline bar (scrub, pause, fullscreen).
- * A custom layer on top of that bar would cover the fullscreen button, so
- * the surface does not steal taps there. Other platforms pause on tap.
+ * iOS uses AVPlayerViewController’s inline bar (scrub, pause, fullscreen, volume).
+ * A custom layer on top of that bar would cover those buttons, so the surface
+ * does not steal taps there. Other platforms pause on tap.
  */
 export function usesNativePlaybackControls(platform: string) {
   return platform === "ios";
+}
+
+/** The system volume button is on that bar, so our speaker chip stays off. */
+export function showsCustomSpeaker(nativeControls: boolean) {
+  return !nativeControls;
 }
 
 /** Tap the poster or a paused frame to play. Tap a playing frame to pause. */
