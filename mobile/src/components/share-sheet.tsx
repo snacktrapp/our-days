@@ -84,10 +84,13 @@ export function ShareSheet({
           circleIds: [circle.circleId],
         };
         if (draft.kind === "video") {
+          const { captureDeviceVideoPoster } = await import("../lib/video-poster");
+          const poster = await captureDeviceVideoPoster(path);
           await uploadVideoMoment(supabase, {
             ...common,
             durationMs: draft.durationMs,
             name: draft.name,
+            poster,
           });
         } else {
           await uploadPhotoMoment(supabase, common);

@@ -8,6 +8,7 @@ import {
   supabaseUrl,
 } from "./config";
 import { sha256Hex } from "./sha256";
+import { persistVideoPoster, type VideoPoster } from "./video-poster-store";
 
 export type Audience = "family" | "just_me";
 
@@ -949,6 +950,7 @@ export type VideoUploadInput = PhotoUploadInput &
   Readonly<{
     durationMs: number;
     name?: string;
+    poster?: VideoPoster | null;
   }>;
 
 function videoMime(declared: string, name: string) {
@@ -1051,6 +1053,13 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
       });
       if (finalizeError || momentId !== reservation.moment_id) {
         throw new Error("The upload finished, but the video could not yet be added. Try again.");
+      }
+    }
+    if (input.poster) {
+      try {
+        await persistVideoPoster(supabase, reservation.moment_id, input.poster);
+      } catch {
+        // The video is already in the journal. The card can still draw a frame.
       }
     }
     publishChip(id);

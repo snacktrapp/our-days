@@ -31,10 +31,11 @@ import {
   videoSurfaceAction,
 } from "../lib/video-playback";
 import { resolveVideoSource, type VideoSource } from "../lib/video-source";
+import { captureDeviceVideoPoster, persistVideoPoster } from "../lib/video-poster";
 import { PrivateImage } from "./private-image";
 
 type Playback = {
-  play: () => void;
+  play: () => void | Promise<void>;
   pause: () => void;
   muted: boolean;
   currentTime: number;
@@ -146,6 +147,112 @@ function RoundPlayButton() {
   );
 }
 
+const posterBackfill = new Set<string>();
+
+function backfillMissingPoster(momentId: string, uri: string) {
+  if (Platform.OS === "web" || posterBackfill.has(momentId)) return;
+  posterBackfill.add(momentId);
+  void (async () => {
+    const poster = await captureDeviceVideoPoster(uri);
+    const supabase = getSupabase();
+    if (!poster || !supabase) return;
+    await persistVideoPoster(supabase, momentId, poster);
+  })();
+}
+
+function PausedStill({
+  video,
+  source,
+  aspectRatio,
+}: Readonly<{
+  video: VideoModule;
+  source: VideoSource;
+  aspectRatio: number;
+}>) {
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const [shown, setShown] = useState(false);
+  const playerSource = source.headers ? { uri: source.uri, headers: source.headers } : { uri: source.uri };
+  const player = video.useVideoPlayer(playerSource, (next) => {
+    next.muted = true;
+    next.currentTime = 0.2;
+  });
+  useEffect(() => {
+    try {
+      const pending = player.play();
+      if (pending && typeof pending.then === "function") void pending.catch(() => undefined);
+    } catch {
+      // A gesture-less play can fail. The dark mat stays until a frame arrives.
+    }
+  }, [player]);
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.mat,
+        { aspectRatio, maxHeight: mediaMaxHeight(viewportWidth, viewportHeight) },
+      ]}
+    >
+      <video.VideoView
+        player={player}
+        style={styles.video}
+        contentFit="contain"
+        nativeControls={false}
+        playsInline
+        onFirstFrameRender={() => {
+          setShown(true);
+          player.pause();
+        }}
+      />
+      {shown ? null : <View style={[styles.cover, styles.ignoreHits]} />}
+    </View>
+  );
+}
+
+function MissingPosterStill({
+  moment,
+  headers,
+  label,
+}: Readonly<{
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
+  label: string;
+}>) {
+  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const ratio = videoAspectRatio(moment.posterWidth, moment.posterHeight);
+  const [video, setVideo] = useState<VideoModule | null>(null);
+  const [source, setSource] = useState<VideoSource | null>(null);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const [loaded, next] = await Promise.all([
+        loadVideoModule(),
+        resolveVideoSource(getSupabase(), moment.id, { url: mediaUrl, headers }),
+      ]);
+      if (!active) return;
+      setVideo(loaded);
+      setSource(next);
+      if (loaded && next) backfillMissingPoster(moment.id, next.uri);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [headers, moment.id]);
+  const mat = (
+    <View
+      style={[
+        styles.mat,
+        { aspectRatio: ratio, maxHeight: mediaMaxHeight(viewportWidth, viewportHeight) },
+      ]}
+    />
+  );
+  if (!video || !source) return mat;
+  return (
+    <VideoBoundary onError={() => setVideo(null)}>
+      <PausedStill video={video} source={source} aspectRatio={ratio} />
+    </VideoBoundary>
+  );
+}
+
 function PosterFrame({
   moment,
   label,
@@ -162,8 +269,6 @@ function PosterFrame({
   onRetry: () => void;
 }>) {
   const { colors } = useAppTheme();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
-  const ratio = videoAspectRatio(moment.posterWidth, moment.posterHeight);
   return (
     <View>
       <Pressable
@@ -183,15 +288,7 @@ function PosterFrame({
             mat="#050b08"
           />
         ) : (
-          <View
-            style={[
-              styles.mat,
-              {
-                aspectRatio: ratio,
-                maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
-              },
-            ]}
-          />
+          <MissingPosterStill moment={moment} headers={headers} label={label} />
         )}
         <View style={[styles.playAnchor, styles.ignoreHits]}>
           <RoundPlayButton />

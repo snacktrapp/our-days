@@ -1,3 +1,5 @@
+import type { VideoPoster } from "./video-poster-store";
+
 const webAccept =
   "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/x-m4v,video/webm";
 
@@ -85,6 +87,8 @@ export type PickedMedia = Readonly<{
   previewUri: string;
   /** A still of the first video frame, when this platform can make one. */
   posterUri: string | null;
+  /** JPEG bytes to store as the moment poster after the video upload. */
+  poster: VideoPoster | null;
 }>;
 
 export const maximumMomentPhotos = 6;
@@ -116,27 +120,63 @@ function captureVideoPreview(file: File) {
     return Promise.reject(new Error("Choose a video about 2 minutes or shorter."));
   }
   const previewUri = URL.createObjectURL(file);
-  return new Promise<{ durationMs: number; posterUri: string | null; previewUri: string }>(
-    (resolve, reject) => {
+  return new Promise<{
+    durationMs: number;
+    posterUri: string | null;
+    previewUri: string;
+    poster: VideoPoster | null;
+  }>((resolve, reject) => {
       const video = doc.createElement("video");
       video.preload = "auto";
       video.muted = true;
       video.playsInline = true;
-      video.onloadeddata = () => {
-        const durationMs = Math.round(video.duration * 1000);
+      const finish = (durationMs: number) => {
+        const width = video.videoWidth || 0;
+        const height = video.videoHeight || 0;
+        if (width < 2 || height < 2) {
+          resolve({ durationMs, posterUri: null, previewUri, poster: null });
+          return;
+        }
+        const scale = Math.min(1, 720 / width);
         const canvas = doc.createElement("canvas");
-        canvas.width = video.videoWidth || 16;
-        canvas.height = video.videoHeight || 9;
-        let posterUri: string | null = null;
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
         try {
           canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
           canvas.toBlob((blob) => {
-            if (blob) posterUri = URL.createObjectURL(blob);
-            resolve({ durationMs, posterUri, previewUri });
-          }, "image/jpeg", 0.85);
+            if (!blob || blob.size < 2_500) {
+              resolve({ durationMs, posterUri: null, previewUri, poster: null });
+              return;
+            }
+            void blob.arrayBuffer().then((bytes) => {
+              resolve({
+                durationMs,
+                posterUri: URL.createObjectURL(blob),
+                previewUri,
+                poster: { bytes, width: canvas.width, height: canvas.height, uri: null },
+              });
+            });
+          }, "image/jpeg", 0.72);
         } catch {
-          resolve({ durationMs, posterUri, previewUri });
+          resolve({ durationMs, posterUri: null, previewUri, poster: null });
         }
+      };
+      video.onloadeddata = () => {
+        const durationMs = Math.round((Number.isFinite(video.duration) ? video.duration : 0) * 1000);
+        if (video.duration > 0.4) {
+          const onSeeked = () => {
+            video.removeEventListener("seeked", onSeeked);
+            finish(durationMs);
+          };
+          video.addEventListener("seeked", onSeeked);
+          try {
+            video.currentTime = 0.2;
+            return;
+          } catch {
+            video.removeEventListener("seeked", onSeeked);
+          }
+        }
+        finish(durationMs);
       };
       video.onerror = () => {
         URL.revokeObjectURL(previewUri);
@@ -193,6 +233,7 @@ async function mediaFromFile(file: File): Promise<PickedMedia> {
       durationMs: preview.durationMs,
       previewUri: preview.previewUri,
       posterUri: preview.posterUri,
+      poster: preview.poster,
     };
   }
   return {
@@ -203,6 +244,7 @@ async function mediaFromFile(file: File): Promise<PickedMedia> {
     durationMs: null,
     previewUri: URL.createObjectURL(file),
     posterUri: null,
+    poster: null,
   };
 }
 
@@ -253,6 +295,10 @@ async function itemFromAsset(asset: {
   if (!asset.video && !mimeType.startsWith("image/")) {
     throw new Error("Choose a JPEG, PNG, or WebP photo, or an MP4, MOV, M4V, or WebM video.");
   }
+  // Loaded on demand: video-poster pulls in expo-video and React Native.
+  const poster = asset.video
+    ? await (await import("./video-poster")).captureDeviceVideoPoster(asset.uri)
+    : null;
   return {
     bytes,
     mimeType,
@@ -260,7 +306,8 @@ async function itemFromAsset(asset: {
     kind: asset.video ? "video" : "photo",
     durationMs,
     previewUri: asset.uri,
-    posterUri: null,
+    posterUri: poster?.uri ?? null,
+    poster,
   };
 }
 
