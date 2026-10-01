@@ -440,16 +440,12 @@ export default function JournalScreen() {
             void signOut();
           }}
         />
-      ) : loading ? (
-        <View style={{ paddingTop: insets.top + stageChromeInset + 18 }}>
-          <Skeleton />
-          <Skeleton short />
-        </View>
       ) : (
         <FlatList
           style={styles.list}
           data={rows}
           keyExtractor={(row) => row.id}
+          accessibilityState={{ busy: loading }}
           onScroll={onScroll}
           scrollEventThrottle={16}
           viewabilityConfig={momentViewability}
@@ -464,7 +460,7 @@ export default function JournalScreen() {
             flexGrow: rows.length === 0 ? 1 : undefined,
           }}
           ListHeaderComponent={
-            showMentions && !error ? (
+            !loading && showMentions && !error ? (
               <MentionsBanner
                 onDismiss={() => {
                   setShowMentions(false);
@@ -474,7 +470,7 @@ export default function JournalScreen() {
             ) : null
           }
           ListEmptyComponent={
-            error ? (
+            loading ? null : error ? (
               <View
                 style={[
                   styles.empty,
@@ -699,19 +695,6 @@ function Rail({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-function Skeleton({ short = false }: Readonly<{ short?: boolean }>) {
-  const { colors } = useAppTheme();
-  return (
-    <View
-      style={[
-        styles.skeleton,
-        short && styles.skeletonShort,
-        { backgroundColor: colors.cream, borderColor: colors.hairline },
-      ]}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -801,16 +784,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-  },
-  skeleton: {
-    height: 168,
-    marginHorizontal: 18,
-    marginBottom: 18,
-    borderRadius: 22,
-    borderWidth: 1,
-  },
-  skeletonShort: {
-    height: 92,
   },
   scrim: {
     ...StyleSheet.absoluteFill,
