@@ -328,6 +328,7 @@ export function AddSheet({
             ...shared,
             name: first.name || "video.mp4",
             durationMs: first.durationMs ?? 0,
+            poster: first.poster,
           })
         : await uploadPhotoMoment(supabase, shared);
     if (result.ok && first.kind === "photo" && mediaItems.length > 1) {
