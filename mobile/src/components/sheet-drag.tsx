@@ -1,5 +1,13 @@
 import { useEffect, useState, type RefObject } from "react";
-import { Animated, Easing, Keyboard, PanResponder, type PanResponderGestureState } from "react-native";
+import {
+  Animated,
+  Easing,
+  Keyboard,
+  PanResponder,
+  View,
+  type LayoutChangeEvent,
+  type PanResponderGestureState,
+} from "react-native";
 
 import {
   canStartSheetDismiss,
@@ -116,52 +124,92 @@ export function useSheetDrag(input: DragInput) {
 }
 
 type ChromeDismissInput = {
-  sheetHeight: RefObject<number>;
   onCommit: RefObject<(actions: SheetDragActions) => void>;
 };
 
-function finishChromeDrag(
-  translateY: Animated.Value,
-  input: ChromeDismissInput,
-  dy: number,
-  vy: number,
-) {
-  const downward = Math.max(0, dy);
-  const velocityY = Number.isFinite(vy) ? vy * 1000 : 0;
-  const springBack = () => springToRest(translateY);
-  if (!sheetDismissShouldCommit({ dy: downward, velocityY })) {
-    springBack();
-    return;
-  }
-  input.onCommit.current?.({
-    springBack,
-    dismiss: (done) => slideAway(translateY, Math.max(240, input.sheetHeight.current + 48), done),
+/** Gesture state and geometry live in this closure, outside render. */
+function createChromeDismiss(input: ChromeDismissInput) {
+  const translateY = new Animated.Value(0);
+  const geometry = { node: null as View | null, top: 0, height: 320, chromeBottom: 64 };
+  const measure = () => {
+    geometry.node?.measureInWindow((_x, y) => {
+      geometry.top = y;
+    });
+  };
+  const claim = (gesture: PanResponderGestureState) => {
+    const startY = gesture.moveY - gesture.dy;
+    const local = startY - geometry.top;
+    return (
+      local >= -12 &&
+      local <= geometry.chromeBottom &&
+      gesture.dy >= sheetDismissAxisPx &&
+      Math.abs(gesture.dx) <= Math.abs(gesture.dy)
+    );
+  };
+  const finish = (gesture: PanResponderGestureState) => {
+    const downward = Math.max(0, gesture.dy);
+    const velocityY = Number.isFinite(gesture.vy) ? gesture.vy * 1000 : 0;
+    const springBack = () => springToRest(translateY);
+    if (!sheetDismissShouldCommit({ dy: downward, velocityY })) {
+      springBack();
+      return;
+    }
+    input.onCommit.current?.({
+      springBack,
+      dismiss: (done) => slideAway(translateY, Math.max(240, geometry.height + 48), done),
+    });
+  };
+  const responder = PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gesture) => claim(gesture),
+    onMoveShouldSetPanResponderCapture: (_event, gesture) => claim(gesture),
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderMove: (_event, gesture) => {
+      translateY.setValue(Math.max(0, gesture.dy));
+    },
+    onPanResponderRelease: (_event, gesture) => finish(gesture),
+    onPanResponderTerminate: (_event, gesture) => finish(gesture),
   });
+  return {
+    translateY,
+    measure,
+    sheetProps: {
+      ref: (node: View | null) => {
+        geometry.node = node;
+      },
+      collapsable: false,
+      onLayout: (event: LayoutChangeEvent) => {
+        geometry.height = event.nativeEvent.layout.height;
+        measure();
+      },
+      ...responder.panHandlers,
+    },
+    chromeProps: {
+      collapsable: false,
+      onLayout: (event: LayoutChangeEvent) => {
+        geometry.chromeBottom = event.nativeEvent.layout.y + event.nativeEvent.layout.height;
+      },
+    },
+  };
 }
 
 /**
  * Swipe down on a sheet's grab bar or header to close it, whether or not the
  * keyboard is up. The rest of the sheet does not use this gesture.
+ *
+ * The responder lives on the sheet itself (spread `sheetProps` on the
+ * Animated.View) and only claims drags that start inside the header (spread
+ * `chromeProps` on that View). On iOS a bare header View that only carries
+ * touch handlers never received the drag, so the sheet did not move.
  */
 export function useChromeDismiss(input: ChromeDismissInput) {
-  const [translateY] = useState(() => new Animated.Value(0));
-  const [responder] = useState(() =>
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_event, gesture) =>
-        gesture.dy >= sheetDismissAxisPx && Math.abs(gesture.dx) <= Math.abs(gesture.dy),
-      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
-        gesture.dy >= sheetDismissAxisPx && Math.abs(gesture.dx) <= Math.abs(gesture.dy),
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_event, gesture) => {
-        translateY.setValue(Math.max(0, gesture.dy));
-      },
-      onPanResponderRelease: (_event, gesture) => {
-        finishChromeDrag(translateY, input, gesture.dy, gesture.vy);
-      },
-      onPanResponderTerminate: (_event, gesture) => {
-        finishChromeDrag(translateY, input, gesture.dy, gesture.vy);
-      },
-    }),
-  );
-  return { translateY, panHandlers: responder.panHandlers };
+  const [chrome] = useState(() => createChromeDismiss(input));
+  useEffect(() => {
+    const shown = Keyboard.addListener("keyboardDidShow", chrome.measure);
+    const hidden = Keyboard.addListener("keyboardDidHide", chrome.measure);
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, [chrome]);
+  return { translateY: chrome.translateY, sheetProps: chrome.sheetProps, chromeProps: chrome.chromeProps };
 }

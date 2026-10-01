@@ -64,7 +64,6 @@ export function CommentSheet({
   const [cursor, setCursor] = useState(initialBody.length);
   const query = mentionQueryAt(body, cursor, mentions);
   const suggestions = query && members.length > 0 ? filterMentionCandidates(members, query.query).slice(0, 6) : [];
-  const sheetHeight = useRef(420);
   const onCommit = useRef<Parameters<typeof useChromeDismiss>[0]["onCommit"]["current"]>(() => undefined);
   const posting = useRef(false);
 
@@ -116,7 +115,7 @@ export function CommentSheet({
     };
   });
 
-  const { translateY, panHandlers } = useChromeDismiss({ sheetHeight, onCommit });
+  const { translateY, sheetProps, chromeProps } = useChromeDismiss({ onCommit });
 
   const retro = colors.appearance === "retro";
   const light = colors.scheme === "light" && !retro;
@@ -144,9 +143,7 @@ export function CommentSheet({
           onPress={() => (Keyboard.isVisible() ? Keyboard.dismiss() : requestClose())}
         />
         <Animated.View
-          onLayout={(event) => {
-            sheetHeight.current = event.nativeEvent.layout.height;
-          }}
+          {...sheetProps}
           style={[
             styles.sheet,
             {
@@ -159,7 +156,7 @@ export function CommentSheet({
             },
           ]}
         >
-          <View {...panHandlers}>
+          <View {...chromeProps}>
             <View style={styles.handleHit} accessibilityRole="adjustable" accessibilityLabel="Drag down to close">
               <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
             </View>

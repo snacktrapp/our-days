@@ -763,6 +763,12 @@ await step("sheets over the feed keep taps with the keyboard up, and sign-out st
   assert.match(read("../src/components/keyboard-form.tsx"), />\s*Done\s*</);
   assert.doesNotMatch(read("../src/components/comment-sheet.tsx"), /KeyboardDoneBar/);
   assert.doesNotMatch(read("../src/components/moment-menu.tsx"), /KeyboardDoneBar/);
+  // Grab-bar dismiss: the responder sits on the sheet's Animated.View, not on a bare header View.
+  for (const file of ["../src/components/comment-sheet.tsx", "../src/components/moment-menu.tsx"]) {
+    assert.match(read(file), /<Animated\.View\s+\{\.\.\.sheetProps\}/);
+    assert.match(read(file), /<View \{\.\.\.chromeProps\}>/);
+    assert.doesNotMatch(read(file), /\{\.\.\.panHandlers\}/);
+  }
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /Previous field/);
   assert.match(read("../src/components/auth-provider.tsx"), /auth\.signOut\(\{ scope: "local" \}\)/);
 });
@@ -777,7 +783,15 @@ await step("mentions banner keeps the web Got it dismiss", async () => {
   assert.match(banner, /They'll get a notice so they don't miss it\./);
   assert.equal((banner.match(/onPress=\{onDismiss\}/g) ?? []).length, 2);
   assert.match(journal, /const mentionsKey = "our-days:mentions-announcement"/);
-  assert.match(journal, /writePref\(mentionsKey, "dismissed"\)/);
+  assert.match(journal, /writePref\(mentionsStoreKey, "dismissed"\)/);
+  assert.match(journal, /getItemAsync\(mentionsStoreKey\)/);
+  // The native key must be one SecureStore accepts, or the dismissal is lost on iPhone.
+  const nativeKey = journal.match(/const mentionsStoreKey = [^?]+\? mentionsKey : "([^"]+)"/)?.[1];
+  assert.ok(nativeKey, "native mentions key");
+  const secure = await import("./e2e/mock-secure-store.mjs");
+  await secure.setItemAsync(nativeKey, "dismissed");
+  assert.equal(await secure.getItemAsync(nativeKey), "dismissed");
+  await assert.rejects(secure.setItemAsync("our-days:mentions-announcement", "dismissed"));
   assert.match(journal, /value === "dismissed"/);
 });
 

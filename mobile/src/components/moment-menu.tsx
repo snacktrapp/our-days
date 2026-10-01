@@ -33,9 +33,8 @@ export function MomentOverflow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const sheetHeight = useRef(320);
   const onCommit = useRef<Parameters<typeof useChromeDismiss>[0]["onCommit"]["current"]>(() => undefined);
-  const { translateY, panHandlers } = useChromeDismiss({ sheetHeight, onCommit });
+  const { translateY, sheetProps, chromeProps } = useChromeDismiss({ onCommit });
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
@@ -184,9 +183,7 @@ export function MomentOverflow({
           >
             <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={requestClose} />
             <Animated.View
-              onLayout={(event) => {
-                sheetHeight.current = event.nativeEvent.layout.height;
-              }}
+              {...sheetProps}
               style={[
                 styles.editSheet,
                 {
@@ -197,7 +194,7 @@ export function MomentOverflow({
                 },
               ]}
             >
-              <View {...panHandlers}>
+              <View {...chromeProps}>
                 <View style={styles.handleHit} accessibilityLabel="Drag down to close">
                   <View style={[styles.handle, { backgroundColor: colors.scheme === "light" ? "#c5c9c6" : "#526158" }]} />
                 </View>
