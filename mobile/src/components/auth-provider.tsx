@@ -136,7 +136,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       async signOut() {
         intentionalSignOut.current = true;
         setAuthError(null);
-        await supabase?.auth.signOut();
+        // Only this iPhone. The web keeps its own session, as it does on sign-out there.
+        await supabase?.auth.signOut({ scope: "local" });
       },
       authError,
       clearAuthError() {

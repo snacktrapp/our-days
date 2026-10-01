@@ -156,7 +156,7 @@ export function PassageSheet({
             <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={goBack} style={styles.back}>
               <Text style={[face(colors, 400), { color: colors.action, fontSize: 17 }]}>Back</Text>
             </Pressable>
-            <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{titles[step]}</Text>
+            <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{step === "start" && ranging ? "Starting verse" : titles[step]}</Text>
             <View style={styles.back} />
           </View>
           {step === "book" ? (

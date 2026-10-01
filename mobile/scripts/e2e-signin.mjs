@@ -610,7 +610,7 @@ await step("PGRST303 on the first request to every endpoint is retried by the ap
   await supabase.auth.signOut({ scope: "local" });
 });
 
-await step("operations user posts a test-circle note, sees it on All circles, then deletes it", async () => {
+await step("operations user posts a test-circle note, sees it on All circles, edits it, then deletes it", async () => {
   resetStore();
   const app = await freshApp("post-note");
   const supabase = app.getSupabase();
@@ -644,9 +644,38 @@ await step("operations user posts a test-circle note, sees it on All circles, th
     page.moments.some((moment) => moment.body.includes(body)),
     "new note should appear on All circles",
   );
-  const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
+  const listed = page.moments.find((moment) => moment.body.includes(body));
+  assert.equal(listed.revision, 1, "the feed carries the revision the ••• menu edits against");
+  const edited = await posts.updateWrittenMoment(supabase, {
+    momentId: created.momentId,
+    revision: listed.revision,
+    body: `${body} edited`,
+    occurredOn: listed.occurredOn,
+    occurredAt: listed.occurredAt,
+    occurredTimezone: listed.occurredTimezone,
+  });
+  assert.equal(edited.ok, true, edited.ok ? "" : edited.message);
+  assert.equal(edited.revision, 2);
+  const stale = await posts.updateWrittenMoment(supabase, {
+    momentId: created.momentId,
+    revision: 1,
+    body: `${body} stale`,
+    occurredOn: listed.occurredOn,
+  });
+  assert.equal(stale.ok, false, "an edit against an old revision is refused");
+  const trashed = await posts.trashWrittenMoment(supabase, created.momentId, edited.revision);
   assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
   await supabase.auth.signOut({ scope: "local" });
+});
+
+await step("sheets over the feed keep taps with the keyboard up, and sign-out stays on this iPhone", async () => {
+  const fs = await import("node:fs");
+  const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
+  assert.match(read("../src/app/journal.tsx"), /<FlatList[^>]*?keyboardShouldPersistTaps="handled"/s);
+  assert.match(read("../src/components/settings-screen.tsx"), /<ScrollView\s+keyboardShouldPersistTaps="handled"/);
+  assert.match(read("../src/components/moment-menu.tsx"), /<KeyboardAvoidingView/);
+  assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /<InputAccessoryView/);
+  assert.match(read("../src/components/auth-provider.tsx"), /auth\.signOut\(\{ scope: "local" \}\)/);
 });
 
 await step("comment and heart a test-circle post, then clean up", async () => {

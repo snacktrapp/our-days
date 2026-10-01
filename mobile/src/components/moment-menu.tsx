@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import { Alert, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { MenuView } from "@expo/ui/community/menu";
 
 import type { TimelineMoment } from "../lib/journal";
@@ -131,27 +131,32 @@ export function MomentOverflow({
       )}
       {editing ? (
         <Modal transparent animationType="slide" onRequestClose={() => setEditing(false)}>
-          <View style={[styles.editScrim, { backgroundColor: colors.scheme === "light" ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)" }]}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={[styles.editScrim, { backgroundColor: colors.scheme === "light" ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)" }]}
+          >
+            <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={() => setEditing(false)} />
             <View style={[styles.editSheet, { backgroundColor: colors.paper, borderColor: colors.hairline }]}>
               <View style={styles.editBar}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => setEditing(false)}>
                   <Text style={[face(colors, 400), { color: colors.ink, fontSize: 17 }]}>Cancel</Text>
                 </Pressable>
                 <Text style={[face(colors, 650), { color: colors.ink, fontSize: 17 }]}>Edit</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="Post" disabled={busy} onPress={() => void save()}>
-                  <Text style={[face(colors, 700), { color: colors.action, fontSize: 17 }]}>{busy ? "Saving…" : "Post"}</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Save" disabled={busy || !body.trim()} onPress={() => void save()}>
+                  <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: body.trim() ? 1 : 0.4 }]}>{busy ? "Saving…" : "Save"}</Text>
                 </Pressable>
               </View>
               <TextInput
                 value={body}
                 onChangeText={setBody}
                 multiline
+                autoFocus
                 accessibilityLabel="Entry"
                 style={[face(colors, 400, "serif"), styles.editInput, { color: colors.ink, borderColor: colors.hairline }]}
               />
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       ) : null}
     </>
@@ -176,5 +181,5 @@ const styles = {
   editScrim: { flex: 1, justifyContent: "flex-end" as const },
   editSheet: { borderTopWidth: 1, padding: 16, gap: 12, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
   editBar: { minHeight: 44, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const },
-  editInput: { minHeight: 120, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 17, lineHeight: 25 },
+  editInput: { minHeight: 120, maxHeight: 260, borderWidth: 1, borderRadius: 8, padding: 12, fontSize: 17, lineHeight: 25 },
 };
