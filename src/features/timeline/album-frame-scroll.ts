@@ -108,7 +108,8 @@ export function createAlbumCenterFollower(stage: HTMLElement) {
     const height = rect.height;
     const delta = height - lastHeight;
     lastHeight = height;
-    if (userTookOver || albumScrollLockedByPull(stage.ownerDocument)) return false;
+    if (userTookOver || albumScrollLockedByPull(stage.ownerDocument))
+      return false;
     const viewport = stage.ownerDocument.defaultView?.innerHeight ?? 0;
     if (!albumFrameOnScreen(rect, viewport)) return false;
     if (Math.abs(delta) < 0.5) return false;
