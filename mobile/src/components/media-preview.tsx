@@ -18,6 +18,7 @@ type VideoModule = {
     style?: object;
     contentFit?: "cover";
     nativeControls?: boolean;
+    allowsVideoFrameAnalysis?: boolean;
   }) => ReactNode;
 };
 
@@ -50,6 +51,7 @@ function PausedFrame({
       player={player}
       contentFit="cover"
       nativeControls={false}
+      allowsVideoFrameAnalysis={false}
       style={StyleSheet.absoluteFill}
     />
   );

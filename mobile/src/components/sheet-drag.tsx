@@ -42,6 +42,8 @@ function slideAway(translateY: Animated.Value, distance: number, done: () => voi
 }
 
 let latestDrag: DragInput | null = null;
+/** The gesture that put the keyboard away; it never moves the sheet too. */
+let keyboardGesture: number | null = null;
 
 function claimGesture(gesture: PanResponderGestureState, pageY: number) {
   const input = latestDrag;
@@ -54,7 +56,9 @@ function claimGesture(gesture: PanResponderGestureState, pageY: number) {
     Math.abs(gesture.dx) <= Math.abs(gesture.dy);
   // With the keyboard up, pulling the form down puts the keyboard away first
   // (like Messages); only the grab bar or header moves the sheet.
+  if (keyboardGesture === gesture.stateID) return false;
   if (downward && !fromChrome && Keyboard.isVisible()) {
+    keyboardGesture = gesture.stateID;
     Keyboard.dismiss();
     return false;
   }

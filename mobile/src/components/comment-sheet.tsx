@@ -88,7 +88,11 @@ export function CommentSheet({
         {Platform.OS === "web" ? null : (
           <BlurView intensity={40} tint={light ? "light" : "dark"} style={StyleSheet.absoluteFill} />
         )}
-        <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={requestClose} />
+        <Pressable
+          accessibilityLabel="Close"
+          style={styles.scrimTap}
+          onPress={() => (Keyboard.isVisible() ? Keyboard.dismiss() : requestClose())}
+        />
         <View
           style={[
             styles.sheet,
