@@ -220,7 +220,8 @@ await step("a video post shows its poster, then plays, and pauses offscreen", as
     kind: "insight",
     sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
   };
-  assert.equal(playback.clipStartSeconds(insight), 120);
+  // The stored Insight video is the excerpt; t= is attribution for the full source.
+  assert.equal(playback.clipStartSeconds(insight), 0);
   assert.equal(
     playback.clipStartSeconds({ kind: "video", sourceUrl: insight.sourceUrl }),
     0,
@@ -639,7 +640,7 @@ await step("test circle video poster is readable and playback starts from its of
   });
   assert.equal(posterPlan.showPoster, true);
   assert.equal(playingPlan.playing, true);
-  assert.equal(playingPlan.startSeconds, found.kind === "insight" ? startSeconds : 0);
+  assert.equal(playingPlan.startSeconds, 0);
   assert.equal(journal.videoPosterPath(found.id), `/api/media/videos/${found.id}/poster`);
   assert.equal(playback.videoDeliveryPath(found.id), `/api/media/videos/${found.id}`);
   const headers = await app.mediaRequestHeaders();
@@ -658,6 +659,19 @@ await step("test circle video poster is readable and playback starts from its of
     redirect: "manual",
   });
   await video.body?.cancel();
+  const { resolveVideoSource } = await import("../src/lib/video-source.ts");
+  const direct = await resolveVideoSource(supabase, found.id, { url: app.mediaUrl, headers });
+  assert.equal(direct.via, "storage", "native playback should read a signed Storage URL");
+  assert.equal(direct.headers, undefined, "a signed Storage URL needs no cookie");
+  for (const range of ["bytes=0-1", "bytes=-4096"]) {
+    const part = await realFetch(direct.uri, { headers: { Range: range } });
+    await part.body?.cancel();
+    console.log(
+      `       storage ${range} -> HTTP ${part.status} ${part.headers.get("content-type")} ${part.headers.get("content-range")}`,
+    );
+    assert.equal(part.status, 206, `storage range ${range}`);
+    assert.match(part.headers.get("content-type") ?? "", /^video\//u);
+  }
   console.log(
     `       video ${playback.videoDeliveryPath(found.id)} -> HTTP ${video.status}, start ${startSeconds}s`,
   );
