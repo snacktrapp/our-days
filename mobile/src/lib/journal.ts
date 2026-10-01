@@ -562,6 +562,8 @@ export async function loadTimelinePage(
     viewerMembershipIds?: readonly string[];
     /** Just me: one query per membership, merged like the personal journal. */
     personal?: readonly Pick<CircleMembership, "circleId" | "personId">[];
+    /** One person's journal inside a circle. Same argument the web person page sends. */
+    journalPersonId?: string;
   }>,
 ): Promise<TimelinePage> {
   const pageArgs = {
@@ -599,6 +601,7 @@ export async function loadTimelinePage(
     const runCircle = (circleId: string) =>
       supabase.rpc("list_timeline_moments", {
         circle_id: circleId,
+        ...(input.journalPersonId ? { journal_person_id: input.journalPersonId } : {}),
         ...pageArgs,
       });
     let { data, error } = usingCircleId

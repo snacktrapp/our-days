@@ -26,7 +26,9 @@ import {
   ChevronDown,
   MoonIcon,
   NavAdd,
+  NavCircles,
   NavFamily,
+  NotificationMark,
   SettingsGear,
   SunIcon,
 } from "./icons";
@@ -49,6 +51,8 @@ export function JournalHeader({
   offset,
   interactive,
   locked = false,
+  onOpenActivity,
+  activityUnread = false,
 }: Readonly<{
   title: string;
   items: readonly SwitcherItem[];
@@ -58,6 +62,9 @@ export function JournalHeader({
   onOpenAppearance: () => void;
   offset: number;
   interactive: boolean;
+  /** Circles uses the same header heart as the web notification center. */
+  onOpenActivity?: () => void;
+  activityUnread?: boolean;
   /** Settings uses the static web title: wordmark and label, no chevron. */
   locked?: boolean;
 }>) {
@@ -226,6 +233,19 @@ export function JournalHeader({
         </View>
       </View>
       <View style={styles.actions}>
+        {onOpenActivity ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={activityUnread ? "Open notifications, new" : "Open notifications"}
+            onPress={onOpenActivity}
+            style={styles.iconHit}
+          >
+            <NotificationMark color={colors.muted} />
+            {activityUnread ? (
+              <View style={[styles.unread, { backgroundColor: colors.clay }]} />
+            ) : null}
+          </Pressable>
+        ) : null}
         {colors.appearance === "retro" ? null : (
           <Pressable
             accessibilityRole="button"
@@ -250,14 +270,18 @@ export function JournalNav({
   offset,
   hidden,
   journalActive = true,
+  circlesActive = false,
   onJournalPress,
   onAddPress,
+  onCirclesPress,
 }: Readonly<{
   offset: number;
   hidden: boolean;
   journalActive?: boolean;
+  circlesActive?: boolean;
   onJournalPress?: () => void;
   onAddPress?: () => void;
+  onCirclesPress?: () => void;
 }>) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -318,6 +342,25 @@ export function JournalNav({
         face={label}
         onPress={onAddPress}
         icon={<NavAdd color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
+      />
+      <NavItem
+        label="Circles"
+        active={circlesActive}
+        onPress={onCirclesPress}
+        color={colors.action}
+        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
+        face={label}
+        icon={
+          <NavCircles
+            color={
+              circlesActive
+                ? colors.action
+                : colors.appearance === "retro"
+                  ? colors.ink
+                  : colors.muted
+            }
+          />
+        }
       />
     </View>
     </View>

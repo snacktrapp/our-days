@@ -234,6 +234,62 @@ await step("sheet drag springs back when short and confirms unsaved text", async
   assert.equal(sheet.sheetHasUnsavedChanges({ ...initial, body: "A note" }, initial), true);
 });
 
+await step("a circle name is required and create starts from a circle you belong to", async () => {
+  const circles = await import("../src/lib/circles.ts");
+  assert.equal(circles.circleNameError("  "), "A circle name is required.");
+  assert.equal(circles.circleNameError("a".repeat(81)), "Use 80 characters or fewer.");
+  assert.equal(circles.circleNameError("  Family  "), null);
+  const archived = {
+    membershipId: "m",
+    circleId: "home",
+    personId: "p",
+    role: "member",
+    name: "Home",
+    timeZone: "UTC",
+    archivedAt: "2026-01-01",
+  };
+  const live = {
+    membershipId: "m2",
+    circleId: "kin",
+    personId: "p",
+    role: "organizer",
+    name: "Kin",
+    timeZone: "UTC",
+    archivedAt: null,
+  };
+  assert.equal(circles.createCircleSourceId([archived, live]), "kin");
+  assert.equal(circles.createCircleSourceId([archived]), "");
+  const directory = await import("../src/lib/circle-directory.ts");
+  const built = directory.buildCircleDirectory({
+    people: [
+      { id: "you", display_name: "Brian", profile_kind: "account", accent_token: "sky", circle_id: "home" },
+      { id: "molly", display_name: "Molly", profile_kind: "account", accent_token: "clay", circle_id: "home" },
+      { id: "tars", display_name: "TARS", profile_kind: "account", accent_token: "slate", circle_id: "home" },
+      { id: "avery", display_name: "Avery", profile_kind: "managed", accent_token: "gold", circle_id: "home" },
+    ],
+    memberships: [
+      { id: "m-you", person_id: "you", role: "organizer", directory_kind: "journal", circle_id: "home" },
+      { id: "m-molly", person_id: "molly", role: "member", directory_kind: "journal", circle_id: "home" },
+      { id: "m-tars", person_id: "tars", role: "operations", directory_kind: "operations", circle_id: "home" },
+    ],
+    guardians: [],
+    pending: [{ emailRequestId: "req", displayName: "Ada" }],
+    canRename: true,
+  });
+  assert.equal(directory.familyFacingCount(built.members), 3);
+  assert.equal(directory.memberSubtitle(built.members[0]), "Organizer");
+  assert.equal(directory.memberSubtitle(built.members[1]), undefined);
+  assert.equal(directory.memberSubtitle(built.members[2]), "Operations");
+  assert.equal(directory.memberSubtitle(built.members[3]), "Managed journal");
+  assert.equal(directory.memberShowsMore(built.members[0], "m-you", true), false);
+  assert.equal(directory.memberShowsMore(built.members[1], "m-you", true), true);
+  assert.equal(directory.memberShowsMore(built.members[3], "m-you", true), true);
+  assert.equal(directory.memberShowsMore(built.members[1], "m-you", false), false);
+  assert.equal(directory.addFromCircleLabel(["Kin"]), "Add someone from Kin");
+  assert.equal(directory.addFromCircleLabel(["Kin", "Home"]), "Add someone from another circle");
+  assert.equal(directory.peopleCountLabel(5), "5 people");
+});
+
 await step("a video post shows its poster, then plays, and pauses offscreen", async () => {
   const playback = await import("../src/lib/video-playback.ts");
   const journal = await import("../src/lib/journal.ts");
