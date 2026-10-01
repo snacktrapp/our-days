@@ -262,7 +262,13 @@ await step("a video post shows its poster, then plays, and pauses offscreen", as
     playback.videoSurfaceAction({ started: true, onScreen: true, resumed: false }),
     "play",
   );
-  assert.equal(playback.videoSurfaceAction({ started: true, onScreen: true }), "fullscreen");
+  assert.equal(playback.usesNativePlaybackControls("ios"), true);
+  assert.equal(playback.usesNativePlaybackControls("web"), false);
+  assert.equal(
+    playback.videoSurfaceAction({ started: true, onScreen: true, nativeControls: true }),
+    "native",
+  );
+  assert.equal(playback.videoSurfaceAction({ started: true, onScreen: true }), "pause");
 });
 
 const { service, publishable } = await loadKeys();

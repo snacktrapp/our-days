@@ -25,7 +25,11 @@ import { videoPosterPath, type TimelineMoment } from "../lib/journal";
 import { getSupabase, mediaUrl } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
-import { videoAspectRatio, videoSurfaceAction } from "../lib/video-playback";
+import {
+  usesNativePlaybackControls,
+  videoAspectRatio,
+  videoSurfaceAction,
+} from "../lib/video-playback";
 import { resolveVideoSource, type VideoSource } from "../lib/video-source";
 import { PrivateImage } from "./private-image";
 
@@ -125,11 +129,66 @@ class VideoBoundary extends Component<
   }
 }
 
-function PlayMark() {
+function PlayTriangle() {
   return (
-    <Svg width={16} height={16} viewBox="0 0 16 16">
-      <Path d="M5 3.2v9.6L13 8 5 3.2Z" fill="#fff" />
+    <Svg width={22} height={22} viewBox="0 0 16 16" style={styles.playGlyph}>
+      <Path d="M5.2 2.8v10.4L13.4 8 5.2 2.8Z" fill="#fff" />
     </Svg>
+  );
+}
+
+/** Centered play control: 56pt disc, white triangle, soft shadow. */
+function RoundPlayButton() {
+  return (
+    <View style={[styles.playDisc, styles.ignoreHits]}>
+      <PlayTriangle />
+    </View>
+  );
+}
+
+/** Speaker / speaker-slash. @expo/vector-icons is not in this binary, so the
+ * glyph is drawn with react-native-svg, which already ships in runtime 0.4.0. */
+function SpeakerGlyph({ muted }: Readonly<{ muted: boolean }>) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path d="M4 9.2v5.6h3.6L13 20V4L7.6 9.2H4Z" fill="#fff" />
+      {muted ? (
+        <Path
+          d="M16.2 9.4 21 14.2M21 9.4l-4.8 4.8"
+          stroke="#fff"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+        />
+      ) : (
+        <Path
+          d="M16.2 8.6a4.6 4.6 0 0 1 0 6.8M18.6 6.2a8 8 0 0 1 0 11.6"
+          fill="none"
+          stroke="#fff"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+        />
+      )}
+    </Svg>
+  );
+}
+
+function SpeakerButton({
+  muted,
+  lifted,
+  onPress,
+}: Readonly<{ muted: boolean; lifted: boolean; onPress: () => void }>) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={muted ? "Unmute" : "Mute"}
+      onPress={onPress}
+      hitSlop={4}
+      style={[styles.speakerHit, lifted ? styles.speakerLifted : null]}
+    >
+      <View style={styles.speakerChip}>
+        <SpeakerGlyph muted={muted} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -180,9 +239,8 @@ function PosterFrame({
             ]}
           />
         )}
-        <View style={styles.bar} pointerEvents="none">
-          <PlayMark />
-          <Text style={[face(colors, 400), styles.time]}>0:00</Text>
+        <View style={[styles.playAnchor, styles.ignoreHits]}>
+          <RoundPlayButton />
         </View>
       </Pressable>
       {unavailable ? (
@@ -220,6 +278,7 @@ function PlayingClip({
   aspectRatio,
   onScreen,
   onResume,
+  onPause,
   onMute,
   onFailed,
 }: Readonly<{
@@ -233,12 +292,13 @@ function PlayingClip({
   label: string;
   onScreen: boolean;
   onResume: () => void;
+  onPause: () => void;
   onMute: () => void;
   onFailed: () => void;
 }>) {
-  const { colors } = useAppTheme();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const viewRef = useRef<FullscreenHandle>(null);
+  const nativeChrome = usesNativePlaybackControls(Platform.OS);
   // The poster stays over the player until AVPlayer has a frame, so a slow
   // first read shows the picture and a spinner instead of a black box.
   const [rendered, setRendered] = useState(false);
@@ -302,13 +362,13 @@ function PlayingClip({
         player={player}
         style={styles.video}
         contentFit="contain"
-        nativeControls={false}
+        nativeControls={nativeChrome}
         allowsPictureInPicture={false}
         playsInline
         onFirstFrameRender={() => setRendered(true)}
       />
       {rendered ? null : (
-        <View style={styles.cover} pointerEvents="none">
+        <View style={[styles.cover, styles.ignoreHits]}>
           {moment.hasPoster ? (
             <PrivateImage
               path={videoPosterPath(moment.id)}
@@ -325,33 +385,34 @@ function PlayingClip({
           </View>
         </View>
       )}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={surface === "play" ? `Play ${label}` : `Full screen, ${label}`}
-        onPress={() => {
-          if (surface === "play") {
-            onResume();
-            return;
-          }
-          void viewRef.current?.enterFullscreen();
-        }}
-        style={styles.hit}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={muted ? "Unmute" : "Mute"}
-        onPress={onMute}
-        style={styles.mute}
-      >
-        <Text style={[face(colors, 600), styles.muteLabel]}>
-          {muted ? "Unmute" : "Mute"}
-        </Text>
-      </Pressable>
-      {holding ? (
-        <View style={styles.pausedMark} pointerEvents="none">
-          <PlayMark />
+      {nativeChrome ? null : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={surface === "play" ? `Play ${label}` : `Pause ${label}`}
+          onPress={() => {
+            if (surface === "play") onResume();
+            else onPause();
+          }}
+          style={styles.hit}
+        />
+      )}
+      {surface === "play" ? (
+        <View style={[styles.playAnchor, styles.passHits]}>
+          {nativeChrome ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Play ${label}`}
+              onPress={onResume}
+              style={styles.playDisc}
+            >
+              <PlayTriangle />
+            </Pressable>
+          ) : (
+            <RoundPlayButton />
+          )}
         </View>
       ) : null}
+      <SpeakerButton muted={muted} lifted={nativeChrome} onPress={onMute} />
     </View>
   );
 }
@@ -454,6 +515,7 @@ export function JournalVideo({
         aspectRatio={aspectRatio}
         onScreen={onScreen}
         onResume={() => setResumed(true)}
+        onPause={() => setResumed(false)}
         onMute={() => setMuted((current) => !current)}
         onFailed={failPlayback}
       />
@@ -501,40 +563,52 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
   },
-  pausedMark: {
+  playAnchor: {
     position: "absolute",
-    left: 10,
-    bottom: 10,
-  },
-  bar: {
-    position: "absolute",
-    left: 0,
+    top: 0,
     right: 0,
     bottom: 0,
-    height: 36,
-    paddingHorizontal: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
-  },
-  time: {
-    color: "#fff",
-    fontSize: 12,
-  },
-  mute: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    minHeight: 44,
-    paddingHorizontal: 12,
+    left: 0,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
   },
-  muteLabel: {
-    color: "#fff",
-    fontSize: 13,
+  playDisc: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    boxShadow: "0px 2px 6px rgba(0, 0, 0, 0.35)",
+  },
+  ignoreHits: {
+    pointerEvents: "none",
+  },
+  passHits: {
+    pointerEvents: "box-none",
+  },
+  playGlyph: {
+    marginLeft: 3,
+  },
+  speakerHit: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  speakerLifted: {
+    bottom: 52,
+  },
+  speakerChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
   },
   unavailable: {
     paddingHorizontal: 16,
