@@ -33,6 +33,16 @@ export function bibleBookGroups(query: string): readonly BibleBookGroup[] {
   return groups;
 }
 
+/** Sheet stays under the status bar and above the keyboard. */
+export function passageSheetMaxHeight(
+  input: Readonly<{ windowHeight: number; topInset: number; keyboardHeight: number }>,
+) {
+  return Math.max(
+    160,
+    input.windowHeight - input.topInset - Math.max(0, input.keyboardHeight) - 8,
+  );
+}
+
 export function bibleNumberChoices(
   picker: "chapter" | "start" | "end",
   verse: BibleVerseSelection,

@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   emptyBibleVerseSelection,
   formatBibleVerseMoment,
+  formatBibleVerseReference,
   loadBibleCatalog,
   selectBiblePassage,
   type BibleVerseSelection,
@@ -61,19 +62,17 @@ import {
   KeyboardForm,
   useComposerInput,
 } from "./keyboard-form";
-import { BiblePickerSheet, type BiblePicker } from "./bible-picker-sheet";
+import { PassageSheet } from "./bible-picker-sheet";
 import { MediaChooser } from "./media-chooser";
 import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
-type Picker = BiblePicker | null;
 
 const choices = [
-  { id: "photo" as const, title: "Photo or video", detail: "Media with date and note" },
-  { id: "thought" as const, title: "Written entry", detail: "Text, date, and details" },
-  { id: "bible" as const, title: "Bible verse", detail: "Choose a passage" },
-  { id: "drafts" as const, title: "Drafts", detail: "Unfinished entries" },
-  { id: "insight" as const, title: "Insight", detail: "Quote, attribution, and source" },
+  { id: "photo" as const, title: "Photo or video", icon: "camera" as const },
+  { id: "thought" as const, title: "Written entry", icon: "pencil" as const },
+  { id: "bible" as const, title: "Bible verse", icon: "book" as const },
+  { id: "insight" as const, title: "Insight", icon: "chatbox-ellipses" as const },
 ];
 
 /**
@@ -135,8 +134,7 @@ export function AddSheet({
   );
   const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
   const [reference, setReference] = useState("");
-  const [picker, setPicker] = useState<Picker>(null);
-  const [catalogReady, setCatalogReady] = useState(false);
+  const [passageOpen, setPassageOpen] = useState(false);
   const [photoKind, setPhotoKind] = useState<"photo" | "video">("photo");
   const [photoDuration, setPhotoDuration] = useState<number | null>(null);
   const [photoName, setPhotoName] = useState<string | null>(null);
@@ -174,7 +172,7 @@ export function AddSheet({
 
   useEffect(() => {
     if (mode !== "bible") return;
-    void loadBibleCatalog().then(() => setCatalogReady(true));
+    void loadBibleCatalog();
   }, [mode]);
 
   function audience(): Audience {
@@ -361,7 +359,7 @@ export function AddSheet({
 
   async function choosePassage(next: BibleVerseSelection) {
     setVerse(next);
-    setPicker(null);
+    setPassageOpen(false);
     if (!next.book || !next.chapter || !next.startVerse || !next.endVerse) {
       setReference("");
       return;
@@ -377,7 +375,7 @@ export function AddSheet({
     setBody(passage.text);
   }
 
-  async function persistDraft() {
+  async function persistDraft(closeAfter = false) {
     const supabase = requireCircle();
     if (!supabase || !circle || !mode || mode === "drafts") return;
     setBusy(true);
@@ -409,6 +407,10 @@ export function AddSheet({
     }
     setDraftId(result.momentId);
     setDraftSession(kind === "insight");
+    if (closeAfter) {
+      onClose();
+      return;
+    }
     setMode("drafts");
   }
 
@@ -543,8 +545,11 @@ export function AddSheet({
       return;
     }
     Alert.alert("Discard this unfinished moment?", undefined, [
-      { text: "Keep editing", style: "cancel" },
-      { text: "Discard", style: "destructive", onPress: then },
+      ...(mode && mode !== "drafts"
+        ? [{ text: "Save draft", onPress: () => void persistDraft(true) }]
+        : []),
+      { text: "Discard", style: "destructive" as const, onPress: then },
+      { text: "Keep editing", style: "cancel" as const },
     ]);
   };
   const onCommit = useRef<Parameters<typeof useSheetDrag>[0]["onCommit"]["current"]>(() => undefined);
@@ -558,6 +563,26 @@ export function AddSheet({
       dismiss(closeSheet);
     };
   });
+  const composing = mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo";
+  function submitComposer() {
+    if (mode === "bible") {
+      if (!reference || !body.trim()) {
+        setError("Choose a passage");
+        return;
+      }
+      void postNote(formatBibleVerseMoment(reference, body));
+      return;
+    }
+    if (mode === "insight") {
+      void postInsight();
+      return;
+    }
+    if (mode === "photo") {
+      void postPhoto();
+      return;
+    }
+    void postNote(body);
+  }
   const { translateY, panHandlers } = useSheetDrag({
     scrollTop,
     chromeHeight,
@@ -605,9 +630,34 @@ export function AddSheet({
         <DismissKeyboardPressable accessible={false} style={styles.handleHit}>
           <View style={[styles.handle, { backgroundColor: colors.scheme === "dark" ? "#526158" : colors.line }]} />
         </DismissKeyboardPressable>
-        <DismissKeyboardPressable style={styles.bar}>
-          <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]}>{titleText}</Text>
-        </DismissKeyboardPressable>
+        <View style={styles.bar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            onPress={() => confirmClose(closeSheet)}
+            style={styles.barSide}
+          >
+            <Text style={[face(colors, 400), { color: colors.ink, fontSize: 17 }]}>Cancel</Text>
+          </Pressable>
+          <Text style={[styles.heading, face(colors, 650), { color: colors.ink }]} numberOfLines={1}>
+            {titleText}
+          </Text>
+          {composing ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Post"
+              disabled={busy}
+              onPress={submitComposer}
+              style={[styles.barSide, styles.barEnd]}
+            >
+              <Text style={[face(colors, 700), { color: colors.action, fontSize: 17 }]}>
+                {busy ? "Saving…" : "Post"}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.barSide} />
+          )}
+        </View>
         </View>
         <ComposerScroller
           contentStyle={styles.body}
@@ -616,29 +666,39 @@ export function AddSheet({
           }}
         >
           {mode == null ? (
-            <View style={styles.grid}>
-              {choices.map((choice) => (
-                <Pressable
-                  key={choice.id}
-                  accessibilityRole="button"
-                  onPress={() => setMode(choice.id)}
-                  style={[styles.choice, { borderColor: colors.hairline, backgroundColor: "transparent" }]}
-                >
-                  <View style={styles.choiceTitle}>
+            <View style={styles.chooser}>
+              <View style={styles.grid}>
+                {choices.map((choice) => (
+                  <Pressable
+                    key={choice.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={choice.title}
+                    onPress={() => setMode(choice.id)}
+                    style={({ pressed }) => [
+                      styles.choice,
+                      {
+                        borderColor: colors.hairline,
+                        backgroundColor: pressed ? colors.selectionFill : "transparent",
+                      },
+                    ]}
+                  >
+                    <Ionicons name={choice.icon} size={28} color={colors.action} />
                     <Text style={[face(colors, 650), { color: colors.ink, fontSize: 13 }]}>
                       {choice.title}
                     </Text>
-                    {choice.id === "drafts" && drafts.length > 0 ? (
-                      <Text style={[face(colors, 650), { color: colors.muted, fontSize: 13 }]}>
-                        {drafts.length}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={[face(colors, 400, "record"), styles.detail, { color: colors.muted }]}>
-                    {choice.detail}
-                  </Text>
-                </Pressable>
-              ))}
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Drafts, ${drafts.length}`}
+                onPress={() => setMode("drafts")}
+                style={styles.draftsFooter}
+              >
+                <Text style={[face(colors, 600), { color: colors.ink, fontSize: 15 }]}>
+                  {`Drafts · ${drafts.length}`}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
           {mode === "drafts" ? (
@@ -684,15 +744,15 @@ export function AddSheet({
                   style={({ pressed }) => [
                     styles.photoDrop,
                     {
-                      borderColor: colors.action,
+                      borderColor: "transparent",
                       backgroundColor: pressed
                         ? colors.selectionFill
                         : retro
                           ? colors.surface
                           : colors.scheme === "light"
-                            ? colors.cream
-                            : colors.paper,
-                      borderRadius: retro ? 2 : 12,
+                            ? colors.surface
+                            : colors.surface,
+                      borderRadius: retro ? 2 : 16,
                       transform: [{ scale: pressed ? 0.985 : 1 }],
                     },
                   ]}
@@ -710,19 +770,30 @@ export function AddSheet({
                 </MediaChooser>
               ) : null}
               {mode === "bible" ? (
-                <BiblePickers
+                <PassageRow
                   verse={verse}
-                  catalogReady={catalogReady}
-                  picker={picker}
                   labelColor={labelColor}
-                  onToggle={setPicker}
+                  open={passageOpen}
+                  onOpen={() => setPassageOpen(true)}
+                  onClose={() => setPassageOpen(false)}
                   onChoose={(next) => void choosePassage(next)}
                 />
               ) : null}
               {mode === "insight" ? (
                 <Field
+                  fieldId="body"
+                  label="Quote"
+                  labelColor={labelColor}
+                  value={body}
+                  placeholder="What did they say?"
+                  multiline
+                  onChange={setBody}
+                />
+              ) : null}
+              {mode === "insight" ? (
+                <Field
                   fieldId="attribution"
-                  label="Attribution"
+                  label="Who said it"
                   labelColor={labelColor}
                   value={title}
                   placeholder="Who said it"
@@ -732,19 +803,21 @@ export function AddSheet({
               {mode === "insight" ? (
                 <Field
                   fieldId="source"
-                  label="Source URL"
+                  label="Source"
                   labelColor={labelColor}
                   value={sourceUrl}
                   placeholder="https://www.youtube.com/…"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="URL"
                   onChange={setSourceUrl}
                 />
               ) : null}
-              {mode === "bible" && reference ? (
-                <Text style={[face(colors, 600), { color: colors.ink }]}>{reference}</Text>
-              ) : null}
+              {mode === "insight" ? null : (
               <Field
                 fieldId="body"
-                label={mode === "bible" ? "Verse text" : mode === "insight" ? "Quote" : mode === "photo" ? "Note" : "Entry"}
+                label={mode === "bible" ? "Verse text" : mode === "photo" ? "Note" : "Entry"}
                 labelColor={labelColor}
                 value={body}
                 placeholder={
@@ -758,6 +831,7 @@ export function AddSheet({
                 accentBorder={retro}
                 onChange={setBody}
               />
+              )}
               <DateTimeFields
                 date={occurredOn}
                 maxDate={circleToday(circle?.timeZone ?? "UTC")}
@@ -796,85 +870,6 @@ export function AddSheet({
             </View>
           ) : null}
         </ComposerScroller>
-        {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
-          <View
-            style={[
-              styles.footer,
-              {
-                borderTopColor: colors.hairline,
-                backgroundColor: colors.cream,
-                paddingBottom: Math.max(10, insets.bottom),
-              },
-            ]}
-          >
-            <View style={styles.split}>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => {
-                  if (mode === "bible") {
-                    if (!reference || !body.trim()) {
-                      setError("Choose a passage");
-                      return;
-                    }
-                    void postNote(formatBibleVerseMoment(reference, body));
-                    return;
-                  }
-                  if (mode === "insight") {
-                    void postInsight();
-                    return;
-                  }
-                  if (mode === "photo") {
-                    void postPhoto();
-                    return;
-                  }
-                  void postNote(body);
-                }}
-                style={[
-                  styles.post,
-                  {
-                    backgroundColor: colors.action,
-                    borderColor: colors.action,
-                    borderRadius: retro ? 2 : 7,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    face(colors, retro ? 700 : 650),
-                    {
-                      color: colors.actionInk,
-                      letterSpacing: retro ? tracking(15, 0.08) : 0,
-                      textTransform: retro ? "uppercase" : "none",
-                    },
-                  ]}
-                >
-                  {busy ? "Saving…" : "Post"}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => void persistDraft()}
-                style={[
-                  styles.draft,
-                  retro
-                    ? {
-                        borderWidth: 1,
-                        borderColor: colors.hairline,
-                        borderRadius: 2,
-                        backgroundColor: colors.surface,
-                      }
-                    : null,
-                ]}
-              >
-                <Text style={[face(colors, retro ? 700 : 650), { color: retro ? colors.ink : colors.muted }]}>
-                  {busy ? "Saving draft…" : "Save draft"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
       </Animated.View>
     </KeyboardAvoidingView>
     </KeyboardForm>
@@ -902,6 +897,10 @@ function Field({
   multiline = false,
   accentBorder = false,
   fieldId,
+  keyboardType,
+  autoCapitalize,
+  autoCorrect,
+  textContentType,
   onChange,
 }: Readonly<{
   label: string;
@@ -911,6 +910,10 @@ function Field({
   multiline?: boolean;
   accentBorder?: boolean;
   fieldId: string;
+  keyboardType?: "url";
+  autoCapitalize?: "none";
+  autoCorrect?: boolean;
+  textContentType?: "URL";
   onChange: (value: string) => void;
 }>) {
   const { colors } = useAppTheme();
@@ -932,6 +935,10 @@ function Field({
         placeholder={placeholder}
         placeholderTextColor={colors.faint}
         multiline={multiline}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        textContentType={textContentType}
         onChangeText={onChange}
         style={[
           styles.input,
@@ -951,73 +958,57 @@ function Field({
   );
 }
 
-function BiblePickers({
+function PassageRow({
   verse,
-  catalogReady,
-  picker,
   labelColor,
-  onToggle,
+  open,
+  onOpen,
+  onClose,
   onChoose,
 }: Readonly<{
   verse: BibleVerseSelection;
-  catalogReady: boolean;
-  picker: Picker;
   labelColor: string;
-  onToggle: (picker: Picker) => void;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   onChoose: (verse: BibleVerseSelection) => void;
 }>) {
   const { colors } = useAppTheme();
   const retro = colors.appearance === "retro";
-  const rows: readonly { id: BiblePicker; label: string; value: string; disabled: boolean }[] = [
-    { id: "book", label: "Book", value: verse.book ?? "Choose book", disabled: false },
-    { id: "chapter", label: "Chapter", value: verse.chapter ? String(verse.chapter) : "Choose chapter", disabled: !verse.book },
-    { id: "start", label: "Starting verse", value: verse.startVerse ? String(verse.startVerse) : "Choose verse", disabled: !verse.chapter },
-    { id: "end", label: "Ending verse", value: verse.endVerse ? String(verse.endVerse) : "Choose verse", disabled: !verse.startVerse },
-  ];
+  const value =
+    verse.book && verse.chapter && verse.startVerse && verse.endVerse
+      ? formatBibleVerseReference(verse.book, verse.chapter, verse.startVerse, verse.endVerse)
+      : "Choose a passage";
   return (
     <View style={styles.form}>
-      {rows.map((row) => (
-        <View key={row.id} style={styles.form}>
-          <Text
-            style={[
-              face(colors, 600, "record"),
-              styles.legend,
-              { color: labelColor, letterSpacing: tracking(9, 0.08) },
-            ]}
-          >
-            {row.label}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${row.label}, ${row.value}`}
-            disabled={row.disabled}
-            onPress={() => onToggle(picker === row.id ? null : row.id)}
-            style={({ pressed }) => [
-              styles.input,
-              styles.trigger,
-              {
-                borderColor: colors.hairline,
-                backgroundColor: pressed ? colors.selectionFill : colors.surface,
-                borderRadius: retro ? 2 : 7,
-                opacity: row.disabled ? 0.45 : 1,
-              },
-            ]}
-          >
-            <Text style={[face(colors, 400), { color: row.value.startsWith("Choose") ? colors.faint : colors.ink }]}>
-              {row.value}
-            </Text>
-          </Pressable>
-        </View>
-      ))}
-      {!catalogReady && verse.book ? (
-        <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>Loading passage…</Text>
-      ) : null}
-      <BiblePickerSheet
-        picker={picker}
-        verse={verse}
-        onClose={() => onToggle(null)}
-        onChoose={onChoose}
-      />
+      <Text
+        style={[
+          face(colors, 600, "record"),
+          styles.legend,
+          { color: labelColor, letterSpacing: tracking(9, 0.08) },
+        ]}
+      >
+        Passage
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Passage, ${value}`}
+        onPress={onOpen}
+        style={({ pressed }) => [
+          styles.input,
+          styles.trigger,
+          {
+            borderColor: colors.hairline,
+            backgroundColor: pressed ? colors.selectionFill : colors.surface,
+            borderRadius: retro ? 2 : 7,
+          },
+        ]}
+      >
+        <Text style={[face(colors, 400), { color: value.startsWith("Choose") ? colors.faint : colors.ink }]}>
+          {value}
+        </Text>
+      </Pressable>
+      <PassageSheet open={open} verse={verse} onClose={onClose} onChoose={onChoose} />
     </View>
   );
 }
@@ -1065,8 +1056,16 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  barSide: {
+    minWidth: 72,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  barEnd: {
+    alignItems: "flex-end",
   },
   back: {
     minHeight: 44,
@@ -1076,6 +1075,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     lineHeight: 22,
+    textAlign: "center",
   },
   footer: {
     borderTopWidth: 1,
@@ -1089,10 +1089,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 12,
   },
+  chooser: { gap: 16 },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+  },
+  draftsFooter: {
+    minHeight: 44,
+    justifyContent: "center",
   },
   choice: {
     width: "47%",
@@ -1101,8 +1106,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 8,
-    justifyContent: "flex-start",
-    gap: 4,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 8,
   },
   choiceTitle: {
     flexDirection: "row",
@@ -1161,8 +1167,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     paddingHorizontal: 16,
     paddingVertical: 18,
-    borderWidth: 2,
-    borderStyle: "dashed",
+    borderWidth: 0,
     gap: 6,
     alignItems: "center",
     justifyContent: "center",

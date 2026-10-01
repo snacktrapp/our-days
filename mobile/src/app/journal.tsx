@@ -30,7 +30,6 @@ import { AddSheet } from "../components/add-sheet";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
 import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
-import { siteOrigin } from "../lib/config";
 import { circleToday } from "../lib/dates";
 import { readLastPostedCircle } from "../lib/last-posted-circle";
 import {
@@ -143,7 +142,6 @@ export default function JournalScreen() {
   const [chromeOffset, setChromeOffset] = useState(0);
   const [pull, setPull] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
-  const [unseenActivity, setUnseenActivity] = useState(false);
   const [viewabilityReady, setViewabilityReady] = useState(false);
   const [visibleMomentIds, setVisibleMomentIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -244,25 +242,6 @@ export default function JournalScreen() {
       active = false;
     };
   }, [session]);
-
-  useEffect(() => {
-    if (!mediaHeaders) return;
-    let active = true;
-    fetch(`${siteOrigin}/api/activity`, { headers: mediaHeaders, cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const body = (await response.json()) as { items?: { id?: string }[] };
-        const ids = (body.items ?? []).flatMap((item) =>
-          typeof item.id === "string" ? [item.id] : [],
-        );
-        const seen = await readSeenNotifications();
-        if (active) setUnseenActivity(ids.some((id) => !seen.has(id)));
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [mediaHeaders]);
 
   useEffect(() => {
     let active = true;
@@ -440,8 +419,15 @@ export default function JournalScreen() {
   // order, even when the account belongs to more circles. Just me loads the
   // personal journal; All circles loads the combined feed.
   const items: readonly SwitcherItem[] = [
-    { id: youScope, label: "Just me", selected: kind === "personal" },
     { id: allScope, label: "All circles", selected: kind === "all" },
+    ...circles
+      .filter((circle) => !circle.archivedAt)
+      .map((circle) => ({
+        id: circle.circleId,
+        label: circle.name,
+        selected: kind === "circle" && scope === circle.circleId,
+      })),
+    { id: youScope, label: "Just me", selected: kind === "personal" },
   ];
   const listed = moments.filter((moment) =>
     momentListedInFeed({ audience: moment.audience, feed: kind }),
@@ -624,6 +610,10 @@ export default function JournalScreen() {
                     accent: profile?.accentToken ?? "slate",
                     membershipIds: circles.map((circle) => circle.membershipId),
                   }}
+                  onMomentChange={(next) =>
+                    setMoments((current) => current.map((item) => (item.id === next.id ? next : item)))
+                  }
+                  onMomentRemove={(id) => setMoments((current) => current.filter((item) => item.id !== id))}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
                   openThread={
                     landing?.openThread === true && landing.momentId === item.moment.id
@@ -675,7 +665,6 @@ export default function JournalScreen() {
         offset={chromeOffset}
         interactive={switcherOpen}
         locked={settingsOpen}
-        unseen={unseenActivity}
       />
       <JournalNav
         offset={chromeOffset}
@@ -732,25 +721,6 @@ export default function JournalScreen() {
       ) : null}
     </View>
   );
-}
-
-const seenNotificationsKey = "our-days:seen-notifications";
-
-async function readSeenNotifications() {
-  const raw =
-    Platform.OS === "web"
-      ? (globalThis.localStorage?.getItem(seenNotificationsKey) ?? null)
-      : await SecureStore.getItemAsync(seenNotificationsKey);
-  try {
-    const parsed = JSON.parse(raw ?? "[]") as unknown;
-    return new Set(
-      Array.isArray(parsed)
-        ? parsed.filter((id): id is string => typeof id === "string")
-        : [],
-    );
-  } catch {
-    return new Set<string>();
-  }
 }
 
 async function mentionDismissed() {

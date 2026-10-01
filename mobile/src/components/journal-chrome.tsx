@@ -1,4 +1,5 @@
 import { BlurView } from "expo-blur";
+import { MenuView } from "@expo/ui/community/menu";
 import { useState, type ReactNode } from "react";
 import {
   Platform,
@@ -25,9 +26,7 @@ import {
   ChevronDown,
   MoonIcon,
   NavAdd,
-  NavCircles,
   NavFamily,
-  NotificationMark,
   SettingsGear,
   SunIcon,
 } from "./icons";
@@ -49,7 +48,6 @@ export function JournalHeader({
   onOpenAppearance,
   offset,
   interactive,
-  unseen = false,
   locked = false,
 }: Readonly<{
   title: string;
@@ -60,7 +58,6 @@ export function JournalHeader({
   onOpenAppearance: () => void;
   offset: number;
   interactive: boolean;
-  unseen?: boolean;
   /** Settings uses the static web title: wordmark and label, no chevron. */
   locked?: boolean;
 }>) {
@@ -71,7 +68,6 @@ export function JournalHeader({
   const hidden = offset > 0 && !open && !interactive;
   const menuWidth = Math.min(220, windowWidth - 32);
   const [anchor, setAnchor] = useState({ width: 0, height: 0 });
-  const titleFace = face(colors, 400, "record");
   const radius = colors.appearance === "retro" ? 2 : chromeRadius;
 
   return (
@@ -124,6 +120,7 @@ export function JournalHeader({
             );
           }}
         >
+        {locked || Platform.OS !== "ios" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={locked ? title : "Choose a journal"}
@@ -132,37 +129,23 @@ export function JournalHeader({
           onPress={onToggle}
           style={styles.titleButton}
         >
-          <View style={styles.wordmark}>
-            {colors.appearance === "retro" ? (
-              <RetroWordmark />
-            ) : (
-              <Wordmark color={colors.ink} width={104} />
-            )}
-          </View>
-          <View style={styles.titleRow}>
-            <Text
-              style={[
-                styles.title,
-                titleFace,
-                { color: colors.ink, letterSpacing: tracking(10, 0.1) },
-              ]}
-              numberOfLines={2}
-            >
-              {title}
-            </Text>
-            {locked ? null : (
-              <View
-                style={[
-                  styles.chevron,
-                  open ? { transform: [{ rotate: "180deg" }] } : null,
-                ]}
-              >
-                <ChevronDown color={colors.ink} />
-              </View>
-            )}
-          </View>
+          <JournalTitle title={title} locked={locked} open={open} />
         </Pressable>
-        {open && !locked ? (
+        ) : (
+          <MenuView
+            actions={items.map((item) => ({
+              id: item.id,
+              title: item.label,
+              state: item.selected ? ("on" as const) : ("off" as const),
+            }))}
+            onPressAction={(event) => onSelect(event.nativeEvent.event)}
+          >
+            <View accessibilityRole="button" accessibilityLabel="Choose a journal" style={styles.titleButton}>
+              <JournalTitle title={title} locked={false} open={false} />
+            </View>
+          </MenuView>
+        )}
+        {open && !locked && Platform.OS !== "ios" ? (
           <View
             style={[
               styles.menu,
@@ -243,25 +226,6 @@ export function JournalHeader({
         </View>
       </View>
       <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open notifications"
-          style={styles.iconHit}
-        >
-          {/* TODO(noop): notification list. See src/lib/noop-controls.ts */}
-          <NotificationMark color={colors.muted} />
-          {unseen ? (
-            <View
-              style={[
-                styles.unread,
-                {
-                  backgroundColor:
-                    colors.appearance === "retro" ? colors.action : colors.clay,
-                },
-              ]}
-            />
-          ) : null}
-        </Pressable>
         {colors.appearance === "retro" ? null : (
           <Pressable
             accessibilityRole="button"
@@ -355,15 +319,37 @@ export function JournalNav({
         onPress={onAddPress}
         icon={<NavAdd color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
       />
-      <NavItem
-        label="Circles"
-        color={colors.action}
-        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
-        face={label}
-        icon={<NavCircles color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
-      />
     </View>
     </View>
+  );
+}
+
+function JournalTitle({
+  title,
+  locked,
+  open,
+}: Readonly<{ title: string; locked: boolean; open: boolean }>) {
+  const { colors } = useAppTheme();
+  const titleFace = face(colors, 400, "record");
+  return (
+    <>
+      <View style={styles.wordmark}>
+        {colors.appearance === "retro" ? <RetroWordmark /> : <Wordmark color={colors.ink} width={104} />}
+      </View>
+      <View style={styles.titleRow}>
+        <Text
+          style={[styles.title, titleFace, { color: colors.ink, letterSpacing: tracking(10, 0.1) }]}
+          numberOfLines={2}
+        >
+          {title}
+        </Text>
+        {locked ? null : (
+          <View style={[styles.chevron, open ? { transform: [{ rotate: "180deg" }] } : null]}>
+            <ChevronDown color={colors.ink} />
+          </View>
+        )}
+      </View>
+    </>
   );
 }
 
@@ -494,7 +480,6 @@ function NavItem({
       onPress={onPress}
       style={styles.navItem}
     >
-      {/* TODO(noop): Add and Circles do not navigate. See noop-controls.ts */}
       {icon}
       <Text
         style={[

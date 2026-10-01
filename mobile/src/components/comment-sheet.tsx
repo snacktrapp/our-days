@@ -102,7 +102,7 @@ export function CommentSheet({
           <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{title}</Text>
           <Text
             numberOfLines={2}
-            style={[face(colors, 400, "record"), styles.context, { color: colors.muted }]}
+            style={[face(colors, 400), styles.context, { color: colors.muted, fontSize: 13, lineHeight: 18 }]}
           >
             {context}
           </Text>

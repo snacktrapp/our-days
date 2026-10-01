@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -100,12 +100,6 @@ export function SettingsScreen({
             <ChevronRight color={colors.muted} />
           </Pressable>
         ) : null}
-        {/* TODO(noop): Recently removed does not open trash. See noop-controls.ts */}
-        <PlainRow
-          title="Recently removed"
-          subtitle="Moments you may want back"
-          trail={<ChevronRight color={colors.muted} />}
-        />
       </View>
       <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
         <SignOutRow onSignOut={onSignOut} />
@@ -469,33 +463,6 @@ function NotificationsRow() {
           {message}
         </Text>
       ) : null}
-    </View>
-  );
-}
-
-function PlainRow({
-  title,
-  subtitle,
-  trail,
-}: Readonly<{ title: string; subtitle: string; trail: ReactNode }>) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={styles.plainRow}>
-      <View style={styles.copy}>
-        <Text
-          style={[
-            face(colors, 600),
-            styles.rowTitle,
-            { color: colors.ink, fontSize: colors.appearance === "retro" ? 16 : 15 },
-          ]}
-        >
-          {title}
-        </Text>
-        <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
-          {subtitle}
-        </Text>
-      </View>
-      {trail}
     </View>
   );
 }

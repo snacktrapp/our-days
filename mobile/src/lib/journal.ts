@@ -100,6 +100,7 @@ export type TimelineMoment = Readonly<{
   posterWidth?: number;
   posterHeight?: number;
   canChange: boolean;
+  revision: number;
   taggedPeopleLabel?: string;
   mentions: readonly MentionSpan[];
   notes: readonly FeedNote[];
@@ -136,6 +137,7 @@ type TimelineRow = Readonly<{
   linked_circle_ids: string[] | null;
   tagged_people?: unknown;
   can_change?: boolean | null;
+  revision?: number | null;
   feed_snapshot_at: string | null;
 }>;
 
@@ -524,6 +526,7 @@ async function enrichMoments(
       posterWidth: poster?.width,
       posterHeight: poster?.height,
       canChange: row.can_change === true,
+      revision: typeof row.revision === "number" ? row.revision : 1,
       taggedPeopleLabel: taggedLabel(row.tagged_people),
       mentions: mentionsByMoment.get(row.moment_id) ?? [],
       notes: notesByMoment.get(row.moment_id) ?? [],

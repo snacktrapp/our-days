@@ -19,15 +19,7 @@ import { invitationTokenFromLink } from "../lib/invites";
 import { GridBackground } from "../components/grid-background";
 import { Wordmark } from "../components/wordmark";
 import { useAppTheme } from "../lib/theme";
-import { face, type ColorScheme } from "../lib/tokens";
-
-/** globals.css color-mix(cream 88%, transparent) on the OAuth buttons. */
-function oauthSurface(scheme: ColorScheme) {
-  return {
-    backgroundColor:
-      scheme === "light" ? "rgba(255, 255, 255, 0.9)" : "rgba(27, 32, 40, 0.88)",
-  };
-}
+import { face } from "../lib/tokens";
 
 export default function SignInScreen() {
   const {
@@ -122,65 +114,11 @@ export default function SignInScreen() {
                 : { color: colors.muted },
             ]}
           >
-            Use the Google or X account that received your invitation.
+            Email a private sign-in link to the address that received your invitation.
           </Text>
-          <View style={styles.oauthList}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign in with Google"
-            style={[
-              styles.oauth,
-              colors.appearance === "retro"
-                ? { backgroundColor: colors.action, borderColor: colors.action, borderRadius: 2 }
-                : oauthSurface(colors.scheme),
-              colors.appearance === "retro" ? null : { borderColor: colors.hairline },
-            ]}
-          >
-            {/* TODO(noop): Google sign-in. See src/lib/noop-controls.ts */}
-            <Text
-              style={[
-                styles.oauthLabel,
-                face(colors, colors.appearance === "retro" ? 700 : 650),
-                {
-                  color: colors.appearance === "retro" ? colors.actionInk : colors.ink,
-                  textTransform: colors.appearance === "retro" ? "uppercase" : "none",
-                  letterSpacing: colors.appearance === "retro" ? 1.1 : 0,
-                },
-              ]}
-            >
-              Sign in with Google
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign in with X"
-            style={[
-              styles.oauth,
-              colors.appearance === "retro"
-                ? { backgroundColor: colors.action, borderColor: colors.action, borderRadius: 2 }
-                : oauthSurface(colors.scheme),
-              colors.appearance === "retro" ? null : { borderColor: colors.hairline },
-            ]}
-          >
-            {/* TODO(noop): X sign-in. See src/lib/noop-controls.ts */}
-            <Text
-              style={[
-                styles.oauthLabel,
-                face(colors, colors.appearance === "retro" ? 700 : 650),
-                {
-                  color: colors.appearance === "retro" ? colors.actionInk : colors.ink,
-                  textTransform: colors.appearance === "retro" ? "uppercase" : "none",
-                  letterSpacing: colors.appearance === "retro" ? 1.1 : 0,
-                },
-              ]}
-            >
-              Sign in with X
-            </Text>
-          </Pressable>
-          </View>
           <View style={[styles.backup, { borderTopColor: colors.hairline }]}>
             <Text style={[styles.backupCopy, body, { color: colors.muted }]}>
-              Or email a private sign-in link
+              Email a private sign-in link
             </Text>
             <Text style={[styles.hint, body, { color: colors.muted }]}>
               Enter the email address that received your invitation.
