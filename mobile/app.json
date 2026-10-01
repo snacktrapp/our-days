@@ -75,7 +75,7 @@
       [
         "expo-share-intent",
         {
-          "iosShareExtensionName": "Our Days",
+          "iosShareExtensionName": "Add to Our Days",
           "disableAndroid": true,
           "iosActivationRules": {
             "NSExtensionActivationSupportsText": true,

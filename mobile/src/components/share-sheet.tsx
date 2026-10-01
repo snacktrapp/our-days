@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { File } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import {
   ActivityIndicator,
   Modal,
@@ -17,7 +18,7 @@ import {
   uploadPhotoMoment,
   uploadVideoMoment,
 } from "../lib/posts";
-import { shareDraftLabel, type ShareDraft } from "../lib/share-entry";
+import { shareDraftLabel, shareNeedsJpeg, type ShareDraft } from "../lib/share-entry";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
@@ -63,10 +64,18 @@ export function ShareSheet({
           return;
         }
       } else {
-        const bytes = await new File(draft.path).arrayBuffer();
+        let path = draft.path;
+        let mimeType = draft.mimeType;
+        if (shareNeedsJpeg(draft)) {
+          const rendered = await ImageManipulator.manipulate(draft.path).renderAsync();
+          const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 });
+          path = saved.uri;
+          mimeType = "image/jpeg";
+        }
+        const bytes = await new File(path).arrayBuffer();
         const common = {
           bytes,
-          mimeType: draft.mimeType,
+          mimeType,
           circleId: circle.circleId,
           journalPersonId: circle.personId,
           body: "",

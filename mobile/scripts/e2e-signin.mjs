@@ -317,6 +317,18 @@ await step("a share becomes a photo, video, or link and still needs a circle", a
     files: [{ path: "file:///tmp/porch.jpg", mimeType: "image/jpeg", fileName: "porch.jpg" }],
   });
   assert.equal(photo?.kind, "photo");
+  assert.equal(share.shareNeedsJpeg(photo), false);
+  const heic = share.draftFromShareIntent({
+    type: "media",
+    files: [{ path: "file:///tmp/IMG_0001.HEIC", mimeType: "image/heic", fileName: "IMG_0001.HEIC" }],
+  });
+  assert.equal(heic?.kind, "photo");
+  assert.equal(share.shareNeedsJpeg(heic), true, "HEIC from Photos is re-encoded as JPEG before upload");
+  const heicNoMime = share.draftFromShareIntent({
+    type: "media",
+    files: [{ path: "file:///tmp/IMG_0002.heic", fileName: "IMG_0002.heic" }],
+  });
+  assert.equal(share.shareNeedsJpeg(heicNoMime), true);
   const video = share.draftFromShareIntent({
     type: "media",
     files: [{

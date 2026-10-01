@@ -54,7 +54,8 @@ function imageMime(mimeType: string, name: string) {
   const extension = name.split(".").pop()?.toLowerCase() ?? "";
   if (extension === "png") return "image/png";
   if (extension === "webp") return "image/webp";
-  if (extension === "jpg" || extension === "jpeg" || extension === "heic") return "image/jpeg";
+  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
+  if (extension === "heic" || extension === "heif") return "image/heic";
   return null;
 }
 
@@ -110,4 +111,15 @@ export function shareDraftLabel(draft: ShareDraft) {
 /** A share is posted into one chosen circle. An empty id is not a choice. */
 export function shareCircleChosen(circleId: string | null | undefined) {
   return Boolean(circleId && circleId.trim());
+}
+
+const uploadablePhotoMimes = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+/**
+ * Photos shared from the Photos app are usually HEIC. The upload path takes
+ * JPEG, PNG, or WebP (same as the web), so anything else is re-encoded as JPEG
+ * on the device first.
+ */
+export function shareNeedsJpeg(draft: ShareDraft) {
+  return draft.kind === "photo" && !uploadablePhotoMimes.has(draft.mimeType.trim().toLowerCase());
 }
