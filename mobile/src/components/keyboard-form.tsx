@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   Dimensions,
-  InputAccessoryView,
   Keyboard,
   Platform,
   Pressable,
@@ -19,7 +18,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useColorScheme,
   View,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -29,8 +27,10 @@ import {
 
 import { adjacentComposerField } from "../lib/composer-keyboard";
 import { setSheetTouchingField } from "../lib/sheet-dismiss";
+import { useAppTheme } from "../lib/theme";
 
 export const composerAccessoryId = "our-days-composer-accessory";
+const keyboardBarHeight = 44;
 
 type FocusFn = () => void;
 
@@ -79,7 +79,6 @@ export function useComposerInput(id: string, multiline = false) {
   const last = adjacentComposerField(ids, id, 1) == null;
   return {
     ref,
-    inputAccessoryViewID: Platform.OS === "ios" ? composerAccessoryId : undefined,
     onFocus: () => form?.onFieldFocus(id, ref.current),
     onTouchStart: () => setSheetTouchingField(true),
     onTouchEnd: () => setSheetTouchingField(false),
@@ -102,6 +101,9 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
   const keyboardTop = useRef(Dimensions.get("window").height);
+  // InputAccessoryView never appears on iOS 27 with the new architecture, so
+  // the ✓ bar is drawn here, pinned to the top of the keyboard.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const publish = useCallback(() => {
     const next = order.current.map((entry) => entry.id);
@@ -133,11 +135,14 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const show = Keyboard.addListener(showEvent, (event) => {
-      keyboardTop.current = event.endCoordinates.screenY;
+      keyboardTop.current =
+        event.endCoordinates.screenY - (Platform.OS === "ios" ? keyboardBarHeight : 0);
+      setKeyboardHeight(event.endCoordinates.height);
       reveal(focusedNode.current);
     });
     const hide = Keyboard.addListener(hideEvent, () => {
       keyboardTop.current = Dimensions.get("window").height;
+      setKeyboardHeight(0);
     });
     return () => {
       show.remove();
@@ -210,8 +215,8 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
     <KeyboardFormContext.Provider value={value}>
       <FieldOrderContext.Provider value={ids}>
       {children}
-      {Platform.OS === "ios" ? (
-        <InputAccessoryView nativeID={composerAccessoryId}>
+      {Platform.OS === "ios" && keyboardHeight > 0 && focusedId != null ? (
+        <View pointerEvents="box-none" style={[styles.barDock, { bottom: keyboardHeight }]}>
           <ComposerKeyboardBar
             previousDisabled={index <= 0}
             nextDisabled={index < 0 || index >= ids.length - 1}
@@ -219,7 +224,7 @@ export function KeyboardForm({ children }: Readonly<{ children: ReactNode }>) {
             onNext={() => focusId(adjacentComposerField(ids, focusedId, 1))}
             onDone={dismiss}
           />
-        </InputAccessoryView>
+        </View>
       ) : null}
       </FieldOrderContext.Provider>
     </KeyboardFormContext.Provider>
@@ -288,7 +293,8 @@ export function ComposerKeyboardBar({
   onNext: () => void;
   onDone: () => void;
 }>) {
-  const dark = useColorScheme() === "dark";
+  const { colors } = useAppTheme();
+  const dark = colors.scheme === "dark" || colors.appearance === "retro";
   const tint = dark ? "#0a84ff" : "#007aff";
   const disabled = dark ? "#636366" : "#8e8e93";
   return (
@@ -339,6 +345,7 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
   fill: { flexGrow: 1 },
   dismissBackdrop: { ...StyleSheet.absoluteFill },
+  barDock: { position: "absolute", left: 0, right: 0, zIndex: 80 },
   bar: {
     height: 44,
     width: "100%",

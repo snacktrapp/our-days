@@ -484,6 +484,9 @@ export default function JournalScreen() {
         />
       ) : (
         <FlatList
+          // Sheets opened from a card (comments, edit) render inside this list,
+          // so a tap there must not just dismiss the keyboard.
+          keyboardShouldPersistTaps="handled"
           ref={listRef}
           style={styles.list}
           data={rows}

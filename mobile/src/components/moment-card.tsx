@@ -1260,7 +1260,8 @@ function NoteRow({
 function commentContext(person: string, kind: string, text: string) {
   const flat = text.replace(/\s+/g, " ").trim();
   const label = flat.length <= 48 ? flat : `${flat.slice(0, 47).trimEnd()}…`;
-  const kindLabel = kind ? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}` : kind;
+  const named = kind === "thought" ? "written" : kind;
+  const kindLabel = named ? `${named.charAt(0).toUpperCase()}${named.slice(1)}` : named;
   return label ? `${person} · ${kindLabel} · ${label}` : `${person} · ${kindLabel}`;
 }
 

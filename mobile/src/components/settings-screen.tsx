@@ -56,6 +56,7 @@ export function SettingsScreen({
   const canInvite = circles.some((circle) => circle.role === "organizer" && !circle.archivedAt);
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       style={styles.fill}
       onScroll={
         onScroll
