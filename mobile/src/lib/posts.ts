@@ -89,6 +89,15 @@ export function dismissUpload(id: string) {
   emit();
 }
 
+/** Tell the feed a post landed, then drop the chip so no confirmation card stays up. */
+function publishChip(id: string) {
+  const current = chips.find((chip) => chip.id === id);
+  if (current && !current.done) {
+    putChip({ ...current, progress: null, failed: false, done: true });
+  }
+  dismissUpload(id);
+}
+
 function randomId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -721,14 +730,7 @@ async function finishPhoto(supabase: SupabaseClient, intakeId: string, chipId: s
     const { data } = await supabase.rpc("get_photo_moment_status", { intake_id: intakeId });
     const status = firstRow(data) as { status?: string } | null;
     if (status?.status === "published") {
-      update({
-        label: "Added to timeline",
-        detail,
-        progress: null,
-        failed: false,
-        done: true,
-      });
-      retryInputs.delete(chipId);
+      publishChip(chipId);
       return;
     }
     if (status?.status === "needs_attention" || status?.status === "cancelled") {
@@ -1040,8 +1042,7 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
         throw new Error("The upload finished, but the video could not yet be added. Try again.");
       }
     }
-    update({ label: "Added to timeline", detail, progress: null, failed: false, done: true });
-    retryInputs.delete(id);
+    publishChip(id);
     return { ok: true as const, momentId: reservation.moment_id };
   } catch (error) {
     update({

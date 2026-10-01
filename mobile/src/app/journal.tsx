@@ -163,6 +163,12 @@ export default function JournalScreen() {
   const yRef = useRef(0);
   const offsetRef = useRef(0);
   const publishedUploads = useRef(new Set<string>());
+  const momentsRef = useRef(moments);
+  const postedMomentIds = useRef<ReadonlySet<string> | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  useEffect(() => {
+    momentsRef.current = moments;
+  }, [moments]);
   const [landing, setLanding] = useState<PushLanding | null>(null);
   const listRef = useRef<FlatList<FeedRow>>(null);
   const landingPages = useRef(0);
@@ -207,6 +213,20 @@ export default function JournalScreen() {
         });
         setMoments(next.moments);
         setPage(next);
+        const before = postedMomentIds.current;
+        if (before) {
+          postedMomentIds.current = null;
+          const newest = next.moments.find((moment) => !before.has(moment.id));
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToOffset({ offset: 0, animated: true });
+          });
+          if (newest) {
+            setHighlightId(newest.id);
+            setTimeout(() => {
+              setHighlightId((current) => (current === newest.id ? null : current));
+            }, 1600);
+          }
+        }
       } catch {
         setMoments([]);
         setPage(null);
@@ -235,7 +255,10 @@ export default function JournalScreen() {
         for (const chip of next) {
           if (chip.done) publishedUploads.current.add(chip.id);
         }
-        if (fresh) void loadFirstPage(scope, circles);
+        if (fresh) {
+          postedMomentIds.current = new Set(momentsRef.current.map((moment) => moment.id));
+          void loadFirstPage(scope, circles);
+        }
       }),
     [circles, loadFirstPage, scope],
   );
@@ -720,6 +743,7 @@ export default function JournalScreen() {
                   }
                   onMomentRemove={(id) => setMoments((current) => current.filter((item) => item.id !== id))}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
+                  highlighted={highlightId === item.moment.id}
                   openThread={
                     landing?.openThread === true && landing.momentId === item.moment.id
                   }
