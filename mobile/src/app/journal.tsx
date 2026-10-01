@@ -27,6 +27,7 @@ import { ShareSheet } from "../components/share-sheet";
 import { dismissShareDraft, subscribeShareDraft } from "../components/share-bridge";
 import type { ShareDraft } from "../lib/share-entry";
 import { AddSheet } from "../components/add-sheet";
+import { CirclesScreen } from "../components/circles-screen";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
 import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
@@ -132,6 +133,7 @@ export default function JournalScreen() {
     Record<string, string> | null | undefined
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
+  const [circlesOpen, setCirclesOpen] = useState(false);
   const homeCircleId = readActiveCircleCookie();
   const [lastPostedCircleId, setLastPostedCircleId] = useState<string | null>(null);
   const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
@@ -647,6 +649,7 @@ export default function JournalScreen() {
       {switcherOpen ? (
         <Pressable style={styles.scrim} onPress={() => setSwitcherOpen(false)} />
       ) : null}
+      {circlesOpen && !settingsOpen ? null : (
       <JournalHeader
         title={title}
         items={items}
@@ -664,20 +667,51 @@ export default function JournalScreen() {
           offsetRef.current = 0;
           setChromeOffset(0);
           setSettingsOpen(true);
+          setCirclesOpen(false);
         }}
         offset={chromeOffset}
         interactive={switcherOpen}
         locked={settingsOpen}
       />
+      )}
+      {circlesOpen && !settingsOpen ? (
+        <View style={[styles.circles, { backgroundColor: colors.paper }]}>
+          <CirclesScreen
+            circles={circles}
+            onOpenJournal={(circleId) => {
+              setCirclesOpen(false);
+              setScope(circleId);
+              setLoading(true);
+              void loadFirstPage(circleId, circles);
+            }}
+            onCirclesChanged={async () => {
+              if (!supabase || !session?.user.id) return;
+              const memberships = await loadCircles(supabase, session.user.id);
+              setCircles(memberships);
+            }}
+          />
+        </View>
+      ) : null}
       <JournalNav
         offset={chromeOffset}
         hidden={chromeHidden}
-        journalActive={!settingsOpen}
-        onJournalPress={() => setSettingsOpen(false)}
+        journalActive={!settingsOpen && !circlesOpen}
+        circlesActive={circlesOpen && !settingsOpen}
+        onJournalPress={() => {
+          setSettingsOpen(false);
+          setCirclesOpen(false);
+        }}
         onAddPress={() => {
           setSettingsOpen(false);
           setSwitcherOpen(false);
+          setCirclesOpen(false);
           setAddOpen(true);
+        }}
+        onCirclesPress={() => {
+          setSettingsOpen(false);
+          setSwitcherOpen(false);
+          setAddOpen(false);
+          setCirclesOpen(true);
         }}
       />
       {uploads.length > 0 ? (
@@ -840,5 +874,9 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFill,
     zIndex: 15,
+  },
+  circles: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 12,
   },
 });

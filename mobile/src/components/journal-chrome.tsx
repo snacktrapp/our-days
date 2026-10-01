@@ -26,6 +26,7 @@ import {
   ChevronDown,
   MoonIcon,
   NavAdd,
+  NavCircles,
   NavFamily,
   SettingsGear,
   SunIcon,
@@ -250,14 +251,18 @@ export function JournalNav({
   offset,
   hidden,
   journalActive = true,
+  circlesActive = false,
   onJournalPress,
   onAddPress,
+  onCirclesPress,
 }: Readonly<{
   offset: number;
   hidden: boolean;
   journalActive?: boolean;
+  circlesActive?: boolean;
   onJournalPress?: () => void;
   onAddPress?: () => void;
+  onCirclesPress?: () => void;
 }>) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -318,6 +323,25 @@ export function JournalNav({
         face={label}
         onPress={onAddPress}
         icon={<NavAdd color={colors.appearance === "retro" ? colors.ink : colors.muted} />}
+      />
+      <NavItem
+        label="Circles"
+        active={circlesActive}
+        onPress={onCirclesPress}
+        color={colors.action}
+        idle={colors.appearance === "retro" ? colors.ink : colors.muted}
+        face={label}
+        icon={
+          <NavCircles
+            color={
+              circlesActive
+                ? colors.action
+                : colors.appearance === "retro"
+                  ? colors.ink
+                  : colors.muted
+            }
+          />
+        }
       />
     </View>
     </View>

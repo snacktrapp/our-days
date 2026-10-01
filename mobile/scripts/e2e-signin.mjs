@@ -234,6 +234,33 @@ await step("sheet drag springs back when short and confirms unsaved text", async
   assert.equal(sheet.sheetHasUnsavedChanges({ ...initial, body: "A note" }, initial), true);
 });
 
+await step("a circle name is required and create starts from a circle you belong to", async () => {
+  const circles = await import("../src/lib/circles.ts");
+  assert.equal(circles.circleNameError("  "), "A circle name is required.");
+  assert.equal(circles.circleNameError("a".repeat(81)), "Use 80 characters or fewer.");
+  assert.equal(circles.circleNameError("  Family  "), null);
+  const archived = {
+    membershipId: "m",
+    circleId: "home",
+    personId: "p",
+    role: "member",
+    name: "Home",
+    timeZone: "UTC",
+    archivedAt: "2026-01-01",
+  };
+  const live = {
+    membershipId: "m2",
+    circleId: "kin",
+    personId: "p",
+    role: "organizer",
+    name: "Kin",
+    timeZone: "UTC",
+    archivedAt: null,
+  };
+  assert.equal(circles.createCircleSourceId([archived, live]), "kin");
+  assert.equal(circles.createCircleSourceId([archived]), "");
+});
+
 await step("a video post shows its poster, then plays, and pauses offscreen", async () => {
   const playback = await import("../src/lib/video-playback.ts");
   const journal = await import("../src/lib/journal.ts");
