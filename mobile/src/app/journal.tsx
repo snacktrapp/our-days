@@ -533,13 +533,17 @@ export default function JournalScreen() {
         <CirclesScreen
           circles={circles}
           accentToken={profile?.accentToken}
-          onScroll={applyScroll}
+          // The web keeps the Circles nav pinned. The directory is often
+          // shorter than the hide distance, so scroll-linked chrome would stop
+          // half off screen.
           onOpenPerson={(circleId, personId, name) => {
             const next = { circleId, personId, name };
             personRef.current = next;
             setPersonJournal(next);
             setCirclesOpen(false);
             setSettingsOpen(false);
+            offsetRef.current = 0;
+            setChromeOffset(0);
             setLoading(true);
             void loadFirstPage(circleId, circles);
           }}
@@ -548,6 +552,8 @@ export default function JournalScreen() {
             setPersonJournal(null);
             setCirclesOpen(false);
             setScope(circleId);
+            offsetRef.current = 0;
+            setChromeOffset(0);
             setLoading(true);
             void loadFirstPage(circleId, circles);
           }}
