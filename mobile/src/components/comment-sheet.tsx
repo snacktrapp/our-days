@@ -102,7 +102,7 @@ export function CommentSheet({
           ]}
         >
           <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss keyboard" onPress={() => Keyboard.dismiss()}>
+          <Pressable accessible={false} onPress={() => Keyboard.dismiss()}>
             <Text style={[styles.title, face(colors, 650), { color: colors.ink }]}>{title}</Text>
           </Pressable>
           <Text

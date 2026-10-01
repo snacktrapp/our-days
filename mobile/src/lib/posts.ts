@@ -113,8 +113,19 @@ function firstRow<T>(data: T | readonly T[] | null) {
   return data;
 }
 
+const friendlyCodes: Readonly<Record<string, string>> = {
+  PHOTO_ACCOUNT_OPEN_QUOTA:
+    "A few of your photos are still finishing. Try again in a few minutes.",
+  PHOTO_CIRCLE_OPEN_QUOTA:
+    "This circle has several photos still finishing. Try again in a few minutes.",
+};
+
 function message(error: { message?: string } | null, fallback: string) {
-  return error?.message && error.message.length < 180 ? error.message : fallback;
+  const text = error?.message;
+  if (!text) return fallback;
+  const code = Object.keys(friendlyCodes).find((key) => text.includes(key));
+  if (code) return friendlyCodes[code] ?? fallback;
+  return text.length < 180 ? text : fallback;
 }
 
 function putChip(next: UploadChip) {
