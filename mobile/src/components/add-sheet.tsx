@@ -7,7 +7,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,18 +14,14 @@ import {
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  bibleBookNames,
-  chaptersInBook,
   emptyBibleVerseSelection,
-  endingVersesInChapter,
   formatBibleVerseMoment,
-  formatBibleVerseReference,
   loadBibleCatalog,
   selectBiblePassage,
-  versesInChapter,
   type BibleVerseSelection,
 } from "../lib/bible";
 import { composerSheetHeight } from "../lib/composer-keyboard";
@@ -67,10 +62,11 @@ import {
   KeyboardForm,
   useComposerInput,
 } from "./keyboard-form";
+import { BiblePickerSheet, type BiblePicker } from "./bible-picker-sheet";
 import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
-type Picker = "book" | "chapter" | "start" | "end" | null;
+type Picker = BiblePicker | null;
 
 const choices = [
   { id: "photo" as const, title: "Photo or video", detail: "Media with date and note" },
@@ -708,40 +704,37 @@ export function AddSheet({
               {mode === "photo" ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Choose photo or video"
+                  accessibilityLabel={
+                    photoName ? `Add photo or video, ${photoName}` : "Add photo or video"
+                  }
                   onPress={chooseMedia}
-                  style={[
+                  style={({ pressed }) => [
                     styles.photoDrop,
                     {
-                      borderColor: retro ? colors.hairline : `${colors.clay}94`,
-                      backgroundColor: retro
-                        ? colors.surface
-                        : colors.scheme === "light"
-                          ? colors.cream
-                          : colors.paper,
-                      borderRadius: retro ? 2 : 8,
+                      borderColor: colors.action,
+                      backgroundColor: pressed
+                        ? colors.selectionFill
+                        : retro
+                          ? colors.surface
+                          : colors.scheme === "light"
+                            ? colors.cream
+                            : colors.paper,
+                      borderRadius: retro ? 2 : 12,
+                      transform: [{ scale: pressed ? 0.985 : 1 }],
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      face(colors, 700),
-                      {
-                        color: "#60574e",
-                        fontSize: 11,
-                        letterSpacing: tracking(11, 0.04),
-                      },
-                    ]}
-                  >
-                    Choose photo or video
+                  <Ionicons name="camera" size={42} color={colors.action} />
+                  <Text style={[face(colors, 700), styles.photoLabel, { color: colors.ink }]}>
+                    Add photo or video
                   </Text>
-                  <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, lineHeight: 17 }]}>
-                    The original uploads privately to this family.
+                  <Text
+                    numberOfLines={1}
+                    style={[face(colors, 400), styles.photoCaption, { color: colors.muted }]}
+                  >
+                    {photoName ?? "Private to this family"}
                   </Text>
                 </Pressable>
-              ) : null}
-              {photoName && mode === "photo" ? (
-                <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>{photoName}</Text>
               ) : null}
               {mode === "bible" ? (
                 <BiblePickers
@@ -1001,23 +994,8 @@ function BiblePickers({
   onChoose: (verse: BibleVerseSelection) => void;
 }>) {
   const { colors } = useAppTheme();
-  const chapters = verse.book ? chaptersInBook(verse.book) : [];
-  const starts = verse.book && verse.chapter ? versesInChapter(verse.book, verse.chapter) : [];
-  const ends =
-    verse.book && verse.chapter && verse.startVerse
-      ? endingVersesInChapter(verse.book, verse.chapter, verse.startVerse)
-      : [];
-  const options =
-    picker === "book"
-      ? bibleBookNames().map((name) => ({ id: name, label: name }))
-      : picker === "chapter"
-        ? chapters.map((chapter) => ({ id: String(chapter), label: String(chapter) }))
-        : picker === "start"
-          ? starts.map((item) => ({ id: String(item), label: String(item) }))
-          : picker === "end"
-            ? ends.map((item) => ({ id: String(item), label: String(item) }))
-            : [];
-  const rows: readonly { id: Picker; label: string; value: string; disabled: boolean }[] = [
+  const retro = colors.appearance === "retro";
+  const rows: readonly { id: BiblePicker; label: string; value: string; disabled: boolean }[] = [
     { id: "book", label: "Book", value: verse.book ?? "Choose book", disabled: false },
     { id: "chapter", label: "Chapter", value: verse.chapter ? String(verse.chapter) : "Choose chapter", disabled: !verse.book },
     { id: "start", label: "Starting verse", value: verse.startVerse ? String(verse.startVerse) : "Choose verse", disabled: !verse.chapter },
@@ -1038,9 +1016,19 @@ function BiblePickers({
           </Text>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`${row.label}, ${row.value}`}
             disabled={row.disabled}
             onPress={() => onToggle(picker === row.id ? null : row.id)}
-            style={[styles.input, styles.trigger, { borderColor: colors.hairline, backgroundColor: colors.surface }]}
+            style={({ pressed }) => [
+              styles.input,
+              styles.trigger,
+              {
+                borderColor: colors.hairline,
+                backgroundColor: pressed ? colors.selectionFill : colors.surface,
+                borderRadius: retro ? 2 : 7,
+                opacity: row.disabled ? 0.45 : 1,
+              },
+            ]}
           >
             <Text style={[face(colors, 400), { color: row.value.startsWith("Choose") ? colors.faint : colors.ink }]}>
               {row.value}
@@ -1051,40 +1039,12 @@ function BiblePickers({
       {!catalogReady && verse.book ? (
         <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>Loading passage…</Text>
       ) : null}
-      {picker ? (
-        <ScrollView style={styles.picker} nestedScrollEnabled>
-          {options.map((option) => (
-            <Pressable
-              key={option.id}
-              accessibilityRole="button"
-              onPress={() => {
-                if (picker === "book") {
-                  onChoose({ book: option.id, chapter: null, startVerse: null, endVerse: null });
-                  return;
-                }
-                const number = Number(option.id);
-                if (picker === "chapter") {
-                  onChoose({ ...verse, chapter: number, startVerse: null, endVerse: null });
-                  return;
-                }
-                if (picker === "start") {
-                  onChoose({ ...verse, startVerse: number, endVerse: number });
-                  return;
-                }
-                onChoose({ ...verse, endVerse: number });
-              }}
-              style={styles.pickerRow}
-            >
-              <Text style={[face(colors, 400), { color: colors.ink }]}>{option.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-      {verse.startVerse && verse.endVerse && verse.book && verse.chapter ? (
-        <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12 }]}>
-          {formatBibleVerseReference(verse.book, verse.chapter, verse.startVerse, verse.endVerse)}
-        </Text>
-      ) : null}
+      <BiblePickerSheet
+        picker={picker}
+        verse={verse}
+        onClose={() => onToggle(null)}
+        onChoose={onChoose}
+      />
     </View>
   );
 }
@@ -1206,14 +1166,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
   },
-  picker: {
-    maxHeight: 220,
-    borderRadius: 7,
-  },
-  pickerRow: {
-    minHeight: 44,
-    justifyContent: "center",
-  },
   split: {
     flexDirection: "row",
     gap: 8,
@@ -1233,12 +1185,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   photoDrop: {
-    minHeight: 82,
-    padding: 14,
-    borderWidth: 1,
+    minHeight: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderWidth: 2,
     borderStyle: "dashed",
     gap: 6,
+    alignItems: "center",
     justifyContent: "center",
+  },
+  photoLabel: {
+    fontSize: 17,
+    lineHeight: 22,
+  },
+  photoCaption: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: "center",
   },
   secondary: {
     flex: 1,

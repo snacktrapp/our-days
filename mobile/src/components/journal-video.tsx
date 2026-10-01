@@ -146,52 +146,6 @@ function RoundPlayButton() {
   );
 }
 
-/** Speaker / speaker-slash. @expo/vector-icons is not in this binary, so the
- * glyph is drawn with react-native-svg, which already ships in runtime 0.4.0. */
-function SpeakerGlyph({ muted }: Readonly<{ muted: boolean }>) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24">
-      <Path d="M4 9.2v5.6h3.6L13 20V4L7.6 9.2H4Z" fill="#fff" />
-      {muted ? (
-        <Path
-          d="M16.2 9.4 21 14.2M21 9.4l-4.8 4.8"
-          stroke="#fff"
-          strokeWidth={1.8}
-          strokeLinecap="round"
-        />
-      ) : (
-        <Path
-          d="M16.2 8.6a4.6 4.6 0 0 1 0 6.8M18.6 6.2a8 8 0 0 1 0 11.6"
-          fill="none"
-          stroke="#fff"
-          strokeWidth={1.8}
-          strokeLinecap="round"
-        />
-      )}
-    </Svg>
-  );
-}
-
-function SpeakerButton({
-  muted,
-  lifted,
-  onPress,
-}: Readonly<{ muted: boolean; lifted: boolean; onPress: () => void }>) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={muted ? "Unmute" : "Mute"}
-      onPress={onPress}
-      hitSlop={4}
-      style={[styles.speakerHit, lifted ? styles.speakerLifted : null]}
-    >
-      <View style={styles.speakerChip}>
-        <SpeakerGlyph muted={muted} />
-      </View>
-    </Pressable>
-  );
-}
-
 function PosterFrame({
   moment,
   label,
@@ -273,13 +227,11 @@ function PlayingClip({
   moment,
   headers,
   holding,
-  muted,
   label,
   aspectRatio,
   onScreen,
   onResume,
   onPause,
-  onMute,
   onFailed,
 }: Readonly<{
   video: VideoModule;
@@ -288,12 +240,10 @@ function PlayingClip({
   headers?: Record<string, string> | null;
   holding: boolean;
   aspectRatio: number;
-  muted: boolean;
   label: string;
   onScreen: boolean;
   onResume: () => void;
   onPause: () => void;
-  onMute: () => void;
   onFailed: () => void;
 }>) {
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
@@ -307,9 +257,7 @@ function PlayingClip({
     () => (source.headers ? { uri: source.uri, headers: source.headers } : { uri: source.uri }),
     [source],
   );
-  const player = useVideoPlayer(playerSource, (instance) => {
-    instance.muted = muted;
-  });
+  const player = useVideoPlayer(playerSource);
 
   useEffect(() => {
     if (holding) {
@@ -332,14 +280,6 @@ function PlayingClip({
     });
     return () => subscription?.remove();
   }, [player, onFailed]);
-
-  // VideoPlayer is an external mutable handle, like HTMLVideoElement.
-  /* eslint-disable react-hooks/immutability */
-  useEffect(() => {
-    player.muted = muted;
-  }, [player, muted]);
-
-  /* eslint-enable react-hooks/immutability */
 
   const surface = videoSurfaceAction({
     started: true,
@@ -412,7 +352,6 @@ function PlayingClip({
           )}
         </View>
       ) : null}
-      <SpeakerButton muted={muted} lifted={nativeChrome} onPress={onMute} />
     </View>
   );
 }
@@ -430,7 +369,6 @@ export function JournalVideo({
 }>) {
   const [started, setStarted] = useState(false);
   const [resumed, setResumed] = useState(true);
-  const [muted, setMuted] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [video, setVideo] = useState<VideoModule | null>(null);
   const [source, setSource] = useState<VideoSource | null>(null);
@@ -510,13 +448,11 @@ export function JournalVideo({
         moment={moment}
         headers={headers}
         holding={holding}
-        muted={muted}
         label={label}
         aspectRatio={aspectRatio}
         onScreen={onScreen}
         onResume={() => setResumed(true)}
         onPause={() => setResumed(false)}
-        onMute={() => setMuted((current) => !current)}
         onFailed={failPlayback}
       />
     </VideoBoundary>
@@ -589,26 +525,6 @@ const styles = StyleSheet.create({
   },
   playGlyph: {
     marginLeft: 3,
-  },
-  speakerHit: {
-    position: "absolute",
-    right: 4,
-    bottom: 4,
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  speakerLifted: {
-    bottom: 52,
-  },
-  speakerChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
   },
   unavailable: {
     paddingHorizontal: 16,

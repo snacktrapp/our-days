@@ -160,6 +160,30 @@ await step("photo menu matches the web and people stay in join order", async () 
   );
 });
 
+await step("bible books group by testament and verses are a number list", async () => {
+  const picker = await import("../src/lib/bible-picker.ts");
+  const groups = picker.bibleBookGroups("");
+  assert.deepEqual(
+    groups.map((group) => group.testament),
+    ["Old Testament", "New Testament"],
+  );
+  assert.equal(groups[0]?.books[0], "Genesis");
+  assert.equal(groups[0]?.books.at(-1), "Malachi");
+  assert.equal(groups[1]?.books[0], "Matthew");
+  assert.equal(groups[1]?.books.at(-1), "Revelation");
+  const john = picker.bibleBookGroups("john");
+  assert.deepEqual(john.map((group) => group.testament), ["New Testament"]);
+  assert.deepEqual(john[0]?.books, ["John", "1 John", "2 John", "3 John"]);
+  assert.deepEqual(picker.bibleBookGroups("zzz"), []);
+  const jonah = { book: "Jonah", chapter: null, startVerse: null, endVerse: null };
+  assert.deepEqual(picker.bibleNumberChoices("chapter", jonah), [1, 2, 3, 4]);
+  assert.equal(
+    picker.bibleNumberChoices("start", { ...jonah, chapter: 1 }).length,
+    17,
+  );
+  assert.deepEqual(picker.bibleNumberChoices("end", { ...jonah, chapter: 1 }), []);
+});
+
 await step("sheet drag springs back when short and confirms unsaved text", async () => {
   const sheet = await import("../src/lib/sheet-dismiss.ts");
   assert.equal(sheet.canStartSheetDismiss(40, true), true);

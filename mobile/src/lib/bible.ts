@@ -1,4 +1,4 @@
-import bookIndex from "../../../src/features/composer/data/web-index.json";
+import bookIndex from "../../../src/features/composer/data/web-index.json" with { type: "json" };
 
 export type BibleVerse = Readonly<{
   reference: string;
@@ -66,11 +66,9 @@ export function formatBibleVerseMoment(reference: string, text: string) {
 }
 
 export async function loadBibleCatalog() {
-  catalog ??= (
-    (await import(
-      "../../../src/features/composer/data/web-catalog.json"
-    )) as { default: Catalog }
-  ).default;
+  // Import a local module. A direct dynamic import of the JSON, which lives
+  // outside this package, is rewritten to a path Metro cannot resolve.
+  catalog ??= (await import("./bible-catalog")).default;
   return catalog;
 }
 
