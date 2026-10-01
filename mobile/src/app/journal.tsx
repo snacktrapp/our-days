@@ -412,11 +412,13 @@ export default function JournalScreen() {
   const selectedCircle = circles.find((circle) => circle.circleId === scope);
   const title = settingsOpen
     ? "Settings"
-    : kind === "personal"
-      ? "Just me"
-      : kind === "circle"
-        ? (selectedCircle?.name ?? "Circle")
-        : "All circles";
+    : circlesOpen
+      ? "Circles"
+      : kind === "personal"
+        ? "Just me"
+        : kind === "circle"
+          ? (selectedCircle?.name ?? "Circle")
+          : "All circles";
   // family-title-switcher.tsx only renders kind "you" and "all", in that
   // order, even when the account belongs to more circles. Just me loads the
   // personal journal; All circles loads the combined feed.
@@ -482,6 +484,22 @@ export default function JournalScreen() {
               disablePushNotifications(false),
               new Promise((resolve) => setTimeout(resolve, 3000)),
             ]).finally(() => signOut());
+          }}
+        />
+      ) : circlesOpen ? (
+        <CirclesScreen
+          circles={circles}
+          onScroll={applyScroll}
+          onOpenJournal={(circleId) => {
+            setCirclesOpen(false);
+            setScope(circleId);
+            setLoading(true);
+            void loadFirstPage(circleId, circles);
+          }}
+          onCirclesChanged={async () => {
+            if (!supabase || !session?.user.id) return;
+            const memberships = await loadCircles(supabase, session.user.id);
+            setCircles(memberships);
           }}
         />
       ) : (
@@ -649,7 +667,6 @@ export default function JournalScreen() {
       {switcherOpen ? (
         <Pressable style={styles.scrim} onPress={() => setSwitcherOpen(false)} />
       ) : null}
-      {circlesOpen && !settingsOpen ? null : (
       <JournalHeader
         title={title}
         items={items}
@@ -671,27 +688,8 @@ export default function JournalScreen() {
         }}
         offset={chromeOffset}
         interactive={switcherOpen}
-        locked={settingsOpen}
+        locked={settingsOpen || circlesOpen}
       />
-      )}
-      {circlesOpen && !settingsOpen ? (
-        <View style={[styles.circles, { backgroundColor: colors.paper }]}>
-          <CirclesScreen
-            circles={circles}
-            onOpenJournal={(circleId) => {
-              setCirclesOpen(false);
-              setScope(circleId);
-              setLoading(true);
-              void loadFirstPage(circleId, circles);
-            }}
-            onCirclesChanged={async () => {
-              if (!supabase || !session?.user.id) return;
-              const memberships = await loadCircles(supabase, session.user.id);
-              setCircles(memberships);
-            }}
-          />
-        </View>
-      ) : null}
       <JournalNav
         offset={chromeOffset}
         hidden={chromeHidden}
@@ -712,6 +710,9 @@ export default function JournalScreen() {
           setSwitcherOpen(false);
           setAddOpen(false);
           setCirclesOpen(true);
+          offsetRef.current = 0;
+          setChromeOffset(0);
+          setPull(0);
         }}
       />
       {uploads.length > 0 ? (
@@ -874,9 +875,5 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFill,
     zIndex: 15,
-  },
-  circles: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 12,
   },
 });
