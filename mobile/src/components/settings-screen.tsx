@@ -25,6 +25,7 @@ import { InviteSendSheet } from "./invite-sheet";
 import {
   disablePushNotifications,
   enablePushNotifications,
+  pushOptedOut,
   pushPermissionState,
 } from "../lib/push";
 
@@ -386,7 +387,7 @@ function NotificationsRow() {
     void pushPermissionState().then(async (state) => {
       if (cancelled) return;
       setBlocked(state === "denied");
-      if (state !== "granted") {
+      if (state !== "granted" || (await pushOptedOut())) {
         setOn(false);
         return;
       }

@@ -482,8 +482,11 @@ export default function JournalScreen() {
           }}
           onSignOut={() => {
             setSettingsOpen(false);
-            void disablePushNotifications();
-            void signOut();
+            // Remove this iPhone's token while the session can still do it, but never hold up sign-out.
+            void Promise.race([
+              disablePushNotifications(false),
+              new Promise((resolve) => setTimeout(resolve, 3000)),
+            ]).finally(() => signOut());
           }}
         />
       ) : (

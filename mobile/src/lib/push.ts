@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 import {
@@ -9,6 +10,26 @@ import {
 import { getSupabase } from "./supabase";
 
 let registeredToken: string | null = null;
+
+/** Set when this iPhone turned notifications off, so Settings does not turn them back on. */
+const optedOutKey = "our-days.push-opted-out";
+
+export async function pushOptedOut() {
+  try {
+    return (await SecureStore.getItemAsync(optedOutKey)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+async function rememberOptOut(optedOut: boolean) {
+  try {
+    if (optedOut) await SecureStore.setItemAsync(optedOutKey, "1");
+    else await SecureStore.deleteItemAsync(optedOutKey);
+  } catch {
+    // Best effort. The server token is the source of truth for delivery.
+  }
+}
 let handlerReady = false;
 
 function projectId() {
@@ -76,16 +97,35 @@ export async function enablePushNotifications() {
       return { ok: false as const, message: "Notifications could not be turned on." };
     }
     registeredToken = token;
+    await rememberOptOut(false);
     return { ok: true as const, message: "Notifications are on." };
   } catch {
     return { ok: false as const, message: "Notifications could not be turned on." };
   }
 }
 
-export async function disablePushNotifications() {
+async function currentDeviceToken() {
+  if (registeredToken) return registeredToken;
+  if (Platform.OS !== "ios") return null;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    const id = projectId();
+    if (current.status !== "granted" || !id) return null;
+    return (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Removes this iPhone's token. `optOut` is true when the person turned the
+ * switch off (remembered on this device); sign-out passes false.
+ */
+export async function disablePushNotifications(optOut = true) {
   const supabase = getSupabase();
-  const token = registeredToken;
+  const token = await currentDeviceToken();
   registeredToken = null;
+  if (optOut) await rememberOptOut(true);
   if (!supabase || !token) return { ok: true as const, message: "Notifications are off." };
   const { error } = await supabase.rpc("delete_expo_push_token", {
     requested_token: token,

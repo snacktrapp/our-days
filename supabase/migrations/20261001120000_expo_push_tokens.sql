@@ -1,4 +1,4 @@
--- Native iOS push tokens. Not applied by this change.
+-- Native iOS push tokens. Applied to production via the Supabase MCP (2026-09-30 PT).
 -- Web Push subscriptions, claims, and delivery functions are untouched.
 -- Recipients follow the same family rules as list_web_push_deliveries,
 -- claim_mention_push_deliveries, and claim_note_reaction_push_deliveries.
