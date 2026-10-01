@@ -19,7 +19,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   useColorScheme,
   View,
   type NativeSyntheticEvent,
@@ -237,6 +236,7 @@ export function ComposerScroller({
   onOffset?: (y: number) => void;
 }>) {
   const form = useKeyboardForm();
+  const dismiss = form?.dismiss ?? Keyboard.dismiss;
   return (
     <ScrollView
       ref={form?.scrollRef}
@@ -254,9 +254,22 @@ export function ComposerScroller({
       }}
       scrollEventThrottle={16}
     >
-      <TouchableWithoutFeedback onPress={form?.dismiss ?? Keyboard.dismiss} accessible={false}>
-        <View style={[styles.fill, contentStyle]}>{children}</View>
-      </TouchableWithoutFeedback>
+      <View style={[styles.fill, contentStyle]}>
+        {Platform.OS === "web" ? (
+          children
+        ) : (
+          <>
+            <Pressable
+              accessible={false}
+              style={styles.dismissBackdrop}
+              onPress={dismiss}
+            />
+            <View pointerEvents="box-none" style={styles.fill}>
+              {children}
+            </View>
+          </>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -325,6 +338,7 @@ const styles = StyleSheet.create({
   scroller: { flex: 1, minHeight: 0 },
   content: { flexGrow: 1 },
   fill: { flexGrow: 1 },
+  dismissBackdrop: { ...StyleSheet.absoluteFill },
   bar: {
     height: 44,
     width: "100%",

@@ -49,7 +49,14 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Our Days uses your location while you add a place, so your family journal can name where you are."
+          "locationWhenInUsePermission": "Our Days uses your location while you add a place, so your family journal can name where you are.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false,
+          "isAndroidMotionActivityEnabled": false
         }
       ],
       "expo-splash-screen"
