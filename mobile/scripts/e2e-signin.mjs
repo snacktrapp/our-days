@@ -264,8 +264,6 @@ await step("a video post shows its poster, then plays, and pauses offscreen", as
   );
   assert.equal(playback.usesNativePlaybackControls("ios"), true);
   assert.equal(playback.usesNativePlaybackControls("web"), false);
-  assert.equal(playback.showsCustomSpeaker(true), false);
-  assert.equal(playback.showsCustomSpeaker(false), true);
   assert.equal(
     playback.videoSurfaceAction({ started: true, onScreen: true, nativeControls: true }),
     "native",

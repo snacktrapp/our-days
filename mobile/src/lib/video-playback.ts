@@ -112,11 +112,6 @@ export function usesNativePlaybackControls(platform: string) {
   return platform === "ios";
 }
 
-/** The system volume button is on that bar, so our speaker chip stays off. */
-export function showsCustomSpeaker(nativeControls: boolean) {
-  return !nativeControls;
-}
-
 /** Tap the poster or a paused frame to play. Tap a playing frame to pause. */
 export function videoSurfaceAction(
   input: Readonly<{
