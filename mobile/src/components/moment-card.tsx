@@ -11,7 +11,6 @@ import {
   useWindowDimensions,
   type TextStyle,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
 
 import {
   audienceChipLabel,
@@ -23,10 +22,8 @@ import {
   visibleNotes,
   type MentionSpan,
 } from "../lib/feed-format";
-import { mediaMaxHeight } from "../lib/media-frame";
 import {
   photoDeliveryPath,
-  videoPosterPath,
   type FeedNote,
   type TimelineMoment,
 } from "../lib/journal";
@@ -45,6 +42,7 @@ import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
 import { CommentSheet } from "./comment-sheet";
+import { JournalVideo } from "./journal-video";
 import { PrivateImage } from "./private-image";
 
 function retroFace(colors: ThemeColors, accent: string) {
@@ -79,6 +77,7 @@ export function FeedMoment({
   viewerYear,
   viewerZone,
   viewer = emptyViewer,
+  onScreen = true,
 }: Readonly<{
   moment: TimelineMoment;
   circleNames: ReadonlyMap<string, string>;
@@ -87,6 +86,7 @@ export function FeedMoment({
   viewerYear: number;
   viewerZone: string;
   viewer?: JournalViewer;
+  onScreen?: boolean;
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
@@ -191,7 +191,13 @@ export function FeedMoment({
         </View>
       </View>
       <View style={[styles.card, { backgroundColor: colors.cream }]}>
-        <CardBody moment={moment} headers={headers} frameWidth={width} viewer={viewer} />
+        <CardBody
+          moment={moment}
+          headers={headers}
+          frameWidth={width}
+          viewer={viewer}
+          onScreen={onScreen}
+        />
       </View>
     </View>
   );
@@ -202,16 +208,23 @@ function CardBody({
   headers,
   frameWidth,
   viewer,
+  onScreen,
 }: Readonly<{
   moment: TimelineMoment;
   headers?: Record<string, string> | null;
   frameWidth: number;
   viewer: JournalViewer;
+  onScreen: boolean;
 }>) {
   if (moment.kind === "photo" || moment.kind === "video") {
     return (
       <View>
-        <Media moment={moment} headers={headers} frameWidth={frameWidth} />
+        <Media
+          moment={moment}
+          headers={headers}
+          frameWidth={frameWidth}
+          onScreen={onScreen}
+        />
         <View style={styles.copy}>
           <AuthorRow moment={moment} />
           {moment.body ? (
@@ -246,7 +259,9 @@ function CardBody({
     return <Milestone moment={moment} viewer={viewer} />;
   }
 
-  return <Thought moment={moment} frameWidth={frameWidth} headers={headers} viewer={viewer} />;
+  return (
+    <Thought moment={moment} headers={headers} viewer={viewer} onScreen={onScreen} />
+  );
 }
 
 function PlaceTitle({ children }: Readonly<{ children: string }>) {
@@ -260,20 +275,18 @@ function PlaceTitle({ children }: Readonly<{ children: string }>) {
 
 function Thought({
   moment,
-  frameWidth,
   headers,
   viewer,
+  onScreen,
 }: Readonly<{
   moment: TimelineMoment;
-  frameWidth: number;
   headers?: Record<string, string> | null;
   viewer: JournalViewer;
+  onScreen: boolean;
 }>) {
   const { colors } = useAppTheme();
   const bible = moment.kind === "thought" ? parseBibleVerse(moment.body) : null;
   const insight = moment.kind === "insight";
-  const poster =
-    insight && moment.hasPoster ? videoPosterPath(moment.id) : undefined;
 
   return (
     <View style={styles.thought}>
@@ -316,15 +329,14 @@ function Thought({
       ) : (
         <FlowCopy text={moment.body} mentions={moment.mentions} />
       )}
-      {poster ? (
+      {insight && moment.hasVideo ? (
         <View style={styles.insightClip}>
-          <PrivateImage
-            path={poster}
-            width={moment.posterWidth}
-            height={moment.posterHeight}
+          <JournalVideo
+            key={moment.id}
+            moment={moment}
             label={`Clip attached to an Insight from ${moment.occurredOn}`}
             headers={headers}
-            frameWidth={frameWidth - 34}
+            onScreen={onScreen}
           />
         </View>
       ) : null}
@@ -687,51 +699,6 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
   );
 }
 
-function VideoPoster({
-  moment,
-  headers,
-  frameWidth,
-}: Readonly<{
-  moment: TimelineMoment;
-  headers?: Record<string, string> | null;
-  frameWidth: number;
-}>) {
-  const { colors } = useAppTheme();
-  const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
-  return (
-    <View>
-      {moment.hasPoster ? (
-        <PrivateImage
-          path={videoPosterPath(moment.id)}
-          width={moment.posterWidth}
-          height={moment.posterHeight}
-          label={`Video in ${moment.personName}’s journal from ${moment.occurredOn}`}
-          headers={headers}
-          frameWidth={frameWidth}
-          mat="#050b08"
-        />
-      ) : (
-        <View
-          style={[
-            styles.videoFallback,
-            {
-              width: "100%",
-              aspectRatio: 16 / 9,
-              maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
-            },
-          ]}
-        />
-      )}
-      <View style={styles.videoBar} pointerEvents="none">
-        <Svg width={16} height={16} viewBox="0 0 16 16">
-          <Path d="M5 3.2v9.6L13 8 5 3.2Z" fill="#fff" />
-        </Svg>
-        <Text style={[face(colors, 400), styles.videoTime]}>0:00</Text>
-      </View>
-    </View>
-  );
-}
-
 /** globals.css `.connected-moment-menu-trigger`: “•••” at 15px, tracking -0.18em. */
 function Overflow({ color }: Readonly<{ color: string }>) {
   const { colors } = useAppTheme();
@@ -759,18 +726,22 @@ function Media({
   moment,
   headers,
   frameWidth,
+  onScreen,
 }: Readonly<{
   moment: TimelineMoment;
   headers?: Record<string, string> | null;
   frameWidth: number;
+  onScreen: boolean;
 }>) {
   const [index, setIndex] = useState(0);
   if (moment.kind === "video") {
     return (
-      <VideoPoster
+      <JournalVideo
+        key={moment.id}
         moment={moment}
         headers={headers}
-        frameWidth={frameWidth}
+        onScreen={onScreen}
+        label={`Video in ${moment.personName}’s journal from ${moment.occurredOn}`}
       />
     );
   }
@@ -1513,26 +1484,6 @@ const styles = StyleSheet.create({
   },
   insightClip: {
     marginTop: 0,
-  },
-  videoFallback: {
-    width: "100%",
-    backgroundColor: "#050b08",
-  },
-  videoBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 36,
-    paddingHorizontal: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
-  },
-  videoTime: {
-    color: "#fff",
-    fontSize: 12,
   },
   dots: {
     position: "absolute",

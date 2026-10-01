@@ -95,6 +95,8 @@ export type TimelineMoment = Readonly<{
   linkedCircleIds: readonly string[];
   photos: readonly TimelinePhoto[];
   hasPoster: boolean;
+  /** Video posts always. Insights only when a clip or its poster is attached. */
+  hasVideo: boolean;
   posterWidth?: number;
   posterHeight?: number;
   canChange: boolean;
@@ -330,6 +332,22 @@ async function fallbackPhotos(
   };
 }
 
+async function loadFallbackVideos(
+  supabase: SupabaseClient,
+  rows: readonly TimelineRow[],
+) {
+  const ids = rows
+    .filter((row) => row.moment_kind === "video" || row.moment_kind === "insight")
+    .map((row) => row.moment_id);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from("moment_videos")
+    .select("moment_id, duration_ms")
+    .in("moment_id", ids);
+  if (error || !data) return [];
+  return data as readonly Record<string, unknown>[];
+}
+
 async function enrichMoments(
   supabase: SupabaseClient,
   rows: readonly TimelineRow[],
@@ -358,6 +376,15 @@ async function enrichMoments(
         typeof row.display_height === "number" ? row.display_height : undefined,
     });
     photosByMoment.set(momentId, current);
+  }
+
+  const videoRows = enrichment
+    ? enrichment.videos
+    : await loadFallbackVideos(supabase, rows);
+  const videos = new Set<string>();
+  for (const row of videoRows) {
+    const momentId = text(row.moment_id);
+    if (momentId) videos.add(momentId);
   }
 
   const posters = new Map<string, { width?: number; height?: number }>();
@@ -490,6 +517,10 @@ async function enrichMoments(
             : [row.moment_circle_id],
       photos: photosByMoment.get(row.moment_id) ?? [],
       hasPoster: posters.has(row.moment_id),
+      hasVideo:
+        row.moment_kind === "video" ||
+        videos.has(row.moment_id) ||
+        (row.moment_kind === "insight" && posters.has(row.moment_id)),
       posterWidth: poster?.width,
       posterHeight: poster?.height,
       canChange: row.can_change === true,

@@ -55,6 +55,8 @@ import {
 } from "../lib/tokens";
 
 const mentionsKey = "our-days:mentions-announcement";
+/** Pause a clip once the row is almost entirely off the screen. */
+const momentViewability = { itemVisiblePercentThreshold: 10 };
 const allScope = "all";
 const youScope = "you";
 const activeCircleCookie = "our-days-active-circle";
@@ -136,6 +138,10 @@ export default function JournalScreen() {
   const [pull, setPull] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
   const [unseenActivity, setUnseenActivity] = useState(false);
+  const [viewabilityReady, setViewabilityReady] = useState(false);
+  const [visibleMomentIds, setVisibleMomentIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const yRef = useRef(0);
   const offsetRef = useRef(0);
   const publishedUploads = useRef(new Set<string>());
@@ -352,6 +358,23 @@ export default function JournalScreen() {
     applyScroll(event.nativeEvent.contentOffset.y);
   }
 
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: readonly { item: FeedRow }[] }) => {
+      const ids = new Set<string>();
+      for (const token of viewableItems) {
+        if (token.item.kind === "moment") ids.add(token.item.id);
+      }
+      setVisibleMomentIds((current) => {
+        if (current.size === ids.size && [...ids].every((id) => current.has(id))) {
+          return current;
+        }
+        return ids;
+      });
+      setViewabilityReady(true);
+    },
+    [],
+  );
+
   if (ready && !session) return <Redirect href="/sign-in" />;
 
   const kind = feedKind(scope);
@@ -429,6 +452,8 @@ export default function JournalScreen() {
           keyExtractor={(row) => row.id}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          viewabilityConfig={momentViewability}
+          onViewableItemsChanged={onViewableItemsChanged}
           onScrollEndDrag={() => {
             if (pull >= 64) void refresh();
           }}
@@ -540,6 +565,7 @@ export default function JournalScreen() {
                     accent: profile?.accentToken ?? "slate",
                     membershipIds: circles.map((circle) => circle.membershipId),
                   }}
+                  onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
                 />
               )}
             </Rail>
