@@ -4,7 +4,6 @@ import {
   Easing,
   Keyboard,
   PanResponder,
-  View,
   type LayoutChangeEvent,
   type PanResponderGestureState,
 } from "react-native";
@@ -132,13 +131,8 @@ type ChromeTouch = { nativeEvent: { pageX: number; pageY: number; timestamp: num
 /** Gesture state and geometry live in this closure, outside render. */
 function createChromeDismiss(input: ChromeDismissInput) {
   const translateY = new Animated.Value(0);
-  const geometry = { node: null as View | null, top: 0, height: 320, chromeBottom: 64 };
+  const geometry = { height: 320 };
   const drag = { tracking: false, active: false, x0: 0, y0: 0, dy: 0, lastY: 0, lastT: 0, vy: 0 };
-  const measure = () => {
-    geometry.node?.measureInWindow((_x, y) => {
-      geometry.top = y;
-    });
-  };
   const finish = () => {
     const active = drag.active;
     drag.tracking = false;
@@ -155,13 +149,14 @@ function createChromeDismiss(input: ChromeDismissInput) {
       dismiss: (done) => slideAway(translateY, Math.max(240, geometry.height + 48), done),
     });
   };
-  // Raw touch events, not PanResponder: inside a React Native Modal on iOS the
-  // responder system never offered the move to the sheet, so it did not move.
+  // Raw touch events on the header, not PanResponder: inside a React Native
+  // Modal on iOS the responder system never offered the move to the sheet.
+  // A touch keeps reporting to the view it started in, so a drag that starts
+  // on the header is followed all the way down.
   const touchHandlers = {
     onTouchStart: (event: ChromeTouch) => {
       const { pageX, pageY, timestamp } = event.nativeEvent;
-      const local = pageY - geometry.top;
-      drag.tracking = local >= -12 && local <= geometry.chromeBottom;
+      drag.tracking = true;
       drag.active = false;
       drag.x0 = pageX;
       drag.y0 = pageY;
@@ -194,23 +189,14 @@ function createChromeDismiss(input: ChromeDismissInput) {
   };
   return {
     translateY,
-    measure,
     sheetProps: {
-      ref: (node: View | null) => {
-        geometry.node = node;
-      },
-      collapsable: false,
       onLayout: (event: LayoutChangeEvent) => {
         geometry.height = event.nativeEvent.layout.height;
-        measure();
       },
-      ...touchHandlers,
     },
     chromeProps: {
       collapsable: false,
-      onLayout: (event: LayoutChangeEvent) => {
-        geometry.chromeBottom = event.nativeEvent.layout.y + event.nativeEvent.layout.height;
-      },
+      ...touchHandlers,
     },
   };
 }
@@ -224,13 +210,5 @@ function createChromeDismiss(input: ChromeDismissInput) {
  */
 export function useChromeDismiss(input: ChromeDismissInput) {
   const [chrome] = useState(() => createChromeDismiss(input));
-  useEffect(() => {
-    const shown = Keyboard.addListener("keyboardDidShow", chrome.measure);
-    const hidden = Keyboard.addListener("keyboardDidHide", chrome.measure);
-    return () => {
-      shown.remove();
-      hidden.remove();
-    };
-  }, [chrome]);
   return { translateY: chrome.translateY, sheetProps: chrome.sheetProps, chromeProps: chrome.chromeProps };
 }
