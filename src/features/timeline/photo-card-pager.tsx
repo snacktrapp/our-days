@@ -13,6 +13,7 @@ import {
 } from "react";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
+import { createAlbumCenterFollower } from "./album-frame-scroll";
 import {
   clearAlbumFrameHeight,
   setAlbumFrameHeight,
@@ -82,6 +83,9 @@ export function PhotoCardPager({
     dx: number;
     commit: boolean;
   } | null>(null);
+  const centerRef = useRef<ReturnType<typeof createAlbumCenterFollower> | null>(
+    null,
+  );
 
   function requestPhoto(photoIndex: number) {
     setRequested((current) =>
@@ -124,7 +128,10 @@ export function PhotoCardPager({
     }
     pairRef.current = next;
     setPair(next);
-    if (next?.mode === "drag") publishFrame(next, indexRef.current, true);
+    if (next?.mode === "drag") {
+      publishFrame(next, indexRef.current, true);
+      centerRef.current?.sync(true);
+    }
   }
 
   function readSlideWidth() {
@@ -197,11 +204,13 @@ export function PhotoCardPager({
   function animateSettledFrame(next: AlbumPair) {
     if (overlayMotionReduced()) {
       publishFrame(next, indexRef.current, true);
+      centerRef.current?.sync(true);
       return;
     }
     if (pagerRef.current) delete pagerRef.current.dataset.heightInstant;
     requestAnimationFrame(() => {
       publishFrame(next, indexRef.current, false);
+      centerRef.current?.sync(false);
     });
   }
 
@@ -284,6 +293,7 @@ export function PhotoCardPager({
       if (published) {
         frameReadyRef.current = true;
         pagerRef.current?.setAttribute("data-frame-ready", "true");
+        if (!dragging) centerRef.current?.noteHeight();
       }
       if (dragging) return;
       requestAnimationFrame(() => {
@@ -293,13 +303,23 @@ export function PhotoCardPager({
       });
     };
     update();
+    const follower = createAlbumCenterFollower(stage);
+    centerRef.current = follower;
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", update);
-      return () => window.removeEventListener("resize", update);
+      return () => {
+        window.removeEventListener("resize", update);
+        follower.stop();
+        centerRef.current = null;
+      };
     }
     const observer = new ResizeObserver(update);
     observer.observe(stage);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      follower.stop();
+      centerRef.current = null;
+    };
   }, [photos.length]);
 
   useLayoutEffect(() => {
@@ -311,6 +331,7 @@ export function PhotoCardPager({
     const active = pairRef.current;
     if (active?.mode === "drag") {
       publishFrameRef.current(active, indexRef.current, true);
+      centerRef.current?.sync(true);
       return;
     }
     if (active?.mode === "snap" || active?.mode === "spring") return;
@@ -323,6 +344,7 @@ export function PhotoCardPager({
     if (!published) return;
     frameReadyRef.current = true;
     pagerRef.current?.setAttribute("data-frame-ready", "true");
+    centerRef.current?.noteHeight();
     if (!firstPublish) return;
     requestAnimationFrame(() => {
       if (pairRef.current?.mode === "drag") return;
@@ -362,6 +384,7 @@ export function PhotoCardPager({
       setIndex(to);
       writePair(null);
       publishFrame(null, to, true);
+      centerRef.current?.sync(true);
       return;
     }
     pendingToRef.current = to;
@@ -463,6 +486,7 @@ export function PhotoCardPager({
       axis: null,
       dx: 0,
     };
+    centerRef.current?.releaseUser();
     setAxis(null);
   }
 
