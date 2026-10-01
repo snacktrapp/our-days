@@ -535,6 +535,11 @@ export default function JournalScreen() {
                   headers={mediaHeaders}
                   viewerYear={viewerYear}
                   viewerZone={viewerZone}
+                  viewer={{
+                    name: profile?.name ?? "You",
+                    accent: profile?.accentToken ?? "slate",
+                    membershipIds: circles.map((circle) => circle.membershipId),
+                  }}
                 />
               )}
             </Rail>

@@ -9,6 +9,8 @@ config.watchFolders = [
   ...new Set([
     ...(config.watchFolders ?? []),
     path.resolve(projectRoot, "../src/features/composer/data"),
+    // Comment @mentions share the web's draft helpers.
+    path.resolve(projectRoot, "../src/features/mentions"),
   ]),
 ];
 

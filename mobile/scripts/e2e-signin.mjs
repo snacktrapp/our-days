@@ -434,6 +434,86 @@ await step("operations user posts a test-circle note, sees it on All circles, th
   await supabase.auth.signOut({ scope: "local" });
 });
 
+await step("comment and heart a test-circle post, then clean up", async () => {
+  resetStore();
+  const app = await freshApp("comment-heart");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const posts = await import("../src/lib/posts.ts");
+  const conversation = await import("../src/lib/conversation.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  const body = `E2E heart post ${Date.now()}`;
+  const comment = `E2E comment ${Date.now()}`;
+  const created = await posts.createWrittenMoment(supabase, {
+    journalPersonId: circle.personId,
+    circleId: circle.circleId,
+    body,
+    occurredOn: circleToday(circle.timeZone),
+    audience: "family",
+    circleIds: [circle.circleId],
+  });
+  assert.equal(created.ok, true, created.ok ? "" : created.message);
+  try {
+    const noted = await conversation.createMomentNote(supabase, {
+      momentId: created.momentId,
+      body: comment,
+    });
+    assert.equal(noted.ok, true, noted.ok ? "" : noted.message);
+    const loved = await conversation.setMomentNoteHeart(supabase, {
+      noteId: noted.noteId,
+      hearted: true,
+    });
+    assert.equal(loved.ok, true, loved.ok ? "" : loved.message);
+    const reaction = await conversation.setMomentReaction(supabase, {
+      momentId: created.momentId,
+      reactionId: "held-close",
+    });
+    assert.equal(reaction.ok, true, reaction.ok ? "" : reaction.message);
+    const page = await journal.loadTimelinePage(supabase, {
+      circleId: circle.circleId,
+      viewerMembershipIds: [circle.membershipId],
+    });
+    const moment = page.moments.find((item) => item.id === created.momentId);
+    assert.ok(moment, "test post should be on the circle feed");
+    const saved = moment.notes.find((note) => note.body === comment);
+    assert.ok(saved, "comment should be on the test post");
+    assert.equal(saved.heartedByViewer, true);
+    assert.ok(
+      moment.reactions.some(
+        (item) => item.reactionId === "held-close" && item.isCurrentMember,
+      ),
+    );
+    const unreacted = await conversation.setMomentReaction(supabase, {
+      momentId: created.momentId,
+      reactionId: null,
+    });
+    assert.equal(unreacted.ok, true, unreacted.ok ? "" : unreacted.message);
+    const unloved = await conversation.setMomentNoteHeart(supabase, {
+      noteId: noted.noteId,
+      hearted: false,
+    });
+    assert.equal(unloved.ok, true, unloved.ok ? "" : unloved.message);
+    const trashedNote = await conversation.trashMomentNote(supabase, {
+      noteId: noted.noteId,
+      revision: saved.revision,
+    });
+    assert.equal(trashedNote.ok, true, trashedNote.ok ? "" : trashedNote.message);
+  } finally {
+    const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+    await supabase.auth.signOut({ scope: "local" });
+  }
+});
+
 await step("OTA runtime is 0.3.0 so build 6 cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));

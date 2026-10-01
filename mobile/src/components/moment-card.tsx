@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type Ref } from "react";
 import {
   Linking,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -30,9 +31,20 @@ import {
   type TimelineMoment,
 } from "../lib/journal";
 import { formatConversationStamp, formatRecordedMomentHeader } from "../lib/moment-time";
+import {
+  createMomentNote,
+  loadMentionCandidates,
+  setMomentNoteHeart,
+  setMomentReaction,
+  trashMomentNote,
+  updateMomentNote,
+  type MentionCandidate,
+} from "../lib/conversation";
+import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
+import { CommentSheet } from "./comment-sheet";
 import { PrivateImage } from "./private-image";
 
 function retroFace(colors: ThemeColors, accent: string) {
@@ -51,6 +63,14 @@ function retroInk(colors: ThemeColors, accent: string) {
   return colors.appearance === "retro" ? colors.actionInk : dotInk(accent, colors);
 }
 
+export type JournalViewer = Readonly<{
+  name: string;
+  accent: string;
+  membershipIds: readonly string[];
+}>;
+
+const emptyViewer: JournalViewer = { name: "You", accent: "slate", membershipIds: [] };
+
 export function FeedMoment({
   moment,
   circleNames,
@@ -58,6 +78,7 @@ export function FeedMoment({
   headers,
   viewerYear,
   viewerZone,
+  viewer = emptyViewer,
 }: Readonly<{
   moment: TimelineMoment;
   circleNames: ReadonlyMap<string, string>;
@@ -65,6 +86,7 @@ export function FeedMoment({
   headers?: Record<string, string> | null;
   viewerYear: number;
   viewerZone: string;
+  viewer?: JournalViewer;
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
@@ -169,7 +191,7 @@ export function FeedMoment({
         </View>
       </View>
       <View style={[styles.card, { backgroundColor: colors.cream }]}>
-        <CardBody moment={moment} headers={headers} frameWidth={width} />
+        <CardBody moment={moment} headers={headers} frameWidth={width} viewer={viewer} />
       </View>
     </View>
   );
@@ -179,10 +201,12 @@ function CardBody({
   moment,
   headers,
   frameWidth,
+  viewer,
 }: Readonly<{
   moment: TimelineMoment;
   headers?: Record<string, string> | null;
   frameWidth: number;
+  viewer: JournalViewer;
 }>) {
   if (moment.kind === "photo" || moment.kind === "video") {
     return (
@@ -197,7 +221,7 @@ function CardBody({
               serif={false}
             />
           ) : null}
-          <Conversation moment={moment} />
+          <Conversation key={moment.id} moment={moment} viewer={viewer} />
         </View>
       </View>
     );
@@ -213,16 +237,16 @@ function CardBody({
         {moment.body ? (
           <ClampedMention text={moment.body} mentions={moment.mentions} serif />
         ) : null}
-        <Conversation moment={moment} />
+        <Conversation key={moment.id} moment={moment} viewer={viewer} />
       </View>
     );
   }
 
   if (moment.kind === "milestone") {
-    return <Milestone moment={moment} />;
+    return <Milestone moment={moment} viewer={viewer} />;
   }
 
-  return <Thought moment={moment} frameWidth={frameWidth} headers={headers} />;
+  return <Thought moment={moment} frameWidth={frameWidth} headers={headers} viewer={viewer} />;
 }
 
 function PlaceTitle({ children }: Readonly<{ children: string }>) {
@@ -238,10 +262,12 @@ function Thought({
   moment,
   frameWidth,
   headers,
+  viewer,
 }: Readonly<{
   moment: TimelineMoment;
   frameWidth: number;
   headers?: Record<string, string> | null;
+  viewer: JournalViewer;
 }>) {
   const { colors } = useAppTheme();
   const bible = moment.kind === "thought" ? parseBibleVerse(moment.body) : null;
@@ -302,7 +328,7 @@ function Thought({
           />
         </View>
       ) : null}
-      <Conversation moment={moment} />
+      <Conversation key={moment.id} moment={moment} viewer={viewer} />
     </View>
   );
 }
@@ -807,7 +833,10 @@ function Media({
   );
 }
 
-function Milestone({ moment }: Readonly<{ moment: TimelineMoment }>) {
+function Milestone({
+  moment,
+  viewer,
+}: Readonly<{ moment: TimelineMoment; viewer: JournalViewer }>) {
   const { colors } = useAppTheme();
   const year = moment.occurredOn.slice(0, 4);
   return (
@@ -843,48 +872,235 @@ function Milestone({ moment }: Readonly<{ moment: TimelineMoment }>) {
           <ClampedMention text={moment.body} mentions={moment.mentions} serif />
         ) : null}
       </View>
-      <Conversation moment={moment} />
+      <Conversation key={moment.id} moment={moment} viewer={viewer} />
     </View>
   );
 }
 
-function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
+function Conversation({
+  moment,
+  viewer,
+}: Readonly<{ moment: TimelineMoment; viewer: JournalViewer }>) {
   const { colors } = useAppTheme();
   const [showAll, setShowAll] = useState(false);
   const [openHearts, setOpenHearts] = useState<string | null>(null);
-  const loved = moment.reactions.some(
+  const [notes, setNotes] = useState(moment.notes);
+  const [reactions, setReactions] = useState(moment.reactions);
+  const [composer, setComposer] = useState<FeedNote | "new" | null>(null);
+  const [members, setMembers] = useState<readonly MentionCandidate[]>([]);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const loved = reactions.some(
     (reaction) => reaction.reactionId === "held-close" && reaction.isCurrentMember,
   );
-  const names = moment.reactions.map((reaction, index) => {
+  const names = reactions.map((reaction, index) => {
     const emoji =
       reaction.reactionId === "made-me-smile"
         ? "😂 "
         : reaction.reactionId === "remember-this"
           ? "✨ "
           : "";
-    const comma = index < moment.reactions.length - 1 ? "," : "";
+    const comma = index < reactions.length - 1 ? "," : "";
     return `${emoji}${reaction.personName}${comma}`;
   });
-  const notes = visibleNotes(moment.notes, showAll);
-  const hidden = hiddenNoteCount(moment.notes.length);
+  const visible = visibleNotes(notes, showAll);
+  const hidden = hiddenNoteCount(notes.length);
+  const mentionsOn =
+    moment.audience !== "just_me" && moment.kind !== "insight";
+
+  async function toggleLove() {
+    const supabase = getSupabase();
+    if (!supabase || pending) return;
+    const next = !loved;
+    setPending(true);
+    setError(null);
+    const result = await setMomentReaction(supabase, {
+      momentId: moment.id,
+      reactionId: next ? "held-close" : null,
+    });
+    setPending(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setReactions((current) => {
+      const kept = current.filter(
+        (reaction) => !(reaction.isCurrentMember && reaction.reactionId === "held-close"),
+      );
+      if (!next) return kept;
+      return [
+        ...kept,
+        {
+          id: `local-heart-${moment.id}`,
+          personName: viewer.name,
+          reactionId: "held-close",
+          isCurrentMember: true,
+        },
+      ];
+    });
+  }
+
+  async function toggleNoteHeart(note: FeedNote) {
+    const supabase = getSupabase();
+    if (!supabase || pending) return;
+    const hearted = !note.heartedByViewer;
+    setPending(true);
+    setError(null);
+    const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
+    setPending(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setNotes((current) =>
+      current.map((item) => {
+        if (item.id !== note.id) return item;
+        const names = hearted
+          ? [...item.heartNames.filter((name) => name !== viewer.name), viewer.name]
+          : item.heartNames.filter((name) => name !== viewer.name);
+        return {
+          ...item,
+          heartedByViewer: hearted,
+          heartNames: names,
+          heartCount: names.length,
+          revision: result.revision ?? item.revision,
+        };
+      }),
+    );
+  }
+
+  async function openComposer(note: FeedNote | "new") {
+    setError(null);
+    setComposer(note);
+    if (!mentionsOn) {
+      setMembers([]);
+      return;
+    }
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const circles = moment.linkedCircleIds.length > 0 ? moment.linkedCircleIds : [moment.circleId];
+    setMembers(await loadMentionCandidates(supabase, circles));
+  }
+
+  async function saveComment(body: string, mentions: readonly { userId: string; name: string; start: number; end: number }[]) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setPending(true);
+    setError(null);
+    if (composer && composer !== "new") {
+      const result = await updateMomentNote(supabase, {
+        noteId: composer.id,
+        revision: composer.revision,
+        body,
+        mentions,
+      });
+      setPending(false);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setNotes((current) =>
+        current.map((item) =>
+          item.id === composer.id
+            ? {
+                ...item,
+                body,
+                revision: result.revision,
+                mentions: mentions.map((mention) => ({
+                  userId: mention.userId,
+                  start: mention.start,
+                  end: mention.end,
+                  name: mention.name,
+                  active: true,
+                })),
+              }
+            : item,
+        ),
+      );
+      setComposer(null);
+      return;
+    }
+    const result = await createMomentNote(supabase, { momentId: moment.id, body, mentions });
+    setPending(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    setNotes((current) => [
+      ...current,
+      {
+        id: result.noteId,
+        authorName: viewer.name,
+        authorAccent: viewer.accent,
+        body,
+        createdAt: new Date().toISOString(),
+        heartCount: 0,
+        heartedByViewer: false,
+        heartNames: [],
+        canChange: true,
+        revision: 1,
+        mentions: mentions.map((mention) => ({
+          userId: mention.userId,
+          start: mention.start,
+          end: mention.end,
+          name: mention.name,
+          active: true,
+        })),
+      },
+    ]);
+    setComposer(null);
+  }
+
+  function removeComment(note: FeedNote) {
+    Alert.alert("Remove this comment?", undefined, [
+      { text: "Keep", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          const supabase = getSupabase();
+          if (!supabase) return;
+          setPending(true);
+          void trashMomentNote(supabase, { noteId: note.id, revision: note.revision }).then((result) => {
+            setPending(false);
+            if (!result.ok) {
+              setError(result.message);
+              return;
+            }
+            setNotes((current) => current.filter((item) => item.id !== note.id));
+            setComposer(null);
+          });
+        },
+      },
+    ]);
+  }
+
+  const kind =
+    moment.kind === "photo"
+      ? "photo"
+      : moment.kind === "location"
+        ? "place"
+        : moment.kind;
 
   return (
-    <View style={[styles.conversation, notes.length > 0 && styles.conversationNotes]}>
+    <View style={[styles.conversation, visible.length > 0 && styles.conversationNotes]}>
       <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add a note"
           style={styles.actionHit}
+          onPress={() => void openComposer("new")}
         >
-          {/* TODO(noop): comment composer. See src/lib/noop-controls.ts */}
           <CommentIcon color={colors.muted} />
         </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={loved ? "Undo love" : "Love"}
+          accessibilityState={{ selected: loved }}
+          disabled={pending}
           style={styles.actionHit}
+          onPress={() => void toggleLove()}
         >
-          {/* TODO(noop): heart write. See src/lib/noop-controls.ts */}
           <HeartGlyph
             color={
               colors.appearance === "retro"
@@ -903,7 +1119,7 @@ function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
           {names.join(" ")}
         </Text>
       </View>
-      {notes.map((note) => (
+      {visible.map((note) => (
         <NoteRow
           key={note.id}
           note={note}
@@ -911,6 +1127,8 @@ function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
           onToggleHearts={() =>
             setOpenHearts((current) => (current === note.id ? null : note.id))
           }
+          onHeart={() => void toggleNoteHeart(note)}
+          onEdit={() => void openComposer(note)}
         />
       ))}
       {hidden > 0 ? (
@@ -920,6 +1138,35 @@ function Conversation({ moment }: Readonly<{ moment: TimelineMoment }>) {
           </Text>
         </Pressable>
       ) : null}
+      {error && !composer ? (
+        <Text style={[face(colors, 400), { color: colors.clay, fontSize: 12 }]}>{error}</Text>
+      ) : null}
+      {composer ? (
+        <CommentSheet
+          title={composer === "new" ? "Add comment" : "Edit comment"}
+          context={commentContext(moment.personName, kind, moment.body || moment.title || "")}
+          initialBody={composer === "new" ? "" : composer.body}
+          initialMentions={
+            composer === "new"
+              ? []
+              : composer.mentions.flatMap((mention) =>
+                  mention.name
+                    ? [{ userId: mention.userId, name: mention.name, start: mention.start, end: mention.end }]
+                    : [],
+                )
+          }
+          editing={composer !== "new"}
+          members={members}
+          pending={pending}
+          error={error}
+          onDismiss={() => {
+            setComposer(null);
+            setError(null);
+          }}
+          onSubmit={(body, mentions) => void saveComment(body, mentions)}
+          onDelete={composer !== "new" ? () => removeComment(composer) : undefined}
+        />
+      ) : null}
     </View>
   );
 }
@@ -928,13 +1175,18 @@ function NoteRow({
   note,
   open,
   onToggleHearts,
+  onHeart,
+  onEdit,
 }: Readonly<{
   note: FeedNote;
   open: boolean;
   onToggleHearts: () => void;
+  onHeart: () => void;
+  onEdit: () => void;
 }>) {
   const { colors } = useAppTheme();
   const stamp = formatConversationStamp(note.createdAt);
+  const counted = note.heartCount > 0;
   return (
     <View style={styles.note}>
       <View style={styles.noteAuthor}>
@@ -969,33 +1221,56 @@ function NoteRow({
           {stamp}
         </Text>
         {note.canChange ? (
-          <Text style={[face(colors, 400), { color: colors.muted, fontSize: 16 }]}>•••</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit comment"
+            onPress={onEdit}
+            hitSlop={14}
+            style={styles.noteMore}
+          >
+            {/* Web .inline-note-more-dots: three 2px dots in a 13x3 box. */}
+            <View style={styles.noteDots}>
+              {[0, 1, 2].map((dot) => (
+                <View key={dot} style={[styles.noteDot, { backgroundColor: colors.muted }]} />
+              ))}
+            </View>
+          </Pressable>
         ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={note.heartedByViewer ? "Undo love on this comment" : "Love this comment"}
-          onPress={note.heartCount > 0 ? onToggleHearts : undefined}
-          style={styles.noteHeart}
-        >
-          <HeartGlyph
-            color={
-              colors.appearance === "retro"
-                ? note.heartedByViewer
-                  ? colors.action
-                  : colors.muted
-                : note.heartedByViewer
-                  ? colors.clay
-                  : colors.muted
-            }
-            filled={note.heartedByViewer}
-            size={15}
-          />
-          {note.heartCount > 0 ? (
-            <Text style={[face(colors, 400), { color: colors.muted, fontSize: 11 }]}>
-              {note.heartCount}
-            </Text>
+        <View style={styles.noteHeart} pointerEvents="box-none">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={note.heartedByViewer ? "Undo love on this comment" : "Love this comment"}
+            accessibilityState={{ selected: note.heartedByViewer }}
+            onPress={onHeart}
+            style={[styles.noteHeartButton, counted && styles.noteHeartShifted]}
+          >
+            <HeartGlyph
+              color={
+                colors.appearance === "retro"
+                  ? note.heartedByViewer
+                    ? colors.action
+                    : colors.muted
+                  : note.heartedByViewer
+                    ? colors.clay
+                    : colors.muted
+              }
+              filled={note.heartedByViewer}
+              size={15}
+            />
+          </Pressable>
+          {counted ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${note.heartCount} ${note.heartCount === 1 ? "person loves" : "people love"} this comment`}
+              onPress={onToggleHearts}
+              style={styles.noteHeartCount}
+            >
+              <Text style={[styles.noteWhen, face(colors, 400, "record"), { color: colors.muted }]}>
+                {note.heartCount}
+              </Text>
+            </Pressable>
           ) : null}
-        </Pressable>
+        </View>
       </View>
       <View style={styles.noteBody}>
         <ClampedMention text={note.body} mentions={note.mentions} serif={false} compact />
@@ -1007,6 +1282,13 @@ function NoteRow({
       ) : null}
     </View>
   );
+}
+
+/** Web: `${personName} · ${kindLabel} · ${conciseLabel(text)}` (48 characters). */
+function commentContext(person: string, kind: string, text: string) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  const label = flat.length <= 48 ? flat : `${flat.slice(0, 47).trimEnd()}…`;
+  return label ? `${person} · ${kind} · ${label}` : `${person} · ${kind}`;
 }
 
 function lovedBy(names: readonly string[]) {
@@ -1359,14 +1641,51 @@ const styles = StyleSheet.create({
   },
   noteHeart: {
     position: "absolute",
-    top: -14,
+    top: "50%",
     right: 0,
-    minWidth: 44,
+    width: 52,
     height: 44,
+    marginTop: -22,
+  },
+  noteHeartButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    paddingRight: 6,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  noteHeartShifted: {
+    right: 15,
+  },
+  noteHeartCount: {
+    position: "absolute",
+    top: 0,
+    right: 6,
+    width: 15,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noteMore: {
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noteDots: {
+    width: 13,
+    height: 3,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 2,
+    justifyContent: "space-between",
+  },
+  noteDot: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
   },
   showMore: {
     minHeight: 44,

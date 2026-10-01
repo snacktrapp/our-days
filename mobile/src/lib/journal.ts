@@ -61,6 +61,7 @@ export type FeedNote = Readonly<{
   heartedByViewer: boolean;
   heartNames: readonly string[];
   canChange: boolean;
+  revision: number;
   mentions: readonly MentionSpan[];
 }>;
 
@@ -433,6 +434,7 @@ async function enrichMoments(
           authors.get(text(heart.author_membership_id) ?? "")?.name ?? "Family",
       ),
       canChange: viewerMembershipIds.has(membershipId),
+      revision: typeof row.revision === "number" ? row.revision : 1,
       mentions: mentionsByNote.get(id) ?? [],
     });
     notesByMoment.set(momentId, list);
