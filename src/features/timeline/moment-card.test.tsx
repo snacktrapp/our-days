@@ -266,6 +266,7 @@ describe("MomentCard timeline media", () => {
     expect(image).toHaveAttribute("height", "801");
     const frame = image.closest(".photo-frame");
     expect(frame).toHaveClass("has-known-ratio", "has-reserved-frame");
+    expect(frame).not.toHaveClass("is-adaptive-album");
     const sizer = frame?.querySelector(".photo-frame-sizer");
     expect(sizer).toHaveAttribute("viewBox", "0 0 1200 801");
     expect(frame?.firstElementChild).toBe(sizer);
@@ -369,6 +370,9 @@ describe("MomentCard timeline media", () => {
       />,
     );
 
+    expect(document.querySelector(".photo-frame")).toHaveClass(
+      "is-adaptive-album",
+    );
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
     for (const photoIndex of [0, 1]) {
@@ -413,6 +417,49 @@ describe("MomentCard timeline media", () => {
     expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("clamps a too-tall album cover to 4:5 before the first swipe", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "tall-album",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Tall cover",
+            badgeLabel: "AUG 28",
+            width: 900,
+            height: 1600,
+          },
+          photos: [
+            {
+              id: "tall",
+              src: "/sample-family.jpg",
+              alt: "Tall cover",
+              width: 900,
+              height: 1600,
+            },
+            {
+              id: "wide",
+              src: "/sample-family.jpg",
+              alt: "Wide cover",
+              width: 1600,
+              height: 900,
+            },
+          ],
+        }}
+      />,
+    );
+    expect(container.querySelector(".photo-frame")).toHaveClass(
+      "is-adaptive-album",
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 10000 12500",
+    );
   });
 
   it("presents a video with native inline controls and no fullscreen trigger", () => {

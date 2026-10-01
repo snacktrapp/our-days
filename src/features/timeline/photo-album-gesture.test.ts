@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  albumFrameFit,
+  albumGestureFrameHeight,
   albumSlideWidth,
+  clampedAlbumFrameBox,
   pairSlideTransform,
   pairTransform,
   waitForFrameReady,
@@ -106,6 +109,56 @@ describe("pairTransform", () => {
         dx: 0,
       }),
     ).toBe("translateX(-50%)");
+  });
+});
+
+describe("album frame height", () => {
+  it("matches the slide ratio inside the clamp and caps 4:5 and 2:1", () => {
+    expect(albumGestureFrameHeight(390, 9 / 16, 9 / 16, "idle", 0)).toBeCloseTo(
+      390 * (9 / 16),
+    );
+    expect(albumGestureFrameHeight(390, 3 / 4, 3 / 4, "idle", 0)).toBeCloseTo(
+      390 * 0.75,
+    );
+    expect(albumGestureFrameHeight(390, 5 / 4, 5 / 4, "idle", 0)).toBeCloseTo(
+      390 * 1.25,
+    );
+    expect(albumGestureFrameHeight(390, 16 / 9, 16 / 9, "idle", 0)).toBeCloseTo(
+      390 * 1.25,
+    );
+    expect(albumGestureFrameHeight(390, 1 / 3, 1 / 3, "idle", 0)).toBeCloseTo(
+      390 * 0.5,
+    );
+  });
+
+  it("interpolates height by drag progress and settles to the incoming slide", () => {
+    const from = 9 / 16;
+    const to = 3 / 4;
+    const midway = albumGestureFrameHeight(390, from, to, "drag", -195);
+    expect(midway).toBeCloseTo((390 * (9 / 16) + 390 * 0.75) / 2);
+    expect(albumGestureFrameHeight(390, from, to, "snap", 0)).toBeCloseTo(
+      390 * 0.75,
+    );
+    expect(albumGestureFrameHeight(390, from, to, "spring", -40)).toBeCloseTo(
+      390 * (9 / 16),
+    );
+  });
+
+  it("covers inside the clamp and contains past it", () => {
+    expect(albumFrameFit(1920, 1080)).toBe("cover");
+    expect(albumFrameFit(1200, 900)).toBe("cover");
+    expect(albumFrameFit(800, 1000)).toBe("cover");
+    expect(albumFrameFit(900, 1600)).toBe("contain");
+    expect(albumFrameFit(3000, 800)).toBe("contain");
+    expect(albumFrameFit(undefined, undefined)).toBe("contain");
+    expect(clampedAlbumFrameBox(900, 1600)).toEqual({
+      width: 10000,
+      height: 12500,
+    });
+    expect(clampedAlbumFrameBox(1920, 1080)).toEqual({
+      width: 1920,
+      height: 1080,
+    });
   });
 });
 

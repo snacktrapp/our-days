@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { albumGestureFrameHeight } from "./photo-album-gesture";
 import { PhotoCardPager } from "./photo-card-pager";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
@@ -413,16 +414,22 @@ describe("PhotoCardPager", () => {
       swipeAlbum(document.querySelector(".photo-card-pager")!);
 
       expect(track()).toHaveClass("is-sliding");
-      expect(stage()?.style.height).not.toBe("");
-      expect(Number.parseFloat(stage()?.style.height ?? "0")).toBeGreaterThan(
-        0,
+      expect(
+        Number.parseFloat(stage()?.dataset.frameHeight ?? "0"),
+      ).toBeGreaterThan(0);
+      expect(document.querySelector('[data-photo-index="0"]')).toHaveClass(
+        "is-cover",
+      );
+      expect(document.querySelector('[data-photo-index="1"]')).toHaveClass(
+        "is-contain",
       );
 
       settleSlide();
 
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
-      expect(stage()?.style.height).toBe("480px");
+      // 900×1200 is taller than 4:5, so a 400px-wide frame clamps to 1.25×.
+      expect(stage()?.dataset.frameHeight).toBe("500.00");
     } finally {
       if (clientWidth) {
         Object.defineProperty(
@@ -531,6 +538,16 @@ describe("PhotoCardPager", () => {
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(track()).toHaveAttribute("data-phase", "drag");
       expect(track()).toHaveAttribute("data-dx", "-60");
+      const expectedHeight = albumGestureFrameHeight(
+        390,
+        801 / 1200,
+        1200 / 900,
+        "drag",
+        -60,
+      );
+      expect(stage()?.dataset.frameHeight).toBe(
+        (Math.round(expectedHeight * 100) / 100).toFixed(2),
+      );
       expect((track() as HTMLElement).style.transform).toBe(
         "translateX(-60px)",
       );
@@ -661,5 +678,44 @@ describe("PhotoCardPager", () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }));
+  });
+
+  it("measures a slide that has no stored dimensions and keeps the first ratio until then", () => {
+    const restoreWidth = mockCardSlideWidth(390);
+    const moment = {
+      ...album,
+      image: { ...album.image, width: undefined, height: undefined },
+      photos: [
+        {
+          id: "wide",
+          src: "/wide.jpg",
+          alt: "Wide",
+        },
+        {
+          id: "tall",
+          src: "/tall.jpg",
+          alt: "Tall",
+        },
+      ],
+    } as const satisfies PhotoMomentViewModel;
+    try {
+      renderPager(moment);
+      expect(stage()?.dataset.frameHeight).toBe(
+        (Math.round(390 * 0.75 * 100) / 100).toFixed(2),
+      );
+      const img = document.querySelector(
+        '[data-photo-index="0"] img',
+      ) as HTMLImageElement;
+      markImgReady(img, 1600, 900);
+      fireEvent.load(img);
+      expect(stage()?.dataset.frameHeight).toBe(
+        (Math.round(390 * (900 / 1600) * 100) / 100).toFixed(2),
+      );
+      expect(document.querySelector('[data-photo-index="0"]')).toHaveClass(
+        "is-cover",
+      );
+    } finally {
+      restoreWidth();
+    }
   });
 });

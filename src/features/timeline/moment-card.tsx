@@ -5,6 +5,7 @@ import {
   photoAlbum,
   timelineCardPhotoSrc,
 } from "@/features/moments/moment-photos";
+import { clampedAlbumFrameBox } from "./photo-album-gesture";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
@@ -209,10 +210,15 @@ export function MomentCard({
     ? { verse: bibleVerseMatch.text, reference: bibleVerseMatch.reference }
     : null;
   if (moment.kind === "photo" || moment.kind === "video") {
+    const album = moment.kind === "photo" ? photoAlbum(moment) : [];
+    const adaptiveAlbum = album.length > 1;
     const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
       moment.kind === "photo" ? moment.image.height : undefined;
     const knownRatio = Boolean(mediaWidth && mediaHeight);
+    const frameBox = adaptiveAlbum
+      ? clampedAlbumFrameBox(mediaWidth, mediaHeight)
+      : { width: mediaWidth, height: mediaHeight };
     return (
       <div
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
@@ -227,12 +233,15 @@ export function MomentCard({
             <div
               className={`photo-frame has-reserved-frame${
                 knownRatio ? " has-known-ratio" : ""
-              }`}
+              }${adaptiveAlbum ? " is-adaptive-album" : ""}`}
             >
-              <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
+              <PhotoFrameSizer
+                width={frameBox.width}
+                height={frameBox.height}
+              />
               <PhotoCardPager
                 moment={moment}
-                images={photoAlbum(moment).map((photo, photoIndex) =>
+                images={album.map((photo, photoIndex) =>
                   moment.image.delivery === "private" ? (
                     <PrivatePhotoImage
                       key={photo.id}

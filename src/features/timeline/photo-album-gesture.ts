@@ -170,3 +170,67 @@ export function clampDragDx(
     ? Math.min(0, Math.max(-width, dx))
     : Math.max(0, Math.min(width, dx));
 }
+
+/** Tallest album frame is 4:5 (height = 1.25 × width). Shortest is 2:1. */
+export const albumFrameMinHeightRatio = 0.5;
+export const albumFrameMaxHeightRatio = 1.25;
+
+export function clampAlbumHeightRatio(heightOverWidth: number) {
+  if (!Number.isFinite(heightOverWidth) || heightOverWidth <= 0) return 0.75;
+  return Math.min(
+    albumFrameMaxHeightRatio,
+    Math.max(albumFrameMinHeightRatio, heightOverWidth),
+  );
+}
+
+export function albumPhotoHeightRatio(width?: number, height?: number) {
+  if (width == null || height == null || width <= 0 || height <= 0) return null;
+  return height / width;
+}
+
+/** Cover fills the frame when the photo is inside the clamp. Contain past it. */
+export function albumFrameFit(
+  width?: number,
+  height?: number,
+): "cover" | "contain" {
+  const ratio = albumPhotoHeightRatio(width, height);
+  if (ratio == null) return "contain";
+  if (ratio < albumFrameMinHeightRatio || ratio > albumFrameMaxHeightRatio) {
+    return "contain";
+  }
+  return "cover";
+}
+
+export function albumSlideFrameHeight(
+  stageWidth: number,
+  heightOverWidth: number,
+) {
+  if (stageWidth <= 0) return 0;
+  return stageWidth * clampAlbumHeightRatio(heightOverWidth);
+}
+
+export function albumGestureFrameHeight(
+  stageWidth: number,
+  fromHeightOverWidth: number,
+  toHeightOverWidth: number,
+  mode: AlbumPair["mode"] | "idle",
+  dx: number,
+) {
+  const fromHeight = albumSlideFrameHeight(stageWidth, fromHeightOverWidth);
+  const toHeight = albumSlideFrameHeight(stageWidth, toHeightOverWidth);
+  if (mode === "snap") return toHeight;
+  if (mode !== "drag" || stageWidth <= 0) return fromHeight;
+  const progress = Math.min(1, Math.max(0, Math.abs(dx) / stageWidth));
+  return fromHeight + (toHeight - fromHeight) * progress;
+}
+
+/** SVG sizer box. Within the clamp this is the photo; past it, the clamped frame. */
+export function clampedAlbumFrameBox(width?: number, height?: number) {
+  const ratio = albumPhotoHeightRatio(width, height);
+  if (ratio == null || width == null || height == null) {
+    return { width: 4, height: 3 };
+  }
+  const clamped = clampAlbumHeightRatio(ratio);
+  if (Math.abs(clamped - ratio) < 0.0005) return { width, height };
+  return { width: 10000, height: Math.round(clamped * 10000) };
+}
