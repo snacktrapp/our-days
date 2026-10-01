@@ -20,24 +20,36 @@ const headerMonths = [
   "Dec",
 ] as const;
 
+/**
+ * Minutes east of UTC for `timeZone` at `instant`.
+ *
+ * Reads the zone's wall clock from format(), not formatToParts(): Hermes on
+ * iOS builds parts by splitting on punctuation, so "GMT-7" comes back as a
+ * timeZoneName of "GMT" and every zone looked like UTC. That hid the poster's
+ * zone label on every card.
+ */
 function offsetMinutes(timeZone: string, instant: Date) {
-  let name: string | undefined;
+  let text: string;
   try {
-    name = new Intl.DateTimeFormat("en-US", {
+    text = new Intl.DateTimeFormat("en-US", {
       timeZone,
-      timeZoneName: "shortOffset",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
       hour: "numeric",
-    })
-      .formatToParts(instant)
-      .find((part) => part.type === "timeZoneName")?.value;
+      minute: "numeric",
+      hour12: false,
+    }).format(instant);
   } catch {
     return null;
   }
-  if (!name || name === "GMT" || name === "UTC") return name ? 0 : null;
-  const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(name);
-  if (!match) return null;
-  const sign = match[1] === "+" ? 1 : -1;
-  return sign * (Number(match[2]) * 60 + Number(match[3] ?? "0"));
+  const numbers = text.match(/\d+/g)?.map(Number);
+  if (!numbers || numbers.length < 5) return null;
+  const [month, day, year, hour, minute] = numbers as [number, number, number, number, number];
+  const wall = Date.UTC(year, month - 1, day, hour % 24, minute);
+  const actual = Math.floor(instant.getTime() / 60000) * 60000;
+  const offset = Math.round((wall - actual) / 60000);
+  return Math.abs(offset) <= 18 * 60 ? offset : null;
 }
 
 function zonesEquivalent(posterZone: string, viewerZone: string, instant: Date) {
@@ -56,20 +68,21 @@ function formatClock(instant: Date, timeZone: string) {
   }).format(instant);
 }
 
+const utcNames = new Set(["UTC", "GMT", "ETC/UTC", "ETC/GMT", "ETC/UCT", "UCT", "ZULU"]);
+
 function zonePlaceLabel(timeZone: string, instant: Date) {
+  if (utcNames.has(timeZone.toUpperCase())) return "UTC";
   const segments = timeZone.split("/");
   const city = segments.length > 1 ? segments.at(-1) : undefined;
   if (city) return city.replaceAll("_", " ");
   try {
-    return (
-      new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        timeZoneName: "short",
-        hour: "numeric",
-      })
-        .formatToParts(instant)
-        .find((part) => part.type === "timeZoneName")?.value ?? timeZone
-    );
+    // Last word of "5 PM EST"; format() is reliable where formatToParts is not.
+    const text = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "short",
+      hour: "numeric",
+    }).format(instant);
+    return text.split(/\s+/u).at(-1) || timeZone;
   } catch {
     return timeZone;
   }

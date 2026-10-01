@@ -512,6 +512,35 @@ globalThis.fetch = async (input, init) => {
 
 console.log(`Sign-in e2e against ${projectRef} as ${testEmail}`);
 
+await step("card time keeps the poster's zone label even with Hermes formatToParts", async () => {
+  const time = await import("../src/lib/moment-time.ts");
+  const original = Intl.DateTimeFormat.prototype.formatToParts;
+  // Hermes on iOS splits the formatted string on punctuation, so "GMT-7" is a "GMT" part.
+  Intl.DateTimeFormat.prototype.formatToParts = function (date) {
+    return this.format(date)
+      .split(/([^\p{L}\p{N}]+)/u)
+      .filter(Boolean)
+      .map((value) => ({ type: /^[\p{L}\p{N}]+$/u.test(value) ? (value === "GMT" ? "timeZoneName" : "literal") : "literal", value }));
+  };
+  try {
+    const header = (occurredTimezone, viewerTimeZone) =>
+      time.formatRecordedMomentHeader({
+        occurredOn: "2026-10-01",
+        occurredAt: "2026-10-01T17:45:00Z",
+        occurredTimezone,
+        viewerTimeZone,
+        viewerYear: 2026,
+      });
+    assert.equal(header("UTC", "America/Los_Angeles"), "Oct 1 · 5:45 PM UTC");
+    assert.equal(header("America/New_York", "America/Los_Angeles"), "Oct 1 · 1:45 PM New York");
+    assert.equal(header("America/Los_Angeles", "America/Los_Angeles"), "Oct 1 · 10:45 AM");
+    assert.equal(header("America/Vancouver", "America/Los_Angeles"), "Oct 1 · 10:45 AM");
+    assert.equal(header("Asia/Kolkata", "America/Los_Angeles"), "Oct 1 · 11:15 PM Kolkata");
+  } finally {
+    Intl.DateTimeFormat.prototype.formatToParts = original;
+  }
+});
+
 await step("storage adapter: 2048-byte limit, UTF-8 chunking, round trip", async () => {
   resetStore();
   const big = JSON.stringify({ name: "Zoë 👪 ".repeat(400), pad: "x".repeat(3000) });
