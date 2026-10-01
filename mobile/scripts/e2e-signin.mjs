@@ -157,6 +157,15 @@ await step("photo menu matches the web and people stay in join order", async () 
   assert.equal(media.usesNativeMediaMenu("ios", false), false);
   assert.equal(media.usesNativeMediaMenu("android", true), false);
   assert.equal(media.usesNativeMediaMenu("web", true), false);
+  const bible = await import("../src/lib/bible-picker.ts");
+  assert.equal(
+    bible.passageSheetMaxHeight({ windowHeight: 852, topInset: 59, keyboardHeight: 336 }),
+    852 - 59 - 336 - 8,
+  );
+  const menu = await import("../src/lib/moment-menu.ts");
+  assert.deepEqual(menu.momentOverflowActions("thought"), ["edit", "delete"]);
+  assert.deepEqual(menu.momentOverflowActions("photo"), ["delete"]);
+  assert.deepEqual(menu.momentOverflowActions("insight"), ["delete"]);
   const mvhd = new Uint8Array(28);
   mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
   new DataView(mvhd.buffer).setUint32(16, 1000);

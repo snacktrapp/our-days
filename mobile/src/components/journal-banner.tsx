@@ -40,44 +40,14 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
             style={[
               styles.body,
               face(colors, 400),
-              colors.appearance === "retro"
-                ? { color: colors.ink, fontSize: 15, lineHeight: 23 }
-                : { color: colors.muted },
+              { color: colors.muted, fontSize: 13, lineHeight: 17 },
             ]}
+            numberOfLines={2}
           >
-            Type @ in a comment or caption to mention someone in the circle. They’ll
-            get a notice so they don’t miss it.
+            Type @ in a comment or caption to mention someone in the circle.
           </Text>
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onDismiss}
-        style={[
-          styles.cta,
-          colors.appearance === "retro"
-            ? {
-                backgroundColor: colors.selectionFill,
-                borderWidth: 1,
-                borderColor: colors.action,
-              }
-            : { backgroundColor: colors.action },
-        ]}
-      >
-        <Text
-          style={[
-            face(colors, colors.appearance === "retro" ? 700 : 650),
-            {
-              color: colors.appearance === "retro" ? colors.action : colors.actionInk,
-              fontSize: 13,
-              textTransform: colors.appearance === "retro" ? "uppercase" : "none",
-              letterSpacing: colors.appearance === "retro" ? 1 : 0,
-            },
-          ]}
-        >
-          Got it
-        </Text>
-      </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Dismiss"
@@ -92,12 +62,12 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
 
 const styles = StyleSheet.create({
   banner: {
-    marginTop: 6,
-    marginBottom: 10,
+    marginTop: 4,
+    marginBottom: 8,
     marginHorizontal: inlineGap - 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: 18,
     overflow: "hidden",
@@ -113,8 +83,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   badge: {
-    width: 32,
-    height: 32,
+    width: 26,
+    height: 26,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
@@ -132,15 +102,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 13,
     lineHeight: 18,
-  },
-  cta: {
-    alignSelf: "flex-start",
-    marginTop: 6,
-    minHeight: 40,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
   },
   dismiss: {
     position: "absolute",

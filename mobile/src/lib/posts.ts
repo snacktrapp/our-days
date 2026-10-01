@@ -232,6 +232,31 @@ export async function createInsightMoment(
   return { ok: true, momentId: data };
 }
 
+export async function updateWrittenMoment(
+  supabase: SupabaseClient,
+  input: Readonly<{
+    momentId: string;
+    revision: number;
+    body: string;
+    occurredOn: string;
+    occurredAt?: string | null;
+    occurredTimezone?: string | null;
+  }>,
+): Promise<PostResult & { revision?: number }> {
+  const { data, error } = await supabase.rpc("update_written_moment", {
+    moment_id: input.momentId,
+    expected_revision: input.revision,
+    body: input.body.trim(),
+    occurred_on: input.occurredOn,
+    occurred_at: input.occurredAt ?? undefined,
+    occurred_timezone: input.occurredTimezone ?? undefined,
+  });
+  if (error) {
+    return { ok: false, message: message(error, "That moment could not be changed.") };
+  }
+  return { ok: true, momentId: input.momentId, revision: typeof data === "number" ? data : input.revision };
+}
+
 export async function trashWrittenMoment(
   supabase: SupabaseClient,
   momentId: string,

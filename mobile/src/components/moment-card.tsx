@@ -41,6 +41,7 @@ import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
+import { MomentChangeContext, MomentOverflow } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
 import { PrivateImage } from "./private-image";
@@ -78,6 +79,8 @@ export function FeedMoment({
   viewerYear,
   viewerZone,
   viewer = emptyViewer,
+  onMomentChange,
+  onMomentRemove,
   onScreen = true,
   openThread = false,
 }: Readonly<{
@@ -88,6 +91,8 @@ export function FeedMoment({
   viewerYear: number;
   viewerZone: string;
   viewer?: JournalViewer;
+  onMomentChange?: (moment: TimelineMoment) => void;
+  onMomentRemove?: (id: string) => void;
   onScreen?: boolean;
   openThread?: boolean;
 }>) {
@@ -115,6 +120,12 @@ export function FeedMoment({
   const accent = moment.personAccent;
 
   return (
+    <MomentChangeContext.Provider
+      value={{
+        onChange: (next) => onMomentChange?.(next),
+        onRemove: (id) => onMomentRemove?.(id),
+      }}
+    >
     <OpenThreadContext.Provider value={openThread}>
     <View style={styles.moment}>
       <View style={styles.connection}>
@@ -205,6 +216,7 @@ export function FeedMoment({
       </View>
     </View>
     </OpenThreadContext.Provider>
+    </MomentChangeContext.Provider>
   );
 }
 
@@ -306,7 +318,7 @@ function Thought({
           >
             Insight
           </Text>
-          {moment.canChange ? <Overflow color={colors.muted} /> : null}
+          <MomentOverflow moment={moment} color={colors.muted} />
         </View>
       ) : (
         <AuthorRow moment={moment} />
@@ -699,34 +711,12 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
           with {moment.taggedPeopleLabel}
         </Text>
       ) : null}
-      {moment.canChange ? <Overflow color={colors.muted} /> : null}
+      <MomentOverflow moment={moment} color={colors.muted} />
     </View>
   );
 }
 
 /** globals.css `.connected-moment-menu-trigger`: “•••” at 15px, tracking -0.18em. */
-function Overflow({ color }: Readonly<{ color: string }>) {
-  const { colors } = useAppTheme();
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Moment options" style={styles.overflow}>
-      {/* TODO(noop): moment menu. See src/lib/noop-controls.ts */}
-      <Text
-        style={[
-          face(colors, 400),
-          {
-            color,
-            fontSize: 15,
-            lineHeight: 15,
-            letterSpacing: tracking(15, -0.18),
-          },
-        ]}
-      >
-        •••
-      </Text>
-    </Pressable>
-  );
-}
-
 function Media({
   moment,
   headers,
@@ -1270,7 +1260,8 @@ function NoteRow({
 function commentContext(person: string, kind: string, text: string) {
   const flat = text.replace(/\s+/g, " ").trim();
   const label = flat.length <= 48 ? flat : `${flat.slice(0, 47).trimEnd()}…`;
-  return label ? `${person} · ${kind} · ${label}` : `${person} · ${kind}`;
+  const kindLabel = kind ? `${kind.charAt(0).toUpperCase()}${kind.slice(1)}` : kind;
+  return label ? `${person} · ${kindLabel} · ${label}` : `${person} · ${kindLabel}`;
 }
 
 function lovedBy(names: readonly string[]) {

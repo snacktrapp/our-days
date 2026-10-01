@@ -68,12 +68,30 @@ export function InviteSendSheet({
     <Modal transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose} />
       <View style={[styles.sheet, { backgroundColor: colors.cream, paddingBottom: Math.max(16, insets.bottom) }]}>
-        <Text style={[face(colors, 650), styles.title, { color: colors.ink }]}>Invite someone</Text>
+        <View style={styles.bar}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={onClose} style={styles.barSide}>
+            <Text style={[face(colors, 400), { color: colors.ink, fontSize: 17 }]}>Cancel</Text>
+          </Pressable>
+          <Text style={[face(colors, 650), styles.title, { color: colors.ink }]}>Invite someone</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send invitation"
+            accessibilityState={{ disabled: busy || !circleId }}
+            disabled={busy || !circleId}
+            onPress={() => void send()}
+            style={[styles.barSide, styles.barEnd]}
+          >
+            <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: circleId ? 1 : 0.4 }]}>
+              {busy ? "Sending…" : "Send"}
+            </Text>
+          </Pressable>
+        </View>
         <Text style={[face(colors, 400), { color: colors.muted, fontSize: 14 }]}>
           {circleId
             ? "They’ll get a private invitation for this circle."
             : "Choose which circle to invite them to."}
         </Text>
+        <Text style={[face(colors, 600, "record"), styles.circleLabel, { color: colors.muted }]}>Circle</Text>
         <View style={styles.chips}>
           {organizers.map((circle) => {
             const selected = circle.circleId === circleId;
@@ -109,18 +127,6 @@ export function InviteSendSheet({
           style={[styles.input, face(colors, 400), { color: colors.ink, borderColor: colors.hairline }]}
         />
         {message ? <Text style={[face(colors, 400), { color: colors.ink }]}>{message}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send invitation"
-          accessibilityState={{ disabled: busy || !circleId }}
-          disabled={busy || !circleId}
-          onPress={() => void send()}
-          style={[styles.post, { backgroundColor: colors.action, opacity: circleId ? 1 : 0.5 }]}
-        >
-          <Text style={[face(colors, 650), { color: colors.actionInk, fontSize: 16 }]}>
-            {busy ? "Sending…" : "Send invitation"}
-          </Text>
-        </Pressable>
       </View>
     </Modal>
   );
@@ -203,7 +209,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  title: { fontSize: 18 },
+  bar: { minHeight: 44, flexDirection: "row", alignItems: "center" },
+  barSide: { minWidth: 64, minHeight: 44, justifyContent: "center" },
+  barEnd: { alignItems: "flex-end" },
+  title: { flex: 1, textAlign: "center", fontSize: 17 },
+  circleLabel: { fontSize: 9, letterSpacing: 0.8, textTransform: "uppercase" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     minHeight: 44,
