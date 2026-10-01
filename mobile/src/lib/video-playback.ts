@@ -103,11 +103,26 @@ export function videoPlaybackPlan(
   };
 }
 
-/** Tap the poster or a paused frame to play. Tap a playing frame for fullscreen. */
+/**
+ * iOS uses AVPlayerViewController’s inline bar (scrub, pause, fullscreen).
+ * A custom layer on top of that bar would cover the fullscreen button, so
+ * the surface does not steal taps there. Other platforms pause on tap.
+ */
+export function usesNativePlaybackControls(platform: string) {
+  return platform === "ios";
+}
+
+/** Tap the poster or a paused frame to play. Tap a playing frame to pause. */
 export function videoSurfaceAction(
-  input: Readonly<{ started: boolean; onScreen: boolean; resumed?: boolean }>,
+  input: Readonly<{
+    started: boolean;
+    onScreen: boolean;
+    resumed?: boolean;
+    nativeControls?: boolean;
+  }>,
 ) {
   const resumed = input.resumed !== false;
   if (!input.started || !input.onScreen || !resumed) return "play" as const;
-  return "fullscreen" as const;
+  if (input.nativeControls) return "native" as const;
+  return "pause" as const;
 }
