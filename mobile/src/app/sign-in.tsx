@@ -1,5 +1,6 @@
 import { Redirect } from "expo-router";
-import { useState } from "react";
+import * as Linking from "expo-linking";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,6 +14,8 @@ import {
 } from "react-native";
 
 import { sentMessage, useAuth } from "../components/auth-provider";
+import { InviteAcceptForm } from "../components/invite-sheet";
+import { invitationTokenFromLink } from "../lib/invites";
 import { GridBackground } from "../components/grid-background";
 import { Wordmark } from "../components/wordmark";
 import { useAppTheme } from "../lib/theme";
@@ -42,6 +45,20 @@ export default function SignInScreen() {
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [inviteToken, setInviteToken] = useState("");
+  const [joining, setJoining] = useState(false);
+
+  useEffect(() => {
+    const read = (url: string | null) => {
+      const token = invitationTokenFromLink(url ?? "");
+      if (!token) return;
+      setInviteToken(token);
+      setJoining(true);
+    };
+    void Linking.getInitialURL().then(read);
+    const subscription = Linking.addEventListener("url", (event) => read(event.url));
+    return () => subscription.remove();
+  }, []);
 
   if (ready && session && !busy) return <Redirect href="/journal" />;
 
@@ -288,6 +305,24 @@ export default function SignInScreen() {
                   Send another code
                 </Text>
               </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Join with an invitation"
+              onPress={() => setJoining((current) => !current)}
+              style={styles.again}
+            >
+              <Text style={[body, { color: colors.action, fontSize: 13 }]}>
+                Join with an invitation
+              </Text>
+            </Pressable>
+            {joining ? (
+              <InviteAcceptForm
+                initialToken={inviteToken}
+                onAccepted={() => {
+                  setJoining(false);
+                }}
+              />
             ) : null}
           </View>
         </View>

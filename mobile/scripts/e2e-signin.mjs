@@ -265,6 +265,25 @@ await step("a video post shows its poster, then plays, and pauses offscreen", as
   assert.equal(playback.videoSurfaceAction({ started: true, onScreen: true }), "fullscreen");
 });
 
+await step("Just me stays off circle feeds, invitations parse, and YouTube is an Insight", async () => {
+  const feed = await import("../src/lib/feed-format.ts");
+  const invites = await import("../src/lib/invites.ts");
+  const youtube = await import("../src/lib/youtube-insight.ts");
+  assert.equal(feed.momentListedInFeed({ audience: "just_me", feed: "personal" }), true);
+  assert.equal(feed.momentListedInFeed({ audience: "just_me", feed: "all" }), true);
+  assert.equal(feed.momentListedInFeed({ audience: "just_me", feed: "circle" }), false);
+  assert.equal(feed.audienceChipLabel({ audience: "just_me" }), "Just me");
+  const token = "a".repeat(40);
+  assert.equal(invites.invitationTokenFromLink(`https://our-days.example/invite#${token}`), token);
+  assert.equal(invites.invitationTokenFromLink(`ourdays://invite?token=${token}`), token);
+  assert.equal(invites.invitationTokenFromLink("https://our-days.example/invite"), null);
+  const clip = "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120";
+  assert.equal(youtube.loneYoutubeClip(clip), clip);
+  assert.equal(youtube.loneYoutubeClip("A note https://www.youtube.com/watch?v=abc"), null);
+  assert.equal(youtube.youtubeInsightAttribution("", clip), "YouTube");
+  assert.equal(feed.insightSourceLabel(clip), "Listen");
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;

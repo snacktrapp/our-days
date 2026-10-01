@@ -49,6 +49,7 @@ import {
 } from "../lib/posts";
 import { loadRosters, type CirclePerson } from "../lib/roster";
 import { getSupabase } from "../lib/supabase";
+import { loneYoutubeClip, youtubeInsightAttribution } from "../lib/youtube-insight";
 import { sheetHasUnsavedChanges, type SheetDraft } from "../lib/sheet-dismiss";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
@@ -214,6 +215,31 @@ export function AddSheet({
       setError("Write the entry before posting.");
       return;
     }
+    const youtube = loneYoutubeClip(nextBody);
+    if (youtube) {
+      setBusy(true);
+      setError(null);
+      const insight = await createInsightMoment(supabase, {
+        circleId: circle.circleId,
+        quote: "A clip worth keeping.",
+        attribution: "YouTube",
+        sourceUrl: youtube,
+        occurredOn,
+        occurredAt: instant.occurredAt,
+        occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
+        audience: audience(),
+        circleIds: justMe ? [] : [circle.circleId],
+      });
+      setBusy(false);
+      if (!insight.ok) {
+        setError(insight.message);
+        return;
+      }
+      if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
+      await rememberCircle();
+      onPosted(audience(), circle.circleId);
+      return;
+    }
     setBusy(true);
     setError(null);
     const result = await createFamilyMoment(supabase, {
@@ -244,7 +270,8 @@ export function AddSheet({
     const supabase = requireCircle();
     const instant = when();
     if (!supabase || !circle || !instant) return;
-    if (!body.trim() || !title.trim()) {
+    const attribution = youtubeInsightAttribution(title, sourceUrl);
+    if (!body.trim() || !attribution) {
       setError("Check the Insight and try again.");
       return;
     }
@@ -253,7 +280,7 @@ export function AddSheet({
     const result = await createInsightMoment(supabase, {
       circleId: circle.circleId,
       quote: body,
-      attribution: title,
+      attribution,
       sourceUrl,
       occurredOn,
       occurredAt: instant.occurredAt,
@@ -742,7 +769,7 @@ export function AddSheet({
                   label="Source URL"
                   labelColor={labelColor}
                   value={sourceUrl}
-                  placeholder="https://"
+                  placeholder="https://www.youtube.com/…"
                   onChange={setSourceUrl}
                 />
               ) : null}
