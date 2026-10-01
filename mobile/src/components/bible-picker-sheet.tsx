@@ -19,6 +19,7 @@ import { bibleBookGroups, bibleNumberChoices, passageSheetMaxHeight } from "../l
 import type { BibleVerseSelection } from "../lib/bible";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
+import { KeyboardDoneBar, composerKeyboardDismissMode } from "./keyboard-form";
 
 type Step = "book" | "chapter" | "start" | "end";
 
@@ -180,7 +181,12 @@ export function PassageSheet({
               ]}
             />
           ) : null}
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: maxHeight - 120 }} contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={composerKeyboardDismissMode}
+            style={{ maxHeight: maxHeight - 120 }}
+            contentContainerStyle={styles.scrollContent}
+          >
             {step === "book" ? (
               groups.length === 0 ? (
                 <Text style={[face(colors, 400), { color: colors.muted, fontSize: 15 }]}>No books match</Text>
@@ -302,6 +308,7 @@ export function PassageSheet({
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </Modal>
   );
 }

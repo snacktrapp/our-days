@@ -21,6 +21,7 @@ import { postableCircles, type CircleMembership } from "../lib/journal";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
+import { KeyboardDoneBar } from "./keyboard-form";
 
 export function InviteSendSheet({
   circles,
@@ -135,6 +136,7 @@ export function InviteSendSheet({
         {message ? <Text style={[face(colors, 400), { color: colors.ink }]}>{message}</Text> : null}
       </View>
       </KeyboardAvoidingView>
+      <KeyboardDoneBar />
     </Modal>
   );
 }

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { MenuView } from "@expo/ui/community/menu";
 
 import type { TimelineMoment } from "../lib/journal";
@@ -8,6 +8,7 @@ import { trashWrittenMoment, updateWrittenMoment } from "../lib/posts";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face, tracking } from "../lib/tokens";
+import { KeyboardDoneBar } from "./keyboard-form";
 
 export const MomentChangeContext = createContext<{
   onChange: (moment: TimelineMoment) => void;
@@ -135,7 +136,7 @@ export function MomentOverflow({
             behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={[styles.editScrim, { backgroundColor: colors.scheme === "light" ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)" }]}
           >
-            <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={() => setEditing(false)} />
+            <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={() => { Keyboard.dismiss(); setEditing(false); }} />
             <View style={[styles.editSheet, { backgroundColor: colors.paper, borderColor: colors.hairline }]}>
               <View style={styles.editBar}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => setEditing(false)}>
@@ -157,6 +158,7 @@ export function MomentOverflow({
               {error ? <Text style={[face(colors, 400), { color: colors.clay }]}>{error}</Text> : null}
             </View>
           </KeyboardAvoidingView>
+          <KeyboardDoneBar />
         </Modal>
       ) : null}
     </>
