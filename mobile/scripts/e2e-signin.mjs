@@ -290,6 +290,26 @@ await step("Just me stays off circle feeds, invitations parse, and YouTube is an
   assert.equal(feed.insightSourceLabel(clip), "Listen");
 });
 
+await step("push taps open All circles on the post or comment, and permission waits", async () => {
+  const push = await import("../src/lib/push-landing.ts");
+  assert.equal(push.requestsPushPermissionAtColdLaunch, false);
+  const token = "ExponentPushToken[e2eOperationsDevice0001]";
+  assert.equal(push.validExpoPushToken(token), true);
+  assert.equal(push.validExpoPushToken("https://push.example/web"), false);
+  const href = push.pushHrefForLanding("moment-1", { noteId: "note-1", thread: true });
+  assert.equal(href, "/family?moment=moment-1&note=note-1&thread=1");
+  assert.deepEqual(push.landingFromPushData({ href }), {
+    momentId: "moment-1",
+    noteId: "note-1",
+    openThread: true,
+  });
+  assert.equal(
+    push.landingFromPushData({ href: "/family?moment=post-9" })?.openThread,
+    false,
+  );
+  assert.equal(push.landingFromPushData({}), null);
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
@@ -704,15 +724,52 @@ await step("test circle video poster is readable and playback starts from its of
   await supabase.auth.signOut({ scope: "local" });
 });
 
-await step("OTA runtime is 0.4.0 so builds 6-7 (runtime 0.2.0/0.3.0) cannot receive this JS", async () => {
+await step("Operations push token registers and is removed", async () => {
+  const operationsEmail = "tars-trapp@agentmail.to";
+  assert.equal(
+    testEmail,
+    operationsEmail,
+    "push token registration runs only for the Operations account",
+  );
+  resetStore();
+  const app = await freshApp("expo-push");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const token = "ExponentPushToken[e2eOperationsDevice0001]";
+  const saved = await supabase.rpc("save_expo_push_token", { requested_token: token });
+  assert.equal(
+    saved.error,
+    null,
+    saved.error
+      ? `save_expo_push_token failed (${saved.error.message}). Apply supabase/migrations/20261001120000_expo_push_tokens.sql`
+      : "",
+  );
+  try {
+    const again = await supabase.rpc("save_expo_push_token", { requested_token: token });
+    assert.equal(again.error, null, again.error?.message ?? "");
+    assert.equal(again.data, saved.data, "the same device token stays one row");
+  } finally {
+    const removed = await supabase.rpc("delete_expo_push_token", { requested_token: token });
+    assert.equal(removed.error, null, removed.error?.message ?? "");
+    assert.equal(removed.data, true);
+    await supabase.auth.signOut({ scope: "local" });
+  }
+});
+
+await step("OTA runtime is 0.5.0 so build 9 (runtime 0.4.0) cannot receive this JS", async () => {
   const fs = await import("node:fs");
   const appJson = JSON.parse(fs.readFileSync(new URL("../app.json", import.meta.url), "utf8"));
   const easJson = JSON.parse(fs.readFileSync(new URL("../eas.json", import.meta.url), "utf8"));
   assert.equal(appJson.expo.runtimeVersion?.policy, "appVersion");
   assert.equal(
     appJson.expo.version,
-    "0.4.0",
-    "runtime follows the app version; 0.4.0 JS (expo-video) must not be delivered to build 7",
+    "0.5.0",
+    "runtime follows the app version; 0.5.0 JS (expo-notifications) must not be delivered to build 9",
   );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");

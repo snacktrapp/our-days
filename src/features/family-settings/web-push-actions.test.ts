@@ -25,6 +25,9 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/web-push/deliver-activity", () => ({
   deliverActivityWebPush: mocks.deliver,
 }));
+vi.mock("@/lib/expo-push/deliver-activity", () => ({
+  deliverActivityExpoPush: vi.fn(),
+}));
 
 import {
   deleteWebPushSubscriptionAction,
