@@ -9,6 +9,7 @@ import {
   type Ref,
 } from "react";
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
@@ -21,15 +22,11 @@ import Svg, { Path } from "react-native-svg";
 
 import { mediaMaxHeight } from "../lib/media-frame";
 import { videoPosterPath, type TimelineMoment } from "../lib/journal";
-import { mediaUrl } from "../lib/supabase";
+import { getSupabase, mediaUrl } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
-import {
-  clipStartSeconds,
-  videoAspectRatio,
-  videoDeliveryPath,
-  videoSurfaceAction,
-} from "../lib/video-playback";
+import { videoAspectRatio, videoSurfaceAction } from "../lib/video-playback";
+import { resolveVideoSource, type VideoSource } from "../lib/video-source";
 import { PrivateImage } from "./private-image";
 
 type Playback = {
@@ -215,7 +212,8 @@ function PosterFrame({
 function PlayingClip({
   video,
   source,
-  startSeconds,
+  moment,
+  headers,
   holding,
   muted,
   label,
@@ -226,8 +224,9 @@ function PlayingClip({
   onFailed,
 }: Readonly<{
   video: VideoModule;
-  source: { uri: string; headers?: Record<string, string> };
-  startSeconds: number;
+  source: VideoSource;
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
   holding: boolean;
   aspectRatio: number;
   muted: boolean;
@@ -240,11 +239,16 @@ function PlayingClip({
   const { colors } = useAppTheme();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
   const viewRef = useRef<FullscreenHandle>(null);
-  const sought = useRef(false);
+  // The poster stays over the player until AVPlayer has a frame, so a slow
+  // first read shows the picture and a spinner instead of a black box.
+  const [rendered, setRendered] = useState(false);
   const { useVideoPlayer, VideoView } = video;
-  const player = useVideoPlayer(source, (instance) => {
+  const playerSource = useMemo(
+    () => (source.headers ? { uri: source.uri, headers: source.headers } : { uri: source.uri }),
+    [source],
+  );
+  const player = useVideoPlayer(playerSource, (instance) => {
     instance.muted = muted;
-    if (startSeconds > 0) instance.currentTime = startSeconds;
   });
 
   useEffect(() => {
@@ -275,17 +279,6 @@ function PlayingClip({
     player.muted = muted;
   }, [player, muted]);
 
-  useEffect(() => {
-    if (sought.current || startSeconds <= 0) return;
-    sought.current = true;
-    player.currentTime = startSeconds;
-  }, [player, startSeconds]);
-
-  function seekIfNeeded() {
-    if (startSeconds > 0 && player.currentTime + 0.25 < startSeconds) {
-      player.currentTime = startSeconds;
-    }
-  }
   /* eslint-enable react-hooks/immutability */
 
   const surface = videoSurfaceAction({
@@ -312,8 +305,26 @@ function PlayingClip({
         nativeControls={false}
         allowsPictureInPicture={false}
         playsInline
-        onFirstFrameRender={seekIfNeeded}
+        onFirstFrameRender={() => setRendered(true)}
       />
+      {rendered ? null : (
+        <View style={styles.cover} pointerEvents="none">
+          {moment.hasPoster ? (
+            <PrivateImage
+              path={videoPosterPath(moment.id)}
+              width={moment.posterWidth && moment.posterHeight ? moment.posterWidth : 16}
+              height={moment.posterWidth && moment.posterHeight ? moment.posterHeight : 9}
+              label={label}
+              headers={headers}
+              frameWidth={0}
+              mat="#050b08"
+            />
+          ) : null}
+          <View style={styles.spinner}>
+            <ActivityIndicator color="#fff" accessibilityLabel={`Loading ${label}`} />
+          </View>
+        </View>
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={surface === "play" ? `Play ${label}` : `Full screen, ${label}`}
@@ -361,7 +372,7 @@ export function JournalVideo({
   const [muted, setMuted] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [video, setVideo] = useState<VideoModule | null>(null);
-  const startSeconds = clipStartSeconds(moment);
+  const [source, setSource] = useState<VideoSource | null>(null);
   const aspectRatio = videoAspectRatio(moment.posterWidth, moment.posterHeight);
   const [trackedOnScreen, setTrackedOnScreen] = useState(onScreen);
   if (onScreen !== trackedOnScreen) {
@@ -380,21 +391,20 @@ export function JournalVideo({
     // this promise; the poster stays up until a tap reports it.
     void loadVideoModule();
   }, []);
-  const source = useMemo(
-    () => ({
-      uri: mediaUrl(videoDeliveryPath(moment.id)),
-      headers: headers ?? undefined,
-    }),
-    [moment.id, headers],
-  );
-
   async function begin() {
     setUnavailable(false);
+    // Sign a fresh Storage URL on every tap; a retry after an expired URL gets a new one.
+    const sourcePromise = resolveVideoSource(getSupabase(), moment.id, {
+      url: mediaUrl,
+      headers,
+    });
     let loaded = await loadVideoModule();
     if (!loaded) {
       resetVideoModule();
       loaded = await loadVideoModule();
     }
+    const nextSource = await sourcePromise;
+    setSource(nextSource);
     if (!loaded) {
       setVideo(null);
       setStarted(false);
@@ -422,7 +432,7 @@ export function JournalVideo({
     />
   );
 
-  if (!started || !video) return poster;
+  if (!started || !video || !source) return poster;
 
   return (
     <VideoBoundary
@@ -436,7 +446,8 @@ export function JournalVideo({
       <PlayingClip
         video={video}
         source={source}
-        startSeconds={startSeconds}
+        moment={moment}
+        headers={headers}
         holding={holding}
         muted={muted}
         label={label}
@@ -468,6 +479,20 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#050b08",
+  },
+  cover: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: "center",
+    backgroundColor: "#050b08",
+  },
+  spinner: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
   },
   hit: {
     position: "absolute",

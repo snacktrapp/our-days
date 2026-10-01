@@ -2,9 +2,9 @@
  * Inline video playback shared by video posts and Insight clips.
  *
  * The web player is `VideoMomentMedia`: a poster (or a 16:9 mat), no
- * autoplay, object-fit contain on #050b08. Insight start times are not a
- * column. They live on the source URL the same way YouTube stores them
- * (`t=120`, `t=1m30s`, `t=1h2m3s`, `start=`) or as a media fragment (`#t=`).
+ * autoplay, object-fit contain on #050b08. An Insight's source URL can carry
+ * the time in the full source (`t=120`, `t=1m30s`, `t=1h2m3s`, `start=`, or
+ * `#t=`). That time is attribution only: the stored clip already starts there.
  */
 
 const plainSeconds = /^\d+(?:\.\d+)?s?$/iu;
@@ -64,11 +64,19 @@ export function insightClipStartSeconds(sourceUrl: string | undefined) {
   return positive(clockSeconds(url.searchParams.get("start") ?? "")) ?? 0;
 }
 
+/**
+ * Where playback of the stored file starts: always 0.
+ *
+ * An Insight's stored video is the excerpt itself, cut from the source at the
+ * time on its URL (a 13 s clip for `&t=1695`). The `t=` on `sourceUrl` is
+ * attribution for the full source, not an offset into the stored clip. The web
+ * player starts these at 0 too. Seeking the clip to 1695 s asked AVPlayer for
+ * a time far past the end of a 13 s file.
+ */
 export function clipStartSeconds(
-  moment: Readonly<{ kind: string; sourceUrl?: string }>,
+  _moment: Readonly<{ kind: string; sourceUrl?: string }>,
 ) {
-  if (moment.kind !== "insight") return 0;
-  return insightClipStartSeconds(moment.sourceUrl);
+  return 0;
 }
 
 /**
