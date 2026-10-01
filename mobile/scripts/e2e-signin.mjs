@@ -145,6 +145,18 @@ await step("photo menu matches the web and people stay in join order", async () 
   assert.equal(media.mediaSourceForMenuIndex(1), "camera");
   assert.equal(media.mediaSourceForMenuIndex(2), "files");
   assert.equal(media.mediaSourceForMenuIndex(3), null);
+  assert.deepEqual(
+    media.mediaMenuItems.map((item) => item.symbol),
+    ["photo.on.rectangle", "camera", "folder"],
+  );
+  assert.equal(media.mediaSourceForMenuId("library"), "library");
+  assert.equal(media.mediaSourceForMenuId("camera"), "camera");
+  assert.equal(media.mediaSourceForMenuId("files"), "files");
+  assert.equal(media.mediaSourceForMenuId("cancel"), null);
+  assert.equal(media.usesNativeMediaMenu("ios", true), true);
+  assert.equal(media.usesNativeMediaMenu("ios", false), false);
+  assert.equal(media.usesNativeMediaMenu("android", true), false);
+  assert.equal(media.usesNativeMediaMenu("web", true), false);
   const mvhd = new Uint8Array(28);
   mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
   new DataView(mvhd.buffer).setUint32(16, 1000);

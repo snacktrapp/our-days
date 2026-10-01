@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActionSheetIOS,
   Alert,
   Animated,
   Keyboard,
@@ -28,7 +27,7 @@ import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
 import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
 import { rememberPostedCircle } from "../lib/last-posted-circle";
-import { mediaMenuOptions, mediaSourceForMenuIndex, pickJournalMedia, type MediaSource } from "../lib/pick-media";
+import { pickJournalMedia, type MediaSource } from "../lib/pick-media";
 import { emptyPlace, type PlaceSelection } from "../lib/places";
 import {
   createFamilyMoment,
@@ -63,6 +62,7 @@ import {
   useComposerInput,
 } from "./keyboard-form";
 import { BiblePickerSheet, type BiblePicker } from "./bible-picker-sheet";
+import { MediaChooser } from "./media-chooser";
 import { useSheetDrag } from "./sheet-drag";
 
 type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
@@ -357,32 +357,6 @@ export function AddSheet({
       .catch((error: unknown) => {
         setError(error instanceof Error ? error.message : "That photo could not be read.");
       });
-  }
-
-  function chooseMedia() {
-    if (Platform.OS === "web") {
-      takeMedia("files");
-      return;
-    }
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: [...mediaMenuOptions, "Cancel"],
-          cancelButtonIndex: mediaMenuOptions.length,
-        },
-        (index) => {
-          const source = mediaSourceForMenuIndex(index);
-          if (source) takeMedia(source);
-        },
-      );
-      return;
-    }
-    Alert.alert("Choose photo or video", undefined, [
-      { text: "Photo Library", onPress: () => takeMedia("library") },
-      { text: "Take Photo or Video", onPress: () => takeMedia("camera") },
-      { text: "Choose Files", onPress: () => takeMedia("files") },
-      { text: "Cancel", style: "cancel" },
-    ]);
   }
 
   async function choosePassage(next: BibleVerseSelection) {
@@ -702,12 +676,11 @@ export function AddSheet({
           {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
             <View style={styles.form}>
               {mode === "photo" ? (
-                <Pressable
-                  accessibilityRole="button"
+                <MediaChooser
                   accessibilityLabel={
                     photoName ? `Add photo or video, ${photoName}` : "Add photo or video"
                   }
-                  onPress={chooseMedia}
+                  onPick={takeMedia}
                   style={({ pressed }) => [
                     styles.photoDrop,
                     {
@@ -734,7 +707,7 @@ export function AddSheet({
                   >
                     {photoName ?? "Private to this family"}
                   </Text>
-                </Pressable>
+                </MediaChooser>
               ) : null}
               {mode === "bible" ? (
                 <BiblePickers

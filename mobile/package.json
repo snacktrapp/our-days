@@ -13,6 +13,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@expo/ui": "~57.0.21",
     "@expo/vector-icons": "^15.1.1",
     "@supabase/supabase-js": "2.112.4",
     "expo": "~57.0.26",
