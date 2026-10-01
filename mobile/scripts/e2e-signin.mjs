@@ -767,6 +767,20 @@ await step("sheets over the feed keep taps with the keyboard up, and sign-out st
   assert.match(read("../src/components/auth-provider.tsx"), /auth\.signOut\(\{ scope: "local" \}\)/);
 });
 
+await step("mentions banner keeps the web Got it dismiss", async () => {
+  const fs = await import("node:fs");
+  const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
+  const banner = read("../src/components/journal-banner.tsx");
+  const journal = read("../src/app/journal.tsx");
+  assert.match(banner, /ctaLabel: "Got it"/);
+  assert.match(banner, /glyph: "@"/);
+  assert.match(banner, /They'll get a notice so they don't miss it\./);
+  assert.equal((banner.match(/onPress=\{onDismiss\}/g) ?? []).length, 2);
+  assert.match(journal, /const mentionsKey = "our-days:mentions-announcement"/);
+  assert.match(journal, /writePref\(mentionsKey, "dismissed"\)/);
+  assert.match(journal, /value === "dismissed"/);
+});
+
 await step("comment and heart a test-circle post, then clean up", async () => {
   resetStore();
   const app = await freshApp("comment-heart");
