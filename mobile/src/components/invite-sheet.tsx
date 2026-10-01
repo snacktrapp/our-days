@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +15,7 @@ import {
   acceptCircleInvitation,
   defaultInviteCircleId,
   requestCircleInvitation,
+  validInvitationEmail,
 } from "../lib/invites";
 import { postableCircles, type CircleMembership } from "../lib/journal";
 import { getSupabase } from "../lib/supabase";
@@ -43,9 +46,11 @@ export function InviteSendSheet({
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const ready = Boolean(circleId) && name.trim().length > 0 && validInvitationEmail(email);
+
   async function send() {
     const supabase = getSupabase();
-    if (!supabase || busy) return;
+    if (!supabase || busy || !ready) return;
     if (!circleId) {
       setMessage("Choose which circle to invite them to.");
       return;
@@ -66,6 +71,7 @@ export function InviteSendSheet({
 
   return (
     <Modal transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Pressable style={styles.scrim} onPress={onClose} />
       <View style={[styles.sheet, { backgroundColor: colors.cream, paddingBottom: Math.max(16, insets.bottom) }]}>
         <View style={styles.bar}>
@@ -76,12 +82,12 @@ export function InviteSendSheet({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send invitation"
-            accessibilityState={{ disabled: busy || !circleId }}
-            disabled={busy || !circleId}
+            accessibilityState={{ disabled: busy || !ready }}
+            disabled={busy || !ready}
             onPress={() => void send()}
             style={[styles.barSide, styles.barEnd]}
           >
-            <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: circleId ? 1 : 0.4 }]}>
+            <Text style={[face(colors, 700), { color: colors.action, fontSize: 17, opacity: ready ? 1 : 0.4 }]}>
               {busy ? "Sending…" : "Send"}
             </Text>
           </Pressable>
@@ -128,6 +134,7 @@ export function InviteSendSheet({
         />
         {message ? <Text style={[face(colors, 400), { color: colors.ink }]}>{message}</Text> : null}
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
