@@ -83,13 +83,16 @@ export function CommentSheet({
     if (!pending) posting.current = false;
   }, [pending]);
 
+  // An edit only needs a confirm when the text changed; a new comment when it has any text.
+  const dirty = body.trim() !== initialBody.trim();
+
   function requestClose() {
     if (pending) return;
-    if (!body.trim()) {
+    if (!dirty) {
       onDismiss();
       return;
     }
-    Alert.alert("Discard this comment?", undefined, [
+    Alert.alert(editing ? "Discard these edits?" : "Discard this comment?", undefined, [
       { text: "Keep editing", style: "cancel" },
       { text: "Discard", style: "destructive", onPress: onDismiss },
     ]);
@@ -101,7 +104,7 @@ export function CommentSheet({
         springBack();
         return;
       }
-      if (!body.trim()) {
+      if (!dirty) {
         dismiss(() => {
           Keyboard.dismiss();
           onDismiss();
