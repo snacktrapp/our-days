@@ -36,12 +36,15 @@ import {
 export function SettingsScreen({
   profile,
   circles = [],
+  viewedCircleId = null,
   onSaveColor,
   onSignOut,
   onScroll,
 }: Readonly<{
   profile: ViewerProfile | null;
   circles?: readonly CircleMembership[];
+  /** Circle feed behind settings; the invite sheet starts there. */
+  viewedCircleId?: string | null;
   onSaveColor: (color: ProfileColorToken) => Promise<{ ok: boolean; message: string }>;
   onSignOut: () => void;
   onScroll?: (y: number) => void;
@@ -107,7 +110,7 @@ export function SettingsScreen({
       <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
         <SignOutRow onSignOut={onSignOut} />
       </View>
-      {inviting ? <InviteSendSheet circles={circles} onClose={() => setInviting(false)} /> : null}
+      {inviting ? <InviteSendSheet circles={circles} viewedCircleId={viewedCircleId} onClose={() => setInviting(false)} /> : null}
     </ScrollView>
   );
 }

@@ -477,6 +477,7 @@ export default function JournalScreen() {
         <SettingsScreen
           profile={profile}
           circles={circles}
+          viewedCircleId={kind === "circle" ? scope : null}
           onScroll={applyScroll}
           onSaveColor={async (color) => {
             if (!supabase) return { ok: false, message: "Your color couldn’t be saved. Try again." };

@@ -32,6 +32,21 @@ export function invitationTokenFromLink(value: string) {
   return null;
 }
 
+/**
+ * Which circle the invite sheet starts on. The circle being viewed wins when
+ * the viewer organizes it; a lone organizer circle is unambiguous. Otherwise
+ * nothing is picked, so the organizer must choose (never a silent default to
+ * whichever circle happens to be first).
+ */
+export function defaultInviteCircleId(
+  organizerCircleIds: readonly string[],
+  viewedCircleId: string | null | undefined,
+) {
+  if (viewedCircleId && organizerCircleIds.includes(viewedCircleId)) return viewedCircleId;
+  if (organizerCircleIds.length === 1) return organizerCircleIds[0] ?? "";
+  return "";
+}
+
 export function validInvitationEmail(value: string) {
   const email = value.trim().toLowerCase();
   return emailPattern.test(email) && email.length <= 254;
