@@ -59,7 +59,14 @@
           "isAndroidMotionActivityEnabled": false
         }
       ],
-      "expo-splash-screen"
+      "expo-splash-screen",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

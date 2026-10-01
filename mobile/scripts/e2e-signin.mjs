@@ -189,6 +189,81 @@ await step("sheet drag springs back when short and confirms unsaved text", async
   assert.equal(sheet.sheetHasUnsavedChanges({ ...initial, body: "A note" }, initial), true);
 });
 
+await step("a video post shows its poster, then plays, and pauses offscreen", async () => {
+  const playback = await import("../src/lib/video-playback.ts");
+  const journal = await import("../src/lib/journal.ts");
+  const momentId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(journal.videoPosterPath(momentId), `/api/media/videos/${momentId}/poster`);
+  assert.equal(playback.videoDeliveryPath(momentId), `/api/media/videos/${momentId}`);
+  assert.equal(playback.videoAspectRatio(1080, 1920), 1080 / 1920);
+  assert.equal(playback.videoAspectRatio(undefined, undefined), 16 / 9);
+  assert.equal(
+    playback.insightClipStartSeconds("https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120"),
+    120,
+  );
+  assert.equal(
+    playback.insightClipStartSeconds("https://www.youtube.com/watch?v=abc&t=1m30s"),
+    90,
+  );
+  assert.equal(
+    playback.insightClipStartSeconds("https://www.youtube.com/watch?v=abc&t=1h2m3s"),
+    3723,
+  );
+  assert.equal(
+    playback.insightClipStartSeconds("https://www.youtube.com/embed/abc?start=45"),
+    45,
+  );
+  assert.equal(playback.insightClipStartSeconds("https://example.com/clip.mp4#t=12.5"), 12.5);
+  assert.equal(playback.insightClipStartSeconds("https://example.com/clip.mp4#t=10,20"), 10);
+  assert.equal(playback.insightClipStartSeconds("https://example.com/no-time"), 0);
+  const insight = {
+    kind: "insight",
+    sourceUrl: "https://www.youtube.com/watch?v=nm1TxQj9IsQ&t=120",
+  };
+  assert.equal(playback.clipStartSeconds(insight), 120);
+  assert.equal(
+    playback.clipStartSeconds({ kind: "video", sourceUrl: insight.sourceUrl }),
+    0,
+  );
+  const poster = playback.videoPlaybackPlan({
+    started: false,
+    onScreen: true,
+    startSeconds: 120,
+  });
+  assert.equal(poster.showPoster, true);
+  assert.equal(poster.playing, false);
+  assert.equal(poster.startSeconds, 120);
+  const playing = playback.videoPlaybackPlan({
+    started: true,
+    onScreen: true,
+    startSeconds: 120,
+  });
+  assert.equal(playing.showPoster, false);
+  assert.equal(playing.playing, true);
+  const paused = playback.videoPlaybackPlan({
+    started: true,
+    onScreen: false,
+    startSeconds: 120,
+  });
+  assert.equal(paused.paused, true);
+  assert.equal(paused.playing, false);
+  const returned = playback.videoPlaybackPlan({
+    started: true,
+    onScreen: true,
+    startSeconds: 120,
+    resumed: false,
+  });
+  assert.equal(returned.playing, false);
+  assert.equal(returned.paused, true);
+  assert.equal(playback.videoSurfaceAction({ started: false, onScreen: true }), "play");
+  assert.equal(playback.videoSurfaceAction({ started: true, onScreen: false }), "play");
+  assert.equal(
+    playback.videoSurfaceAction({ started: true, onScreen: true, resumed: false }),
+    "play",
+  );
+  assert.equal(playback.videoSurfaceAction({ started: true, onScreen: true }), "fullscreen");
+});
+
 const { service, publishable } = await loadKeys();
 process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
 process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
@@ -512,6 +587,82 @@ await step("comment and heart a test-circle post, then clean up", async () => {
     assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
     await supabase.auth.signOut({ scope: "local" });
   }
+});
+
+await step("test circle video poster is readable and playback starts from its offset", async () => {
+  resetStore();
+  const app = await freshApp("video-smoke");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const playback = await import("../src/lib/video-playback.ts");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to read another circle`);
+  let cursor;
+  let snapshotAt;
+  let found;
+  for (let pageIndex = 0; pageIndex < 5 && !found; pageIndex += 1) {
+    const page = await journal.loadTimelinePage(supabase, {
+      circleId: circle.circleId,
+      cursor,
+      snapshotAt,
+      viewerMembershipIds: [circle.membershipId],
+    });
+    found = page.moments.find(
+      (moment) => moment.kind === "video" || (moment.kind === "insight" && moment.hasVideo),
+    );
+    cursor = page.cursor;
+    snapshotAt = page.snapshotAt;
+    if (!page.hasMore) break;
+  }
+  if (!found) {
+    console.log(`       ${circleName} has no video post to smoke`);
+    await supabase.auth.signOut({ scope: "local" });
+    return;
+  }
+  const startSeconds = playback.clipStartSeconds(found);
+  const posterPlan = playback.videoPlaybackPlan({
+    started: false,
+    onScreen: true,
+    startSeconds,
+  });
+  const playingPlan = playback.videoPlaybackPlan({
+    started: true,
+    onScreen: true,
+    startSeconds,
+  });
+  assert.equal(posterPlan.showPoster, true);
+  assert.equal(playingPlan.playing, true);
+  assert.equal(playingPlan.startSeconds, found.kind === "insight" ? startSeconds : 0);
+  assert.equal(journal.videoPosterPath(found.id), `/api/media/videos/${found.id}/poster`);
+  assert.equal(playback.videoDeliveryPath(found.id), `/api/media/videos/${found.id}`);
+  const headers = await app.mediaRequestHeaders();
+  assert.ok(headers?.Cookie, "media cookie header built");
+  if (found.hasPoster) {
+    const poster = await realFetch(app.mediaUrl(journal.videoPosterPath(found.id)), {
+      headers,
+      redirect: "manual",
+    });
+    await poster.body?.cancel();
+    console.log(`       poster ${journal.videoPosterPath(found.id)} -> HTTP ${poster.status}`);
+    assert.ok(poster.status !== 401 && poster.status !== 403, `poster rejected: ${poster.status}`);
+  }
+  const video = await realFetch(app.mediaUrl(playback.videoDeliveryPath(found.id)), {
+    headers: { ...headers, Range: "bytes=0-1" },
+    redirect: "manual",
+  });
+  await video.body?.cancel();
+  console.log(
+    `       video ${playback.videoDeliveryPath(found.id)} -> HTTP ${video.status}, start ${startSeconds}s`,
+  );
+  assert.ok(video.status !== 401 && video.status !== 403, `video rejected: ${video.status}`);
+  await supabase.auth.signOut({ scope: "local" });
 });
 
 await step("OTA runtime is 0.3.0 so build 6 cannot receive this JS", async () => {
