@@ -18,6 +18,7 @@ import {
   clampDragDx,
   pairSlideTransform,
   slideMs,
+  swipeAxis,
   swipeThreshold,
   waitForFrameReady,
   wrapIndex,
@@ -42,6 +43,7 @@ export function PhotoCardPager({
   const [requested, setRequested] = useState(() => new Set([0]));
   const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(0);
   const reportedRatioRef = useRef(false);
@@ -168,6 +170,60 @@ export function PhotoCardPager({
       onIntrinsicRatio(node.naturalHeight / node.naturalWidth);
     });
   }, [onIntrinsicRatio, photos.length]);
+
+  useEffect(() => {
+    if (photos.length < 2) return;
+    const root = rootRef.current;
+    if (!root) return;
+    // iOS Safari decides `touch-action: pan-y` at touchstart, so any swipe
+    // with a little vertical drift became a page scroll (and a pointercancel).
+    // Cancel the native pan from a non-passive touchmove once the gesture has
+    // locked horizontal, using the same 45° rule as the pointer handlers.
+    let touch: {
+      id: number;
+      x: number;
+      y: number;
+      axis: "x" | "y" | null;
+    } | null = null;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        touch = null;
+        return;
+      }
+      const t = event.touches[0];
+      touch = { id: t.identifier, x: t.clientX, y: t.clientY, axis: null };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!touch) return;
+      if (event.touches.length !== 1) {
+        touch = null;
+        return;
+      }
+      const t = Array.from(event.touches).find(
+        (candidate) => candidate.identifier === touch?.id,
+      );
+      if (!t) return;
+      if (touch.axis == null) {
+        touch.axis =
+          pointerRef.current?.axis ??
+          swipeAxis(t.clientX - touch.x, t.clientY - touch.y);
+      }
+      if (touch.axis === "x" && event.cancelable) event.preventDefault();
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length === 0) touch = null;
+    };
+    root.addEventListener("touchstart", onTouchStart, { passive: true });
+    root.addEventListener("touchmove", onTouchMove, { passive: false });
+    root.addEventListener("touchend", onTouchEnd, { passive: true });
+    root.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      root.removeEventListener("touchstart", onTouchStart);
+      root.removeEventListener("touchmove", onTouchMove);
+      root.removeEventListener("touchend", onTouchEnd);
+      root.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [photos.length]);
 
   useEffect(
     () => () => {
@@ -301,10 +357,9 @@ export function PhotoCardPager({
     const rawDx = event.clientX - start.x;
     const rawDy = event.clientY - start.y;
     if (start.axis == null) {
-      if (Math.abs(rawDx) < axisLockPx && Math.abs(rawDy) < axisLockPx) {
-        return;
-      }
-      if (Math.abs(rawDy) >= Math.abs(rawDx)) {
+      const locked = swipeAxis(rawDx, rawDy);
+      if (locked == null) return;
+      if (locked === "y") {
         start.axis = "y";
         setAxis("y");
         return;
@@ -415,6 +470,7 @@ export function PhotoCardPager({
 
   return (
     <div
+      ref={rootRef}
       className={`photo-card-pager${photos.length > 1 ? " has-album" : ""}${
         axis === "x" ? " is-axis-x" : ""
       }`}
