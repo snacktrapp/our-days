@@ -266,7 +266,7 @@ describe("MomentCard timeline media", () => {
     expect(image).toHaveAttribute("height", "801");
     const frame = image.closest(".photo-frame");
     expect(frame).toHaveClass("has-known-ratio", "has-reserved-frame");
-    expect(frame).not.toHaveClass("is-adaptive-album");
+    expect(frame).not.toHaveClass("is-album");
     const sizer = frame?.querySelector(".photo-frame-sizer");
     expect(sizer).toHaveAttribute("viewBox", "0 0 1200 801");
     expect(frame?.firstElementChild).toBe(sizer);
@@ -370,8 +370,10 @@ describe("MomentCard timeline media", () => {
       />,
     );
 
-    expect(document.querySelector(".photo-frame")).toHaveClass(
-      "is-adaptive-album",
+    expect(document.querySelector(".photo-frame")).toHaveClass("is-album");
+    expect(document.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      `0 0 10000 ${Math.round(10000 * (1200 / 900))}`,
     );
     expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
     expect(screen.queryByRole("img", { name: "Second porch" })).toBeNull();
@@ -419,7 +421,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("clamps a too-tall album cover to 3:4 before the first swipe", () => {
+  it("sizes an album to its tallest slide, capped at 9:16", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -453,12 +455,100 @@ describe("MomentCard timeline media", () => {
         }}
       />,
     );
-    expect(container.querySelector(".photo-frame")).toHaveClass(
-      "is-adaptive-album",
+    expect(container.querySelector(".photo-frame")).toHaveClass("is-album");
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      `0 0 10000 ${Math.round(10000 * (16 / 9))}`,
+    );
+  });
+
+  it("keeps an album no taller than 4:3 when nothing in it is taller", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "wide-album",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Wide cover",
+            badgeLabel: "AUG 28",
+            width: 1600,
+            height: 900,
+          },
+          photos: [
+            {
+              id: "wide",
+              src: "/sample-family.jpg",
+              alt: "Wide cover",
+              width: 1600,
+              height: 900,
+            },
+            {
+              id: "standard",
+              src: "/sample-family.jpg",
+              alt: "Standard cover",
+              width: 1200,
+              height: 900,
+            },
+          ],
+        }}
+      />,
     );
     expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
       "viewBox",
-      "0 0 10000 13333",
+      "0 0 10000 7500",
+    );
+  });
+
+  it("uses the first loaded image when an album has no stored dimensions", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...thought,
+          id: "unmeasured-album",
+          kind: "photo",
+          kicker: "A photo",
+          image: {
+            src: "/sample-family.jpg",
+            alt: "Unknown cover",
+            badgeLabel: "AUG 28",
+          },
+          photos: [
+            {
+              id: "unknown",
+              src: "/sample-family.jpg",
+              alt: "Unknown cover",
+            },
+            {
+              id: "unknown-2",
+              src: "/sample-family.jpg",
+              alt: "Unknown second",
+            },
+          ],
+        }}
+      />,
+    );
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      "0 0 4 3",
+    );
+    const img = container.querySelector(
+      '[data-photo-index="0"] img',
+    ) as HTMLImageElement;
+    Object.defineProperty(img, "naturalWidth", {
+      configurable: true,
+      get: () => 900,
+    });
+    Object.defineProperty(img, "naturalHeight", {
+      configurable: true,
+      get: () => 1600,
+    });
+    fireEvent.load(img);
+    expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
+      "viewBox",
+      `0 0 10000 ${Math.round(10000 * (16 / 9))}`,
     );
   });
 

@@ -2,8 +2,6 @@
 
 import {
   useEffect,
-  useId,
-  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -13,16 +11,8 @@ import {
 } from "react";
 import { photoAlbum } from "@/features/moments/moment-photos";
 import { overlayMotionReduced } from "@/features/shell/use-overlay-popover-close";
-import { createAlbumCenterFollower } from "./album-frame-scroll";
 import {
-  clearAlbumFrameHeight,
-  setAlbumFrameHeight,
-} from "./album-frame-style";
-import {
-  albumFrameFit,
-  albumGestureFrameHeight,
   albumIndexes,
-  albumPhotoHeightRatio,
   albumSlideWidth,
   axisLockPx,
   clampDragDx,
@@ -38,9 +28,12 @@ import type { PhotoMomentViewModel } from "./timeline-view-model";
 export function PhotoCardPager({
   moment,
   images,
+  onIntrinsicRatio,
 }: Readonly<{
   moment: PhotoMomentViewModel;
   images: readonly ReactNode[];
+  /** Used once when an album has no stored width/height. */
+  onIntrinsicRatio?: (heightOverWidth: number) => void;
 }>) {
   const photos = photoAlbum(moment);
   const [index, setIndex] = useState(0);
@@ -49,22 +42,9 @@ export function PhotoCardPager({
   const [requested, setRequested] = useState(() => new Set([0]));
   const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
-  const [measured, setMeasured] = useState(
-    () => new Map<number, { width: number; height: number }>(),
-  );
-  const frameKey = useId();
   const stageRef = useRef<HTMLDivElement>(null);
-  const pagerRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(0);
-  const frameReadyRef = useRef(false);
-  const rememberRef = useRef<(img: HTMLImageElement) => void>(() => {});
-  const publishFrameRef = useRef<
-    (
-      active: AlbumPair | null,
-      settledIndex: number,
-      instant: boolean,
-    ) => boolean
-  >(() => false);
+  const reportedRatioRef = useRef(false);
   const slideWidthRef = useRef(0);
   const pairRef = useRef<AlbumPair | null>(null);
   const pendingToRef = useRef<number | null>(null);
@@ -83,9 +63,6 @@ export function PhotoCardPager({
     dx: number;
     commit: boolean;
   } | null>(null);
-  const centerRef = useRef<ReturnType<typeof createAlbumCenterFollower> | null>(
-    null,
-  );
 
   function requestPhoto(photoIndex: number) {
     setRequested((current) =>
@@ -128,10 +105,6 @@ export function PhotoCardPager({
     }
     pairRef.current = next;
     setPair(next);
-    if (next?.mode === "drag") {
-      publishFrame(next, indexRef.current, true);
-      centerRef.current?.sync(true);
-    }
   }
 
   function readSlideWidth() {
@@ -142,105 +115,12 @@ export function PhotoCardPager({
 
   indexRef.current = index;
 
-  function ratioAt(photoIndex: number) {
-    const photo = photos[photoIndex];
-    const stored = albumPhotoHeightRatio(photo?.width, photo?.height);
-    if (stored != null) return stored;
-    const seen = measured.get(photoIndex);
-    const fromImage = albumPhotoHeightRatio(seen?.width, seen?.height);
-    if (fromImage != null) return fromImage;
-    const first = photos[0];
-    const firstStored = albumPhotoHeightRatio(first?.width, first?.height);
-    if (firstStored != null) return firstStored;
-    const firstSeen = measured.get(0);
-    const firstImage = albumPhotoHeightRatio(
-      firstSeen?.width,
-      firstSeen?.height,
-    );
-    if (firstImage != null) return firstImage;
-    return 0.75;
-  }
-
-  function fitClass(photoIndex: number) {
-    const photo = photos[photoIndex];
-    const seen = measured.get(photoIndex);
-    const width = photo?.width && photo.width > 0 ? photo.width : seen?.width;
-    const height =
-      photo?.height && photo.height > 0 ? photo.height : seen?.height;
-    return albumFrameFit(width, height) === "cover" ? "is-cover" : "is-contain";
-  }
-
-  function publishFrame(
-    active: AlbumPair | null,
-    settledIndex: number,
-    instant: boolean,
-  ) {
-    const width = readSlideWidth();
-    const fromIndex = active?.from ?? settledIndex;
-    const toIndex = active?.to ?? settledIndex;
-    const height = albumGestureFrameHeight(
-      width,
-      ratioAt(fromIndex),
-      ratioAt(toIndex),
-      active?.mode ?? "idle",
-      active?.dx ?? 0,
-    );
-    if (height <= 0) return false;
-    setAlbumFrameHeight(document, frameKey, height);
-    if (stageRef.current) {
-      stageRef.current.dataset.frameHeight = height.toFixed(2);
-    }
-    const pager = pagerRef.current;
-    if (pager) {
-      if (instant || overlayMotionReduced())
-        pager.dataset.heightInstant = "true";
-      else delete pager.dataset.heightInstant;
-    }
-    return true;
-  }
-
-  publishFrameRef.current = publishFrame;
-
-  function animateSettledFrame(next: AlbumPair) {
-    if (overlayMotionReduced()) {
-      publishFrame(next, indexRef.current, true);
-      centerRef.current?.sync(true);
-      return;
-    }
-    if (pagerRef.current) delete pagerRef.current.dataset.heightInstant;
-    requestAnimationFrame(() => {
-      publishFrame(next, indexRef.current, false);
-      centerRef.current?.sync(false);
-    });
-  }
-
   function rememberImage(img: HTMLImageElement) {
-    const host = img.closest("[data-photo-index]");
-    const photoIndex = Number(host?.getAttribute("data-photo-index"));
-    if (!Number.isInteger(photoIndex) || photoIndex < 0) return;
-    const photo = photos[photoIndex];
-    if (photo?.width && photo.height && photo.width > 0 && photo.height > 0) {
-      return;
-    }
+    if (reportedRatioRef.current || !onIntrinsicRatio) return;
     if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
-    setMeasured((current) => {
-      const previous = current.get(photoIndex);
-      if (
-        previous?.width === img.naturalWidth &&
-        previous.height === img.naturalHeight
-      ) {
-        return current;
-      }
-      const next = new Map(current);
-      next.set(photoIndex, {
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      });
-      return next;
-    });
+    reportedRatioRef.current = true;
+    onIntrinsicRatio(img.naturalHeight / img.naturalWidth);
   }
-
-  rememberRef.current = rememberImage;
 
   const displayIndex =
     pair?.mode === "snap" || pair?.mode === "drag" ? pair.to : index;
@@ -272,119 +152,22 @@ export function PhotoCardPager({
     setIndex(nextIndex);
     writePair(null);
     setAxis(null);
-    publishFrame(null, nextIndex, false);
   }
 
-  useLayoutEffect(() => {
-    if (photos.length < 2) return;
-    const stage = stageRef.current;
-    if (!stage) return;
-    const update = () => {
-      const width = albumSlideWidth(stage);
-      if (width <= 0 || width === slideWidthRef.current) return;
-      slideWidthRef.current = width;
-      const active = pairRef.current;
-      const dragging = active?.mode === "drag";
-      const published = publishFrameRef.current(
-        dragging ? active : null,
-        indexRef.current,
-        true,
-      );
-      if (published) {
-        frameReadyRef.current = true;
-        pagerRef.current?.setAttribute("data-frame-ready", "true");
-        if (!dragging) centerRef.current?.noteHeight();
-      }
-      if (dragging) return;
-      requestAnimationFrame(() => {
-        if (pairRef.current?.mode === "drag") return;
-        if (overlayMotionReduced()) return;
-        delete pagerRef.current?.dataset.heightInstant;
-      });
-    };
-    update();
-    const follower = createAlbumCenterFollower(stage);
-    centerRef.current = follower;
-    const view = stage.ownerDocument.defaultView;
-    let resizeScheduled = false;
-    let disposed = false;
-    let lastInlineSize = -1;
-    const scheduleWidthUpdate = () => {
-      if (!view || resizeScheduled || disposed) return;
-      // Set the flag before requesting the frame. The test runner invokes
-      // requestAnimationFrame immediately, and assigning the id afterward
-      // would leave the flag stuck.
-      resizeScheduled = true;
-      view.requestAnimationFrame(() => {
-        resizeScheduled = false;
-        if (!disposed) update();
-      });
-    };
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", update);
-      return () => {
-        disposed = true;
-        window.removeEventListener("resize", update);
-        follower.stop();
-        centerRef.current = null;
-      };
-    }
-    // The stage's own height follows its width, and that height animates.
-    // Writing it inside this callback is the WebKit pageerror
-    // "ResizeObserver loop completed with undelivered notifications."
-    // Height-only ticks are ignored; a width change is applied next frame.
-    const observer = new ResizeObserver((entries) => {
-      const inline = entries[0]?.contentRect.width ?? 0;
-      if (inline > 0 && Math.abs(inline - lastInlineSize) < 0.5) return;
-      if (inline > 0) lastInlineSize = inline;
-      scheduleWidthUpdate();
-    });
-    observer.observe(stage);
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      follower.stop();
-      centerRef.current = null;
-    };
-  }, [photos.length]);
-
-  useLayoutEffect(() => {
-    if (photos.length < 2) return;
-    const stage = stageRef.current;
-    stage?.querySelectorAll("img").forEach((node) => {
-      if (node instanceof HTMLImageElement) rememberRef.current(node);
-    });
-    const active = pairRef.current;
-    if (active?.mode === "drag") {
-      publishFrameRef.current(active, indexRef.current, true);
-      centerRef.current?.sync(true);
+  useEffect(() => {
+    if (!onIntrinsicRatio || photos.length < 2 || reportedRatioRef.current) {
       return;
     }
-    if (active?.mode === "snap" || active?.mode === "spring") return;
-    const firstPublish = !frameReadyRef.current;
-    const published = publishFrameRef.current(
-      null,
-      indexRef.current,
-      firstPublish,
-    );
-    if (!published) return;
-    frameReadyRef.current = true;
-    pagerRef.current?.setAttribute("data-frame-ready", "true");
-    centerRef.current?.noteHeight();
-    if (!firstPublish) return;
-    requestAnimationFrame(() => {
-      if (pairRef.current?.mode === "drag") return;
-      if (overlayMotionReduced()) return;
-      delete pagerRef.current?.dataset.heightInstant;
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.querySelectorAll("img").forEach((node) => {
+      if (!(node instanceof HTMLImageElement) || !node.complete) return;
+      if (reportedRatioRef.current) return;
+      if (node.naturalWidth <= 0 || node.naturalHeight <= 0) return;
+      reportedRatioRef.current = true;
+      onIntrinsicRatio(node.naturalHeight / node.naturalWidth);
     });
-  }, [measured, photos]);
-
-  useEffect(
-    () => () => {
-      clearAlbumFrameHeight(document, frameKey);
-    },
-    [frameKey],
-  );
+  }, [onIntrinsicRatio, photos.length]);
 
   useEffect(
     () => () => {
@@ -397,7 +180,6 @@ export function PhotoCardPager({
   function startSettle(next: AlbumPair) {
     pendingToRef.current = next.mode === "snap" ? next.to : next.from;
     writePair(next);
-    animateSettledFrame(next);
     clearFinishTimer();
     finishTimerRef.current = window.setTimeout(finishPair, slideMs + 40);
   }
@@ -409,8 +191,6 @@ export function PhotoCardPager({
       indexRef.current = to;
       setIndex(to);
       writePair(null);
-      publishFrame(null, to, true);
-      centerRef.current?.sync(true);
       return;
     }
     pendingToRef.current = to;
@@ -512,7 +292,6 @@ export function PhotoCardPager({
       axis: null,
       dx: 0,
     };
-    centerRef.current?.releaseUser();
     setAxis(null);
   }
 
@@ -612,10 +391,10 @@ export function PhotoCardPager({
         data-photo-index={photoIndex}
         className={
           role === "parked"
-            ? `photo-card-pager-frame is-parked ${fitClass(photoIndex)}`
+            ? "photo-card-pager-frame is-parked"
             : role === "incoming"
-              ? `photo-card-pager-frame is-incoming ${fitClass(photoIndex)}`
-              : `photo-card-pager-frame is-outgoing ${fitClass(photoIndex)}`
+              ? "photo-card-pager-frame is-incoming"
+              : "photo-card-pager-frame is-outgoing"
         }
         aria-hidden={role === "parked" ? true : undefined}
       >
@@ -636,8 +415,6 @@ export function PhotoCardPager({
 
   return (
     <div
-      ref={pagerRef}
-      data-album={photos.length > 1 ? frameKey : undefined}
       className={`photo-card-pager${photos.length > 1 ? " has-album" : ""}${
         axis === "x" ? " is-axis-x" : ""
       }`}

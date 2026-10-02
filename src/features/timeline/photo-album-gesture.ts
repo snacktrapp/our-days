@@ -171,70 +171,42 @@ export function clampDragDx(
     : Math.max(0, Math.min(width, dx));
 }
 
-/** Tallest album frame is 3:4 (height = 4/3 × width). Shortest is 2:1. */
-export const albumFrameMinHeightRatio = 0.5;
-export const albumFrameMaxHeightRatio = 4 / 3;
-
-export function clampAlbumHeightRatio(heightOverWidth: number) {
-  if (!Number.isFinite(heightOverWidth) || heightOverWidth <= 0) return 0.75;
-  return Math.min(
-    albumFrameMaxHeightRatio,
-    Math.max(albumFrameMinHeightRatio, heightOverWidth),
-  );
-}
+/** A multi-photo frame is never taller than 9:16. */
+export const albumFrameMaxHeightRatio = 16 / 9;
 
 export function albumPhotoHeightRatio(width?: number, height?: number) {
   if (width == null || height == null || width <= 0 || height <= 0) return null;
   return height / width;
 }
 
-/** Cover fills the frame from 2:1 through 3:4. Anything outside that
- *  (taller than 3:4, or wider than 2:1) is contained on the theme background. */
-export function albumFrameFit(
-  width?: number,
-  height?: number,
-): "cover" | "contain" {
-  const ratio = albumPhotoHeightRatio(width, height);
-  if (
-    ratio == null ||
-    ratio < albumFrameMinHeightRatio ||
-    ratio > albumFrameMaxHeightRatio
-  ) {
-    return "contain";
-  }
-  return "cover";
-}
-
-export function albumSlideFrameHeight(
-  stageWidth: number,
-  heightOverWidth: number,
+/** Tallest stored slide, capped at 9:16. Null when no photo has dimensions. */
+export function albumFrameHeightRatio(
+  photos: readonly { width?: number; height?: number }[],
 ) {
-  if (stageWidth <= 0) return 0;
-  return stageWidth * clampAlbumHeightRatio(heightOverWidth);
-}
-
-export function albumGestureFrameHeight(
-  stageWidth: number,
-  fromHeightOverWidth: number,
-  toHeightOverWidth: number,
-  mode: AlbumPair["mode"] | "idle",
-  dx: number,
-) {
-  const fromHeight = albumSlideFrameHeight(stageWidth, fromHeightOverWidth);
-  const toHeight = albumSlideFrameHeight(stageWidth, toHeightOverWidth);
-  if (mode === "snap") return toHeight;
-  if (mode !== "drag" || stageWidth <= 0) return fromHeight;
-  const progress = Math.min(1, Math.max(0, Math.abs(dx) / stageWidth));
-  return fromHeight + (toHeight - fromHeight) * progress;
-}
-
-/** SVG sizer box. Within the clamp this is the photo; past it, the clamped frame. */
-export function clampedAlbumFrameBox(width?: number, height?: number) {
-  const ratio = albumPhotoHeightRatio(width, height);
-  if (ratio == null || width == null || height == null) {
-    return { width: 4, height: 3 };
+  let tallest = 0;
+  for (const photo of photos) {
+    const ratio = albumPhotoHeightRatio(photo.width, photo.height);
+    if (ratio == null || ratio <= tallest) continue;
+    tallest = ratio;
   }
-  const clamped = clampAlbumHeightRatio(ratio);
-  if (Math.abs(clamped - ratio) < 0.0005) return { width, height };
-  return { width: 10000, height: Math.round(clamped * 10000) };
+  if (tallest <= 0) return null;
+  return Math.min(albumFrameMaxHeightRatio, tallest);
+}
+
+/** SVG sizer for one fixed album frame. Missing metadata uses a 4:3
+ *  placeholder until the first loaded image supplies a ratio. */
+export function albumFrameBox(
+  photos: readonly { width?: number; height?: number }[],
+  fallbackRatio?: number | null,
+) {
+  const stored = albumFrameHeightRatio(photos);
+  const ratio =
+    stored ??
+    (fallbackRatio != null &&
+    Number.isFinite(fallbackRatio) &&
+    fallbackRatio > 0
+      ? Math.min(albumFrameMaxHeightRatio, fallbackRatio)
+      : null);
+  if (ratio == null) return { width: 4, height: 3 };
+  return { width: 10000, height: Math.round(ratio * 10000) };
 }

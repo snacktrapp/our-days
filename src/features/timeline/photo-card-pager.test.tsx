@@ -6,7 +6,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { albumGestureFrameHeight } from "./photo-album-gesture";
 import { PhotoCardPager } from "./photo-card-pager";
 import type { PhotoMomentViewModel } from "./timeline-view-model";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
@@ -61,9 +60,16 @@ function albumImages(moment: PhotoMomentViewModel = album) {
   ));
 }
 
-function renderPager(moment: PhotoMomentViewModel = album) {
+function renderPager(
+  moment: PhotoMomentViewModel = album,
+  onIntrinsicRatio?: (heightOverWidth: number) => void,
+) {
   return render(
-    <PhotoCardPager moment={moment} images={albumImages(moment)} />,
+    <PhotoCardPager
+      moment={moment}
+      images={albumImages(moment)}
+      onIntrinsicRatio={onIntrinsicRatio}
+    />,
   );
 }
 
@@ -385,7 +391,7 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
-  it("slides a ready neighbor immediately and settles height to the incoming photo", () => {
+  it("slides a ready neighbor immediately and keeps the frame size fixed", () => {
     const clientWidth = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       "clientWidth",
@@ -418,22 +424,13 @@ describe("PhotoCardPager", () => {
       swipeAlbum(document.querySelector(".photo-card-pager")!);
 
       expect(track()).toHaveClass("is-sliding");
-      expect(
-        Number.parseFloat(stage()?.dataset.frameHeight ?? "0"),
-      ).toBeGreaterThan(0);
-      expect(document.querySelector('[data-photo-index="0"]')).toHaveClass(
-        "is-cover",
-      );
-      expect(document.querySelector('[data-photo-index="1"]')).toHaveClass(
-        "is-cover",
-      );
+      expect(stage()?.dataset.frameHeight).toBeUndefined();
 
       settleSlide();
 
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
-      // 900×1200 is 3:4, so a 400px-wide frame is exactly 4/3 × width.
-      expect(stage()?.dataset.frameHeight).toBe("533.33");
+      expect(stage()?.dataset.frameHeight).toBeUndefined();
     } finally {
       if (clientWidth) {
         Object.defineProperty(
@@ -550,16 +547,6 @@ describe("PhotoCardPager", () => {
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(track()).toHaveAttribute("data-phase", "drag");
       expect(track()).toHaveAttribute("data-dx", "-60");
-      const expectedHeight = albumGestureFrameHeight(
-        390,
-        801 / 1200,
-        1200 / 900,
-        "drag",
-        -60,
-      );
-      expect(stage()?.dataset.frameHeight).toBe(
-        (Math.round(expectedHeight * 100) / 100).toFixed(2),
-      );
       expect((track() as HTMLElement).style.transform).toBe(
         "translateX(-60px)",
       );
@@ -692,8 +679,8 @@ describe("PhotoCardPager", () => {
     }));
   });
 
-  it("measures a slide that has no stored dimensions and keeps the first ratio until then", () => {
-    const restoreWidth = mockCardSlideWidth(390);
+  it("reports the first loaded image once when the album has no stored size", () => {
+    const ratios: number[] = [];
     const moment = {
       ...album,
       image: { ...album.image, width: undefined, height: undefined },
@@ -710,99 +697,13 @@ describe("PhotoCardPager", () => {
         },
       ],
     } as const satisfies PhotoMomentViewModel;
-    try {
-      renderPager(moment);
-      expect(stage()?.dataset.frameHeight).toBe(
-        (Math.round(390 * 0.75 * 100) / 100).toFixed(2),
-      );
-      const img = document.querySelector(
-        '[data-photo-index="0"] img',
-      ) as HTMLImageElement;
-      markImgReady(img, 1600, 900);
-      fireEvent.load(img);
-      expect(stage()?.dataset.frameHeight).toBe(
-        (Math.round(390 * (900 / 1600) * 100) / 100).toFixed(2),
-      );
-      expect(document.querySelector('[data-photo-index="0"]')).toHaveClass(
-        "is-cover",
-      );
-    } finally {
-      restoreWidth();
-    }
-  });
-
-  it("applies a resize-observer width change on the next frame", () => {
-    const frames: FrameRequestCallback[] = [];
-    vi.stubGlobal("requestAnimationFrame", (fn: FrameRequestCallback) => {
-      frames.push(fn);
-      return frames.length;
-    });
-    vi.stubGlobal("cancelAnimationFrame", () => {});
-    let observer: ResizeObserverCallback | null = null;
-    class RecordingResizeObserver {
-      constructor(callback: ResizeObserverCallback) {
-        observer = callback;
-      }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-    vi.stubGlobal("ResizeObserver", RecordingResizeObserver);
-    let width = 400;
-    const previous = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      "clientWidth",
-    );
-    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
-      configurable: true,
-      get() {
-        return this.classList?.contains("photo-card-pager-stage") ? width : 0;
-      },
-    });
-    const notify = (inline: number) => {
-      observer?.(
-        [
-          {
-            contentRect: { width: inline, height: 0 },
-            target: stage()!,
-          } as unknown as ResizeObserverEntry,
-        ],
-        {} as ResizeObserver,
-      );
-    };
-
-    try {
-      renderPager();
-      const initial = stage()?.dataset.frameHeight;
-      expect(initial).toBe(
-        albumGestureFrameHeight(400, 801 / 1200, 801 / 1200, "idle", 0).toFixed(
-          2,
-        ),
-      );
-      const queuedAfterMount = frames.length;
-
-      notify(400);
-      expect(stage()?.dataset.frameHeight).toBe(initial);
-      expect(frames.length).toBe(queuedAfterMount + 1);
-      frames.at(-1)?.(0);
-      expect(stage()?.dataset.frameHeight).toBe(initial);
-
-      notify(400.4);
-      expect(frames.length).toBe(queuedAfterMount + 1);
-
-      notify(500);
-      expect(stage()?.dataset.frameHeight).toBe(initial);
-      width = 500;
-      frames.at(-1)?.(0);
-      expect(stage()?.dataset.frameHeight).toBe(
-        albumGestureFrameHeight(500, 801 / 1200, 801 / 1200, "idle", 0).toFixed(
-          2,
-        ),
-      );
-    } finally {
-      if (previous) {
-        Object.defineProperty(HTMLElement.prototype, "clientWidth", previous);
-      }
-    }
+    renderPager(moment, (ratio) => ratios.push(ratio));
+    const img = document.querySelector(
+      '[data-photo-index="0"] img',
+    ) as HTMLImageElement;
+    markImgReady(img, 1600, 900);
+    fireEvent.load(img);
+    fireEvent.load(img);
+    expect(ratios).toEqual([900 / 1600]);
   });
 });

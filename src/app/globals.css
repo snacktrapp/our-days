@@ -1545,29 +1545,9 @@ button {
   max-height: none;
   min-width: 0;
 }
-/* Multi-photo frames follow the current slide. The sizer holds the first
-   photo's clamped ratio until the pager publishes a height, so the card
-   does not collapse or jump before that measurement. */
-.photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-  > .photo-frame-sizer {
-  display: none;
-}
-.photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-  > .photo-card-pager {
-  height: auto;
-  align-self: stretch;
-}
-.photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-  .photo-card-pager-stage {
-  height: var(--album-frame-height);
-  max-height: var(--timeline-media-max-height);
-}
-.photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-  .photo-card-pager-stage,
-.photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-  .photo-card-pager-frame {
-  background: transparent;
-}
+/* Multi-photo frames keep one ratio: the tallest slide, capped at 9:16.
+   The sizer reserves that box. Every slide is contained, so the bars are
+   the theme surface behind the image. */
 .photo-frame.has-reserved-frame img,
 .photo-frame.has-reserved-frame video {
   width: 100%;
@@ -1677,13 +1657,12 @@ button {
   object-fit: contain;
   object-position: center;
 }
+.photo-card-pager.has-album .photo-card-pager-stage,
+.photo-card-pager.has-album .photo-card-pager-frame {
+  background: transparent;
+}
 .photo-card-pager.has-album img {
   -webkit-user-drag: none;
-}
-.photo-card-pager.has-album .photo-card-pager-frame.is-cover img {
-  object-fit: cover;
-}
-.photo-card-pager.has-album .photo-card-pager-frame.is-contain img {
   object-fit: contain;
   background: transparent;
 }
@@ -1703,14 +1682,6 @@ button {
   .photo-card-pager-track.is-sliding,
   .photo-card-pager-track.is-springing {
     transition: transform 200ms ease;
-  }
-  .photo-frame.is-adaptive-album:has(.photo-card-pager[data-frame-ready])
-    .photo-card-pager-stage {
-    transition: height 250ms ease-out;
-  }
-  .photo-frame.is-adaptive-album:has(.photo-card-pager[data-height-instant])
-    .photo-card-pager-stage {
-    transition: none;
   }
 }
 .photo-card-pager-dots {

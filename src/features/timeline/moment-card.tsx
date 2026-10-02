@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CspPublicImage } from "@/components/csp-image";
 import { PrivatePhotoImage } from "@/components/private-photo-image";
 import {
   photoAlbum,
   timelineCardPhotoSrc,
 } from "@/features/moments/moment-photos";
-import { clampedAlbumFrameBox } from "./photo-album-gesture";
+import { albumFrameBox, albumFrameHeightRatio } from "./photo-album-gesture";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
@@ -204,6 +204,7 @@ export function MomentCard({
   connectedPosition,
   connectedTotal,
 }: MomentCardProps) {
+  const [intrinsicRatio, setIntrinsicRatio] = useState<number | null>(null);
   const bibleVerseMatch =
     moment.kind === "thought" ? parseBibleVerseMoment(moment.text) : null;
   const bibleVerse = bibleVerseMatch
@@ -211,13 +212,16 @@ export function MomentCard({
     : null;
   if (moment.kind === "photo" || moment.kind === "video") {
     const album = moment.kind === "photo" ? photoAlbum(moment) : [];
-    const adaptiveAlbum = album.length > 1;
+    const albumFrame = album.length > 1;
+    const storedAlbumRatio = albumFrame ? albumFrameHeightRatio(album) : null;
     const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
       moment.kind === "photo" ? moment.image.height : undefined;
-    const knownRatio = Boolean(mediaWidth && mediaHeight);
-    const frameBox = adaptiveAlbum
-      ? clampedAlbumFrameBox(mediaWidth, mediaHeight)
+    const knownRatio = albumFrame
+      ? storedAlbumRatio != null || intrinsicRatio != null
+      : Boolean(mediaWidth && mediaHeight);
+    const frameBox = albumFrame
+      ? albumFrameBox(album, intrinsicRatio)
       : { width: mediaWidth, height: mediaHeight };
     return (
       <div
@@ -233,7 +237,7 @@ export function MomentCard({
             <div
               className={`photo-frame has-reserved-frame${
                 knownRatio ? " has-known-ratio" : ""
-              }${adaptiveAlbum ? " is-adaptive-album" : ""}`}
+              }${albumFrame ? " is-album" : ""}`}
             >
               <PhotoFrameSizer
                 width={frameBox.width}
@@ -241,6 +245,11 @@ export function MomentCard({
               />
               <PhotoCardPager
                 moment={moment}
+                onIntrinsicRatio={
+                  albumFrame && storedAlbumRatio == null
+                    ? setIntrinsicRatio
+                    : undefined
+                }
                 images={album.map((photo, photoIndex) =>
                   moment.image.delivery === "private" ? (
                     <PrivatePhotoImage
