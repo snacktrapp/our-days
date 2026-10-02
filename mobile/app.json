@@ -14,6 +14,9 @@
     "ios": {
       "bundleIdentifier": "com.snacktrapp.ourdays",
       "supportsTablet": false,
+      "infoPlist": {
+        "NSMotionUsageDescription": "Our Days does not track your movement. iOS asks for this notice because the location tools used to name a place include motion support."
+      },
       "config": {
         "usesNonExemptEncryption": false
       }
