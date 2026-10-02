@@ -1662,6 +1662,21 @@ button {
 .photo-card-pager.has-album .photo-card-pager-frame {
   background: var(--cream);
 }
+/* The sizer alone sets the frame. A tall photo must not stretch that grid
+   row up to its own aspect ratio. */
+.photo-frame.is-album > .photo-card-pager {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+}
+.photo-card-pager.has-album .photo-card-pager-stage,
+.photo-card-pager.has-album .photo-card-pager-frame,
+.photo-card-pager.has-album .photo-card-pager-track {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
 .photo-card-pager.has-album .photo-card-pager-frame {
   display: flex;
   align-items: center;
@@ -1676,6 +1691,8 @@ button {
   height: auto;
   max-width: 100%;
   max-height: 100%;
+  min-width: 0;
+  min-height: 0;
   flex: 0 1 auto;
   object-fit: fill;
   color: transparent;
