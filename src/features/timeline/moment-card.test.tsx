@@ -421,7 +421,7 @@ describe("MomentCard timeline media", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("sizes an album to its tallest slide, capped at 9:16", () => {
+  it("sizes an album to its tallest slide, capped at 3:4", () => {
     const { container } = render(
       <MomentCard
         moment={{
@@ -458,7 +458,7 @@ describe("MomentCard timeline media", () => {
     expect(container.querySelector(".photo-frame")).toHaveClass("is-album");
     expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
       "viewBox",
-      `0 0 10000 ${Math.round(10000 * (16 / 9))}`,
+      `0 0 10000 ${Math.round(10000 * (4 / 3))}`,
     );
   });
 
@@ -548,7 +548,7 @@ describe("MomentCard timeline media", () => {
     fireEvent.load(img);
     expect(container.querySelector(".photo-frame-sizer")).toHaveAttribute(
       "viewBox",
-      `0 0 10000 ${Math.round(10000 * (16 / 9))}`,
+      `0 0 10000 ${Math.round(10000 * (4 / 3))}`,
     );
   });
 

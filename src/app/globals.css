@@ -1545,7 +1545,7 @@ button {
   max-height: none;
   min-width: 0;
 }
-/* Multi-photo frames keep one ratio: the tallest slide, capped at 9:16.
+/* Multi-photo frames keep one ratio: the tallest slide, capped at 3:4.
    The sizer reserves that box. Every slide is contained, so the bars are
    the theme surface behind the image. */
 .photo-frame.has-reserved-frame img,
@@ -1657,14 +1657,30 @@ button {
   object-fit: contain;
   object-position: center;
 }
+.photo-frame.is-album,
 .photo-card-pager.has-album .photo-card-pager-stage,
 .photo-card-pager.has-album .photo-card-pager-frame {
-  background: transparent;
+  background: var(--cream);
+}
+.photo-card-pager.has-album .photo-card-pager-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .photo-card-pager.has-album img {
+  /* Fit the photo inside the fixed frame without letterboxing inside the
+     img. iPhone Safari paints object-fit gaps with the text color (near
+     black) once a filter is applied, which covered the theme surface on
+     real photos. The slide behind the image is the theme surface. */
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  flex: 0 1 auto;
+  object-fit: fill;
+  color: transparent;
+  background-color: transparent;
   -webkit-user-drag: none;
-  object-fit: contain;
-  background: transparent;
 }
 .photo-card-pager-frame.is-parked {
   position: absolute;

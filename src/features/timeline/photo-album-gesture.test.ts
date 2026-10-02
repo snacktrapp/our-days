@@ -112,17 +112,17 @@ describe("pairTransform", () => {
 });
 
 describe("album frame box", () => {
-  it("uses the tallest slide and caps anything past 9:16", () => {
+  it("uses the tallest slide and caps anything past 3:4", () => {
     const mixed = [
       { width: 1600, height: 900 },
       { width: 1200, height: 900 },
       { width: 1200, height: 1600 },
       { width: 900, height: 1600 },
     ];
-    expect(albumFrameHeightRatio(mixed)).toBeCloseTo(16 / 9);
+    expect(albumFrameHeightRatio(mixed)).toBeCloseTo(4 / 3);
     expect(albumFrameBox(mixed)).toEqual({
       width: 10000,
-      height: Math.round(10000 * (16 / 9)),
+      height: Math.round(10000 * (4 / 3)),
     });
     expect(
       albumFrameHeightRatio([
@@ -135,7 +135,7 @@ describe("album frame box", () => {
         { width: 900, height: 2000 },
         { width: 1600, height: 900 },
       ]),
-    ).toBeCloseTo(16 / 9);
+    ).toBeCloseTo(4 / 3);
   });
 
   it("keeps a 4:3 placeholder until a loaded image supplies the ratio", () => {
@@ -143,6 +143,10 @@ describe("album frame box", () => {
     expect(albumFrameBox([{}, {}], 9 / 16)).toEqual({
       width: 10000,
       height: Math.round(10000 * (9 / 16)),
+    });
+    expect(albumFrameBox([{}, {}], 16 / 9)).toEqual({
+      width: 10000,
+      height: Math.round(10000 * (4 / 3)),
     });
     expect(albumFrameBox([{ width: 1200, height: 900 }], 16 / 9)).toEqual({
       width: 10000,

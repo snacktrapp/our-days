@@ -171,15 +171,15 @@ export function clampDragDx(
     : Math.max(0, Math.min(width, dx));
 }
 
-/** A multi-photo frame is never taller than 9:16. */
-export const albumFrameMaxHeightRatio = 16 / 9;
+/** A multi-photo frame is never taller than 3:4. */
+export const albumFrameMaxHeightRatio = 4 / 3;
 
 export function albumPhotoHeightRatio(width?: number, height?: number) {
   if (width == null || height == null || width <= 0 || height <= 0) return null;
   return height / width;
 }
 
-/** Tallest stored slide, capped at 9:16. Null when no photo has dimensions. */
+/** Tallest stored slide, capped at 3:4. Null when no photo has dimensions. */
 export function albumFrameHeightRatio(
   photos: readonly { width?: number; height?: number }[],
 ) {
