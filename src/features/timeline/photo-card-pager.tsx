@@ -305,17 +305,43 @@ export function PhotoCardPager({
     update();
     const follower = createAlbumCenterFollower(stage);
     centerRef.current = follower;
+    const view = stage.ownerDocument.defaultView;
+    let resizeScheduled = false;
+    let disposed = false;
+    let lastInlineSize = -1;
+    const scheduleWidthUpdate = () => {
+      if (!view || resizeScheduled || disposed) return;
+      // Set the flag before requesting the frame. The test runner invokes
+      // requestAnimationFrame immediately, and assigning the id afterward
+      // would leave the flag stuck.
+      resizeScheduled = true;
+      view.requestAnimationFrame(() => {
+        resizeScheduled = false;
+        if (!disposed) update();
+      });
+    };
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", update);
       return () => {
+        disposed = true;
         window.removeEventListener("resize", update);
         follower.stop();
         centerRef.current = null;
       };
     }
-    const observer = new ResizeObserver(update);
+    // The stage's own height follows its width, and that height animates.
+    // Writing it inside this callback is the WebKit pageerror
+    // "ResizeObserver loop completed with undelivered notifications."
+    // Height-only ticks are ignored; a width change is applied next frame.
+    const observer = new ResizeObserver((entries) => {
+      const inline = entries[0]?.contentRect.width ?? 0;
+      if (inline > 0 && Math.abs(inline - lastInlineSize) < 0.5) return;
+      if (inline > 0) lastInlineSize = inline;
+      scheduleWidthUpdate();
+    });
     observer.observe(stage);
     return () => {
+      disposed = true;
       observer.disconnect();
       follower.stop();
       centerRef.current = null;

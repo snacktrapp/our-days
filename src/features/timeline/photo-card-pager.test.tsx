@@ -730,4 +730,79 @@ describe("PhotoCardPager", () => {
       restoreWidth();
     }
   });
+
+  it("applies a resize-observer width change on the next frame", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (fn: FrameRequestCallback) => {
+      frames.push(fn);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    let observer: ResizeObserverCallback | null = null;
+    class RecordingResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        observer = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", RecordingResizeObserver);
+    let width = 400;
+    const previous = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientWidth",
+    );
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get() {
+        return this.classList?.contains("photo-card-pager-stage") ? width : 0;
+      },
+    });
+    const notify = (inline: number) => {
+      observer?.(
+        [
+          {
+            contentRect: { width: inline, height: 0 },
+            target: stage()!,
+          } as unknown as ResizeObserverEntry,
+        ],
+        {} as ResizeObserver,
+      );
+    };
+
+    try {
+      renderPager();
+      const initial = stage()?.dataset.frameHeight;
+      expect(initial).toBe(
+        albumGestureFrameHeight(400, 801 / 1200, 801 / 1200, "idle", 0).toFixed(
+          2,
+        ),
+      );
+      const queuedAfterMount = frames.length;
+
+      notify(400);
+      expect(stage()?.dataset.frameHeight).toBe(initial);
+      expect(frames.length).toBe(queuedAfterMount + 1);
+      frames.at(-1)?.(0);
+      expect(stage()?.dataset.frameHeight).toBe(initial);
+
+      notify(400.4);
+      expect(frames.length).toBe(queuedAfterMount + 1);
+
+      notify(500);
+      expect(stage()?.dataset.frameHeight).toBe(initial);
+      width = 500;
+      frames.at(-1)?.(0);
+      expect(stage()?.dataset.frameHeight).toBe(
+        albumGestureFrameHeight(500, 801 / 1200, 801 / 1200, "idle", 0).toFixed(
+          2,
+        ),
+      );
+    } finally {
+      if (previous) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", previous);
+      }
+    }
+  });
 });
