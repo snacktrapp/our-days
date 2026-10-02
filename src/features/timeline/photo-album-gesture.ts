@@ -170,3 +170,43 @@ export function clampDragDx(
     ? Math.min(0, Math.max(-width, dx))
     : Math.max(0, Math.min(width, dx));
 }
+
+/** A multi-photo frame is never taller than 3:4. */
+export const albumFrameMaxHeightRatio = 4 / 3;
+
+export function albumPhotoHeightRatio(width?: number, height?: number) {
+  if (width == null || height == null || width <= 0 || height <= 0) return null;
+  return height / width;
+}
+
+/** Tallest stored slide, capped at 3:4. Null when no photo has dimensions. */
+export function albumFrameHeightRatio(
+  photos: readonly { width?: number; height?: number }[],
+) {
+  let tallest = 0;
+  for (const photo of photos) {
+    const ratio = albumPhotoHeightRatio(photo.width, photo.height);
+    if (ratio == null || ratio <= tallest) continue;
+    tallest = ratio;
+  }
+  if (tallest <= 0) return null;
+  return Math.min(albumFrameMaxHeightRatio, tallest);
+}
+
+/** SVG sizer for one fixed album frame. Missing metadata uses a 4:3
+ *  placeholder until the first loaded image supplies a ratio. */
+export function albumFrameBox(
+  photos: readonly { width?: number; height?: number }[],
+  fallbackRatio?: number | null,
+) {
+  const stored = albumFrameHeightRatio(photos);
+  const ratio =
+    stored ??
+    (fallbackRatio != null &&
+    Number.isFinite(fallbackRatio) &&
+    fallbackRatio > 0
+      ? Math.min(albumFrameMaxHeightRatio, fallbackRatio)
+      : null);
+  if (ratio == null) return { width: 4, height: 3 };
+  return { width: 10000, height: Math.round(ratio * 10000) };
+}

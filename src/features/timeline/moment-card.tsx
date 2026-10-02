@@ -5,6 +5,8 @@ import {
   photoAlbum,
   timelineCardPhotoSrc,
 } from "@/features/moments/moment-photos";
+import { AlbumPhotoFrame } from "./album-photo-frame";
+import { albumFrameBox, albumFrameHeightRatio } from "./photo-album-gesture";
 import { PhotoCardPager } from "./photo-card-pager";
 import { MomentConversationControl } from "./moment-conversation-control";
 import { ConnectedMomentControl } from "@/features/moments/connected-moment-control";
@@ -209,10 +211,44 @@ export function MomentCard({
     ? { verse: bibleVerseMatch.text, reference: bibleVerseMatch.reference }
     : null;
   if (moment.kind === "photo" || moment.kind === "video") {
+    const album = moment.kind === "photo" ? photoAlbum(moment) : [];
+    const albumFrame = album.length > 1;
+    const storedAlbumRatio = albumFrame ? albumFrameHeightRatio(album) : null;
     const mediaWidth = moment.kind === "photo" ? moment.image.width : undefined;
     const mediaHeight =
       moment.kind === "photo" ? moment.image.height : undefined;
     const knownRatio = Boolean(mediaWidth && mediaHeight);
+    const frameBox = { width: mediaWidth, height: mediaHeight };
+    const albumImages =
+      moment.kind === "photo"
+        ? album.map((photo, photoIndex) =>
+            moment.image.delivery === "private" ? (
+              <PrivatePhotoImage
+                key={photo.id}
+                src={privateTimelinePhotoSrc(
+                  moment.id,
+                  photo.id,
+                  Boolean(preload && photoIndex === 0),
+                )}
+                alt={photo.alt}
+                width={photo.width}
+                height={photo.height}
+                highPriority={preload && photoIndex === 0}
+              />
+            ) : (
+              <CspPublicImage
+                key={photo.id}
+                src={photo.src}
+                alt={photo.alt}
+                width={photo.width ?? 1200}
+                height={photo.height ?? 801}
+                highPriority={preload && photoIndex === 0}
+                eager={photoIndex > 0}
+                sizes="(max-width: 520px) 92vw, 410px"
+              />
+            ),
+          )
+        : [];
     return (
       <div
         className={`moment-card photo-card ${moment.kind === "video" ? "video-card" : ""}`}
@@ -224,43 +260,27 @@ export function MomentCard({
           />
         ) : (
           <DoubleTapPhoto momentId={moment.id}>
-            <div
-              className={`photo-frame has-reserved-frame${
-                knownRatio ? " has-known-ratio" : ""
-              }`}
-            >
-              <PhotoFrameSizer width={mediaWidth} height={mediaHeight} />
-              <PhotoCardPager
+            {albumFrame ? (
+              <AlbumPhotoFrame
                 moment={moment}
-                images={photoAlbum(moment).map((photo, photoIndex) =>
-                  moment.image.delivery === "private" ? (
-                    <PrivatePhotoImage
-                      key={photo.id}
-                      src={privateTimelinePhotoSrc(
-                        moment.id,
-                        photo.id,
-                        Boolean(preload && photoIndex === 0),
-                      )}
-                      alt={photo.alt}
-                      width={photo.width}
-                      height={photo.height}
-                      highPriority={preload && photoIndex === 0}
-                    />
-                  ) : (
-                    <CspPublicImage
-                      key={photo.id}
-                      src={photo.src}
-                      alt={photo.alt}
-                      width={photo.width ?? 1200}
-                      height={photo.height ?? 801}
-                      highPriority={preload && photoIndex === 0}
-                      eager={photoIndex > 0}
-                      sizes="(max-width: 520px) 92vw, 410px"
-                    />
-                  ),
-                )}
+                images={albumImages}
+                width={albumFrameBox(album).width}
+                height={albumFrameBox(album).height}
+                hasStoredRatio={storedAlbumRatio != null}
               />
-            </div>
+            ) : (
+              <div
+                className={`photo-frame has-reserved-frame${
+                  knownRatio ? " has-known-ratio" : ""
+                }`}
+              >
+                <PhotoFrameSizer
+                  width={frameBox.width}
+                  height={frameBox.height}
+                />
+                <PhotoCardPager moment={moment} images={albumImages} />
+              </div>
+            )}
           </DoubleTapPhoto>
         )}
         <div className="card-copy">

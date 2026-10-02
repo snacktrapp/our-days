@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -29,9 +28,12 @@ import type { PhotoMomentViewModel } from "./timeline-view-model";
 export function PhotoCardPager({
   moment,
   images,
+  onIntrinsicRatio,
 }: Readonly<{
   moment: PhotoMomentViewModel;
   images: readonly ReactNode[];
+  /** Used once when an album has no stored width/height. */
+  onIntrinsicRatio?: (heightOverWidth: number) => void;
 }>) {
   const photos = photoAlbum(moment);
   const [index, setIndex] = useState(0);
@@ -40,8 +42,9 @@ export function PhotoCardPager({
   const [requested, setRequested] = useState(() => new Set([0]));
   const [pair, setPair] = useState<AlbumPair | null>(null);
   const [axis, setAxis] = useState<"x" | "y" | null>(null);
-  const [stageHeight, setStageHeight] = useState<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const indexRef = useRef(0);
+  const reportedRatioRef = useRef(false);
   const slideWidthRef = useRef(0);
   const pairRef = useRef<AlbumPair | null>(null);
   const pendingToRef = useRef<number | null>(null);
@@ -110,6 +113,15 @@ export function PhotoCardPager({
     return slideWidthRef.current;
   }
 
+  indexRef.current = index;
+
+  function rememberImage(img: HTMLImageElement) {
+    if (reportedRatioRef.current || !onIntrinsicRatio) return;
+    if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    reportedRatioRef.current = true;
+    onIntrinsicRatio(img.naturalHeight / img.naturalWidth);
+  }
+
   const displayIndex =
     pair?.mode === "snap" || pair?.mode === "drag" ? pair.to : index;
   function frameEl(photoIndex: number): HTMLElement | null {
@@ -117,38 +129,6 @@ export function PhotoCardPager({
       stageRef.current?.querySelector(`[data-photo-index="${photoIndex}"]`) ??
       null
     );
-  }
-
-  function estimateHeight(incomingIndex: number): number {
-    const stage = stageRef.current;
-    if (!stage) return 0;
-    const width = stage.clientWidth;
-    const incoming = photos[incomingIndex];
-    if (incoming?.width && incoming.height && width > 0) {
-      return width * (incoming.height / incoming.width);
-    }
-    return 0;
-  }
-
-  function paintedFrameHeight(photoIndex: number): number {
-    const height = frameEl(photoIndex)?.offsetHeight ?? 0;
-    return height > 1 ? height : 0;
-  }
-
-  function lockStageHeight(incomingIndex: number, incomingPainted = 0) {
-    const currentHeight = stageRef.current?.offsetHeight ?? 0;
-    const incomingHeight = Math.max(
-      incomingPainted,
-      estimateHeight(incomingIndex),
-    );
-    const nextHeight = Math.max(currentHeight, incomingHeight);
-    if (nextHeight > 0) setStageHeight(nextHeight);
-  }
-
-  function settleStageHeight(incomingIndex: number) {
-    const nextHeight =
-      paintedFrameHeight(incomingIndex) || estimateHeight(incomingIndex);
-    if (nextHeight > 0) setStageHeight(nextHeight);
   }
 
   function clearFinishTimer() {
@@ -165,38 +145,29 @@ export function PhotoCardPager({
   function finishPair() {
     const nextIndex = pendingToRef.current;
     if (nextIndex == null) return;
-    const incomingHeight = paintedFrameHeight(nextIndex);
     pendingToRef.current = null;
     pendingDragRef.current = null;
     clearFinishTimer();
+    indexRef.current = nextIndex;
     setIndex(nextIndex);
     writePair(null);
     setAxis(null);
-    if (incomingHeight > 0) {
-      setStageHeight(incomingHeight);
-      return;
-    }
-    const estimated = estimateHeight(nextIndex);
-    if (estimated > 0) setStageHeight(estimated);
   }
 
-  useLayoutEffect(() => {
-    if (photos.length < 2) return;
+  useEffect(() => {
+    if (!onIntrinsicRatio || photos.length < 2 || reportedRatioRef.current) {
+      return;
+    }
     const stage = stageRef.current;
     if (!stage) return;
-    const update = () => {
-      const width = albumSlideWidth(stage);
-      if (width > 0) slideWidthRef.current = width;
-    };
-    update();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", update);
-      return () => window.removeEventListener("resize", update);
-    }
-    const observer = new ResizeObserver(update);
-    observer.observe(stage);
-    return () => observer.disconnect();
-  }, [photos.length]);
+    stage.querySelectorAll("img").forEach((node) => {
+      if (!(node instanceof HTMLImageElement) || !node.complete) return;
+      if (reportedRatioRef.current) return;
+      if (node.naturalWidth <= 0 || node.naturalHeight <= 0) return;
+      reportedRatioRef.current = true;
+      onIntrinsicRatio(node.naturalHeight / node.naturalWidth);
+    });
+  }, [onIntrinsicRatio, photos.length]);
 
   useEffect(
     () => () => {
@@ -214,25 +185,22 @@ export function PhotoCardPager({
   }
 
   function startSnap(from: number, to: number, direction: 1 | -1) {
-    lockStageHeight(to, paintedFrameHeight(to));
     if (overlayMotionReduced()) {
       pendingToRef.current = null;
       pendingDragRef.current = null;
+      indexRef.current = to;
       setIndex(to);
       writePair(null);
-      requestAnimationFrame(() => settleStageHeight(to));
       return;
     }
     pendingToRef.current = to;
     writePair({ from, to, direction, mode: "pending", dx: 0 });
     requestAnimationFrame(() => {
-      lockStageHeight(to, paintedFrameHeight(to));
       startSettle({ from, to, direction, mode: "snap", dx: 0 });
     });
   }
 
   function applyDrag(to: number, direction: 1 | -1, dx: number) {
-    lockStageHeight(to, paintedFrameHeight(to));
     writePair({ from: index, to, direction, mode: "drag", dx });
   }
 
@@ -409,8 +377,6 @@ export function PhotoCardPager({
   const parkedIndexes = albumIndexes(photos.length).filter(
     (photoIndex) => !reserved.has(photoIndex),
   );
-  const stageStyle: CSSProperties | undefined =
-    stageHeight == null ? undefined : { height: stageHeight };
   const trackStyle: CSSProperties | undefined = pair
     ? { transform: pairSlideTransform(pair, pair.slideWidth ?? 0) }
     : undefined;
@@ -455,6 +421,10 @@ export function PhotoCardPager({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onDragStart={(event) => {
+        // A mouse swipe otherwise becomes a native image drag and cancels the pointer.
+        if (photos.length > 1) event.preventDefault();
+      }}
       onPointerCancel={() => {
         const currentPair = pairRef.current;
         pointerRef.current = null;
@@ -475,7 +445,11 @@ export function PhotoCardPager({
         <div
           ref={stageRef}
           className="photo-card-pager-stage"
-          style={stageStyle}
+          onLoad={(event) => {
+            if (event.target instanceof HTMLImageElement) {
+              rememberImage(event.target);
+            }
+          }}
         >
           <div
             className={`photo-card-pager-track${pair ? " is-paired" : ""}${

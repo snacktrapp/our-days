@@ -60,9 +60,16 @@ function albumImages(moment: PhotoMomentViewModel = album) {
   ));
 }
 
-function renderPager(moment: PhotoMomentViewModel = album) {
+function renderPager(
+  moment: PhotoMomentViewModel = album,
+  onIntrinsicRatio?: (heightOverWidth: number) => void,
+) {
   return render(
-    <PhotoCardPager moment={moment} images={albumImages(moment)} />,
+    <PhotoCardPager
+      moment={moment}
+      images={albumImages(moment)}
+      onIntrinsicRatio={onIntrinsicRatio}
+    />,
   );
 }
 
@@ -266,7 +273,11 @@ describe("PhotoCardPager", () => {
       photos: [album.photos[0]],
     });
 
-    expect(screen.getByRole("img", { name: "First porch" })).toBeVisible();
+    const img = screen.getByRole("img", { name: "First porch" });
+    expect(img).toBeVisible();
+    const drag = new Event("dragstart", { bubbles: true, cancelable: true });
+    img.dispatchEvent(drag);
+    expect(drag.defaultPrevented).toBe(false);
     expect(
       screen.queryByRole("button", { name: "Next photo" }),
     ).not.toBeInTheDocument();
@@ -380,7 +391,7 @@ describe("PhotoCardPager", () => {
     expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
   });
 
-  it("slides a ready neighbor immediately and settles height to the incoming photo", () => {
+  it("slides a ready neighbor immediately and keeps the frame size fixed", () => {
     const clientWidth = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       "clientWidth",
@@ -413,16 +424,13 @@ describe("PhotoCardPager", () => {
       swipeAlbum(document.querySelector(".photo-card-pager")!);
 
       expect(track()).toHaveClass("is-sliding");
-      expect(stage()?.style.height).not.toBe("");
-      expect(Number.parseFloat(stage()?.style.height ?? "0")).toBeGreaterThan(
-        0,
-      );
+      expect(stage()?.dataset.frameHeight).toBeUndefined();
 
       settleSlide();
 
       expect(screen.getByRole("img", { name: "Second porch" })).toBeVisible();
       expect(screen.queryByRole("img", { name: "First porch" })).toBeNull();
-      expect(stage()?.style.height).toBe("480px");
+      expect(stage()?.dataset.frameHeight).toBeUndefined();
     } finally {
       if (clientWidth) {
         Object.defineProperty(
@@ -505,6 +513,14 @@ describe("PhotoCardPager", () => {
     } finally {
       restoreWidth();
     }
+  });
+
+  it("cancels the browser image drag so a mouse swipe can finish", () => {
+    renderPager();
+    const img = screen.getByRole("img", { name: "First porch" });
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    img.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it("follows a horizontal drag live, then snaps past the threshold", () => {
@@ -661,5 +677,33 @@ describe("PhotoCardPager", () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }));
+  });
+
+  it("reports the first loaded image once when the album has no stored size", () => {
+    const ratios: number[] = [];
+    const moment = {
+      ...album,
+      image: { ...album.image, width: undefined, height: undefined },
+      photos: [
+        {
+          id: "wide",
+          src: "/wide.jpg",
+          alt: "Wide",
+        },
+        {
+          id: "tall",
+          src: "/tall.jpg",
+          alt: "Tall",
+        },
+      ],
+    } as const satisfies PhotoMomentViewModel;
+    renderPager(moment, (ratio) => ratios.push(ratio));
+    const img = document.querySelector(
+      '[data-photo-index="0"] img',
+    ) as HTMLImageElement;
+    markImgReady(img, 1600, 900);
+    fireEvent.load(img);
+    fireEvent.load(img);
+    expect(ratios).toEqual([900 / 1600]);
   });
 });

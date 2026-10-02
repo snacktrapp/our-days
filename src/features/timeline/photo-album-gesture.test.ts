@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  albumFrameBox,
+  albumFrameHeightRatio,
   albumSlideWidth,
   pairSlideTransform,
   pairTransform,
@@ -106,6 +108,50 @@ describe("pairTransform", () => {
         dx: 0,
       }),
     ).toBe("translateX(-50%)");
+  });
+});
+
+describe("album frame box", () => {
+  it("uses the tallest slide and caps anything past 3:4", () => {
+    const mixed = [
+      { width: 1600, height: 900 },
+      { width: 1200, height: 900 },
+      { width: 1200, height: 1600 },
+      { width: 900, height: 1600 },
+    ];
+    expect(albumFrameHeightRatio(mixed)).toBeCloseTo(4 / 3);
+    expect(albumFrameBox(mixed)).toEqual({
+      width: 10000,
+      height: Math.round(10000 * (4 / 3)),
+    });
+    expect(
+      albumFrameHeightRatio([
+        { width: 1600, height: 900 },
+        { width: 1200, height: 900 },
+      ]),
+    ).toBeCloseTo(0.75);
+    expect(
+      albumFrameHeightRatio([
+        { width: 900, height: 2000 },
+        { width: 1600, height: 900 },
+      ]),
+    ).toBeCloseTo(4 / 3);
+  });
+
+  it("keeps a 4:3 placeholder until a loaded image supplies the ratio", () => {
+    expect(albumFrameBox([{}, {}])).toEqual({ width: 4, height: 3 });
+    expect(albumFrameBox([{}, {}], 9 / 16)).toEqual({
+      width: 10000,
+      height: Math.round(10000 * (9 / 16)),
+    });
+    expect(albumFrameBox([{}, {}], 16 / 9)).toEqual({
+      width: 10000,
+      height: Math.round(10000 * (4 / 3)),
+    });
+    expect(albumFrameBox([{ width: 1200, height: 900 }], 16 / 9)).toEqual({
+      width: 10000,
+      height: 7500,
+    });
   });
 });
 
