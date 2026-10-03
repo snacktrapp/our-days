@@ -51,6 +51,7 @@ const nextConfig: NextConfig = {
     "/api/photos/process": sharpTraceIncludes,
     "/api/photos/card-backfill": sharpTraceIncludes,
     "/api/maps/static": sharpTraceIncludes,
+    "/api/insights/found/thumbnail": sharpTraceIncludes,
   },
   images: {
     qualities: [75],

@@ -884,12 +884,53 @@ describe("MomentCard insight treatment", () => {
       screen.getByText(/Morning sunlight is the most powerful stimulus/u),
     ).toBeVisible();
     expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Listen" })).toHaveAttribute(
-      "href",
-      insight.sourceUrl,
-    );
+    expect(
+      screen.getByRole("link", { name: "Open at this spot" }),
+    ).toHaveAttribute("href", insight.sourceUrl);
+    expect(screen.getByText("at 2:00")).toBeVisible();
     expect(container.querySelector(".avatar-node")).toBeNull();
     expect(screen.queryByText("TARS")).toBeNull();
+    const play = screen.getByRole("button", { name: "Play video" });
+    expect(play).toBeVisible();
+    expect(play.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://i.ytimg.com/vi/nm1TxQj9IsQ/hqdefault.jpg",
+    );
+    expect(container.querySelector("iframe")).toBeNull();
+  });
+
+  it("replaces the YouTube thumbnail with the nocookie player", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<MomentCard moment={insight} />);
+    await user.click(screen.getByRole("button", { name: "Play video" }));
+    const frame = container.querySelector("iframe");
+    expect(frame).toHaveAttribute(
+      "src",
+      "https://www.youtube-nocookie.com/embed/nm1TxQj9IsQ?start=120&autoplay=1&playsinline=1&rel=0",
+    );
+    expect(frame).toHaveAttribute(
+      "referrerpolicy",
+      "strict-origin-when-cross-origin",
+    );
+    expect(frame?.getAttribute("src")).not.toContain("nm1TxQj9IsQ&t");
+    expect(screen.queryByRole("button", { name: "Play video" })).toBeNull();
+  });
+
+  it("leaves a page source without a video frame", () => {
+    const { container } = render(
+      <MomentCard
+        moment={{
+          ...insight,
+          sourceUrl: "https://hubermanlab.com/sleep",
+          sourceLabel: "Read the source",
+        }}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Play video" })).toBeNull();
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Read the source" }),
+    ).toHaveAttribute("href", "https://hubermanlab.com/sleep");
   });
 
   it("renders an attached clip inline when an Insight has video metadata", () => {

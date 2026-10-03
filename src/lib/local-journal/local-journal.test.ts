@@ -280,6 +280,23 @@ describe("local journal happy path", () => {
 
     expect(inTimeline(family)).not.toContain("Private system note.");
     expect(inTimeline(ownJournal)).toContain("Private system note.");
+    const allCircles = await loadLocalTimeline(access, context, {
+      pages: 1,
+      allCircles: true,
+    });
+    const jordanAccess: LocalAccess = {
+      membershipId: localJordanMembershipId,
+      circleId: localCircleId,
+      personId: localJordanPersonId,
+      role: "member",
+    };
+    const jordanAllCircles = await loadLocalTimeline(
+      jordanAccess,
+      await loadLocalJournalContext(jordanAccess),
+      { pages: 1, allCircles: true },
+    );
+    expect(inTimeline(allCircles)).toContain("Private system note.");
+    expect(inTimeline(jordanAllCircles)).not.toContain("Private system note.");
     expect(ownInsight?.entryType).toBe("moment");
     if (ownInsight?.entryType !== "moment") {
       throw new Error("Just me insight missing from author journal");

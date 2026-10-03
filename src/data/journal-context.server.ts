@@ -5,6 +5,7 @@ import { profileColorAccent } from "@/features/profile-color";
 import type { MomentComposerViewModel } from "@/features/composer/composer-view-model";
 import type { PostableCircle } from "@/features/composer/post-to";
 import {
+  foundSearchIsEnabled,
   localJournalIsEnabled,
   photoPostingIsEnabled,
 } from "../../config/our-days-environment";
@@ -947,6 +948,8 @@ export async function loadConnectedJournalContext(
     experience: "connected-family",
     circleId: access.circleId,
     photoPostingEnabled: photoPostingIsEnabled(),
+    foundEnabled: foundSearchIsEnabled(),
+    viewerRole: access.role,
     previewToday: plainToday(circleResult.data.time_zone),
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,

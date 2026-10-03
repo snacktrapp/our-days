@@ -283,7 +283,9 @@ describe("TimelineFeed", () => {
     expect(screen.getByText("Insight")).toBeVisible();
     expect(screen.getByText(/Morning sunlight sets the clock/u)).toBeVisible();
     expect(screen.getByText(/Huberman Lab — Master Your Sleep/u)).toBeVisible();
-    expect(screen.getByRole("link", { name: "Listen" })).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Open at this spot" }),
+    ).toBeVisible();
   });
 
   it("shows a Just me chip in the card body", () => {
