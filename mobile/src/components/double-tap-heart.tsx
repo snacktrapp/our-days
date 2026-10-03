@@ -57,10 +57,12 @@ export function DoubleTapHeart({
   const last = useRef<PostTap | null>(null);
   const [shown, setShown] = useState<{ key: number; x: number; y: number } | null>(null);
 
-  const point = (event: GestureResponderEvent) => ({
-    x: event.nativeEvent.pageX,
-    y: event.nativeEvent.pageY,
-  });
+  // The touch that changed (iOS also mirrors it on nativeEvent; the browser
+  // build only has it in changedTouches).
+  const point = (event: GestureResponderEvent) => {
+    const touch = event.nativeEvent.changedTouches?.[0] ?? event.nativeEvent;
+    return { x: touch.pageX, y: touch.pageY };
+  };
 
   return (
     <View
