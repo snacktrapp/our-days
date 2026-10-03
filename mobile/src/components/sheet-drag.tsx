@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   Animated,
   Easing,
@@ -11,8 +11,10 @@ import {
 import {
   canStartSheetDismiss,
   isSheetTouchingField,
+  releaseVelocity,
   sheetDismissAxisPx,
   sheetDismissShouldCommit,
+  sheetFlickMinPx,
 } from "../lib/sheet-dismiss";
 
 type SheetDragActions = Readonly<{
@@ -132,15 +134,41 @@ type ChromeTouch = { nativeEvent: { pageX: number; pageY: number; timestamp: num
 function createChromeDismiss(input: ChromeDismissInput) {
   const translateY = new Animated.Value(0);
   const geometry = { height: 320 };
-  const drag = { tracking: false, active: false, x0: 0, y0: 0, dy: 0, lastY: 0, lastT: 0, vy: 0 };
-  const finish = () => {
-    const active = drag.active;
+  const drag = {
+    tracking: false,
+    active: false,
+    x0: 0,
+    y0: 0,
+    dy: 0,
+    samples: [] as { y: number; t: number }[],
+  };
+  const record = (pageY: number, timestamp: number) => {
+    drag.samples.push({ y: pageY, t: timestamp });
+    if (drag.samples.length > 12) drag.samples.shift();
+  };
+  const finish = (event?: ChromeTouch) => {
+    let active = drag.active;
+    const tracking = drag.tracking;
     drag.tracking = false;
     drag.active = false;
+    if (event && tracking) {
+      // A fast flick can lift a few points past its last move, sometimes
+      // before any move cleared the 8 pt slop. Count the lift point too.
+      const { pageX, pageY, timestamp } = event.nativeEvent;
+      if (Number.isFinite(pageY) && Number.isFinite(pageX)) {
+        const dy = pageY - drag.y0;
+        const dx = pageX - drag.x0;
+        if (!active && dy >= sheetFlickMinPx && Math.abs(dx) <= dy) active = true;
+        if (active) drag.dy = Math.max(drag.dy, dy);
+        if (timestamp > (drag.samples.at(-1)?.t ?? 0)) record(pageY, timestamp);
+      }
+    }
     if (!active) return;
+    const releaseT = event?.nativeEvent.timestamp ?? drag.samples.at(-1)?.t ?? 0;
+    const velocityY = releaseVelocity(drag.samples, releaseT);
     const downward = Math.max(0, drag.dy);
     const springBack = () => springToRest(translateY);
-    if (!sheetDismissShouldCommit({ dy: downward, velocityY: drag.vy })) {
+    if (!sheetDismissShouldCommit({ dy: downward, velocityY })) {
       springBack();
       return;
     }
@@ -161,15 +189,15 @@ function createChromeDismiss(input: ChromeDismissInput) {
       drag.x0 = pageX;
       drag.y0 = pageY;
       drag.dy = 0;
-      drag.lastY = pageY;
-      drag.lastT = timestamp;
-      drag.vy = 0;
+      drag.samples = [];
+      record(pageY, timestamp);
     },
     onTouchMove: (event: ChromeTouch) => {
       if (!drag.tracking) return;
       const { pageX, pageY, timestamp } = event.nativeEvent;
       const dy = pageY - drag.y0;
       const dx = pageX - drag.x0;
+      record(pageY, timestamp);
       if (!drag.active) {
         if (dy < sheetDismissAxisPx || Math.abs(dx) > Math.abs(dy)) {
           if (dy < -sheetDismissAxisPx || Math.abs(dx) > sheetDismissAxisPx * 2) drag.tracking = false;
@@ -177,15 +205,11 @@ function createChromeDismiss(input: ChromeDismissInput) {
         }
         drag.active = true;
       }
-      const elapsed = timestamp - drag.lastT;
-      if (elapsed > 0) drag.vy = ((pageY - drag.lastY) / elapsed) * 1000;
-      drag.lastY = pageY;
-      drag.lastT = timestamp;
       drag.dy = dy;
       translateY.setValue(Math.max(0, dy));
     },
-    onTouchEnd: finish,
-    onTouchCancel: finish,
+    onTouchEnd: (event: ChromeTouch) => finish(event),
+    onTouchCancel: () => finish(),
   };
   return {
     translateY,
@@ -211,4 +235,17 @@ function createChromeDismiss(input: ChromeDismissInput) {
 export function useChromeDismiss(input: ChromeDismissInput) {
   const [chrome] = useState(() => createChromeDismiss(input));
   return { translateY: chrome.translateY, sheetProps: chrome.sheetProps, chromeProps: chrome.chromeProps };
+}
+
+/**
+ * `useChromeDismiss` for sheets with nothing to confirm: a drag past the
+ * threshold or a quick flick on the grab bar slides the sheet away, then
+ * calls `onClose`.
+ */
+export function useGrabDismiss(onClose: () => void) {
+  const onCommit = useRef<(actions: SheetDragActions) => void>(() => undefined);
+  useEffect(() => {
+    onCommit.current = ({ dismiss }) => dismiss(onClose);
+  }, [onClose]);
+  return useChromeDismiss({ onCommit });
 }

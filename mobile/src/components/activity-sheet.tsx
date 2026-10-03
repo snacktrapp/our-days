@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -19,6 +20,7 @@ import type { CircleMembership } from "../lib/journal";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
+import { useGrabDismiss } from "./sheet-drag";
 
 /** Web notification center: Activity sheet opened from the header heart. */
 export function ActivitySheet({
@@ -60,12 +62,14 @@ export function ActivitySheet({
     };
   }, [attempt, circles, supabase]);
   const showFailure = failed || !supabase;
+  const { translateY, sheetProps, chromeProps } = useGrabDismiss(onClose);
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.scrim, { backgroundColor: scrim }]}>
         <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={onClose} />
-        <View
+        <Animated.View
+          {...sheetProps}
           style={[
             styles.sheet,
             {
@@ -74,11 +78,14 @@ export function ActivitySheet({
               borderTopLeftRadius: retro ? 2 : 14,
               borderTopRightRadius: retro ? 2 : 14,
               paddingBottom: Math.max(16, insets.bottom),
+              transform: [{ translateY }],
             },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          <Text style={[face(colors, 650), styles.title, { color: colors.ink }]}>Activity</Text>
+          <View {...chromeProps} accessibilityLabel="Drag down to close">
+            <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
+            <Text style={[face(colors, 650), styles.title, { color: colors.ink }]}>Activity</Text>
+          </View>
           <ScrollView contentContainerStyle={styles.body}>
             {items == null && supabase ? (
               <View style={styles.statusRow}>
@@ -124,7 +131,7 @@ export function ActivitySheet({
               </Pressable>
             ))}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
