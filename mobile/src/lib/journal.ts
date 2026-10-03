@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PendingUpload } from "./pending-uploads";
 
 import { circleToday } from "./dates";
 import { personInitial, type MentionSpan } from "./feed-format";
@@ -107,6 +108,8 @@ export type TimelineMoment = Readonly<{
   mentions: readonly MentionSpan[];
   notes: readonly FeedNote[];
   reactions: readonly FeedReaction[];
+  /** Set on a new post still uploading from this iPhone (see pending-uploads.ts). */
+  pending?: PendingUpload;
 }>;
 
 export type TimelinePage = Readonly<{

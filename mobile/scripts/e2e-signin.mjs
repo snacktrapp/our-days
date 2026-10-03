@@ -1409,6 +1409,225 @@ await step("edit a test-circle photo post: text, time, remove, add, reorder, sta
   }
 });
 
+await step("inline upload: pending card merges into the feed, posts to the test circle, failed upload keeps Retry/Remove (build 20)", async () => {
+  const pending = await import("../src/lib/pending-uploads.ts");
+  pending.resetPendingForTests();
+  // Pure merge: a pending post sits at its date in a newest-first feed and
+  // disappears once the feed has the real post.
+  const real = (id, occurredOn, occurredAt = null) => ({ id, occurredOn, occurredAt });
+  const job = (id, occurredOn, occurredAt, momentId = null) => ({
+    id,
+    mode: "post",
+    momentId,
+    post: {
+      circleId: "c1",
+      journalPersonId: "p1",
+      body: "hi",
+      occurredOn,
+      occurredAt,
+      occurredTimezone: null,
+      placeName: "",
+      taggedPersonIds: [],
+      audience: "family",
+      circleIds: ["c1"],
+    },
+    media: [{ kind: "photo", mimeType: "image/jpeg", name: "a.jpg", durationMs: null, uri: "file:///a.jpg", posterUri: null }],
+    progress: 0.4,
+    state: "uploading",
+    error: null,
+    createdAt: new Date().toISOString(),
+  });
+  const author = { name: "TARS", initial: "T", accent: "slate" };
+  const feed = [real("m3", "2026-10-03"), real("m2", "2026-09-30"), real("m1", "2026-09-01")];
+  const merged = pending.mergePending(
+    feed,
+    [job("a", "2026-10-01", null), job("b", "2026-10-04", null), job("x", "2026-10-02", null)],
+    { listed: (post) => post.circleId === "c1", author },
+  );
+  assert.deepEqual(
+    merged.map((item) => item.id),
+    ["pending:b", "m3", "pending:x", "pending:a", "m2", "m1"],
+  );
+  assert.equal(merged[0].pending.state, "uploading");
+  assert.equal(merged[0].canChange, false, "no ••• menu on a card still uploading");
+  assert.equal(
+    pending.mergePending(feed, [job("done", "2026-10-03", null, "m3")], { listed: () => true, author }).length,
+    3,
+    "a finished post the feed already has is not shown twice",
+  );
+  assert.equal(
+    pending.mergePending(feed, [job("other", "2026-10-03", null)], { listed: () => false, author }).length,
+    3,
+    "a post for another circle stays off this feed",
+  );
+
+  // Restore: an upload still running when the app closed comes back failed, with its bytes.
+  const disk = new Map();
+  const memoryStorage = {
+    jobs: [],
+    async save(jobs) {
+      this.jobs = jobs;
+    },
+    async load() {
+      return this.jobs;
+    },
+    async putBytes(jobId, index, payload) {
+      disk.set(`${jobId}/${index}`, payload);
+      return { uri: `file:///pending/${jobId}/${index}.bin`, posterUri: null };
+    },
+    async readBytes(jobId, index) {
+      return disk.get(`${jobId}/${index}`) ?? null;
+    },
+    async drop(jobId) {
+      for (const key of [...disk.keys()]) if (key.startsWith(`${jobId}/`)) disk.delete(key);
+    },
+  };
+  memoryStorage.jobs = [job("left", "2026-10-03", null)];
+
+  resetStore();
+  const app = await freshApp("inline-upload");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  await pending.restorePending(memoryStorage, supabase);
+  const restored = pending.listPending().find((item) => item.id === "left");
+  assert.equal(restored?.state, "failed");
+  assert.equal(restored?.error, pending.interruptedCopy);
+  pending.removePending("left");
+  assert.equal(pending.listPending().length, 0);
+
+  const posts = await import("../src/lib/posts.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const { execFileSync } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  globalThis.XMLHttpRequest ??= class {
+    upload = {};
+    #headers = {};
+    open(method, url) {
+      this.method = method;
+      this.url = url;
+    }
+    setRequestHeader(key, value) {
+      this.#headers[key] = value;
+    }
+    getResponseHeader(key) {
+      return this.response?.headers.get(key) ?? null;
+    }
+    send(body) {
+      realFetch(this.url, { method: this.method, headers: this.#headers, body: body ?? undefined })
+        .then(async (response) => {
+          this.response = response;
+          this.status = response.status;
+          await response.arrayBuffer();
+          this.onload?.();
+        })
+        .catch(() => this.onerror?.());
+    }
+  };
+  const jpeg = (color) => {
+    const file = `/tmp/e2e-inline-${color}.jpg`;
+    execFileSync("python3", [
+      "-c",
+      `from PIL import Image; Image.new("RGB", (64, 48), "${color}").save("${file}", quality=90)`,
+    ]);
+    const bytes = fs.readFileSync(file);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  };
+  const picked = (color) => ({
+    bytes: jpeg(color),
+    mimeType: "image/jpeg",
+    name: `${color}.jpg`,
+    kind: "photo",
+    durationMs: null,
+    previewUri: `file:///tmp/e2e-inline-${color}.jpg`,
+    posterUri: null,
+    poster: null,
+  });
+  const body = `E2E inline upload ${Date.now()}`;
+  const seen = [];
+  const stop = pending.subscribePending(() => {
+    const current = pending.listPending()[0];
+    if (current) seen.push(current.state);
+  });
+  const queued = await pending.queuePost(
+    supabase,
+    {
+      circleId: circle.circleId,
+      journalPersonId: circle.personId,
+      body,
+      occurredOn: circleToday(circle.timeZone),
+      occurredAt: new Date(Math.floor(Date.now() / 60000) * 60000).toISOString(),
+      occurredTimezone: circle.timeZone,
+      placeName: "",
+      taggedPersonIds: [],
+      audience: "family",
+      circleIds: [circle.circleId],
+    },
+    [picked("orange"), picked("purple")],
+  );
+  assert.equal(pending.listPending()[0]?.id, queued.id, "the card is in the feed before the upload ends");
+  const finished = await queued.done;
+  stop();
+  let momentId = finished?.momentId;
+  try {
+    assert.equal(finished?.state, "done", finished?.error ?? "");
+    assert.equal(finished.progress, 1);
+    assert.ok(seen.includes("uploading"));
+    assert.ok(momentId);
+    let photos = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      photos = await journal.loadMomentPhotos(supabase, momentId);
+      if (photos?.length === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    assert.equal(photos?.length, 2, "both photos are on the post");
+    const page = await journal.loadTimelinePage(supabase, {
+      circleId: circle.circleId,
+      viewerMembershipIds: [circle.membershipId],
+    });
+    const listed = page.moments.find((item) => item.id === momentId);
+    assert.ok(listed, "the published post is on the test circle feed");
+    assert.equal(listed.body, body);
+    assert.equal(
+      pending.mergePending(page.moments, pending.listPending(), { listed: () => true, author }).filter((item) => item.pending)
+        .length,
+      0,
+      "the pending card gives way to the real post",
+    );
+    pending.settlePending([queued.id]);
+
+    // Failure: adding to a post that is gone fails on its card and keeps Retry/Remove.
+    const moment = { id: "00000000-0000-4000-8000-000000000000", circleId: circle.circleId, journalPersonId: circle.personId, occurredOn: listed.occurredOn, audience: "family" };
+    const bad = await pending.queueAddPhotos(supabase, moment, [picked("gray")]);
+    const failed = await bad.done;
+    assert.equal(failed?.state, "failed");
+    assert.ok(failed?.error);
+    await pending.retryPending(bad.id, supabase);
+    assert.equal(pending.listPending().find((item) => item.id === bad.id)?.state, "failed", "Retry reruns and fails again");
+    pending.removePending(bad.id);
+    assert.equal(pending.listPending().length, 0, "Remove clears it");
+    const open = await posts.trashWrittenMoment(supabase, momentId, listed.revision);
+    assert.equal(open.ok, true, open.ok ? "" : open.message);
+    momentId = null;
+  } finally {
+    if (momentId) {
+      const page = await journal.loadTimelinePage(supabase, { circleId: circle.circleId, viewerMembershipIds: [circle.membershipId] }).catch(() => null);
+      const current = page?.moments.find((item) => item.id === momentId);
+      if (current) await posts.trashWrittenMoment(supabase, momentId, current.revision);
+    }
+    pending.resetPendingForTests();
+    await supabase.auth.signOut({ scope: "local" });
+  }
+});
+
 await step("test circle video poster is readable and playback starts from its offset", async () => {
   resetStore();
   const app = await freshApp("video-smoke");

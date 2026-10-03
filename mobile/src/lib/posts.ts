@@ -767,14 +767,45 @@ async function finishPhoto(supabase: SupabaseClient, intakeId: string, chipId: s
 }
 
 /**
+ * Inline progress (pending card in the feed) instead of the old floating chip:
+ * with hooks, an upload reports progress here, adds no chip, and resolves only
+ * once the post is published.
+ */
+export type UploadHooks = Readonly<{ onProgress: (fraction: number) => void }>;
+
+/** Run the photo worker and wait until the post is published (or clearly failed). */
+async function awaitPhotoPublished(supabase: SupabaseClient, intakeId: string) {
+  // The bytes are stored and acknowledged; a worker hiccup is not an upload
+  // failure (Retry would post twice). Watch the status instead.
+  await requestPhotoProcessing(intakeId).catch(() => undefined);
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data } = await supabase.rpc("get_photo_moment_status", { intake_id: intakeId });
+    const status = firstRow(data) as { status?: string } | null;
+    if (status?.status === "published") return;
+    if (status?.status === "needs_attention" || status?.status === "cancelled") {
+      throw new Error("This photo needs attention before it can be added.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+}
+
+/**
  * Same reserve → claim → resumable storage upload → acknowledge path as
  * `src/features/composer/photo-upload.ts`, then the existing `/api/photos/process` worker.
  */
-export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUploadInput) {
+export async function uploadPhotoMoment(
+  supabase: SupabaseClient,
+  input: PhotoUploadInput,
+  hooks?: UploadHooks,
+) {
   const id = randomId();
   const detail = dateLabel(input.occurredOn);
-  retryInputs.set(id, input);
-  const update = (patch: Partial<UploadChip> & { label: string }) =>
+  if (!hooks) retryInputs.set(id, input);
+  const update = (patch: Partial<UploadChip> & { label: string }) => {
+    if (hooks) {
+      if (patch.progress != null) hooks.onProgress(patch.progress);
+      return;
+    }
     putChip({
       id,
       detail,
@@ -783,6 +814,7 @@ export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUp
       done: false,
       ...patch,
     });
+  };
   update({ label: "Uploading…", progress: 0 });
   try {
     const mimeType = inspectPhoto(input.bytes, input.mimeType);
@@ -844,6 +876,10 @@ export async function uploadPhotoMoment(supabase: SupabaseClient, input: PhotoUp
       throw new Error("The upload finished, but could not yet be confirmed.");
     }
     update({ label: "Uploading…", progress: 1 });
+    if (hooks) {
+      await awaitPhotoPublished(supabase, reservation.intake_id);
+      return { ok: true as const, momentId: reservation.moment_id };
+    }
     void finishPhoto(supabase, reservation.intake_id, id, detail);
     return { ok: true as const, momentId: reservation.moment_id };
   } catch (error) {
@@ -869,8 +905,11 @@ export async function attachExtraPhotos(
   supabase: SupabaseClient,
   momentId: string,
   photos: readonly { bytes: ArrayBuffer; mimeType: string }[],
-) {
-  for (const photo of photos) {
+  /** `index` of the photo uploading and its 0–1 byte progress. */
+  onProgress?: (index: number, fraction: number) => void,
+): Promise<{ ok: true } | { ok: false; message: string; attached: number }> {
+  for (const [attached, photo] of photos.entries()) {
+    const failed = (message: string) => ({ ok: false as const, message, attached });
     try {
       const mimeType = inspectPhoto(photo.bytes, photo.mimeType);
       const sha256 = sha256Hex(photo.bytes);
@@ -882,7 +921,7 @@ export async function attachExtraPhotos(
       });
       const reservation = firstRow(reserved) as { intake_id?: string } | null;
       if (reserveError || !reservation?.intake_id) {
-        return { ok: false as const, message: "An extra photo could not be added." };
+        return failed("An extra photo could not be added.");
       }
       const { data: claimed, error: claimError } = await supabase.rpc("claim_photo_intake_upload", {
         expected_mime_type: mimeType,
@@ -895,7 +934,7 @@ export async function attachExtraPhotos(
         | { bucket_id?: string; object_path?: string; state?: string }
         | null;
       if (claimError || !claim?.bucket_id || !claim.object_path) {
-        return { ok: false as const, message: "An extra photo could not be added." };
+        return failed("An extra photo could not be added.");
       }
       if (claim.state !== "uploaded_unverified") {
         await uploadWithTus(
@@ -910,19 +949,17 @@ export async function attachExtraPhotos(
             intake_id: reservation.intake_id,
             upload_request_key: uploadKey,
           },
-          () => undefined,
+          (fraction) => onProgress?.(attached, fraction),
         );
       }
       const { error: ackError } = await supabase.rpc("acknowledge_photo_intake", {
         intake_id: reservation.intake_id,
       });
-      if (ackError) return { ok: false as const, message: "An extra photo could not be added." };
+      if (ackError) return failed("An extra photo could not be added.");
       await requestPhotoProcessing(reservation.intake_id);
+      onProgress?.(attached, 1);
     } catch (error) {
-      return {
-        ok: false as const,
-        message: error instanceof Error ? error.message : "An extra photo could not be added.",
-      };
+      return failed(error instanceof Error ? error.message : "An extra photo could not be added.");
     }
   }
   return { ok: true as const };
@@ -971,11 +1008,19 @@ function videoMime(declared: string, name: string) {
 }
 
 /** Same reserve → resumable upload → finalize path as `src/features/composer/video-upload.ts`. */
-export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUploadInput) {
+export async function uploadVideoMoment(
+  supabase: SupabaseClient,
+  input: VideoUploadInput,
+  hooks?: UploadHooks,
+) {
   const id = randomId();
   const detail = dateLabel(input.occurredOn);
-  retryInputs.set(id, input);
-  const update = (patch: Partial<UploadChip> & { label: string }) =>
+  if (!hooks) retryInputs.set(id, input);
+  const update = (patch: Partial<UploadChip> & { label: string }) => {
+    if (hooks) {
+      if (patch.progress != null) hooks.onProgress(patch.progress);
+      return;
+    }
     putChip({
       id,
       detail,
@@ -984,6 +1029,7 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
       done: false,
       ...patch,
     });
+  };
   update({ label: "Uploading…", progress: 0 });
   try {
     const mimeType = videoMime(input.mimeType, input.name ?? "");
@@ -1062,7 +1108,7 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
         // The video is already in the journal. The card can still draw a frame.
       }
     }
-    publishChip(id);
+    if (!hooks) publishChip(id);
     return { ok: true as const, momentId: reservation.moment_id };
   } catch (error) {
     update({

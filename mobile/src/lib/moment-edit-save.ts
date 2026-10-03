@@ -10,8 +10,8 @@ import {
   remapMentions,
   type MomentEditDraft,
 } from "./moment-edit";
+import { queueAddPhotos, settlePending } from "./pending-uploads";
 import {
-  addPhotosToMoment,
   removeMomentPhoto,
   reorderMomentPhotos,
   sharePrivateMoment,
@@ -27,8 +27,11 @@ export type EditSaveResult =
       occurredAt: string | null;
       occurredTimezone: string | null;
       mentions: readonly { userId: string; start: number; end: number }[] | undefined;
-      /** New photos still uploading; resolves when they are on the post. */
-      adding: Promise<{ ok: boolean; message?: string }> | null;
+      /**
+       * New photos still uploading (shown on the card as pending pages);
+       * resolves when they are on the post. A failure stays on the card with Retry.
+       */
+      adding: Promise<{ ok: boolean; message?: string; jobId: string }> | null;
     }>
   | Readonly<{
       ok: false;
@@ -123,10 +126,19 @@ export async function saveMomentEdit(
     mentions: write.edit.mentions,
     adding:
       added.length > 0
-        ? addPhotosToMoment(supabase, {
-            momentId: moment.id,
-            occurredOn: draft.occurredOn,
-            photos: added.map((item) => ({ bytes: item.bytes, mimeType: item.mimeType })),
+        ? queueAddPhotos(
+            supabase,
+            {
+              id: moment.id,
+              circleId: moment.circleId,
+              journalPersonId: moment.journalPersonId,
+              occurredOn: draft.occurredOn,
+              audience: moment.audience,
+            },
+            added,
+          ).then(async ({ id, done }) => {
+            const job = await done;
+            return { ok: job?.state === "done", message: job?.error ?? undefined, jobId: id };
           })
         : null,
   };
@@ -235,6 +247,8 @@ export async function runMomentEdit(
       if (!added.ok || (photos && photos.length >= expected)) break;
       await wait(1500);
     }
+    // The real photos are on the card now; drop the local pending pages.
+    if (added.ok) settlePending([added.jobId]);
   }
   return result;
 }

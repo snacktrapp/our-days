@@ -54,10 +54,11 @@ import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
-import { MomentChangeContext, MomentOverflow } from "./moment-menu";
+import { MomentChangeContext, MomentOverflow, MoreDots } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
 import { AlbumPager } from "./album-pager";
+import { PendingAddStrip, PendingPostMedia } from "./pending-media";
 import {
   createMomentHeartBus,
   DoubleTapHeart,
@@ -273,12 +274,19 @@ function CardBody({
   if (moment.kind === "photo" || moment.kind === "video") {
     return (
       <View>
-        <Media
-          moment={moment}
-          headers={headers}
-          frameWidth={frameWidth}
-          onScreen={onScreen}
-        />
+        {moment.pending ? (
+          <PendingPostMedia job={moment.pending} />
+        ) : (
+          <>
+            <Media
+              moment={moment}
+              headers={headers}
+              frameWidth={frameWidth}
+              onScreen={onScreen}
+            />
+            <PendingAddStrip momentId={moment.id} />
+          </>
+        )}
         <View style={styles.copy}>
           <AuthorRow moment={moment} />
           {moment.body ? (
@@ -288,7 +296,9 @@ function CardBody({
               serif={false}
             />
           ) : null}
-          <Conversation key={moment.id} moment={moment} viewer={viewer} />
+          {moment.pending ? null : (
+            <Conversation key={moment.id} moment={moment} viewer={viewer} />
+          )}
         </View>
       </View>
     );
@@ -1308,15 +1318,10 @@ function NoteRow({
             accessibilityLabel="Edit comment"
             disabled={editDisabled}
             onPress={onEdit}
-            hitSlop={14}
             style={styles.noteMore}
           >
-            {/* Web .inline-note-more-dots: three 2px dots in a 13x3 box. */}
-            <View style={styles.noteDots}>
-              {[0, 1, 2].map((dot) => (
-                <View key={dot} style={[styles.noteDot, { backgroundColor: colors.muted }]} />
-              ))}
-            </View>
+            {/* Same round dots as the post menu, a size smaller; a real 44×44 target. */}
+            <MoreDots color={colors.muted} size={3} />
           </Pressable>
         ) : null}
         <View style={styles.noteHeart} pointerEvents="box-none">
@@ -1568,6 +1573,8 @@ const styles = StyleSheet.create({
   },
   authorLine: {
     position: "relative",
+    // The 44×44 ••• target hangs below this row; keep it above the caption.
+    zIndex: 2,
     width: "100%",
     minHeight: 20,
     flexDirection: "row",
@@ -1759,22 +1766,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noteMore: {
-    width: 16,
-    height: 16,
+    // 44×44 to the touch; negative margins keep its 16×16 place in the row.
+    width: 44,
+    height: 44,
+    marginVertical: -14,
+    marginHorizontal: -14,
     alignItems: "center",
     justifyContent: "center",
-  },
-  noteDots: {
-    width: 13,
-    height: 3,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  noteDot: {
-    width: 2,
-    height: 2,
-    borderRadius: 1,
+    zIndex: 2,
   },
   showMore: {
     minHeight: 44,

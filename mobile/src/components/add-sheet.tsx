@@ -58,9 +58,6 @@ import {
   listEntryDrafts,
   loadEntryDraft,
   saveEntryDraft,
-  attachExtraPhotos,
-  uploadPhotoMoment,
-  uploadVideoMoment,
   type Audience,
   type DraftListItem,
 } from "../lib/posts";
@@ -87,6 +84,7 @@ import {
 import { PassageSheet } from "./bible-picker-sheet";
 import { MediaChooser } from "./media-chooser";
 import { EditPhotoStrip } from "./edit-photo-strip";
+import { queuePost } from "../lib/pending-uploads";
 import { MediaStill } from "./media-preview";
 import { PrivateImage } from "./private-image";
 import { useSheetDrag } from "./sheet-drag";
@@ -370,48 +368,32 @@ export function AddSheet({
       setError("Choose a photo first.");
       return;
     }
-    setBusy(true);
-    setError(null);
-    const shared = {
-      bytes: first.bytes,
-      mimeType: first.mimeType,
-      circleId: circle.circleId,
-      journalPersonId: circle.personId,
-      body: body.trim(),
-      occurredOn,
-      occurredAt: instant.occurredAt,
-      occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
-      placeName: place.label,
-      taggedPersonIds: taggedIds,
-      audience: audience(),
-      circleIds: justMe ? [] : [circle.circleId],
-    };
-    const result =
-      first.kind === "video"
-        ? await uploadVideoMoment(supabase, {
-            ...shared,
-            name: first.name || "video.mp4",
-            durationMs: first.durationMs ?? 0,
-            poster: first.poster,
-          })
-        : await uploadPhotoMoment(supabase, shared);
-    if (result.ok && first.kind === "photo" && mediaItems.length > 1) {
-      const extra = await attachExtraPhotos(
-        supabase,
-        result.momentId,
-        mediaItems.slice(1).map((item) => ({ bytes: item.bytes, mimeType: item.mimeType })),
-      );
-      if (!extra.ok) {
-        setBusy(false);
-        setError(extra.message);
-        return;
-      }
-    }
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
+    if (first.kind === "video" && mediaItems.length > 1) {
+      setError("Choose photos or a video, not both.");
       return;
     }
+    const names = new Map(visiblePeople.map((person) => [person.id, person.name]));
+    // The sheet closes now; the post appears in the feed with its photo dimmed
+    // and a thin progress bar until the upload finishes (Retry if it fails).
+    void queuePost(
+      supabase,
+      {
+        circleId: circle.circleId,
+        journalPersonId: circle.personId,
+        body: body.trim(),
+        occurredOn,
+        occurredAt: instant.occurredAt,
+        occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
+        placeName: place.label,
+        taggedPersonIds: taggedIds,
+        taggedLabel:
+          taggedIds.flatMap((id) => (names.has(id) ? [names.get(id) as string] : [])).join(", ") || undefined,
+        audience: audience(),
+        circleIds: justMe ? [] : [circle.circleId],
+      },
+      mediaItems,
+    );
+    setMediaItems([]);
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
     await rememberCircle();
     onPosted(audience(), circle.circleId);
