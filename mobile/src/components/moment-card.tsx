@@ -1091,7 +1091,8 @@ function Conversation({
           />
         </Pressable>
         <Text
-          style={[styles.reactionNames, face(colors, 400), { color: colors.ink }]}
+          // Web .inline-reaction-summary li: var(--muted), 11px.
+          style={[styles.reactionNames, face(colors, 400), { color: colors.muted }]}
           numberOfLines={2}
         >
           {names.join(" ")}
@@ -1284,7 +1285,8 @@ function NoteRow({
         <ClampedMention text={note.body} mentions={note.mentions} serif={false} compact />
       </View>
       {open ? (
-        <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, marginTop: 4 }]}>
+        // Web p.inline-note-loved: muted, 10px/1.2, 0.02em, 2px above.
+        <Text style={[face(colors, 400), styles.noteLoved, { color: colors.muted }]}>
           {lovedBy(note.heartNames)}
         </Text>
       ) : null}
@@ -1648,6 +1650,7 @@ const styles = StyleSheet.create({
   noteWhen: {
     fontSize: 8,
   },
+  noteLoved: { fontSize: 10, lineHeight: 12, letterSpacing: 0.2, marginTop: 2 },
   noteHeart: {
     position: "absolute",
     top: "50%",
