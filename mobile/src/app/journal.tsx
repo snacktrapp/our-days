@@ -28,6 +28,7 @@ import { dismissShareDraft, subscribeShareDraft } from "../components/share-brid
 import type { ShareDraft } from "../lib/share-entry";
 import { AddSheet } from "../components/add-sheet";
 import { ActivitySheet } from "../components/activity-sheet";
+import { FeedScrollLock } from "../lib/feed-scroll-lock";
 import { CirclesScreen } from "../components/circles-screen";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
@@ -159,6 +160,9 @@ export default function JournalScreen() {
   const [shareDraft, setShareDraft] = useState<ShareDraft | null>(null);
   const [profile, setProfile] = useState<ViewerProfile | null>(null);
   const [chromeOffset, setChromeOffset] = useState(0);
+  // Circles: the header scrolls away with the directory like the web page;
+  // the bottom nav stays pinned.
+  const [circlesHeaderOffset, setCirclesHeaderOffset] = useState(0);
   const [pull, setPull] = useState(0);
   const [showMentions, setShowMentions] = useState(false);
   const [viewabilityReady, setViewabilityReady] = useState(false);
@@ -176,6 +180,11 @@ export default function JournalScreen() {
   }, [moments]);
   const [landing, setLanding] = useState<PushLanding | null>(null);
   const listRef = useRef<FlatList<FeedRow>>(null);
+  const lockFeedScroll = useCallback((locked: boolean) => {
+    // iOS only: a native UIScrollView keeps scrolling under a PanResponder.
+    if (Platform.OS !== "ios") return;
+    listRef.current?.setNativeProps({ scrollEnabled: !locked });
+  }, []);
   const landingPages = useRef(0);
   const circlesRef = useRef(circles);
   const loadFirstPageRef = useRef<
@@ -561,9 +570,13 @@ export default function JournalScreen() {
         <CirclesScreen
           circles={circles}
           accentToken={profile?.accentToken}
-          // The web keeps the Circles nav pinned. The directory is often
-          // shorter than the hide distance, so scroll-linked chrome would stop
-          // half off screen.
+          // The web keeps the Circles nav pinned and lets the header scroll
+          // away with the page. The header moves 1:1 with the directory, so a
+          // short directory never leaves it stuck half off screen.
+          onScroll={(y) => {
+            const next = Math.round(Math.max(0, Math.min(distance, y)));
+            setCirclesHeaderOffset((current) => (current === next ? current : next));
+          }}
           onOpenPerson={(circleId, personId, name) => {
             const next = { circleId, personId, name };
             personRef.current = next;
@@ -592,6 +605,7 @@ export default function JournalScreen() {
           }}
         />
       ) : (
+        <FeedScrollLock.Provider value={lockFeedScroll}>
         <FlatList
           // Sheets opened from a card (comments, edit) render inside this list,
           // so a tap there must not just dismiss the keyboard.
@@ -633,6 +647,7 @@ export default function JournalScreen() {
                   setCirclesOpen(true);
                   offsetRef.current = 0;
                   setChromeOffset(0);
+                  setCirclesHeaderOffset(0);
                 }}
                 style={styles.backToCircles}
               >
@@ -774,6 +789,7 @@ export default function JournalScreen() {
             ) : null
           }
         />
+        </FeedScrollLock.Provider>
       )}
       {switcherOpen ? (
         <Pressable style={styles.scrim} onPress={() => setSwitcherOpen(false)} />
@@ -797,7 +813,7 @@ export default function JournalScreen() {
           setSettingsOpen(true);
           setCirclesOpen(false);
         }}
-        offset={chromeOffset}
+        offset={circlesOpen && !settingsOpen ? circlesHeaderOffset : chromeOffset}
         interactive={switcherOpen}
         locked={settingsOpen || circlesOpen || Boolean(personJournal)}
         onOpenActivity={
@@ -859,6 +875,7 @@ export default function JournalScreen() {
           setCirclesOpen(true);
           offsetRef.current = 0;
           setChromeOffset(0);
+          setCirclesHeaderOffset(0);
           setPull(0);
         }}
       />

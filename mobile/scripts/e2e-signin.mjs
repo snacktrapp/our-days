@@ -60,6 +60,13 @@ async function step(name, fn) {
   }
 }
 
+// Set the app config env before the first app module import: config.ts reads
+// it once at load, and the offline steps below import journal.ts first.
+const { service, publishable } = await loadKeys();
+process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
+process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
+process.env.EXPO_PUBLIC_SITE_URL ??= "https://our-days-neon.vercel.app";
+
 await step("journal module loads under plain Node", async () => {
   const loaded = await import("../src/lib/journal.ts");
   assert.equal(typeof loaded.loadTimelinePage, "function");
@@ -203,6 +210,43 @@ await step("bible books group by testament and verses are a number list", async 
     17,
   );
   assert.deepEqual(picker.bibleNumberChoices("end", { ...jonah, chapter: 1 }), []);
+});
+
+await step("album frame is the tallest photo capped at 3:4 and swipes lock within 45°", async () => {
+  const album = await import("../src/lib/album-frame.ts");
+  // Fixed frame: tallest stored photo, never taller than width × 4/3.
+  assert.equal(album.albumFrameHeight(390, [{ width: 1200, height: 800 }, { width: 900, height: 1600 }]), 520);
+  assert.equal(album.albumFrameHeight(390, [{ width: 1200, height: 800 }, { width: 1000, height: 1000 }]), 390);
+  // No stored sizes: the web 4:3 placeholder, then the first loaded photo.
+  assert.equal(album.albumFrameHeight(390, [{}, {}]), 293);
+  assert.equal(album.albumFrameHeight(390, [{}, {}], 2), 520);
+  // 8 px slop, then horizontal only within 45°.
+  assert.equal(album.swipeAxis(7, -7), null);
+  assert.equal(album.swipeAxis(-12, 11), "x");
+  assert.equal(album.swipeAxis(11, 12), "y");
+  assert.equal(album.albumSwipeStep(-album.albumSwipeThresholdPx, 0), -1);
+  assert.equal(album.albumSwipeStep(20, 0), 0);
+  assert.equal(album.wrapIndex(-1, 3), 2);
+});
+
+await step("a short quick flick on a grab bar closes the sheet", async () => {
+  const sheet = await import("../src/lib/sheet-dismiss.ts");
+  // ~30 pt in ~48 ms: well short of the 72 pt drag threshold.
+  const flick = [
+    { y: 100, t: 0 },
+    { y: 106, t: 16 },
+    { y: 117, t: 32 },
+    { y: 130, t: 48 },
+  ];
+  const v = sheet.releaseVelocity(flick, 52);
+  assert.ok(v >= sheet.sheetDismissVelocity, `flick speed ${v}`);
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 30, velocityY: v }), true);
+  // Same distance, but the finger rested before lifting.
+  assert.equal(sheet.releaseVelocity(flick, 200), 0);
+  // A jittery tap never closes, however fast.
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 10, velocityY: 3000 }), false);
+  // A slow short drag springs back.
+  assert.equal(sheet.sheetDismissShouldCommit({ dy: 40, velocityY: 150 }), false);
 });
 
 await step("sheet drag springs back when short and confirms unsaved text", async () => {
@@ -460,10 +504,6 @@ await step("a share becomes a photo, video, or link and still needs a circle", a
   assert.equal(share.shareCircleChosen("circle-1"), true);
 });
 
-const { service, publishable } = await loadKeys();
-process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
-process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
-process.env.EXPO_PUBLIC_SITE_URL ??= "https://our-days-neon.vercel.app";
 
 const { createClient } = await import("@supabase/supabase-js");
 const secureStore = await import("./e2e/mock-secure-store.mjs");

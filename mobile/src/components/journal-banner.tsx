@@ -164,7 +164,8 @@ const styles = StyleSheet.create({
     columnGap: 4,
   },
   cta: {
-    minHeight: 40,
+    // A 44 pt pill: the Apple HIG minimum tap target, drawn at full height.
+    minHeight: 44,
     paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -41,6 +42,7 @@ import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, stageChromeInset, tracking, type ThemeColors } from "../lib/tokens";
 import { ChevronRight, NavCircles } from "./icons";
 import { KeyboardDoneBar, composerKeyboardDismissMode } from "./keyboard-form";
+import { useGrabDismiss } from "./sheet-drag";
 
 export function CirclesScreen({
   circles,
@@ -711,6 +713,7 @@ function ManagementSheet({
   const retro = colors.appearance === "retro";
   const light = colors.scheme === "light" && !retro;
   const scrim = retro ? "#100d0c" : light ? "rgba(32,39,33,0.42)" : "rgba(0,5,3,0.72)";
+  const { translateY, sheetProps, chromeProps } = useGrabDismiss(onClose);
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView
@@ -718,7 +721,8 @@ function ManagementSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <Pressable accessibilityLabel="Close management" style={styles.scrimTap} onPress={onClose} />
-        <View
+        <Animated.View
+          {...sheetProps}
           style={[
             styles.sheet,
             {
@@ -727,15 +731,18 @@ function ManagementSheet({
               borderTopLeftRadius: retro ? 2 : 24,
               borderTopRightRadius: retro ? 2 : 24,
               paddingBottom: Math.max(24, insets.bottom),
+              transform: [{ translateY }],
             },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          {title ? (
-            <Text style={[face(colors, 650), styles.sheetTitle, { color: colors.ink }]}>{title}</Text>
-          ) : (
-            <View style={{ height: 28 }} />
-          )}
+          <View {...chromeProps} accessibilityLabel="Drag down to close">
+            <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
+            {title ? (
+              <Text style={[face(colors, 650), styles.sheetTitle, { color: colors.ink }]}>{title}</Text>
+            ) : (
+              <View style={{ height: 28 }} />
+            )}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close management"
@@ -751,7 +758,7 @@ function ManagementSheet({
           >
             {children}
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
       <KeyboardDoneBar />
     </Modal>
@@ -1134,6 +1141,7 @@ function InviteDrawer({
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ displayName: string; email: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const { translateY, sheetProps, chromeProps } = useGrabDismiss(onClose);
 
   function review() {
     const displayName = name.trim();
@@ -1157,7 +1165,8 @@ function InviteDrawer({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <Pressable accessibilityLabel="Close" style={styles.scrimTap} onPress={onClose} />
-        <View
+        <Animated.View
+          {...sheetProps}
           style={[
             styles.sheet,
             {
@@ -1166,11 +1175,14 @@ function InviteDrawer({
               borderTopLeftRadius: retro ? 2 : 14,
               borderTopRightRadius: retro ? 2 : 14,
               paddingBottom: Math.max(16, insets.bottom),
+              transform: [{ translateY }],
             },
           ]}
         >
-          <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
-          <Text style={[face(colors, 650), styles.inviteTitle, { color: colors.ink }]}>Invite someone</Text>
+          <View {...chromeProps} accessibilityLabel="Drag down to close">
+            <View style={[styles.handle, { backgroundColor: retro ? "#6f655b" : "#526158" }]} />
+            <Text style={[face(colors, 650), styles.inviteTitle, { color: colors.ink }]}>Invite someone</Text>
+          </View>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={composerKeyboardDismissMode}
@@ -1262,7 +1274,7 @@ function InviteDrawer({
               <Text style={[face(colors, 400), { color: colors.muted, fontSize: 16 }]}>Close</Text>
             </Pressable>
           </ScrollView>
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
       <KeyboardDoneBar />
     </Modal>
@@ -1380,7 +1392,7 @@ function AddExistingSheet({
       ) : null}
       {loaded && people.length === 0 ? (
         <Text style={[face(colors, 400), { color: colors.muted, fontSize: 15, lineHeight: 22 }]}>
-          No members available to add. To invite someone else, use their email below.
+          No members available to add. To add someone new, use Invite someone on the circle.
         </Text>
       ) : null}
       {message ? (

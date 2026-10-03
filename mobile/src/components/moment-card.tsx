@@ -4,7 +4,6 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -45,6 +44,7 @@ import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
 import { MomentChangeContext, MomentOverflow } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
+import { AlbumPager } from "./album-pager";
 import { PrivateImage } from "./private-image";
 
 function retroFace(colors: ThemeColors, accent: string) {
@@ -760,7 +760,6 @@ function Media({
   frameWidth: number;
   onScreen: boolean;
 }>) {
-  const [index, setIndex] = useState(0);
   if (moment.kind === "video") {
     return (
       <JournalVideo
@@ -773,61 +772,28 @@ function Media({
     );
   }
   const photos = moment.photos.length > 0 ? moment.photos : [{ id: moment.id, sortOrder: 0 }];
-  const photo = photos[Math.min(index, photos.length - 1)];
+  if (photos.length > 1) {
+    return (
+      <AlbumPager
+        key={moment.id}
+        photos={photos}
+        pathFor={(photoId) => photoDeliveryPath(moment.id, photoId)}
+        label={`Photo in ${moment.personName}’s journal from ${moment.occurredOn}`}
+        headers={headers}
+        frameWidth={frameWidth}
+      />
+    );
+  }
+  const photo = photos[0];
   return (
-    <View>
-      {photos.length > 1 ? (
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const next = Math.round(
-              event.nativeEvent.contentOffset.x / Math.max(frameWidth, 1),
-            );
-            setIndex(next);
-          }}
-        >
-          {photos.map((item) => (
-            <View key={item.id} style={{ width: frameWidth }}>
-              <PrivateImage
-                path={photoDeliveryPath(moment.id, item.id)}
-                width={item.width}
-                height={item.height}
-                label={`Photo in ${moment.personName}’s journal`}
-                headers={headers}
-                frameWidth={frameWidth}
-              />
-            </View>
-          ))}
-        </ScrollView>
-      ) : (
-        <PrivateImage
-          path={photoDeliveryPath(moment.id, photo?.id)}
-          width={photo?.width}
-          height={photo?.height}
-          label={`Photo in ${moment.personName}’s journal from ${moment.occurredOn}`}
-          headers={headers}
-          frameWidth={frameWidth}
-        />
-      )}
-      {photos.length > 1 ? (
-        <View style={styles.dots} pointerEvents="none">
-          {photos.map((item, dot) => (
-            <View
-              key={item.id}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor:
-                    dot === index ? "#fffaf0" : "rgba(255, 250, 240, 0.45)",
-                },
-              ]}
-            />
-          ))}
-        </View>
-      ) : null}
-    </View>
+    <PrivateImage
+      path={photoDeliveryPath(moment.id, photo?.id)}
+      width={photo?.width}
+      height={photo?.height}
+      label={`Photo in ${moment.personName}’s journal from ${moment.occurredOn}`}
+      headers={headers}
+      frameWidth={frameWidth}
+    />
   );
 }
 
@@ -1519,20 +1485,6 @@ const styles = StyleSheet.create({
   },
   insightClip: {
     marginTop: 0,
-  },
-  dots: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 10,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 5,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 999,
   },
   milestone: {
     paddingVertical: 18,
