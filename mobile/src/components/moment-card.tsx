@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type Ref } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -14,12 +14,14 @@ import {
 } from "react-native";
 
 import {
+  appleMapsUrl,
   audienceChipLabel,
   displayPlaceLabel,
   hiddenNoteCount,
   insightSourceLabel,
   mentionPieces,
   parseBibleVerse,
+  shortPlaceLabel,
   visibleNotes,
   type MentionSpan,
 } from "../lib/feed-format";
@@ -316,7 +318,38 @@ function CardBody({
 
 function LocationHeading({ moment }: Readonly<{ moment: TimelineMoment }>) {
   const place = useResolvedPlace(moment, false);
-  return <PlaceTitle>{place || "A remembered place"}</PlaceTitle>;
+  return (
+    <MapsLink moment={moment} name={place}>
+      <PlaceTitle>{place || "A remembered place"}</PlaceTitle>
+    </MapsLink>
+  );
+}
+
+/**
+ * Web `MomentPlaceButton`: the place opens Apple Maps at the post's
+ * coordinates. Same look as the plain text (the web link has no underline);
+ * it dims while pressed. Without coordinates it stays plain text.
+ */
+function MapsLink({
+  moment,
+  name,
+  children,
+}: Readonly<{ moment: TimelineMoment; name: string; children: ReactNode }>) {
+  const url = appleMapsUrl(moment.placeName || moment.title, moment.latitude, moment.longitude);
+  const label = shortPlaceLabel(name);
+  if (!url || !label) return children;
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Open ${label} in Maps`}
+      accessibilityHint="Opens Apple Maps"
+      hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
+      onPress={() => void Linking.openURL(url).catch(() => undefined)}
+      style={({ pressed }) => [styles.mapsLink, pressed ? styles.mapsLinkPressed : null]}
+    >
+      {children}
+    </Pressable>
+  );
 }
 
 function PlaceTitle({ children }: Readonly<{ children: string }>) {
@@ -757,12 +790,14 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
               ·
             </Text>
             <PlacePin color={colors.muted} hole={colors.paper} />
-            <Text
-              style={[styles.placeName, face(colors, 400, "record"), { color: colors.muted }]}
-              numberOfLines={1}
-            >
-              {place}
-            </Text>
+            <MapsLink moment={moment} name={place}>
+              <Text
+                style={[styles.placeName, face(colors, 400, "record"), { color: colors.muted }]}
+                numberOfLines={1}
+              >
+                {place}
+              </Text>
+            </MapsLink>
           </View>
         ) : null}
       </View>
@@ -1571,6 +1606,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
+  mapsLink: { flexShrink: 1, minWidth: 0 },
+  mapsLinkPressed: { opacity: 0.5 },
   placeName: {
     fontSize: 11,
     flexShrink: 1,

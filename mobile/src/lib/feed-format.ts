@@ -4,7 +4,7 @@
  * Bible marker: src/features/composer/bible-verse-catalog.ts parse pattern
  * Insight link: src/features/insights/insight-source.ts insightSourceLabel
  * Mentions: src/features/mentions/mention-text.tsx
- * Place: src/lib/place-coordinates.ts shortPlaceLabel
+ * Place: src/lib/place-coordinates.ts shortPlaceLabel, buildAppleMapsUrl
  * Notes window: src/features/timeline/moment-conversation-notes.ts
  */
 
@@ -21,6 +21,32 @@ export function shortPlaceLabel(value: string) {
   if (!trimmed) return "";
   const comma = trimmed.indexOf(",");
   return comma > 0 ? trimmed.slice(0, comma).trim() : trimmed;
+}
+
+function finiteCoordinate(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Web `buildAppleMapsUrl`: tapping a post's place opens Apple Maps at the
+ * stored coordinates, labeled with the short place name. Null without valid
+ * coordinates, so a typed name with no pin stays plain text like the web.
+ */
+export function appleMapsUrl(
+  placeName: string | null | undefined,
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+) {
+  const lat = finiteCoordinate(latitude);
+  const lng = finiteCoordinate(longitude);
+  if (lat === null || lng === null || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  const query = shortPlaceLabel(placeName ?? "") || `${lat},${lng}`;
+  return `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(query)}&z=12`;
 }
 
 const coordinatePair = /^-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?$/u;

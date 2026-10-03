@@ -339,6 +339,52 @@ await step("post edit matches the web: draft, photo plan, time, mentions, and re
   assert.equal(refreshed, 1);
 });
 
+await step("dragging a photo thumb opens a live gap, settles into it, and keeps VoiceOver moves", async () => {
+  const reorder = await import("../src/lib/thumb-reorder.ts");
+  const fs = await import("node:fs");
+  const step = 80;
+  assert.equal(reorder.dragSlot(0, 0, 4, step), 0);
+  assert.equal(reorder.dragSlot(0, 39, 4, step), 0, "under half a slot stays put");
+  assert.equal(reorder.dragSlot(0, 41, 4, step), 1);
+  assert.equal(reorder.dragSlot(1, 170, 4, step), 3);
+  assert.equal(reorder.dragSlot(1, 900, 4, step), 3, "clamped to the last slot");
+  assert.equal(reorder.dragSlot(2, -900, 4, step), 0, "clamped to the first slot");
+  // Drag 0 over slot 2: thumbs 1 and 2 slide left one slot, 3 stays.
+  assert.deepEqual([0, 1, 2, 3].map((i) => reorder.makeRoomOffset(i, 0, 2, step)), [0, -80, -80, 0]);
+  // Drag 3 over slot 1: thumbs 1 and 2 slide right.
+  assert.deepEqual([0, 1, 2, 3].map((i) => reorder.makeRoomOffset(i, 3, 1, step)), [0, 80, 80, 0]);
+  assert.deepEqual([0, 1, 2].map((i) => reorder.makeRoomOffset(i, 1, 1, step)), [0, 0, 0]);
+  const strip = fs.readFileSync(new URL("../src/components/edit-photo-strip.tsx", import.meta.url), "utf8");
+  assert.match(strip, /isReduceMotionEnabled/, "Reduce Motion turns springs into instant moves");
+  assert.match(strip, /name: "moveLeft", label: "Move left"/);
+  assert.match(strip, /name: "moveRight", label: "Move right"/);
+  assert.match(strip, /liftHaptic\(\)/);
+  assert.match(strip, /slotHaptic\(\)/);
+  const haptics = fs.readFileSync(new URL("../src/lib/haptics.ts", import.meta.url), "utf8");
+  assert.match(haptics, /import\("expo-haptics"\)\.catch/, "haptics load lazily so older binaries never crash");
+});
+
+await step("tapping a post's place opens Apple Maps with the web's URL", async () => {
+  const feed = await import("../src/lib/feed-format.ts");
+  const fs = await import("node:fs");
+  // Same vectors as the web's place-coordinates / moment-place-meta tests.
+  assert.equal(
+    feed.appleMapsUrl("Sand Harbor, NV, United States", 39.2, -119.93),
+    "https://maps.apple.com/?ll=39.2,-119.93&q=Sand%20Harbor&z=12",
+  );
+  assert.equal(
+    feed.appleMapsUrl("Bass Lake", 37.3247, -119.5664),
+    "https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake&z=12",
+  );
+  assert.equal(feed.appleMapsUrl("The porch", "35.28", "-120.66"), "https://maps.apple.com/?ll=35.28,-120.66&q=The%20porch&z=12");
+  assert.equal(feed.appleMapsUrl("", 35.28, -120.66), "https://maps.apple.com/?ll=35.28,-120.66&q=35.28%2C-120.66&z=12");
+  assert.equal(feed.appleMapsUrl("Oak Street School", null, null), null, "a typed name without a pin is not a link");
+  assert.equal(feed.appleMapsUrl("Nowhere", 91, 0), null);
+  const card = fs.readFileSync(new URL("../src/components/moment-card.tsx", import.meta.url), "utf8");
+  assert.match(card, /accessibilityLabel=\{`Open \$\{label\} in Maps`\}/);
+  assert.match(card, /Linking\.openURL\(url\)/);
+});
+
 function menuFor(edit, moment) {
   return edit.canEditMoment(moment);
 }

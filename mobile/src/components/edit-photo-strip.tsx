@@ -1,11 +1,13 @@
 import { Image, type ImageStyle } from "expo-image";
-import { useEffect, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { liftHaptic, slotHaptic } from "../lib/haptics";
 import { photoDeliveryPath } from "../lib/journal";
 import type { EditPhoto } from "../lib/moment-edit";
 import { maximumMomentPhotos, type MediaSource } from "../lib/pick-media";
 import { mediaUrl } from "../lib/supabase";
+import { dragSlot, makeRoomOffset } from "../lib/thumb-reorder";
 import { useAppTheme } from "../lib/theme";
 import { face } from "../lib/tokens";
 import { MediaChooser } from "./media-chooser";
@@ -13,37 +15,81 @@ import { MediaChooser } from "./media-chooser";
 const thumb = 72;
 const gap = 8;
 
+const step = thumb + gap;
+
+type TouchLike = Readonly<{ pageX?: number; touches?: readonly { pageX: number }[] }>;
+
+/** iOS puts pageX on the event; react-native-web only on its touches. */
+function touchX(event: TouchLike) {
+  return event.pageX ?? event.touches?.[0]?.pageX ?? 0;
+}
+const lifted = 1.08;
+
 /**
  * Touch-and-hold a thumbnail, then drag it sideways (web drag-and-drop on
- * `.composer-photo-thumb`). Raw touch events, not PanResponder: responder
- * moves do not reach views inside the sheet's Modal on iOS (see sheet-drag).
- * Gesture state lives in this closure, outside render, like album-pager.
+ * `.composer-photo-thumb`). The other thumbs spring aside live to open a gap,
+ * like rearranging the iOS Home Screen, and the drop settles into that gap.
+ * Raw touch events, not PanResponder (see sheet-drag). Gesture state lives in
+ * this closure, outside render, like album-pager.
  */
 function createThumbDrag(onDragging: (index: number | null) => void) {
   const x = new Animated.Value(0);
+  const scale = new Animated.Value(1);
+  const offsets = new Map<string, Animated.Value>();
   const state = {
     index: null as number | null,
+    slot: 0,
     startX: 0,
     dx: 0,
-    count: 0,
+    keys: [] as readonly string[],
+    reduced: false,
     move: (_from: number, _to: number) => undefined as void,
   };
-  function finish() {
-    const from = state.index;
-    const dx = state.dx;
-    state.index = null;
-    state.dx = 0;
-    onDragging(null);
+  function offset(key: string) {
+    let value = offsets.get(key);
+    if (!value) {
+      value = new Animated.Value(0);
+      offsets.set(key, value);
+    }
+    return value;
+  }
+  function glide(value: Animated.Value, toValue: number, done?: () => void) {
+    if (state.reduced) {
+      value.setValue(toValue);
+      done?.();
+      return;
+    }
+    Animated.spring(value, {
+      toValue,
+      useNativeDriver: true,
+      stiffness: 380,
+      damping: 30,
+      mass: 1,
+      restDisplacementThreshold: 0.5,
+      restSpeedThreshold: 4,
+    }).start(({ finished }) => {
+      if (finished) done?.();
+    });
+  }
+  function makeRoom(from: number, to: number) {
+    state.keys.forEach((key, index) => glide(offset(key), makeRoomOffset(index, from, to, step)));
+  }
+  function reset() {
     x.setValue(0);
-    if (from == null) return;
-    const to = Math.max(0, Math.min(state.count - 1, from + Math.round(dx / (thumb + gap))));
-    if (to !== from) state.move(from, to);
+    scale.setValue(1);
+    offsets.forEach((value) => value.setValue(0));
   }
   return {
     x,
-    update(count: number, move: (from: number, to: number) => void) {
-      state.count = count;
+    scale,
+    offset,
+    reset,
+    update(keys: readonly string[], move: (from: number, to: number) => void) {
+      state.keys = keys;
       state.move = move;
+    },
+    setReduced(reduced: boolean) {
+      state.reduced = reduced;
     },
     touchStart(pageX: number) {
       if (state.index == null) state.startX = pageX;
@@ -51,17 +97,37 @@ function createThumbDrag(onDragging: (index: number | null) => void) {
     /** Long press picked this thumb up; moves from here drag it. */
     lift(index: number) {
       state.index = index;
+      state.slot = index;
       state.dx = 0;
       x.setValue(0);
+      liftHaptic();
+      if (!state.reduced) glide(scale, lifted);
       onDragging(index);
     },
     touchMove(index: number, pageX: number) {
       if (state.index !== index) return;
       state.dx = pageX - state.startX;
       x.setValue(state.dx);
+      const slot = dragSlot(index, state.dx, state.keys.length, step);
+      if (slot !== state.slot) {
+        state.slot = slot;
+        slotHaptic();
+        makeRoom(index, slot);
+      }
     },
     touchEnd(index: number) {
-      if (state.index === index) finish();
+      if (state.index !== index) return;
+      const from = index;
+      const to = state.slot;
+      state.index = null;
+      glide(scale, 1);
+      // Settle into the gap, then commit the order. The layout effect zeroes
+      // every offset in the same commit, so nothing jumps.
+      glide(x, (to - from) * step, () => {
+        if (to !== from) state.move(from, to);
+        else reset();
+        onDragging(null);
+      });
     },
   };
 }
@@ -85,10 +151,23 @@ export function EditPhotoStrip({
   const { colors } = useAppTheme();
   const [dragging, setDragging] = useState<number | null>(null);
   const [gesture] = useState(() => createThumbDrag(setDragging));
+  const order = photos.map((photo) => photo.key).join(",");
   useEffect(() => {
-    gesture.update(photos.length, onMove);
+    gesture.update(
+      photos.map((photo) => photo.key),
+      onMove,
+    );
   });
-  const dragX = gesture.x;
+  useLayoutEffect(() => {
+    gesture.reset();
+  }, [gesture, order]);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => gesture.setReduced(reduced));
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (reduced) =>
+      gesture.setReduced(reduced),
+    );
+    return () => subscription.remove();
+  }, [gesture]);
   const first = photos[0];
   const removable = photos.length > 1;
 
@@ -118,17 +197,18 @@ export function EditPhotoStrip({
         {photos.map((photo, index) => (
           <Animated.View
             key={photo.key}
-            onTouchStart={(event) => gesture.touchStart(event.nativeEvent.pageX)}
-            onTouchMove={(event) => gesture.touchMove(index, event.nativeEvent.pageX)}
+            onTouchStart={(event) => gesture.touchStart(touchX(event.nativeEvent))}
+            onTouchMove={(event) => gesture.touchMove(index, touchX(event.nativeEvent))}
             onTouchEnd={() => gesture.touchEnd(index)}
             onTouchCancel={() => gesture.touchEnd(index)}
             style={[
-              styles.thumb,
+              styles.slot,
               dragging === index
-                ? { zIndex: 3, opacity: 0.9, transform: [{ translateX: dragX }, { scale: 1.06 }] }
-                : null,
+                ? [styles.lifted, { transform: [{ translateX: gesture.x }, { scale: gesture.scale }] }]
+                : { transform: [{ translateX: gesture.offset(photo.key) }] },
             ]}
           >
+            <View style={styles.thumb}>
             <Pressable
               accessibilityRole="image"
               accessibilityLabel={`Photo ${index + 1} of ${photos.length}`}
@@ -154,6 +234,7 @@ export function EditPhotoStrip({
                 label={`Photo ${index + 1} of ${photos.length}`}
               />
             </Pressable>
+            </View>
             {removable ? (
               <Pressable
                 accessibilityRole="button"
@@ -243,7 +324,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(36,31,27,0.88)",
   },
   removePillText: { color: "#fffaf0", fontSize: 11 },
-  strip: { gap, paddingBottom: 4 },
+  strip: { gap, paddingVertical: 6 },
+  slot: { width: thumb, height: thumb },
+  lifted: {
+    zIndex: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   thumb: {
     width: thumb,
     height: thumb,
