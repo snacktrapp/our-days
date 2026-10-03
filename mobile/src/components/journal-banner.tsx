@@ -67,9 +67,6 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
         <Pressable
           accessibilityRole="button"
           onPress={onDismiss}
-          // The pill stays 40 pt tall like the web; the slop makes the tap
-          // target 44 pt (Apple HIG minimum).
-          hitSlop={ctaHitSlop}
           style={[
             styles.cta,
             retro
@@ -106,8 +103,6 @@ export function MentionsBanner({ onDismiss }: Readonly<{ onDismiss: () => void }
     </View>
   );
 }
-
-const ctaHitSlop = { top: 2, bottom: 2, left: 0, right: 0 } as const;
 
 /** Retro `--accent-soft`: color-mix(accent 14%, transparent). */
 function accentSoft(hex: string) {
@@ -169,7 +164,8 @@ const styles = StyleSheet.create({
     columnGap: 4,
   },
   cta: {
-    minHeight: 40,
+    // A 44 pt pill: the Apple HIG minimum tap target, drawn at full height.
+    minHeight: 44,
     paddingHorizontal: 16,
     borderRadius: 999,
     borderWidth: 1,
