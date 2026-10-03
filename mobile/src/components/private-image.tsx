@@ -19,6 +19,8 @@ export function PrivateImage({
   headers,
   frameWidth: _frameWidth,
   mat,
+  frameHeight,
+  onSize,
 }: Readonly<{
   path: string;
   width?: number;
@@ -28,6 +30,10 @@ export function PrivateImage({
   frameWidth: number;
   /** Video frames use #050b08. Photos use cream. */
   mat?: string;
+  /** Album slides: a fixed frame height; the photo is contained inside it. */
+  frameHeight?: number;
+  /** Reports the loaded image's pixel size (album frames without stored sizes). */
+  onSize?: (width: number, height: number) => void;
 }>) {
   const { colors } = useAppTheme();
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
@@ -45,11 +51,14 @@ export function PrivateImage({
   // Width is 100% of the card. Height comes from that width via aspectRatio,
   // the same way the web SVG sizer does. An explicit height from the window
   // width is taller whenever the frame is narrower than the window.
-  const frameStyle = {
-    aspectRatio: imageWidth / imageHeight,
-    maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
-    backgroundColor: ground,
-  };
+  const frameStyle =
+    frameHeight != null
+      ? { height: frameHeight, backgroundColor: ground }
+      : {
+          aspectRatio: imageWidth / imageHeight,
+          maxHeight: mediaMaxHeight(viewportWidth, viewportHeight),
+          backgroundColor: ground,
+        };
 
   if (failed || !headers) {
     return (
@@ -75,6 +84,14 @@ export function PrivateImage({
         cachePolicy="memory-disk"
         accessibilityLabel={label}
         onError={() => setFailed(true)}
+        onLoad={
+          onSize
+            ? (event) => {
+                const { width: w, height: h } = event.source;
+                if (w > 0 && h > 0) onSize(w, h);
+              }
+            : undefined
+        }
       />
     </View>
   );
