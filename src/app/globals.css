@@ -196,15 +196,39 @@ html.composer-scroll-locked .phone-stage {
 button {
   font: inherit;
 }
-/* Product-wide policy: focusing a control or restoring focus after a sheet
-   closes must not paint a ring. Keep focus behavior and semantic states intact.
-   Important intentionally wins over older component-specific focus styles. */
+/* Product-wide policy: pointer taps, touch, and programmatic focus (sheet
+   open, dialog focus restore) must not paint a ring. Keep focus behavior
+   and semantic states intact. Future's keyboard ring lives in retro.css and
+   is more specific than this reset. Important wins over older component
+   focus styles. */
 :focus,
 :focus-visible,
+:focus:not(:focus-visible),
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible,
+dialog:focus,
+dialog:focus-visible,
 .photo-input:has(input:focus-visible),
 .video-feasibility-input:has(input:focus-visible) {
   outline: none !important;
   box-shadow: none !important;
+}
+
+/* WebKit matches :focus-visible for taps and for element.focus() after a
+   dialog closes. data-modality is set from the pre-paint script. Coarse
+   pointers (iPhone) stay ring-free until a real keyboard navigation key. */
+:root[data-modality="pointer"] :focus,
+:root[data-modality="pointer"] :focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :root:not([data-modality="keyboard"]) :focus,
+  :root:not([data-modality="keyboard"]) :focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
 }
 
 /* Journal header / lightbox chrome: no focus ring at all, including
@@ -7933,7 +7957,7 @@ html.overlay-open .bottom-nav {
   line-height: 1.45;
 }
 
-.notification-preference-note:focus {
+.notification-preference-note:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--teal) 72%, white);
   outline-offset: 2px;
 }

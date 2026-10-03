@@ -154,6 +154,27 @@ describe("retro theme", () => {
     );
   });
 
+  it("marks keyboard navigation separately from taps before focus moves", () => {
+    runBootstrap();
+
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+    );
+    expect(document.documentElement.dataset.modality).toBe("keyboard");
+
+    document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    expect(document.documentElement.dataset.modality).toBe("pointer");
+
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Tab",
+        ctrlKey: true,
+        bubbles: true,
+      }),
+    );
+    expect(document.documentElement.dataset.modality).toBe("pointer");
+  });
+
   it("applies Retro immediately from a stored light theme", () => {
     window.localStorage.setItem(JOURNAL_THEME_STORAGE_KEY, "light");
     document.documentElement.dataset.theme = "light";
