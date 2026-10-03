@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Animated, Easing, PanResponder, StyleSheet, View } from "react-native";
 
 import {
@@ -9,6 +9,7 @@ import {
   swipeAxis,
   wrapIndex,
 } from "../lib/album-frame";
+import { FeedScrollLock } from "../lib/feed-scroll-lock";
 import { useAppTheme } from "../lib/theme";
 import { PrivateImage } from "./private-image";
 
@@ -18,7 +19,16 @@ type AlbumPhoto = Readonly<{ id: string; width?: number; height?: number }>;
 function createAlbumGesture(onPos: (pos: number) => void) {
   const x = new Animated.Value(0);
   const state = { pos: 0, width: 0, count: 0, busy: false };
-  const lock = { id: -1, axis: null as "x" | "y" | null };
+  let lockFeed: ((locked: boolean) => void) | null = null;
+  let feedLocked = false;
+  const setFeedLocked = (locked: boolean) => {
+    if (feedLocked === locked) return;
+    feedLocked = locked;
+    lockFeed?.(locked);
+  };
+  // PanResponder keeps one stateID for its whole life, so the axis lock is
+  // reset at each touch start instead of keyed by stateID.
+  const lock = { axis: null as "x" | "y" | null };
 
   function settle(step: -1 | 0 | 1) {
     const next = state.pos - step;
@@ -38,27 +48,37 @@ function createAlbumGesture(onPos: (pos: number) => void) {
   }
 
   /** The axis locks once, when the finger first leaves the slop box. */
-  function claims(stateID: number, dx: number, dy: number) {
+  function claims(dx: number, dy: number) {
     if (state.busy || state.count < 2) return false;
-    if (lock.id !== stateID) {
-      lock.id = stateID;
-      lock.axis = null;
-    }
     if (lock.axis == null) lock.axis = swipeAxis(dx, dy);
     return lock.axis === "x";
   }
 
   const responder = PanResponder.create({
-    onMoveShouldSetPanResponderCapture: (_event, g) => claims(g.stateID, g.dx, g.dy),
-    onMoveShouldSetPanResponder: (_event, g) => claims(g.stateID, g.dx, g.dy),
+    onStartShouldSetPanResponderCapture: () => {
+      lock.axis = null;
+      // Safety net: a gesture that never reported its end must not leave
+      // the feed unable to scroll.
+      setFeedLocked(false);
+      return false;
+    },
+    onMoveShouldSetPanResponderCapture: (_event, g) => claims(g.dx, g.dy),
+    onMoveShouldSetPanResponder: (_event, g) => claims(g.dx, g.dy),
     onPanResponderTerminationRequest: () => false,
     onShouldBlockNativeResponder: () => true,
+    onPanResponderGrant: () => setFeedLocked(true),
     onPanResponderMove: (_event, g) => {
       const dx = Math.max(-state.width, Math.min(state.width, g.dx));
       x.setValue(-state.pos * state.width + dx);
     },
-    onPanResponderRelease: (_event, g) => settle(albumSwipeStep(g.dx, g.vx * 1000)),
-    onPanResponderTerminate: () => settle(0),
+    onPanResponderRelease: (_event, g) => {
+      setFeedLocked(false);
+      settle(albumSwipeStep(g.dx, g.vx * 1000));
+    },
+    onPanResponderTerminate: () => {
+      setFeedLocked(false);
+      settle(0);
+    },
   });
 
   return {
@@ -68,6 +88,14 @@ function createAlbumGesture(onPos: (pos: number) => void) {
       state.width = width;
       state.count = count;
       x.setValue(-state.pos * width);
+    },
+    setLock(next: ((locked: boolean) => void) | null) {
+      if (feedLocked && lockFeed && lockFeed !== next) lockFeed(false);
+      lockFeed = next;
+      if (feedLocked) next?.(true);
+    },
+    release() {
+      setFeedLocked(false);
     },
     step(direction: -1 | 1) {
       if (!state.busy && state.count > 1) settle(direction);
@@ -105,9 +133,18 @@ export function AlbumPager({
   const [gesture] = useState(() => createAlbumGesture(setPos));
   const { x } = gesture;
 
+  const lockFeed = useContext(FeedScrollLock);
+
   useEffect(() => {
     gesture.resize(frameWidth, photos.length);
   }, [frameWidth, photos.length, gesture]);
+
+  useEffect(() => {
+    gesture.setLock(lockFeed);
+  }, [gesture, lockFeed]);
+
+  // Never leave the feed locked if the card unmounts mid-swipe.
+  useEffect(() => () => gesture.release(), [gesture]);
 
   const hasStoredRatio = albumFrameHeightRatio(photos) != null;
   const height = albumFrameHeight(frameWidth, photos, fallbackRatio);

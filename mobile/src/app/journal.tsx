@@ -28,6 +28,7 @@ import { dismissShareDraft, subscribeShareDraft } from "../components/share-brid
 import type { ShareDraft } from "../lib/share-entry";
 import { AddSheet } from "../components/add-sheet";
 import { ActivitySheet } from "../components/activity-sheet";
+import { FeedScrollLock } from "../lib/feed-scroll-lock";
 import { CirclesScreen } from "../components/circles-screen";
 import { UploadShelf } from "../components/upload-shelf";
 import { writePref } from "../lib/appearance";
@@ -179,6 +180,11 @@ export default function JournalScreen() {
   }, [moments]);
   const [landing, setLanding] = useState<PushLanding | null>(null);
   const listRef = useRef<FlatList<FeedRow>>(null);
+  const lockFeedScroll = useCallback((locked: boolean) => {
+    // iOS only: a native UIScrollView keeps scrolling under a PanResponder.
+    if (Platform.OS !== "ios") return;
+    listRef.current?.setNativeProps({ scrollEnabled: !locked });
+  }, []);
   const landingPages = useRef(0);
   const circlesRef = useRef(circles);
   const loadFirstPageRef = useRef<
@@ -599,6 +605,7 @@ export default function JournalScreen() {
           }}
         />
       ) : (
+        <FeedScrollLock.Provider value={lockFeedScroll}>
         <FlatList
           // Sheets opened from a card (comments, edit) render inside this list,
           // so a tap there must not just dismiss the keyboard.
@@ -782,6 +789,7 @@ export default function JournalScreen() {
             ) : null
           }
         />
+        </FeedScrollLock.Provider>
       )}
       {switcherOpen ? (
         <Pressable style={styles.scrim} onPress={() => setSwitcherOpen(false)} />

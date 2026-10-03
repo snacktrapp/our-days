@@ -66,7 +66,8 @@ export function albumFrameHeight(
 }
 
 /** -1 = show the next photo, 1 = the previous one, 0 = spring back. */
-export function albumSwipeStep(dx: number, velocityX: number): -1 | 0 | 1 {
+export function albumSwipeStep(dx: number, rawVelocityX: number): -1 | 0 | 1 {
+  const velocityX = Number.isFinite(rawVelocityX) ? rawVelocityX : 0;
   const committed =
     Math.abs(dx) >= albumSwipeThresholdPx ||
     (Math.abs(dx) > albumAxisLockPx &&

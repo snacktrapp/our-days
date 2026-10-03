@@ -51,7 +51,7 @@ function slideAway(translateY: Animated.Value, distance: number, done: () => voi
 }
 
 let latestDrag: DragInput | null = null;
-/** The gesture that put the keyboard away; it never moves the sheet too. */
+/** The touch that put the keyboard away; it never moves the sheet too. */
 let keyboardGesture: number | null = null;
 
 function claimGesture(gesture: PanResponderGestureState, pageY: number) {
@@ -104,6 +104,13 @@ export function useSheetDrag(input: DragInput) {
   });
   const [responder] = useState(() =>
     PanResponder.create({
+      // stateID never changes for a PanResponder, so forget the gesture that
+      // lowered the keyboard when the next touch starts. Otherwise one
+      // keyboard pull blocked every later drag on this sheet.
+      onStartShouldSetPanResponderCapture: () => {
+        keyboardGesture = null;
+        return false;
+      },
       onMoveShouldSetPanResponder: (event, gesture) =>
         claimGesture(gesture, event.nativeEvent.pageY),
       onMoveShouldSetPanResponderCapture: (event, gesture) =>
