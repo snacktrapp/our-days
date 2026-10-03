@@ -1,9 +1,9 @@
 /**
- * Edit uses `update_written_moment`, which only fits a written entry.
- * Delete uses `set_written_moment_trashed`, which removes any post the
- * viewer can change. A post with neither action does not show a menu.
+ * Web `ConnectedMomentControl`: Edit opens the composer for every changeable
+ * post except an Insight; Move to trash (`set_written_moment_trashed`) works
+ * for any post the viewer can change. A post with neither shows no menu.
  */
 export function momentOverflowActions(kind: string): readonly ("edit" | "delete")[] {
-  if (kind === "thought") return ["edit", "delete"];
-  return ["delete"];
+  if (kind === "insight") return ["delete"];
+  return ["edit", "delete"];
 }

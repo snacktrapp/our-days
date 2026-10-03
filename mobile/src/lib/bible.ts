@@ -65,6 +65,37 @@ export function formatBibleVerseMoment(reference: string, text: string) {
   return `${text.trim()}\n\n— ${reference.trim()} · World English Bible`;
 }
 
+const bibleVerseMomentPattern = /^([\s\S]+)\n\n— ([^\n]+) · World English Bible$/u;
+
+/** Web `parseBibleVerseReference`: "John 3:16–17" back to a selection. */
+export function parseBibleVerseReference(reference: string): BibleVerseSelection | null {
+  const trimmed = reference.trim();
+  const book = [...bibleBookNames()]
+    .sort((left, right) => right.length - left.length)
+    .find((name) => trimmed === name || trimmed.startsWith(`${name} `));
+  if (!book) return null;
+  const rest = trimmed.slice(book.length).trim();
+  const match = /^(\d+):(\d+)(?:[–-](\d+))?$/u.exec(rest);
+  if (!match) return null;
+  const chapter = Number(match[1]);
+  const startVerse = Number(match[2]);
+  const endVerse = match[3] ? Number(match[3]) : startVerse;
+  const available = versesInChapter(book, chapter);
+  if (!available.includes(startVerse) || !available.includes(endVerse) || endVerse < startVerse) {
+    return null;
+  }
+  return { book, chapter, startVerse, endVerse };
+}
+
+/** Web `parseBibleVerseMoment`: a saved verse body back to its parts, so Edit opens the verse picker. */
+export function parseBibleVerseMoment(body: string) {
+  const match = bibleVerseMomentPattern.exec(body);
+  if (!match?.[1] || !match[2]) return null;
+  const selection = parseBibleVerseReference(match[2]);
+  if (!selection) return null;
+  return { text: match[1], reference: match[2], selection };
+}
+
 export async function loadBibleCatalog() {
   // Import a local module. A direct dynamic import of the JSON, which lives
   // outside this package, is rewritten to a path Metro cannot resolve.

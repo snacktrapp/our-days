@@ -1077,3 +1077,154 @@ export async function uploadVideoMoment(supabase: SupabaseClient, input: VideoUp
     };
   }
 }
+
+const editConflictCopy = "This moment changed elsewhere. Reopen it before editing again.";
+const editFailedCopy = "That moment could not be changed.";
+
+function isEditConflict(error: { code?: string } | null, status?: number) {
+  return error?.code === "PT409" || status === 409;
+}
+
+export type MentionWrite = Readonly<{ userId: string; start: number; end: number }>;
+
+export type FamilyMomentEdit = Readonly<{
+  momentId: string;
+  /** The post's own revision. Never a note, heart, or reaction revision. */
+  revision: number;
+  title: string;
+  body: string;
+  placeName: string;
+  latitude: number | null;
+  longitude: number | null;
+  taggedPersonIds: readonly string[];
+  occurredOn: string;
+  occurredAt: string | null;
+  occurredTimezone: string | null;
+  audience: Audience;
+  /** Undefined leaves mentions alone; an array (even empty) replaces them. */
+  mentions?: readonly MentionWrite[];
+}>;
+
+export type EditResult =
+  | Readonly<{ ok: true; revision: number }>
+  | Readonly<{ ok: false; message: string; conflict: boolean }>;
+
+/**
+ * Web `updateFamilyMomentAction` → `update_family_moment`. Every field is
+ * sent: the function replaces title, body, place, tags and time together.
+ * Returns the post's new revision, the only value the next edit or delete
+ * may send as `expected_revision`.
+ */
+export async function updateFamilyMoment(
+  supabase: SupabaseClient,
+  input: FamilyMomentEdit,
+): Promise<EditResult> {
+  const { data, error, status } = await supabase.rpc("update_family_moment", {
+    moment_id: input.momentId,
+    expected_revision: input.revision,
+    moment_title: input.title.trim(),
+    moment_body: input.body.trim(),
+    place_name: input.placeName.trim(),
+    tagged_person_ids: [...input.taggedPersonIds],
+    occurred_on: input.occurredOn,
+    occurred_at: input.occurredAt ?? undefined,
+    occurred_timezone: input.occurredTimezone ?? undefined,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    audience: input.audience,
+    ...(input.mentions
+      ? {
+          mentioned_user_ids: input.mentions.map((mention) => mention.userId),
+          mention_starts: input.mentions.map((mention) => mention.start),
+          mention_ends: input.mentions.map((mention) => mention.end),
+        }
+      : {}),
+  });
+  if (error) {
+    const conflict = isEditConflict(error, status);
+    return { ok: false, conflict, message: conflict ? editConflictCopy : editFailedCopy };
+  }
+  return { ok: true, revision: typeof data === "number" ? data : input.revision + 1 };
+}
+
+/** Web `share_private_moment` path of the edit: a Just me post moves into one circle. */
+export async function sharePrivateMoment(
+  supabase: SupabaseClient,
+  input: FamilyMomentEdit & Readonly<{ destinationCircleId: string }>,
+): Promise<EditResult> {
+  const { data, error, status } = await supabase.rpc("share_private_moment", {
+    moment_id: input.momentId,
+    expected_revision: input.revision,
+    destination_circle_id: input.destinationCircleId,
+    moment_title: input.title.trim(),
+    moment_body: input.body.trim(),
+    place_name: input.placeName.trim(),
+    tagged_person_ids: [...input.taggedPersonIds],
+    occurred_on: input.occurredOn,
+    occurred_at: input.occurredAt ?? undefined,
+    occurred_timezone: input.occurredTimezone ?? undefined,
+    latitude: input.latitude,
+    longitude: input.longitude,
+  });
+  if (error) {
+    const conflict = isEditConflict(error, status);
+    return { ok: false, conflict, message: conflict ? editConflictCopy : editFailedCopy };
+  }
+  return { ok: true, revision: typeof data === "number" ? data : input.revision + 1 };
+}
+
+/** Web `removeMomentPhotoAction`. Does not change the post revision. */
+export async function removeMomentPhoto(supabase: SupabaseClient, momentId: string, photoId: string) {
+  const { error } = await supabase.rpc("remove_moment_photo", { moment_id: momentId, photo_id: photoId });
+  return error
+    ? { ok: false as const, message: "That photo could not be removed." }
+    : { ok: true as const };
+}
+
+/** Web `reorderMomentPhotosAction`: every photo id on the post, in the new order. */
+export async function reorderMomentPhotos(
+  supabase: SupabaseClient,
+  momentId: string,
+  photoIds: readonly string[],
+) {
+  const { error } = await supabase.rpc("reorder_moment_photos", {
+    moment_id: momentId,
+    photo_ids: [...photoIds],
+  });
+  return error
+    ? { ok: false as const, message: "Those photos could not be reordered." }
+    : { ok: true as const };
+}
+
+/**
+ * Photos added in Edit: the same attach → claim → upload → process path as
+ * extra album photos, with one upload chip so the feed shows progress while
+ * the edit sheet is already closed (web `startOptimisticPhotoUpload` with
+ * `existingMomentId`).
+ */
+export async function addPhotosToMoment(
+  supabase: SupabaseClient,
+  input: Readonly<{
+    momentId: string;
+    occurredOn: string;
+    photos: readonly { bytes: ArrayBuffer; mimeType: string }[];
+  }>,
+) {
+  const id = randomId();
+  const detail = dateLabel(input.occurredOn);
+  putChip({
+    id,
+    label: input.photos.length > 1 ? `Adding ${input.photos.length} photos…` : "Adding photo…",
+    detail,
+    progress: null,
+    failed: false,
+    done: false,
+  });
+  const result = await attachExtraPhotos(supabase, input.momentId, input.photos);
+  if (!result.ok) {
+    putChip({ id, label: "Upload failed", detail: result.message, progress: null, failed: true, done: false });
+    return result;
+  }
+  publishChip(id);
+  return result;
+}

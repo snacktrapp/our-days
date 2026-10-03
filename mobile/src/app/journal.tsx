@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { Redirect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  AccessibilityInfo,
   FlatList,
   Platform,
   Pressable,
@@ -39,6 +40,7 @@ import { circleToday } from "../lib/dates";
 import { readLastPostedCircle } from "../lib/last-posted-circle";
 import {
   loadCircles,
+  loadMomentPhotos,
   loadTimelinePage,
   loadViewerProfile,
   saveProfileColor,
@@ -48,6 +50,7 @@ import {
   type ViewerProfile,
 } from "../lib/journal";
 import { momentListedInFeed } from "../lib/feed-format";
+import { runMomentEdit, type EditReopen } from "../lib/moment-edit-save";
 import { formatPlainDate } from "../lib/moment-time";
 import { disablePushNotifications, subscribeNotificationOpens } from "../lib/push";
 import type { PushLanding } from "../lib/push-landing";
@@ -142,6 +145,11 @@ export default function JournalScreen() {
     Record<string, string> | null | undefined
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
+  /** The post being edited; a failed save reopens it with the draft and error. */
+  const [editing, setEditing] = useState<(Partial<EditReopen> & { moment: TimelineMoment; key: number }) | null>(
+    null,
+  );
+  const editKey = useRef(0);
   const [circlesOpen, setCirclesOpen] = useState(false);
   const [personJournal, setPersonJournal] = useState<{
     circleId: string;
@@ -398,6 +406,15 @@ export default function JournalScreen() {
   async function refresh() {
     setRefreshing(true);
     await loadFirstPage(scope, circles);
+  }
+
+  function openEdit(state: Partial<EditReopen> & { moment: TimelineMoment }) {
+    editKey.current += 1;
+    setEditing({ ...state, key: editKey.current });
+  }
+
+  function patchMoment(id: string, update: (current: TimelineMoment) => TimelineMoment) {
+    setMoments((current) => current.map((item) => (item.id === id ? update(item) : item)));
   }
 
   function applyScroll(y: number) {
@@ -762,6 +779,7 @@ export default function JournalScreen() {
                     setMoments((current) => current.map((item) => (item.id === next.id ? next : item)))
                   }
                   onMomentRemove={(id) => setMoments((current) => current.filter((item) => item.id !== id))}
+                  onMomentEdit={(moment) => openEdit({ moment })}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
                   highlighted={highlightId === item.moment.id}
                   openThread={
@@ -893,6 +911,39 @@ export default function JournalScreen() {
             setLoading(true);
             void loadFirstPage(allScope, circles);
           }}
+        />
+      ) : null}
+      {editing ? (
+        <AddSheet
+          key={editing.key}
+          circles={circles}
+          justMeDefault={false}
+          edit={{
+            moment: editing.moment,
+            headers: mediaHeaders,
+            draft: editing.draft,
+            error: editing.error,
+            onSave: (initial, draft, taggedLabel) => {
+              const moment = editing.moment;
+              if (!supabase) return;
+              const client = supabase;
+              setEditing(null);
+              void runMomentEdit(client, {
+                moment,
+                initial,
+                draft,
+                taggedLabel,
+                deviceTimeZone: viewerZone,
+                patch: patchMoment,
+                reopen: openEdit,
+                refresh: () => void loadFirstPage(scope, circles),
+                announce: (message) => AccessibilityInfo.announceForAccessibility(message),
+                loadPhotos: (id) => loadMomentPhotos(client, id),
+              });
+            },
+          }}
+          onClose={() => setEditing(null)}
+          onPosted={() => setEditing(null)}
         />
       ) : null}
       {addOpen ? (

@@ -100,6 +100,7 @@ export function FeedMoment({
   viewer = emptyViewer,
   onMomentChange,
   onMomentRemove,
+  onMomentEdit,
   onScreen = true,
   openThread = false,
   highlighted = false,
@@ -113,6 +114,7 @@ export function FeedMoment({
   viewer?: JournalViewer;
   onMomentChange?: (moment: TimelineMoment) => void;
   onMomentRemove?: (id: string) => void;
+  onMomentEdit?: (moment: TimelineMoment) => void;
   onScreen?: boolean;
   openThread?: boolean;
   highlighted?: boolean;
@@ -148,6 +150,7 @@ export function FeedMoment({
       value={{
         onChange: (next) => onMomentChange?.(next),
         onRemove: (id) => onMomentRemove?.(id),
+        onEdit: (next) => onMomentEdit?.(next),
       }}
     >
     <OpenThreadContext.Provider value={openThread}>

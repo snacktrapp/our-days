@@ -102,6 +102,8 @@ export type TimelineMoment = Readonly<{
   canChange: boolean;
   revision: number;
   taggedPeopleLabel?: string;
+  /** Tagged person ids. Edit sends them back; update_family_moment replaces the tag list. */
+  taggedPersonIds: readonly string[];
   mentions: readonly MentionSpan[];
   notes: readonly FeedNote[];
   reactions: readonly FeedReaction[];
@@ -283,6 +285,39 @@ function taggedLabel(value: unknown) {
     return name ? [name] : [];
   });
   return names.length > 0 ? names.join(", ") : undefined;
+}
+
+function taggedIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const id = asRecord(item) ? text(asRecord(item)?.id) : undefined;
+    return id ? [id] : [];
+  });
+}
+
+/** One post's photos in album order, after an edit removes, reorders, or adds some. */
+export async function loadMomentPhotos(
+  supabase: SupabaseClient,
+  momentId: string,
+): Promise<TimelinePhoto[] | null> {
+  const { data, error } = await supabase
+    .from("moment_photos")
+    .select("id, sort_order, display_width, display_height")
+    .eq("moment_id", momentId)
+    .order("sort_order", { ascending: true });
+  if (error || !data) return null;
+  return (data as Record<string, unknown>[]).flatMap((row) => {
+    const id = text(row.id);
+    if (!id) return [];
+    return [
+      {
+        id,
+        sortOrder: typeof row.sort_order === "number" ? row.sort_order : 0,
+        width: typeof row.display_width === "number" ? row.display_width : undefined,
+        height: typeof row.display_height === "number" ? row.display_height : undefined,
+      },
+    ];
+  });
 }
 
 async function loadEnrichment(
@@ -533,6 +568,7 @@ async function enrichMoments(
       canChange: row.can_change === true,
       revision: typeof row.revision === "number" ? row.revision : 1,
       taggedPeopleLabel: taggedLabel(row.tagged_people),
+      taggedPersonIds: taggedIds(row.tagged_people),
       mentions: mentionsByMoment.get(row.moment_id) ?? [],
       notes: notesByMoment.get(row.moment_id) ?? [],
       reactions: reactionsByMoment.get(row.moment_id) ?? [],
