@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type Ref } from "react";
 import {
+  AccessibilityInfo,
+  Animated,
   Linking,
   Alert,
   Platform,
@@ -37,6 +39,19 @@ import {
   updateMomentNote,
   type MentionCandidate,
 } from "../lib/conversation";
+import {
+  confirmLocalNote,
+  isLocalNote,
+  isNoteDoubleTap,
+  localNote,
+  localNotePrefix,
+  revertNoteHeart,
+  withNoteHeart,
+  withNoteRevision,
+  withoutNote,
+  withViewerLove,
+  type Mention,
+} from "../lib/conversation-state";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
@@ -853,6 +868,12 @@ function Conversation({
   const [composer, setComposer] = useState<FeedNote | "new" | null>(null);
   const [members, setMembers] = useState<readonly MentionCandidate[]>([]);
   const [pending, setPending] = useState(false);
+  const [lovePending, setLovePending] = useState(false);
+  const [lovePop, setLovePop] = useState(0);
+  const [notePops, setNotePops] = useState<Readonly<Record<string, number>>>({});
+  const [retryDraft, setRetryDraft] = useState<{ body: string; mentions: readonly Mention[] } | null>(null);
+  const loveWrite = useRef(0);
+  const localSeq = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const loved = reactions.some(
     (reaction) => reaction.reactionId === "held-close" && reaction.isCurrentMember,
@@ -878,69 +899,63 @@ function Conversation({
     setShowAll(true);
   }
 
+  // Web `chooseReaction`: the heart flips at once and is rolled back if the
+  // write fails. A newer tap supersedes an older write's outcome.
   async function toggleLove() {
     const supabase = getSupabase();
-    if (!supabase || pending) return;
+    if (!supabase || lovePending) return;
     const next = !loved;
-    setPending(true);
+    const prior = reactions;
+    loveWrite.current += 1;
+    const gen = loveWrite.current;
+    setReactions((current) => withViewerLove(current, viewer.name, moment.id, next));
+    if (next) setLovePop((count) => count + 1);
     setError(null);
-    const result = await setMomentReaction(supabase, {
-      momentId: moment.id,
-      reactionId: next ? "held-close" : null,
-    });
-    setPending(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    setLovePending(true);
+    let message: string | null = null;
+    try {
+      const result = await setMomentReaction(supabase, {
+        momentId: moment.id,
+        reactionId: next ? "held-close" : null,
+      });
+      if (!result.ok) message = result.message;
+    } catch {
+      message = "That response could not be saved. Try again.";
     }
-    setReactions((current) => {
-      const kept = current.filter(
-        (reaction) => !(reaction.isCurrentMember && reaction.reactionId === "held-close"),
-      );
-      if (!next) return kept;
-      return [
-        ...kept,
-        {
-          id: `local-heart-${moment.id}`,
-          personName: viewer.name,
-          reactionId: "held-close",
-          isCurrentMember: true,
-        },
-      ];
-    });
+    if (gen !== loveWrite.current) return;
+    setLovePending(false);
+    if (message) {
+      setReactions(prior);
+      setError(message);
+    }
   }
 
-  async function toggleNoteHeart(note: FeedNote) {
+  // Web `chooseNoteHeart`: optimistic, rolled back on failure.
+  async function toggleNoteHeart(note: FeedNote, hearted = !note.heartedByViewer) {
     const supabase = getSupabase();
-    if (!supabase || pending) return;
-    const hearted = !note.heartedByViewer;
-    setPending(true);
+    if (!supabase || isLocalNote(note)) return;
+    if (hearted === note.heartedByViewer) return;
+    setNotes((current) => withNoteHeart(current, note.id, viewer.name, hearted));
+    if (hearted) setNotePops((current) => ({ ...current, [note.id]: (current[note.id] ?? 0) + 1 }));
     setError(null);
-    const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
-    setPending(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    let message: string | null = null;
+    try {
+      const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
+      if (result.ok) {
+        setNotes((current) => withNoteRevision(current, note.id, result.revision));
+        return;
+      }
+      message = result.message;
+    } catch {
+      message = "That heart could not be saved. Try again.";
     }
-    setNotes((current) =>
-      current.map((item) => {
-        if (item.id !== note.id) return item;
-        const names = hearted
-          ? [...item.heartNames.filter((name) => name !== viewer.name), viewer.name]
-          : item.heartNames.filter((name) => name !== viewer.name);
-        return {
-          ...item,
-          heartedByViewer: hearted,
-          heartNames: names,
-          heartCount: names.length,
-          revision: result.revision ?? item.revision,
-        };
-      }),
-    );
+    setNotes((current) => revertNoteHeart(current, note));
+    setError(message);
   }
 
   async function openComposer(note: FeedNote | "new") {
     setError(null);
+    if (note === "new") setRetryDraft(null);
     setComposer(note);
     if (!mentionsOn) {
       setMembers([]);
@@ -952,30 +967,37 @@ function Conversation({
     setMembers(await loadMentionCandidates(supabase, circles));
   }
 
-  async function saveComment(body: string, mentions: readonly { userId: string; name: string; start: number; end: number }[]) {
+  async function saveComment(body: string, mentions: readonly Mention[]) {
     const supabase = getSupabase();
     if (!supabase) return;
-    setPending(true);
-    setError(null);
     if (composer && composer !== "new") {
-      const result = await updateMomentNote(supabase, {
-        noteId: composer.id,
-        revision: composer.revision,
-        body,
-        mentions,
-      });
+      // Edits stay server-first like the web: they need the current revision.
+      setPending(true);
+      setError(null);
+      let result: Awaited<ReturnType<typeof updateMomentNote>>;
+      try {
+        result = await updateMomentNote(supabase, {
+          noteId: composer.id,
+          revision: composer.revision,
+          body,
+          mentions,
+        });
+      } catch {
+        result = { ok: false, message: "That note could not be saved. Try again." };
+      }
       setPending(false);
       if (!result.ok) {
         setError(result.message);
         return;
       }
+      const revision = result.revision;
       setNotes((current) =>
         current.map((item) =>
           item.id === composer.id
             ? {
                 ...item,
                 body,
-                revision: result.revision,
+                revision,
                 mentions: mentions.map((mention) => ({
                   userId: mention.userId,
                   start: mention.start,
@@ -990,35 +1012,33 @@ function Conversation({
       setComposer(null);
       return;
     }
-    const result = await createMomentNote(supabase, { momentId: moment.id, body, mentions });
-    setPending(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
-    }
+    // New comment: one tap posts. The sheet closes and the comment shows at
+    // once; if the server refuses it, it comes back out and the sheet reopens
+    // with the same text and the error.
+    localSeq.current += 1;
+    const localId = `${localNotePrefix}${moment.id}-${localSeq.current}`;
     setNotes((current) => [
       ...current,
-      {
-        id: result.noteId,
-        authorName: viewer.name,
-        authorAccent: viewer.accent,
-        body,
-        createdAt: new Date().toISOString(),
-        heartCount: 0,
-        heartedByViewer: false,
-        heartNames: [],
-        canChange: true,
-        revision: 1,
-        mentions: mentions.map((mention) => ({
-          userId: mention.userId,
-          start: mention.start,
-          end: mention.end,
-          name: mention.name,
-          active: true,
-        })),
-      },
+      localNote({ localId, authorName: viewer.name, authorAccent: viewer.accent, body, mentions }),
     ]);
     setComposer(null);
+    setRetryDraft(null);
+    setError(null);
+    let message: string | null = null;
+    try {
+      const result = await createMomentNote(supabase, { momentId: moment.id, body, mentions });
+      if (result.ok) {
+        setNotes((current) => confirmLocalNote(current, localId, result.noteId));
+        return;
+      }
+      message = result.message;
+    } catch {
+      message = "That note could not be saved. Try again.";
+    }
+    setNotes((current) => withoutNote(current, localId));
+    setRetryDraft({ body, mentions });
+    setError(message);
+    setComposer("new");
   }
 
   function removeComment(note: FeedNote) {
@@ -1067,11 +1087,12 @@ function Conversation({
           accessibilityRole="button"
           accessibilityLabel={loved ? "Undo love" : "Love"}
           accessibilityState={{ selected: loved }}
-          disabled={pending}
+          disabled={lovePending}
           style={styles.actionHit}
           onPress={() => void toggleLove()}
         >
-          <HeartGlyph
+          <PopHeart
+            pop={lovePop}
             color={
               colors.appearance === "retro"
                 ? loved
@@ -1094,10 +1115,14 @@ function Conversation({
           key={note.id}
           note={note}
           open={openHearts === note.id}
+          pop={notePops[note.id] ?? 0}
+          saving={isLocalNote(note)}
+          editDisabled={pending}
           onToggleHearts={() =>
             setOpenHearts((current) => (current === note.id ? null : note.id))
           }
           onHeart={() => void toggleNoteHeart(note)}
+          onDoubleTap={() => void toggleNoteHeart(note, true)}
           onEdit={() => void openComposer(note)}
         />
       ))}
@@ -1115,10 +1140,10 @@ function Conversation({
         <CommentSheet
           title={composer === "new" ? "Add comment" : "Edit comment"}
           context={commentContext(moment.personName, kind, moment.body || moment.title || "")}
-          initialBody={composer === "new" ? "" : composer.body}
+          initialBody={composer === "new" ? (retryDraft?.body ?? "") : composer.body}
           initialMentions={
             composer === "new"
-              ? []
+              ? (retryDraft?.mentions ?? [])
               : composer.mentions.flatMap((mention) =>
                   mention.name
                     ? [{ userId: mention.userId, name: mention.name, start: mention.start, end: mention.end }]
@@ -1131,6 +1156,7 @@ function Conversation({
           error={error}
           onDismiss={() => {
             setComposer(null);
+            setRetryDraft(null);
             setError(null);
           }}
           onSubmit={(body, mentions) => void saveComment(body, mentions)}
@@ -1144,21 +1170,49 @@ function Conversation({
 function NoteRow({
   note,
   open,
+  pop,
+  saving,
+  editDisabled,
   onToggleHearts,
   onHeart,
+  onDoubleTap,
   onEdit,
 }: Readonly<{
   note: FeedNote;
   open: boolean;
+  pop: number;
+  /** Posted locally, not confirmed yet: no heart or edit until it has an id. */
+  saving: boolean;
+  editDisabled: boolean;
   onToggleHearts: () => void;
   onHeart: () => void;
+  onDoubleTap: () => void;
   onEdit: () => void;
 }>) {
   const { colors } = useAppTheme();
   const stamp = formatConversationStamp(note.createdAt);
   const counted = note.heartCount > 0;
+  const lastTap = useRef<{ noteId: string; t: number; x: number; y: number } | null>(null);
   return (
-    <View style={styles.note}>
+    <Pressable
+      style={[styles.note, saving && styles.noteSaving]}
+      accessible={false}
+      // Web: a double tap on a comment hearts it (never un-hearts).
+      onPress={(event) => {
+        const tap = {
+          noteId: note.id,
+          t: Date.now(),
+          x: event.nativeEvent.pageX,
+          y: event.nativeEvent.pageY,
+        };
+        if (isNoteDoubleTap(lastTap.current, tap)) {
+          lastTap.current = null;
+          if (!note.heartedByViewer && !saving) onDoubleTap();
+          return;
+        }
+        lastTap.current = tap;
+      }}
+    >
       <View style={styles.noteAuthor}>
         <View style={styles.noteWho}>
           <View
@@ -1190,10 +1244,11 @@ function NoteRow({
         <Text style={[styles.noteWhen, face(colors, 400, "record"), { color: colors.muted }]}>
           {stamp}
         </Text>
-        {note.canChange ? (
+        {note.canChange && !saving ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit comment"
+            disabled={editDisabled}
             onPress={onEdit}
             hitSlop={14}
             style={styles.noteMore}
@@ -1211,10 +1266,12 @@ function NoteRow({
             accessibilityRole="button"
             accessibilityLabel={note.heartedByViewer ? "Undo love on this comment" : "Love this comment"}
             accessibilityState={{ selected: note.heartedByViewer }}
+            disabled={saving}
             onPress={onHeart}
             style={[styles.noteHeartButton, counted && styles.noteHeartShifted]}
           >
-            <HeartGlyph
+            <PopHeart
+              pop={pop}
               color={
                 colors.appearance === "retro"
                   ? note.heartedByViewer
@@ -1250,7 +1307,40 @@ function NoteRow({
           {lovedBy(note.heartNames)}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Web `.quick-reaction-glyph.is-popping`: a short scale pop each time a heart
+ * is turned on. Skipped when Reduce Motion is on.
+ */
+function PopHeart({
+  pop,
+  color,
+  filled,
+  size,
+}: Readonly<{ pop: number; color: string; filled: boolean; size?: number }>) {
+  const [scale] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (pop === 0) return;
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled || reduced) return;
+      scale.setValue(1);
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.28, duration: 110, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }),
+      ]).start();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pop, scale]);
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <HeartGlyph color={color} filled={filled} size={size} />
+    </Animated.View>
   );
 }
 
@@ -1577,6 +1667,7 @@ const styles = StyleSheet.create({
   noteWhen: {
     fontSize: 8,
   },
+  noteSaving: { opacity: 0.6 },
   noteHeart: {
     position: "absolute",
     top: "50%",

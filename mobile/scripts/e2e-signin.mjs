@@ -212,6 +212,49 @@ await step("bible books group by testament and verses are a number list", async 
   assert.deepEqual(picker.bibleNumberChoices("end", { ...jonah, chapter: 1 }), []);
 });
 
+await step("comment hearts and new comments are optimistic and roll back like the web", async () => {
+  const c = await import("../src/lib/conversation-state.ts");
+  const note = {
+    id: "n1", authorName: "Molly", authorAccent: "sage", body: "hi", createdAt: "2026-10-03T16:00:00Z",
+    heartCount: 1, heartedByViewer: false, heartNames: ["Molly"], canChange: false, revision: 3, mentions: [],
+  };
+  const hearted = c.withNoteHeart([note], "n1", "TARS", true);
+  assert.deepEqual(hearted[0].heartNames, ["Molly", "TARS"]);
+  assert.equal(hearted[0].heartCount, 2);
+  assert.equal(hearted[0].heartedByViewer, true);
+  assert.equal(c.withNoteHeart(hearted, "n1", "TARS", true)[0].heartCount, 2, "a second heart never double-counts");
+  const bumped = c.withNoteRevision(hearted, "n1", 4);
+  assert.equal(bumped[0].revision, 4);
+  const rolled = c.revertNoteHeart(bumped, note);
+  assert.equal(rolled[0].heartCount, 1);
+  assert.equal(rolled[0].heartedByViewer, false);
+  assert.equal(rolled[0].revision, 4, "rollback keeps unrelated fields");
+
+  const loved = c.withViewerLove([{ id: "r1", personName: "Molly", reactionId: "held-close", isCurrentMember: false }], "TARS", "m1", true);
+  assert.deepEqual(loved.map((r) => r.personName), ["Molly", "TARS"]);
+  assert.deepEqual(c.withViewerLove(loved, "TARS", "m1", false).map((r) => r.personName), ["Molly"]);
+
+  const local = c.localNote({ localId: `${c.localNotePrefix}m1-1`, authorName: "TARS", authorAccent: "sky", body: "hey @Molly", mentions: [{ userId: "u", name: "Molly", start: 4, end: 10 }] });
+  assert.equal(c.isLocalNote(local), true);
+  assert.equal(local.mentions[0].active, true);
+  const list = [note, local];
+  const confirmed = c.confirmLocalNote(list, local.id, "n2");
+  assert.deepEqual(confirmed.map((n) => n.id), ["n1", "n2"]);
+  assert.equal(c.isLocalNote(confirmed[1]), false);
+  assert.deepEqual(c.withoutNote(list, local.id).map((n) => n.id), ["n1"], "a refused comment comes back out");
+
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 250, x: 20, y: 20 }), true);
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 320, x: 10, y: 10 }), false);
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n2", t: 100, x: 10, y: 10 }), false);
+  assert.equal(c.isNoteDoubleTap(null, { noteId: "n1", t: 100, x: 10, y: 10 }), false);
+
+  // The sheet posts on one tap: no Done bar in the comment sheet.
+  const fs = await import("node:fs");
+  const sheet = fs.readFileSync(new URL("../src/components/comment-sheet.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(sheet, /KeyboardDoneBar/);
+  assert.match(sheet, /onPressIn=\{submit\}/);
+});
+
 await step("album frame is the tallest photo capped at 3:4 and swipes lock within 45°", async () => {
   const album = await import("../src/lib/album-frame.ts");
   // Fixed frame: tallest stored photo, never taller than width × 4/3.
