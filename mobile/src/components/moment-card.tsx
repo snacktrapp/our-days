@@ -44,8 +44,8 @@ import {
   newNote,
   revertNoteHeart,
   withNoteHeart,
-  withNoteRevision,
   withViewerLove,
+  acceptsDoubleTapLove,
   type Mention,
 } from "../lib/conversation-state";
 import { getSupabase } from "../lib/supabase";
@@ -56,6 +56,13 @@ import { MomentChangeContext, MomentOverflow } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
 import { AlbumPager } from "./album-pager";
+import {
+  createMomentHeartBus,
+  DoubleTapHeart,
+  MomentHeartContext,
+  useMomentHeartAcceptor,
+  type MomentHeartBus,
+} from "./double-tap-heart";
 import { PrivateImage } from "./private-image";
 
 function retroFace(colors: ThemeColors, accent: string) {
@@ -112,6 +119,9 @@ export function FeedMoment({
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
+  // Web `our-days:heart`: a double tap on the photo or written copy asks this
+  // card's conversation to add a heart.
+  const [heartBus] = useState<MomentHeartBus>(createMomentHeartBus);
   const chip = audienceChipLabel({
     audience: moment.audience,
     linkedCircleIds: moment.linkedCircleIds,
@@ -141,6 +151,7 @@ export function FeedMoment({
       }}
     >
     <OpenThreadContext.Provider value={openThread}>
+    <MomentHeartContext.Provider value={heartBus}>
     <View style={styles.moment}>
       <View style={styles.connection}>
         <View style={styles.connectionSide}>
@@ -235,6 +246,7 @@ export function FeedMoment({
         />
       </View>
     </View>
+    </MomentHeartContext.Provider>
     </OpenThreadContext.Provider>
     </MomentChangeContext.Provider>
   );
@@ -346,6 +358,7 @@ function Thought({
       ) : (
         <AuthorRow moment={moment} />
       )}
+      <DoubleTapHeart burst="center">
       {bible ? (
         <FlowCopy
           text={bible.verse}
@@ -369,6 +382,7 @@ function Thought({
       ) : (
         <FlowCopy text={moment.body} mentions={moment.mentions} />
       )}
+      </DoubleTapHeart>
       {insight && moment.hasVideo ? (
         <View style={styles.insightClip}>
           <JournalVideo
@@ -782,6 +796,22 @@ function Media({
       />
     );
   }
+  return (
+    <DoubleTapHeart burst="tap">
+      <PhotoMedia moment={moment} headers={headers} frameWidth={frameWidth} />
+    </DoubleTapHeart>
+  );
+}
+
+function PhotoMedia({
+  moment,
+  headers,
+  frameWidth,
+}: Readonly<{
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
+  frameWidth: number;
+}>) {
   const photos = moment.photos.length > 0 ? moment.photos : [{ id: moment.id, sortOrder: 0 }];
   if (photos.length > 1) {
     return (
@@ -924,6 +954,12 @@ function Conversation({
     }
   }
 
+  useMomentHeartAcceptor(() => {
+    if (!acceptsDoubleTapLove({ loved, pending: lovePending })) return false;
+    void toggleLove();
+    return true;
+  });
+
   // Web `chooseNoteHeart`: optimistic, rolled back on failure.
   async function toggleNoteHeart(note: FeedNote, hearted = !note.heartedByViewer) {
     const supabase = getSupabase();
@@ -935,10 +971,11 @@ function Conversation({
     let message: string | null = null;
     try {
       const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
-      if (result.ok) {
-        setNotes((current) => withNoteRevision(current, note.id, result.revision));
-        return;
-      }
+      // set_moment_note_heart returns the HEART row's revision, not the
+      // comment's. Writing it into note.revision made the next edit or delete
+      // send a stale expected_revision (PT409 "Note changed elsewhere"). The
+      // web ignores it too.
+      if (result.ok) return;
       message = result.message;
     } catch {
       message = "That heart could not be saved. Try again.";

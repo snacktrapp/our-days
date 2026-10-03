@@ -223,12 +223,11 @@ await step("post and comment hearts are optimistic and roll back like the web; d
   assert.equal(hearted[0].heartCount, 2);
   assert.equal(hearted[0].heartedByViewer, true);
   assert.equal(c.withNoteHeart(hearted, "n1", "TARS", true)[0].heartCount, 2, "a second heart never double-counts");
-  const bumped = c.withNoteRevision(hearted, "n1", 4);
-  assert.equal(bumped[0].revision, 4);
-  const rolled = c.revertNoteHeart(bumped, note);
+  assert.equal(hearted[0].revision, 3, "a heart never changes the comment's revision");
+  const rolled = c.revertNoteHeart(hearted, note);
   assert.equal(rolled[0].heartCount, 1);
   assert.equal(rolled[0].heartedByViewer, false);
-  assert.equal(rolled[0].revision, 4, "rollback keeps unrelated fields");
+  assert.equal(rolled[0].revision, 3);
 
   const loved = c.withViewerLove([{ id: "r1", personName: "Molly", reactionId: "held-close", isCurrentMember: false }], "TARS", "m1", true);
   assert.deepEqual(loved.map((r) => r.personName), ["Molly", "TARS"]);
@@ -875,6 +874,73 @@ await step("mentions banner keeps the web Got it dismiss", async () => {
   assert.equal(await secure.getItemAsync(nativeKey), "dismissed");
   await assert.rejects(secure.setItemAsync("our-days:mentions-announcement", "dismissed"));
   assert.match(journal, /value === "dismissed"/);
+});
+
+await step("edit, heart a few times, then delete your own test-circle comment (build 15 PT409)", async () => {
+  resetStore();
+  const app = await freshApp("comment-delete");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const posts = await import("../src/lib/posts.ts");
+  const conversation = await import("../src/lib/conversation.ts");
+  const state = await import("../src/lib/conversation-state.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  const created = await posts.createWrittenMoment(supabase, {
+    journalPersonId: circle.personId,
+    circleId: circle.circleId,
+    body: `E2E delete-comment post ${Date.now()}`,
+    occurredOn: circleToday(circle.timeZone),
+    audience: "family",
+    circleIds: [circle.circleId],
+  });
+  assert.equal(created.ok, true, created.ok ? "" : created.message);
+  try {
+    const noted = await conversation.createMomentNote(supabase, { momentId: created.momentId, body: "Co" });
+    assert.equal(noted.ok, true, noted.ok ? "" : noted.message);
+    const load = async () => {
+      const page = await journal.loadTimelinePage(supabase, {
+        circleId: circle.circleId,
+        viewerMembershipIds: [circle.membershipId],
+      });
+      return page.moments.find((item) => item.id === created.momentId);
+    };
+    let notes = (await load()).notes;
+    let note = notes.find((item) => item.id === noted.noteId);
+    const edited = await conversation.updateMomentNote(supabase, { noteId: note.id, revision: note.revision, body: "Coo" });
+    assert.equal(edited.ok, true, edited.ok ? "" : edited.message);
+    notes = notes.map((item) => (item.id === note.id ? { ...item, body: "Coo", revision: edited.revision } : item));
+    // Heart, un-heart, heart, like a phone session; apply exactly what the app does.
+    let heartRevision = 0;
+    for (const hearted of [true, false, true, false, true]) {
+      note = notes.find((item) => item.id === noted.noteId);
+      notes = state.withNoteHeart(notes, note.id, "TARS", hearted);
+      const res = await conversation.setMomentNoteHeart(supabase, { noteId: note.id, hearted });
+      assert.equal(res.ok, true, res.ok ? "" : res.message);
+      heartRevision = res.heartRevision ?? heartRevision;
+    }
+    note = notes.find((item) => item.id === noted.noteId);
+    assert.equal(note.revision, edited.revision, "hearts must not touch the comment revision");
+    assert.notEqual(heartRevision, note.revision, "setup: the heart row revision differs from the comment's");
+    // Build 15 sent the heart revision here and got PT409.
+    const stale = await conversation.trashMomentNote(supabase, { noteId: note.id, revision: heartRevision });
+    assert.equal(stale.ok, false, "the heart revision is the stale value build 15 sent");
+    const trashed = await conversation.trashMomentNote(supabase, { noteId: note.id, revision: note.revision });
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+    const after = await load();
+    assert.equal(after.notes.some((item) => item.id === noted.noteId), false, "deleted comment is gone from the feed");
+  } finally {
+    const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+  }
 });
 
 await step("comment and heart a test-circle post, then clean up", async () => {

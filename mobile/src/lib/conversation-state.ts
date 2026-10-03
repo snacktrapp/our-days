@@ -44,16 +44,6 @@ export function withNoteHeart(
   });
 }
 
-/** Put one note's server revision back after a write that bumped it. */
-export function withNoteRevision(
-  notes: readonly FeedNote[],
-  noteId: string,
-  revision: number | undefined,
-): readonly FeedNote[] {
-  if (revision == null) return notes;
-  return notes.map((note) => (note.id === noteId ? { ...note, revision } : note));
-}
-
 /** Undo one optimistic note heart without disturbing anything else that changed since. */
 export function revertNoteHeart(
   notes: readonly FeedNote[],
@@ -117,4 +107,23 @@ export function isNoteDoubleTap(
     next.t - previous.t < noteDoubleTapMs &&
     Math.hypot(previous.x - next.x, previous.y - next.y) < noteDoubleTapPx
   );
+}
+
+/** Web DoubleTapPhoto: a finger that moves more than this is a swipe, not a tap. */
+export const postTapSlopPx = 10;
+
+export type PostTap = Readonly<{ t: number; x: number; y: number }>;
+
+/** Web DoubleTapPhoto: second tap within 300 ms and 32 pt of the first. */
+export function isPostDoubleTap(previous: PostTap | null, next: PostTap) {
+  return (
+    previous != null &&
+    next.t - previous.t < noteDoubleTapMs &&
+    Math.hypot(previous.x - next.x, previous.y - next.y) < noteDoubleTapPx
+  );
+}
+
+/** Web conversation `our-days:heart` listener: accept only a new love, never while saving. */
+export function acceptsDoubleTapLove(input: Readonly<{ loved: boolean; pending: boolean }>) {
+  return !input.loved && !input.pending;
 }
