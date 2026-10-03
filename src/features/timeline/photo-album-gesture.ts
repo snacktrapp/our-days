@@ -3,6 +3,18 @@ export const axisLockPx = 8;
 export const slideMs = 200;
 export const mountAlbumLimit = 6;
 
+/**
+ * Which way a gesture locks once it leaves the slop box. Anything within 45°
+ * of horizontal (|dx| > |dy|) pages the album; steeper swipes scroll the page.
+ * Null while the finger is still inside the slop box.
+ */
+export function swipeAxis(dx: number, dy: number): "x" | "y" | null {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax < axisLockPx && ay < axisLockPx) return null;
+  return ax > ay ? "x" : "y";
+}
+
 export type AlbumPair = Readonly<{
   from: number;
   to: number;

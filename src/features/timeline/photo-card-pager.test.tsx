@@ -707,3 +707,51 @@ describe("PhotoCardPager", () => {
     expect(ratios).toEqual([900 / 1600]);
   });
 });
+
+describe("PhotoCardPager touch scroll locking", () => {
+  function touchEvent(
+    type: "touchstart" | "touchmove" | "touchend",
+    target: Element,
+    point: { x: number; y: number } | null,
+  ) {
+    const touches = point
+      ? [{ identifier: 1, clientX: point.x, clientY: point.y, target }]
+      : [];
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "touches", { value: touches });
+    Object.defineProperty(event, "changedTouches", { value: touches });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  function swipe(target: Element, degrees: number) {
+    const radians = (degrees * Math.PI) / 180;
+    touchEvent("touchstart", target, { x: 200, y: 200 });
+    const moves = [4, 16, 40].map((length) =>
+      touchEvent("touchmove", target, {
+        x: 200 - length * Math.cos(radians),
+        y: 200 - length * Math.sin(radians),
+      }),
+    );
+    touchEvent("touchend", target, null);
+    return moves.map((event) => event.defaultPrevented);
+  }
+
+  it("holds the page still for a 20° swipe after the slop box", () => {
+    const { container } = renderPager();
+    const pager = container.querySelector(".photo-card-pager")!;
+    expect(swipe(pager, 20)).toEqual([false, true, true]);
+  });
+
+  it("lets a 50° swipe scroll the timeline", () => {
+    const { container } = renderPager();
+    const pager = container.querySelector(".photo-card-pager")!;
+    expect(swipe(pager, 50)).toEqual([false, false, false]);
+  });
+
+  it("never blocks scrolling on a single photo", () => {
+    const { container } = renderPager({ ...album, photos: [album.photos[0]] });
+    const pager = container.querySelector(".photo-card-pager")!;
+    expect(swipe(pager, 0)).toEqual([false, false, false]);
+  });
+});

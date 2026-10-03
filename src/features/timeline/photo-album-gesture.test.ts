@@ -5,8 +5,36 @@ import {
   albumSlideWidth,
   pairSlideTransform,
   pairTransform,
+  swipeAxis,
   waitForFrameReady,
 } from "./photo-album-gesture";
+
+describe("swipeAxis", () => {
+  const at = (degrees: number, length = 40) => {
+    const radians = (degrees * Math.PI) / 180;
+    return [length * Math.cos(radians), length * Math.sin(radians)] as const;
+  };
+
+  it("waits inside the slop box", () => {
+    expect(swipeAxis(5, 4)).toBeNull();
+    expect(swipeAxis(-7, 7)).toBeNull();
+  });
+
+  it("pages for swipes well off horizontal", () => {
+    expect(swipeAxis(...at(0))).toBe("x");
+    expect(swipeAxis(...at(20))).toBe("x");
+    expect(swipeAxis(...at(30))).toBe("x");
+    expect(swipeAxis(...at(40))).toBe("x");
+    const [dx, dy] = at(20);
+    expect(swipeAxis(-dx, -dy)).toBe("x");
+  });
+
+  it("scrolls for steep swipes", () => {
+    expect(swipeAxis(...at(50))).toBe("y");
+    expect(swipeAxis(...at(90))).toBe("y");
+    expect(swipeAxis(10, 10)).toBe("y");
+  });
+});
 
 describe("waitForFrameReady", () => {
   it("waits for a deferred image to mount and decode", async () => {
