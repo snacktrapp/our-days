@@ -60,6 +60,13 @@ async function step(name, fn) {
   }
 }
 
+// Set the app config env before the first app module import: config.ts reads
+// it once at load, and the offline steps below import journal.ts first.
+const { service, publishable } = await loadKeys();
+process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
+process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
+process.env.EXPO_PUBLIC_SITE_URL ??= "https://our-days-neon.vercel.app";
+
 await step("journal module loads under plain Node", async () => {
   const loaded = await import("../src/lib/journal.ts");
   assert.equal(typeof loaded.loadTimelinePage, "function");
@@ -497,10 +504,6 @@ await step("a share becomes a photo, video, or link and still needs a circle", a
   assert.equal(share.shareCircleChosen("circle-1"), true);
 });
 
-const { service, publishable } = await loadKeys();
-process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
-process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = publishable;
-process.env.EXPO_PUBLIC_SITE_URL ??= "https://our-days-neon.vercel.app";
 
 const { createClient } = await import("@supabase/supabase-js");
 const secureStore = await import("./e2e/mock-secure-store.mjs");
