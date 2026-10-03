@@ -1,18 +1,11 @@
 /**
  * Pure state steps for the native conversation (comments and hearts), so the
- * optimistic writes and their rollbacks match the web
+ * optimistic heart writes and their rollbacks match the web
  * `moment-conversation-control.tsx` and can be tested under plain Node.
  */
 import type { FeedNote, FeedReaction } from "./journal";
 
 export type Mention = Readonly<{ userId: string; name: string; start: number; end: number }>;
-
-/** Local ids for comments the server has not confirmed yet. */
-export const localNotePrefix = "local-note-";
-
-export function isLocalNote(note: Pick<FeedNote, "id">) {
-  return note.id.startsWith(localNotePrefix);
-}
 
 /** Web `withCurrentMemberReaction` for the heart: drop the viewer's heart, add it back when loved. */
 export function withViewerLove(
@@ -78,9 +71,10 @@ export function revertNoteHeart(
   );
 }
 
-export function localNote(
+/** The comment just saved, shown before the next feed load brings it back. */
+export function newNote(
   input: Readonly<{
-    localId: string;
+    id: string;
     authorName: string;
     authorAccent: string;
     body: string;
@@ -89,7 +83,7 @@ export function localNote(
   }>,
 ): FeedNote {
   return {
-    id: input.localId,
+    id: input.id,
     authorName: input.authorName,
     authorAccent: input.authorAccent,
     body: input.body,
@@ -107,19 +101,6 @@ export function localNote(
       active: true,
     })),
   };
-}
-
-/** A confirmed comment keeps its place and takes the server id. */
-export function confirmLocalNote(
-  notes: readonly FeedNote[],
-  localId: string,
-  noteId: string,
-): readonly FeedNote[] {
-  return notes.map((note) => (note.id === localId ? { ...note, id: noteId } : note));
-}
-
-export function withoutNote(notes: readonly FeedNote[], noteId: string): readonly FeedNote[] {
-  return notes.filter((note) => note.id !== noteId);
 }
 
 /** Web double-tap rule: two taps within 300 ms and 32 pt; finger moved < 10 pt. */

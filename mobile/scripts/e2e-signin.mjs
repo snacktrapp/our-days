@@ -212,7 +212,7 @@ await step("bible books group by testament and verses are a number list", async 
   assert.deepEqual(picker.bibleNumberChoices("end", { ...jonah, chapter: 1 }), []);
 });
 
-await step("comment hearts and new comments are optimistic and roll back like the web", async () => {
+await step("post and comment hearts are optimistic and roll back like the web; double tap hearts a comment", async () => {
   const c = await import("../src/lib/conversation-state.ts");
   const note = {
     id: "n1", authorName: "Molly", authorAccent: "sage", body: "hi", createdAt: "2026-10-03T16:00:00Z",
@@ -234,14 +234,9 @@ await step("comment hearts and new comments are optimistic and roll back like th
   assert.deepEqual(loved.map((r) => r.personName), ["Molly", "TARS"]);
   assert.deepEqual(c.withViewerLove(loved, "TARS", "m1", false).map((r) => r.personName), ["Molly"]);
 
-  const local = c.localNote({ localId: `${c.localNotePrefix}m1-1`, authorName: "TARS", authorAccent: "sky", body: "hey @Molly", mentions: [{ userId: "u", name: "Molly", start: 4, end: 10 }] });
-  assert.equal(c.isLocalNote(local), true);
-  assert.equal(local.mentions[0].active, true);
-  const list = [note, local];
-  const confirmed = c.confirmLocalNote(list, local.id, "n2");
-  assert.deepEqual(confirmed.map((n) => n.id), ["n1", "n2"]);
-  assert.equal(c.isLocalNote(confirmed[1]), false);
-  assert.deepEqual(c.withoutNote(list, local.id).map((n) => n.id), ["n1"], "a refused comment comes back out");
+  const saved = c.newNote({ id: "n2", authorName: "TARS", authorAccent: "sky", body: "hey @Molly", mentions: [{ userId: "u", name: "Molly", start: 4, end: 10 }] });
+  assert.equal(saved.mentions[0].active, true);
+  assert.equal(saved.canChange, true);
 
   assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 250, x: 20, y: 20 }), true);
   assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 320, x: 10, y: 10 }), false);
