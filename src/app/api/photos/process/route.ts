@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import {
   photoPostingIsEnabled,
   resolvedSiteOrigin,
@@ -7,6 +8,8 @@ import {
   PhotoWorkerError,
   PHOTO_WORKER_VERSION,
 } from "@/lib/photo-worker.server";
+import type { Database } from "@/lib/supabase/database.types";
+import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -33,6 +36,30 @@ function normalizeHost(value: string | null) {
     .replace(/:(?:80|443)$/u, "");
 }
 
+function hostname(host: string) {
+  return host.replace(/:\d+$/u, "");
+}
+
+/** Expo web runs on localhost while `next dev` is another port. Production stays closed. */
+function devLoopbackAllowed(originHost: string) {
+  const name = hostname(originHost);
+  if (name !== "localhost" && name !== "127.0.0.1" && name !== "[::1]") {
+    return false;
+  }
+  const vercel = process.env.VERCEL_ENV;
+  const ours = process.env.OUR_DAYS_ENVIRONMENT;
+  if (vercel === "production" || vercel === "preview") return false;
+  if (ours === "production" || ours === "preview") return false;
+  return true;
+}
+
+function bearerToken(request: Request) {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  const match = /^Bearer\s+(\S+)$/iu.exec(header.trim());
+  return match?.[1] ?? null;
+}
+
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;
@@ -43,6 +70,7 @@ function sameOrigin(request: Request) {
     return false;
   }
   if (!originHost) return false;
+  if (devLoopbackAllowed(originHost)) return true;
 
   const requestHost = normalizeHost(
     request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
@@ -56,6 +84,20 @@ function sameOrigin(request: Request) {
   } catch {
     return false;
   }
+}
+
+async function supabaseForRequest(request: Request) {
+  const token = bearerToken(request);
+  // Native sends the session cookie. Browsers drop that header, so Expo web
+  // sends the same access token as Authorization, which fetch allows.
+  if (!request.headers.get("cookie") && token) {
+    const { url, publishableKey } = readSupabasePublicConfig();
+    return createClient<Database>(url, publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+  }
+  return createOurDaysServerClient();
 }
 
 export async function POST(request: Request) {
@@ -81,7 +123,7 @@ export async function POST(request: Request) {
     return response({ ok: false, message: "Photo request is invalid." }, 400);
   }
 
-  const supabase = await createOurDaysServerClient();
+  const supabase = await supabaseForRequest(request);
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) return response({ ok: false }, 404);
 
