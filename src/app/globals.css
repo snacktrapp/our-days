@@ -10703,3 +10703,139 @@ iframe.composer-location-map {
   background: var(--action);
   color: #fff;
 }
+
+.private-entry-password {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.private-entry-password form {
+  margin-top: 12px;
+  text-align: left;
+}
+
+.public-legal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  margin-top: 22px;
+  color: var(--muted);
+  font-family: var(--font-interface);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.public-legal-footer a {
+  color: var(--teal);
+}
+
+.public-legal-footer p {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.settings-page .public-legal-footer {
+  justify-content: flex-start;
+  padding: 4px 2px 12px;
+}
+
+.settings-page .public-legal-footer p {
+  text-align: left;
+}
+
+.legal-page {
+  min-height: 100svh;
+  padding: max(20px, env(safe-area-inset-top)) 20px
+    max(32px, env(safe-area-inset-bottom));
+  background: var(--grid-surface);
+  color: var(--ink);
+}
+
+.legal-page-card {
+  width: min(100%, 40rem);
+  margin: 0 auto;
+}
+
+.legal-wordmark-link {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 20px;
+}
+
+.legal-draft-banner {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--ochre);
+  border-radius: 8px;
+  color: var(--ochre);
+  font: 650 13px / 1.4 var(--font-interface);
+  text-align: center;
+}
+
+.legal-copy {
+  font: 400 16px / 1.5 var(--font-interface);
+}
+
+.legal-copy h1,
+.legal-copy h2 {
+  margin: 1.3em 0 0.5em;
+  color: var(--ink);
+  font-family: var(--font-interface);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.legal-copy h1 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
+.legal-copy h2 {
+  font-size: 20px;
+}
+
+.legal-copy p,
+.legal-copy li {
+  margin: 0 0 0.8em;
+}
+
+.legal-copy ul {
+  margin: 0 0 1em;
+  padding-left: 1.2em;
+}
+
+.legal-copy a {
+  color: var(--teal);
+}
+
+.legal-copy blockquote {
+  margin: 0 0 1.2em;
+  padding-left: 12px;
+  border-left: 3px solid var(--ochre);
+  color: var(--muted);
+}
+
+.legal-table-wrap {
+  margin: 0 0 1.2em;
+  overflow-x: auto;
+}
+
+.legal-copy table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.legal-copy th,
+.legal-copy td {
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.legal-copy th {
+  font-weight: 650;
+}

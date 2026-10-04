@@ -44,5 +44,20 @@ describe("Account tools", () => {
     expect(
       screen.getByRole("button", { name: "Sign out and use another email" }),
     ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "href",
+      "/privacy",
+    );
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute(
+      "href",
+      "/terms",
+    );
+    expect(screen.getByRole("link", { name: "Support" })).toHaveAttribute(
+      "href",
+      "/support",
+    );
+    expect(
+      screen.getByRole("link", { name: "team@beelinetech.co" }),
+    ).toHaveAttribute("href", "mailto:team@beelinetech.co");
   });
 });
