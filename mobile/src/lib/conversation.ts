@@ -109,13 +109,14 @@ export async function setMomentReaction(
 export async function setMomentNoteHeart(
   supabase: SupabaseClient,
   input: Readonly<{ noteId: string; hearted: boolean }>,
-): Promise<Ok<{ revision?: number }> | Err> {
+): Promise<Ok<{ heartRevision?: number }> | Err> {
+  // Returns the heart row's revision; it is not the comment's revision.
   const { data, error } = await supabase.rpc("set_moment_note_heart", {
     note_id: input.noteId,
     hearted: input.hearted,
   });
   if (error) return { ok: false, message: "That heart could not be saved." };
-  return { ok: true, revision: typeof data === "number" ? data : undefined };
+  return { ok: true, heartRevision: typeof data === "number" ? data : undefined };
 }
 
 function initialFor(name: string) {

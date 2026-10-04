@@ -9,6 +9,9 @@ import { AuthProvider, useAuth } from "../components/auth-provider";
 import { ShareIntentBridge } from "../components/share-bridge";
 import { applyUpdateAtLaunch } from "../lib/app-updates";
 import { ThemeProvider, useAppTheme } from "../lib/theme";
+import { installWebAlert } from "../lib/web-alert";
+
+installWebAlert();
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Expo web and fast refresh have no native splash to hold.

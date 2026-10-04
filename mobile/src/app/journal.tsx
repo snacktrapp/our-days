@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { Redirect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  AccessibilityInfo,
   FlatList,
   Platform,
   Pressable,
@@ -30,15 +31,24 @@ import { AddSheet } from "../components/add-sheet";
 import { ActivitySheet } from "../components/activity-sheet";
 import { FeedScrollLock } from "../lib/feed-scroll-lock";
 import { CirclesScreen } from "../components/circles-screen";
-import { UploadShelf } from "../components/upload-shelf";
+import { usePendingUploads } from "../components/pending-media";
 import { writePref } from "../lib/appearance";
-import { listUploads, subscribeUploads, type Audience, type UploadChip } from "../lib/posts";
+import { type Audience } from "../lib/posts";
+import {
+  listPending,
+  mergePending,
+  restorePending,
+  settlePending,
+  subscribePending,
+} from "../lib/pending-uploads";
+import { profileAccent } from "../lib/profile-accent";
 import { loadActivity, readSeenActivityIds, type ActivityItem } from "../lib/activity";
 import { readNotificationTarget } from "../../../src/lib/activity-notifications";
 import { circleToday } from "../lib/dates";
 import { readLastPostedCircle } from "../lib/last-posted-circle";
 import {
   loadCircles,
+  loadMomentPhotos,
   loadTimelinePage,
   loadViewerProfile,
   saveProfileColor,
@@ -48,6 +58,7 @@ import {
   type ViewerProfile,
 } from "../lib/journal";
 import { momentListedInFeed } from "../lib/feed-format";
+import { runMomentEdit, type EditReopen } from "../lib/moment-edit-save";
 import { formatPlainDate } from "../lib/moment-time";
 import { disablePushNotifications, subscribeNotificationOpens } from "../lib/push";
 import type { PushLanding } from "../lib/push-landing";
@@ -142,6 +153,11 @@ export default function JournalScreen() {
     Record<string, string> | null | undefined
   >(undefined);
   const [addOpen, setAddOpen] = useState(false);
+  /** The post being edited; a failed save reopens it with the draft and error. */
+  const [editing, setEditing] = useState<(Partial<EditReopen> & { moment: TimelineMoment; key: number }) | null>(
+    null,
+  );
+  const editKey = useRef(0);
   const [circlesOpen, setCirclesOpen] = useState(false);
   const [personJournal, setPersonJournal] = useState<{
     circleId: string;
@@ -154,7 +170,8 @@ export default function JournalScreen() {
   const [seenActivity, setSeenActivity] = useState<readonly string[]>(() => readSeenActivityIds());
   const homeCircleId = readActiveCircleCookie();
   const [lastPostedCircleId, setLastPostedCircleId] = useState<string | null>(null);
-  const [uploads, setUploads] = useState<readonly UploadChip[]>(listUploads());
+  const pendingJobs = usePendingUploads();
+  const settledJobs = useRef(new Set<string>());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareDraft, setShareDraft] = useState<ShareDraft | null>(null);
@@ -171,7 +188,6 @@ export default function JournalScreen() {
   );
   const yRef = useRef(0);
   const offsetRef = useRef(0);
-  const publishedUploads = useRef(new Set<string>());
   const momentsRef = useRef(moments);
   const postedMomentIds = useRef<ReadonlySet<string> | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -260,22 +276,54 @@ export default function JournalScreen() {
     void readLastPostedCircle(session.user.id).then(setLastPostedCircleId);
   }, [session?.user.id]);
 
-  useEffect(
-    () =>
-      subscribeUploads(() => {
-        const next = listUploads();
-        setUploads(next);
-        const fresh = next.some((chip) => chip.done && !publishedUploads.current.has(chip.id));
-        for (const chip of next) {
-          if (chip.done) publishedUploads.current.add(chip.id);
+  // Failed uploads from an earlier launch come back on their cards (web #148).
+  useEffect(() => {
+    if (!supabase || !session?.user.id || Platform.OS === "web") return;
+    void import("../lib/pending-upload-files").then(({ pendingFileStorage }) =>
+      restorePending(pendingFileStorage(session.user.id), supabase),
+    );
+  }, [session?.user.id, supabase]);
+
+  // A finished upload: reload so the real post (or its new photos) replaces
+  // the pending card, then drop the local copy.
+  useEffect(() => {
+    if (!supabase) return;
+    return subscribePending(() => {
+      for (const job of listPending()) {
+        if (job.state !== "done" || settledJobs.current.has(job.id)) continue;
+        settledJobs.current.add(job.id);
+        const momentId = job.momentId;
+        if (job.mode === "post") {
+          void (async () => {
+            // Publishing can trail the upload by a few seconds.
+            for (let attempt = 0; attempt < 4; attempt += 1) {
+              await loadFirstPage(scope, circles);
+              await new Promise((resolve) => setTimeout(resolve, 300));
+              if (momentsRef.current.some((item) => item.id === momentId)) break;
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+            settlePending([job.id]);
+          })();
+        } else if (momentId) {
+          void (async () => {
+            const expected = job.media.length;
+            const before = momentsRef.current.find((item) => item.id === momentId)?.photos.length ?? 0;
+            for (let attempt = 0; attempt < 8; attempt += 1) {
+              const photos = await loadMomentPhotos(supabase, momentId);
+              if (photos) {
+                setMoments((current) =>
+                  current.map((item) => (item.id === momentId ? { ...item, photos } : item)),
+                );
+              }
+              if (photos && photos.length >= before + expected) break;
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+            }
+            settlePending([job.id]);
+          })();
         }
-        if (fresh) {
-          postedMomentIds.current = new Set(momentsRef.current.map((moment) => moment.id));
-          void loadFirstPage(scope, circles);
-        }
-      }),
-    [circles, loadFirstPage, scope],
-  );
+      }
+    });
+  }, [supabase, loadFirstPage, scope, circles]);
 
   useEffect(() => {
     if (!session) {
@@ -400,6 +448,15 @@ export default function JournalScreen() {
     await loadFirstPage(scope, circles);
   }
 
+  function openEdit(state: Partial<EditReopen> & { moment: TimelineMoment }) {
+    editKey.current += 1;
+    setEditing({ ...state, key: editKey.current });
+  }
+
+  function patchMoment(id: string, update: (current: TimelineMoment) => TimelineMoment) {
+    setMoments((current) => current.map((item) => (item.id === id ? update(item) : item)));
+  }
+
   function applyScroll(y: number) {
     setPull(y < 0 ? Math.min(80, -y) : 0);
     if (y <= 0 || switcherOpen) {
@@ -510,7 +567,18 @@ export default function JournalScreen() {
       })),
     { id: youScope, label: "Just me", selected: kind === "personal" },
   ];
-  const listed = moments.filter((moment) =>
+  const feedMoments = mergePending(moments, pendingJobs, {
+    listed: (post) =>
+      personJournal
+        ? post.journalPersonId === personJournal.personId
+        : kind !== "circle" || post.circleId === scope || post.circleIds.includes(scope),
+    author: {
+      name: profile?.name ?? "You",
+      initial: profile?.initial ?? "Y",
+      accent: profileAccent(profile?.accentToken),
+    },
+  });
+  const listed = feedMoments.filter((moment) =>
     momentListedInFeed({
       audience: moment.audience,
       feed: personJournal ? (viewingOwnJournal ? "personal" : "circle") : kind,
@@ -762,6 +830,7 @@ export default function JournalScreen() {
                     setMoments((current) => current.map((item) => (item.id === next.id ? next : item)))
                   }
                   onMomentRemove={(id) => setMoments((current) => current.filter((item) => item.id !== id))}
+                  onMomentEdit={(moment) => openEdit({ moment })}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
                   highlighted={highlightId === item.moment.id}
                   openThread={
@@ -879,9 +948,6 @@ export default function JournalScreen() {
           setPull(0);
         }}
       />
-      {uploads.length > 0 ? (
-        <UploadShelf chips={uploads} top={insets.top + floatGap + chromeHeight + 8} />
-      ) : null}
       {shareDraft && session ? (
         <ShareSheet
           draft={shareDraft}
@@ -893,6 +959,39 @@ export default function JournalScreen() {
             setLoading(true);
             void loadFirstPage(allScope, circles);
           }}
+        />
+      ) : null}
+      {editing ? (
+        <AddSheet
+          key={editing.key}
+          circles={circles}
+          justMeDefault={false}
+          edit={{
+            moment: editing.moment,
+            headers: mediaHeaders,
+            draft: editing.draft,
+            error: editing.error,
+            onSave: (initial, draft, taggedLabel) => {
+              const moment = editing.moment;
+              if (!supabase) return;
+              const client = supabase;
+              setEditing(null);
+              void runMomentEdit(client, {
+                moment,
+                initial,
+                draft,
+                taggedLabel,
+                deviceTimeZone: viewerZone,
+                patch: patchMoment,
+                reopen: openEdit,
+                refresh: () => void loadFirstPage(scope, circles),
+                announce: (message) => AccessibilityInfo.announceForAccessibility(message),
+                loadPhotos: (id) => loadMomentPhotos(client, id),
+              });
+            },
+          }}
+          onClose={() => setEditing(null)}
+          onPosted={() => setEditing(null)}
         />
       ) : null}
       {addOpen ? (
@@ -917,7 +1016,10 @@ export default function JournalScreen() {
             setAddOpen(false);
             setScope(next);
             setLoading(true);
-            void loadFirstPage(next, circles);
+            // A photo post is already on the feed as a pending card; show it.
+            void loadFirstPage(next, circles).then(() =>
+              requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: true })),
+            );
           }}
         />
       ) : null}

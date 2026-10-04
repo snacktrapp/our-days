@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState, type Ref } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import {
+  AccessibilityInfo,
+  Animated,
   Linking,
   Alert,
   Platform,
@@ -12,12 +14,14 @@ import {
 } from "react-native";
 
 import {
+  appleMapsUrl,
   audienceChipLabel,
   displayPlaceLabel,
   hiddenNoteCount,
   insightSourceLabel,
   mentionPieces,
   parseBibleVerse,
+  shortPlaceLabel,
   visibleNotes,
   type MentionSpan,
 } from "../lib/feed-format";
@@ -37,14 +41,31 @@ import {
   updateMomentNote,
   type MentionCandidate,
 } from "../lib/conversation";
+import {
+  isNoteDoubleTap,
+  newNote,
+  revertNoteHeart,
+  withNoteHeart,
+  withViewerLove,
+  acceptsDoubleTapLove,
+  type Mention,
+} from "../lib/conversation-state";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
-import { MomentChangeContext, MomentOverflow } from "./moment-menu";
+import { MomentChangeContext, MomentOverflow, MoreDots } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
 import { AlbumPager } from "./album-pager";
+import { PendingAddStrip, PendingPostMedia } from "./pending-media";
+import {
+  createMomentHeartBus,
+  DoubleTapHeart,
+  MomentHeartContext,
+  useMomentHeartAcceptor,
+  type MomentHeartBus,
+} from "./double-tap-heart";
 import { PrivateImage } from "./private-image";
 
 function retroFace(colors: ThemeColors, accent: string) {
@@ -82,6 +103,7 @@ export function FeedMoment({
   viewer = emptyViewer,
   onMomentChange,
   onMomentRemove,
+  onMomentEdit,
   onScreen = true,
   openThread = false,
   highlighted = false,
@@ -95,12 +117,16 @@ export function FeedMoment({
   viewer?: JournalViewer;
   onMomentChange?: (moment: TimelineMoment) => void;
   onMomentRemove?: (id: string) => void;
+  onMomentEdit?: (moment: TimelineMoment) => void;
   onScreen?: boolean;
   openThread?: boolean;
   highlighted?: boolean;
 }>) {
   const { width } = useWindowDimensions();
   const { colors } = useAppTheme();
+  // Web `our-days:heart`: a double tap on the photo or written copy asks this
+  // card's conversation to add a heart.
+  const [heartBus] = useState<MomentHeartBus>(createMomentHeartBus);
   const chip = audienceChipLabel({
     audience: moment.audience,
     linkedCircleIds: moment.linkedCircleIds,
@@ -127,9 +153,11 @@ export function FeedMoment({
       value={{
         onChange: (next) => onMomentChange?.(next),
         onRemove: (id) => onMomentRemove?.(id),
+        onEdit: (next) => onMomentEdit?.(next),
       }}
     >
     <OpenThreadContext.Provider value={openThread}>
+    <MomentHeartContext.Provider value={heartBus}>
     <View style={styles.moment}>
       <View style={styles.connection}>
         <View style={styles.connectionSide}>
@@ -224,6 +252,7 @@ export function FeedMoment({
         />
       </View>
     </View>
+    </MomentHeartContext.Provider>
     </OpenThreadContext.Provider>
     </MomentChangeContext.Provider>
   );
@@ -245,12 +274,19 @@ function CardBody({
   if (moment.kind === "photo" || moment.kind === "video") {
     return (
       <View>
-        <Media
-          moment={moment}
-          headers={headers}
-          frameWidth={frameWidth}
-          onScreen={onScreen}
-        />
+        {moment.pending ? (
+          <PendingPostMedia job={moment.pending} />
+        ) : (
+          <>
+            <Media
+              moment={moment}
+              headers={headers}
+              frameWidth={frameWidth}
+              onScreen={onScreen}
+            />
+            <PendingAddStrip momentId={moment.id} />
+          </>
+        )}
         <View style={styles.copy}>
           <AuthorRow moment={moment} />
           {moment.body ? (
@@ -260,7 +296,9 @@ function CardBody({
               serif={false}
             />
           ) : null}
-          <Conversation key={moment.id} moment={moment} viewer={viewer} />
+          {moment.pending ? null : (
+            <Conversation key={moment.id} moment={moment} viewer={viewer} />
+          )}
         </View>
       </View>
     );
@@ -290,7 +328,38 @@ function CardBody({
 
 function LocationHeading({ moment }: Readonly<{ moment: TimelineMoment }>) {
   const place = useResolvedPlace(moment, false);
-  return <PlaceTitle>{place || "A remembered place"}</PlaceTitle>;
+  return (
+    <MapsLink moment={moment} name={place}>
+      <PlaceTitle>{place || "A remembered place"}</PlaceTitle>
+    </MapsLink>
+  );
+}
+
+/**
+ * Web `MomentPlaceButton`: the place opens Apple Maps at the post's
+ * coordinates. Same look as the plain text (the web link has no underline);
+ * it dims while pressed. Without coordinates it stays plain text.
+ */
+function MapsLink({
+  moment,
+  name,
+  children,
+}: Readonly<{ moment: TimelineMoment; name: string; children: ReactNode }>) {
+  const url = appleMapsUrl(moment.placeName || moment.title, moment.latitude, moment.longitude);
+  const label = shortPlaceLabel(name);
+  if (!url || !label) return children;
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Open ${label} in Maps`}
+      accessibilityHint="Opens Apple Maps"
+      hitSlop={{ top: 12, bottom: 12, left: 4, right: 4 }}
+      onPress={() => void Linking.openURL(url).catch(() => undefined)}
+      style={({ pressed }) => [styles.mapsLink, pressed ? styles.mapsLinkPressed : null]}
+    >
+      {children}
+    </Pressable>
+  );
 }
 
 function PlaceTitle({ children }: Readonly<{ children: string }>) {
@@ -335,6 +404,7 @@ function Thought({
       ) : (
         <AuthorRow moment={moment} />
       )}
+      <DoubleTapHeart burst="center">
       {bible ? (
         <FlowCopy
           text={bible.verse}
@@ -358,6 +428,7 @@ function Thought({
       ) : (
         <FlowCopy text={moment.body} mentions={moment.mentions} />
       )}
+      </DoubleTapHeart>
       {insight && moment.hasVideo ? (
         <View style={styles.insightClip}>
           <JournalVideo
@@ -729,12 +800,14 @@ function AuthorRow({ moment }: Readonly<{ moment: TimelineMoment }>) {
               ·
             </Text>
             <PlacePin color={colors.muted} hole={colors.paper} />
-            <Text
-              style={[styles.placeName, face(colors, 400, "record"), { color: colors.muted }]}
-              numberOfLines={1}
-            >
-              {place}
-            </Text>
+            <MapsLink moment={moment} name={place}>
+              <Text
+                style={[styles.placeName, face(colors, 400, "record"), { color: colors.muted }]}
+                numberOfLines={1}
+              >
+                {place}
+              </Text>
+            </MapsLink>
           </View>
         ) : null}
       </View>
@@ -771,6 +844,22 @@ function Media({
       />
     );
   }
+  return (
+    <DoubleTapHeart burst="tap">
+      <PhotoMedia moment={moment} headers={headers} frameWidth={frameWidth} />
+    </DoubleTapHeart>
+  );
+}
+
+function PhotoMedia({
+  moment,
+  headers,
+  frameWidth,
+}: Readonly<{
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
+  frameWidth: number;
+}>) {
   const photos = moment.photos.length > 0 ? moment.photos : [{ id: moment.id, sortOrder: 0 }];
   if (photos.length > 1) {
     return (
@@ -853,6 +942,10 @@ function Conversation({
   const [composer, setComposer] = useState<FeedNote | "new" | null>(null);
   const [members, setMembers] = useState<readonly MentionCandidate[]>([]);
   const [pending, setPending] = useState(false);
+  const [lovePending, setLovePending] = useState(false);
+  const [lovePop, setLovePop] = useState(0);
+  const [notePops, setNotePops] = useState<Readonly<Record<string, number>>>({});
+  const loveWrite = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const loved = reactions.some(
     (reaction) => reaction.reactionId === "held-close" && reaction.isCurrentMember,
@@ -878,65 +971,65 @@ function Conversation({
     setShowAll(true);
   }
 
+  // Web `chooseReaction`: the heart flips at once and is rolled back if the
+  // write fails. A newer tap supersedes an older write's outcome.
   async function toggleLove() {
     const supabase = getSupabase();
-    if (!supabase || pending) return;
+    if (!supabase || lovePending) return;
     const next = !loved;
-    setPending(true);
+    const prior = reactions;
+    loveWrite.current += 1;
+    const gen = loveWrite.current;
+    setReactions((current) => withViewerLove(current, viewer.name, moment.id, next));
+    if (next) setLovePop((count) => count + 1);
     setError(null);
-    const result = await setMomentReaction(supabase, {
-      momentId: moment.id,
-      reactionId: next ? "held-close" : null,
-    });
-    setPending(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    setLovePending(true);
+    let message: string | null = null;
+    try {
+      const result = await setMomentReaction(supabase, {
+        momentId: moment.id,
+        reactionId: next ? "held-close" : null,
+      });
+      if (!result.ok) message = result.message;
+    } catch {
+      message = "That response could not be saved. Try again.";
     }
-    setReactions((current) => {
-      const kept = current.filter(
-        (reaction) => !(reaction.isCurrentMember && reaction.reactionId === "held-close"),
-      );
-      if (!next) return kept;
-      return [
-        ...kept,
-        {
-          id: `local-heart-${moment.id}`,
-          personName: viewer.name,
-          reactionId: "held-close",
-          isCurrentMember: true,
-        },
-      ];
-    });
+    if (gen !== loveWrite.current) return;
+    setLovePending(false);
+    if (message) {
+      setReactions(prior);
+      setError(message);
+    }
   }
 
-  async function toggleNoteHeart(note: FeedNote) {
+  useMomentHeartAcceptor(() => {
+    if (!acceptsDoubleTapLove({ loved, pending: lovePending })) return false;
+    void toggleLove();
+    return true;
+  });
+
+  // Web `chooseNoteHeart`: optimistic, rolled back on failure.
+  async function toggleNoteHeart(note: FeedNote, hearted = !note.heartedByViewer) {
     const supabase = getSupabase();
-    if (!supabase || pending) return;
-    const hearted = !note.heartedByViewer;
-    setPending(true);
+    if (!supabase) return;
+    if (hearted === note.heartedByViewer) return;
+    setNotes((current) => withNoteHeart(current, note.id, viewer.name, hearted));
+    if (hearted) setNotePops((current) => ({ ...current, [note.id]: (current[note.id] ?? 0) + 1 }));
     setError(null);
-    const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
-    setPending(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    let message: string | null = null;
+    try {
+      const result = await setMomentNoteHeart(supabase, { noteId: note.id, hearted });
+      // set_moment_note_heart returns the HEART row's revision, not the
+      // comment's. Writing it into note.revision made the next edit or delete
+      // send a stale expected_revision (PT409 "Note changed elsewhere"). The
+      // web ignores it too.
+      if (result.ok) return;
+      message = result.message;
+    } catch {
+      message = "That heart could not be saved. Try again.";
     }
-    setNotes((current) =>
-      current.map((item) => {
-        if (item.id !== note.id) return item;
-        const names = hearted
-          ? [...item.heartNames.filter((name) => name !== viewer.name), viewer.name]
-          : item.heartNames.filter((name) => name !== viewer.name);
-        return {
-          ...item,
-          heartedByViewer: hearted,
-          heartNames: names,
-          heartCount: names.length,
-          revision: result.revision ?? item.revision,
-        };
-      }),
-    );
+    setNotes((current) => revertNoteHeart(current, note));
+    setError(message);
   }
 
   async function openComposer(note: FeedNote | "new") {
@@ -952,30 +1045,37 @@ function Conversation({
     setMembers(await loadMentionCandidates(supabase, circles));
   }
 
-  async function saveComment(body: string, mentions: readonly { userId: string; name: string; start: number; end: number }[]) {
+  async function saveComment(body: string, mentions: readonly Mention[]) {
     const supabase = getSupabase();
     if (!supabase) return;
-    setPending(true);
-    setError(null);
     if (composer && composer !== "new") {
-      const result = await updateMomentNote(supabase, {
-        noteId: composer.id,
-        revision: composer.revision,
-        body,
-        mentions,
-      });
+      // Edits stay server-first like the web: they need the current revision.
+      setPending(true);
+      setError(null);
+      let result: Awaited<ReturnType<typeof updateMomentNote>>;
+      try {
+        result = await updateMomentNote(supabase, {
+          noteId: composer.id,
+          revision: composer.revision,
+          body,
+          mentions,
+        });
+      } catch {
+        result = { ok: false, message: "That note could not be saved. Try again." };
+      }
       setPending(false);
       if (!result.ok) {
         setError(result.message);
         return;
       }
+      const revision = result.revision;
       setNotes((current) =>
         current.map((item) =>
           item.id === composer.id
             ? {
                 ...item,
                 body,
-                revision: result.revision,
+                revision,
                 mentions: mentions.map((mention) => ({
                   userId: mention.userId,
                   start: mention.start,
@@ -990,33 +1090,25 @@ function Conversation({
       setComposer(null);
       return;
     }
-    const result = await createMomentNote(supabase, { momentId: moment.id, body, mentions });
+    // New comments stay server-first like the web: the sheet shows Saving…
+    // and keeps the text if the post fails.
+    setPending(true);
+    setError(null);
+    let result: Awaited<ReturnType<typeof createMomentNote>>;
+    try {
+      result = await createMomentNote(supabase, { momentId: moment.id, body, mentions });
+    } catch {
+      result = { ok: false, message: "That note could not be saved. Try again." };
+    }
     setPending(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
+    const noteId = result.noteId;
     setNotes((current) => [
       ...current,
-      {
-        id: result.noteId,
-        authorName: viewer.name,
-        authorAccent: viewer.accent,
-        body,
-        createdAt: new Date().toISOString(),
-        heartCount: 0,
-        heartedByViewer: false,
-        heartNames: [],
-        canChange: true,
-        revision: 1,
-        mentions: mentions.map((mention) => ({
-          userId: mention.userId,
-          start: mention.start,
-          end: mention.end,
-          name: mention.name,
-          active: true,
-        })),
-      },
+      newNote({ id: noteId, authorName: viewer.name, authorAccent: viewer.accent, body, mentions }),
     ]);
     setComposer(null);
   }
@@ -1067,11 +1159,12 @@ function Conversation({
           accessibilityRole="button"
           accessibilityLabel={loved ? "Undo love" : "Love"}
           accessibilityState={{ selected: loved }}
-          disabled={pending}
+          disabled={lovePending}
           style={styles.actionHit}
           onPress={() => void toggleLove()}
         >
-          <HeartGlyph
+          <PopHeart
+            pop={lovePop}
             color={
               colors.appearance === "retro"
                 ? loved
@@ -1083,7 +1176,8 @@ function Conversation({
           />
         </Pressable>
         <Text
-          style={[styles.reactionNames, face(colors, 400), { color: colors.ink }]}
+          // Web .inline-reaction-summary li: var(--muted), 11px.
+          style={[styles.reactionNames, face(colors, 400), { color: colors.muted }]}
           numberOfLines={2}
         >
           {names.join(" ")}
@@ -1094,10 +1188,13 @@ function Conversation({
           key={note.id}
           note={note}
           open={openHearts === note.id}
+          pop={notePops[note.id] ?? 0}
+          editDisabled={pending}
           onToggleHearts={() =>
             setOpenHearts((current) => (current === note.id ? null : note.id))
           }
           onHeart={() => void toggleNoteHeart(note)}
+          onDoubleTap={() => void toggleNoteHeart(note, true)}
           onEdit={() => void openComposer(note)}
         />
       ))}
@@ -1144,21 +1241,46 @@ function Conversation({
 function NoteRow({
   note,
   open,
+  pop,
+  editDisabled,
   onToggleHearts,
   onHeart,
+  onDoubleTap,
   onEdit,
 }: Readonly<{
   note: FeedNote;
   open: boolean;
+  pop: number;
+  editDisabled: boolean;
   onToggleHearts: () => void;
   onHeart: () => void;
+  onDoubleTap: () => void;
   onEdit: () => void;
 }>) {
   const { colors } = useAppTheme();
   const stamp = formatConversationStamp(note.createdAt);
   const counted = note.heartCount > 0;
+  const lastTap = useRef<{ noteId: string; t: number; x: number; y: number } | null>(null);
   return (
-    <View style={styles.note}>
+    <Pressable
+      style={styles.note}
+      accessible={false}
+      // Web: a double tap on a comment hearts it (never un-hearts).
+      onPress={(event) => {
+        const tap = {
+          noteId: note.id,
+          t: Date.now(),
+          x: event.nativeEvent.pageX,
+          y: event.nativeEvent.pageY,
+        };
+        if (isNoteDoubleTap(lastTap.current, tap)) {
+          lastTap.current = null;
+          if (!note.heartedByViewer) onDoubleTap();
+          return;
+        }
+        lastTap.current = tap;
+      }}
+    >
       <View style={styles.noteAuthor}>
         <View style={styles.noteWho}>
           <View
@@ -1194,16 +1316,12 @@ function NoteRow({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit comment"
+            disabled={editDisabled}
             onPress={onEdit}
-            hitSlop={14}
             style={styles.noteMore}
           >
-            {/* Web .inline-note-more-dots: three 2px dots in a 13x3 box. */}
-            <View style={styles.noteDots}>
-              {[0, 1, 2].map((dot) => (
-                <View key={dot} style={[styles.noteDot, { backgroundColor: colors.muted }]} />
-              ))}
-            </View>
+            {/* Same round dots as the post menu, a size smaller; a real 44×44 target. */}
+            <MoreDots color={colors.muted} size={3} />
           </Pressable>
         ) : null}
         <View style={styles.noteHeart} pointerEvents="box-none">
@@ -1214,7 +1332,8 @@ function NoteRow({
             onPress={onHeart}
             style={[styles.noteHeartButton, counted && styles.noteHeartShifted]}
           >
-            <HeartGlyph
+            <PopHeart
+              pop={pop}
               color={
                 colors.appearance === "retro"
                   ? note.heartedByViewer
@@ -1246,11 +1365,45 @@ function NoteRow({
         <ClampedMention text={note.body} mentions={note.mentions} serif={false} compact />
       </View>
       {open ? (
-        <Text style={[face(colors, 400), { color: colors.muted, fontSize: 12, marginTop: 4 }]}>
+        // Web p.inline-note-loved: muted, 10px/1.2, 0.02em, 2px above.
+        <Text style={[face(colors, 400), styles.noteLoved, { color: colors.muted }]}>
           {lovedBy(note.heartNames)}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
+  );
+}
+
+/**
+ * Web `.quick-reaction-glyph.is-popping`: a short scale pop each time a heart
+ * is turned on. Skipped when Reduce Motion is on.
+ */
+function PopHeart({
+  pop,
+  color,
+  filled,
+  size,
+}: Readonly<{ pop: number; color: string; filled: boolean; size?: number }>) {
+  const [scale] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (pop === 0) return;
+    let cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
+      if (cancelled || reduced) return;
+      scale.setValue(1);
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.28, duration: 110, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }),
+      ]).start();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pop, scale]);
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <HeartGlyph color={color} filled={filled} size={size} />
+    </Animated.View>
   );
 }
 
@@ -1420,6 +1573,8 @@ const styles = StyleSheet.create({
   },
   authorLine: {
     position: "relative",
+    // The 44×44 ••• target hangs below this row; keep it above the caption.
+    zIndex: 2,
     width: "100%",
     minHeight: 20,
     flexDirection: "row",
@@ -1458,6 +1613,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
+  mapsLink: { flexShrink: 1, minWidth: 0 },
+  mapsLinkPressed: { opacity: 0.5 },
   placeName: {
     fontSize: 11,
     flexShrink: 1,
@@ -1577,6 +1734,7 @@ const styles = StyleSheet.create({
   noteWhen: {
     fontSize: 8,
   },
+  noteLoved: { fontSize: 10, lineHeight: 12, letterSpacing: 0.2, marginTop: 2 },
   noteHeart: {
     position: "absolute",
     top: "50%",
@@ -1608,22 +1766,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noteMore: {
-    width: 16,
-    height: 16,
+    // 44×44 to the touch; negative margins keep its 16×16 place in the row.
+    width: 44,
+    height: 44,
+    marginVertical: -14,
+    marginHorizontal: -14,
     alignItems: "center",
     justifyContent: "center",
-  },
-  noteDots: {
-    width: 13,
-    height: 3,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  noteDot: {
-    width: 2,
-    height: 2,
-    borderRadius: 1,
+    zIndex: 2,
   },
   showMore: {
     minHeight: 44,

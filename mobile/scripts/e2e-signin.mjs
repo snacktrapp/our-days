@@ -171,7 +171,8 @@ await step("photo menu matches the web and people stay in join order", async () 
   );
   const menu = await import("../src/lib/moment-menu.ts");
   assert.deepEqual(menu.momentOverflowActions("thought"), ["edit", "delete"]);
-  assert.deepEqual(menu.momentOverflowActions("photo"), ["delete"]);
+  assert.deepEqual(menu.momentOverflowActions("photo"), ["edit", "delete"]);
+  assert.deepEqual(menu.momentOverflowActions("video"), ["edit", "delete"]);
   assert.deepEqual(menu.momentOverflowActions("insight"), ["delete"]);
   const mvhd = new Uint8Array(28);
   mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
@@ -187,6 +188,206 @@ await step("photo menu matches the web and people stay in join order", async () 
     ["Ada", "Bea"],
   );
 });
+
+await step("post edit matches the web: draft, photo plan, time, mentions, and revision", async () => {
+  const edit = await import("../src/lib/moment-edit.ts");
+  const save = await import("../src/lib/moment-edit-save.ts");
+  const base = {
+    id: "m1",
+    kind: "photo",
+    canChange: true,
+    revision: 3,
+    body: "Hi @Ada at the park",
+    title: "",
+    placeName: "Park",
+    latitude: 1,
+    longitude: 2,
+    occurredOn: "2026-10-01",
+    occurredAt: "2026-10-01T16:30:00.000Z",
+    occurredTimezone: "America/Los_Angeles",
+    timePrecision: "minute",
+    taggedPersonIds: ["p1"],
+    taggedPeopleLabel: "Ada",
+    photos: [
+      { id: "a", width: 4, height: 3 },
+      { id: "b", width: 4, height: 3 },
+      { id: "c", width: 4, height: 3 },
+    ],
+    mentions: [{ userId: "u1", start: 3, end: 7, label: "@Ada" }],
+    audience: "family",
+    linkedCircleIds: ["c1"],
+  };
+  assert.deepEqual(menuFor(edit, base), true);
+  assert.equal(edit.canEditMoment({ ...base, kind: "insight" }), false);
+  assert.equal(edit.canEditMoment({ ...base, canChange: false }), false);
+  const initial = edit.buildEditDraft(base);
+  assert.equal(initial.mode, "photo");
+  assert.equal(initial.occurredTime, "09:30", "recorded wall clock in the poster's zone");
+  assert.deepEqual(initial.photos.map((photo) => photo.existingPhotoId), ["a", "b", "c"]);
+  assert.equal(edit.editIsDirty(initial, initial), false);
+  const picked = { bytes: new ArrayBuffer(4), mimeType: "image/jpeg", name: "n.jpg", kind: "photo", durationMs: null, previewUri: "x", posterUri: null, poster: null };
+  const moved = edit.movePhoto(initial.photos.filter((photo) => photo.key !== "b"), 1, 0);
+  const draft = {
+    ...initial,
+    body: "Hi there @Ada at the park!",
+    occurredTime: "07:15",
+    photos: [...moved, { key: "new1", picked }],
+  };
+  assert.equal(edit.editIsDirty(draft, initial), true);
+  const plan = edit.photoEditPlan(initial.photos, draft.photos);
+  assert.deepEqual(plan.removedIds, ["b"]);
+  assert.deepEqual(plan.reorderIds, ["c", "a"]);
+  assert.equal(plan.added.length, 1);
+  assert.equal(plan.changed, true);
+  assert.equal(edit.photoEditPlan(initial.photos, initial.photos).changed, false);
+  // Unchanged time keeps the recorded instant and zone; a changed one uses this device.
+  assert.deepEqual(edit.editOccurrence(initial, initial, base, "Europe/London"), {
+    occurredAt: base.occurredAt,
+    occurredTimezone: base.occurredTimezone,
+  });
+  const changed = edit.editOccurrence(draft, initial, base, "America/New_York");
+  assert.equal(changed.occurredTimezone, "America/New_York");
+  assert.equal(changed.occurredAt, new Date("2026-10-01T07:15:00").toISOString());
+  assert.deepEqual(edit.editOccurrence({ ...draft, occurredTime: "" }, initial, base, "UTC"), {
+    occurredAt: null,
+    occurredTimezone: null,
+  });
+  const remapped = edit.remapMentions(base.body, draft.body, base.mentions);
+  assert.deepEqual(remapped.map((span) => [span.start, span.end]), [[9, 13]]);
+  assert.deepEqual(edit.remapMentions(base.body, "No mention now", base.mentions), []);
+  assert.equal(edit.editValidationError({ ...draft, body: "  " }, initial), null, "a photo post may have no note");
+  assert.equal(
+    edit.editValidationError({ ...edit.buildEditDraft({ ...base, kind: "thought", photos: [] }), body: " " }),
+    "Write a thought before saving this moment.",
+  );
+  assert.equal(
+    edit.editValidationError({ ...draft, shareToCircleId: "c2" }, initial),
+    "Save your photo changes first, then reopen Edit to share this post.",
+  );
+  const write = save.editWrite(base, initial, draft, "America/New_York");
+  assert.equal(write.ok, true);
+  assert.equal(write.edit.revision, 3, "saves against the post's own revision");
+  const shown = edit.optimisticEditedMoment(base, draft, changed, "Ada", write.edit.mentions);
+  assert.equal(shown.body, "Hi there @Ada at the park!");
+  assert.equal(shown.revision, 3, "the optimistic card keeps the old revision until the server answers");
+  assert.deepEqual(shown.photos.slice(0, 2).map((photo) => photo.id), ["c", "a"]);
+
+  // Orchestration with a fake server: optimistic, then revision from update_family_moment only.
+  const calls = [];
+  const fake = (responses) => ({
+    rpc: async (name, args) => {
+      calls.push([name, args]);
+      return responses[name] ?? { data: null, error: null };
+    },
+  });
+  let card = base;
+  const reopened = [];
+  const noAdd = { ...draft, photos: moved };
+  const ok = await save.runMomentEdit(
+    fake({ update_family_moment: { data: 4, error: null } }),
+    {
+      moment: base,
+      initial,
+      draft: noAdd,
+      taggedLabel: "Ada",
+      deviceTimeZone: "America/New_York",
+      patch: (id, update) => {
+        card = update(card);
+      },
+      reopen: (state) => reopened.push(state),
+      loadPhotos: async () => [base.photos[2], base.photos[0]],
+      wait: async () => {},
+    },
+  );
+  assert.equal(ok.ok, true, ok.message);
+  assert.equal(card.revision, 4);
+  assert.equal(card.body, "Hi there @Ada at the park!");
+  assert.deepEqual(card.photos.map((photo) => photo.id), ["c", "a"]);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ["update_family_moment", "remove_moment_photo", "reorder_moment_photos"],
+  );
+  assert.equal(reopened.length, 0);
+  // Conflict: the card goes back, the sheet reopens with the draft and the web copy.
+  card = base;
+  let refreshed = 0;
+  const conflict = await save.runMomentEdit(
+    fake({ update_family_moment: { data: null, error: { code: "PT409", message: "revision conflict" } } }),
+    {
+      moment: base,
+      initial,
+      draft: noAdd,
+      taggedLabel: "Ada",
+      deviceTimeZone: "America/New_York",
+      patch: (id, update) => {
+        card = update(card);
+      },
+      reopen: (state) => reopened.push(state),
+      refresh: () => {
+        refreshed += 1;
+      },
+      loadPhotos: async () => null,
+      wait: async () => {},
+    },
+  );
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.conflict, true);
+  assert.equal(card.body, base.body);
+  assert.equal(card.revision, 3);
+  assert.equal(reopened[0].error, "This moment changed elsewhere. Reopen it before editing again.");
+  assert.equal(reopened[0].draft.body, noAdd.body);
+  assert.equal(refreshed, 1);
+});
+
+await step("dragging a photo thumb opens a live gap, settles into it, and keeps VoiceOver moves", async () => {
+  const reorder = await import("../src/lib/thumb-reorder.ts");
+  const fs = await import("node:fs");
+  const step = 80;
+  assert.equal(reorder.dragSlot(0, 0, 4, step), 0);
+  assert.equal(reorder.dragSlot(0, 39, 4, step), 0, "under half a slot stays put");
+  assert.equal(reorder.dragSlot(0, 41, 4, step), 1);
+  assert.equal(reorder.dragSlot(1, 170, 4, step), 3);
+  assert.equal(reorder.dragSlot(1, 900, 4, step), 3, "clamped to the last slot");
+  assert.equal(reorder.dragSlot(2, -900, 4, step), 0, "clamped to the first slot");
+  // Drag 0 over slot 2: thumbs 1 and 2 slide left one slot, 3 stays.
+  assert.deepEqual([0, 1, 2, 3].map((i) => reorder.makeRoomOffset(i, 0, 2, step)), [0, -80, -80, 0]);
+  // Drag 3 over slot 1: thumbs 1 and 2 slide right.
+  assert.deepEqual([0, 1, 2, 3].map((i) => reorder.makeRoomOffset(i, 3, 1, step)), [0, 80, 80, 0]);
+  assert.deepEqual([0, 1, 2].map((i) => reorder.makeRoomOffset(i, 1, 1, step)), [0, 0, 0]);
+  const strip = fs.readFileSync(new URL("../src/components/edit-photo-strip.tsx", import.meta.url), "utf8");
+  assert.match(strip, /isReduceMotionEnabled/, "Reduce Motion turns springs into instant moves");
+  assert.match(strip, /name: "moveLeft", label: "Move left"/);
+  assert.match(strip, /name: "moveRight", label: "Move right"/);
+  assert.match(strip, /liftHaptic\(\)/);
+  assert.match(strip, /slotHaptic\(\)/);
+  const haptics = fs.readFileSync(new URL("../src/lib/haptics.ts", import.meta.url), "utf8");
+  assert.match(haptics, /import\("expo-haptics"\)\.catch/, "haptics load lazily so older binaries never crash");
+});
+
+await step("tapping a post's place opens Apple Maps with the web's URL", async () => {
+  const feed = await import("../src/lib/feed-format.ts");
+  const fs = await import("node:fs");
+  // Same vectors as the web's place-coordinates / moment-place-meta tests.
+  assert.equal(
+    feed.appleMapsUrl("Sand Harbor, NV, United States", 39.2, -119.93),
+    "https://maps.apple.com/?ll=39.2,-119.93&q=Sand%20Harbor&z=12",
+  );
+  assert.equal(
+    feed.appleMapsUrl("Bass Lake", 37.3247, -119.5664),
+    "https://maps.apple.com/?ll=37.3247,-119.5664&q=Bass%20Lake&z=12",
+  );
+  assert.equal(feed.appleMapsUrl("The porch", "35.28", "-120.66"), "https://maps.apple.com/?ll=35.28,-120.66&q=The%20porch&z=12");
+  assert.equal(feed.appleMapsUrl("", 35.28, -120.66), "https://maps.apple.com/?ll=35.28,-120.66&q=35.28%2C-120.66&z=12");
+  assert.equal(feed.appleMapsUrl("Oak Street School", null, null), null, "a typed name without a pin is not a link");
+  assert.equal(feed.appleMapsUrl("Nowhere", 91, 0), null);
+  const card = fs.readFileSync(new URL("../src/components/moment-card.tsx", import.meta.url), "utf8");
+  assert.match(card, /accessibilityLabel=\{`Open \$\{label\} in Maps`\}/);
+  assert.match(card, /Linking\.openURL\(url\)/);
+});
+
+function menuFor(edit, moment) {
+  return edit.canEditMoment(moment);
+}
 
 await step("bible books group by testament and verses are a number list", async () => {
   const picker = await import("../src/lib/bible-picker.ts");
@@ -210,6 +411,43 @@ await step("bible books group by testament and verses are a number list", async 
     17,
   );
   assert.deepEqual(picker.bibleNumberChoices("end", { ...jonah, chapter: 1 }), []);
+});
+
+await step("post and comment hearts are optimistic and roll back like the web; double tap hearts a comment", async () => {
+  const c = await import("../src/lib/conversation-state.ts");
+  const note = {
+    id: "n1", authorName: "Molly", authorAccent: "sage", body: "hi", createdAt: "2026-10-03T16:00:00Z",
+    heartCount: 1, heartedByViewer: false, heartNames: ["Molly"], canChange: false, revision: 3, mentions: [],
+  };
+  const hearted = c.withNoteHeart([note], "n1", "TARS", true);
+  assert.deepEqual(hearted[0].heartNames, ["Molly", "TARS"]);
+  assert.equal(hearted[0].heartCount, 2);
+  assert.equal(hearted[0].heartedByViewer, true);
+  assert.equal(c.withNoteHeart(hearted, "n1", "TARS", true)[0].heartCount, 2, "a second heart never double-counts");
+  assert.equal(hearted[0].revision, 3, "a heart never changes the comment's revision");
+  const rolled = c.revertNoteHeart(hearted, note);
+  assert.equal(rolled[0].heartCount, 1);
+  assert.equal(rolled[0].heartedByViewer, false);
+  assert.equal(rolled[0].revision, 3);
+
+  const loved = c.withViewerLove([{ id: "r1", personName: "Molly", reactionId: "held-close", isCurrentMember: false }], "TARS", "m1", true);
+  assert.deepEqual(loved.map((r) => r.personName), ["Molly", "TARS"]);
+  assert.deepEqual(c.withViewerLove(loved, "TARS", "m1", false).map((r) => r.personName), ["Molly"]);
+
+  const saved = c.newNote({ id: "n2", authorName: "TARS", authorAccent: "sky", body: "hey @Molly", mentions: [{ userId: "u", name: "Molly", start: 4, end: 10 }] });
+  assert.equal(saved.mentions[0].active, true);
+  assert.equal(saved.canChange, true);
+
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 250, x: 20, y: 20 }), true);
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n1", t: 320, x: 10, y: 10 }), false);
+  assert.equal(c.isNoteDoubleTap({ noteId: "n1", t: 0, x: 10, y: 10 }, { noteId: "n2", t: 100, x: 10, y: 10 }), false);
+  assert.equal(c.isNoteDoubleTap(null, { noteId: "n1", t: 100, x: 10, y: 10 }), false);
+
+  // The sheet posts on one tap: no Done bar in the comment sheet.
+  const fs = await import("node:fs");
+  const sheet = fs.readFileSync(new URL("../src/components/comment-sheet.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(sheet, /KeyboardDoneBar/);
+  assert.match(sheet, /onPressIn=\{submit\}/);
 });
 
 await step("album frame is the tallest photo capped at 3:4 and swipes lock within 45°", async () => {
@@ -798,19 +1036,20 @@ await step("sheets over the feed keep taps with the keyboard up, and sign-out st
   const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
   assert.match(read("../src/app/journal.tsx"), /<FlatList[^>]*?keyboardShouldPersistTaps="handled"/s);
   assert.match(read("../src/components/settings-screen.tsx"), /<ScrollView\s+keyboardShouldPersistTaps="handled"/);
-  assert.match(read("../src/components/moment-menu.tsx"), /<KeyboardAvoidingView/);
+  // Post edit lives in the add sheet now (web: the composer in edit mode).
+  assert.match(read("../src/components/add-sheet.tsx"), /<KeyboardAvoidingView/);
+  assert.doesNotMatch(read("../src/components/moment-menu.tsx"), /<TextInput/);
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /<InputAccessoryView/);
   assert.match(read("../src/components/keyboard-form.tsx"), />\s*Done\s*</);
   assert.doesNotMatch(read("../src/components/comment-sheet.tsx"), /KeyboardDoneBar/);
-  assert.doesNotMatch(read("../src/components/moment-menu.tsx"), /KeyboardDoneBar/);
   // Grab-bar dismiss: the responder sits on the sheet's Animated.View, not on a bare header View.
-  for (const file of ["../src/components/comment-sheet.tsx", "../src/components/moment-menu.tsx"]) {
+  for (const file of ["../src/components/comment-sheet.tsx"]) {
     assert.match(read(file), /<Animated\.View\s+\{\.\.\.sheetProps\}/);
     assert.match(read(file), /<View \{\.\.\.chromeProps\}>/);
     assert.doesNotMatch(read(file), /\{\.\.\.panHandlers\}/);
   }
-  // The edit-post menu stays mounted, so each edit must start with the sheet at rest.
-  assert.match(read("../src/components/moment-menu.tsx"), /if \(editing\) translateY\.setValue\(0\)/);
+  // Each edit mounts a fresh sheet (keyed), so it always starts at rest with the post's own values.
+  assert.match(read("../src/app/journal.tsx"), /key=\{editing\.key\}/);
   // Header drag uses raw touches; PanResponder moves never reach a sheet inside a Modal on iOS.
   assert.match(read("../src/components/sheet-drag.tsx"), /onTouchMove: \(event: ChromeTouch\)/);
   assert.doesNotMatch(read("../src/components/keyboard-form.tsx"), /Previous field/);
@@ -837,6 +1076,73 @@ await step("mentions banner keeps the web Got it dismiss", async () => {
   assert.equal(await secure.getItemAsync(nativeKey), "dismissed");
   await assert.rejects(secure.setItemAsync("our-days:mentions-announcement", "dismissed"));
   assert.match(journal, /value === "dismissed"/);
+});
+
+await step("edit, heart a few times, then delete your own test-circle comment (build 15 PT409)", async () => {
+  resetStore();
+  const app = await freshApp("comment-delete");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const posts = await import("../src/lib/posts.ts");
+  const conversation = await import("../src/lib/conversation.ts");
+  const state = await import("../src/lib/conversation-state.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  const created = await posts.createWrittenMoment(supabase, {
+    journalPersonId: circle.personId,
+    circleId: circle.circleId,
+    body: `E2E delete-comment post ${Date.now()}`,
+    occurredOn: circleToday(circle.timeZone),
+    audience: "family",
+    circleIds: [circle.circleId],
+  });
+  assert.equal(created.ok, true, created.ok ? "" : created.message);
+  try {
+    const noted = await conversation.createMomentNote(supabase, { momentId: created.momentId, body: "Co" });
+    assert.equal(noted.ok, true, noted.ok ? "" : noted.message);
+    const load = async () => {
+      const page = await journal.loadTimelinePage(supabase, {
+        circleId: circle.circleId,
+        viewerMembershipIds: [circle.membershipId],
+      });
+      return page.moments.find((item) => item.id === created.momentId);
+    };
+    let notes = (await load()).notes;
+    let note = notes.find((item) => item.id === noted.noteId);
+    const edited = await conversation.updateMomentNote(supabase, { noteId: note.id, revision: note.revision, body: "Coo" });
+    assert.equal(edited.ok, true, edited.ok ? "" : edited.message);
+    notes = notes.map((item) => (item.id === note.id ? { ...item, body: "Coo", revision: edited.revision } : item));
+    // Heart, un-heart, heart, like a phone session; apply exactly what the app does.
+    let heartRevision = 0;
+    for (const hearted of [true, false, true, false, true]) {
+      note = notes.find((item) => item.id === noted.noteId);
+      notes = state.withNoteHeart(notes, note.id, "TARS", hearted);
+      const res = await conversation.setMomentNoteHeart(supabase, { noteId: note.id, hearted });
+      assert.equal(res.ok, true, res.ok ? "" : res.message);
+      heartRevision = res.heartRevision ?? heartRevision;
+    }
+    note = notes.find((item) => item.id === noted.noteId);
+    assert.equal(note.revision, edited.revision, "hearts must not touch the comment revision");
+    assert.notEqual(heartRevision, note.revision, "setup: the heart row revision differs from the comment's");
+    // Build 15 sent the heart revision here and got PT409.
+    const stale = await conversation.trashMomentNote(supabase, { noteId: note.id, revision: heartRevision });
+    assert.equal(stale.ok, false, "the heart revision is the stale value build 15 sent");
+    const trashed = await conversation.trashMomentNote(supabase, { noteId: note.id, revision: note.revision });
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+    const after = await load();
+    assert.equal(after.notes.some((item) => item.id === noted.noteId), false, "deleted comment is gone from the feed");
+  } finally {
+    const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+  }
 });
 
 await step("comment and heart a test-circle post, then clean up", async () => {
@@ -915,6 +1221,409 @@ await step("comment and heart a test-circle post, then clean up", async () => {
   } finally {
     const trashed = await posts.trashWrittenMoment(supabase, created.momentId, 1);
     assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+    await supabase.auth.signOut({ scope: "local" });
+  }
+});
+
+await step("edit a test-circle photo post: text, time, remove, add, reorder, stale revision refused", async () => {
+  resetStore();
+  const app = await freshApp("post-edit");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const posts = await import("../src/lib/posts.ts");
+  const edit = await import("../src/lib/moment-edit.ts");
+  const save = await import("../src/lib/moment-edit-save.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const { execFileSync } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  // Node has no XMLHttpRequest; the app's resumable upload uses it on iOS.
+  globalThis.XMLHttpRequest ??= class {
+    upload = {};
+    #headers = {};
+    open(method, url) {
+      this.method = method;
+      this.url = url;
+    }
+    setRequestHeader(key, value) {
+      this.#headers[key] = value;
+    }
+    getResponseHeader(key) {
+      return this.response?.headers.get(key) ?? null;
+    }
+    send(body) {
+      realFetch(this.url, { method: this.method, headers: this.#headers, body: body ?? undefined })
+        .then(async (response) => {
+          this.response = response;
+          this.status = response.status;
+          await response.arrayBuffer();
+          this.onload?.();
+        })
+        .catch(() => this.onerror?.());
+    }
+  };
+  const jpeg = (color) => {
+    const file = `/tmp/e2e-edit-${color}.jpg`;
+    execFileSync("python3", [
+      "-c",
+      `from PIL import Image; Image.new("RGB", (64, 48), "${color}").save("${file}", quality=90)`,
+    ]);
+    const bytes = fs.readFileSync(file);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  };
+  const body = `E2E edit ${Date.now()}`;
+  const today = circleToday(circle.timeZone);
+  const created = await posts.uploadPhotoMoment(supabase, {
+    bytes: jpeg("red"),
+    mimeType: "image/jpeg",
+    circleId: circle.circleId,
+    journalPersonId: circle.personId,
+    body,
+    occurredOn: today,
+    occurredAt: new Date(Math.floor(Date.now() / 60000) * 60000).toISOString(),
+    occurredTimezone: circle.timeZone,
+    audience: "family",
+    circleIds: [circle.circleId],
+  });
+  assert.equal(created.ok, true, created.ok ? "" : created.message);
+  const momentId = created.momentId;
+  const waitPhotos = async (count) => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const photos = await journal.loadMomentPhotos(supabase, momentId);
+      if (photos && photos.length === count) return photos;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    throw new Error(`the post never showed ${count} photos`);
+  };
+  const findMoment = async () => {
+    const page = await journal.loadTimelinePage(supabase, {
+      circleId: circle.circleId,
+      viewerMembershipIds: [circle.membershipId],
+    });
+    return page.moments.find((moment) => moment.id === momentId);
+  };
+  try {
+    await waitPhotos(1);
+    const extra = await posts.attachExtraPhotos(supabase, momentId, [{ bytes: jpeg("blue"), mimeType: "image/jpeg" }]);
+    assert.equal(extra.ok, true, extra.message);
+    const [red, blue] = await waitPhotos(2);
+    let moment = await findMoment();
+    assert.ok(moment, "the photo post is on the test circle feed");
+    assert.equal(moment.photos.length, 2);
+    const startRevision = moment.revision;
+
+    // Edit 1 through the same path the sheet uses: text, time, drop red, add green.
+    const initial = edit.buildEditDraft(moment);
+    assert.ok(initial, "a photo post opens in Edit");
+    const green = jpeg("green");
+    const draft = {
+      ...initial,
+      body: `${body} edited`,
+      occurredTime: "07:15",
+      photos: [
+        ...initial.photos.filter((photo) => photo.existingPhotoId !== red.id),
+        {
+          key: "green",
+          picked: {
+            bytes: green,
+            mimeType: "image/jpeg",
+            name: "green.jpg",
+            kind: "photo",
+            durationMs: null,
+            previewUri: "",
+            posterUri: null,
+            poster: null,
+          },
+        },
+      ],
+    };
+    let card = moment;
+    const reopened = [];
+    const deviceTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const saved = await save.runMomentEdit(supabase, {
+      moment,
+      initial,
+      draft,
+      taggedLabel: moment.taggedPeopleLabel,
+      deviceTimeZone,
+      patch: (id, update) => {
+        card = update(card);
+      },
+      reopen: (state) => reopened.push(state),
+      loadPhotos: (id) => journal.loadMomentPhotos(supabase, id),
+    });
+    assert.equal(saved.ok, true, saved.message);
+    assert.equal(reopened.length, 0, reopened[0]?.error);
+    assert.equal(saved.revision, startRevision + 1, "only update_family_moment moves the revision");
+    assert.equal(card.revision, saved.revision);
+    assert.equal(card.body, `${body} edited`);
+    const afterAdd = await waitPhotos(2);
+    assert.equal(afterAdd[0].id, blue.id, "blue stays first");
+    assert.notEqual(afterAdd[1].id, red.id, "red was removed and green added at the end");
+    moment = await findMoment();
+    assert.equal(moment.body, `${body} edited`);
+    assert.equal(moment.revision, saved.revision, "photo steps did not touch the post revision");
+    assert.equal(edit.recordedLocalTime(moment.occurredAt, moment.occurredTimezone), "07:15");
+    assert.equal(moment.occurredTimezone, deviceTimeZone);
+
+    // Edit 2: drag green before blue.
+    const second = edit.buildEditDraft(moment);
+    const reordered = await save.saveMomentEdit(supabase, {
+      moment,
+      initial: second,
+      draft: { ...second, photos: edit.movePhoto(second.photos, 1, 0) },
+      deviceTimeZone,
+    });
+    assert.equal(reordered.ok, true, reordered.message);
+    const order = await journal.loadMomentPhotos(supabase, momentId);
+    assert.deepEqual(order.map((photo) => photo.id), [afterAdd[1].id, blue.id]);
+
+    // A save against the revision the sheet opened with before edit 2 is refused.
+    const stale = await save.saveMomentEdit(supabase, {
+      moment,
+      initial: second,
+      draft: { ...second, body: `${body} stale` },
+      deviceTimeZone,
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.conflict, true);
+    assert.equal(stale.message, "This moment changed elsewhere. Reopen it before editing again.");
+    moment = await findMoment();
+    assert.equal(moment.body, `${body} edited`, "the stale save changed nothing");
+    const trashed = await posts.trashWrittenMoment(supabase, momentId, moment.revision);
+    assert.equal(trashed.ok, true, trashed.ok ? "" : trashed.message);
+  } catch (error) {
+    const current = await findMoment().catch(() => null);
+    if (current) await posts.trashWrittenMoment(supabase, momentId, current.revision);
+    throw error;
+  } finally {
+    await supabase.auth.signOut({ scope: "local" });
+  }
+});
+
+await step("inline upload: pending card merges into the feed, posts to the test circle, failed upload keeps Retry/Remove (build 20)", async () => {
+  const pending = await import("../src/lib/pending-uploads.ts");
+  pending.resetPendingForTests();
+  // Pure merge: a pending post sits at its date in a newest-first feed and
+  // disappears once the feed has the real post.
+  const real = (id, occurredOn, occurredAt = null) => ({ id, occurredOn, occurredAt });
+  const job = (id, occurredOn, occurredAt, momentId = null) => ({
+    id,
+    mode: "post",
+    momentId,
+    post: {
+      circleId: "c1",
+      journalPersonId: "p1",
+      body: "hi",
+      occurredOn,
+      occurredAt,
+      occurredTimezone: null,
+      placeName: "",
+      taggedPersonIds: [],
+      audience: "family",
+      circleIds: ["c1"],
+    },
+    media: [{ kind: "photo", mimeType: "image/jpeg", name: "a.jpg", durationMs: null, uri: "file:///a.jpg", posterUri: null }],
+    progress: 0.4,
+    state: "uploading",
+    error: null,
+    createdAt: new Date().toISOString(),
+  });
+  const author = { name: "TARS", initial: "T", accent: "slate" };
+  const feed = [real("m3", "2026-10-03"), real("m2", "2026-09-30"), real("m1", "2026-09-01")];
+  const merged = pending.mergePending(
+    feed,
+    [job("a", "2026-10-01", null), job("b", "2026-10-04", null), job("x", "2026-10-02", null)],
+    { listed: (post) => post.circleId === "c1", author },
+  );
+  assert.deepEqual(
+    merged.map((item) => item.id),
+    ["pending:b", "m3", "pending:x", "pending:a", "m2", "m1"],
+  );
+  assert.equal(merged[0].pending.state, "uploading");
+  assert.equal(merged[0].canChange, false, "no ••• menu on a card still uploading");
+  assert.equal(
+    pending.mergePending(feed, [job("done", "2026-10-03", null, "m3")], { listed: () => true, author }).length,
+    3,
+    "a finished post the feed already has is not shown twice",
+  );
+  assert.equal(
+    pending.mergePending(feed, [job("other", "2026-10-03", null)], { listed: () => false, author }).length,
+    3,
+    "a post for another circle stays off this feed",
+  );
+
+  // Restore: an upload still running when the app closed comes back failed, with its bytes.
+  const disk = new Map();
+  const memoryStorage = {
+    jobs: [],
+    async save(jobs) {
+      this.jobs = jobs;
+    },
+    async load() {
+      return this.jobs;
+    },
+    async putBytes(jobId, index, payload) {
+      disk.set(`${jobId}/${index}`, payload);
+      return { uri: `file:///pending/${jobId}/${index}.bin`, posterUri: null };
+    },
+    async readBytes(jobId, index) {
+      return disk.get(`${jobId}/${index}`) ?? null;
+    },
+    async drop(jobId) {
+      for (const key of [...disk.keys()]) if (key.startsWith(`${jobId}/`)) disk.delete(key);
+    },
+  };
+  memoryStorage.jobs = [job("left", "2026-10-03", null)];
+
+  resetStore();
+  const app = await freshApp("inline-upload");
+  const supabase = app.getSupabase();
+  const result = await verifyEmailCode(supabase, testEmail, await emailOtp(), {
+    storage: secureSessionStorage,
+    storageKey,
+    sleep: noSleep,
+  });
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  await pending.restorePending(memoryStorage, supabase);
+  const restored = pending.listPending().find((item) => item.id === "left");
+  assert.equal(restored?.state, "failed");
+  assert.equal(restored?.error, pending.interruptedCopy);
+  pending.removePending("left");
+  assert.equal(pending.listPending().length, 0);
+
+  const posts = await import("../src/lib/posts.ts");
+  const { circleToday } = await import("../src/lib/dates.ts");
+  const { execFileSync } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const circles = await journal.loadCircles(supabase, result.session.user.id);
+  const circleName = process.env.E2E_TEST_CIRCLE_NAME ?? "TARS e2e test";
+  const circle = circles.find((item) => item.name === circleName);
+  assert.ok(circle, `circle "${circleName}" was not found; refusing to post into another circle`);
+  globalThis.XMLHttpRequest ??= class {
+    upload = {};
+    #headers = {};
+    open(method, url) {
+      this.method = method;
+      this.url = url;
+    }
+    setRequestHeader(key, value) {
+      this.#headers[key] = value;
+    }
+    getResponseHeader(key) {
+      return this.response?.headers.get(key) ?? null;
+    }
+    send(body) {
+      realFetch(this.url, { method: this.method, headers: this.#headers, body: body ?? undefined })
+        .then(async (response) => {
+          this.response = response;
+          this.status = response.status;
+          await response.arrayBuffer();
+          this.onload?.();
+        })
+        .catch(() => this.onerror?.());
+    }
+  };
+  const jpeg = (color) => {
+    const file = `/tmp/e2e-inline-${color}.jpg`;
+    execFileSync("python3", [
+      "-c",
+      `from PIL import Image; Image.new("RGB", (64, 48), "${color}").save("${file}", quality=90)`,
+    ]);
+    const bytes = fs.readFileSync(file);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  };
+  const picked = (color) => ({
+    bytes: jpeg(color),
+    mimeType: "image/jpeg",
+    name: `${color}.jpg`,
+    kind: "photo",
+    durationMs: null,
+    previewUri: `file:///tmp/e2e-inline-${color}.jpg`,
+    posterUri: null,
+    poster: null,
+  });
+  const body = `E2E inline upload ${Date.now()}`;
+  const seen = [];
+  const stop = pending.subscribePending(() => {
+    const current = pending.listPending()[0];
+    if (current) seen.push(current.state);
+  });
+  const queued = await pending.queuePost(
+    supabase,
+    {
+      circleId: circle.circleId,
+      journalPersonId: circle.personId,
+      body,
+      occurredOn: circleToday(circle.timeZone),
+      occurredAt: new Date(Math.floor(Date.now() / 60000) * 60000).toISOString(),
+      occurredTimezone: circle.timeZone,
+      placeName: "",
+      taggedPersonIds: [],
+      audience: "family",
+      circleIds: [circle.circleId],
+    },
+    [picked("orange"), picked("purple")],
+  );
+  assert.equal(pending.listPending()[0]?.id, queued.id, "the card is in the feed before the upload ends");
+  const finished = await queued.done;
+  stop();
+  let momentId = finished?.momentId;
+  try {
+    assert.equal(finished?.state, "done", finished?.error ?? "");
+    assert.equal(finished.progress, 1);
+    assert.ok(seen.includes("uploading"));
+    assert.ok(momentId);
+    let photos = null;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      photos = await journal.loadMomentPhotos(supabase, momentId);
+      if (photos?.length === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    assert.equal(photos?.length, 2, "both photos are on the post");
+    const page = await journal.loadTimelinePage(supabase, {
+      circleId: circle.circleId,
+      viewerMembershipIds: [circle.membershipId],
+    });
+    const listed = page.moments.find((item) => item.id === momentId);
+    assert.ok(listed, "the published post is on the test circle feed");
+    assert.equal(listed.body, body);
+    assert.equal(
+      pending.mergePending(page.moments, pending.listPending(), { listed: () => true, author }).filter((item) => item.pending)
+        .length,
+      0,
+      "the pending card gives way to the real post",
+    );
+    pending.settlePending([queued.id]);
+
+    // Failure: adding to a post that is gone fails on its card and keeps Retry/Remove.
+    const moment = { id: "00000000-0000-4000-8000-000000000000", circleId: circle.circleId, journalPersonId: circle.personId, occurredOn: listed.occurredOn, audience: "family" };
+    const bad = await pending.queueAddPhotos(supabase, moment, [picked("gray")]);
+    const failed = await bad.done;
+    assert.equal(failed?.state, "failed");
+    assert.ok(failed?.error);
+    await pending.retryPending(bad.id, supabase);
+    assert.equal(pending.listPending().find((item) => item.id === bad.id)?.state, "failed", "Retry reruns and fails again");
+    pending.removePending(bad.id);
+    assert.equal(pending.listPending().length, 0, "Remove clears it");
+    const open = await posts.trashWrittenMoment(supabase, momentId, listed.revision);
+    assert.equal(open.ok, true, open.ok ? "" : open.message);
+    momentId = null;
+  } finally {
+    if (momentId) {
+      const page = await journal.loadTimelinePage(supabase, { circleId: circle.circleId, viewerMembershipIds: [circle.membershipId] }).catch(() => null);
+      const current = page?.moments.find((item) => item.id === momentId);
+      if (current) await posts.trashWrittenMoment(supabase, momentId, current.revision);
+    }
+    pending.resetPendingForTests();
     await supabase.auth.signOut({ scope: "local" });
   }
 });

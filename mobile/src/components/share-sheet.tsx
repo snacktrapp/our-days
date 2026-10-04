@@ -13,11 +13,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { circleToday } from "../lib/dates";
 import { postableCircles, type CircleMembership } from "../lib/journal";
-import {
-  createWrittenMoment,
-  uploadPhotoMoment,
-  uploadVideoMoment,
-} from "../lib/posts";
+import { queuePost } from "../lib/pending-uploads";
+import { createWrittenMoment } from "../lib/posts";
 import { shareDraftLabel, shareNeedsJpeg, type ShareDraft } from "../lib/share-entry";
 import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
@@ -73,28 +70,38 @@ export function ShareSheet({
           mimeType = "image/jpeg";
         }
         const bytes = await new File(path).arrayBuffer();
-        const common = {
-          bytes,
-          mimeType,
-          circleId: circle.circleId,
-          journalPersonId: circle.personId,
-          body: "",
-          occurredOn,
-          audience: "family" as const,
-          circleIds: [circle.circleId],
-        };
-        if (draft.kind === "video") {
-          const { captureDeviceVideoPoster } = await import("../lib/video-poster");
-          const poster = await captureDeviceVideoPoster(path);
-          await uploadVideoMoment(supabase, {
-            ...common,
-            durationMs: draft.durationMs,
-            name: draft.name,
-            poster,
-          });
-        } else {
-          await uploadPhotoMoment(supabase, common);
-        }
+        const poster =
+          draft.kind === "video"
+            ? await (await import("../lib/video-poster")).captureDeviceVideoPoster(path)
+            : null;
+        // Shows in the feed as a pending card with inline progress.
+        void queuePost(
+          supabase,
+          {
+            circleId: circle.circleId,
+            journalPersonId: circle.personId,
+            body: "",
+            occurredOn,
+            occurredAt: null,
+            occurredTimezone: null,
+            placeName: "",
+            taggedPersonIds: [],
+            audience: "family",
+            circleIds: [circle.circleId],
+          },
+          [
+            {
+              bytes,
+              mimeType,
+              name: draft.kind === "video" ? draft.name : "photo.jpg",
+              kind: draft.kind === "video" ? "video" : "photo",
+              durationMs: draft.kind === "video" ? draft.durationMs : null,
+              previewUri: path,
+              posterUri: poster?.uri ?? null,
+              poster,
+            },
+          ],
+        );
       }
       onPosted();
     } catch {

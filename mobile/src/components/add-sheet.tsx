@@ -27,7 +27,21 @@ import {
 } from "../lib/bible";
 import { composerSheetHeight } from "../lib/composer-keyboard";
 import { circleToday } from "../lib/dates";
-import { initialAudienceCircleId, postableCircles, type CircleMembership } from "../lib/journal";
+import {
+  initialAudienceCircleId,
+  postableCircles,
+  videoPosterPath,
+  type CircleMembership,
+  type TimelineMoment,
+} from "../lib/journal";
+import {
+  buildEditDraft,
+  editIsDirty,
+  editValidationError,
+  movePhoto,
+  type EditPhoto,
+  type MomentEditDraft,
+} from "../lib/moment-edit";
 import { rememberPostedCircle } from "../lib/last-posted-circle";
 import {
   maximumMomentPhotos,
@@ -44,9 +58,6 @@ import {
   listEntryDrafts,
   loadEntryDraft,
   saveEntryDraft,
-  attachExtraPhotos,
-  uploadPhotoMoment,
-  uploadVideoMoment,
   type Audience,
   type DraftListItem,
 } from "../lib/posts";
@@ -72,10 +83,49 @@ import {
 } from "./keyboard-form";
 import { PassageSheet } from "./bible-picker-sheet";
 import { MediaChooser } from "./media-chooser";
+import { EditPhotoStrip } from "./edit-photo-strip";
+import { queuePost } from "../lib/pending-uploads";
 import { MediaStill } from "./media-preview";
+import { PrivateImage } from "./private-image";
 import { useSheetDrag } from "./sheet-drag";
 
-type Mode = "photo" | "thought" | "bible" | "insight" | "drafts" | null;
+type Mode = "photo" | "thought" | "bible" | "insight" | "milestone" | "location" | "drafts" | null;
+
+/**
+ * Edit reuses this sheet the way the web reuses its composer
+ * (`composerSession.openEdit(buildComposerEditDraft(...))`).
+ */
+export type EditRequest = Readonly<{
+  moment: TimelineMoment;
+  headers?: Record<string, string> | null;
+  /** A failed save reopens with the draft the user had and the error. */
+  draft?: MomentEditDraft;
+  error?: string | null;
+  /** `taggedLabel`: the names the card shows for the chosen tags. */
+  onSave: (initial: MomentEditDraft, draft: MomentEditDraft, taggedLabel: string | undefined) => void;
+}>;
+
+function sheetModeFor(draft: MomentEditDraft): Mode {
+  return draft.mode === "video" ? "photo" : draft.mode;
+}
+
+/** Web `modeCopy[mode].title`. The web keeps these titles in Edit too. */
+function editTitle(draft: MomentEditDraft) {
+  switch (draft.mode) {
+    case "photo":
+      return "New photo entry";
+    case "video":
+      return "New video entry";
+    case "bible":
+      return "Add a Bible verse";
+    case "milestone":
+      return "New milestone";
+    case "location":
+      return "New location entry";
+    default:
+      return "New written entry";
+  }
+}
 
 const choices = [
   { id: "photo" as const, title: "Photo or video", icon: "camera" as const },
@@ -97,6 +147,7 @@ export function AddSheet({
   onPosted,
   initialMode = null,
   previewPeople,
+  edit,
 }: Readonly<{
   circles: readonly CircleMembership[];
   justMeDefault: boolean;
@@ -106,16 +157,25 @@ export function AddSheet({
   onPosted: (audience: Audience, circleId: string) => void;
   initialMode?: Mode;
   previewPeople?: Readonly<Record<string, readonly CirclePerson[]>>;
+  edit?: EditRequest;
 }>) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { colors } = useAppTheme();
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [body, setBody] = useState("");
-  const [title, setTitle] = useState("");
+  // What the post looked like when Edit opened, and where this sheet starts.
+  const [editInitial] = useState(() => (edit ? buildEditDraft(edit.moment) : null));
+  const editStart = edit?.draft ?? editInitial;
+  const [mode, setMode] = useState<Mode>(editStart ? sheetModeFor(editStart) : initialMode);
+  const [body, setBody] = useState(editStart?.body ?? "");
+  const [title, setTitle] = useState(
+    editStart && editStart.mode !== "bible" ? editStart.title : "",
+  );
+  const [editPhotos, setEditPhotos] = useState<readonly EditPhoto[]>(editStart?.photos ?? []);
+  const [shareToCircleId, setShareToCircleId] = useState(editStart?.shareToCircleId ?? "");
   const [sourceUrl, setSourceUrl] = useState("");
   const audienceCircles = useMemo(() => postableCircles(circles), [circles]);
   const [occurredOn, setOccurredOn] = useState(() =>
+    editStart?.occurredOn ??
     circleToday(
       circles.find((item) => item.circleId === initialAudienceCircleId(circles, activeCircleId))
         ?.timeZone ??
@@ -124,10 +184,10 @@ export function AddSheet({
     ),
   );
   const [occurredTime, setOccurredTime] = useState(
-    initialMode === "bible" ? "" : currentPickerTimeValue(),
+    editStart ? editStart.occurredTime : initialMode === "bible" ? "" : currentPickerTimeValue(),
   );
-  const [place, setPlace] = useState<PlaceSelection>(emptyPlace);
-  const [taggedIds, setTaggedIds] = useState<readonly string[]>([]);
+  const [place, setPlace] = useState<PlaceSelection>(editStart?.place ?? emptyPlace);
+  const [taggedIds, setTaggedIds] = useState<readonly string[]>(editStart?.taggedIds ?? []);
   const [roster, setRoster] = useState<ReadonlyMap<string, readonly CirclePerson[]>>(
     () => new Map(Object.entries(previewPeople ?? {})),
   );
@@ -141,15 +201,17 @@ export function AddSheet({
   const [circleId, setCircleId] = useState(() =>
     initialAudienceCircleId(circles, activeCircleId),
   );
-  const [verse, setVerse] = useState<BibleVerseSelection>(emptyBibleVerseSelection);
-  const [reference, setReference] = useState("");
+  const [verse, setVerse] = useState<BibleVerseSelection>(
+    editStart?.verse ?? emptyBibleVerseSelection,
+  );
+  const [reference, setReference] = useState(editStart?.mode === "bible" ? editStart.title : "");
   const [passageOpen, setPassageOpen] = useState(false);
   const [mediaItems, setMediaItems] = useState<readonly PickedMedia[]>([]);
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
   const [draftSession, setDraftSession] = useState(false);
   const [drafts, setDrafts] = useState<readonly DraftListItem[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(edit?.error ?? null);
   const radius = colors.appearance === "retro" ? 2 : 14;
   const audienceId = audienceCircles.some((item) => item.circleId === circleId)
     ? circleId
@@ -158,9 +220,9 @@ export function AddSheet({
 
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase || editInitial) return;
     void listEntryDrafts(supabase).then(setDrafts);
-  }, [mode]);
+  }, [mode, editInitial]);
 
   useEffect(() => {
     if (previewPeople) return;
@@ -306,48 +368,32 @@ export function AddSheet({
       setError("Choose a photo first.");
       return;
     }
-    setBusy(true);
-    setError(null);
-    const shared = {
-      bytes: first.bytes,
-      mimeType: first.mimeType,
-      circleId: circle.circleId,
-      journalPersonId: circle.personId,
-      body: body.trim(),
-      occurredOn,
-      occurredAt: instant.occurredAt,
-      occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
-      placeName: place.label,
-      taggedPersonIds: taggedIds,
-      audience: audience(),
-      circleIds: justMe ? [] : [circle.circleId],
-    };
-    const result =
-      first.kind === "video"
-        ? await uploadVideoMoment(supabase, {
-            ...shared,
-            name: first.name || "video.mp4",
-            durationMs: first.durationMs ?? 0,
-            poster: first.poster,
-          })
-        : await uploadPhotoMoment(supabase, shared);
-    if (result.ok && first.kind === "photo" && mediaItems.length > 1) {
-      const extra = await attachExtraPhotos(
-        supabase,
-        result.momentId,
-        mediaItems.slice(1).map((item) => ({ bytes: item.bytes, mimeType: item.mimeType })),
-      );
-      if (!extra.ok) {
-        setBusy(false);
-        setError(extra.message);
-        return;
-      }
-    }
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
+    if (first.kind === "video" && mediaItems.length > 1) {
+      setError("Choose photos or a video, not both.");
       return;
     }
+    const names = new Map(visiblePeople.map((person) => [person.id, person.name]));
+    // The sheet closes now; the post appears in the feed with its photo dimmed
+    // and a thin progress bar until the upload finishes (Retry if it fails).
+    void queuePost(
+      supabase,
+      {
+        circleId: circle.circleId,
+        journalPersonId: circle.personId,
+        body: body.trim(),
+        occurredOn,
+        occurredAt: instant.occurredAt,
+        occurredTimezone: instant.occurredTimezone ?? circle.timeZone,
+        placeName: place.label,
+        taggedPersonIds: taggedIds,
+        taggedLabel:
+          taggedIds.flatMap((id) => (names.has(id) ? [names.get(id) as string] : [])).join(", ") || undefined,
+        audience: audience(),
+        circleIds: justMe ? [] : [circle.circleId],
+      },
+      mediaItems,
+    );
+    setMediaItems([]);
     if (draftId) void deleteEntryDraft(supabase, draftId, draftSession);
     await rememberCircle();
     onPosted(audience(), circle.circleId);
@@ -365,6 +411,35 @@ export function AddSheet({
       for (const item of current) releasePreview(item);
       return next;
     });
+  }
+
+  /** Web Edit "Add photo": photos only, up to six on the post. */
+  function addEditPhotos(source: MediaSource) {
+    void pickJournalMediaList(source, {
+      multiple: source !== "camera",
+      limit: Math.max(1, maximumMomentPhotos - editPhotos.length),
+    })
+      .then((picked) => {
+        if (picked.length === 0) return;
+        if (picked.some((item) => item.kind === "video")) {
+          for (const item of picked) releasePreview(item);
+          setError("Choose photos or a video, not both.");
+          return;
+        }
+        setEditPhotos((current) =>
+          [
+            ...current,
+            ...picked.map((item, index) => ({
+              key: `new-${Date.now()}-${index}-${item.previewUri}`,
+              picked: item,
+            })),
+          ].slice(0, maximumMomentPhotos),
+        );
+        setError(null);
+      })
+      .catch((error: unknown) => {
+        setError(error instanceof Error ? error.message : "That photo could not be read.");
+      });
   }
 
   function takeMedia(source: MediaSource, intent: "replace" | "add") {
@@ -505,8 +580,9 @@ export function AddSheet({
     seeded.current = true;
   }
 
-  const titleText =
-    mode === "photo"
+  const titleText = editStart
+    ? editTitle(editStart)
+    : mode === "photo"
       ? "New photo entry"
       : mode === "thought"
         ? "New written entry"
@@ -531,9 +607,14 @@ export function AddSheet({
     : colors.scheme === "light"
       ? "rgba(32,39,33,0.42)"
       : "rgba(0,5,3,0.72)";
-  const visiblePeople = (roster.get(circle?.circleId ?? "") ?? []).filter(
-    (person) => person.id !== circle?.personId,
-  );
+  const visiblePeople = edit
+    ? (roster.get(edit.moment.circleId) ?? []).filter(
+        (person) => person.id !== edit.moment.journalPersonId,
+      )
+    : (roster.get(circle?.circleId ?? "") ?? []).filter(
+        (person) => person.id !== circle?.personId,
+      );
+  const editCircle = edit ? circles.find((item) => item.circleId === edit.moment.circleId) : undefined;
   const scrollTop = useRef(0);
   const chromeHeight = useRef(88);
   const sheetTop = useRef(0);
@@ -562,7 +643,27 @@ export function AddSheet({
     };
     seeded.current = true;
   }, [audienceId, circles.length, justMe, occurredOn, occurredTime]);
+  const currentEditDraft = (): MomentEditDraft | null =>
+    editStart
+      ? {
+          mode: editStart.mode,
+          body,
+          title: editStart.mode === "bible" ? reference : title,
+          verse,
+          occurredOn,
+          occurredTime,
+          place:
+            editStart.mode === "location"
+              ? { label: title, latitude: place.latitude, longitude: place.longitude }
+              : place,
+          taggedIds,
+          photos: editPhotos,
+          shareToCircleId,
+        }
+      : null;
   const unsaved = () => {
+    const editing = currentEditDraft();
+    if (editing && editInitial) return editIsDirty(editing, editInitial);
     const initial = baseline.current;
     if (!initial) return false;
     return sheetHasUnsavedChanges(
@@ -591,6 +692,13 @@ export function AddSheet({
       then();
       return;
     }
+    if (editStart) {
+      Alert.alert("Discard these edits?", undefined, [
+        { text: "Keep editing", style: "cancel" as const },
+        { text: "Discard", style: "destructive" as const, onPress: then },
+      ]);
+      return;
+    }
     Alert.alert("Discard this unfinished moment?", undefined, [
       ...(mode && mode !== "drafts"
         ? [{ text: "Save draft", onPress: () => void persistDraft(true) }]
@@ -610,8 +718,54 @@ export function AddSheet({
       dismiss(closeSheet);
     };
   });
-  const composing = mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo";
+  const composing =
+    mode === "thought" ||
+    mode === "bible" ||
+    mode === "insight" ||
+    mode === "photo" ||
+    mode === "milestone" ||
+    mode === "location";
+  function submitEdit() {
+    const draft = currentEditDraft();
+    if (!edit || !editInitial || !draft) return;
+    const invalid = editValidationError(draft, editInitial);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    const send = () => {
+      Keyboard.dismiss();
+      const names = new Map(visiblePeople.map((person) => [person.id, person.name]));
+      const unchanged = draft.taggedIds.join(",") === edit.moment.taggedPersonIds.join(",");
+      const label = unchanged
+        ? edit.moment.taggedPeopleLabel
+        : draft.taggedIds.flatMap((id) => (names.has(id) ? [names.get(id) as string] : [])).join(", ") ||
+          undefined;
+      edit.onSave(editInitial, draft, label);
+    };
+    if (!draft.shareToCircleId) {
+      send();
+      return;
+    }
+    const target = audienceCircles.find((item) => item.circleId === draft.shareToCircleId);
+    if (!target) {
+      setError("Choose a circle you belong to.");
+      return;
+    }
+    Alert.alert(
+      `Everyone in ${target.name} will be able to see this post, including your comments and reactions. Share it?`,
+      undefined,
+      [
+        { text: "Cancel", style: "cancel" as const },
+        { text: "Share", onPress: send },
+      ],
+    );
+  }
   function submitComposer() {
+    if (editStart) {
+      submitEdit();
+      return;
+    }
     if (mode === "bible") {
       if (!reference || !body.trim()) {
         setError("Choose a passage");
@@ -692,13 +846,13 @@ export function AddSheet({
           {composing ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Post"
+              accessibilityLabel={editStart ? "Save" : "Post"}
               disabled={busy}
               onPress={submitComposer}
               style={[styles.barSide, styles.barEnd]}
             >
               <Text style={[face(colors, 700), { color: colors.action, fontSize: 17 }]}>
-                {busy ? "Saving…" : "Post"}
+                {busy ? "Saving…" : editStart ? "Save" : "Post"}
               </Text>
             </Pressable>
           ) : (
@@ -780,9 +934,54 @@ export function AddSheet({
               </View>
             )
           ) : null}
-          {mode === "thought" || mode === "bible" || mode === "insight" || mode === "photo" ? (
+          {composing ? (
             <View style={styles.form}>
-              {mode === "photo" ? (
+              {mode === "photo" && edit && editStart?.mode === "video" ? (
+                <View style={[styles.videoStill, { borderRadius: radius }]}>
+                  <PrivateImage
+                    path={videoPosterPath(edit.moment.id)}
+                    label="Selected video preview"
+                    headers={edit.headers}
+                    frameWidth={0}
+                    frameHeight={200}
+                    mat="#050b08"
+                  />
+                </View>
+              ) : null}
+              {mode === "photo" && edit && editStart?.mode === "photo" ? (
+                <EditPhotoStrip
+                  momentId={edit.moment.id}
+                  headers={edit.headers}
+                  photos={editPhotos}
+                  onAdd={addEditPhotos}
+                  onRemove={(key) =>
+                    setEditPhotos((current) =>
+                      current.length > 1 ? current.filter((item) => item.key !== key) : current,
+                    )
+                  }
+                  onMove={(from, to) => setEditPhotos((current) => movePhoto(current, from, to))}
+                />
+              ) : null}
+              {mode === "milestone" ? (
+                <Field
+                  fieldId="title"
+                  label="Milestone"
+                  labelColor={labelColor}
+                  value={title}
+                  placeholder="A meaningful first"
+                  onChange={setTitle}
+                />
+              ) : null}
+              {mode === "location" ? (
+                <PlaceFields
+                  value={{ label: title, latitude: place.latitude, longitude: place.longitude }}
+                  onChange={(next) => {
+                    setTitle(next.label);
+                    setPlace(next);
+                  }}
+                />
+              ) : null}
+              {mode === "photo" && !edit ? (
                 <PhotoPicker
                   items={mediaItems}
                   retro={retro}
@@ -838,7 +1037,15 @@ export function AddSheet({
               {mode === "insight" ? null : (
               <Field
                 fieldId="body"
-                label={mode === "bible" ? "Verse text" : mode === "photo" ? "Note" : "Entry"}
+                label={
+                  mode === "bible"
+                    ? "Verse text"
+                    : mode === "photo"
+                      ? "Note"
+                      : mode === "milestone" || mode === "location"
+                        ? "Details"
+                        : "Entry"
+                }
                 labelColor={labelColor}
                 value={body}
                 placeholder={
@@ -846,34 +1053,59 @@ export function AddSheet({
                     ? "Record what happened…"
                     : mode === "bible"
                       ? "Choose a passage to fill this entry…"
-                      : "Add context…"
+                      : mode === "milestone"
+                        ? "Add relevant details…"
+                        : mode === "location"
+                          ? "Add context for this location…"
+                          : "Add context…"
                 }
                 multiline
+                interfaceFace={mode === "photo"}
                 accentBorder={retro}
                 onChange={setBody}
               />
               )}
               <DateTimeFields
                 date={occurredOn}
-                maxDate={circleToday(circle?.timeZone ?? "UTC")}
+                maxDate={circleToday((edit ? editCircle : circle)?.timeZone ?? "UTC")}
                 time={occurredTime}
-                timeOptional={mode === "bible"}
+                timeOptional={
+                  editStart
+                    ? !(editStart.mode === "photo" || editStart.mode === "video" || editStart.mode === "thought")
+                    : mode === "bible"
+                }
                 onDateChange={setOccurredOn}
                 onTimeChange={setOccurredTime}
               />
-              <AudienceChips
-                circles={audienceCircles}
-                counts={counts}
-                justMe={justMe}
-                circleId={audienceId}
-                onJustMe={setJustMe}
-                onCircle={(id) => {
-                  setJustMe(false);
-                  setCircleId(id);
-                  setTaggedIds([]);
-                }}
-              />
-              {mode === "insight" ? null : (
+              {edit ? (
+                // Web Edit has no audience picker; a Just me post can be shared into one circle.
+                edit.moment.audience === "just_me" && audienceCircles.length > 0 ? (
+                  <AudienceChips
+                    circles={audienceCircles}
+                    counts={counts}
+                    justMe={!shareToCircleId}
+                    circleId={shareToCircleId}
+                    onJustMe={(value) => {
+                      if (value) setShareToCircleId("");
+                    }}
+                    onCircle={setShareToCircleId}
+                  />
+                ) : null
+              ) : (
+                <AudienceChips
+                  circles={audienceCircles}
+                  counts={counts}
+                  justMe={justMe}
+                  circleId={audienceId}
+                  onJustMe={setJustMe}
+                  onCircle={(id) => {
+                    setJustMe(false);
+                    setCircleId(id);
+                    setTaggedIds([]);
+                  }}
+                />
+              )}
+              {mode === "insight" || mode === "location" ? null : (
                 <PlaceFields value={place} onChange={setPlace} />
               )}
               {mode === "insight" ? null : (
@@ -922,6 +1154,7 @@ function Field({
   autoCapitalize,
   autoCorrect,
   textContentType,
+  interfaceFace = false,
   onChange,
 }: Readonly<{
   label: string;
@@ -929,6 +1162,8 @@ function Field({
   value: string;
   placeholder: string;
   multiline?: boolean;
+  /** Web `.media-caption-field`: a photo or video note uses the interface face. */
+  interfaceFace?: boolean;
   accentBorder?: boolean;
   fieldId: string;
   keyboardType?: "url";
@@ -963,7 +1198,7 @@ function Field({
         onChangeText={onChange}
         style={[
           styles.input,
-          face(colors, 400, multiline ? "serif" : "interface"),
+          face(colors, 400, multiline && !interfaceFace ? "serif" : "interface"),
           {
             color: colors.ink,
             borderColor: accentBorder ? colors.action : colors.hairline,
@@ -1297,6 +1532,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     textAlign: "center",
+  },
+  videoStill: {
+    overflow: "hidden",
   },
   previewFrame: {
     height: 168,
