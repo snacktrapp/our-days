@@ -612,7 +612,11 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   titleButton: {
+    // HIG: the title menu is a 44 pt target even though the text is short.
+    minHeight: 44,
+    minWidth: 88,
     alignItems: "center",
+    justifyContent: "center",
     maxWidth: "100%",
   },
   titleRow: {
