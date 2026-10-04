@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { deliverActivityExpoPush } from "@/lib/expo-push/deliver-activity";
 import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
 import type { AccentToken } from "@/features/accent-token";
 import type {
@@ -86,6 +87,7 @@ function queueMentionPush(
   noteId?: string,
 ) {
   after(async () => {
+    await deliverActivityExpoPush(supabase, "mention", momentId, { noteId });
     await deliverActivityWebPush(supabase, "mention", momentId, { noteId });
   });
 }
@@ -357,6 +359,7 @@ export async function createFamilyMomentAction(input: {
   }
   if (audience === "family") {
     after(async () => {
+      await deliverActivityExpoPush(supabase, "moment", data);
       await deliverActivityWebPush(supabase, "moment", data);
     });
     if (input.mentions) queueMentionPush(supabase, data);
@@ -951,6 +954,9 @@ export async function createMomentNoteAction(input: {
       message: "That note could not be saved. Your words are still here.",
     };
   after(async () => {
+    await deliverActivityExpoPush(supabase, "note", input.momentId, {
+      noteId: data,
+    });
     await deliverActivityWebPush(supabase, "note", input.momentId, {
       noteId: data,
     });
@@ -1119,6 +1125,7 @@ export async function setMomentReactionAction(input: {
   if (error) return { ok: false, message: "That response could not be saved." };
   if (input.reactionId) {
     after(async () => {
+      await deliverActivityExpoPush(supabase, "reaction", input.momentId);
       await deliverActivityWebPush(supabase, "reaction", input.momentId);
     });
   }
@@ -1170,6 +1177,7 @@ export async function setMomentNoteHeartAction(input: {
   if (error) return { ok: false, message: "That heart could not be saved." };
   if (input.hearted) {
     after(async () => {
+      await deliverActivityExpoPush(supabase, "note_reaction", input.noteId);
       await deliverActivityWebPush(supabase, "note_reaction", input.noteId);
     });
   }
@@ -1256,6 +1264,7 @@ export async function createWrittenMomentAction(input: {
     };
   if (audience === "family") {
     after(async () => {
+      await deliverActivityExpoPush(supabase, "moment", data);
       await deliverActivityWebPush(supabase, "moment", data);
     });
     if (input.mentions) queueMentionPush(supabase, data);
