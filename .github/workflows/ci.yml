@@ -94,15 +94,212 @@ jobs:
       - name: Audit the complete dependency tree
         run: |
           set +e
-          output=""
+          # Intentional exception: GHSA-vfj7-8cjw-p6xm alone must not fail this gate.
+          # braces is dev-only via eslint-config-next → @next/eslint-plugin-next →
+          # fast-glob → micromatch. Any other moderate-or-higher advisory still fails.
           status=1
           transient=1
           for attempt in 1 2 3 4; do
-            output="$(timeout 90 npm audit --audit-level=moderate 2>&1)"
+            json_file="$(mktemp)"
+            err_file="$(mktemp)"
+            timeout 90 npm audit --json --audit-level=moderate >"$json_file" 2>"$err_file"
             status=$?
-            printf '%s\n' "$output"
+            cat "$err_file"
+            cat "$json_file"
             if [ "$status" -eq 0 ]; then
+              rm -f "$json_file" "$err_file"
               exit 0
+            fi
+            AUDIT_JSON="$json_file" node <<'EOF'
+            const fs = require("fs");
+
+            // Intentional exception: GHSA-vfj7-8cjw-p6xm only.
+            const ALLOWED = new Set(["ghsa-vfj7-8cjw-p6xm"]);
+            const GHSA = /GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i;
+
+            function advisoryId(via) {
+              for (const field of [via.url, via.source, via.name]) {
+                if (typeof field !== "string") continue;
+                const match = field.match(GHSA);
+                if (match) return match[0].toLowerCase();
+              }
+              return null;
+            }
+
+            function isBlockingSeverity(severity) {
+              const value = String(severity || "").toLowerCase();
+              return value === "moderate" || value === "high" || value === "critical";
+            }
+
+            function isKnownNonBlocking(severity) {
+              const value = String(severity || "").toLowerCase();
+              return value === "info" || value === "low";
+            }
+
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync(process.env.AUDIT_JSON, "utf8"));
+            } catch (error) {
+              console.error(`npm audit did not produce JSON: ${error.message}`);
+              process.exit(2);
+            }
+
+            if (
+              !report ||
+              typeof report !== "object" ||
+              !report.vulnerabilities ||
+              typeof report.vulnerabilities !== "object" ||
+              Array.isArray(report.vulnerabilities) ||
+              !report.metadata ||
+              !report.metadata.vulnerabilities
+            ) {
+              console.error("npm audit JSON is not a vulnerability report");
+              process.exit(2);
+            }
+
+            const vulns = report.vulnerabilities;
+            const meta = report.metadata.vulnerabilities;
+            const metaBlocking =
+              Number(meta.moderate || 0) +
+              Number(meta.high || 0) +
+              Number(meta.critical || 0);
+            const blockingNames = Object.keys(vulns).filter((name) =>
+              isBlockingSeverity(vulns[name] && vulns[name].severity),
+            );
+
+            if (metaBlocking > blockingNames.length) {
+              console.error(
+                `::error::Audit metadata reports ${metaBlocking} moderate-or-higher findings, but only ${blockingNames.length} were readable`,
+              );
+              process.exit(1);
+            }
+
+            const memo = new Map();
+
+            function explain(name, stack) {
+              if (memo.has(name)) return memo.get(name);
+              if (stack.has(name)) {
+                return {
+                  ok: false,
+                  allowed: false,
+                  reason: `dependency cycle at ${name}`,
+                };
+              }
+              const vuln = vulns[name];
+              if (!vuln) {
+                return {
+                  ok: false,
+                  allowed: false,
+                  reason: `missing vulnerability entry for ${name}`,
+                };
+              }
+              if (!isBlockingSeverity(vuln.severity)) {
+                const result = {
+                  ok: true,
+                  allowed: false,
+                  reason: `${name} is below moderate`,
+                };
+                memo.set(name, result);
+                return result;
+              }
+
+              const vias = Array.isArray(vuln.via) ? vuln.via : [];
+              if (vias.length === 0) {
+                const result = {
+                  ok: false,
+                  allowed: false,
+                  reason: `${name} is ${vuln.severity} with no advisory source`,
+                };
+                memo.set(name, result);
+                return result;
+              }
+
+              let allowed = false;
+              for (const via of vias) {
+                if (via && typeof via === "object") {
+                  const id = advisoryId(via);
+                  if (id && ALLOWED.has(id)) {
+                    allowed = true;
+                    continue;
+                  }
+                  if (isKnownNonBlocking(via.severity)) continue;
+                  const label = id || via.title || "unidentified advisory";
+                  const result = {
+                    ok: false,
+                    allowed: false,
+                    reason: `${name} has ${via.severity || vuln.severity} advisory ${label}`,
+                  };
+                  memo.set(name, result);
+                  return result;
+                }
+                if (typeof via === "string") {
+                  stack.add(name);
+                  const child = explain(via, stack);
+                  stack.delete(name);
+                  if (!child.ok) {
+                    const result = {
+                      ok: false,
+                      allowed: false,
+                      reason: `${name} → ${child.reason}`,
+                    };
+                    memo.set(name, result);
+                    return result;
+                  }
+                  if (child.allowed) allowed = true;
+                  continue;
+                }
+                const result = {
+                  ok: false,
+                  allowed: false,
+                  reason: `${name} has an unreadable advisory source`,
+                };
+                memo.set(name, result);
+                return result;
+              }
+
+              if (!allowed) {
+                const result = {
+                  ok: false,
+                  allowed: false,
+                  reason: `${name} is ${vuln.severity} without the allowlisted advisory`,
+                };
+                memo.set(name, result);
+                return result;
+              }
+
+              const result = {
+                ok: true,
+                allowed: true,
+                reason: `${name} is only GHSA-vfj7-8cjw-p6xm`,
+              };
+              memo.set(name, result);
+              return result;
+            }
+
+            const failures = [];
+            for (const name of blockingNames) {
+              const result = explain(name, new Set());
+              if (!result.ok) failures.push(result.reason);
+            }
+
+            if (failures.length > 0) {
+              for (const failure of failures) console.error(`::error::${failure}`);
+              process.exit(1);
+            }
+
+            console.log(
+              `audit-allowlist: no blocking advisories. Intentional exception GHSA-vfj7-8cjw-p6xm covers ${blockingNames.length} moderate-or-higher finding(s).`,
+            );
+            process.exit(0);
+          EOF
+            decision=$?
+            output="$(cat "$err_file"; printf '\n'; cat "$json_file")"
+            rm -f "$json_file" "$err_file"
+            if [ "$decision" -eq 0 ]; then
+              exit 0
+            fi
+            if [ "$decision" -eq 1 ]; then
+              exit 1
             fi
             if printf '%s\n' "$output" | grep -Eq 'found [1-9][0-9]* vulnerabilit'; then
               exit "$status"
