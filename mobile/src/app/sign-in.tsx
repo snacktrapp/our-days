@@ -14,6 +14,8 @@ import {
 } from "react-native";
 
 import { sentMessage, useAuth } from "../components/auth-provider";
+import { openExternalUrl } from "../components/safety-sheets";
+import { legalUrl } from "../lib/safety";
 import { InviteAcceptForm } from "../components/invite-sheet";
 import { invitationTokenFromLink } from "../lib/invites";
 import { GridBackground } from "../components/grid-background";
@@ -29,8 +31,10 @@ export default function SignInScreen() {
     session,
     authError,
     clearAuthError,
+    notice,
     sendCode,
     verifyCode,
+    signInWithPassword,
   } = useAuth();
   const { colors } = useAppTheme();
   const [email, setEmail] = useState("");
@@ -40,6 +44,9 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
   const [inviteToken, setInviteToken] = useState("");
   const [joining, setJoining] = useState(false);
+  const [passwordMode, setPasswordMode] = useState(false);
+  const [password, setPassword] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     const read = (url: string | null) => {
@@ -74,6 +81,21 @@ export default function SignInScreen() {
     const result = await verifyCode(email, code);
     setBusy(false);
     if (result.ok) setMessage(null);
+  }
+
+  async function onPassword() {
+    clearAuthError();
+    setBusy(true);
+    setMessage(null);
+    const result = await signInWithPassword(email, password);
+    setBusy(false);
+    if (!result.ok) setMessage(result.message);
+  }
+
+  async function openLegal(path: "privacy" | "terms" | "support") {
+    setLinkError(null);
+    const opened = await openExternalUrl(legalUrl(path));
+    if (!opened) setLinkError("That page could not be opened.");
   }
 
   const label = face(colors, 650);
@@ -117,20 +139,15 @@ export default function SignInScreen() {
                 : { color: colors.muted },
             ]}
           >
-            Email a private sign-in link to the address that received your invitation.
+            We’ll email a 6-digit code to the address that received your invitation.
           </Text>
-          <View style={[styles.backup, { borderTopColor: colors.hairline }]}>
-            <Text style={[styles.backupCopy, body, { color: colors.muted }]}>
-              Email a private sign-in link
-            </Text>
+          <View style={styles.form}>
             <Text style={[styles.hint, body, { color: colors.muted }]}>
               Enter the email address that received your invitation.
             </Text>
             {configured ? null : (
               <Text style={[styles.warning, body, { color: colors.ink }]}>
-                Set EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in mobile/.env before
-                signing in. The project URL is already the Our Days Supabase
-                project.
+                Sign-in is unavailable right now.
               </Text>
             )}
             <Text style={[styles.fieldLabel, label, { color: colors.muted }]}>
@@ -165,7 +182,7 @@ export default function SignInScreen() {
               ]}
               editable={!busy}
             />
-            {sent ? (
+            {sent && !passwordMode ? (
               <>
                 <Text style={[styles.fieldLabel, label, { color: colors.muted }]}>
                   Six-digit code
@@ -198,17 +215,48 @@ export default function SignInScreen() {
                 />
               </>
             ) : null}
+            {passwordMode ? (
+              <>
+                <Text style={[styles.fieldLabel, label, { color: colors.muted }]}>Password</Text>
+                <TextInput
+                  keyboardAppearance={colors.scheme}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  textContentType="password"
+                  accessibilityLabel="Password"
+                  style={[
+                    styles.input,
+                    face(colors, 400),
+                    {
+                      color: colors.ink,
+                      borderColor: colors.hairline,
+                      borderRadius: colors.appearance === "retro" ? 2 : 7,
+                      backgroundColor:
+                        colors.appearance === "retro" || colors.scheme !== "light"
+                          ? colors.surface
+                          : colors.cream,
+                    },
+                  ]}
+                  editable={!busy}
+                />
+              </>
+            ) : null}
             {authError ? (
               <Text accessibilityRole="alert" style={[styles.error, face(colors, 600), { color: colors.danger }]}>
                 {authError}
               </Text>
             ) : message ? (
               <Text style={[styles.status, body, { color: colors.muted }]}>{message}</Text>
+            ) : notice ? (
+              <Text style={[styles.status, body, { color: colors.muted }]}>{notice}</Text>
             ) : null}
             <Pressable
               accessibilityRole="button"
               disabled={busy || !configured}
-              onPress={() => void (sent ? onVerify() : onSend())}
+              onPress={() => void (passwordMode ? onPassword() : sent ? onVerify() : onSend())}
               style={[
                 styles.submit,
                 {
@@ -233,11 +281,11 @@ export default function SignInScreen() {
                     },
                   ]}
                 >
-                  {sent ? "Sign in" : "Email me a sign-in link"}
+                  {passwordMode || sent ? "Sign in" : "Email me a code"}
                 </Text>
               )}
             </Pressable>
-            {sent ? (
+            {sent && !passwordMode ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={busy}
@@ -249,6 +297,20 @@ export default function SignInScreen() {
                 </Text>
               </Pressable>
             ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={passwordMode ? "Email me a code" : "Sign in with a password"}
+              onPress={() => {
+                setPasswordMode((current) => !current);
+                setMessage(null);
+                clearAuthError();
+              }}
+              style={styles.again}
+            >
+              <Text style={[body, { color: colors.action, fontSize: 13 }]}>
+                {passwordMode ? "Email me a code" : "Sign in with a password"}
+              </Text>
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Join with an invitation"
@@ -269,6 +331,22 @@ export default function SignInScreen() {
             ) : null}
           </View>
         </View>
+        <View style={styles.legal}>
+          <Pressable accessibilityRole="link" onPress={() => void openLegal("privacy")}>
+            <Text style={[body, { color: colors.muted, fontSize: 13 }]}>Privacy</Text>
+          </Pressable>
+          <Text style={[body, { color: colors.muted, fontSize: 13 }]}>·</Text>
+          <Pressable accessibilityRole="link" onPress={() => void openLegal("terms")}>
+            <Text style={[body, { color: colors.muted, fontSize: 13 }]}>Terms</Text>
+          </Pressable>
+          <Text style={[body, { color: colors.muted, fontSize: 13 }]}>·</Text>
+          <Pressable accessibilityRole="link" onPress={() => void openLegal("support")}>
+            <Text style={[body, { color: colors.muted, fontSize: 13 }]}>Support</Text>
+          </Pressable>
+        </View>
+        {linkError ? (
+          <Text style={[styles.status, body, { color: colors.danger, textAlign: "center" }]}>{linkError}</Text>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
     <KeyboardDoneBar />
@@ -336,6 +414,16 @@ const styles = StyleSheet.create({
   },
   oauthLabel: {
     fontSize: 14,
+  },
+  form: {
+    marginTop: 8,
+  },
+  legal: {
+    marginTop: 18,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
   },
   backup: {
     marginTop: 20,

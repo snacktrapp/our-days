@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAuth } from "./auth-provider";
+import {
+  BlockedPeopleScreen,
+  DeleteAccountSheet,
+  openExternalUrl,
+} from "./safety-sheets";
+import { contactEmail, contactUrl, legalUrl } from "../lib/safety";
+
 import {
   profileAccent,
   profileColorChoices,
@@ -39,6 +47,7 @@ export function SettingsScreen({
   viewedCircleId = null,
   onSaveColor,
   onSignOut,
+  onUnblocked,
   onScroll,
 }: Readonly<{
   profile: ViewerProfile | null;
@@ -47,13 +56,34 @@ export function SettingsScreen({
   viewedCircleId?: string | null;
   onSaveColor: (color: ProfileColorToken) => Promise<{ ok: boolean; message: string }>;
   onSignOut: () => void;
+  onUnblocked?: (membershipId: string) => void;
   onScroll?: (y: number) => void;
 }>) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const radius = colors.appearance === "retro" ? 2 : 18;
   const [inviting, setInviting] = useState(false);
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [linkError, setLinkError] = useState("");
+  const { setNotice } = useAuth();
   const canInvite = circles.some((circle) => circle.role === "organizer" && !circle.archivedAt);
+
+  async function openLink(url: string) {
+    setLinkError("");
+    const opened = await openExternalUrl(url);
+    if (!opened) setLinkError("That page could not be opened.");
+  }
+
+  if (blockedOpen) {
+    return (
+      <BlockedPeopleScreen
+        onClose={() => setBlockedOpen(false)}
+        onUnblocked={(membershipId) => onUnblocked?.(membershipId)}
+      />
+    );
+  }
+
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -102,10 +132,62 @@ export function SettingsScreen({
           </Pressable>
         ) : null}
       </View>
+      <Text style={[face(colors, 600), styles.section, { color: colors.muted }]}>Privacy & support</Text>
+      <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
+        <LinkRow title="Privacy Policy" onPress={() => void openLink(legalUrl("privacy"))} />
+        <LinkRow title="Terms of Use" onPress={() => void openLink(legalUrl("terms"))} />
+        <LinkRow title="Support" onPress={() => void openLink(legalUrl("support"))} />
+        <LinkRow
+          title="Contact us"
+          detail={contactEmail}
+          onPress={() => void openLink(contactUrl())}
+        />
+        <LinkRow title="Blocked people" onPress={() => setBlockedOpen(true)} />
+      </View>
+      {linkError ? (
+        <Text accessibilityRole="alert" style={[face(colors, 400), styles.hint, { color: colors.danger }]}>
+          {linkError}
+        </Text>
+      ) : null}
       <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
         <SignOutRow onSignOut={onSignOut} />
       </View>
+      <View style={[styles.group, { backgroundColor: colors.cream, borderRadius: radius }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+          onPress={() => setDeleting(true)}
+          style={styles.plainRow}
+        >
+          <View style={styles.copy}>
+            <Text
+              style={[
+                face(colors, 600),
+                styles.rowTitle,
+                { color: colors.danger, fontSize: colors.appearance === "retro" ? 16 : 15 },
+              ]}
+            >
+              Delete account
+            </Text>
+            <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
+              Your posts, photos, videos, comments, and hearts.
+            </Text>
+          </View>
+          <ChevronRight color={colors.danger} />
+        </Pressable>
+      </View>
       {inviting ? <InviteSendSheet circles={circles} viewedCircleId={viewedCircleId} onClose={() => setInviting(false)} /> : null}
+      {deleting ? (
+        <DeleteAccountSheet
+          visible
+          onClose={() => setDeleting(false)}
+          onRequested={() => {
+            setDeleting(false);
+            setNotice("Deletion requested.");
+            onSignOut();
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -468,6 +550,39 @@ function NotificationsRow() {
   );
 }
 
+function LinkRow({
+  title,
+  detail,
+  onPress,
+}: Readonly<{
+  title: string;
+  detail?: string;
+  onPress: () => void;
+}>) {
+  const { colors } = useAppTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={styles.plainRow}>
+      <View style={styles.copy}>
+        <Text
+          style={[
+            face(colors, 600),
+            styles.rowTitle,
+            { color: colors.ink, fontSize: colors.appearance === "retro" ? 16 : 15 },
+          ]}
+        >
+          {title}
+        </Text>
+        {detail ? (
+          <Text style={[face(colors, 400), metaType(colors.appearance), { color: colors.muted }]}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      <ChevronRight color={colors.muted} />
+    </Pressable>
+  );
+}
+
 function SignOutRow({ onSignOut }: Readonly<{ onSignOut: () => void }>) {
   const { colors } = useAppTheme();
   const [busy, setBusy] = useState(false);
@@ -514,6 +629,11 @@ const styles = StyleSheet.create({
   },
   group: {
     overflow: "hidden",
+  },
+  section: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: -16,
   },
   profileRow: {
     minHeight: 56,

@@ -4,18 +4,25 @@ A first-slice Expo app in `mobile/`. It signs into the same Supabase project as 
 
 ## What works
 
-- Email code sign-in, the same passwordless flow as `src/features/auth/sign-in-actions.ts`: `signInWithOtp` with `shouldCreateUser: false`, then `verifyOtp` (`type: "email"`). The session is stored in the iOS keychain through `expo-secure-store` (chunked, because a Supabase session is larger than one keychain value).
+- Email code sign-in, the same passwordless flow as `src/features/auth/sign-in-actions.ts`: `signInWithOtp` with `shouldCreateUser: false`, then `verifyOtp` (`type: "email"`). The button says **Email me a code**. The session is stored in the iOS keychain through `expo-secure-store` (chunked, because a Supabase session is larger than one keychain value).
+- Password sign-in from **Sign in with a password** on the same screen. It calls `signInWithPassword` and stores the session in that same chunked secure storage. Members usually have no password; the App Review account does.
 - Circle switcher, including **All circles**. A circle calls `list_timeline_moments`. All circles calls `list_all_timeline_moments`, and falls back to the first circle if that RPC fails, matching the web.
 - Timeline cards for thoughts, photos, videos, and insights. Photos use `GET /api/media/moments/:id?photo=:photoId&w=1080`. Video and insight posters use `GET /api/media/videos/:id/poster`. Those routes read the Supabase session from cookies, so the app sends the same `base64-` cookie `@supabase/ssr` writes in the browser.
-- Posting a thought calls `create_written_moment` with the signed-in person’s id in the chosen circle, `audience: "family"`, and today’s date in that circle’s time zone.
+- Posting a thought, photo, or video, plus comments, hearts, and edits.
+- Settings: profile color, theme, notifications, invitations, **Privacy & support** (Privacy Policy, Terms of Use, Support, Contact us, Blocked people), and **Delete account**.
+- Report and block from the ••• menu on a post or comment. If the safety RPC is not deployed yet, the button shows a plain error and does not crash.
+- A one-time Terms agreement after sign-in. If `get_my_terms_acceptance` is not deployed yet, the gate lets the person through.
 
 ## What is stubbed
 
-- Password sign-in. Members do not have passwords. The web sends a six-digit code.
 - Magic-link return into the app. The email link still opens the website. Type the code here.
-- Accepting a pending invitation during sign-in.
-- Photo and video capture, playback beyond the poster, comments, reactions, edits, and Just me posting.
-- Android is configured only so Expo’s project file stays valid. This spike is the iPhone app.
+- Android is configured so the project file and adaptive icon stay valid. This spike is the iPhone app.
+
+## App icon and splash
+
+`mobile/assets/icon.png` and the splash image are the Our Days mark, not the Expo template. The splash is that mark on `#101216`, with a light-mode background of `#edf0f4`.
+
+**Icon/splash require a new EAS native build; do not ship via OTA.** `runtimeVersion.policy` is `appVersion` (currently `0.5.0`). An EAS Update cannot change the icon or the native splash.
 
 ## Run in Expo Go
 
@@ -48,7 +55,7 @@ npx eas-cli@latest login
 npx eas-cli@latest init
 ```
 
-`eas.json` has two store profiles. `preview` is the TestFlight profile. `production` is the App Store profile and auto-increments the build number. The iOS bundle id is `com.snacktrapp.ourdays`.
+`eas.json` has two store profiles. `preview` is the TestFlight profile. `production` is the App Store profile. Both auto-increment the build number. The iOS bundle id is `com.snacktrapp.ourdays`.
 
 Put the publishable key in EAS, not in the repo:
 
@@ -84,7 +91,7 @@ npx eas-cli@latest submit --platform ios --profile production
 
 ## Over-the-air updates (EAS Update)
 
-`expo-updates` is installed and `app.json` points at the EAS Update URL with `runtimeVersion.policy = "appVersion"`. The `production` build profile uses the `production` channel. A build only receives updates if it was built with `expo-updates` and has the same app `version` (runtime `0.1.0` today). Changing native code or app `version` needs a new store build.
+`expo-updates` is installed and `app.json` points at the EAS Update URL with `runtimeVersion.policy = "appVersion"`. The `production` build profile uses the `production` channel. A build only receives updates if it was built with `expo-updates` and has the same app `version` (runtime `0.5.0`). Changing native code, the icon, the splash, or the app `version` needs a new store build. Do not ship the icon or splash with `eas update`.
 
 Ship a JS-only change to production builds:
 

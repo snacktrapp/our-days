@@ -42,6 +42,34 @@ function verifyMessage(error: { code?: string; message?: string }) {
 }
 
 /**
+ * Password sign-in for the reviewer account (and any other account that has
+ * one). The caller passes the same Supabase client as the email-code path,
+ * so the session is written to the same chunked secure storage.
+ */
+export async function signInWithPassword(
+  supabase: SupabaseClient,
+  email: string,
+  password: string,
+): Promise<AuthResult> {
+  const normalized = email.trim().toLowerCase();
+  if (!validEmail(normalized) || password.length === 0) {
+    return { ok: false, message: "Enter your email and password." };
+  }
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalized,
+      password,
+    });
+    if (error || !data.session) {
+      return { ok: false, message: "That email or password did not work." };
+    }
+    return { ok: true, session: data.session };
+  } catch {
+    return { ok: false, message: "That email or password did not work." };
+  }
+}
+
+/**
  * The email-code sign-in path shared by the app and scripts/e2e-signin.mjs.
  *
  * Only a definitive answer ("this account has no circle") signs the new

@@ -64,6 +64,8 @@ export type FeedNote = Readonly<{
   canChange: boolean;
   revision: number;
   mentions: readonly MentionSpan[];
+  /** Author's circle membership. Block uses this id. Absent on a comment just saved here. */
+  authorMembershipId?: string;
 }>;
 
 export type FeedReaction = Readonly<{
@@ -102,6 +104,8 @@ export type TimelineMoment = Readonly<{
   posterHeight?: number;
   canChange: boolean;
   revision: number;
+  /** Recorder's circle membership, when the timeline row can be read. */
+  authorMembershipId?: string;
   taggedPeopleLabel?: string;
   /** Tagged person ids. Edit sends them back; update_family_moment replaces the tag list. */
   taggedPersonIds: readonly string[];
@@ -323,6 +327,25 @@ export async function loadMomentPhotos(
   });
 }
 
+async function loadMomentAuthors(
+  supabase: SupabaseClient,
+  momentIds: readonly string[],
+) {
+  const authors = new Map<string, string>();
+  if (momentIds.length === 0) return authors;
+  const { data, error } = await supabase
+    .from("moments")
+    .select("id, recorded_by_membership_id")
+    .in("id", [...momentIds]);
+  if (error || !data) return authors;
+  for (const row of data as readonly { id?: string; recorded_by_membership_id?: string }[]) {
+    if (row.id && row.recorded_by_membership_id) {
+      authors.set(row.id, row.recorded_by_membership_id);
+    }
+  }
+  return authors;
+}
+
 async function loadEnrichment(
   supabase: SupabaseClient,
   momentIds: readonly string[],
@@ -398,10 +421,11 @@ async function enrichMoments(
   rows: readonly TimelineRow[],
   viewerMembershipIds: ReadonlySet<string>,
 ): Promise<TimelineMoment[]> {
-  const enrichment = await loadEnrichment(
-    supabase,
-    rows.map((row) => row.moment_id),
-  );
+  const momentIds = rows.map((row) => row.moment_id);
+  const [enrichment, authorMemberships] = await Promise.all([
+    loadEnrichment(supabase, momentIds),
+    loadMomentAuthors(supabase, momentIds),
+  ]);
   const fallback = enrichment
     ? null
     : await fallbackPhotos(supabase, rows);
@@ -508,6 +532,7 @@ async function enrichMoments(
       canChange: viewerMembershipIds.has(membershipId),
       revision: typeof row.revision === "number" ? row.revision : 1,
       mentions: mentionsByNote.get(id) ?? [],
+      authorMembershipId: membershipId || undefined,
     });
     notesByMoment.set(momentId, list);
   }
@@ -570,6 +595,7 @@ async function enrichMoments(
       posterHeight: poster?.height,
       canChange: row.can_change === true,
       revision: typeof row.revision === "number" ? row.revision : 1,
+      authorMembershipId: authorMemberships.get(row.moment_id),
       taggedPeopleLabel: taggedLabel(row.tagged_people),
       taggedPersonIds: taggedIds(row.tagged_people),
       mentions: mentionsByMoment.get(row.moment_id) ?? [],
