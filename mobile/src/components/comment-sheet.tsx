@@ -255,6 +255,7 @@ export function CommentSheet({
               </Pressable>
             ) : null}
             <TextInput
+              keyboardAppearance={colors.scheme}
               value={body}
               autoFocus
               placeholder="A memory, detail, or reply…"

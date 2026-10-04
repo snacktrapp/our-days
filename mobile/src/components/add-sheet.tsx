@@ -1189,6 +1189,7 @@ function Field({
         {label}
       </Text>
       <TextInput
+        keyboardAppearance={colors.scheme}
         {...input}
         value={value}
         placeholder={placeholder}

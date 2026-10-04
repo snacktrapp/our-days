@@ -116,6 +116,7 @@ export function InviteSendSheet({
           })}
         </View>
         <TextInput
+          keyboardAppearance={colors.scheme}
           value={name}
           onChangeText={setName}
           accessibilityLabel="Their name"
@@ -124,6 +125,7 @@ export function InviteSendSheet({
           style={[styles.input, face(colors, 400), { color: colors.ink, borderColor: colors.hairline }]}
         />
         <TextInput
+          keyboardAppearance={colors.scheme}
           value={email}
           onChangeText={setEmail}
           accessibilityLabel="Email address"
@@ -166,6 +168,7 @@ export function InviteAcceptForm({
     <View style={styles.accept}>
       <Text style={[face(colors, 650), { color: colors.ink, fontSize: 16 }]}>Join your circle.</Text>
       <TextInput
+        keyboardAppearance={colors.scheme}
         value={link}
         onChangeText={setLink}
         accessibilityLabel="Invitation link"
@@ -175,6 +178,7 @@ export function InviteAcceptForm({
         style={[styles.input, face(colors, 400), { color: colors.ink, borderColor: colors.hairline }]}
       />
       <TextInput
+        keyboardAppearance={colors.scheme}
         value={email}
         onChangeText={setEmail}
         accessibilityLabel="Invitation email"
@@ -185,6 +189,7 @@ export function InviteAcceptForm({
         style={[styles.input, face(colors, 400), { color: colors.ink, borderColor: colors.hairline }]}
       />
       <TextInput
+        keyboardAppearance={colors.scheme}
         value={code}
         onChangeText={setCode}
         accessibilityLabel="Invitation code"
