@@ -784,6 +784,7 @@ function CreateCircleSheet({
       </Text>
       <Text style={fieldLabelStyle(colors)}>Name</Text>
       <TextInput
+        keyboardAppearance={colors.scheme}
         value={name}
         onChangeText={(value) => {
           setName(value);
@@ -847,6 +848,7 @@ function CircleSettingsSheet({
         <>
           <Text style={fieldLabelStyle(colors)}>Circle name</Text>
           <TextInput
+            keyboardAppearance={colors.scheme}
             value={name}
             onChangeText={(value) => {
               setName(value);
@@ -1234,6 +1236,7 @@ function InviteDrawer({
               <>
                 <Text style={fieldLabelStyle(colors)}>Member’s name</Text>
                 <TextInput
+                  keyboardAppearance={colors.scheme}
                   value={name}
                   onChangeText={(value) => {
                     setName(value);
@@ -1246,6 +1249,7 @@ function InviteDrawer({
                 />
                 <Text style={fieldLabelStyle(colors)}>Email address</Text>
                 <TextInput
+                  keyboardAppearance={colors.scheme}
                   value={email}
                   onChangeText={(value) => {
                     setEmail(value);

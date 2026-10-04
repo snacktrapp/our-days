@@ -5,7 +5,7 @@ export type MenuItem = Readonly<{ id: string; title: string; destructive?: boole
 
 /** iOS only (see ios-menu-trigger.ios.tsx); other platforms use a Pressable. */
 export function IosMenuTrigger(
-  _props: Readonly<{ items: readonly MenuItem[]; style: StyleProp<ViewStyle>; children: ReactNode }>,
+  _props: Readonly<{ items: readonly MenuItem[]; style: StyleProp<ViewStyle>; label: string; children: ReactNode }>,
 ) {
   return null;
 }

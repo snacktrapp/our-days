@@ -137,6 +137,7 @@ export default function SignInScreen() {
               Email address
             </Text>
             <TextInput
+              keyboardAppearance={colors.scheme}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -170,6 +171,7 @@ export default function SignInScreen() {
                   Six-digit code
                 </Text>
                 <TextInput
+                  keyboardAppearance={colors.scheme}
                   value={code}
                   onChangeText={setCode}
                   keyboardType="number-pad"

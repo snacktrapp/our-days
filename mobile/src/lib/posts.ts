@@ -1242,35 +1242,3 @@ export async function reorderMomentPhotos(
     : { ok: true as const };
 }
 
-/**
- * Photos added in Edit: the same attach → claim → upload → process path as
- * extra album photos, with one upload chip so the feed shows progress while
- * the edit sheet is already closed (web `startOptimisticPhotoUpload` with
- * `existingMomentId`).
- */
-export async function addPhotosToMoment(
-  supabase: SupabaseClient,
-  input: Readonly<{
-    momentId: string;
-    occurredOn: string;
-    photos: readonly { bytes: ArrayBuffer; mimeType: string }[];
-  }>,
-) {
-  const id = randomId();
-  const detail = dateLabel(input.occurredOn);
-  putChip({
-    id,
-    label: input.photos.length > 1 ? `Adding ${input.photos.length} photos…` : "Adding photo…",
-    detail,
-    progress: null,
-    failed: false,
-    done: false,
-  });
-  const result = await attachExtraPhotos(supabase, input.momentId, input.photos);
-  if (!result.ok) {
-    putChip({ id, label: "Upload failed", detail: result.message, progress: null, failed: true, done: false });
-    return result;
-  }
-  publishChip(id);
-  return result;
-}

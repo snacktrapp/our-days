@@ -455,6 +455,7 @@ export function PlaceFields({
     <View style={styles.stack}>
       <FieldLabel optional>Add a place</FieldLabel>
       <TextInput
+        keyboardAppearance={colors.scheme}
         {...placeInput}
         value={search}
         placeholder="Search or locate"

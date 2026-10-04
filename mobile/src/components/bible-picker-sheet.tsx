@@ -162,6 +162,7 @@ export function PassageSheet({
           </View>
           {step === "book" ? (
             <TextInput
+              keyboardAppearance={colors.scheme}
               value={query}
               onChangeText={setQuery}
               autoFocus

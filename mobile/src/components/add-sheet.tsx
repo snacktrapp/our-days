@@ -985,6 +985,9 @@ export function AddSheet({
                 <PhotoPicker
                   items={mediaItems}
                   retro={retro}
+                  privacy={
+                    justMe || !circle ? "Only you will see this" : `Only ${circle.name} will see this`
+                  }
                   onPick={takeMedia}
                   onRemove={removeMedia}
                 />
@@ -1186,6 +1189,7 @@ function Field({
         {label}
       </Text>
       <TextInput
+        keyboardAppearance={colors.scheme}
         {...input}
         value={value}
         placeholder={placeholder}
@@ -1272,11 +1276,14 @@ function PassageRow({
 function PhotoPicker({
   items,
   retro,
+  privacy,
   onPick,
   onRemove,
 }: Readonly<{
   items: readonly PickedMedia[];
   retro: boolean;
+  /** Who will see it, from the "Who can see this?" choice. */
+  privacy: string;
   onPick: (source: MediaSource, intent: "replace" | "add") => void;
   onRemove: (index: number) => void;
 }>) {
@@ -1301,7 +1308,7 @@ function PhotoPicker({
         <Ionicons name="camera" size={42} color={colors.action} />
         <Text style={[face(colors, 700), styles.photoLabel, { color: colors.ink }]}>Add photo or video</Text>
         <Text style={[face(colors, 400), styles.photoCaption, { color: colors.muted }]}>
-          Private to this family
+          {privacy}
         </Text>
       </MediaChooser>
     );

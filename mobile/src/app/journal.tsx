@@ -429,7 +429,9 @@ export default function JournalScreen() {
   }, [supabase, circles, scope]);
 
   useEffect(() => {
-    if (!supabase || (!circlesOpen && !personJournal)) return;
+    // Web parity: the header heart is on every journal screen, so its list
+    // and unread dot load everywhere and refresh on navigation and on open.
+    if (!supabase) return;
     let active = true;
     void loadActivity(supabase, circles)
       .then((items) => {
@@ -441,7 +443,7 @@ export default function JournalScreen() {
     return () => {
       active = false;
     };
-  }, [circles, circlesOpen, personJournal, supabase]);
+  }, [activityOpen, circles, circlesOpen, personJournal, scope, supabase]);
 
   async function refresh() {
     setRefreshing(true);
@@ -885,9 +887,7 @@ export default function JournalScreen() {
         offset={circlesOpen && !settingsOpen ? circlesHeaderOffset : chromeOffset}
         interactive={switcherOpen}
         locked={settingsOpen || circlesOpen || Boolean(personJournal)}
-        onOpenActivity={
-          (circlesOpen || personJournal) && !settingsOpen ? () => setActivityOpen(true) : undefined
-        }
+        onOpenActivity={() => setActivityOpen(true)}
         activityUnread={activityItems.some((item) => !seenActivity.includes(item.id))}
       />
       {activityOpen ? (
