@@ -6,6 +6,7 @@ import { localJournalIsEnabled } from "../../../config/our-days-environment";
 import { requireJournalAccess } from "@/lib/auth/journal-access";
 import { isExpectedMutationOrigin } from "@/lib/auth/same-origin";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
+import { deliverActivityExpoPush } from "@/lib/expo-push/deliver-activity";
 import { webPushIsConfigured } from "@/lib/web-push/keys";
 
 const endpointPattern = /^https:\/\/\S{8,2048}$/u;
@@ -111,7 +112,9 @@ export async function deliverPublishedMomentPushAction(input: {
   const { deliverActivityWebPush } =
     await import("@/lib/web-push/deliver-activity");
   after(async () => {
+    await deliverActivityExpoPush(supabase, "moment", input.momentId);
     await deliverActivityWebPush(supabase, "moment", input.momentId);
+    await deliverActivityExpoPush(supabase, "mention", input.momentId);
     await deliverActivityWebPush(supabase, "mention", input.momentId);
   });
   return { ok: true, message: "Saved." };
