@@ -60,6 +60,7 @@ export function MomentOverflow({
   return Platform.OS === "ios" ? (
     <IosMenuTrigger
       style={styles.hit}
+      label="Moment options"
       items={[
         ...(actions.includes("edit") ? [{ id: "edit", title: "Edit", onPress: () => onEdit(moment) }] : []),
         { id: "delete", title: "Delete", destructive: true, onPress: remove },
