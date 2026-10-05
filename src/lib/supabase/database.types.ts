@@ -529,6 +529,8 @@ export type Database = {
           kind: string;
           latitude: number | null;
           longitude: number | null;
+          moment_push_notified_at: string | null;
+          moment_push_scheduled_at: string | null;
           occurred_at: string | null;
           occurred_on: string;
           occurred_timezone: string | null;
@@ -553,6 +555,8 @@ export type Database = {
           kind?: string;
           latitude?: number | null;
           longitude?: number | null;
+          moment_push_notified_at?: string | null;
+          moment_push_scheduled_at?: string | null;
           occurred_at?: string | null;
           occurred_on: string;
           occurred_timezone?: string | null;
@@ -577,6 +581,8 @@ export type Database = {
           kind?: string;
           latitude?: number | null;
           longitude?: number | null;
+          moment_push_notified_at?: string | null;
+          moment_push_scheduled_at?: string | null;
           occurred_at?: string | null;
           occurred_on?: string;
           occurred_timezone?: string | null;
@@ -790,6 +796,10 @@ export type Database = {
           intake_id: string;
           state: string;
         }[];
+      };
+      claim_moment_push_delivery: {
+        Args: { requested_moment_id: string };
+        Returns: boolean;
       };
       claim_mention_push_deliveries: {
         Args: { requested_moment_id: string; requested_note_id?: string };
@@ -1330,6 +1340,15 @@ export type Database = {
           moment_id: string;
           note_id: string | null;
           snippet: string;
+        }[];
+      };
+      moment_push_delivery_status: {
+        Args: { requested_moment_id: string };
+        Returns: {
+          already_notified: boolean;
+          fallback_elapsed: boolean;
+          media_ready: boolean;
+          should_send: boolean;
         }[];
       };
       list_my_photo_intakes: {
