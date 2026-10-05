@@ -255,7 +255,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await page.getByRole("link", { name: "← Back to Circles" }).click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Account", exact: true }),
+    page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Journal", exact: true }).click();
   await expect(
@@ -361,7 +361,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
   ).toBe(true);
   for (const destination of [
     { href: "/circles", link: "Circles", pair: "Our Days|Circles" },
-    { href: "/settings/family", link: "Settings", pair: "Our Days|Account" },
+    { href: "/settings/family", link: "Settings", pair: "Our Days|Settings" },
     {
       href: `/people/${localAlexPersonId}`,
       link: "Journal",
@@ -867,7 +867,9 @@ test("settings explains the last organizer and lets a member request deletion", 
     page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "team@beelinetech.co" }),
+    page
+      .getByLabel("Safety")
+      .getByRole("link", { name: "team@beelinetech.co" }),
   ).toBeVisible();
   await expect(page.getByText("Blocked people")).toBeVisible();
   await page.getByRole("button", { name: "Delete account" }).click();

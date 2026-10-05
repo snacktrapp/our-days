@@ -1,6 +1,6 @@
 begin;
 
-select plan(40);
+select plan(39);
 
 insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
 values (
