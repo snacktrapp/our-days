@@ -176,6 +176,8 @@ select is(
   'the unfinished video is not in the same sweep'
 );
 
+reset role;
+
 create temp table first_claim as
 select moment_push_notified_at as notified_at
   from public.moments
@@ -187,6 +189,8 @@ select is(
   'the first sweep sets moment_push_notified_at'
 );
 
+set local role anon;
+
 select is(
   (
     select count(*)::bigint
@@ -196,6 +200,8 @@ select is(
   0::bigint,
   'a second sweep does not claim or deliver the same post'
 );
+
+reset role;
 
 select is(
   (
