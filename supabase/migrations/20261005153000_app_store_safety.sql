@@ -962,7 +962,7 @@ begin
   ]
   loop
     statement := format(
-      'alter table %s %s trigger user',
+      'alter table %s %s trigger all',
       relation,
       case when enabled then 'enable' else 'disable' end
     );
@@ -979,6 +979,8 @@ security definer
 set search_path = ''
 as $$
 begin
+  perform set_config('row_security', 'off', true);
+
   if target_user_id is null then
     raise exception using
       errcode = '22023',
@@ -1209,7 +1211,10 @@ declare
   run private.account_deletion_runs%rowtype;
   leased_id uuid;
   copied_email text;
+  authored_moments_remain boolean;
 begin
+  perform set_config('row_security', 'off', true);
+
   if closure_request_id is null then
     return;
   end if;
@@ -1292,8 +1297,33 @@ begin
     return;
   end if;
 
-  if run.content_purged_at is null then
+  select exists (
+    select 1
+      from public.moments as moment
+      join public.circle_memberships as membership
+        on membership.id = moment.recorded_by_membership_id
+     where membership.user_id = target_request.auth_user_id
+  )
+    into authored_moments_remain;
+
+  if run.content_purged_at is null or authored_moments_remain then
     perform private.purge_account_authored_content(target_request.auth_user_id);
+
+    select exists (
+      select 1
+        from public.moments as moment
+        join public.circle_memberships as membership
+          on membership.id = moment.recorded_by_membership_id
+       where membership.user_id = target_request.auth_user_id
+    )
+      into authored_moments_remain;
+
+    if authored_moments_remain then
+      raise exception using
+        errcode = 'P0001',
+        message = 'Account content could not be removed';
+    end if;
+
     update private.account_deletion_runs
        set content_purged_at = statement_timestamp(),
            storage_purged_at = statement_timestamp(),
@@ -1568,6 +1598,8 @@ as $$
 declare
   closure_id uuid;
 begin
+  perform set_config('row_security', 'off', true);
+
   for closure_id in
     select closure.id
       from private.account_closure_requests as closure
@@ -1647,6 +1679,9 @@ grant execute on function private.viewer_hides_note(uuid) to authenticated;
 grant execute on function private.viewer_hides_reaction(uuid) to authenticated;
 grant execute on function private.viewer_hides_heart(uuid) to authenticated;
 grant execute on function private.viewer_hides_tagged_person(uuid, uuid) to authenticated;
+grant execute on function private.set_account_deletion_triggers(boolean) to service_role;
+grant execute on function private.purge_account_authored_content(uuid) to service_role;
+grant execute on function private.process_account_deletion(uuid) to service_role;
 grant execute on function private.tick_safety_jobs() to service_role;
 
 revoke all on function public.report_content(text, uuid, text, text)
@@ -1790,3 +1825,14 @@ begin
   return claimed > 0;
 end;
 $$;
+
+alter function private.purge_account_authored_content(uuid) owner to postgres;
+alter function private.set_account_deletion_triggers(boolean) owner to postgres;
+alter function private.process_account_deletion(uuid) owner to postgres;
+alter function private.tick_safety_jobs() owner to postgres;
+alter function private.claim_moment_push_delivery(uuid) owner to postgres;
+
+revoke all on function private.claim_moment_push_delivery(uuid)
+  from public, anon;
+grant execute on function private.claim_moment_push_delivery(uuid) to authenticated;
+grant execute on function private.claim_moment_push_delivery(uuid) to service_role;

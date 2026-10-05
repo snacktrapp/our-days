@@ -70,6 +70,8 @@ select ok(
   'a non-poster cannot claim another member''s moment push delivery'
 );
 
+reset role;
+
 update public.moments
    set moment_push_scheduled_at = statement_timestamp() - interval '5 minutes',
        moment_push_notified_at = null
