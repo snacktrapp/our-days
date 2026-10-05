@@ -962,7 +962,7 @@ begin
   ]
   loop
     statement := format(
-      'alter table %s %s trigger all',
+      'alter table %s %s trigger user',
       relation,
       case when enabled then 'enable' else 'disable' end
     );
@@ -988,6 +988,8 @@ begin
   end if;
 
   perform private.set_account_deletion_triggers(false);
+  perform set_config('our_days.account_deletion', 'on', true);
+  perform set_config('our_days.allow_moment_photo_delete', 'on', true);
   begin
     drop table if exists pg_temp.account_deletion_memberships;
     drop table if exists pg_temp.account_deletion_moments;
@@ -1190,9 +1192,13 @@ begin
          );
     end if;
 
+    perform set_config('our_days.account_deletion', 'off', true);
+    perform set_config('our_days.allow_moment_photo_delete', 'off', true);
     perform private.set_account_deletion_triggers(true);
   exception
     when others then
+      perform set_config('our_days.account_deletion', 'off', true);
+      perform set_config('our_days.allow_moment_photo_delete', 'off', true);
       perform private.set_account_deletion_triggers(true);
       raise;
   end;
@@ -1823,6 +1829,168 @@ begin
 
   get diagnostics claimed = row_count;
   return claimed > 0;
+end;
+$$;
+
+create or replace function private.enforce_moment_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501', message = 'Moments must use the reviewed deletion workflow';
+  end if;
+
+  if tg_op = 'UPDATE' and (
+    new.id <> old.id
+    or new.circle_id <> old.circle_id
+    or new.journal_person_id <> old.journal_person_id
+    or new.recorded_by_membership_id <> old.recorded_by_membership_id
+    or new.kind <> old.kind
+    or new.created_at <> old.created_at
+    or new.created_by_operations_membership_id
+      is distinct from old.created_by_operations_membership_id
+  ) then
+    raise exception using errcode = '42501', message = 'Moment identity is immutable';
+  end if;
+
+  new.revision := old.revision + 1;
+  new.updated_at := statement_timestamp();
+  return new;
+end;
+$$;
+
+create or replace function private.enforce_moment_note_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501', message = 'Notes must use the reviewed deletion workflow';
+  end if;
+  if new.id <> old.id
+    or new.circle_id <> old.circle_id
+    or new.moment_id <> old.moment_id
+    or new.author_membership_id <> old.author_membership_id
+    or new.created_at <> old.created_at then
+    raise exception using errcode = '42501', message = 'Note identity is immutable';
+  end if;
+  new.revision := old.revision + 1;
+  new.updated_at := statement_timestamp();
+  return new;
+end;
+$$;
+
+create or replace function private.enforce_moment_reaction_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501', message = 'Reactions must use the reviewed removal workflow';
+  end if;
+  if new.id <> old.id
+    or new.circle_id <> old.circle_id
+    or new.moment_id <> old.moment_id
+    or new.author_membership_id <> old.author_membership_id
+    or new.created_at <> old.created_at then
+    raise exception using errcode = '42501', message = 'Reaction identity is immutable';
+  end if;
+  new.revision := old.revision + 1;
+  new.updated_at := greatest(
+    pg_catalog.clock_timestamp(), old.updated_at, old.created_at
+  );
+  if new.removed_at is not null then
+    new.removed_at := greatest(new.removed_at, new.updated_at, old.created_at);
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function private.enforce_moment_person_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501', message = 'Moment tags must use the reviewed removal workflow';
+  end if;
+  if new.circle_id <> old.circle_id
+    or new.moment_id <> old.moment_id
+    or new.person_id <> old.person_id
+    or new.tagged_by_membership_id <> old.tagged_by_membership_id
+    or new.created_at <> old.created_at then
+    raise exception using errcode = '42501', message = 'Moment tag identity is immutable';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function private.enforce_moment_note_reaction_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501', message = 'Comment hearts must use the reviewed removal workflow';
+  end if;
+  if new.id <> old.id
+    or new.circle_id <> old.circle_id
+    or new.note_id <> old.note_id
+    or new.moment_id <> old.moment_id
+    or new.author_membership_id <> old.author_membership_id
+    or new.author_user_id <> old.author_user_id
+    or new.created_at <> old.created_at then
+    raise exception using errcode = '42501', message = 'Comment heart identity is immutable';
+  end if;
+  if new.notified_at is distinct from old.notified_at
+    and old.notified_at is not null then
+    raise exception using errcode = '42501', message = 'Comment heart notification is permanent';
+  end if;
+  new.revision := old.revision + 1;
+  new.updated_at := statement_timestamp();
+  return new;
+end;
+$$;
+
+create or replace function private.enforce_moment_video_integrity()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if tg_op = 'DELETE' then
+    if current_setting('our_days.account_deletion', true) = 'on' then
+      return old;
+    end if;
+    raise exception using errcode = '42501',
+      message = 'Video moment identity is immutable';
+  end if;
+  if new is distinct from old then
+    raise exception using errcode = '42501',
+      message = 'Video moment identity is immutable';
+  end if;
+  return new;
 end;
 $$;
 

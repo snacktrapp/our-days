@@ -89,6 +89,7 @@ select is(
     'accept_terms(terms_version text)',
     'acknowledge_photo_intake(intake_id uuid)',
     'add_existing_circle_member(source_membership_id uuid, target_circle_id uuid)',
+    'apply_app_review_demo(reviewer_user_id uuid, dry_run boolean)',
     'attach_photo_to_moment(existing_moment_id uuid, request_key uuid)',
     'attach_video_moment_poster(moment_id uuid, width_px integer, height_px integer)',
     'block_member(target_membership_id uuid)',
