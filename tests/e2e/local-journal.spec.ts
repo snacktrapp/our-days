@@ -38,7 +38,9 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  const notifications = page.getByRole("button", { name: /Open notifications/ });
+  const notifications = page.getByRole("button", {
+    name: /Open notifications/,
+  });
   await expect(notifications).toBeVisible();
   await notifications.click();
   await expect.poll(() => requests).toBeGreaterThan(0);
@@ -221,9 +223,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("link", { name: "Jordan — open journal" })
-    .click();
+  await page.getByRole("link", { name: "Jordan — open journal" }).click();
   await expect(
     page.getByRole("heading", { name: "Jordan", exact: true }),
   ).toBeVisible();
