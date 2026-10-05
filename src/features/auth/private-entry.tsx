@@ -21,11 +21,13 @@ export function PrivateEntry({
   cleanupIncomplete = false,
   linkIssue,
   oauthIssue,
+  notice,
 }: {
   connected?: boolean;
   cleanupIncomplete?: boolean;
   linkIssue?: "invalid" | "unavailable";
   oauthIssue?: keyof typeof oauthIssueCopy;
+  notice?: "deletion-requested";
 }) {
   const [email, setEmail] = useState("");
   const [emailEdited, setEmailEdited] = useState(false);
@@ -66,6 +68,11 @@ export function PrivateEntry({
         <h1 id="private-entry-title">
           {connected ? "Open your journal." : "Our Days is invitation only."}
         </h1>
+        {notice === "deletion-requested" ? (
+          <p className="auth-status" role="status">
+            Deletion requested.
+          </p>
+        ) : null}
         {cleanupState !== "ready" ? (
           <div className="private-entry-content">
             <p

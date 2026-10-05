@@ -748,6 +748,10 @@ export type Database = {
         Args: never;
         Returns: string;
       };
+      accept_terms: {
+        Args: { terms_version: string };
+        Returns: string;
+      };
       acknowledge_photo_intake: {
         Args: { intake_id: string };
         Returns: {
@@ -778,6 +782,10 @@ export type Database = {
       attach_video_moment_poster: {
         Args: { height_px: number; moment_id: string; width_px: number };
         Returns: boolean;
+      };
+      block_member: {
+        Args: { target_membership_id: string };
+        Returns: undefined;
       };
       cancel_photo_intake: {
         Args: { intake_id: string };
@@ -1108,6 +1116,21 @@ export type Database = {
           reactions: Json;
         }[];
       };
+      get_my_account_closure_status: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          last_organizer_circles: string[];
+          requested_at: string;
+          state: string;
+        }[];
+      };
+      get_my_terms_acceptance: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          accepted_at: string;
+          terms_version: string;
+        }[];
+      };
       get_photo_moment_delivery: {
         Args: { moment_id: string };
         Returns: {
@@ -1314,6 +1337,14 @@ export type Database = {
           tagged_people: Json;
           time_precision: string;
           updated_at: string;
+        }[];
+      };
+      list_my_blocks: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          blocked_at: string;
+          membership_id: string;
+          person_display_name: string;
         }[];
       };
       list_my_mention_notifications: {
@@ -1570,6 +1601,15 @@ export type Database = {
         Args: { moment_id: string; photo_ids: string[] };
         Returns: undefined;
       };
+      report_content: {
+        Args: {
+          details?: string;
+          reason: string;
+          target_id: string;
+          target_kind: string;
+        };
+        Returns: string;
+      };
       request_account_closure: {
         Args: { request_key: string };
         Returns: string;
@@ -1762,9 +1802,17 @@ export type Database = {
         Args: { batch_limit: number };
         Returns: number;
       };
+      tick_safety_jobs: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
       trash_moment_note: {
         Args: { expected_revision: number; note_id: string };
         Returns: number;
+      };
+      unblock_member: {
+        Args: { target_membership_id: string };
+        Returns: undefined;
       };
       update_circle: {
         Args: { circle_id: string; circle_name: string };

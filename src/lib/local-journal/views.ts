@@ -171,7 +171,13 @@ function conversationFromLocalDocument(
   const mine = viewerLocalMembershipIds(document, access);
   return {
     notes: document.notes
-      .filter((note) => note.momentId === momentId && note.trashedAt === null)
+      .filter(
+        (note) =>
+          note.momentId === momentId &&
+          note.trashedAt === null &&
+          !localHidesNote(document, access, note.id) &&
+          !localBlocksMembership(document, access, note.authorMembershipId),
+      )
       .slice()
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .map((note) => {
@@ -187,7 +193,10 @@ function conversationFromLocalDocument(
             )?.personId,
         );
         const noteHearts = (document.noteHearts ?? []).filter(
-          (heart) => heart.noteId === note.id && heart.removedAt === null,
+          (heart) =>
+            heart.noteId === note.id &&
+            heart.removedAt === null &&
+            !localBlocksMembership(document, access, heart.authorMembershipId),
         );
         return {
           id: note.id,
@@ -199,6 +208,7 @@ function conversationFromLocalDocument(
           displayDate: displayConversationDateOnly(note.createdAt, "UTC"),
           revision: note.revision,
           canChange: mine.has(note.authorMembershipId),
+          authorMembershipId: note.authorMembershipId,
           heartCount: noteHearts.length,
           heartedByViewer: noteHearts.some((heart) =>
             mine.has(heart.authorMembershipId),
@@ -211,7 +221,9 @@ function conversationFromLocalDocument(
     reactions: document.reactions
       .filter(
         (reaction) =>
-          reaction.momentId === momentId && reaction.removedAt === null,
+          reaction.momentId === momentId &&
+          reaction.removedAt === null &&
+          !localBlocksMembership(document, access, reaction.authorMembershipId),
       )
       .map((reaction) => {
         const personNameValue = membershipPersonName(
@@ -262,6 +274,7 @@ function momentToTimelineRow(
       recorderMembership?.personId ?? moment.journalPersonId ?? "",
     source_url: moment.sourceUrl ?? null,
     recorder_person_name: recorderPerson?.displayName ?? "Family",
+    recorded_by_membership_id: moment.recordedByMembershipId,
     body: moment.body,
     can_change: true,
     revision: moment.revision,
@@ -553,7 +566,9 @@ export async function loadLocalJournalContext(
   for (const note of document.notes) {
     if (
       note.trashedAt !== null ||
-      !viewerMembershipIds.includes(note.authorMembershipId)
+      !viewerMembershipIds.includes(note.authorMembershipId) ||
+      localHidesNote(document, access, note.id) ||
+      localHidesMoment(document, access, note.momentId)
     )
       continue;
     const moment = document.moments.find((item) => item.id === note.momentId);
@@ -585,7 +600,10 @@ export async function loadLocalJournalContext(
         .filter(
           (note) =>
             note.trashedAt === null &&
-            !viewerMembershipIds.includes(note.authorMembershipId),
+            !viewerMembershipIds.includes(note.authorMembershipId) &&
+            !localHidesNote(document, access, note.id) &&
+            !localBlocksMembership(document, access, note.authorMembershipId) &&
+            !localHidesMoment(document, access, note.momentId),
         )
         .map((note) => ({
           id: note.id,
@@ -594,7 +612,16 @@ export async function loadLocalJournalContext(
           created_at: note.createdAt,
         })),
       document.reactions
-        .filter((reaction) => reaction.removedAt === null)
+        .filter(
+          (reaction) =>
+            reaction.removedAt === null &&
+            !localBlocksMembership(
+              document,
+              access,
+              reaction.authorMembershipId,
+            ) &&
+            !localHidesMoment(document, access, reaction.momentId),
+        )
         .map((reaction) => ({
           id: reaction.id,
           moment_id: reaction.momentId,
@@ -619,6 +646,12 @@ export async function loadLocalJournalContext(
             moment.kind !== "insight" &&
             moment.audience !== "just_me" &&
             moment.recordedByMembershipId !== access.membershipId &&
+            !localHidesMoment(document, access, moment.id) &&
+            !localBlocksMembership(
+              document,
+              access,
+              moment.recordedByMembershipId,
+            ) &&
             momentLinkedCircleIds(moment, document.circle.id).some((circleId) =>
               viewerCircleIds.has(circleId),
             ),
@@ -778,6 +811,48 @@ function localViewerCircleIds(
   ];
 }
 
+function localAccountSafety(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  return document.safetyByAccount?.[access.personId];
+}
+
+function localHidesMoment(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  momentId: string,
+) {
+  return (
+    localAccountSafety(document, access)?.hiddenMomentIds?.includes(
+      momentId,
+    ) === true
+  );
+}
+
+function localBlocksMembership(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  membershipId: string,
+) {
+  return (
+    localAccountSafety(document, access)?.blockedMembershipIds?.includes(
+      membershipId,
+    ) === true
+  );
+}
+
+function localHidesNote(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  noteId: string,
+) {
+  return (
+    localAccountSafety(document, access)?.hiddenNoteIds?.includes(noteId) ===
+    true
+  );
+}
+
 function visibleMoments(
   document: Awaited<ReturnType<typeof readLocalJournal>>,
   access: LocalAccess,
@@ -799,6 +874,12 @@ function visibleMoments(
   return document.moments
     .filter((moment) => {
       if (moment.trashedAt !== null) return false;
+      if (localHidesMoment(document, access, moment.id)) return false;
+      if (
+        localBlocksMembership(document, access, moment.recordedByMembershipId)
+      ) {
+        return false;
+      }
       if (!journalPersonId) {
         if (allCircles) {
           if (moment.audience === "just_me") {
@@ -890,6 +971,7 @@ export async function loadLocalTimeline(
         viewingJournalPersonId: options.journalPersonId,
         feedCircleId: allCircles || personal ? null : access.circleId,
         circleNames,
+        viewerMembershipIds: viewerLocalMembershipIds(document, access),
       },
       localMomentPhotoDescriptors(moment),
       conversationFromLocalDocument(document, access, moment.id),
@@ -1032,7 +1114,9 @@ export async function loadLocalMemories(
     ? mapTimelineRow(
         momentToTimelineRow(document, feature, snapshotAt),
         context.today,
-        undefined,
+        {
+          viewerMembershipIds: viewerLocalMembershipIds(document, access),
+        },
         localMomentPhotoDescriptors(feature),
       )
     : undefined;
@@ -1131,7 +1215,9 @@ export async function loadLocalMemoryJourney(
     mapTimelineRow(
       momentToTimelineRow(document, moment, snapshotAt),
       context.today,
-      undefined,
+      {
+        viewerMembershipIds: viewerLocalMembershipIds(document, access),
+      },
       localMomentPhotoDescriptors(moment),
       conversationFromLocalDocument(document, access, moment.id),
     ),

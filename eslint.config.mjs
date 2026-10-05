@@ -34,6 +34,7 @@ const eslintConfig = defineConfig([
     "test-results/**",
     ".vercel/**",
     "next-env.d.ts",
+    "supabase/functions/**",
   ]),
 ]);
 

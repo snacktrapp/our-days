@@ -76,11 +76,39 @@ export type TimelineRow = Omit<
   moment_audience?: string | null;
   linked_circle_ids?: string[] | null;
   tagged_people?: unknown;
+  recorded_by_membership_id?: string | null;
 };
 
 type MomentPhotoClient = Awaited<ReturnType<typeof createOurDaysServerClient>>;
 
 const pageSize = 20;
+
+export async function withRecorderMemberships(
+  supabase: MomentPhotoClient,
+  rows: readonly TimelineRow[],
+): Promise<TimelineRow[]> {
+  const ids = [...new Set(rows.map((row) => row.moment_id))];
+  if (ids.length === 0) return [...rows];
+  try {
+    if (typeof supabase.from !== "function") return [...rows];
+    const result = await supabase
+      .from("moments")
+      .select("id, recorded_by_membership_id")
+      .in("id", ids);
+    if (!result || result.error || !result.data) return [...rows];
+    const byId = new Map(
+      result.data.map((row) => [row.id, row.recorded_by_membership_id]),
+    );
+    return rows.map((row) => ({
+      ...row,
+      recorded_by_membership_id:
+        byId.get(row.moment_id) ?? row.recorded_by_membership_id ?? null,
+    }));
+  } catch {
+    return [...rows];
+  }
+}
+
 const maximumCumulativePages = 25;
 
 export type ConnectedTimelineOptions = Readonly<{
@@ -305,6 +333,7 @@ export async function loadMomentConversationsByMomentId(
       displayDate: displayConversationDateOnly(note.created_at, "UTC"),
       revision: note.revision,
       canChange: viewerMembershipIds.has(note.author_membership_id),
+      authorMembershipId: note.author_membership_id,
       heartCount: noteHearts.length,
       heartedByViewer: noteHearts.some((heart) =>
         viewerMembershipIds.has(heart.author_membership_id),
@@ -361,6 +390,7 @@ export function mapTimelineRow(
     viewingJournalPersonId?: string;
     feedCircleId?: string | null;
     circleNames?: Readonly<Record<string, string>>;
+    viewerMembershipIds?: ReadonlySet<string>;
   }>,
   photos?: readonly MomentPhotoDescriptor[],
   conversation: MomentConversationViewModel = emptyConversation,
@@ -467,6 +497,11 @@ export function mapTimelineRow(
       : {}),
     conversation,
     canChange: row.can_change,
+    authoredByViewer: row.recorded_by_membership_id
+      ? visibility?.viewerMembershipIds?.has(row.recorded_by_membership_id)
+      : undefined,
+    authorMembershipId: row.recorded_by_membership_id || undefined,
+    authorName: row.recorder_person_name ?? undefined,
     revision: row.revision,
     editOccurrence: {
       occurredAt: row.occurred_at,
@@ -1092,16 +1127,26 @@ export async function loadConnectedTimeline(
         enrichRows.map((row) => row.moment_id),
       ),
     ]);
+  const viewerMembershipIds = new Set(
+    context.viewerMembershipIds?.length
+      ? context.viewerMembershipIds
+      : [access.membershipId],
+  );
+  const [describedStubs, describedRows] = await Promise.all([
+    withRecorderMemberships(supabase, stubRows),
+    withRecorderMemberships(supabase, enrichRows),
+  ]);
   const visibility = {
     viewerPersonId: access.personId,
     viewingJournalPersonId: options.journalPersonId,
     feedCircleId: allCircles || personal ? null : access.circleId,
     circleNames,
+    viewerMembershipIds,
   };
-  const stubMoments = stubRows.map((row) =>
+  const stubMoments = describedStubs.map((row) =>
     mapTimelineRow(row, context.today, visibility),
   );
-  const moments = enrichRows.map((row) =>
+  const moments = describedRows.map((row) =>
     mapTimelineRow(
       row,
       context.today,

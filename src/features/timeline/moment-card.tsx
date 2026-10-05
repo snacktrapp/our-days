@@ -115,7 +115,12 @@ function cardOptions(
   connectedPosition?: number,
   connectedTotal?: number,
 ) {
-  if (!connectedActions || !moment.canChange) return null;
+  if (
+    moment.authoredByViewer !== false &&
+    (!connectedActions || !moment.canChange)
+  ) {
+    return null;
+  }
   return (
     <ConnectedMomentControl
       moment={moment}

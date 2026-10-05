@@ -32,6 +32,7 @@ import {
   type SaveEntryDraftInput,
 } from "@/features/composer/entry-drafts";
 import type {
+  LocalAccountSafety,
   LocalEntryDraft,
   LocalJournalDocument,
   LocalMedia,
@@ -150,6 +151,10 @@ function emptyDocument(): LocalJournalDocument {
     noteHearts: [],
     reactions: [],
     drafts: [],
+    safetyByAccount: {
+      [localAlexPersonId]: { termsVersion: "2026-10-04" },
+      [localJordanPersonId]: { termsVersion: "2026-10-04" },
+    },
   };
 }
 
@@ -1429,4 +1434,178 @@ export async function deleteLocalEntryDraft(access: LocalAccess, id: string) {
 
 export function resetLocalJournalForTests() {
   rmSync(dataRoot(), { recursive: true, force: true });
+}
+
+function accountSafety(
+  document: LocalJournalDocument,
+  personId: string,
+): LocalAccountSafety {
+  return document.safetyByAccount?.[personId] ?? {};
+}
+
+function withAccountSafety(
+  document: LocalJournalDocument,
+  personId: string,
+  safety: LocalAccountSafety,
+): LocalJournalDocument {
+  return {
+    ...document,
+    safetyByAccount: {
+      ...document.safetyByAccount,
+      [personId]: safety,
+    },
+  };
+}
+
+function uniqueIds(current: readonly string[] | undefined, id: string) {
+  return [...new Set([...(current ?? []), id])];
+}
+
+export function localLastOrganizerCircles(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+) {
+  const home = document.memberships.find(
+    (membership) => membership.id === access.membershipId,
+  );
+  const activeOrganizers = document.memberships.filter(
+    (membership) =>
+      membership.status === "active" && membership.role === "organizer",
+  );
+  if (
+    home?.status === "active" &&
+    home.role === "organizer" &&
+    activeOrganizers.length < 2
+  ) {
+    return [document.circle.name];
+  }
+  return [];
+}
+
+export async function readLocalSafety(access: LocalAccess) {
+  const document = await readLocalJournal();
+  requireMembership(document, access);
+  const safety = accountSafety(document, access.personId);
+  const blocks = (safety.blockedMembershipIds ?? []).flatMap((membershipId) => {
+    const membership = document.memberships.find(
+      (item) => item.id === membershipId,
+    );
+    const person = document.people.find(
+      (item) => item.id === membership?.personId,
+    );
+    return person
+      ? [{ membershipId, personDisplayName: person.displayName }]
+      : [];
+  });
+  return {
+    termsVersion: safety.termsVersion ?? null,
+    blocks,
+    deletionRequestedAt: safety.deletionRequestedAt ?? null,
+    lastOrganizerCircles: localLastOrganizerCircles(document, access),
+  };
+}
+
+export async function acceptLocalTerms(access: LocalAccess, version: string) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = accountSafety(document, access.personId);
+    if (current.termsVersion === version) return current.termsVersion;
+    writeDocumentUnlocked(
+      withAccountSafety(document, access.personId, {
+        ...current,
+        termsVersion: version,
+      }),
+    );
+    return version;
+  });
+}
+
+export async function reportLocalContent(
+  access: LocalAccess,
+  targetKind: "moment" | "note",
+  targetId: string,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = accountSafety(document, access.personId);
+    const next =
+      targetKind === "moment"
+        ? {
+            ...current,
+            hiddenMomentIds: uniqueIds(current.hiddenMomentIds, targetId),
+          }
+        : {
+            ...current,
+            hiddenNoteIds: uniqueIds(current.hiddenNoteIds, targetId),
+          };
+    writeDocumentUnlocked(withAccountSafety(document, access.personId, next));
+  });
+}
+
+export async function blockLocalMember(
+  access: LocalAccess,
+  membershipId: string,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    if (membershipId === access.membershipId) {
+      throw new Error("This person cannot be blocked");
+    }
+    const target = document.memberships.find(
+      (membership) => membership.id === membershipId,
+    );
+    if (!target) throw new Error("This person cannot be blocked");
+    const current = accountSafety(document, access.personId);
+    writeDocumentUnlocked(
+      withAccountSafety(document, access.personId, {
+        ...current,
+        blockedMembershipIds: uniqueIds(
+          current.blockedMembershipIds,
+          membershipId,
+        ),
+      }),
+    );
+  });
+}
+
+export async function unblockLocalMember(
+  access: LocalAccess,
+  membershipId: string,
+) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const current = accountSafety(document, access.personId);
+    writeDocumentUnlocked(
+      withAccountSafety(document, access.personId, {
+        ...current,
+        blockedMembershipIds: (current.blockedMembershipIds ?? []).filter(
+          (id) => id !== membershipId,
+        ),
+      }),
+    );
+  });
+}
+
+export async function requestLocalAccountDeletion(access: LocalAccess) {
+  return withStoreLock(() => {
+    const document = readDocumentUnlocked();
+    requireMembership(document, access);
+    const circles = localLastOrganizerCircles(document, access);
+    if (circles.length > 0) {
+      return { ok: false as const, circles };
+    }
+    const current = accountSafety(document, access.personId);
+    const requestedAt = current.deletionRequestedAt ?? new Date().toISOString();
+    writeDocumentUnlocked(
+      withAccountSafety(document, access.personId, {
+        ...current,
+        deletionRequestedAt: requestedAt,
+      }),
+    );
+    return { ok: true as const, requestedAt };
+  });
 }

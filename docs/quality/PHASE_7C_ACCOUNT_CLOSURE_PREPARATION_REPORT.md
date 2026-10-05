@@ -43,3 +43,17 @@ This checkpoint closes database authorization without deleting shared family his
 ## Next gate
 
 Keep account deletion unavailable. Before a production action exists, add private media ownership/reconciliation, ready-artifact invalidation, an external suppression/receipt boundary, a separately deployed narrow worker, Auth/session deletion integration, retry and partial-failure recovery, and real-device confirmation/recovery UX. Then rehearse the full operation against isolated hosted resources and prove that a restored project does not restore access.
+
+## Amendment — 2026-10-05 — App Store account deletion
+
+`private.prepare_account_closure` still preserves other people’s history when it is called on its own. The App Store safety job deletes the requester’s authored posts, photos, videos, comments, hearts, drafts, push tokens, and tags or mentions of them before that preparation runs. Invitation rows stay immutable; preparation still invalidates the ones they sent.
+
+Scheduling is `pg_cron` job `our-days-safety-jobs` at `15 * * * *`, calling `private.tick_safety_jobs()`. Browser roles cannot execute it. `public.tick_safety_jobs()` is granted only to `service_role`. Email goes out through the Vault secret `resend_api_key` and `pg_net` to `https://api.resend.com/emails`, from `Our Days <ourdays@mail.beelinetech.co>`. The optional Edge Function `supabase/functions/safety-jobs` only POSTs that public RPC with the service role. The Next.js app does not hold a service-role key.
+
+### Stuck-deletion runbook
+
+Inspect `private.account_deletion_runs`, `private.account_deletion_completions`, and `private.safety_outbound_mail` (recipient and body are cleared after a successful send). Re-run `select private.tick_safety_jobs();` as `service_role`, or POST the edge function with `Authorization: Bearer <SAFETY_JOB_SECRET>`. `last_error_code` `23503` means the Auth user could not be deleted because a foreign key remains. `23514` means the person is still the last organizer; name another organizer or archive the circle, then tick again. Mail stays pending until Vault `resend_api_key` or the edge function’s `RESEND_API_KEY` is set.
+
+### Rollback
+
+The migration is additive. Do not drop the new tables or functions in a down migration. Unscheduling `our-days-safety-jobs` stops automatic processing. `public.request_account_closure` and `private.prepare_account_closure` keep their previous behavior.

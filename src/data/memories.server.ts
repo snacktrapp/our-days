@@ -23,6 +23,7 @@ import {
   loadMomentConversationsByMomentId,
   loadMomentPhotosByMomentId,
   mapTimelineRow,
+  withRecorderMemberships,
   requestedPageCount,
   requestedSnapshot,
   type TimelineRow,
@@ -166,12 +167,21 @@ export async function loadConnectedMemories(
     featureRow?.moment_kind === "photo"
       ? await loadMomentPhotosByMomentId(supabase, [featureRow.moment_id])
       : new Map();
-  const featureMoment = featureRow
+  const featureDescribed = featureRow
+    ? (await withRecorderMemberships(supabase, [featureRow as TimelineRow]))[0]
+    : undefined;
+  const featureMoment = featureDescribed
     ? mapTimelineRow(
-        featureRow,
+        featureDescribed,
         context.today,
-        undefined,
-        featurePhotos.get(featureRow.moment_id),
+        {
+          viewerMembershipIds: new Set(
+            context.viewerMembershipIds?.length
+              ? context.viewerMembershipIds
+              : [access.membershipId],
+          ),
+        },
+        featurePhotos.get(featureDescribed.moment_id),
       )
     : undefined;
 
@@ -330,11 +340,22 @@ export async function loadConnectedMemoryJourney(
     },
     rows.map((row) => row.moment_id),
   );
-  const moments = rows.map((row) =>
+  const describedRows = await withRecorderMemberships(
+    supabase,
+    rows as TimelineRow[],
+  );
+  const memoryVisibility = {
+    viewerMembershipIds: new Set(
+      context.viewerMembershipIds?.length
+        ? context.viewerMembershipIds
+        : [access.membershipId],
+    ),
+  };
+  const moments = describedRows.map((row) =>
     mapTimelineRow(
       row,
       context.today,
-      undefined,
+      memoryVisibility,
       photosByMoment.get(row.moment_id),
       conversationsByMoment.get(row.moment_id),
     ),

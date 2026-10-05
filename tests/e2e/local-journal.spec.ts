@@ -855,3 +855,42 @@ test("unconfigured Google and X stay on the invitation gate", async ({
     page.getByRole("button", { name: "Email me a sign-in link" }),
   ).toBeVisible();
 });
+
+test("settings explains the last organizer and lets a member request deletion", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "team@beelinetech.co" }),
+  ).toBeVisible();
+  await expect(page.getByText("Blocked people")).toBeVisible();
+  await page.getByRole("button", { name: "Delete account" }).click();
+  const organizerDialog = page.getByRole("dialog", { name: "Delete account" });
+  await expect(organizerDialog).toContainText(
+    "Our Days needs another organizer",
+  );
+  await expect(
+    organizerDialog.getByRole("button", { name: "Delete my account" }),
+  ).toHaveCount(0);
+  await organizerDialog.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+
+  await page.getByLabel("Email address").fill("jordan@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Delete account" }).click();
+  const deletionDialog = page.getByRole("dialog", { name: "Delete account" });
+  await expect(deletionDialog).toContainText("within 7 days");
+  await deletionDialog
+    .getByRole("button", { name: "Delete my account" })
+    .click();
+  await expect(page).toHaveURL(/\/sign-in\?notice=deletion-requested/);
+  await expect(page.getByText("Deletion requested.")).toBeVisible();
+});
