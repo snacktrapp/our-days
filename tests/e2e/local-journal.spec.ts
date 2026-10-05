@@ -16,6 +16,10 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   page.on("pageerror", (error) => errors.push(error.message));
   let fresh = false;
   let requests = 0;
+  // Install the clock before navigation so the banner's 30s poll is a fake
+  // timer. Installing later leaves the already-scheduled timeout on real time,
+  // and fast-forward never fires it.
+  await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await page.route("**/api/activity", async (route) => {
     requests += 1;
     await route.fulfill({
@@ -65,7 +69,6 @@ test("fresh thread comments appear as a banner and in Activity without replaying
       }),
     );
   });
-  await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,
   );

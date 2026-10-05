@@ -1218,6 +1218,9 @@ begin
      where acceptance.user_id = target_user_id;
 
     if to_regclass('storage.objects') is not null then
+      -- storage.protect_delete rejects every DELETE statement unless the
+      -- Storage API's own bypass is set, including a delete that matches nothing.
+      perform set_config('storage.allow_delete_query', 'true', true);
       delete from storage.objects as object
        using pg_temp.account_deletion_objects as target
        where (
@@ -1229,6 +1232,7 @@ begin
            and object.bucket_id = target.bucket_id
            and object.name = target.object_path
          );
+      perform set_config('storage.allow_delete_query', 'false', true);
     end if;
 
     perform set_config('our_days.account_deletion', 'off', true);
@@ -1237,6 +1241,7 @@ begin
     when others then
       perform set_config('our_days.account_deletion', 'off', true);
       perform set_config('our_days.allow_moment_photo_delete', 'off', true);
+      perform set_config('storage.allow_delete_query', 'false', true);
       raise;
   end;
 end;
