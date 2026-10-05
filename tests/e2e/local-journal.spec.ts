@@ -49,6 +49,22 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   ]);
   expect(requests).toBeGreaterThan(0);
   await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("our-days:activity-updated", {
+        detail: [
+          {
+            id: "note:old",
+            actorName: "Molly",
+            message: "also commented on Brian’s post.",
+            displayDate: "Today",
+            createdAt: "2026-09-19T10:00:00Z",
+            href: "/family#moment-thread",
+          },
+        ],
+      }),
+    );
+  });
   await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,

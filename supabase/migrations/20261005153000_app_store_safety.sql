@@ -1252,7 +1252,6 @@ as $$
 declare
   target_request private.account_closure_requests%rowtype;
   run private.account_deletion_runs%rowtype;
-  leased_id uuid;
   copied_email text;
   authored_moments_remain boolean;
 begin
@@ -1284,39 +1283,30 @@ begin
     return;
   end if;
 
-  with leased as (
-    insert into private.account_deletion_runs (
-      closure_request_id, attempt_count, leased_until
-    ) values (
-      target_request.id,
-      1,
-      statement_timestamp() + interval '15 minutes'
-    )
-    on conflict on constraint account_deletion_runs_pkey do update
-      set attempt_count = private.account_deletion_runs.attempt_count + 1,
-          leased_until = statement_timestamp() + interval '15 minutes',
-          updated_at = statement_timestamp()
-    where private.account_deletion_runs.completed_at is null
-      and (
-        private.account_deletion_runs.leased_until is null
-        or private.account_deletion_runs.leased_until < statement_timestamp()
-      )
-    returning closure_request_id
+  insert into private.account_deletion_runs (
+    closure_request_id, attempt_count, leased_until
+  ) values (
+    target_request.id,
+    1,
+    statement_timestamp() + interval '15 minutes'
   )
-  select leased.closure_request_id
-    into leased_id
-    from leased;
-
-  if leased_id is null then
-    perform set_config('our_days.account_deletion', 'off', true);
-    return;
-  end if;
+  on conflict on constraint account_deletion_runs_pkey do update
+    set attempt_count = private.account_deletion_runs.attempt_count + 1,
+        leased_until = statement_timestamp() + interval '15 minutes',
+        updated_at = statement_timestamp()
+  where private.account_deletion_runs.completed_at is null;
 
   select deletion_run.*
     into run
     from private.account_deletion_runs as deletion_run
    where deletion_run.closure_request_id = target_request.id
+     and deletion_run.completed_at is null
    for update;
+
+  if run.closure_request_id is null then
+    perform set_config('our_days.account_deletion', 'off', true);
+    return;
+  end if;
 
   if exists (
     select 1
