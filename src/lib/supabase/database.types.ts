@@ -774,6 +774,10 @@ export type Database = {
         Args: { source_membership_id: string; target_circle_id: string };
         Returns: string;
       };
+      apply_app_review_demo: {
+        Args: { dry_run?: boolean; reviewer_user_id: string };
+        Returns: Json;
+      };
       attach_photo_to_moment: {
         Args: { existing_moment_id: string; request_key: string };
         Returns: {

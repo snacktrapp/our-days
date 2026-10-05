@@ -1,4 +1,5 @@
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { PublicLegalFooter } from "@/features/legal/public-legal-footer";
 import { AccountSafetyControls } from "@/features/safety/account-safety";
 import type { AccountSafetySnapshot } from "@/features/safety/safety-actions";
 import { safetyContactEmail } from "@/features/safety/terms";
@@ -57,6 +58,7 @@ export function AccountTools({
           </div>
         </SettingsGroup>
       </SettingsSection>
+      <PublicLegalFooter />
     </>
   );
 }
