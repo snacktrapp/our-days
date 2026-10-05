@@ -486,7 +486,7 @@ select is(
   'the status shows a deletion request before the job runs'
 );
 
-reset role;
+set local role service_role;
 
 select lives_ok(
   $$select private.tick_safety_jobs()$$,

@@ -143,6 +143,46 @@ revoke all on table private.account_deletion_completions
 revoke all on table private.safety_outbound_mail
   from public, anon, authenticated, service_role;
 
+create policy member_blocks_account_deletion on private.member_blocks
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy terms_acceptances_account_deletion on private.terms_acceptances
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy entry_drafts_account_deletion on private.entry_drafts
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy expo_push_tokens_account_deletion on private.expo_push_tokens
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy web_push_subscriptions_account_deletion on private.web_push_subscriptions
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy account_deletion_runs_job on private.account_deletion_runs
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy account_deletion_completions_job on private.account_deletion_completions
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
+create policy safety_outbound_mail_job on private.safety_outbound_mail
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
+
 create function private.viewer_reported(target_kind text, target_id uuid)
 returns boolean
 language sql
@@ -989,7 +1029,6 @@ begin
 
   perform set_config('our_days.account_deletion', 'on', true);
   perform set_config('our_days.allow_moment_photo_delete', 'on', true);
-  perform set_config('session_replication_role', 'replica', true);
   begin
     drop table if exists pg_temp.account_deletion_memberships;
     drop table if exists pg_temp.account_deletion_moments;
@@ -1194,12 +1233,10 @@ begin
 
     perform set_config('our_days.account_deletion', 'off', true);
     perform set_config('our_days.allow_moment_photo_delete', 'off', true);
-    perform set_config('session_replication_role', 'origin', true);
   exception
     when others then
       perform set_config('our_days.account_deletion', 'off', true);
       perform set_config('our_days.allow_moment_photo_delete', 'off', true);
-      perform set_config('session_replication_role', 'origin', true);
       raise;
   end;
 end;
@@ -1220,8 +1257,10 @@ declare
   authored_moments_remain boolean;
 begin
   perform set_config('row_security', 'off', true);
+  perform set_config('our_days.account_deletion', 'on', true);
 
   if closure_request_id is null then
+    perform set_config('our_days.account_deletion', 'off', true);
     return;
   end if;
 
@@ -1230,6 +1269,7 @@ begin
       from private.account_deletion_completions as done
      where done.closure_request_id = process_account_deletion.closure_request_id
   ) then
+    perform set_config('our_days.account_deletion', 'off', true);
     return;
   end if;
 
@@ -1240,6 +1280,7 @@ begin
    for update;
 
   if target_request.id is null then
+    perform set_config('our_days.account_deletion', 'off', true);
     return;
   end if;
 
@@ -1267,6 +1308,7 @@ begin
     from leased;
 
   if leased_id is null then
+    perform set_config('our_days.account_deletion', 'off', true);
     return;
   end if;
 
@@ -1300,6 +1342,7 @@ begin
            leased_until = null,
            updated_at = statement_timestamp()
      where account_deletion_runs.closure_request_id = target_request.id;
+    perform set_config('our_days.account_deletion', 'off', true);
     return;
   end if;
 
@@ -1371,6 +1414,7 @@ begin
                leased_until = null,
                updated_at = statement_timestamp()
          where account_deletion_runs.closure_request_id = target_request.id;
+        perform set_config('our_days.account_deletion', 'off', true);
         return;
     end;
 
@@ -1416,6 +1460,8 @@ begin
          last_error_code = null,
          updated_at = statement_timestamp()
    where account_deletion_runs.closure_request_id = target_request.id;
+
+  perform set_config('our_days.account_deletion', 'off', true);
 end;
 $$;
 
@@ -1606,6 +1652,7 @@ declare
   error_code text;
 begin
   perform set_config('row_security', 'off', true);
+  perform set_config('our_days.account_deletion', 'on', true);
 
   for closure_id in
     select closure.id
@@ -1643,8 +1690,14 @@ begin
   end loop;
 
   perform private.dispatch_pending_safety_mail();
+  perform set_config('our_days.account_deletion', 'off', true);
 end;
 $$;
+
+create policy account_closure_requests_job on private.account_closure_requests
+  for all
+  using (current_setting('our_days.account_deletion', true) = 'on')
+  with check (current_setting('our_days.account_deletion', true) = 'on');
 
 create function public.tick_safety_jobs()
 returns void

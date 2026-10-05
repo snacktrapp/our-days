@@ -34,17 +34,17 @@ test("fresh thread comments appear as a banner and in Activity without replaying
       },
     });
   });
-  await page.clock.install();
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  const notifications = page.getByRole("button", {
-    name: /Open notifications/,
-  });
-  await expect(notifications).toBeVisible();
-  await notifications.click();
-  await expect.poll(() => requests).toBeGreaterThan(0);
-  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: /Open notifications/ }),
+  ).toBeVisible();
+  await page.waitForResponse((response) =>
+    response.url().includes("/api/activity"),
+  );
+  expect(requests).toBeGreaterThan(0);
+  await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,
   );
@@ -250,7 +250,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("button", { name: "Choose a journal" }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page.locator("a.circle-back-link").click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
