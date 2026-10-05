@@ -7,10 +7,10 @@ const mocks = vi.hoisted(() => ({
     void callback();
   }),
   createClient: vi.fn(),
-  deliver: vi.fn(),
   getHeaders: vi.fn(),
   requireAccess: vi.fn(),
   rpc: vi.fn(),
+  scheduleMomentPush: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,11 +22,8 @@ vi.mock("@/lib/auth/journal-access", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createOurDaysServerClient: mocks.createClient,
 }));
-vi.mock("@/lib/web-push/deliver-activity", () => ({
-  deliverActivityWebPush: mocks.deliver,
-}));
-vi.mock("@/lib/expo-push/deliver-activity", () => ({
-  deliverActivityExpoPush: vi.fn(),
+vi.mock("@/lib/moment-push/schedule-moment-push", () => ({
+  scheduleMomentPush: mocks.scheduleMomentPush,
 }));
 
 import {
@@ -55,7 +52,7 @@ describe("web push subscription actions", () => {
       role: "member",
     });
     mocks.rpc.mockResolvedValue({ data: "sub-1", error: null });
-    mocks.deliver.mockResolvedValue(undefined);
+    mocks.scheduleMomentPush.mockResolvedValue(undefined);
     mocks.createClient.mockResolvedValue({ rpc: mocks.rpc });
   });
 
@@ -95,23 +92,16 @@ describe("web push subscription actions", () => {
     });
   });
 
-  it("schedules published moment push delivery after the response", async () => {
+  it("schedules media-gated moment push delivery after the response", async () => {
     const momentId = "60000000-0000-4000-8000-000000000001";
-    let resolveDelivery: (() => void) | undefined;
-    const delivery = new Promise<void>((resolve) => {
-      resolveDelivery = resolve;
-    });
-    mocks.deliver.mockReturnValue(delivery);
 
     await expect(
       deliverPublishedMomentPushAction({ momentId }),
     ).resolves.toMatchObject({ ok: true });
     expect(mocks.after).toHaveBeenCalledOnce();
-    expect(mocks.deliver).toHaveBeenCalledWith(
+    expect(mocks.scheduleMomentPush).toHaveBeenCalledWith(
       { rpc: mocks.rpc },
-      "moment",
       momentId,
     );
-    resolveDelivery?.();
   });
 });

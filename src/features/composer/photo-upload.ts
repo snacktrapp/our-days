@@ -55,6 +55,8 @@ export type PhotoMomentDraft = Readonly<{
   existingMomentId?: string;
   mentions?: readonly { userId: string; start: number; end: number }[];
   announcePublication?: boolean;
+  /** True for new family posts so every photo in the batch can re-check readiness. */
+  scheduleMomentPush?: boolean;
 }>;
 
 export type PhotoUploadResult = Readonly<{
@@ -537,9 +539,13 @@ function isAbortError(error: unknown) {
 
 function notifyPublishedPhotoMoment(
   momentId: string,
-  draft: Pick<PhotoMomentDraft, "announcePublication">,
+  draft: Pick<PhotoMomentDraft, "announcePublication" | "scheduleMomentPush">,
 ) {
-  if (!shouldAnnouncePhotoMomentPublication(draft)) return;
+  const shouldSchedule =
+    draft.scheduleMomentPush === true ||
+    (draft.scheduleMomentPush !== false &&
+      shouldAnnouncePhotoMomentPublication(draft));
+  if (!shouldSchedule) return;
   void import("@/features/family-settings/web-push-actions").then(
     ({ deliverPublishedMomentPushAction }) =>
       deliverPublishedMomentPushAction({ momentId }),

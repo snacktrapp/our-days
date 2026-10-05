@@ -457,6 +457,7 @@ function runPhotoUpload(
             existingMomentId:
               absoluteIndex === 0 ? input.draft.existingMomentId : lastMomentId,
             announcePublication: absoluteIndex === 0,
+            scheduleMomentPush: !input.draft.existingMomentId,
           },
           attempt,
           controller.signal,
