@@ -225,6 +225,30 @@ as $$
   );
 $$;
 
+-- Policies stay security invoker. They must not read private.member_blocks
+-- directly, or every live timeline and memory read fails with permission denied.
+create function private.viewer_hides_tagged_person(
+  circle_id uuid,
+  person_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+      from public.circle_memberships as tagged
+      join private.member_blocks as block
+        on block.blocked_user_id = tagged.user_id
+       and block.blocker_user_id = (select auth.uid())
+     where tagged.circle_id = viewer_hides_tagged_person.circle_id
+       and tagged.person_id = viewer_hides_tagged_person.person_id
+       and tagged.user_id is not null
+  );
+$$;
+
 create or replace function private.can_read_live_moment(requested_moment_id uuid)
 returns boolean
 language sql
@@ -309,16 +333,7 @@ using (
   removed_at is null
   and (select private.can_read_live_moment(moment_id))
   and not (select private.viewer_hides_author(tagged_by_membership_id))
-  and not exists (
-    select 1
-      from public.circle_memberships as tagged
-      join private.member_blocks as block
-        on block.blocked_user_id = tagged.user_id
-       and block.blocker_user_id = (select auth.uid())
-     where tagged.circle_id = moment_people.circle_id
-       and tagged.person_id = moment_people.person_id
-       and tagged.user_id is not null
-  )
+  and not (select private.viewer_hides_tagged_person(circle_id, person_id))
 );
 
 drop policy content_mentions_select_visible_moment on public.content_mentions;
@@ -356,17 +371,42 @@ as $$
         'body', note.body,
         'revision', note.revision,
         'createdAt', note.created_at,
-        'canChange', note.author_membership_id = private.current_membership_id(moment.circle_id)
+        'canChange', note_membership.user_id = (select auth.uid()),
+        'heartCount', (
+          select count(*)::int
+            from public.moment_note_reactions as heart
+           where heart.note_id = note.id
+             and heart.removed_at is null
+             and not (select private.viewer_hides_heart(heart.id))
+        ),
+        'heartedByViewer', exists (
+          select 1
+            from public.moment_note_reactions as heart
+           where heart.note_id = note.id
+             and heart.removed_at is null
+             and heart.author_user_id = (select auth.uid())
+             and not (select private.viewer_hides_heart(heart.id))
+        ),
+        'heartNames', coalesce((
+          select jsonb_agg(heart_author.display_name order by heart.created_at, heart.id)
+            from public.moment_note_reactions as heart
+            join public.circle_memberships as heart_membership
+              on heart_membership.id = heart.author_membership_id
+            join public.people as heart_author
+              on heart_author.circle_id = heart_membership.circle_id
+             and heart_author.id = heart_membership.person_id
+           where heart.note_id = note.id
+             and heart.removed_at is null
+             and not (select private.viewer_hides_heart(heart.id))
+        ), '[]'::jsonb)
       ) order by note.created_at, note.id)
       from public.moment_notes as note
       join public.circle_memberships as note_membership
-        on note_membership.circle_id = note.circle_id
-       and note_membership.id = note.author_membership_id
+        on note_membership.id = note.author_membership_id
       join public.people as note_author
         on note_author.circle_id = note_membership.circle_id
        and note_author.id = note_membership.person_id
-      where note.circle_id = moment.circle_id
-        and note.moment_id = moment.id
+      where note.circle_id = moment.circle_id and note.moment_id = moment.id
         and note.trashed_at is null
         and not (select private.viewer_hides_note(note.id))
     ), '[]'::jsonb),
@@ -378,12 +418,11 @@ as $$
         'personAccent', reaction_author.accent_token,
         'reactionId', reaction.reaction_type,
         'revision', reaction.revision,
-        'isCurrentMember', reaction.author_membership_id = private.current_membership_id(moment.circle_id)
+        'isCurrentMember', reaction_membership.user_id = (select auth.uid())
       ) order by reaction.created_at, reaction.id)
       from public.moment_reactions as reaction
       join public.circle_memberships as reaction_membership
-        on reaction_membership.circle_id = reaction.circle_id
-       and reaction_membership.id = reaction.author_membership_id
+        on reaction_membership.id = reaction.author_membership_id
       join public.people as reaction_author
         on reaction_author.circle_id = reaction_membership.circle_id
        and reaction_author.id = reaction_membership.person_id
@@ -421,16 +460,7 @@ as $$
         where tag.moment_id = requested_moment_id
           and tag.removed_at is null
           and not (select private.viewer_hides_author(tag.tagged_by_membership_id))
-          and not exists (
-            select 1
-              from public.circle_memberships as tagged
-              join private.member_blocks as block
-                on block.blocked_user_id = tagged.user_id
-               and block.blocker_user_id = (select auth.uid())
-             where tagged.circle_id = tag.circle_id
-               and tagged.person_id = tag.person_id
-               and tagged.user_id is not null
-          )
+          and not (select private.viewer_hides_tagged_person(tag.circle_id, tag.person_id))
       ), '[]'::jsonb)
   end;
 $$;
@@ -737,7 +767,7 @@ begin
     target.user_id,
     target.id
   )
-  on conflict (blocker_user_id, blocked_user_id) do nothing;
+  on conflict on constraint member_blocks_pair_key do nothing;
 end;
 $$;
 
@@ -821,7 +851,7 @@ begin
 
   insert into private.terms_acceptances (user_id, terms_version)
   values (current_user_id, normalized_version)
-  on conflict (user_id, terms_version) do nothing;
+  on conflict on constraint terms_acceptances_pkey do nothing;
 
   select acceptance.accepted_at
     into accepted
@@ -1210,7 +1240,7 @@ begin
       1,
       statement_timestamp() + interval '15 minutes'
     )
-    on conflict (closure_request_id) do update
+    on conflict on constraint account_deletion_runs_pkey do update
       set attempt_count = private.account_deletion_runs.attempt_count + 1,
           leased_until = statement_timestamp() + interval '15 minutes',
           updated_at = statement_timestamp()
@@ -1316,7 +1346,7 @@ begin
 
   insert into private.account_deletion_completions (closure_request_id)
   values (target_request.id)
-  on conflict (closure_request_id) do nothing;
+  on conflict on constraint account_deletion_completions_pkey do nothing;
 
   if copied_email is not null
     and not exists (
@@ -1565,7 +1595,7 @@ begin
         ) values (
           closure_id, sqlstate, null
         )
-        on conflict (closure_request_id) do update
+        on conflict on constraint account_deletion_runs_pkey do update
           set last_error_code = sqlstate,
               leased_until = null,
               updated_at = statement_timestamp();
@@ -1598,6 +1628,8 @@ revoke all on function private.viewer_hides_reaction(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function private.viewer_hides_heart(uuid)
   from public, anon, authenticated, service_role;
+revoke all on function private.viewer_hides_tagged_person(uuid, uuid)
+  from public, anon, authenticated, service_role;
 revoke all on function private.set_account_deletion_triggers(boolean)
   from public, anon, authenticated, service_role;
 revoke all on function private.purge_account_authored_content(uuid)
@@ -1614,6 +1646,7 @@ grant execute on function private.viewer_hides_author(uuid) to authenticated;
 grant execute on function private.viewer_hides_note(uuid) to authenticated;
 grant execute on function private.viewer_hides_reaction(uuid) to authenticated;
 grant execute on function private.viewer_hides_heart(uuid) to authenticated;
+grant execute on function private.viewer_hides_tagged_person(uuid, uuid) to authenticated;
 grant execute on function private.tick_safety_jobs() to service_role;
 
 revoke all on function public.report_content(text, uuid, text, text)
@@ -1679,5 +1712,81 @@ begin
         raise notice 'safety cron not scheduled: %', sqlerrm;
     end;
   end if;
+end;
+$$;
+
+-- 20261005140000 stores the row count in a boolean, so a successful claim
+-- raises "operator does not exist: boolean > integer". That migration is
+-- already applied in production, so correct the body here without editing it.
+create or replace function private.claim_moment_push_delivery(requested_moment_id uuid)
+returns boolean
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+  target_circle_id uuid;
+  actor_membership_id uuid;
+  scheduled_at timestamptz;
+  fallback_interval interval := interval '4 minutes';
+  ready boolean;
+  claimed integer := 0;
+begin
+  if current_user_id is null or requested_moment_id is null then
+    return false;
+  end if;
+
+  select
+    moment.circle_id,
+    moment.recorded_by_membership_id,
+    moment.moment_push_scheduled_at
+    into target_circle_id, actor_membership_id, scheduled_at
+    from public.moments as moment
+   where moment.id = requested_moment_id
+     and moment.trashed_at is null
+     and moment.kind <> 'insight'
+     and moment.audience = 'family'
+     and moment.moment_push_notified_at is null;
+
+  if target_circle_id is null then
+    return false;
+  end if;
+
+  if not exists (
+    select 1
+      from public.circle_memberships as membership
+     where membership.id = actor_membership_id
+       and membership.circle_id = target_circle_id
+       and membership.user_id = current_user_id
+       and membership.status = 'active'
+  ) and not (select private.photo_validator_is_allowed(current_user_id)) then
+    return false;
+  end if;
+
+  if scheduled_at is null then
+    update public.moments as moment
+       set moment_push_scheduled_at = statement_timestamp()
+     where moment.id = requested_moment_id
+       and moment.moment_push_scheduled_at is null
+    returning moment.moment_push_scheduled_at into scheduled_at;
+  end if;
+
+  ready := (select private.moment_media_push_is_ready(requested_moment_id));
+
+  if not ready
+    and statement_timestamp()
+      < coalesce(scheduled_at, statement_timestamp()) + fallback_interval then
+    return false;
+  end if;
+
+  update public.moments as moment
+     set moment_push_notified_at = statement_timestamp()
+   where moment.id = requested_moment_id
+     and moment.moment_push_notified_at is null;
+
+  get diagnostics claimed = row_count;
+  return claimed > 0;
 end;
 $$;
