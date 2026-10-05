@@ -787,6 +787,7 @@ export type Database = {
           state: string;
         }[];
       };
+      claim_found_search: { Args: never; Returns: string };
       claim_mention_push_deliveries: {
         Args: { requested_moment_id: string; requested_note_id?: string };
         Returns: {
@@ -1541,6 +1542,10 @@ export type Database = {
           target_auth_user_id: string;
           token_sha256_hex: string;
         }[];
+      };
+      refund_found_search: {
+        Args: { claim_id: string };
+        Returns: string;
       };
       reject_photo_display_derivative: {
         Args: {

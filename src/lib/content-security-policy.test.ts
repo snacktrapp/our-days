@@ -20,7 +20,11 @@ describe("content security policy", () => {
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("form-action 'self'");
     expect(policy).toContain("frame-ancestors 'none'");
-    expect(policy).toContain("frame-src 'self'");
+    expect(policy).toContain(
+      "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
+    );
+    expect(policy).toContain("https://i.ytimg.com");
+    expect(policy).not.toContain("https://www.youtube.com/embed");
     expect(policy).toContain("upgrade-insecure-requests");
     expect(policy).not.toContain("'unsafe-inline'");
     expect(policy).not.toContain("'unsafe-eval'");
@@ -37,7 +41,7 @@ describe("content security policy", () => {
       "connect-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co wss://aaaaaaaaaaaaaaaaaaaa.supabase.co https://api.maptiler.com https://cdn.maptiler.com",
     );
     expect(policy).toContain(
-      "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://api.maptiler.com https://cdn.maptiler.com",
+      "img-src 'self' blob: data: https://aaaaaaaaaaaaaaaaaaaa.supabase.co https://api.maptiler.com https://cdn.maptiler.com https://i.ytimg.com",
     );
     expect(policy).toContain(
       "media-src 'self' blob: https://aaaaaaaaaaaaaaaaaaaa.supabase.co",

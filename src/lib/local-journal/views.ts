@@ -26,6 +26,7 @@ import type {
 import { displayConversationDateOnly } from "@/features/timeline/display-conversation-date";
 import type { PeopleViewModel } from "@/features/people/people-view-model";
 import { buildPeopleViewModel } from "@/features/people/people-view-model";
+import { foundSearchIsEnabled } from "../../../config/our-days-environment";
 import type { ConnectedJournalContext } from "@/data/journal-context.server";
 import {
   buildActivityNotifications,
@@ -475,6 +476,8 @@ export async function loadLocalJournalContext(
       experience: "connected-family",
       circleId: extra.id,
       photoPostingEnabled: true,
+      foundEnabled: foundSearchIsEnabled(),
+      viewerRole: extra.role,
       previewToday: today,
       defaultJournalPersonId: extra.personId,
       recorderPersonId: extra.personId,
@@ -535,6 +538,8 @@ export async function loadLocalJournalContext(
     experience: "connected-family",
     circleId: access.circleId,
     photoPostingEnabled: true,
+    foundEnabled: foundSearchIsEnabled(),
+    viewerRole: access.role,
     previewToday: today,
     defaultJournalPersonId: access.personId,
     recorderPersonId: access.personId,
@@ -753,6 +758,28 @@ function localViewerMembershipIds(
   return ids;
 }
 
+function viewerOwnsInsight(
+  document: LocalJournalDocument,
+  access: LocalAccess,
+  moment: LocalMoment,
+) {
+  if (moment.recordedByMembershipId === access.membershipId) return true;
+  if (
+    document.accounts.some(
+      (account) =>
+        account.personId === access.personId &&
+        account.membershipId === moment.recordedByMembershipId,
+    )
+  ) {
+    return true;
+  }
+  return (document.extraCircles ?? []).some(
+    (circle) =>
+      circle.personId === access.personId &&
+      circle.membershipId === moment.recordedByMembershipId,
+  );
+}
+
 function recorderPersonIdForMoment(
   document: LocalJournalDocument,
   moment: LocalMoment,
@@ -803,9 +830,7 @@ function visibleMoments(
         if (allCircles) {
           if (moment.audience === "just_me") {
             if (moment.kind === "insight") {
-              return Boolean(
-                ownMembershipIds?.has(moment.recordedByMembershipId),
-              );
+              return viewerOwnsInsight(document, access, moment);
             }
             return Boolean(
               moment.journalPersonId &&
