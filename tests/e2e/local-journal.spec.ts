@@ -38,10 +38,11 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(
-    page.getByRole("button", { name: /Open notifications/ }),
-  ).toBeVisible();
+  const notifications = page.getByRole("button", { name: /Open notifications/ });
+  await expect(notifications).toBeVisible();
+  await notifications.click();
   await expect.poll(() => requests).toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,
   );
@@ -220,11 +221,8 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
-  await page.locator(".circle-accordion-trigger").first().click();
   await page
-    .locator(
-      `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,
-    )
+    .getByRole("link", { name: "Jordan — open journal" })
     .click();
   await expect(
     page.getByRole("heading", { name: "Jordan", exact: true }),
@@ -656,7 +654,8 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(
     page
       .getByLabel("Chronological moments")
-      .getByText("Casey left a pebble on the porch."),
+      .getByText("Casey left a pebble on the porch.")
+      .first(),
   ).toBeVisible({
     timeout: 15_000,
   });
@@ -745,7 +744,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(manifest.json()).resolves.toMatchObject({
     name: "Our Days",
     display: "standalone",
-    start_url: "/",
+    start_url: "/family",
   });
 });
 

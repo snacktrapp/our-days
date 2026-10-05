@@ -978,14 +978,10 @@ volatile
 security definer
 set search_path = ''
 as $$
-declare
-  previous_role text := current_user;
 begin
   perform set_config('row_security', 'off', true);
-  execute 'set local role service_role';
 
   if target_user_id is null then
-    execute format('set local role %I', previous_role);
     raise exception using
       errcode = '22023',
       message = 'Account content could not be removed';
@@ -1199,13 +1195,11 @@ begin
     perform set_config('our_days.account_deletion', 'off', true);
     perform set_config('our_days.allow_moment_photo_delete', 'off', true);
     perform set_config('session_replication_role', 'origin', true);
-    execute format('set local role %I', previous_role);
   exception
     when others then
       perform set_config('our_days.account_deletion', 'off', true);
       perform set_config('our_days.allow_moment_photo_delete', 'off', true);
       perform set_config('session_replication_role', 'origin', true);
-      execute format('set local role %I', previous_role);
       raise;
   end;
 end;
@@ -1224,14 +1218,10 @@ declare
   leased_id uuid;
   copied_email text;
   authored_moments_remain boolean;
-  previous_role text := current_user;
 begin
   perform set_config('row_security', 'off', true);
-  execute 'set local role service_role';
-  perform set_config('our_days.account_deletion', 'on', true);
 
   if closure_request_id is null then
-    execute format('set local role %I', previous_role);
     return;
   end if;
 
@@ -1240,7 +1230,6 @@ begin
       from private.account_deletion_completions as done
      where done.closure_request_id = process_account_deletion.closure_request_id
   ) then
-    execute format('set local role %I', previous_role);
     return;
   end if;
 
@@ -1251,7 +1240,6 @@ begin
    for update;
 
   if target_request.id is null then
-    execute format('set local role %I', previous_role);
     return;
   end if;
 
@@ -1279,7 +1267,6 @@ begin
     from leased;
 
   if leased_id is null then
-    execute format('set local role %I', previous_role);
     return;
   end if;
 
@@ -1313,8 +1300,6 @@ begin
            leased_until = null,
            updated_at = statement_timestamp()
      where account_deletion_runs.closure_request_id = target_request.id;
-    perform set_config('our_days.account_deletion', 'off', true);
-    execute format('set local role %I', previous_role);
     return;
   end if;
 
@@ -1386,8 +1371,6 @@ begin
                leased_until = null,
                updated_at = statement_timestamp()
          where account_deletion_runs.closure_request_id = target_request.id;
-        perform set_config('our_days.account_deletion', 'off', true);
-        execute format('set local role %I', previous_role);
         return;
     end;
 
@@ -1433,9 +1416,6 @@ begin
          last_error_code = null,
          updated_at = statement_timestamp()
    where account_deletion_runs.closure_request_id = target_request.id;
-
-  perform set_config('our_days.account_deletion', 'off', true);
-  execute format('set local role %I', previous_role);
 end;
 $$;
 
@@ -1626,7 +1606,6 @@ declare
   error_code text;
 begin
   perform set_config('row_security', 'off', true);
-  execute 'set local role service_role';
 
   for closure_id in
     select closure.id
@@ -1664,7 +1643,6 @@ begin
   end loop;
 
   perform private.dispatch_pending_safety_mail();
-  reset role;
 end;
 $$;
 
