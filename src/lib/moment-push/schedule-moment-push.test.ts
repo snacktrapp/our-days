@@ -46,12 +46,14 @@ function client(
   return {
     rpc: vi.fn(async (fn: string) => {
       if (fn === "moment_push_delivery_status") {
-        const row = statusSequence[Math.min(statusIndex, statusSequence.length - 1)];
+        const row =
+          statusSequence[Math.min(statusIndex, statusSequence.length - 1)];
         statusIndex += 1;
         return { data: [row], error: null };
       }
       if (fn === "claim_moment_push_delivery") {
-        const claimed = claimResults[Math.min(claimIndex, claimResults.length - 1)];
+        const claimed =
+          claimResults[Math.min(claimIndex, claimResults.length - 1)];
         claimIndex += 1;
         return { data: claimed, error: null };
       }
@@ -82,10 +84,22 @@ describe("scheduleMomentPush", () => {
     await vi.advanceTimersByTimeAsync(MOMENT_PUSH_POLL_MS);
     await pending;
 
-    expect(mocks.deliverExpo).toHaveBeenCalledWith(supabase, "moment", momentId);
+    expect(mocks.deliverExpo).toHaveBeenCalledWith(
+      supabase,
+      "moment",
+      momentId,
+    );
     expect(mocks.deliverWeb).toHaveBeenCalledWith(supabase, "moment", momentId);
-    expect(mocks.deliverExpo).toHaveBeenCalledWith(supabase, "mention", momentId);
-    expect(mocks.deliverWeb).toHaveBeenCalledWith(supabase, "mention", momentId);
+    expect(mocks.deliverExpo).toHaveBeenCalledWith(
+      supabase,
+      "mention",
+      momentId,
+    );
+    expect(mocks.deliverWeb).toHaveBeenCalledWith(
+      supabase,
+      "mention",
+      momentId,
+    );
     expect(mocks.deliverExpo).toHaveBeenCalledTimes(2);
     expect(supabase.rpc).toHaveBeenCalledWith("claim_moment_push_delivery", {
       requested_moment_id: momentId,
@@ -102,7 +116,11 @@ describe("scheduleMomentPush", () => {
     await vi.advanceTimersByTimeAsync(MOMENT_PUSH_POLL_MS);
     await pending;
 
-    expect(mocks.deliverExpo).toHaveBeenCalledWith(supabase, "moment", momentId);
+    expect(mocks.deliverExpo).toHaveBeenCalledWith(
+      supabase,
+      "moment",
+      momentId,
+    );
     expect(mocks.deliverExpo).toHaveBeenCalledTimes(2);
   });
 

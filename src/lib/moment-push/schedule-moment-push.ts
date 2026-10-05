@@ -2,10 +2,7 @@ import "server-only";
 
 import { deliverActivityExpoPush } from "@/lib/expo-push/deliver-activity";
 import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
-import {
-  MOMENT_PUSH_FALLBACK_MS,
-  MOMENT_PUSH_POLL_MS,
-} from "./constants";
+import { MOMENT_PUSH_FALLBACK_MS, MOMENT_PUSH_POLL_MS } from "./constants";
 
 type RpcClient = {
   rpc: (
