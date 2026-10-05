@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { runMomentPushSweep } from "@/lib/moment-push/sweep-moment-pushes";
 
+// Called by the database cron (pg_net), not by Vercel Cron. This team is on
+// the Hobby plan, which rejects schedules more frequent than once a day.
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

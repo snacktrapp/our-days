@@ -112,5 +112,6 @@ describe("moment push sweep selection", () => {
     expect(migration).toContain("interval '24 hours'");
     expect(migration).toContain("interval '4 minutes'");
     expect(migration).toContain("claimed_rows integer");
+    expect(migration).toContain("'*/2 * * * *'");
   });
 });

@@ -1,8 +1,18 @@
 begin;
 
-select plan(11);
+select plan(14);
 
 select private.replace_moment_push_sweep_secret('sweep-secret-fixture');
+
+select is(
+  (
+    select schedule
+      from cron.job
+     where jobname = 'moment-push-sweep'
+  ),
+  '*/2 * * * *',
+  'the database cron sweeps every two minutes'
+);
 
 update public.moments
    set moment_push_scheduled_at = timestamptz '2026-10-06 07:00:00+00'
@@ -111,6 +121,21 @@ update public.moments
        ),
        moment_push_notified_at = null
  where id = '60000000-0000-4000-8000-000000000003';
+
+select lives_ok(
+  $$select private.invoke_moment_push_sweep()$$,
+  'the database cron does nothing until a target URL is stored'
+);
+
+select is(
+  (
+    select moment_push_notified_at is null
+      from public.moments
+     where id = '60000000-0000-4000-8000-000000000003'
+  ),
+  true,
+  'an unconfigured database cron does not claim a due post'
+);
 
 set local role anon;
 

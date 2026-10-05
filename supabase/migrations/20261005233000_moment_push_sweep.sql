@@ -86,7 +86,13 @@ create index moments_unnotified_push_sweep_idx
 create table private.moment_push_sweep_credential (
   id boolean primary key default true check (id),
   secret_hash bytea not null,
-  updated_at timestamptz not null default statement_timestamp()
+  presented_secret text not null,
+  target_url text,
+  updated_at timestamptz not null default statement_timestamp(),
+  constraint moment_push_sweep_credential_target_url_valid check (
+    target_url is null
+    or target_url ~ '^https://[A-Za-z0-9.-]+/api/cron/moment-push$'
+  )
 );
 
 alter table private.moment_push_sweep_credential enable row level security;
@@ -95,7 +101,10 @@ alter table private.moment_push_sweep_credential force row level security;
 revoke all on table private.moment_push_sweep_credential
   from public, anon, authenticated, service_role;
 
-create function private.replace_moment_push_sweep_secret(new_secret text)
+create function private.replace_moment_push_sweep_secret(
+  new_secret text,
+  new_target_url text default null
+)
 returns void
 language plpgsql
 volatile
@@ -111,13 +120,26 @@ begin
       message = 'Moment push sweep secret is invalid';
   end if;
 
-  insert into private.moment_push_sweep_credential as credential (id, secret_hash)
+  if new_target_url is not null
+    and new_target_url !~ '^https://[A-Za-z0-9.-]+/api/cron/moment-push$' then
+    raise exception using
+      errcode = '22023',
+      message = 'Moment push sweep target is invalid';
+  end if;
+
+  insert into private.moment_push_sweep_credential as credential (
+    id, secret_hash, presented_secret, target_url
+  )
   values (
     true,
-    extensions.digest(pg_catalog.convert_to(new_secret, 'UTF8'), 'sha256')
+    extensions.digest(pg_catalog.convert_to(new_secret, 'UTF8'), 'sha256'),
+    new_secret,
+    new_target_url
   )
   on conflict (id) do update
     set secret_hash = excluded.secret_hash,
+        presented_secret = excluded.presented_secret,
+        target_url = excluded.target_url,
         updated_at = statement_timestamp();
 end;
 $$;
@@ -335,7 +357,51 @@ begin
 end;
 $$;
 
-revoke all on function private.replace_moment_push_sweep_secret(text)
+-- Hobby Vercel Cron is daily only, which is too slow for the four-minute
+-- media fallback. pg_cron calls the app route every two minutes. Until an
+-- operator stores the Production origin, the job returns without calling out.
+create extension if not exists pg_net;
+create extension if not exists pg_cron;
+
+create function private.invoke_moment_push_sweep()
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  target text;
+  secret text;
+begin
+  select credential.target_url, credential.presented_secret
+    into target, secret
+    from private.moment_push_sweep_credential as credential
+   where credential.id;
+
+  if target is null or secret is null or char_length(secret) < 16 then
+    return;
+  end if;
+
+  perform net.http_get(
+    url => target,
+    headers => pg_catalog.jsonb_build_object(
+      'Authorization', 'Bearer ' || secret
+    ),
+    timeout_milliseconds => 20000
+  );
+end;
+$$;
+
+select cron.schedule(
+  'moment-push-sweep',
+  '*/2 * * * *',
+  'select private.invoke_moment_push_sweep()'
+);
+
+revoke all on function private.replace_moment_push_sweep_secret(text, text)
+  from public, anon, authenticated, service_role;
+revoke all on function private.invoke_moment_push_sweep()
   from public, anon, authenticated, service_role;
 revoke all on function public.sweep_due_moment_pushes(text, timestamptz, integer)
   from public, anon, authenticated, service_role;
