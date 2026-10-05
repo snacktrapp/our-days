@@ -78,7 +78,7 @@ update public.moments
  where id = '60000000-0000-4000-8000-000000000007';
 
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 
 select is(
   (

@@ -15,7 +15,7 @@ select is(
 );
 
 update public.moments
-   set moment_push_scheduled_at = timestamptz '2026-10-06 07:00:00+00'
+   set moment_push_scheduled_at = timestamptz '2026-10-05 14:20:00+00'
          - interval '1 second',
        moment_push_notified_at = null
  where id = '60000000-0000-4000-8000-000000000003';
@@ -51,7 +51,7 @@ insert into public.moments (
   '2026-08-27',
   'date',
   'family',
-  greatest(statement_timestamp(), timestamptz '2026-10-06 07:00:00+00')
+  greatest(statement_timestamp(), timestamptz '2026-10-05 14:20:00+00')
 );
 
 set local role anon;
@@ -117,7 +117,7 @@ reset role;
 update public.moments
    set moment_push_scheduled_at = greatest(
          statement_timestamp(),
-         timestamptz '2026-10-06 07:00:00+00'
+         timestamptz '2026-10-05 14:20:00+00'
        ),
        moment_push_notified_at = null
  where id = '60000000-0000-4000-8000-000000000003';

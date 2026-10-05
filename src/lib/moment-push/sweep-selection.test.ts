@@ -27,11 +27,11 @@ function candidate(
 }
 
 describe("moment push sweep selection", () => {
-  it("does not select the Oct 5 stuck post or anything scheduled before the cutoff", () => {
+  it("selects the Oct 5 stuck post and skips anything scheduled before the cutoff", () => {
     const now = Date.parse("2026-10-05T23:00:00.000Z");
     expect(
       momentIsDueForPushSweep(candidate({ scheduledAt: stuckPost }), now),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       momentIsDueForPushSweep(
         candidate({ scheduledAt: floor - 1, mediaReady: true }),
@@ -108,7 +108,7 @@ describe("moment push sweep selection", () => {
       "supabase/migrations/20261005233000_moment_push_sweep.sql",
       "utf8",
     );
-    expect(migration).toContain("timestamptz '2026-10-06 07:00:00+00'");
+    expect(migration).toContain("timestamptz '2026-10-05 14:20:00+00'");
     expect(migration).toContain("interval '24 hours'");
     expect(migration).toContain("interval '4 minutes'");
     expect(migration).toContain("claimed_rows integer");

@@ -202,15 +202,16 @@ begin
       message = 'Moment push sweep is unavailable';
   end if;
 
-  -- Floor: nothing scheduled before 2026-10-06 07:00 UTC (midnight Pacific
-  -- on 6 Oct 2026) and nothing older than 24 hours. The Oct 5 9:49 AM PT
-  -- stuck post is before this floor and must not be sent on deploy.
+  -- Floor: nothing scheduled before 2026-10-05 14:20 UTC (just before #207
+  -- deployed) and nothing older than 24 hours. The Oct 5 9:49 AM PT stuck
+  -- post is after this floor, so the sweeper sends it once while it is
+  -- still inside the 24 hour window.
   sweep_not_before := greatest(
     coalesce(
       requested_not_before,
-      timestamptz '2026-10-06 07:00:00+00'
+      timestamptz '2026-10-05 14:20:00+00'
     ),
-    timestamptz '2026-10-06 07:00:00+00',
+    timestamptz '2026-10-05 14:20:00+00',
     statement_timestamp() - interval '24 hours'
   );
   batch_limit := least(greatest(coalesce(requested_limit, 10), 1), 20);
