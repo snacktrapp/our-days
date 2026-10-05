@@ -559,15 +559,8 @@ export default function JournalScreen() {
   // order, even when the account belongs to more circles. Just me loads the
   // personal journal; All circles loads the combined feed.
   const items: readonly SwitcherItem[] = [
-    { id: allScope, label: "All circles", selected: kind === "all" },
-    ...circles
-      .filter((circle) => !circle.archivedAt)
-      .map((circle) => ({
-        id: circle.circleId,
-        label: circle.name,
-        selected: kind === "circle" && scope === circle.circleId,
-      })),
     { id: youScope, label: "Just me", selected: kind === "personal" },
+    { id: allScope, label: "All circles", selected: kind === "all" },
   ];
   const feedMoments = mergePending(moments, pendingJobs, {
     listed: (post) =>
