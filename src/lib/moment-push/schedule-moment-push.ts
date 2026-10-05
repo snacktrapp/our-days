@@ -1,7 +1,10 @@
 import "server-only";
 
 import { deliverActivityExpoPush } from "@/lib/expo-push/deliver-activity";
-import { deliverActivityWebPush } from "@/lib/web-push/deliver-activity";
+import {
+  deliverActivityWebPush,
+  type ActivityPushClient,
+} from "@/lib/web-push/deliver-activity";
 import { MOMENT_PUSH_FALLBACK_MS, MOMENT_PUSH_POLL_MS } from "./constants";
 
 type RpcClient = {
@@ -64,14 +67,12 @@ async function claimMomentPush(client: RpcClient, momentId: string) {
   return data === true;
 }
 
-async function deliverMomentAndMentionPushes(
-  client: RpcClient,
-  momentId: string,
-) {
+async function deliverMomentAndMentionPushes(client: object, momentId: string) {
+  const webClient = client as ActivityPushClient;
   await deliverActivityExpoPush(client, "moment", momentId);
-  await deliverActivityWebPush(client, "moment", momentId);
+  await deliverActivityWebPush(webClient, "moment", momentId);
   await deliverActivityExpoPush(client, "mention", momentId);
-  await deliverActivityWebPush(client, "mention", momentId);
+  await deliverActivityWebPush(webClient, "mention", momentId);
 }
 
 /**
@@ -90,7 +91,7 @@ export async function scheduleMomentPush(client: object, momentId: string) {
     if (status.should_send) {
       const claimed = await claimMomentPush(rpc, momentId);
       if (!claimed) return;
-      await deliverMomentAndMentionPushes(rpc, momentId);
+      await deliverMomentAndMentionPushes(client, momentId);
       return;
     }
     await sleep(MOMENT_PUSH_POLL_MS);
