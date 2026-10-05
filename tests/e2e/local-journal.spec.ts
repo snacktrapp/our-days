@@ -37,13 +37,18 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(
-    page.getByRole("button", { name: /Open notifications/ }),
-  ).toBeVisible();
-  await page.waitForResponse((response) =>
-    response.url().includes("/api/activity"),
-  );
+  const notifications = page.getByRole("button", {
+    name: /Open notifications/,
+  });
+  await expect(notifications).toBeVisible();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes("/api/activity"),
+    ),
+    notifications.click(),
+  ]);
   expect(requests).toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
   await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,

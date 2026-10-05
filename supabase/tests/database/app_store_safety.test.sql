@@ -498,6 +498,8 @@ select lives_ok(
   'running the safety job again is idempotent'
 );
 
+reset role;
+
 select is(
   (
     select count(*)::bigint
