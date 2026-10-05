@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 
-import { verifyEmailCode } from "../lib/auth-flow";
+import { signInWithPassword as passwordSignIn, verifyEmailCode } from "../lib/auth-flow";
 import { authStorageKey, siteOrigin } from "../lib/config";
 import { validEmail } from "../lib/journal";
 import { secureSessionStorage } from "../lib/secure-session";
@@ -26,19 +26,26 @@ type AuthValue = Readonly<{
   clearAuthError: () => void;
   sendCode: (email: string) => Promise<AuthResult>;
   verifyCode: (email: string, code: string) => Promise<AuthResult>;
+  signInWithPassword: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  /** Shown on the sign-in screen after account deletion. */
+  notice: string | null;
+  setNotice: (value: string | null) => void;
 }>;
 
 const AuthContext = createContext<AuthValue | null>(null);
 
 const sentMessage =
-  "If this address has access, we sent a private sign-in link.";
+  "If this address has access, we sent a 6-digit code.";
+
+const unavailableMessage = "Sign-in is unavailable right now.";
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const supabase = useMemo(() => getSupabase(), []);
   const [ready, setReady] = useState(() => !supabase);
   const [session, setSession] = useState<Session | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const intentionalSignOut = useRef(false);
   const verifying = useRef(false);
 
@@ -83,10 +90,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       session,
       async sendCode(email) {
         if (!supabase) {
-          return {
-            ok: false,
-            message: "Add the publishable key before signing in.",
-          };
+          return { ok: false, message: unavailableMessage };
         }
         if (!validEmail(email)) {
           return { ok: false, message: "Enter a complete email address." };
@@ -107,10 +111,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       },
       async verifyCode(email, code) {
         if (!supabase) {
-          return {
-            ok: false,
-            message: "Add the publishable key before signing in.",
-          };
+          return { ok: false, message: unavailableMessage };
         }
         setAuthError(null);
         verifying.current = true;
@@ -133,6 +134,24 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           verifying.current = false;
         }
       },
+      async signInWithPassword(email, password) {
+        if (!supabase) return { ok: false, message: unavailableMessage };
+        setAuthError(null);
+        setNotice(null);
+        try {
+          const result = await passwordSignIn(supabase, email, password);
+          if (!result.ok) {
+            setAuthError(result.message);
+            return result;
+          }
+          setSession(result.session);
+          return { ok: true };
+        } catch {
+          const message = "That email or password did not work.";
+          setAuthError(message);
+          return { ok: false, message };
+        }
+      },
       async signOut() {
         intentionalSignOut.current = true;
         setAuthError(null);
@@ -143,8 +162,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       clearAuthError() {
         setAuthError(null);
       },
+      notice,
+      setNotice,
     }),
-    [authError, ready, session, supabase],
+    [authError, notice, ready, session, supabase],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

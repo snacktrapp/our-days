@@ -170,10 +170,17 @@ await step("photo menu matches the web and people stay in join order", async () 
     852 - 59 - 336 - 8,
   );
   const menu = await import("../src/lib/moment-menu.ts");
-  assert.deepEqual(menu.momentOverflowActions("thought"), ["edit", "delete"]);
-  assert.deepEqual(menu.momentOverflowActions("photo"), ["edit", "delete"]);
-  assert.deepEqual(menu.momentOverflowActions("video"), ["edit", "delete"]);
-  assert.deepEqual(menu.momentOverflowActions("insight"), ["delete"]);
+  const own = { viewerMembershipIds: ["me"], authorMembershipId: "me" };
+  const other = { viewerMembershipIds: ["me"], authorMembershipId: "them" };
+  assert.deepEqual(menu.momentOverflowActions({ kind: "thought", canChange: true, ...own }), ["edit", "delete", "report"]);
+  assert.deepEqual(menu.momentOverflowActions({ kind: "photo", canChange: true, ...own }), ["edit", "delete", "report"]);
+  assert.deepEqual(menu.momentOverflowActions({ kind: "video", canChange: true, ...own }), ["edit", "delete", "report"]);
+  assert.deepEqual(menu.momentOverflowActions({ kind: "insight", canChange: true, ...own }), ["delete", "report"]);
+  assert.deepEqual(menu.momentOverflowActions({ kind: "thought", canChange: false, ...other }), ["report", "block"]);
+  assert.deepEqual(menu.momentOverflowActions({ kind: "thought", canChange: false, pending: true, ...other }), []);
+  assert.deepEqual(menu.commentOverflowActions({ canChange: true, ...own }), ["edit", "delete", "report"]);
+  assert.deepEqual(menu.commentOverflowActions({ canChange: false, ...other }), ["report", "block"]);
+  assert.equal(menu.blockActionTitle("Ada"), "Block Ada");
   const mvhd = new Uint8Array(28);
   mvhd.set([0x6d, 0x76, 0x68, 0x64, 0, 0, 0, 0]);
   new DataView(mvhd.buffer).setUint32(16, 1000);
@@ -1766,6 +1773,89 @@ await step("OTA runtime is 0.5.0 so build 9 (runtime 0.4.0) cannot receive this 
   );
   assert.match(appJson.expo.updates?.url ?? "", /^https:\/\/u\.expo\.dev\//u);
   assert.equal(easJson.build.production.channel, "production");
+  assert.equal(easJson.build.preview.autoIncrement, true);
+  assert.equal(easJson.build.production.autoIncrement, true);
+});
+
+await step("safety RPCs fail with a plain message, and terms fails open only if the function is missing", async () => {
+  const safety = await import("../src/lib/safety.ts");
+  const fs = await import("node:fs");
+  const missing = {
+    code: "PGRST202",
+    message: "Could not find the function public.report_content in the schema cache",
+  };
+  const client = {
+    rpc: async () => ({ data: null, error: missing }),
+  };
+  const reported = await safety.reportContent(client, {
+    targetKind: "moment",
+    targetId: "00000000-0000-4000-8000-000000000001",
+    reason: "spam",
+    details: "details stay off the error",
+  });
+  assert.equal(reported.ok, false);
+  assert.equal(reported.missing, true);
+  assert.match(reported.message, /could not be sent/i);
+  assert.doesNotMatch(reported.message, /PGRST|schema|details stay/i);
+  const blocked = await safety.blockMember(client, "00000000-0000-4000-8000-000000000002");
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.message, /could not be blocked/i);
+  const deleted = await safety.requestAccountClosure(client, "00000000-0000-4000-8000-000000000003");
+  assert.equal(deleted.ok, false);
+  assert.match(deleted.message, /could not be requested/i);
+  assert.equal(safety.termsGate({ error: missing, rows: null }), "allow");
+  assert.equal(safety.termsGate({ error: { code: "42501", message: "permission denied for user" }, rows: null }), "prompt");
+  assert.equal(safety.termsGate({ error: null, rows: [] }), "prompt");
+  assert.equal(
+    safety.termsGate({ error: null, rows: [{ terms_version: safety.TERMS_VERSION }] }),
+    "allow",
+  );
+  assert.equal(
+    safety.termsGate({ error: null, rows: [{ terms_version: "2020-01-01" }] }),
+    "prompt",
+  );
+  const source = fs.readFileSync(new URL("../src/lib/safety.ts", import.meta.url), "utf8");
+  assert.equal(source.includes("console."), false);
+  const clientSource = fs.readFileSync(new URL("../src/lib/supabase.ts", import.meta.url), "utf8");
+  assert.match(clientSource, /storage: secureSessionStorage/);
+  assert.match(safety.freshRequestKey(), /^[0-9a-f-]{36}$/iu);
+  const hidden = safety.withoutBlockedAuthor(
+    [
+      { id: "mine", authorMembershipId: "me", notes: [{ authorMembershipId: "them" }] },
+      { id: "theirs", authorMembershipId: "them", notes: [] },
+    ],
+    "them",
+  );
+  assert.deepEqual(hidden.map((moment) => moment.id), ["mine"]);
+  assert.equal(hidden[0].notes.length, 0);
+  assert.equal(safety.closureView({ error: missing, row: null }).kind, "confirm");
+  assert.equal(
+    safety.closureView({
+      error: null,
+      row: { state: "", requestedAt: null, lastOrganizerCircles: ["The Rivera Family (Demo)"] },
+    }).kind,
+    "last-organizer",
+  );
+});
+
+await step("password sign-in uses the same client storage when a test password is set", async () => {
+  const email = process.env.E2E_PASSWORD_EMAIL;
+  const password = process.env.E2E_PASSWORD;
+  if (!email || !password) {
+    console.log("       skipped (set E2E_PASSWORD_EMAIL and E2E_PASSWORD)");
+    return;
+  }
+  if (forbidden.includes(email.toLowerCase())) {
+    throw new Error("Refusing password sign-in against a personal account.");
+  }
+  resetStore();
+  const app = await freshApp("password");
+  const { signInWithPassword } = await import("../src/lib/auth-flow.ts");
+  const result = await signInWithPassword(app.getSupabase(), email, password);
+  assert.equal(result.ok, true, result.ok ? "" : result.message);
+  const stored = [...secureStore.store.values()].join("");
+  assert.ok(stored.includes("access_token"), "password session was not written to secure storage");
+  await app.getSupabase().auth.signOut({ scope: "local" });
 });
 
 await step("wrong code returns a visible error", async () => {

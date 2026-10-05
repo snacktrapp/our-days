@@ -6,6 +6,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Platform } from "react-native";
 
 import { AuthProvider, useAuth } from "../components/auth-provider";
+import { TermsGate } from "../components/safety-sheets";
 import { ShareIntentBridge } from "../components/share-bridge";
 import { applyUpdateAtLaunch } from "../lib/app-updates";
 import { ThemeProvider, useAppTheme } from "../lib/theme";
@@ -28,7 +29,9 @@ export default function RootLayout() {
       <AuthProvider>
         <BootGate fontsReady={fontsReady || Boolean(fontError)}>
           <ShareIntentBridge />
-          <ThemedStack />
+          <TermsGate>
+            <ThemedStack />
+          </TermsGate>
         </BootGate>
       </AuthProvider>
     </ThemeProvider>

@@ -22,6 +22,7 @@ import {
   type SwitcherItem,
 } from "../components/journal-chrome";
 import { SettingsScreen } from "../components/settings-screen";
+import { authorHidden, withoutBlockedAuthor } from "../lib/safety";
 import { MentionsBanner } from "../components/journal-banner";
 import { FeedMoment } from "../components/moment-card";
 import { ShareSheet } from "../components/share-sheet";
@@ -174,6 +175,7 @@ export default function JournalScreen() {
   const settledJobs = useRef(new Set<string>());
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [hiddenAuthors, setHiddenAuthors] = useState<readonly string[]>([]);
   const [shareDraft, setShareDraft] = useState<ShareDraft | null>(null);
   const [profile, setProfile] = useState<ViewerProfile | null>(null);
   const [chromeOffset, setChromeOffset] = useState(0);
@@ -573,11 +575,13 @@ export default function JournalScreen() {
       accent: profileAccent(profile?.accentToken),
     },
   });
-  const listed = feedMoments.filter((moment) =>
-    momentListedInFeed({
-      audience: moment.audience,
-      feed: personJournal ? (viewingOwnJournal ? "personal" : "circle") : kind,
-    }),
+  const listed = feedMoments.filter(
+    (moment) =>
+      !authorHidden(moment.authorMembershipId, hiddenAuthors) &&
+      momentListedInFeed({
+        audience: moment.audience,
+        feed: personJournal ? (viewingOwnJournal ? "personal" : "circle") : kind,
+      }),
   );
   const rows = buildRows(listed, today, Boolean(page?.hasMore));
   const chromeHidden = chromeOffset >= distance && !switcherOpen;
@@ -611,6 +615,10 @@ export default function JournalScreen() {
           profile={profile}
           circles={circles}
           viewedCircleId={kind === "circle" ? scope : null}
+          onUnblocked={(membershipId) => {
+            setHiddenAuthors((current) => current.filter((id) => id !== membershipId));
+            void loadFirstPage(scope, circles);
+          }}
           onScroll={applyScroll}
           onSaveColor={async (color) => {
             if (!supabase) return { ok: false, message: "Your color couldn’t be saved. Try again." };
@@ -826,6 +834,15 @@ export default function JournalScreen() {
                   }
                   onMomentRemove={(id) => setMoments((current) => current.filter((item) => item.id !== id))}
                   onMomentEdit={(moment) => openEdit({ moment })}
+                  hiddenAuthorIds={hiddenAuthors}
+                  onHideAuthor={(membershipId) => {
+                    if (!membershipId) return;
+                    setHiddenAuthors((current) =>
+                      current.includes(membershipId) ? current : [...current, membershipId],
+                    );
+                    setMoments((current) => withoutBlockedAuthor(current, membershipId));
+                    void loadFirstPage(scope, circles);
+                  }}
                   onScreen={!viewabilityReady || visibleMomentIds.has(item.id)}
                   highlighted={highlightId === item.moment.id}
                   openThread={

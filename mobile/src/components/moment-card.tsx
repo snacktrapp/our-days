@@ -54,7 +54,8 @@ import { getSupabase } from "../lib/supabase";
 import { useAppTheme } from "../lib/theme";
 import { dotColor, dotInk, face, momentGap, timelineInset, tracking, type ThemeColors } from "../lib/tokens";
 import { CommentIcon, HeartGlyph, InsightMark, PlacePin } from "./icons";
-import { MomentChangeContext, MomentOverflow, MoreDots } from "./moment-menu";
+import { authorHidden } from "../lib/safety";
+import { CommentOverflow, MomentChangeContext, MomentOverflow } from "./moment-menu";
 import { CommentSheet } from "./comment-sheet";
 import { JournalVideo } from "./journal-video";
 import { AlbumPager } from "./album-pager";
@@ -104,6 +105,8 @@ export function FeedMoment({
   onMomentChange,
   onMomentRemove,
   onMomentEdit,
+  onHideAuthor,
+  hiddenAuthorIds = [],
   onScreen = true,
   openThread = false,
   highlighted = false,
@@ -118,6 +121,8 @@ export function FeedMoment({
   onMomentChange?: (moment: TimelineMoment) => void;
   onMomentRemove?: (id: string) => void;
   onMomentEdit?: (moment: TimelineMoment) => void;
+  onHideAuthor?: (membershipId: string) => void;
+  hiddenAuthorIds?: readonly string[];
   onScreen?: boolean;
   openThread?: boolean;
   highlighted?: boolean;
@@ -154,6 +159,9 @@ export function FeedMoment({
         onChange: (next) => onMomentChange?.(next),
         onRemove: (id) => onMomentRemove?.(id),
         onEdit: (next) => onMomentEdit?.(next),
+        onHideAuthor: (membershipId) => onHideAuthor?.(membershipId),
+        viewerMembershipIds: viewer.membershipIds,
+        hiddenAuthorIds,
       }}
     >
     <OpenThreadContext.Provider value={openThread}>
@@ -938,6 +946,8 @@ function Conversation({
   const [showAll, setShowAll] = useState(false);
   const [openHearts, setOpenHearts] = useState<string | null>(null);
   const [notes, setNotes] = useState(moment.notes);
+  const { hiddenAuthorIds } = useContext(MomentChangeContext);
+  const liveNotes = notes.filter((note) => !authorHidden(note.authorMembershipId, hiddenAuthorIds));
   const [reactions, setReactions] = useState(moment.reactions);
   const [composer, setComposer] = useState<FeedNote | "new" | null>(null);
   const [members, setMembers] = useState<readonly MentionCandidate[]>([]);
@@ -960,8 +970,8 @@ function Conversation({
     const comma = index < reactions.length - 1 ? "," : "";
     return `${emoji}${reaction.personName}${comma}`;
   });
-  const visible = visibleNotes(notes, showAll);
-  const hidden = hiddenNoteCount(notes.length);
+  const visible = visibleNotes(liveNotes, showAll);
+  const hidden = hiddenNoteCount(liveNotes.length);
   const mentionsOn =
     moment.audience !== "just_me" && moment.kind !== "insight";
   const openThread = useContext(OpenThreadContext);
@@ -1196,6 +1206,8 @@ function Conversation({
           onHeart={() => void toggleNoteHeart(note)}
           onDoubleTap={() => void toggleNoteHeart(note, true)}
           onEdit={() => void openComposer(note)}
+          onRemove={() => removeComment(note)}
+          onReported={() => setNotes((current) => current.filter((item) => item.id !== note.id))}
         />
       ))}
       {hidden > 0 ? (
@@ -1247,6 +1259,8 @@ function NoteRow({
   onHeart,
   onDoubleTap,
   onEdit,
+  onRemove,
+  onReported,
 }: Readonly<{
   note: FeedNote;
   open: boolean;
@@ -1256,6 +1270,8 @@ function NoteRow({
   onHeart: () => void;
   onDoubleTap: () => void;
   onEdit: () => void;
+  onRemove: () => void;
+  onReported: () => void;
 }>) {
   const { colors } = useAppTheme();
   const stamp = formatConversationStamp(note.createdAt);
@@ -1312,18 +1328,15 @@ function NoteRow({
         <Text style={[styles.noteWhen, face(colors, 400, "record"), { color: colors.muted }]}>
           {stamp}
         </Text>
-        {note.canChange ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit comment"
-            disabled={editDisabled}
-            onPress={onEdit}
-            style={styles.noteMore}
-          >
-            {/* Same round dots as the post menu, a size smaller; a real 44×44 target. */}
-            <MoreDots color={colors.muted} size={3} />
-          </Pressable>
-        ) : null}
+        <CommentOverflow
+          note={note}
+          color={colors.muted}
+          disabled={editDisabled}
+          onEdit={onEdit}
+          onRemove={onRemove}
+          onReported={onReported}
+          style={styles.noteMore}
+        />
         <View style={styles.noteHeart} pointerEvents="box-none">
           <Pressable
             accessibilityRole="button"

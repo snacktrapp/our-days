@@ -24,7 +24,7 @@
     "android": {
       "package": "com.snacktrapp.ourdays",
       "adaptiveIcon": {
-        "backgroundColor": "#101216",
+        "backgroundColor": "#1b2028",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -67,7 +67,18 @@
           "isAndroidMotionActivityEnabled": false
         }
       ],
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#edf0f4",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "dark": {
+            "backgroundColor": "#101216",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
       [
         "expo-notifications",
         {

@@ -8,6 +8,7 @@
       "distribution": "store",
       "channel": "preview",
       "environment": "preview",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://snwmwzbeajfrateksolo.supabase.co",
         "EXPO_PUBLIC_SITE_URL": "https://our-days-neon.vercel.app"
