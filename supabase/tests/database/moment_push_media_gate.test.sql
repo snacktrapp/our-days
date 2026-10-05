@@ -1,6 +1,6 @@
 begin;
 
-select plan(8);
+select plan(9);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
