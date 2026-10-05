@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SignOutButton } from "@/features/auth/sign-out-button";
+import { PublicLegalFooter } from "@/features/legal/public-legal-footer";
 import { AppearanceSettings } from "@/features/shell/appearance-settings";
 import { NotificationPreference } from "./notification-preference";
 import {
@@ -36,6 +37,7 @@ export function AccountTools() {
           </div>
         </SettingsGroup>
       </SettingsSection>
+      <PublicLegalFooter />
     </>
   );
 }

@@ -143,3 +143,70 @@ export async function verifySignInCode(
 
   redirect("/family");
 }
+
+export async function signInWithPassword(
+  _previousState: SignInActionState,
+  formData: FormData,
+): Promise<SignInActionState> {
+  const email = normalizedEmail(formData);
+  const rawPassword = formData.get("password");
+  const password = typeof rawPassword === "string" ? rawPassword : "";
+
+  if (!SIMPLE_EMAIL.test(email) || email.length > 254 || password.length < 1) {
+    return { status: "invalid", message: "Enter your email and password." };
+  }
+  if (!(await hasExpectedOrigin())) {
+    return { status: "denied", message: "Sign-in is unavailable right now." };
+  }
+  if (localJournalIsEnabled()) {
+    return {
+      status: "unavailable",
+      message: "Sign-in is unavailable right now.",
+    };
+  }
+
+  try {
+    const supabase = await createOurDaysServerClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      return {
+        status: "denied",
+        email,
+        message: "That email or password is not valid.",
+      };
+    }
+
+    const { data, error: membershipError } = await supabase
+      .from("circle_memberships")
+      .select("circle_id")
+      .limit(2);
+    if (membershipError) {
+      await supabase.auth.signOut({ scope: "local" });
+      return {
+        status: "unavailable",
+        email,
+        message: "Our Days is temporarily unavailable. Please try again.",
+      };
+    }
+
+    const accepted = await acceptPendingInvitationForSession(supabase);
+    if ((!data || data.length === 0) && !accepted) {
+      return {
+        status: "no-access",
+        email,
+        message: "This account does not have access to a circle.",
+      };
+    }
+  } catch {
+    return {
+      status: "unavailable",
+      email,
+      message: "Our Days is temporarily unavailable. Please try again.",
+    };
+  }
+
+  redirect("/family");
+}

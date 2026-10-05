@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   getHeaders: vi.fn(),
   createClient: vi.fn(),
   signInWithOtp: vi.fn(),
+  signInWithPassword: vi.fn(),
+  signOut: vi.fn(),
   verifyOtp: vi.fn(),
   select: vi.fn(),
   limit: vi.fn(),
@@ -24,7 +26,11 @@ vi.mock("@/lib/auth/accept-pending-invitation.server", () => ({
   acceptPendingInvitationForSession: mocks.acceptPending,
 }));
 
-import { requestSignInLink, verifySignInCode } from "./sign-in-actions";
+import {
+  requestSignInLink,
+  signInWithPassword,
+  verifySignInCode,
+} from "./sign-in-actions";
 
 const initialSignInActionState = { status: "idle" } as const;
 
@@ -43,11 +49,15 @@ describe("passwordless email sign-in actions", () => {
     mocks.limit.mockResolvedValue({ data: [{ circle_id: "circle-a" }] });
     mocks.select.mockReturnValue({ limit: mocks.limit });
     mocks.signInWithOtp.mockResolvedValue({ error: null });
+    mocks.signInWithPassword.mockResolvedValue({ error: null });
+    mocks.signOut.mockResolvedValue({ error: null });
     mocks.verifyOtp.mockResolvedValue({ error: null });
     mocks.acceptPending.mockResolvedValue(false);
     mocks.createClient.mockResolvedValue({
       auth: {
         signInWithOtp: mocks.signInWithOtp,
+        signInWithPassword: mocks.signInWithPassword,
+        signOut: mocks.signOut,
         verifyOtp: mocks.verifyOtp,
       },
       from: vi.fn(() => ({ select: mocks.select })),
@@ -206,5 +216,49 @@ describe("passwordless email sign-in actions", () => {
     ).rejects.toThrow("NEXT_REDIRECT");
     expect(mocks.acceptPending).toHaveBeenCalledOnce();
     expect(mocks.redirect).toHaveBeenCalledWith("/family");
+  });
+
+  it("signs in with the supplied password and opens the journal", async () => {
+    await expect(
+      signInWithPassword(
+        initialSignInActionState,
+        form({ email: "appreview@beelinetech.co", password: "review-pass" }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mocks.signInWithPassword).toHaveBeenCalledWith({
+      email: "appreview@beelinetech.co",
+      password: "review-pass",
+    });
+    expect(mocks.signInWithOtp).not.toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith("/family");
+  });
+
+  it("rejects a password that Auth does not accept", async () => {
+    mocks.signInWithPassword.mockResolvedValueOnce({
+      error: { message: "Invalid login credentials" },
+    });
+
+    await expect(
+      signInWithPassword(
+        initialSignInActionState,
+        form({ email: "appreview@beelinetech.co", password: "wrong" }),
+      ),
+    ).resolves.toMatchObject({
+      status: "denied",
+      message: "That email or password is not valid.",
+    });
+    expect(mocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("does not open the journal when the password account has no circle", async () => {
+    mocks.limit.mockResolvedValueOnce({ data: [] });
+
+    await expect(
+      signInWithPassword(
+        initialSignInActionState,
+        form({ email: "appreview@beelinetech.co", password: "review-pass" }),
+      ),
+    ).resolves.toMatchObject({ status: "no-access" });
   });
 });

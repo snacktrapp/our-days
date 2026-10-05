@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,7 @@ vi.mock("@/lib/auth/browser-private-state", () => ({
 }));
 vi.mock("./sign-in-actions", () => ({
   requestSignInLink: mocks.requestCode,
+  signInWithPassword: mocks.verifyCode,
   verifySignInCode: mocks.verifyCode,
 }));
 
@@ -66,6 +68,46 @@ describe("sign-in cleanup gate", () => {
       ),
     ).toBeVisible();
     expect(screen.getByText("Or email a private sign-in link")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Sign in with a password" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute(
+      "href",
+      "/privacy",
+    );
+    expect(screen.getByRole("link", { name: "Terms" })).toHaveAttribute(
+      "href",
+      "/terms",
+    );
+    expect(screen.getByRole("link", { name: "Support" })).toHaveAttribute(
+      "href",
+      "/support",
+    );
+    expect(
+      screen.getByRole("link", { name: "team@beelinetech.co" }),
+    ).toHaveAttribute("href", "mailto:team@beelinetech.co");
+  });
+
+  it("opens email and password fields without removing Google or the email link", async () => {
+    const user = userEvent.setup();
+    render(createElement(PrivateEntry, { connected: true }));
+
+    await user.click(
+      screen.getByRole("link", { name: "Sign in with a password" }),
+    );
+
+    expect(screen.getByLabelText("Email")).toBeVisible();
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Email me a sign-in link" }),
+    ).toBeVisible();
   });
 
   it("keeps Google and X off the locked invitation-only gate", () => {

@@ -3,7 +3,12 @@ import { OurDaysWordmark } from "@/components/our-days-wordmark";
 
 import { useActionState, useEffect, useState } from "react";
 import { purgeOurDaysBrowserState } from "@/lib/auth/browser-private-state";
-import { requestSignInLink, type SignInActionState } from "./sign-in-actions";
+import { PublicLegalFooter } from "@/features/legal/public-legal-footer";
+import {
+  requestSignInLink,
+  signInWithPassword,
+  type SignInActionState,
+} from "./sign-in-actions";
 
 const initialSignInActionState: SignInActionState = { status: "idle" };
 
@@ -36,6 +41,11 @@ export function PrivateEntry({
     requestSignInLink,
     initialSignInActionState,
   );
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordState, passwordAction, passwordPending] = useActionState(
+    signInWithPassword,
+    initialSignInActionState,
+  );
   const linkRequested = requestState.status === "sent";
 
   useEffect(() => {
@@ -55,6 +65,10 @@ export function PrivateEntry({
     ["invalid", "denied", "unavailable"].includes(requestState.status);
   const submittedEmail = requestState.email ?? email.trim().toLowerCase();
   const busy = requestPending;
+  const passwordIsError =
+    ["invalid", "denied", "no-access", "unavailable"].includes(
+      passwordState.status,
+    ) && Boolean(passwordState.message);
 
   return (
     <main className="private-entry-shell">
@@ -155,10 +169,60 @@ export function PrivateEntry({
                 </form>
               </div>
             )}
+            <div className="private-entry-password">
+              {passwordOpen ? (
+                <form
+                  action={passwordAction}
+                  id="sign-in-password-form"
+                  noValidate
+                >
+                  <label htmlFor="sign-in-password-email">Email</label>
+                  <input
+                    id="sign-in-password-email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    required
+                    disabled={passwordPending}
+                    defaultValue={email}
+                  />
+                  <label htmlFor="sign-in-password">Password</label>
+                  <input
+                    id="sign-in-password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    disabled={passwordPending}
+                  />
+                  <button type="submit" disabled={passwordPending}>
+                    {passwordPending ? "Signing in…" : "Sign in"}
+                  </button>
+                  {passwordIsError ? (
+                    <p className="auth-error" role="alert">
+                      {passwordState.message}
+                    </p>
+                  ) : null}
+                </form>
+              ) : (
+                <a
+                  href="#sign-in-password-form"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setPasswordOpen(true);
+                  }}
+                >
+                  Sign in with a password
+                </a>
+              )}
+            </div>
           </div>
         ) : (
           <span>Sign-in is currently unavailable.</span>
         )}
+        <PublicLegalFooter />
       </section>
     </main>
   );
