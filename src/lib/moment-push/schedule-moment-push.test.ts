@@ -39,7 +39,7 @@ function statusRow(
 
 function client(
   statusSequence: ReturnType<typeof statusRow>[],
-  claimResults: boolean[] = [true],
+  claimResults: Array<boolean | "error"> = [true],
 ) {
   let statusIndex = 0;
   let claimIndex = 0;
@@ -55,6 +55,9 @@ function client(
         const claimed =
           claimResults[Math.min(claimIndex, claimResults.length - 1)];
         claimIndex += 1;
+        if (claimed === "error") {
+          return { data: null, error: { message: "db" } };
+        }
         return { data: claimed, error: null };
       }
       return { data: null, error: null };
@@ -124,9 +127,31 @@ describe("scheduleMomentPush", () => {
     expect(mocks.deliverExpo).toHaveBeenCalledTimes(2);
   });
 
-  it("does not send duplicate pushes when claim loses the race", async () => {
+  it("keeps polling when a ready claim loses to a newer upload, then sends once", async () => {
     const supabase = client(
-      [statusRow({ media_ready: true, should_send: true })],
+      [
+        statusRow({ media_ready: true, should_send: true }),
+        statusRow(),
+        statusRow({ media_ready: true, should_send: true }),
+      ],
+      [false, true],
+    );
+
+    const pending = scheduleMomentPush(supabase, momentId);
+    await vi.advanceTimersByTimeAsync(MOMENT_PUSH_POLL_MS);
+    await pending;
+
+    expect(mocks.deliverExpo).toHaveBeenCalledTimes(2);
+    expect(mocks.deliverWeb).toHaveBeenCalledTimes(2);
+    expect(supabase.rpc).toHaveBeenCalledTimes(5);
+  });
+
+  it("does not send when a declined claim was already notified", async () => {
+    const supabase = client(
+      [
+        statusRow({ media_ready: true, should_send: true }),
+        statusRow({ already_notified: true, should_send: false }),
+      ],
       [false],
     );
 
@@ -134,6 +159,39 @@ describe("scheduleMomentPush", () => {
 
     expect(mocks.deliverExpo).not.toHaveBeenCalled();
     expect(mocks.deliverWeb).not.toHaveBeenCalled();
+  });
+
+  it("exits at the deadline without sending while media is still unfinished", async () => {
+    const supabase = client([statusRow()]);
+
+    const pending = scheduleMomentPush(supabase, momentId);
+    await vi.advanceTimersByTimeAsync(
+      MOMENT_PUSH_FALLBACK_MS + MOMENT_PUSH_POLL_MS,
+    );
+    await pending;
+
+    expect(mocks.deliverExpo).not.toHaveBeenCalled();
+    expect(supabase.rpc).not.toHaveBeenCalledWith(
+      "claim_moment_push_delivery",
+      expect.anything(),
+    );
+  });
+
+  it("stops after repeated claim RPC failures", async () => {
+    const supabase = client(
+      [statusRow({ media_ready: true, should_send: true })],
+      ["error"],
+    );
+
+    const pending = scheduleMomentPush(supabase, momentId);
+    await vi.advanceTimersByTimeAsync(MOMENT_PUSH_POLL_MS * 5);
+    await pending;
+
+    const claimCalls = supabase.rpc.mock.calls.filter(
+      (call) => call[0] === "claim_moment_push_delivery",
+    );
+    expect(claimCalls).toHaveLength(3);
+    expect(mocks.deliverExpo).not.toHaveBeenCalled();
   });
 
   it("stops immediately when the moment was already notified", async () => {

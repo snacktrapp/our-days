@@ -1781,6 +1781,27 @@ export type Database = {
         };
         Returns: number;
       };
+      sweep_due_moment_pushes: {
+        Args: {
+          presented_secret: string;
+          requested_limit?: number;
+          requested_not_before?: string;
+        };
+        Returns: {
+          actor_name: string | null;
+          auth: string | null;
+          channel: string;
+          circle_name: string | null;
+          destination: string | null;
+          kind: string;
+          moment_id: string;
+          moment_kind: string | null;
+          note_id: string | null;
+          p256dh: string | null;
+          snippet: string | null;
+          visible_circle_id: string | null;
+        }[];
+      };
       sweep_expired_invitation_email_requests: {
         Args: { batch_limit: number };
         Returns: number;

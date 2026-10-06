@@ -5,7 +5,11 @@ import {
   deliverActivityWebPush,
   type ActivityPushClient,
 } from "@/lib/web-push/deliver-activity";
-import { MOMENT_PUSH_FALLBACK_MS, MOMENT_PUSH_POLL_MS } from "./constants";
+import {
+  MOMENT_PUSH_FALLBACK_MS,
+  MOMENT_PUSH_POLL_MS,
+  MOMENT_PUSH_RPC_FAILURE_LIMIT,
+} from "./constants";
 
 type RpcClient = {
   rpc: (
@@ -53,7 +57,12 @@ async function readDeliveryStatus(client: RpcClient, momentId: string) {
   return isDeliveryStatusRow(row) ? row : null;
 }
 
-async function claimMomentPush(client: RpcClient, momentId: string) {
+type ClaimResult = "claimed" | "declined" | "error";
+
+async function claimMomentPush(
+  client: RpcClient,
+  momentId: string,
+): Promise<ClaimResult> {
   const { data, error } = await client.rpc("claim_moment_push_delivery", {
     requested_moment_id: momentId,
   });
@@ -62,9 +71,9 @@ async function claimMomentPush(client: RpcClient, momentId: string) {
       momentId,
       message: error.message,
     });
-    return false;
+    return "error";
   }
-  return data === true;
+  return data === true ? "claimed" : "declined";
 }
 
 async function deliverMomentAndMentionPushes(client: object, momentId: string) {
@@ -83,16 +92,46 @@ async function deliverMomentAndMentionPushes(client: object, momentId: string) {
 export async function scheduleMomentPush(client: object, momentId: string) {
   const rpc = client as RpcClient;
   const deadline = Date.now() + MOMENT_PUSH_FALLBACK_MS + MOMENT_PUSH_POLL_MS;
+  let consecutiveFailures = 0;
+
+  const noteFailure = () => {
+    consecutiveFailures += 1;
+    return consecutiveFailures >= MOMENT_PUSH_RPC_FAILURE_LIMIT;
+  };
 
   while (Date.now() < deadline) {
     const status = await readDeliveryStatus(rpc, momentId);
-    if (!status) return;
+    if (!status) {
+      if (noteFailure()) return;
+      await sleep(MOMENT_PUSH_POLL_MS);
+      continue;
+    }
     if (status.already_notified) return;
     if (status.should_send) {
       const claimed = await claimMomentPush(rpc, momentId);
-      if (!claimed) return;
-      await deliverMomentAndMentionPushes(client, momentId);
-      return;
+      if (claimed === "claimed") {
+        await deliverMomentAndMentionPushes(client, momentId);
+        return;
+      }
+      if (claimed === "error") {
+        if (noteFailure()) return;
+        await sleep(MOMENT_PUSH_POLL_MS);
+        continue;
+      }
+      // Another photo can land between the status read and the claim. The
+      // claim re-checks readiness and declines without taking the send.
+      // Keep waiting unless a winner already marked the moment notified.
+      const afterClaim = await readDeliveryStatus(rpc, momentId);
+      if (!afterClaim) {
+        if (noteFailure()) return;
+        await sleep(MOMENT_PUSH_POLL_MS);
+        continue;
+      }
+      if (afterClaim.already_notified) return;
+      consecutiveFailures = 0;
+      console.info("[moment-push] claim_declined", { momentId });
+    } else {
+      consecutiveFailures = 0;
     }
     await sleep(MOMENT_PUSH_POLL_MS);
   }

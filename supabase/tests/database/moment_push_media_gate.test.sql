@@ -1,6 +1,6 @@
 begin;
 
-select plan(8);
+select plan(9);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000002', true);
@@ -70,13 +70,15 @@ select ok(
   'a non-poster cannot claim another member''s moment push delivery'
 );
 
+reset role;
+
 update public.moments
    set moment_push_scheduled_at = statement_timestamp() - interval '5 minutes',
        moment_push_notified_at = null
  where id = '60000000-0000-4000-8000-000000000007';
 
 set local role authenticated;
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
 
 select is(
   (
