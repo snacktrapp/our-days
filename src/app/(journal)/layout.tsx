@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { TermsAcceptanceGate } from "@/features/safety/terms-gate";
 import { JournalRouteBoundary } from "@/features/shell/journal-route-boundary";
 import { PersistentJournalShell } from "@/features/shell/journal-chrome";
 
@@ -8,7 +10,12 @@ export default function JournalLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <PersistentJournalShell>
-      <JournalRouteBoundary>{children}</JournalRouteBoundary>
+      <JournalRouteBoundary>
+        <Suspense fallback={null}>
+          <TermsAcceptanceGate />
+        </Suspense>
+        {children}
+      </JournalRouteBoundary>
     </PersistentJournalShell>
   );
 }

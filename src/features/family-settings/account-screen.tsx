@@ -32,6 +32,10 @@ import {
 } from "@/features/family-settings/family-settings-actions";
 import { invitationDeliveryIsEnabled } from "../../../config/our-days-environment";
 import { AccountTools } from "@/features/family-settings/account-tools";
+import {
+  loadAccountSafety,
+  type AccountSafetySnapshot,
+} from "@/features/safety/safety-actions";
 import { createFamilyMomentAction } from "@/features/moments/moment-actions";
 import { createGroupAction } from "@/features/groups/create-group-action";
 import { renameCircleAction } from "@/features/groups/rename-circle-action";
@@ -262,13 +266,25 @@ export default async function AccountScreen({
       ) : (
         <SettingsPage>
           <ProfileColorSettings model={model.panel} />
-          <AccountContents />
+          <AccountContents safety={await loadSafetySnapshot()} />
         </SettingsPage>
       )}
     </JournalChrome>
   );
 }
 
-function AccountContents() {
-  return <AccountTools />;
+async function loadSafetySnapshot(): Promise<AccountSafetySnapshot | null> {
+  try {
+    return await loadAccountSafety();
+  } catch {
+    return null;
+  }
+}
+
+function AccountContents({
+  safety = null,
+}: {
+  safety?: AccountSafetySnapshot | null;
+}) {
+  return <AccountTools safety={safety} />;
 }

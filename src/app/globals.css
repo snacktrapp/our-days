@@ -10704,6 +10704,122 @@ iframe.composer-location-map {
   color: #fff;
 }
 
+.safety-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(42, 35, 29, 0.36);
+}
+
+.safety-gate-card,
+.safety-dialog {
+  width: min(26rem, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 22px 20px;
+  border-radius: 18px;
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 0 12px 30px rgb(49 39 31 / 16%);
+}
+
+.safety-gate-card h2,
+.safety-dialog h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.safety-gate-card p,
+.safety-dialog p {
+  margin: 0;
+}
+
+.safety-gate-agree {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.safety-gate-card button,
+.safety-dialog button,
+.safety-delete-trigger {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--cream);
+  font: inherit;
+}
+
+.safety-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.safety-dialog-actions button[type="button"] {
+  background: transparent;
+  color: var(--ink);
+}
+
+.safety-dialog-actions button.is-destructive {
+  background: #8b3e36;
+  color: var(--cream);
+}
+
+.safety-gate-card button:disabled,
+.safety-dialog button:disabled {
+  opacity: 0.45;
+}
+
+.safety-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: rgba(42, 35, 29, 0.36);
+}
+
+.safety-dialog {
+  position: fixed;
+  z-index: 90;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.safety-dialog select,
+.safety-dialog textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.safety-dialog textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.safety-delete-trigger {
+  width: 100%;
+  background: transparent;
+  color: #8b3e36;
+  text-align: left;
+}
+
+.comment-moderation-menu {
+  position: fixed;
+  z-index: 40;
+}
+
 .private-entry-password {
   margin-top: 16px;
   text-align: center;

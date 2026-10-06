@@ -72,6 +72,7 @@ export type MomentConversationViewModel = Readonly<{
     displayDate: string;
     revision?: number;
     canChange?: boolean;
+    authorMembershipId?: string;
     mentions?: readonly MentionDisplay[];
     heartCount?: number;
     heartedByViewer?: boolean;
@@ -114,6 +115,9 @@ type TimelineMomentBase = Readonly<{
   mentions?: readonly MentionDisplay[];
   conversation: MomentConversationViewModel;
   canChange?: boolean;
+  authoredByViewer?: boolean;
+  authorMembershipId?: string;
+  authorName?: string;
   revision?: number;
   editOccurrence?: Readonly<{
     occurredAt: string | null;

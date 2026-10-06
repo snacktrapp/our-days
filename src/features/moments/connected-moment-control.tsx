@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ModerationMenuButtons } from "@/features/safety/moderation-menu";
 import { useOverlayPopoverClose } from "@/features/shell/use-overlay-popover-close";
 import { buildComposerEditDraft } from "@/features/composer/build-edit-draft";
 import { useComposerSession } from "@/features/composer/composer-session";
@@ -75,11 +76,13 @@ type ConnectedMomentControlProps = Readonly<{
 }>;
 
 export function ConnectedMomentControl(props: ConnectedMomentControlProps) {
-  if (!props.actions || !props.moment.canChange || !props.moment.revision) {
-    return null;
-  }
+  const changeable = Boolean(
+    props.actions && props.moment.canChange && props.moment.revision,
+  );
+  const canModerate = props.moment.authoredByViewer === false;
+  if (!changeable && !canModerate) return null;
 
-  return <ChangeableMomentControl {...props} actions={props.actions} />;
+  return <ChangeableMomentControl {...props} changeable={changeable} />;
 }
 
 function ChangeableMomentControl({
@@ -87,7 +90,8 @@ function ChangeableMomentControl({
   actions,
   position = 1,
   total = 1,
-}: ConnectedMomentControlProps & { actions: ConnectedMomentActions }) {
+  changeable,
+}: ConnectedMomentControlProps & { changeable: boolean }) {
   const composerSession = useComposerSession();
   const [pending, setPending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -149,6 +153,7 @@ function ChangeableMomentControl({
   }, [menuOpen]);
 
   const trash = async () => {
+    if (!actions || !moment.revision) return;
     if (
       !window.confirm(
         "Move this moment to trash? It will leave your timelines until restored.",
@@ -161,7 +166,7 @@ function ChangeableMomentControl({
     try {
       const result = await actions.trash({
         momentId: moment.id,
-        revision: moment.revision!,
+        revision: moment.revision,
       });
       if (!result.ok) {
         setMessage(result.message);
@@ -189,7 +194,7 @@ function ChangeableMomentControl({
 
   const editMoment = () => {
     closeMenu(true);
-    if (!composerSession) return;
+    if (!actions || !composerSession) return;
     const draft = buildComposerEditDraft(moment, actions.update, {
       removePhoto: actions.removePhoto,
       reorderPhotos: actions.reorderPhotos,
@@ -236,26 +241,39 @@ function ChangeableMomentControl({
             data-placement={menuPlacement}
             onAnimationEnd={onAnimationEnd}
           >
-            <button type="button" onClick={copyText}>
-              Copy text
-            </button>
-            {moment.kind === "insight" ? null : (
-              <button
-                type="button"
-                aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-                onClick={editMoment}
-              >
-                Edit moment
-              </button>
-            )}
-            <button
-              type="button"
-              aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
-              disabled={pending}
-              onClick={trash}
-            >
-              {pending ? "Moving…" : "Move to trash"}
-            </button>
+            {changeable ? (
+              <>
+                <button type="button" onClick={copyText}>
+                  Copy text
+                </button>
+                {moment.kind === "insight" ? null : (
+                  <button
+                    type="button"
+                    aria-label={`Edit — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+                    onClick={editMoment}
+                  >
+                    Edit moment
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={`${pending ? "Moving…" : "Move to trash"} — ${actionMomentLabel(moment)} — entry ${position} of ${total}`}
+                  disabled={pending}
+                  onClick={trash}
+                >
+                  {pending ? "Moving…" : "Move to trash"}
+                </button>
+              </>
+            ) : null}
+            {moment.authoredByViewer === false ? (
+              <ModerationMenuButtons
+                targetKind="moment"
+                targetId={moment.id}
+                authorMembershipId={moment.authorMembershipId}
+                authorName={moment.authorName ?? moment.personName}
+                onFinished={() => closeMenu(true)}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>

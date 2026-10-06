@@ -57,7 +57,10 @@ describe("Account tools", () => {
       "/support",
     );
     expect(
-      screen.getByRole("link", { name: "team@beelinetech.co" }),
-    ).toHaveAttribute("href", "mailto:team@beelinetech.co");
+      screen.getAllByRole("link", { name: "team@beelinetech.co" }),
+    ).toEqual([
+      expect.objectContaining({ href: "mailto:team@beelinetech.co" }),
+      expect.objectContaining({ href: "mailto:team@beelinetech.co" }),
+    ]);
   });
 });

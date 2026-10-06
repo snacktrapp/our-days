@@ -2,7 +2,12 @@ import { journalPersistenceIsConnected } from "../../../../config/our-days-envir
 import { PrivateEntry } from "@/features/auth/private-entry";
 
 type SignInPageProps = Readonly<{
-  searchParams: Promise<{ cleanup?: string; link?: string; oauth?: string }>;
+  searchParams: Promise<{
+    cleanup?: string;
+    link?: string;
+    oauth?: string;
+    notice?: string;
+  }>;
 }>;
 
 const oauthIssues = [
@@ -13,11 +18,14 @@ const oauthIssues = [
 ] as const;
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const { cleanup, link, oauth } = await searchParams;
+  const { cleanup, link, oauth, notice } = await searchParams;
   return (
     <PrivateEntry
       connected={journalPersistenceIsConnected()}
       cleanupIncomplete={cleanup === "incomplete"}
+      notice={
+        notice === "deletion-requested" ? "deletion-requested" : undefined
+      }
       linkIssue={
         link === "invalid" || link === "unavailable" ? link : undefined
       }

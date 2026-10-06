@@ -170,4 +170,13 @@ export type LocalJournalDocument = Readonly<{
   noteHearts?: readonly LocalNoteHeart[];
   reactions: readonly LocalReaction[];
   drafts?: readonly LocalEntryDraft[];
+  safetyByAccount?: Readonly<Record<string, LocalAccountSafety>>;
+}>;
+
+export type LocalAccountSafety = Readonly<{
+  termsVersion?: string;
+  blockedMembershipIds?: readonly string[];
+  hiddenMomentIds?: readonly string[];
+  hiddenNoteIds?: readonly string[];
+  deletionRequestedAt?: string;
 }>;

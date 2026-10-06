@@ -30,6 +30,7 @@ import {
   type MentionCandidate,
 } from "@/features/mentions/mention-draft";
 import { MentionText } from "@/features/mentions/mention-text";
+import { CommentModeration } from "@/features/safety/moderation-menu";
 import { CommentDrawer } from "./comment-drawer";
 import { HeartGlyph } from "./heart-glyph";
 
@@ -844,6 +845,12 @@ export function MomentConversationControl({
                           />
                         </button>
                       </span>
+                    ) : note.canChange === false && note.authorMembershipId ? (
+                      <CommentModeration
+                        noteId={note.id}
+                        authorMembershipId={note.authorMembershipId}
+                        authorName={note.authorName}
+                      />
                     ) : null}
                     <span
                       className={`inline-note-heart${(note.heartCount ?? 0) > 0 ? " has-count" : ""}`}

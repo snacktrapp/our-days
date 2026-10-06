@@ -1,6 +1,8 @@
-import Link from "next/link";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { PublicLegalFooter } from "@/features/legal/public-legal-footer";
+import { AccountSafetyControls } from "@/features/safety/account-safety";
+import type { AccountSafetySnapshot } from "@/features/safety/safety-actions";
+import { safetyContactEmail } from "@/features/safety/terms";
 import { AppearanceSettings } from "@/features/shell/appearance-settings";
 import { NotificationPreference } from "./notification-preference";
 import {
@@ -12,7 +14,11 @@ import {
   SettingsSection,
 } from "./settings-directory";
 
-export function AccountTools() {
+export function AccountTools({
+  safety = null,
+}: {
+  safety?: AccountSafetySnapshot | null;
+}) {
   return (
     <>
       <SettingsSection aria-label="Preferences">
@@ -28,6 +34,21 @@ export function AccountTools() {
               <SettingsChevron />
             </SettingsRowTrail>
           </SettingsRowLink>
+        </SettingsGroup>
+      </SettingsSection>
+      <SettingsSection aria-label="Safety">
+        <SettingsGroup>
+          <div className="settings-row is-plain">
+            <SettingsRowCopy
+              title="Contact"
+              subtitle={
+                <a href={`mailto:${safetyContactEmail}`}>
+                  {safetyContactEmail}
+                </a>
+              }
+            />
+          </div>
+          <AccountSafetyControls safety={safety} />
         </SettingsGroup>
       </SettingsSection>
       <SettingsSection aria-label="Session">

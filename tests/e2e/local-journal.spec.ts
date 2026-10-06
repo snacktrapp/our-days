@@ -16,6 +16,10 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   page.on("pageerror", (error) => errors.push(error.message));
   let fresh = false;
   let requests = 0;
+  // Install the clock before navigation so the banner's 30s poll is a fake
+  // timer. Installing later leaves the already-scheduled timeout on real time,
+  // and fast-forward never fires it.
+  await page.clock.install({ time: new Date("2026-09-20T10:01:00Z") });
   await page.route("**/api/activity", async (route) => {
     requests += 1;
     await route.fulfill({
@@ -34,14 +38,37 @@ test("fresh thread comments appear as a banner and in Activity without replaying
       },
     });
   });
-  await page.clock.install();
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill("family@example.com");
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(
-    page.getByRole("button", { name: /Open notifications/ }),
-  ).toBeVisible();
-  await expect.poll(() => requests).toBeGreaterThan(0);
+  const notifications = page.getByRole("button", {
+    name: /Open notifications/,
+  });
+  await expect(notifications).toBeVisible();
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes("/api/activity"),
+    ),
+    notifications.click(),
+  ]);
+  expect(requests).toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("our-days:activity-updated", {
+        detail: [
+          {
+            id: "note:old",
+            actorName: "Molly",
+            message: "also commented on Brian’s post.",
+            displayDate: "Today",
+            createdAt: "2026-09-19T10:00:00Z",
+            href: "/family#moment-thread",
+          },
+        ],
+      }),
+    );
+  });
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,
   );
@@ -220,12 +247,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
-  await page.locator(".circle-accordion-trigger").first().click();
-  await page
-    .locator(
-      `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,
-    )
-    .click();
+  await page.getByRole("link", { name: "Jordan — open journal" }).click();
   await expect(
     page.getByRole("heading", { name: "Jordan", exact: true }),
   ).toBeVisible();
@@ -252,10 +274,10 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("button", { name: "Choose a journal" }),
   ).toHaveCount(0);
-  await page.getByRole("link", { name: "← Back to Circles" }).click();
+  await page.locator("a.circle-back-link").click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Account", exact: true }),
+    page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Journal", exact: true }).click();
   await expect(
@@ -361,7 +383,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
   ).toBe(true);
   for (const destination of [
     { href: "/circles", link: "Circles", pair: "Our Days|Circles" },
-    { href: "/settings/family", link: "Settings", pair: "Our Days|Account" },
+    { href: "/settings/family", link: "Settings", pair: "Our Days|Settings" },
     {
       href: `/people/${localAlexPersonId}`,
       link: "Journal",
@@ -656,7 +678,8 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(
     page
       .getByLabel("Chronological moments")
-      .getByText("Casey left a pebble on the porch."),
+      .getByText("Casey left a pebble on the porch.")
+      .first(),
   ).toBeVisible({
     timeout: 15_000,
   });
@@ -745,7 +768,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(manifest.json()).resolves.toMatchObject({
     name: "Our Days",
     display: "standalone",
-    start_url: "/",
+    start_url: "/family",
   });
 });
 
@@ -854,4 +877,45 @@ test("unconfigured Google and X stay on the invitation gate", async ({
   await expect(
     page.getByRole("button", { name: "Email me a sign-in link" }),
   ).toBeVisible();
+});
+
+test("settings explains the last organizer and lets a member request deletion", async ({
+  page,
+}) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill("family@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByLabel("Safety")
+      .getByRole("link", { name: "team@beelinetech.co" }),
+  ).toBeVisible();
+  await expect(page.getByText("Blocked people")).toBeVisible();
+  await page.getByRole("button", { name: "Delete account" }).click();
+  const organizerDialog = page.getByRole("dialog", { name: "Delete account" });
+  await expect(organizerDialog).toContainText(
+    "Our Days needs another organizer",
+  );
+  await expect(
+    organizerDialog.getByRole("button", { name: "Delete my account" }),
+  ).toHaveCount(0);
+  await organizerDialog.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+
+  await page.getByLabel("Email address").fill("jordan@example.com");
+  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Delete account" }).click();
+  const deletionDialog = page.getByRole("dialog", { name: "Delete account" });
+  await expect(deletionDialog).toContainText("within 7 days");
+  await deletionDialog
+    .getByRole("button", { name: "Delete my account" })
+    .click();
+  await expect(page).toHaveURL(/\/sign-in\?notice=deletion-requested/);
+  await expect(page.getByText("Deletion requested.")).toBeVisible();
 });

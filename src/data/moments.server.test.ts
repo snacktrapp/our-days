@@ -46,6 +46,24 @@ function row(overrides: Partial<Row> = {}): Row {
   };
 }
 
+function recorderMembershipLookup() {
+  return vi.fn((table: string) => {
+    if (table !== "moments") {
+      throw new Error("timeline enrichment fell back to per-table reads");
+    }
+    return {
+      select(columns: string) {
+        if (columns !== "id, recorded_by_membership_id") {
+          throw new Error("timeline enrichment fell back to per-table reads");
+        }
+        return {
+          in: async () => ({ data: [], error: null }),
+        };
+      },
+    };
+  });
+}
+
 describe("connected timeline mapping", () => {
   it("maps database accents explicitly and never invents a time for date-only history", () => {
     const moment = mapTimelineRow(row(), "2026-08-30");
@@ -1110,9 +1128,7 @@ describe("connected timeline mapping", () => {
   it("enriches a page in one RPC", async () => {
     const momentId = "10000000-0000-4000-8000-000000000099";
     const photoId = "10000000-0000-4000-8000-000000000098";
-    const from = vi.fn(() => {
-      throw new Error("timeline enrichment fell back to per-table reads");
-    });
+    const from = recorderMembershipLookup();
     const rpc = vi.fn(async (fn: string) => {
       if (fn === "list_all_timeline_moments") {
         return {
@@ -1181,7 +1197,7 @@ describe("connected timeline mapping", () => {
     );
     expect(moment.moment.conversation.notes[0]?.body).toBe("Look at this.");
     expect(moment.moment.conversation.notes[0]?.authorName).toBe("Molly");
-    expect(from).not.toHaveBeenCalled();
+    expect(from.mock.calls.map(([table]) => table)).toEqual(["moments"]);
     expect(rpc).toHaveBeenCalledWith("enrich_timeline_page", {
       moment_ids: [momentId],
     });
@@ -1196,9 +1212,7 @@ describe("connected timeline mapping", () => {
     const secondId = "10000000-0000-4000-8000-000000000097";
     const firstPhotoId = "10000000-0000-4000-8000-000000000098";
     const secondPhotoId = "10000000-0000-4000-8000-000000000096";
-    const from = vi.fn(() => {
-      throw new Error("timeline enrichment fell back to per-table reads");
-    });
+    const from = recorderMembershipLookup();
     const rpc = vi.fn(async (fn: string) => {
       if (fn === "enrich_timeline_page") {
         return {
@@ -1297,7 +1311,7 @@ describe("connected timeline mapping", () => {
     expect(restMoment.moment.image.src).toBe(
       `/api/media/moments/${secondId}?photo=${secondPhotoId}`,
     );
-    expect(from).not.toHaveBeenCalled();
+    expect(from.mock.calls.every(([table]) => table === "moments")).toBe(true);
     expect(
       rpc.mock.calls.filter(([fn]) => fn === "enrich_timeline_page"),
     ).toHaveLength(2);
