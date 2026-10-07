@@ -41,12 +41,15 @@ test("fresh thread comments appear as a banner and in Activity without replaying
   await expect(
     page.getByRole("button", { name: /Open notifications/ }),
   ).toBeVisible();
+  // The shell seeds Activity from the page, so the first network poll waits
+  // for the 30s timer instead of firing during that baseline.
+  await page.clock.fastForward(31_000);
   await expect.poll(() => requests).toBeGreaterThan(0);
   await expect(page.getByRole("status", { name: "New comment" })).toHaveCount(
     0,
   );
   fresh = true;
-  await page.clock.fastForward(31000);
+  await page.clock.fastForward(31_000);
   const banner = page.getByRole("status", { name: "New comment" });
   await expect(banner).toBeVisible();
   await expect(banner.getByRole("link")).toHaveAttribute(
@@ -220,7 +223,6 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await expect(
     page.getByRole("heading", { name: "Circles", exact: true }),
   ).toBeVisible();
-  await page.locator(".circle-accordion-trigger").first().click();
   await page
     .locator(
       `a[href="/people/${localJordanPersonId}?fromCircle=${localCircleId}"]`,
@@ -255,7 +257,7 @@ test("Circles browsing retains the personal Journal and posts as the signed-in a
   await page.getByRole("link", { name: "← Back to Circles" }).click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Account", exact: true }),
+    page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Journal", exact: true }).click();
   await expect(
@@ -361,7 +363,7 @@ test("navigation keeps the same controls and chosen title through a delayed feed
   ).toBe(true);
   for (const destination of [
     { href: "/circles", link: "Circles", pair: "Our Days|Circles" },
-    { href: "/settings/family", link: "Settings", pair: "Our Days|Account" },
+    { href: "/settings/family", link: "Settings", pair: "Our Days|Settings" },
     {
       href: `/people/${localAlexPersonId}`,
       link: "Journal",
@@ -497,7 +499,9 @@ test("nearby album requests all photos before the cover finishes and retains the
     )
       requests.push(request.url());
   });
-  await page.reload();
+  // Album images are part of the document load. Waiting for "load" would
+  // sit on the held photo responses this test is measuring.
+  await page.reload({ waitUntil: "domcontentloaded" });
   await card.scrollIntoViewIfNeeded();
   const pager = card.locator(".photo-card-pager");
   const albumRequests = () =>
@@ -745,7 +749,7 @@ test("sign in, write a moment, attach media, and browse by date", async ({
   await expect(manifest.json()).resolves.toMatchObject({
     name: "Our Days",
     display: "standalone",
-    start_url: "/",
+    start_url: "/family",
   });
 });
 

@@ -33,7 +33,7 @@ test("manifest is installable and legacy service-worker state is retired", async
   expect(manifest).toMatchObject({
     id: "/",
     scope: "/",
-    start_url: "/",
+    start_url: "/family",
     display: "standalone",
   });
   expect(manifest.icons).toEqual(
