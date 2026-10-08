@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
@@ -11,10 +12,7 @@ import {
   rememberCardRendition,
   renderCardPhoto,
 } from "@/lib/card-photo-rendition.server";
-import {
-  openSignedPrivateObject,
-  readCappedVerifiedPrivateBytes,
-} from "@/lib/private-media-delivery.server";
+import { readCappedVerifiedPrivateBytes } from "@/lib/private-media-delivery.server";
 import { normalizedSha256Hex } from "@/lib/private-media-delivery";
 import { upsertServerTiming } from "@/lib/server-timing";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
@@ -22,10 +20,19 @@ import { createOurDaysServerClient } from "@/lib/supabase/server";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-const privateHeaders = {
+const privateNoStoreHeaders = {
   "Cache-Control": "private, no-store, max-age=0",
   Expires: "0",
   Pragma: "no-cache",
+  Vary: "Cookie",
+  "X-Content-Type-Options": "nosniff",
+  "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
+} as const;
+
+const privateCacheControl = "private, max-age=604800, immutable";
+const privateCachedHeaders = {
+  "Cache-Control": privateCacheControl,
+  Vary: "Cookie",
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
 } as const;
@@ -43,7 +50,7 @@ function unavailable(serverTiming?: string) {
   return new Response(null, {
     status: 404,
     headers: {
-      ...privateHeaders,
+      ...privateNoStoreHeaders,
       ...(serverTiming ? { "Server-Timing": serverTiming } : {}),
     },
   });
@@ -53,13 +60,50 @@ function imageResponse(
   bytes: Uint8Array,
   contentType: string,
   serverTiming: string,
+  etag: string,
 ) {
   return new Response(Buffer.from(bytes), {
     status: 200,
     headers: {
-      ...privateHeaders,
+      ...privateCachedHeaders,
       "Content-Length": String(bytes.byteLength),
       "Content-Type": contentType,
+      ETag: etag,
+      "Server-Timing": serverTiming,
+    },
+  });
+}
+
+function etagFor(parts: readonly (string | number)[]) {
+  const key = parts.join(":");
+  const digest = createHash("sha256").update(key).digest("hex");
+  return `"od-media-${digest}"`;
+}
+
+function etagFromBytes(bytes: Uint8Array) {
+  return `"od-media-${createHash("sha256").update(bytes).digest("hex")}"`;
+}
+
+function onMatchNotModified(
+  request: Request,
+  etag: string,
+  serverTiming: string,
+) {
+  const match = request.headers.get("if-none-match");
+  if (
+    !match ||
+    !match
+      .split(",")
+      .map((entry) => entry.trim())
+      .includes(etag)
+  ) {
+    return null;
+  }
+  return new Response(null, {
+    status: 304,
+    headers: {
+      ...privateCachedHeaders,
+      ETag: etag,
       "Server-Timing": serverTiming,
     },
   });
@@ -153,8 +197,14 @@ export async function GET(
     const expectedSha = selected.displaySha256 ?? selected.sha256;
     if (cardWidth != null && expectedSha) {
       const cached = readCachedCardRendition(expectedSha, cardWidth);
-      if (cached)
-        return imageResponse(cached, "image/webp", mediaTiming(authMs, 0, 0));
+      if (cached) {
+        const serverTiming = mediaTiming(authMs, 0, 0);
+        const etag = etagFor(["photo", "card", expectedSha, cardWidth]);
+        return (
+          onMatchNotModified(request, etag, serverTiming) ??
+          imageResponse(cached, "image/webp", serverTiming, etag)
+        );
+      }
     }
     const fetchStarted = performance.now();
     const relativePath =
@@ -168,7 +218,7 @@ export async function GET(
       return new Response(bytes, {
         status: 200,
         headers: {
-          ...privateHeaders,
+          ...privateNoStoreHeaders,
           "Content-Length": String(bytes.byteLength),
           "Content-Type": selected.displayMimeType ?? selected.mimeType,
           "Server-Timing": mediaTiming(authMs, fetchMs, 0),
@@ -184,10 +234,18 @@ export async function GET(
     if (expectedSha) {
       rememberCardRendition(expectedSha, cardWidth, rendered.bytes);
     }
-    return imageResponse(
-      rendered.bytes,
-      "image/webp",
-      mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
+    const serverTiming = mediaTiming(
+      authMs,
+      fetchMs,
+      rendered.resizeMs,
+      rendered.queueMs,
+    );
+    const etag = expectedSha
+      ? etagFor(["photo", "card", expectedSha, cardWidth])
+      : etagFromBytes(rendered.bytes);
+    return (
+      onMatchNotModified(request, etag, serverTiming) ??
+      imageResponse(rendered.bytes, "image/webp", serverTiming, etag)
     );
   }
   if (!mediaDeliveryIsEnabled()) {
@@ -211,6 +269,15 @@ export async function GET(
   if (cardWidth != null) {
     const sha = normalizedSha256Hex(descriptor.output_sha256_hex);
     if (!sha) return unavailable(mediaTiming(authMs, 0, 0));
+    const cardEtag = etagFor(["photo", "card", sha, cardWidth]);
+    const cached = readCachedCardRendition(sha, cardWidth);
+    if (cached) {
+      const serverTiming = mediaTiming(authMs, 0, 0);
+      return (
+        onMatchNotModified(request, cardEtag, serverTiming) ??
+        imageResponse(cached, "image/webp", serverTiming, cardEtag)
+      );
+    }
     const stored = storedCard(descriptor.card_renditions, cardWidth);
     if (stored) {
       const fetchStarted = performance.now();
@@ -218,19 +285,17 @@ export async function GET(
         supabase.storage.from(stored.bucket),
         stored.path,
         { mime: stored.mime, sha: stored.sha, size: stored.size },
+        stored.bucket,
       );
       const fetchMs = elapsedSince(fetchStarted);
       if (verified) {
-        return imageResponse(
-          verified,
-          "image/webp",
-          mediaTiming(authMs, fetchMs, 0),
+        rememberCardRendition(sha, cardWidth, verified);
+        const serverTiming = mediaTiming(authMs, fetchMs, 0);
+        return (
+          onMatchNotModified(request, cardEtag, serverTiming) ??
+          imageResponse(verified, "image/webp", serverTiming, cardEtag)
         );
       }
-    }
-    const cached = readCachedCardRendition(sha, cardWidth);
-    if (cached) {
-      return imageResponse(cached, "image/webp", mediaTiming(authMs, 0, 0));
     }
     const fetchStarted = performance.now();
     const verified = await readCappedVerifiedPrivateBytes(
@@ -241,6 +306,7 @@ export async function GET(
         mime: descriptor.output_mime_type,
         sha: descriptor.output_sha256_hex,
       },
+      descriptor.bucket_id,
     );
     const fetchMs = elapsedSince(fetchStarted);
     if (!verified) return unavailable(mediaTiming(authMs, fetchMs, 0));
@@ -251,15 +317,20 @@ export async function GET(
       );
     }
     rememberCardRendition(sha, cardWidth, rendered.bytes);
-    return imageResponse(
-      rendered.bytes,
-      "image/webp",
-      mediaTiming(authMs, fetchMs, rendered.resizeMs, rendered.queueMs),
+    const serverTiming = mediaTiming(
+      authMs,
+      fetchMs,
+      rendered.resizeMs,
+      rendered.queueMs,
+    );
+    return (
+      onMatchNotModified(request, cardEtag, serverTiming) ??
+      imageResponse(rendered.bytes, "image/webp", serverTiming, cardEtag)
     );
   }
 
   const fetchStarted = performance.now();
-  const photo = await openSignedPrivateObject(
+  const photo = await readCappedVerifiedPrivateBytes(
     supabase.storage.from(descriptor.bucket_id),
     descriptor.object_path,
     {
@@ -267,22 +338,23 @@ export async function GET(
       mime: descriptor.output_mime_type,
       sha: descriptor.output_sha256_hex,
     },
+    descriptor.bucket_id,
   );
   const fetchMs = elapsedSince(fetchStarted);
   if (!photo) return unavailable(mediaTiming(authMs, fetchMs, 0));
-
-  // No ETag: the descriptor digest is checked while the body streams, so a
-  // hash ETag would require buffering the whole object before the first byte.
-  // Cache-Control stays private/no-store, which is what keeps iOS from pinning.
-  return new Response(photo.stream, {
-    status: 200,
-    headers: {
-      ...privateHeaders,
-      ...(photo.contentLength == null
-        ? {}
-        : { "Content-Length": String(photo.contentLength) }),
-      "Content-Type": descriptor.output_mime_type,
-      "Server-Timing": mediaTiming(authMs, fetchMs, 0),
-    },
-  });
+  const photoSha = normalizedSha256Hex(descriptor.output_sha256_hex);
+  const photoEtag = photoSha
+    ? etagFor(["photo", "full", photoSha])
+    : etagFor([
+        "photo",
+        "full",
+        descriptor.bucket_id,
+        descriptor.object_path,
+        String(descriptor.output_size_bytes),
+      ]);
+  const serverTiming = mediaTiming(authMs, fetchMs, 0);
+  return (
+    onMatchNotModified(request, photoEtag, serverTiming) ??
+    imageResponse(photo, descriptor.output_mime_type, serverTiming, photoEtag)
+  );
 }

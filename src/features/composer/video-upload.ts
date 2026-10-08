@@ -477,7 +477,7 @@ export async function uploadVideoMoment(
       bucketName: reservation.bucket_id,
       objectName: reservation.object_path,
       contentType: mimeType,
-      cacheControl: "3600",
+      cacheControl: "31536000, immutable",
       metadata: JSON.stringify(userMetadata),
     },
     onStage,

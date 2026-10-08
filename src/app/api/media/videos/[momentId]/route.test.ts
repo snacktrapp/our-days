@@ -24,6 +24,7 @@ const descriptor = {
   object_path: "video/private",
   size_bytes: 10,
 };
+const privateCachedHeader = "private, max-age=604800, immutable";
 
 function request(range?: string) {
   return GET(
@@ -67,9 +68,9 @@ describe("private video delivery route", () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("video/mp4");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
+    expect(response.headers.get("vary")).toBe("Cookie, Range");
+    expect(response.headers.get("etag")).toMatch(/^"od-media-[0-9a-f]{64}"$/u);
     expect(mocks.rpc).toHaveBeenCalledWith("get_video_moment_delivery", {
       moment_id: momentId,
     });
@@ -89,6 +90,7 @@ describe("private video delivery route", () => {
     );
     const response = await request("bytes=0-4");
     expect(response.status).toBe(206);
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
     expect(response.headers.get("content-range")).toBe("bytes 0-4/10");
     expect(mocks.fetch).toHaveBeenCalledWith(
       "https://storage.example.test/signed",
@@ -101,6 +103,9 @@ describe("private video delivery route", () => {
     async (range) => {
       const response = await request(range);
       expect(response.status).toBe(404);
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-store, max-age=0",
+      );
       expect(mocks.createClient).not.toHaveBeenCalled();
     },
   );
@@ -169,13 +174,18 @@ describe("private video delivery route", () => {
     );
     const response = await request("bytes=0-1");
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
     expect(response.headers.get("content-range")).toBeNull();
     expect(await response.text()).toBe("");
   });
 
   it("fails closed when the private descriptor or upstream shape changes", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: [], error: null });
-    expect((await request()).status).toBe(404);
+    expect((await request()).headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
 
     mocks.fetch.mockResolvedValueOnce(
       new Response(new Uint8Array(9), {
@@ -183,6 +193,10 @@ describe("private video delivery route", () => {
         headers: { "content-length": "9", "content-type": "video/mp4" },
       }),
     );
-    expect((await request()).status).toBe(404);
+    const mismatched = await request();
+    expect(mismatched.status).toBe(404);
+    expect(mismatched.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
   });
 });

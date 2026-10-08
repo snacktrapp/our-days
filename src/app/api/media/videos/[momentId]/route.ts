@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
@@ -14,16 +15,33 @@ const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const singleByteRangePattern = /^bytes=(?:\d+-\d*|\d*-\d+)$/u;
 
-const privateHeaders = {
+const privateNoStoreHeaders = {
   "Cache-Control": "private, no-store, max-age=0",
   Expires: "0",
   Pragma: "no-cache",
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
 } as const;
+const privateCacheControl = "private, max-age=604800, immutable";
+const privateCachedHeaders = {
+  "Cache-Control": privateCacheControl,
+  Vary: "Cookie",
+  "X-Content-Type-Options": "nosniff",
+  "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
+} as const;
 
 function unavailable() {
-  return new Response(null, { status: 404, headers: privateHeaders });
+  return new Response(null, { status: 404, headers: privateNoStoreHeaders });
+}
+
+function etagFor(parts: readonly (string | number)[]) {
+  const key = parts.join(":");
+  const digest = createHash("sha256").update(key).digest("hex");
+  return `"od-media-${digest}"`;
+}
+
+function varyWithRange() {
+  return "Cookie, Range";
 }
 
 function validPartialResponse(response: Response, expectedSize: number) {
@@ -130,10 +148,10 @@ export async function GET(
       return unavailable();
     }
     const bytes = readLocalMediaFile(moment.media.originalRelativePath);
-    const headers = new Headers(privateHeaders);
+    const headers = new Headers(privateNoStoreHeaders);
     headers.set("Accept-Ranges", "bytes");
     headers.set("Content-Type", moment.media.mimeType);
-    headers.set("Vary", "Range");
+    headers.set("Vary", varyWithRange());
     if (range) {
       const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
       if (!match) return unavailable();
@@ -169,6 +187,35 @@ export async function GET(
   );
   const descriptor = rows?.[0];
   if (descriptorError || !descriptor) return unavailable();
+  const expectedSize = declaredByteSize(descriptor.size_bytes);
+  if (expectedSize === null) return unavailable();
+  const etag = etagFor([
+    "video",
+    descriptor.bucket_id,
+    descriptor.object_path,
+    expectedSize,
+    descriptor.mime_type,
+  ]);
+  if (!range) {
+    const match = request.headers.get("if-none-match");
+    if (
+      match
+        ?.split(",")
+        .map((entry) => entry.trim())
+        .includes(etag)
+    ) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          ...privateCachedHeaders,
+          ETag: etag,
+          "Accept-Ranges": "bytes",
+          "Content-Type": descriptor.mime_type,
+          Vary: varyWithRange(),
+        },
+      });
+    }
+  }
 
   const { data: signed, error: signingError } = await supabase.storage
     .from(descriptor.bucket_id)
@@ -186,22 +233,18 @@ export async function GET(
     return unavailable();
   }
 
-  const expectedSize = declaredByteSize(descriptor.size_bytes);
   const contentType = upstream.headers.get("content-type");
   const contentLength = Number(upstream.headers.get("content-length"));
-  if (
-    expectedSize === null ||
-    !upstream.body ||
-    !mediaTypeMatches(contentType, descriptor.mime_type)
-  ) {
+  if (!upstream.body || !mediaTypeMatches(contentType, descriptor.mime_type)) {
     await upstream.body?.cancel();
     return unavailable();
   }
 
-  const responseHeaders = new Headers(privateHeaders);
+  const responseHeaders = new Headers(privateCachedHeaders);
+  responseHeaders.set("ETag", etag);
   responseHeaders.set("Accept-Ranges", "bytes");
   responseHeaders.set("Content-Type", descriptor.mime_type);
-  responseHeaders.set("Vary", "Range");
+  responseHeaders.set("Vary", varyWithRange());
 
   if (!range) {
     if (

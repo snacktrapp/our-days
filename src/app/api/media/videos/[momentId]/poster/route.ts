@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   localJournalIsEnabled,
   mediaDeliveryIsEnabled,
@@ -12,16 +13,31 @@ import { createOurDaysServerClient } from "@/lib/supabase/server";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-const privateHeaders = {
+const privateNoStoreHeaders = {
   "Cache-Control": "private, no-store, max-age=0",
   Expires: "0",
   Pragma: "no-cache",
+  Vary: "Cookie",
+  "X-Content-Type-Options": "nosniff",
+  "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
+} as const;
+
+const privateCacheControl = "private, max-age=604800, immutable";
+const privateCachedHeaders = {
+  "Cache-Control": privateCacheControl,
+  Vary: "Cookie",
   "X-Content-Type-Options": "nosniff",
   "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
 } as const;
 
 function unavailable() {
-  return new Response(null, { status: 404, headers: privateHeaders });
+  return new Response(null, { status: 404, headers: privateNoStoreHeaders });
+}
+
+function etagFor(parts: readonly (string | number)[]) {
+  const key = parts.join(":");
+  const digest = createHash("sha256").update(key).digest("hex");
+  return `"od-media-${digest}"`;
 }
 
 export async function GET(
@@ -54,7 +70,7 @@ export async function GET(
     return new Response(bytes, {
       status: 200,
       headers: {
-        ...privateHeaders,
+        ...privateNoStoreHeaders,
         "Content-Length": String(bytes.byteLength),
         "Content-Type": moment.media.posterMimeType ?? "image/jpeg",
       },
@@ -70,6 +86,29 @@ export async function GET(
   );
   const descriptor = rows?.[0];
   if (error || !descriptor) return unavailable();
+  const etag = etagFor([
+    "poster",
+    descriptor.bucket_id,
+    descriptor.object_path,
+    String(descriptor.size_bytes),
+    descriptor.mime_type,
+  ]);
+  const match = _request.headers.get("if-none-match");
+  if (
+    match
+      ?.split(",")
+      .map((entry) => entry.trim())
+      .includes(etag)
+  ) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        ...privateCachedHeaders,
+        ETag: etag,
+        "Content-Type": descriptor.mime_type,
+      },
+    });
+  }
 
   const file = await fetchSignedPrivateObject(
     supabase.storage.from(descriptor.bucket_id),
@@ -88,9 +127,10 @@ export async function GET(
   return new Response(bytes, {
     status: 200,
     headers: {
-      ...privateHeaders,
+      ...privateCachedHeaders,
       "Content-Length": String(bytes.byteLength),
       "Content-Type": descriptor.mime_type,
+      ETag: etag,
     },
   });
 }
