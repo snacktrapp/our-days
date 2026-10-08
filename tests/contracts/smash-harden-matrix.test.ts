@@ -42,6 +42,10 @@ const journalContext = read("src/data/journal-context.server.ts");
 const sessionError = readIfPresent("src/lib/auth/family-session-error.ts");
 const photoRoute = read("src/app/api/media/moments/[momentId]/route.ts");
 const photoDeliveryChecks = read("src/lib/private-media-delivery.ts");
+const photoDeliveryServer = read("src/lib/private-media-delivery.server.ts");
+const photoRouteTest = read(
+  "src/app/api/media/moments/[momentId]/route.test.ts",
+);
 const videoRoute = read("src/app/api/media/videos/[momentId]/route.ts");
 const videoRouteTest = read(
   "src/app/api/media/videos/[momentId]/route.test.ts",
@@ -186,40 +190,47 @@ describe("smash harden matrix", () => {
       );
       expect(photoRoute).toContain("get_photo_moment_delivery");
       expect(photoRoute).toContain("if (descriptorError || !descriptor)");
-      expect(photoRoute).toContain("openSignedPrivateObject");
+      expect(photoRoute).toContain("readCappedVerifiedPrivateBytes");
+      const descriptorGate = photoRoute.indexOf(
+        "if (descriptorError || !descriptor)",
+      );
+      const firstStorageRead = photoRoute.indexOf(
+        "readCappedVerifiedPrivateBytes(",
+      );
+      expect(descriptorGate).toBeGreaterThan(-1);
+      expect(firstStorageRead).toBeGreaterThan(-1);
+      expect(descriptorGate).toBeLessThan(firstStorageRead);
+      expect(photoRouteTest).toContain(
+        "returns a neutral 404 when get_photo_moment_delivery has no live session or capability",
+      );
+      expect(photoRouteTest).toContain(
+        "expect(mocks.createSignedUrl).not.toHaveBeenCalled()",
+      );
+      expect(photoRouteTest).toContain(
+        "expect(mocks.fetch).not.toHaveBeenCalled()",
+      );
     });
 
     it("would have 404'd openable photos when Storage omitted MIME or stringified size", () => {
-      const failClose = (
-        photo: Readonly<{ size: number; type: string }>,
-        outputSize: unknown,
-        outputMime: string,
-      ) => photo.size !== outputSize || photo.type !== outputMime;
-
-      expect(failClose({ size: 5, type: "" }, 5, "image/webp")).toBe(true);
-      expect(
-        failClose(
-          { size: 5, type: "application/octet-stream" },
-          5,
-          "image/webp",
-        ),
-      ).toBe(true);
-      expect(
-        failClose({ size: 5, type: "image/webp" }, "5", "image/webp"),
-      ).toBe(true);
-      expect(failClose({ size: 5, type: "image/webp" }, 5, "image/webp")).toBe(
-        false,
+      expect(photoRoute).toContain("readCappedVerifiedPrivateBytes");
+      expect(photoDeliveryChecks).toContain("mediaTypeMatches");
+      expect(photoDeliveryChecks).toContain("declaredByteSize");
+      expect(photoDeliveryChecks).toContain("contentLengthAgrees");
+      expect(photoDeliveryServer).toContain(
+        'if (!mediaTypeMatches(upstream.headers.get("content-type"), expected.mime))',
       );
-
-      const usesOldPredicate = photoRoute.includes(
-        "photo.type !== descriptor.output_mime_type",
+      expect(photoDeliveryServer).toContain(
+        "const size = declaredByteSize(expected.size);",
       );
-      const usesHelper =
-        photoRoute.includes("openSignedPrivateObject") &&
-        photoDeliveryChecks.includes("mediaTypeMatches") &&
-        photoDeliveryChecks.includes("declaredByteSize") &&
-        photoDeliveryChecks.includes("contentLengthAgrees");
-      expect(usesOldPredicate || usesHelper).toBe(true);
+      expect(photoDeliveryServer).toContain(
+        "if (!contentLengthAgrees(upstream.headers, size))",
+      );
+      expect(photoRouteTest).toContain(
+        "still opens matching SHA bytes when the signed fetch omits MIME or stringifies size",
+      );
+      expect(read("src/lib/private-media-delivery.test.ts")).toContain(
+        "accepts missing MIME and stringified size while still enforcing capped verification",
+      );
     });
 
     it("does not advertise a Safari 206 from a truncated Storage body", () => {

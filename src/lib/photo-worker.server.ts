@@ -30,6 +30,8 @@ import { readSupabasePublicConfig } from "@/lib/supabase/public-config";
 const intakeBucket = "our-days-intake";
 const originalsBucket = "our-days-originals";
 const displayBucket = "our-days-display";
+const shortPrivateCacheControl = "private, max-age=3600, must-revalidate";
+const immutablePrivateCacheControl = "private, max-age=31536000, immutable";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const sha256Pattern = /^[0-9a-f]{64}$/u;
@@ -227,11 +229,15 @@ async function uploadObject(
   metadata: object,
   stream: NodeJS.ReadableStream,
 ) {
+  const cacheControl =
+    bucket === displayBucket
+      ? immutablePrivateCacheControl
+      : shortPrivateCacheControl;
   const response = await storageRequest(config, bucket, objectPath, {
     body: stream as unknown as BodyInit,
     duplex: "half",
     headers: {
-      "cache-control": "max-age=0",
+      "cache-control": cacheControl,
       "content-type": contentType,
       "x-metadata": Buffer.from(JSON.stringify(metadata)).toString("base64"),
       "x-upsert": "false",
