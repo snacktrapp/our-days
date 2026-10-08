@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -11,12 +11,17 @@ import {
   sha256HexMatches,
 } from "./private-media-delivery";
 import {
+  clearVerifiedPrivateMediaCacheForTests,
   fetchSignedPrivateObject,
   readCappedVerifiedPrivateBytes,
   streamVerifiedBytes,
 } from "./private-media-delivery.server";
 
 describe("private media delivery checks", () => {
+  beforeEach(() => {
+    clearVerifiedPrivateMediaCacheForTests();
+  });
+
   it("accepts bigint or decimal-string sizes from PostgREST", () => {
     expect(declaredByteSize(428450)).toBe(428450);
     expect(declaredByteSize("428450")).toBe(428450);
@@ -202,6 +207,85 @@ describe("private media delivery checks", () => {
         { mime: "image/webp", sha: digest, size: exact.byteLength },
       ),
     ).resolves.toEqual(exact);
+    vi.unstubAllGlobals();
+  });
+
+  it("reuses capped verified bytes without re-fetching the same object", async () => {
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.example.test/signed" },
+      error: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3, 4, 5]), {
+        status: 200,
+        headers: { "content-type": "image/webp", "content-length": "5" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: 5 },
+        "our-days-display",
+      ),
+    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: 5 },
+        "our-days-display",
+      ),
+    ).resolves.toEqual(new Uint8Array([1, 2, 3, 4, 5]));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createSignedUrl).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("accepts missing MIME and stringified size while still enforcing capped verification", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.example.test/signed" },
+      error: null,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "", "content-length": "5" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: "5" },
+        "missing-mime-string-size",
+      ),
+    ).resolves.toEqual(bytes);
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: "6" },
+        "mismatch-size",
+      ),
+    ).resolves.toBeNull();
     vi.unstubAllGlobals();
   });
 

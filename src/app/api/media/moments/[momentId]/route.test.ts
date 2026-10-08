@@ -7,6 +7,7 @@ import {
   clearCardRenditionCache,
   rememberCardRendition,
 } from "@/lib/card-photo-rendition.server";
+import { clearVerifiedPrivateMediaCacheForTests } from "@/lib/private-media-delivery.server";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
@@ -42,6 +43,7 @@ const secondDescriptor = {
   photo_id: "10000000-0000-4000-8000-000000000012",
   sort_order: 1,
 };
+const privateCachedHeader = "private, max-age=604800, immutable";
 
 function request(id = momentId, search = "") {
   return GET(
@@ -94,6 +96,7 @@ function signedBytes(
 
 describe("private photo delivery route", () => {
   beforeEach(() => {
+    clearVerifiedPrivateMediaCacheForTests();
     vi.stubEnv("OUR_DAYS_MEDIA_DELIVERY_MODE", "enabled");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.rpc.mockResolvedValue({
@@ -110,6 +113,7 @@ describe("private photo delivery route", () => {
   });
 
   afterEach(() => {
+    clearVerifiedPrivateMediaCacheForTests();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -130,9 +134,9 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(response.headers.get("etag")).toMatch(/^"od-media-[0-9a-f]{64}"$/u);
     expect(mocks.rpc).toHaveBeenCalledWith("get_photo_moment_delivery", {
       moment_id: momentId,
     });
@@ -158,6 +162,9 @@ describe("private photo delivery route", () => {
     if (id === momentId) mocks.rpc.mockResolvedValue({ data: [], error: null });
     const response = await request(id);
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
     expect(await response.text()).toBe("");
   });
 
@@ -227,11 +234,7 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(404);
 
     signedBytes([5, 4, 3, 2, 1]);
-    const sameShapeCorruption = await request();
-    expect(sameShapeCorruption.status).toBe(200);
-    await expect(sameShapeCorruption.arrayBuffer()).rejects.toThrow(
-      /did not match its descriptor/u,
-    );
+    expect((await request()).status).toBe(404);
   });
 
   it("returns a neutral 404 when get_photo_moment_delivery has no live session or capability", async () => {
@@ -380,9 +383,7 @@ describe("private photo delivery route", () => {
     const response = await request(momentId, "?w=1080");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
     const timing = response.headers.get("server-timing") ?? "";
     expect(timing).toContain("auth;dur=");
     expect(timing).toContain("fetch;dur=");
@@ -528,15 +529,22 @@ describe("private photo delivery route", () => {
       `?photo=${secondDescriptor.photo_id}&w=1080`,
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("server-timing")).toContain("resize;dur=0");
     expect(response.headers.get("server-timing")).toContain("queue;dur=0");
     expect(Buffer.from(await response.arrayBuffer())).toEqual(card);
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(cardPath, 60);
+
+    const repeated = await request(
+      momentId,
+      `?photo=${secondDescriptor.photo_id}&w=1080`,
+    );
+    expect(repeated.status).toBe(200);
+    expect(Buffer.from(await repeated.arrayBuffer())).toEqual(card);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to on-demand resize when no stored card exists", async () => {

@@ -24,6 +24,7 @@ const descriptor = {
   object_path: "poster/10000000-0000-4000-8000-000000000001",
   size_bytes: 4,
 };
+const privateCachedHeader = "private, max-age=604800, immutable";
 
 function request(id = momentId) {
   return GET(
@@ -65,9 +66,9 @@ describe("private video poster delivery route", () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/jpeg");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(response.headers.get("etag")).toMatch(/^"od-media-[0-9a-f]{64}"$/u);
     expect(mocks.rpc).toHaveBeenCalledWith("get_video_moment_poster_delivery", {
       moment_id: momentId,
     });
@@ -102,13 +103,21 @@ describe("private video poster delivery route", () => {
       data: null,
       error: { message: "not found" },
     });
-    expect((await request()).status).toBe(404);
+    const response = await request();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("fails closed when the private descriptor is missing", async () => {
     mocks.rpc.mockResolvedValue({ data: [], error: null });
-    expect((await request()).status).toBe(404);
+    const response = await request();
+    expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
     expect(mocks.createSignedUrl).not.toHaveBeenCalled();
   });
 });
