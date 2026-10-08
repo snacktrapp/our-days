@@ -284,7 +284,7 @@ function VideoFeasibilityDialog({
             {previewUrl ? "Choose a different video" : "Choose a short video"}
           </span>
           <small id="video-feasibility-picker-constraints">
-            One local clip · up to 60 seconds
+            One local clip · up to 40 seconds
           </small>
           <input
             ref={inputRef}

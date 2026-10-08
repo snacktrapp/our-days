@@ -1957,8 +1957,8 @@ export function MomentComposer({
                       <span>Choose photo or video</span>
                       <small>
                         {connectedPhotoAvailable
-                          ? "The original uploads privately to this family."
-                          : "It stays on this device in the preview."}
+                          ? "Videos up to 40 seconds. The original uploads privately to this family."
+                          : "Videos up to 40 seconds. It stays on this device in the preview."}
                       </small>
                       <input
                         ref={photoInputRef}

@@ -1,33 +1,33 @@
 -- Tighten video reserves to fit Supabase Free storage pressure:
--- - duration cap: 60 seconds (60000 ms)
--- - stored size backstop: 32 MiB (33554432 bytes)
+-- - duration cap: 40 seconds (40000 ms)
+-- - stored size backstop: 128 MiB (134217728 bytes)
 --
 -- Existing production rows already include a few older videos above these caps.
 -- Add NOT VALID constraints so historical rows keep working while new writes
 -- are enforced immediately.
 
 alter table private.video_upload_requests
-  add constraint video_upload_requests_size_cap_32mb check (
-    expected_size_bytes between 1 and 33554432
+  add constraint video_upload_requests_size_cap_128mb check (
+    expected_size_bytes between 1 and 134217728
   ) not valid;
 
 alter table private.video_upload_requests
-  add constraint video_upload_requests_duration_cap_60s check (
-    duration_ms between 1 and 60000
+  add constraint video_upload_requests_duration_cap_40s check (
+    duration_ms between 1 and 40000
   ) not valid;
 
 alter table public.moment_videos
-  add constraint moment_videos_size_cap_32mb check (
-    size_bytes between 1 and 33554432
+  add constraint moment_videos_size_cap_128mb check (
+    size_bytes between 1 and 134217728
   ) not valid;
 
 alter table public.moment_videos
-  add constraint moment_videos_duration_cap_60s check (
-    duration_ms between 1 and 60000
+  add constraint moment_videos_duration_cap_40s check (
+    duration_ms between 1 and 40000
   ) not valid;
 
 update storage.buckets
-   set file_size_limit = 33554432
+   set file_size_limit = 134217728
  where id = 'our-days-videos';
 
 create or replace function private.reserve_video_moment(
@@ -84,9 +84,9 @@ begin
       'video/mp4', 'video/quicktime', 'video/x-m4v', 'video/webm'
     )
     or requested_expected_size_bytes is null
-    or requested_expected_size_bytes not between 1 and 33554432
+    or requested_expected_size_bytes not between 1 and 134217728
     or requested_duration_ms is null
-    or requested_duration_ms not between 1 and 60000 then
+    or requested_duration_ms not between 1 and 40000 then
     raise exception using errcode = '22023',
       message = 'Video moment could not be prepared';
   end if;
@@ -310,9 +310,9 @@ declare
   reserved record;
 begin
   if duration_ms is null
-    or duration_ms not between 1 and 60000
+    or duration_ms not between 1 and 40000
     or expected_size_bytes is null
-    or expected_size_bytes not between 1 and 33554432 then
+    or expected_size_bytes not between 1 and 134217728 then
     raise exception using errcode = '22023',
       message = 'Video moment could not be prepared';
   end if;

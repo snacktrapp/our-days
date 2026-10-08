@@ -25,36 +25,36 @@ select lives_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of about 59 seconds.',
+    body := 'A clip of 40 seconds.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 59360,
+    duration_ms := 40000,
     request_key := 'd1200000-0000-4000-8000-000000000001',
     audience := 'family'
   )$$,
-  'a clip of about 59 seconds (59360 ms) is accepted'
+  'a clip of 40 seconds (40000 ms) is accepted'
 );
 
 select throws_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of 70 seconds.',
+    body := 'A clip of 41 seconds.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 70000,
+    duration_ms := 41000,
     request_key := 'd1200000-0000-4000-8000-000000000002',
     audience := 'family'
   )$$,
   '22023',
   'Video moment could not be prepared',
-  'a clip of 70 seconds is rejected'
+  'a clip of 41 seconds is rejected'
 );
 
 select throws_ok(
@@ -66,14 +66,14 @@ select throws_ok(
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
-    expected_size_bytes := 33554433,
+    expected_size_bytes := 134217729,
     duration_ms := 30000,
     request_key := 'd1200000-0000-4000-8000-000000000003',
     audience := 'family'
   )$$,
   '22023',
   'Video moment could not be prepared',
-  'a reserve above 32 MiB is rejected'
+  'a reserve above 128 MiB is rejected'
 );
 
 select lives_ok(

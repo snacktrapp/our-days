@@ -67,8 +67,8 @@ describe("prepareVideoUploadFile", () => {
     );
   });
 
-  it("allows a small raw file through when compression is unsupported", async () => {
-    const source = videoFile(maximumStoredVideoBytes - 1, "video/mp4");
+  it("allows a large raw file under the backstop when compression is unsupported", async () => {
+    const source = videoFile(120 * 1024 * 1024, "video/mp4");
     await expect(
       prepareVideoUploadFile(
         {

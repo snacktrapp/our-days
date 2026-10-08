@@ -114,6 +114,14 @@ function inspectVideo(file: File, durationMs: number) {
     );
   }
   if (file.size > maximumVideoBytes) {
+    if (durationMs <= maximumVideoDurationMs) {
+      console.warn("[video-upload] backstop_edge_case", {
+        durationMs,
+        fileSize: file.size,
+        reason: "upload_payload_above_backstop",
+        type: mimeType,
+      });
+    }
     throw new VideoUploadError(storedVideoTooLargeMessage, false);
   }
   if (

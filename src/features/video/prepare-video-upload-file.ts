@@ -185,6 +185,18 @@ function playbackTimeoutMs(durationMs: number) {
   );
 }
 
+function logBackstopEdgeCase(
+  context: Readonly<{
+    durationMs: number;
+    fileSize: number;
+    reason: string;
+    type: string;
+  }>,
+) {
+  if (context.durationMs > maximumVideoDurationMs) return;
+  console.warn("[video-upload] backstop_edge_case", context);
+}
+
 async function waitForPlaybackFinished(input: {
   signal?: AbortSignal;
   timeoutMs: number;
@@ -471,6 +483,12 @@ export async function prepareVideoUploadFile(
 
   if (!support || !needsCompression) {
     if (input.file.size > maximumStoredVideoBytes) {
+      logBackstopEdgeCase({
+        durationMs: input.durationMs,
+        fileSize: input.file.size,
+        reason: "compression_unavailable",
+        type: input.file.type,
+      });
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
     return { file: input.file, compressed: false };
@@ -482,6 +500,12 @@ export async function prepareVideoUploadFile(
       support,
     });
     if (compressed.size > maximumStoredVideoBytes) {
+      logBackstopEdgeCase({
+        durationMs: input.durationMs,
+        fileSize: compressed.size,
+        reason: "compressed_output_above_backstop",
+        type: compressed.type,
+      });
       throw new VideoUploadError(storedVideoTooLargeMessage, false);
     }
     if (compressed.size < 1) {
@@ -503,8 +527,20 @@ export async function prepareVideoUploadFile(
         return { file: input.file, compressed: false };
       }
       if (error.message === prepareTimeoutMessage) {
+        logBackstopEdgeCase({
+          durationMs: input.durationMs,
+          fileSize: input.file.size,
+          reason: "compression_timeout",
+          type: input.file.type,
+        });
         throw new VideoUploadError(slowPrepareTooLargeMessage, false);
       }
+      logBackstopEdgeCase({
+        durationMs: input.durationMs,
+        fileSize: input.file.size,
+        reason: "compression_failed",
+        type: input.file.type,
+      });
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
     if (input.file.size <= maximumStoredVideoBytes) {
