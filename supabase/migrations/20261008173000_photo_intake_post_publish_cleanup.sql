@@ -2,6 +2,42 @@
 -- This keeps browser uploads write-only while allowing an authenticated
 -- requester to trigger safe post-publish intake cleanup.
 
+create or replace function private.photo_intake_cleanup_is_safe(
+  requested_intake_id uuid,
+  requested_object_path text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    requested_intake_id is not null
+    and requested_object_path is not null
+    and exists (
+      select 1
+        from private.photo_intakes as intake
+        join private.photo_originals as original
+          on original.circle_id = intake.circle_id
+         and original.intake_id = intake.id
+        join private.photo_display_derivatives as derivative
+          on derivative.circle_id = original.circle_id
+         and derivative.original_id = original.id
+        join public.moment_photos as photo
+          on photo.circle_id = original.circle_id
+         and photo.original_id = original.id
+         and photo.display_derivative_id = derivative.id
+       where intake.id = requested_intake_id
+         and intake.object_path = requested_object_path
+         and intake.state = 'verified'
+         and original.storage_object_id is not null
+         and derivative.storage_object_id is not null
+    ),
+    false
+  );
+$$;
+
 create or replace function private.cleanup_published_photo_intake(
   requested_intake_id uuid
 )
@@ -22,7 +58,6 @@ declare
   target_circle_id uuid;
   target_intake private.photo_intakes%rowtype;
   target_request private.photo_moment_requests%rowtype;
-  has_published_photo boolean := false;
 begin
   if current_user_id is null
     or requested_intake_id is null
@@ -91,22 +126,10 @@ begin
     return;
   end if;
 
-  select exists (
-    select 1
-      from private.photo_originals as original
-      join private.photo_display_derivatives as derivative
-        on derivative.circle_id = original.circle_id
-       and derivative.original_id = original.id
-      join public.moment_photos as photo
-        on photo.circle_id = original.circle_id
-       and photo.original_id = original.id
-       and photo.display_derivative_id = derivative.id
-     where original.intake_id = target_intake.id
-       and original.storage_object_id is not null
-       and derivative.storage_object_id is not null
-  ) into has_published_photo;
-
-  if not has_published_photo then
+  if not (select private.photo_intake_cleanup_is_safe(
+    target_intake.id,
+    target_intake.object_path
+  )) then
     return query select
       target_intake.id,
       false,
@@ -234,13 +257,50 @@ as $$
   order by intake.requested_at desc, intake.id;
 $$;
 
-create policy our_days_intake_delete_verified_published_owner
+drop policy if exists our_days_intake_delete_verified_published_owner
+  on storage.objects;
+
+drop policy if exists our_days_intake_select_exact_active_validator_lease
+  on storage.objects;
+
+create policy our_days_intake_select_exact_active_validator_lease
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'our-days-intake'
+  and (
+    (
+      (select storage.allow_any_operation(array[
+        'object.get_authenticated', 'object.get_authenticated_info'
+      ]::text[]))
+      and (select private.photo_validation_source_is_readable(name, id, version))
+    )
+    or (
+      (select private.photo_validator_is_allowed((select auth.uid())))
+      and exists (
+        select 1
+          from regexp_matches(
+            name,
+            '^intake/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$',
+            'i'
+          ) as path_parts(parts)
+         where (select private.photo_intake_cleanup_is_safe(
+           (path_parts.parts)[1]::uuid,
+           name
+         ))
+      )
+    )
+  )
+);
+
+create policy our_days_intake_delete_verified_published_worker_only
 on storage.objects
 for delete
 to authenticated
 using (
   bucket_id = 'our-days-intake'
-  and owner_id = (select auth.uid()::text)
+  and (select private.photo_validator_is_allowed((select auth.uid())))
   and exists (
     select 1
       from regexp_matches(
@@ -248,12 +308,10 @@ using (
         '^intake/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$',
         'i'
       ) as path_parts(parts)
-      cross join lateral private.cleanup_published_photo_intake(
-        (path_parts.parts)[1]::uuid
-      ) as cleanup
-     where cleanup.safe_to_delete
-       and cleanup.bucket_id = bucket_id
-       and cleanup.object_path = name
+     where (select private.photo_intake_cleanup_is_safe(
+       (path_parts.parts)[1]::uuid,
+       name
+     ))
   )
 );
 
@@ -261,8 +319,12 @@ revoke all on function private.cleanup_published_photo_intake(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function public.cleanup_published_photo_intake(uuid)
   from public, anon, authenticated, service_role;
+revoke all on function private.photo_intake_cleanup_is_safe(uuid, text)
+  from public, anon, authenticated, service_role;
 
 grant execute on function public.cleanup_published_photo_intake(uuid)
   to authenticated;
 grant execute on function private.cleanup_published_photo_intake(uuid)
+  to authenticated;
+grant execute on function private.photo_intake_cleanup_is_safe(uuid, text)
   to authenticated;

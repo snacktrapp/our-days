@@ -264,22 +264,16 @@ insert into storage.objects (
   )
 );
 select * from public.acknowledge_photo_intake(:'processing_intake_id'::uuid);
-select * from public.cleanup_published_photo_intake(:'processing_intake_id'::uuid)
-  \gset processing_cleanup_
-select is(
-  row(
-    :'processing_cleanup_safe_to_delete',
-    :'processing_cleanup_bucket_id',
-    :'processing_cleanup_object_path',
-    :'processing_cleanup_reason'
-  )::text,
-  row(
-    'f'::text,
-    null::text,
-    null::text,
-    'intake_not_verified'::text
-  )::text,
-  'cleanup refuses to delete intake bytes before publish is complete'
+select ok(
+  exists (
+    select 1
+      from public.cleanup_published_photo_intake(:'processing_intake_id'::uuid)
+     where not safe_to_delete
+       and bucket_id is null
+       and object_path is null
+       and reason = 'intake_not_verified'
+  ),
+  'cleanup refuses to mark intake bytes safe before publish is complete'
 );
 select is(
   (select count(*)::bigint from storage.objects as object
@@ -323,6 +317,21 @@ values (
 );
 insert into private.photo_validator_allowlist (auth_user_id)
 values ('10000000-0000-4000-8000-000000000099');
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000099'::uuid
+);
+select set_config('storage.allow_delete_query', 'on', true);
+select is(
+  (with removed as (
+    delete from storage.objects as object
+     where object.bucket_id = 'our-days-intake'
+       and object.name = :'processing_object_path'
+    returning 1
+  ) select count(*)::bigint from removed),
+  0::bigint,
+  'worker identity cannot delete an intake object before publish is complete'
+);
 
 select set_config(
   'request.jwt.claim.sub',
@@ -428,6 +437,14 @@ select is(
   )::text,
   'an authenticated intake owner receives a safe storage-api cleanup verdict after publish'
 );
+select is(
+  (select count(*)::bigint
+     from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'the published intake object remains until worker cleanup executes'
+);
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000002'::uuid
 );
@@ -453,8 +470,32 @@ select is(
        and object.name = :'processing_object_path'
     returning 1
   ) select count(*)::bigint from removed),
+  0::bigint,
+  'storage delete policy blocks deleting intake objects for the owner session'
+);
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000099'::uuid
+);
+select set_config('storage.allow_delete_query', 'on', true);
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
   1::bigint,
-  'storage delete policy allows the intake owner to delete after publish is complete'
+  'worker identity can select the verified-published intake object'
+);
+select is(
+  (with removed as (
+    delete from storage.objects as object
+     where object.bucket_id = 'our-days-intake'
+       and object.name = :'processing_object_path'
+    returning 1
+  ) select count(*)::bigint from removed),
+  1::bigint,
+  'storage delete policy allows worker cleanup for verified-published intake objects'
+);
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
 );
 select is(
   (select count(*)::bigint from public.list_my_photo_intakes(

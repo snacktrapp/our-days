@@ -108,6 +108,21 @@ async function authenticatedWorker() {
   return { client, token: data.session.access_token, url, publishableKey };
 }
 
+export async function withAuthenticatedPhotoWorkerClient<T>(
+  work: (client: WorkerClient) => Promise<T>,
+): Promise<T> {
+  const worker = await authenticatedWorker();
+  try {
+    return await work(worker.client);
+  } finally {
+    try {
+      await worker.client.auth.signOut({ scope: "local" });
+    } catch {
+      // Cleanup should not mask the caller's result.
+    }
+  }
+}
+
 function firstRow<T>(rows: readonly T[] | null, label: string): T {
   const row = rows?.[0];
   if (!row) throw new PhotoWorkerError(`${label} could not be started.`);

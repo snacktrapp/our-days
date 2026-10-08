@@ -7,9 +7,10 @@ const mocks = vi.hoisted(() => ({
   deliver: vi.fn(),
   getUser: vi.fn(),
   process: vi.fn(),
-  remove: vi.fn(),
   rpc: vi.fn(),
-  storageFrom: vi.fn(),
+  withWorkerClient: vi.fn(),
+  workerRemove: vi.fn(),
+  workerStorageFrom: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -41,6 +42,7 @@ vi.mock("@/lib/photo-worker.server", () => ({
     }
   },
   processPhotoIntake: mocks.process,
+  withAuthenticatedPhotoWorkerClient: mocks.withWorkerClient,
 }));
 
 import { PhotoWorkerError } from "@/lib/photo-worker.server";
@@ -73,9 +75,10 @@ describe("private photo processing route", () => {
     mocks.deliver.mockResolvedValue(undefined);
     mocks.getUser.mockReset();
     mocks.process.mockReset();
-    mocks.remove.mockReset();
     mocks.rpc.mockReset();
-    mocks.storageFrom.mockReset();
+    mocks.withWorkerClient.mockReset();
+    mocks.workerRemove.mockReset();
+    mocks.workerStorageFrom.mockReset();
     vi.stubEnv("OUR_DAYS_PHOTO_POSTING_MODE", "enabled");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.getUser.mockResolvedValue({
@@ -108,20 +111,25 @@ describe("private photo processing route", () => {
       return { data: null, error: { message: `Unexpected RPC: ${name}` } };
     });
     mocks.process.mockResolvedValue(undefined);
-    mocks.remove.mockResolvedValue({
+    mocks.workerRemove.mockResolvedValue({
       data: [{ name: intakeObjectPath }],
       error: null,
     });
-    mocks.storageFrom.mockImplementation((bucket: string) => ({
+    mocks.workerStorageFrom.mockImplementation((bucket: string) => ({
       remove:
         bucket === "our-days-intake"
-          ? mocks.remove
+          ? mocks.workerRemove
           : vi.fn(async () => ({ data: [], error: null })),
     }));
+    mocks.withWorkerClient.mockImplementation(
+      async (work: (client: unknown) => unknown) =>
+        work({
+          storage: { from: mocks.workerStorageFrom },
+        }),
+    );
     mocks.createClient.mockResolvedValue({
       auth: { getUser: mocks.getUser },
       rpc: mocks.rpc,
-      storage: { from: mocks.storageFrom },
     });
   });
 
@@ -197,8 +205,9 @@ describe("private photo processing route", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
       intake_id: intakeId,
     });
-    expect(mocks.storageFrom).toHaveBeenCalledWith("our-days-intake");
-    expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+    expect(mocks.withWorkerClient).toHaveBeenCalledTimes(1);
+    expect(mocks.workerStorageFrom).toHaveBeenCalledWith("our-days-intake");
+    expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
     expect(mocks.deliver).not.toHaveBeenCalled();
     expect(response.headers.get("cache-control")).toBe(
       "private, no-store, max-age=0",
@@ -237,8 +246,9 @@ describe("private photo processing route", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
       intake_id: intakeId,
     });
-    expect(mocks.storageFrom).toHaveBeenCalledWith("our-days-intake");
-    expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+    expect(mocks.withWorkerClient).toHaveBeenCalledTimes(1);
+    expect(mocks.workerStorageFrom).toHaveBeenCalledWith("our-days-intake");
+    expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
     expect(mocks.deliver).not.toHaveBeenCalled();
   });
 
@@ -270,19 +280,26 @@ describe("private photo processing route", () => {
 
     const response = await request();
     expect(response.status).toBe(200);
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
+  });
+
+  it("uses the worker-authenticated storage client for intake removal", async () => {
+    await request();
+    expect(mocks.withWorkerClient).toHaveBeenCalledTimes(1);
+    expect(mocks.workerStorageFrom).toHaveBeenCalledWith("our-days-intake");
   });
 
   it("keeps publishing non-fatal when storage API removal fails", async () => {
-    mocks.remove.mockResolvedValue({
+    mocks.workerRemove.mockResolvedValue({
       data: null,
       error: { message: "forbidden" },
     });
 
     const response = await request();
     expect(response.status).toBe(200);
-    expect(mocks.storageFrom).toHaveBeenCalledWith("our-days-intake");
-    expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+    expect(mocks.withWorkerClient).toHaveBeenCalledTimes(1);
+    expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
   });
 
   it("reports cleanup-not-removed when storage removal deletes nothing", async () => {
@@ -292,7 +309,7 @@ describe("private photo processing route", () => {
     const infoSpy = vi
       .spyOn(console, "info")
       .mockImplementation(() => undefined);
-    mocks.remove.mockResolvedValue({
+    mocks.workerRemove.mockResolvedValue({
       data: [],
       error: null,
     });
@@ -300,7 +317,7 @@ describe("private photo processing route", () => {
     try {
       const response = await request();
       expect(response.status).toBe(200);
-      expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+      expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
       expect(warnSpy).toHaveBeenCalledWith(
         "[photo-process] cleanup-not-removed",
         expect.objectContaining({
@@ -327,7 +344,8 @@ describe("private photo processing route", () => {
     const response = await request();
     expect(response.status).toBe(404);
     expect(mocks.process).not.toHaveBeenCalled();
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 
   it("returns a retryable response for a temporary worker failure", async () => {
@@ -351,7 +369,8 @@ describe("private photo processing route", () => {
         intake_id: intakeId,
       },
     );
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 
   it("returns success when another request published despite this worker error", async () => {
@@ -365,8 +384,9 @@ describe("private photo processing route", () => {
     expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
       intake_id: intakeId,
     });
-    expect(mocks.storageFrom).toHaveBeenCalledWith("our-days-intake");
-    expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+    expect(mocks.withWorkerClient).toHaveBeenCalledTimes(1);
+    expect(mocks.workerStorageFrom).toHaveBeenCalledWith("our-days-intake");
+    expect(mocks.workerRemove).toHaveBeenCalledWith([intakeObjectPath]);
   });
 
   it("does not claim a failure is terminal when its status cannot be read", async () => {
@@ -387,7 +407,8 @@ describe("private photo processing route", () => {
         intake_id: intakeId,
       },
     );
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 
   it("returns a stable attention response after a terminal safe failure", async () => {
@@ -415,7 +436,8 @@ describe("private photo processing route", () => {
       ok: false,
       message: "This file could not be verified as a safe photo.",
     });
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 
   it("keeps a nonterminal worker invariant retryable", async () => {
@@ -451,7 +473,8 @@ describe("private photo processing route", () => {
         intake_id: intakeId,
       },
     );
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 
   it("keeps intake bytes when processing is still incomplete", async () => {
@@ -473,6 +496,7 @@ describe("private photo processing route", () => {
         intake_id: intakeId,
       },
     );
-    expect(mocks.remove).not.toHaveBeenCalled();
+    expect(mocks.withWorkerClient).not.toHaveBeenCalled();
+    expect(mocks.workerRemove).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 begin;
 
-select plan(119);
+select plan(121);
 
 update private.photo_capabilities
    set enabled = true, updated_at = statement_timestamp()
@@ -419,7 +419,7 @@ select is(
        and policy.cmd = 'SELECT'
   ),
   1::bigint,
-  'the intake bucket has exactly one validator-only SELECT policy'
+  'the intake bucket has exactly one intake SELECT policy'
 );
 
 select ok(
@@ -439,14 +439,10 @@ select ok(
          policy_row.polqual,
          policy_row.polrelid
        ) like '%object.get_authenticated%object.get_authenticated_info%'
-       and pg_catalog.regexp_count(
-         pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid),
-         'object\.'
-       ) = 2
        and pg_catalog.pg_get_expr(
          policy_row.polqual,
          policy_row.polrelid
-       ) like '%photo_validation_source_is_readable(objects.name, objects.id, objects.version)%'
+       ) like '%photo_validation_source_is_readable%'
        and not (
          pg_catalog.pg_get_expr(
            policy_row.polqual,
@@ -457,7 +453,30 @@ select ok(
          ]::text[])
        )
   ),
-  'the sole intake SELECT policy permits only exact authenticated object reads through the validator source guard'
+  'the sole intake SELECT policy keeps exact authenticated validator reads'
+);
+select ok(
+  exists (
+    select 1
+      from pg_catalog.pg_policy as policy_row
+     where policy_row.polname =
+         'our_days_intake_select_exact_active_validator_lease'
+       and policy_row.polrelid = 'storage.objects'::regclass
+       and policy_row.polcmd = 'r'
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_validation_source_is_readable%'
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_validator_is_allowed%'
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_intake_cleanup_is_safe%'
+  ),
+  'the only intake SELECT policy stays lease-safe for users and adds a worker-only published-read branch'
 );
 
 select ok(
@@ -520,8 +539,32 @@ select is(
        and policy.policyname like 'our_days_intake_%'
        and policy.cmd = 'DELETE'
   ),
-  0::bigint,
-  'the intake bucket has no browser DELETE policy'
+  1::bigint,
+  'the intake bucket has exactly one worker-only DELETE policy'
+);
+select ok(
+  exists (
+    select 1
+      from pg_catalog.pg_policy as policy_row
+     where policy_row.polname =
+         'our_days_intake_delete_verified_published_worker_only'
+       and policy_row.polrelid = 'storage.objects'::regclass
+       and policy_row.polcmd = 'd'
+       and policy_row.polroles = array[
+         (select role_row.oid
+            from pg_catalog.pg_roles as role_row
+           where role_row.rolname = 'authenticated')
+       ]::oid[]
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_validator_is_allowed(( SELECT auth.uid()%'
+       and pg_catalog.pg_get_expr(
+         policy_row.polqual,
+         policy_row.polrelid
+       ) like '%photo_intake_cleanup_is_safe%'
+  ),
+  'non-worker authenticated users still have no intake DELETE path; only worker-only verified-published delete exists'
 );
 
 set local role authenticated;

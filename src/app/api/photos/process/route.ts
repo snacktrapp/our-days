@@ -6,6 +6,7 @@ import {
   processPhotoIntake,
   PhotoWorkerError,
   PHOTO_WORKER_VERSION,
+  withAuthenticatedPhotoWorkerClient,
 } from "@/lib/photo-worker.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -89,42 +90,39 @@ async function cleanupPublishedIntake(
     return;
   }
 
+  const bucketId = cleanup.bucket_id;
+  const objectPath = cleanup.object_path;
+  let removedPaths: string[] = [];
   try {
-    const { data: removedRows, error: removeError } = await supabase.storage
-      .from(cleanup.bucket_id)
-      .remove([cleanup.object_path]);
-    if (removeError) {
-      console.warn("[photo-process] intake cleanup remove failed", {
-        bucketId: cleanup.bucket_id,
-        intakeId,
-        momentId,
-        objectPath: cleanup.object_path,
-        reason: cleanup.reason,
-        workerVersion: PHOTO_WORKER_VERSION,
-      });
-      return;
-    }
-    const removedPaths = (removedRows ?? [])
-      .map((row) => {
-        if (!row || typeof row !== "object") return null;
-        if ("name" in row && typeof row.name === "string") return row.name;
-        if ("path" in row && typeof row.path === "string") return row.path;
-        return null;
-      })
-      .filter((path): path is string => Boolean(path));
-    if (!removedPaths.includes(cleanup.object_path)) {
-      console.warn("[photo-process] cleanup-not-removed", {
-        bucketId: cleanup.bucket_id,
-        intakeId,
-        momentId,
-        objectPath: cleanup.object_path,
-        reason: cleanup.reason,
-        workerVersion: PHOTO_WORKER_VERSION,
-      });
-      return;
-    }
+    removedPaths = await withAuthenticatedPhotoWorkerClient(
+      async (workerClient) => {
+        const { data: removedRows, error: removeError } =
+          await workerClient.storage.from(bucketId).remove([objectPath]);
+        if (removeError) throw removeError;
+        return (removedRows ?? [])
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            if ("name" in row && typeof row.name === "string") return row.name;
+            if ("path" in row && typeof row.path === "string") return row.path;
+            return null;
+          })
+          .filter((path): path is string => Boolean(path));
+      },
+    );
   } catch {
     console.warn("[photo-process] intake cleanup remove failed", {
+      bucketId: cleanup.bucket_id,
+      intakeId,
+      momentId,
+      objectPath: cleanup.object_path,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  if (!removedPaths.includes(objectPath)) {
+    console.warn("[photo-process] cleanup-not-removed", {
       bucketId: cleanup.bucket_id,
       intakeId,
       momentId,
