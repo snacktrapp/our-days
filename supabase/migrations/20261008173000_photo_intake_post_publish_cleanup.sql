@@ -7,7 +7,9 @@ create or replace function private.cleanup_published_photo_intake(
 )
 returns table (
   intake_id uuid,
-  deleted boolean,
+  safe_to_delete boolean,
+  bucket_id text,
+  object_path text,
   reason text
 )
 language plpgsql
@@ -80,7 +82,12 @@ begin
   end if;
 
   if target_intake.state <> 'verified' then
-    return query select target_intake.id, false, 'intake_not_verified'::text;
+    return query select
+      target_intake.id,
+      false,
+      null::text,
+      null::text,
+      'intake_not_verified'::text;
     return;
   end if;
 
@@ -100,26 +107,30 @@ begin
   ) into has_published_photo;
 
   if not has_published_photo then
-    return query select target_intake.id, false, 'not_published'::text;
+    return query select
+      target_intake.id,
+      false,
+      null::text,
+      null::text,
+      'not_published'::text;
     return;
   end if;
 
-  delete from storage.objects as object
-   where object.bucket_id = 'our-days-intake'
-     and object.name = target_intake.object_path;
-
-  if found then
-    return query select target_intake.id, true, 'deleted'::text;
-  end if;
-
-  return query select target_intake.id, false, 'already_missing'::text;
+  return query select
+    target_intake.id,
+    true,
+    'our-days-intake'::text,
+    target_intake.object_path,
+    'safe_to_delete'::text;
 end;
 $$;
 
 create function public.cleanup_published_photo_intake(intake_id uuid)
 returns table (
   intake_id uuid,
-  deleted boolean,
+  safe_to_delete boolean,
+  bucket_id text,
+  object_path text,
   reason text
 )
 language sql
@@ -229,4 +240,6 @@ revoke all on function public.cleanup_published_photo_intake(uuid)
   from public, anon, authenticated, service_role;
 
 grant execute on function public.cleanup_published_photo_intake(uuid)
+  to authenticated;
+grant execute on function private.cleanup_published_photo_intake(uuid)
   to authenticated;

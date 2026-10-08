@@ -800,9 +800,11 @@ export type Database = {
       cleanup_published_photo_intake: {
         Args: { intake_id: string };
         Returns: {
-          deleted: boolean;
+          bucket_id: string | null;
           intake_id: string;
+          object_path: string | null;
           reason: string;
+          safe_to_delete: boolean;
         }[];
       };
       claim_moment_push_delivery: {

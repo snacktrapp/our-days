@@ -29,7 +29,13 @@ function fakeClient({
     }
     if (prefix === `original/${originalPath.split("/")[1]}`) {
       return {
-        data: [{ id: "original-file", metadata: {}, name: originalPath.split("/")[2] }],
+        data: [
+          {
+            id: "original-file",
+            metadata: {},
+            name: originalPath.split("/")[2],
+          },
+        ],
         error: null,
       };
     }

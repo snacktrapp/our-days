@@ -39,7 +39,9 @@ async function listBucketFiles(client, bucket, rootPrefix) {
         sortBy: { column: "name", order: "asc" },
       });
       if (error) {
-        throw new Error(`Could not list ${bucket}/${prefix ?? ""}: ${error.message}`);
+        throw new Error(
+          `Could not list ${bucket}/${prefix ?? ""}: ${error.message}`,
+        );
       }
       if (!data || data.length === 0) break;
 
@@ -69,9 +71,13 @@ async function hashStorageObject(client, bucket, objectPath, cache) {
   const hit = cache.get(cacheKey);
   if (hit) return hit;
 
-  const { data, error } = await client.storage.from(bucket).download(objectPath);
+  const { data, error } = await client.storage
+    .from(bucket)
+    .download(objectPath);
   if (error || !data) {
-    throw new Error(`Could not download ${bucket}/${objectPath}: ${error?.message ?? "unknown error"}`);
+    throw new Error(
+      `Could not download ${bucket}/${objectPath}: ${error?.message ?? "unknown error"}`,
+    );
   }
   const bytes = Buffer.from(await data.arrayBuffer());
   const hashed = {
@@ -110,15 +116,21 @@ export function assertIdenticalDeletionCandidates(candidates) {
     (candidate) => !candidate.shaMatch || !candidate.sizeMatch,
   );
   if (nonIdentical.length > 0) {
-    throw new Error("Refusing cleanup: non-identical file candidates were provided.");
+    throw new Error(
+      "Refusing cleanup: non-identical file candidates were provided.",
+    );
   }
 }
 
 export async function deleteIntakeObjects(client, candidates) {
   assertIdenticalDeletionCandidates(candidates);
-  const paths = [...new Set(candidates.map((candidate) => candidate.intakePath))];
+  const paths = [
+    ...new Set(candidates.map((candidate) => candidate.intakePath)),
+  ];
   if (paths.length === 0) return [];
-  const { data, error } = await client.storage.from(INTAKE_BUCKET).remove(paths);
+  const { data, error } = await client.storage
+    .from(INTAKE_BUCKET)
+    .remove(paths);
   if (error) {
     throw new Error(`Cleanup delete failed: ${error.message}`);
   }
@@ -134,7 +146,11 @@ export async function runIntakeCleanupReport({
   log = console,
 }) {
   const intakeFiles = await listBucketFiles(client, INTAKE_BUCKET, "intake");
-  const originalFiles = await listBucketFiles(client, ORIGINALS_BUCKET, "original");
+  const originalFiles = await listBucketFiles(
+    client,
+    ORIGINALS_BUCKET,
+    "original",
+  );
 
   const originalsByIntakeId = new Map();
   for (const original of originalFiles) {
@@ -195,7 +211,12 @@ export async function runIntakeCleanupReport({
     const [candidate] = candidates;
     const [intakeHash, originalHash] = await Promise.all([
       hashStorageObject(client, INTAKE_BUCKET, intake.name, hashCache),
-      hashStorageObject(client, ORIGINALS_BUCKET, candidate.originalPath, hashCache),
+      hashStorageObject(
+        client,
+        ORIGINALS_BUCKET,
+        candidate.originalPath,
+        hashCache,
+      ),
     ]);
     const sizeMatch = intakeHash.sizeBytes === originalHash.sizeBytes;
     const shaMatch = intakeHash.sha256Hex === originalHash.sha256Hex;
@@ -318,7 +339,9 @@ export async function runIntakeCleanupReport({
 
   if (applyCleanup) {
     const deleted = await deleteIntakeObjects(client, plannedDeletes);
-    log.info(`\nDeleted ${deleted.length} intake objects from ${INTAKE_BUCKET}.`);
+    log.info(
+      `\nDeleted ${deleted.length} intake objects from ${INTAKE_BUCKET}.`,
+    );
   } else {
     log.info("\nDry run mode: no objects were deleted.");
   }
@@ -366,9 +389,7 @@ async function main() {
     process.env.SUPABASE_URL?.trim() ??
     "";
   if (!url) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) is required.",
-    );
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) is required.");
   }
   const serviceRoleKey = requiredEnvironment("SUPABASE_SERVICE_ROLE_KEY");
   const client = createClient(url, serviceRoleKey, {

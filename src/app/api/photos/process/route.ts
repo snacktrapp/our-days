@@ -78,10 +78,49 @@ async function cleanupPublishedIntake(
     });
     return;
   }
-  console.info("[photo-process] intake cleanup", {
-    deleted: cleanup.deleted,
+
+  if (!cleanup.safe_to_delete || !cleanup.bucket_id || !cleanup.object_path) {
+    console.info("[photo-process] intake cleanup skipped", {
+      intakeId,
+      momentId,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  try {
+    const { error: removeError } = await supabase.storage
+      .from(cleanup.bucket_id)
+      .remove([cleanup.object_path]);
+    if (removeError) {
+      console.warn("[photo-process] intake cleanup remove failed", {
+        bucketId: cleanup.bucket_id,
+        intakeId,
+        momentId,
+        objectPath: cleanup.object_path,
+        reason: cleanup.reason,
+        workerVersion: PHOTO_WORKER_VERSION,
+      });
+      return;
+    }
+  } catch {
+    console.warn("[photo-process] intake cleanup remove failed", {
+      bucketId: cleanup.bucket_id,
+      intakeId,
+      momentId,
+      objectPath: cleanup.object_path,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  console.info("[photo-process] intake cleanup removed", {
+    bucketId: cleanup.bucket_id,
     intakeId,
     momentId,
+    objectPath: cleanup.object_path,
     reason: cleanup.reason,
     workerVersion: PHOTO_WORKER_VERSION,
   });
