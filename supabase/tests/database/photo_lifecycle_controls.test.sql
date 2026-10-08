@@ -462,7 +462,7 @@ select public.complete_photo_display_derivative(
   3,
   1
 ) as display_derivative_id \gset processing_display_
-set constraints photo_moment_publish_after_derivative immediate;
+set constraints private.photo_moment_publish_after_derivative immediate;
 reset role;
 select is(
   (select state from private.photo_intakes
