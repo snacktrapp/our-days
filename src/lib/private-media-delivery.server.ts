@@ -67,7 +67,10 @@ function readCachedVerifiedBytes(key: string) {
 }
 
 function rememberCachedVerifiedBytes(key: string, bytes: Uint8Array) {
-  if (bytes.byteLength < 1 || bytes.byteLength > verifiedBytesCacheMaxEntryBytes)
+  if (
+    bytes.byteLength < 1 ||
+    bytes.byteLength > verifiedBytesCacheMaxEntryBytes
+  )
     return;
   const existing = verifiedBytesCache.findIndex((entry) => entry.key === key);
   if (existing >= 0) evictCachedVerifiedBytes(existing);

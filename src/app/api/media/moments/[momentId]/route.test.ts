@@ -43,6 +43,7 @@ const secondDescriptor = {
   photo_id: "10000000-0000-4000-8000-000000000012",
   sort_order: 1,
 };
+const privateCachedHeader = "private, max-age=604800, immutable";
 
 function request(id = momentId, search = "") {
   return GET(
@@ -133,9 +134,9 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(response.headers.get("etag")).toMatch(/^"od-media-[0-9a-f]{64}"$/u);
     expect(mocks.rpc).toHaveBeenCalledWith("get_photo_moment_delivery", {
       moment_id: momentId,
     });
@@ -161,6 +162,9 @@ describe("private photo delivery route", () => {
     if (id === momentId) mocks.rpc.mockResolvedValue({ data: [], error: null });
     const response = await request(id);
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
     expect(await response.text()).toBe("");
   });
 
@@ -379,9 +383,7 @@ describe("private photo delivery route", () => {
     const response = await request(momentId, "?w=1080");
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/webp");
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
     const timing = response.headers.get("server-timing") ?? "";
     expect(timing).toContain("auth;dur=");
     expect(timing).toContain("fetch;dur=");
@@ -527,9 +529,7 @@ describe("private photo delivery route", () => {
       `?photo=${secondDescriptor.photo_id}&w=1080`,
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
+    expect(response.headers.get("cache-control")).toBe(privateCachedHeader);
     expect(response.headers.get("content-type")).toBe("image/webp");
     expect(response.headers.get("server-timing")).toContain("resize;dur=0");
     expect(response.headers.get("server-timing")).toContain("queue;dur=0");
