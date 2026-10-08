@@ -101,10 +101,12 @@ describe("VideoFeasibilityPanel", () => {
       type: "video/mp4",
     });
     Object.defineProperty(oversized, "size", {
-      value: 100 * 1024 * 1024 + 1,
+      value: 256 * 1024 * 1024 + 1,
     });
     await user.upload(picker, oversized);
-    expect(screen.getByRole("alert")).toHaveTextContent("smaller than 100 MB");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "too large to prepare on this device",
+    );
     expect(createObjectURL).not.toHaveBeenCalled();
     expect(screen.queryByText(/private-name/u)).not.toBeInTheDocument();
   });
@@ -178,7 +180,7 @@ describe("VideoFeasibilityPanel", () => {
       1080,
       "duration could not be read",
     ],
-    ["too long", 120.6, 1920, 1080, "about 2 minutes or shorter"],
+    ["too long", 40.6, 1920, 1080, "40 seconds or less"],
     ["missing dimensions", 20, 0, 0, "picture size is not supported"],
     ["oversized dimensions", 20, 4096, 2304, "picture size is not supported"],
   ])(
