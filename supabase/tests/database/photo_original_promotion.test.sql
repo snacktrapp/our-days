@@ -810,8 +810,9 @@ select throws_ok(
 );
 reset role;
 
--- A timed-out lease is not renewable by its original validator. A distinct,
--- still-separated validator gets a new attempt identity and canonical path.
+-- An expired lease can be reclaimed by the same validator with a new lease
+-- key (migration 20260911141000). That rotates the attempt. A distinct,
+-- still-separated validator takes over only while the lease stays expired.
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values
   (
@@ -885,15 +886,39 @@ set constraints all deferred;
 
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000097'::uuid);
-select throws_ok(
-  format(
-    'select * from public.claim_photo_validation(%L::uuid,%L::uuid)',
-    :'takeover_intake_id', 'c5000000-0000-4000-8000-000000000096'
-  ),
-  '42501', 'Photo validation could not be claimed',
-  'the original validator cannot reclaim its own expired lease'
+select * from public.claim_photo_validation(
+  :'takeover_intake_id'::uuid,
+  'c5000000-0000-4000-8000-000000000096'
+) \gset renewed_validation_
+select is(
+  :'renewed_validation_validation_job_id'::uuid,
+  :'stale_validation_validation_job_id'::uuid,
+  'the original validator reclaims the same job after its lease expires'
 );
+select isnt(
+  :'renewed_validation_lease_attempt_id'::text,
+  :'stale_validation_lease_attempt_id'::text,
+  'same-validator reclaim receives a fresh lease-attempt identity'
+);
+select isnt(
+  :'renewed_validation_canonical_object_path'::text,
+  :'stale_validation_canonical_object_path'::text,
+  'same-validator reclaim receives a fresh immutable canonical path'
+);
+reset role;
 
+set constraints all immediate;
+alter table private.photo_validation_jobs
+  disable trigger photo_validation_jobs_integrity;
+update private.photo_validation_jobs
+   set lease_started_at = statement_timestamp() - interval '16 minutes',
+       lease_expires_at = statement_timestamp() - interval '1 minute'
+ where id = :'renewed_validation_validation_job_id'::uuid;
+alter table private.photo_validation_jobs
+  enable trigger photo_validation_jobs_integrity;
+set constraints all deferred;
+
+set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000096'::uuid);
 select * from public.claim_photo_validation(
   :'takeover_intake_id'::uuid,

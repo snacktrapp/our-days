@@ -131,8 +131,13 @@ async function openNotification(page: Page, url: string) {
 async function postOffset(page: Page, selector: string) {
   return page.locator(selector).evaluate((node) => {
     const topbar = document.querySelector(".topbar");
+    // The scroll-away header translates upward without changing layout.
+    // Its border box, not the translated rect, is the stable reference.
     const inset =
-      topbar instanceof HTMLElement ? topbar.getBoundingClientRect().bottom : 0;
+      topbar instanceof HTMLElement
+        ? Math.max(0, Number.parseFloat(getComputedStyle(topbar).top) || 0) +
+          topbar.offsetHeight
+        : 0;
     return node.getBoundingClientRect().top - inset;
   });
 }
