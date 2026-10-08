@@ -77,15 +77,23 @@ describe("private photo processing route", () => {
       data: { user: { id: "30000000-0000-4000-8000-000000000003" } },
       error: null,
     });
-    mocks.rpc
-      .mockResolvedValueOnce({
-        data: [{ moment_id: momentId, status: "processing" }],
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        data: [{ moment_id: momentId, status: "published" }],
-        error: null,
-      });
+    const statusQueue: Array<{ moment_id: string | null; status: string }> = [
+      { moment_id: momentId, status: "processing" },
+      { moment_id: momentId, status: "published" },
+    ];
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "get_photo_moment_status") {
+        const next = statusQueue.shift() ?? statusQueue[statusQueue.length - 1];
+        return { data: next ? [next] : [], error: null };
+      }
+      if (name === "cleanup_published_photo_intake") {
+        return {
+          data: [{ deleted: true, intake_id: intakeId, reason: "deleted" }],
+          error: null,
+        };
+      }
+      return { data: null, error: { message: `Unexpected RPC: ${name}` } };
+    });
     mocks.process.mockResolvedValue(undefined);
     mocks.createClient.mockResolvedValue({
       auth: { getUser: mocks.getUser },
@@ -162,6 +170,9 @@ describe("private photo processing route", () => {
       intake_id: intakeId,
     });
     expect(mocks.process).toHaveBeenCalledWith(intakeId);
+    expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
     expect(mocks.deliver).not.toHaveBeenCalled();
     expect(response.headers.get("cache-control")).toBe(
       "private, no-store, max-age=0",
@@ -171,13 +182,24 @@ describe("private photo processing route", () => {
 
   it("does not rerun work for an already published photo", async () => {
     mocks.rpc.mockReset();
-    mocks.rpc.mockResolvedValue({
-      data: [{ moment_id: momentId, status: "published" }],
-      error: null,
+    mocks.rpc.mockImplementation(async (name: string) => {
+      if (name === "get_photo_moment_status") {
+        return { data: [{ moment_id: momentId, status: "published" }], error: null };
+      }
+      if (name === "cleanup_published_photo_intake") {
+        return {
+          data: [{ deleted: true, intake_id: intakeId, reason: "deleted" }],
+          error: null,
+        };
+      }
+      return { data: null, error: { message: `Unexpected RPC: ${name}` } };
     });
     const response = await request();
     expect(response.status).toBe(200);
     expect(mocks.process).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
     expect(mocks.deliver).not.toHaveBeenCalled();
   });
 
@@ -204,6 +226,9 @@ describe("private photo processing route", () => {
       ok: false,
       message: "The photo is still being prepared. Check again shortly.",
     });
+    expect(mocks.rpc).not.toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
   });
 
   it("returns success when another request published despite this worker error", async () => {
@@ -213,7 +238,10 @@ describe("private photo processing route", () => {
     const response = await request();
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true, momentId });
-    expect(mocks.rpc).toHaveBeenCalledTimes(2);
+    expect(mocks.rpc).toHaveBeenCalledTimes(3);
+    expect(mocks.rpc).toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
   });
 
   it("does not claim a failure is terminal when its status cannot be read", async () => {
@@ -228,6 +256,9 @@ describe("private photo processing route", () => {
       new PhotoWorkerError("Private failure", false),
     );
     expect((await request()).status).toBe(503);
+    expect(mocks.rpc).not.toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
   });
 
   it("returns a stable attention response after a terminal safe failure", async () => {
@@ -283,6 +314,27 @@ describe("private photo processing route", () => {
     expect(await response.json()).toEqual({
       ok: false,
       message: "The photo is still being prepared. Check again shortly.",
+    });
+    expect(mocks.rpc).not.toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
+    });
+  });
+
+  it("keeps intake bytes when processing is still incomplete", async () => {
+    mocks.rpc.mockReset();
+    mocks.rpc
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ moment_id: momentId, status: "processing" }],
+        error: null,
+      });
+    const response = await request();
+    expect(response.status).toBe(202);
+    expect(mocks.rpc).not.toHaveBeenCalledWith("cleanup_published_photo_intake", {
+      intake_id: intakeId,
     });
   });
 });

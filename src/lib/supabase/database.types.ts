@@ -797,6 +797,14 @@ export type Database = {
           state: string;
         }[];
       };
+      cleanup_published_photo_intake: {
+        Args: { intake_id: string };
+        Returns: {
+          deleted: boolean;
+          intake_id: string;
+          reason: string;
+        }[];
+      };
       claim_moment_push_delivery: {
         Args: { requested_moment_id: string };
         Returns: boolean;

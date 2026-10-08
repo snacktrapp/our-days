@@ -56,10 +56,16 @@ select ok(
     'authenticated', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
   ) and has_function_privilege(
     'authenticated', 'public.list_my_photo_intakes(uuid)', 'EXECUTE'
+  ) and has_function_privilege(
+    'authenticated', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
   ) and not has_function_privilege(
     'anon', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
   ) and not has_function_privilege(
     'service_role', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'anon', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'service_role', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
   ),
   'only authenticated members can reach lifecycle RPCs'
 );
@@ -252,6 +258,20 @@ insert into storage.objects (
   )
 );
 select * from public.acknowledge_photo_intake(:'processing_intake_id'::uuid);
+select * from public.cleanup_published_photo_intake(:'processing_intake_id'::uuid)
+  \gset processing_cleanup_
+select is(
+  row(:'processing_cleanup_deleted', :'processing_cleanup_reason')::text,
+  row('f'::text, 'intake_not_verified'::text)::text,
+  'cleanup refuses to delete intake bytes before publish is complete'
+);
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'an incomplete intake cleanup attempt leaves the quarantine object untouched'
+);
 select throws_ok(
   format(
     'select * from public.cancel_photo_intake(%L::uuid)',
