@@ -275,6 +275,7 @@ select ok(
   ),
   'cleanup refuses to mark intake bytes safe before publish is complete'
 );
+reset role;
 select is(
   (select count(*)::bigint from storage.objects as object
     where object.bucket_id = 'our-days-intake'
@@ -282,17 +283,24 @@ select is(
   1::bigint,
   'an incomplete intake cleanup attempt leaves the quarantine object untouched'
 );
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
+);
 select set_config('storage.allow_delete_query', 'on', true);
+with removed as (
+  delete from storage.objects as object
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_prepublish_delete_count from removed \gset
 select is(
-  (with removed as (
-    delete from storage.objects as object
-     where object.bucket_id = 'our-days-intake'
-       and object.name = :'processing_object_path'
-    returning 1
-  ) select count(*)::bigint from removed),
+  :'processing_prepublish_delete_count'::bigint,
   0::bigint,
   'storage delete policy blocks deleting an intake object before publish is complete'
 );
+reset role;
 select is(
   (select count(*)::bigint from storage.objects as object
     where object.bucket_id = 'our-days-intake'
@@ -322,13 +330,16 @@ select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000099'::uuid
 );
 select set_config('storage.allow_delete_query', 'on', true);
+with removed as (
+  delete from storage.objects as object
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_worker_before_publish_delete_count
+from removed \gset
 select is(
-  (with removed as (
-    delete from storage.objects as object
-     where object.bucket_id = 'our-days-intake'
-       and object.name = :'processing_object_path'
-    returning 1
-  ) select count(*)::bigint from removed),
+  :'processing_worker_before_publish_delete_count'::bigint,
   0::bigint,
   'worker identity cannot delete an intake object before publish is complete'
 );
@@ -437,6 +448,7 @@ select is(
   )::text,
   'an authenticated intake owner receives a safe storage-api cleanup verdict after publish'
 );
+reset role;
 select is(
   (select count(*)::bigint
      from storage.objects as object
@@ -445,17 +457,20 @@ select is(
   1::bigint,
   'the published intake object remains until worker cleanup executes'
 );
+set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000002'::uuid
 );
 select set_config('storage.allow_delete_query', 'on', true);
+with removed as (
+  delete from storage.objects as object
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_other_user_delete_count from removed \gset
 select is(
-  (with removed as (
-    delete from storage.objects as object
-     where object.bucket_id = 'our-days-intake'
-       and object.name = :'processing_object_path'
-    returning 1
-  ) select count(*)::bigint from removed),
+  :'processing_other_user_delete_count'::bigint,
   0::bigint,
   'storage delete policy blocks deleting another requester intake object'
 );
@@ -463,13 +478,15 @@ select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
 );
 select set_config('storage.allow_delete_query', 'on', true);
+with removed as (
+  delete from storage.objects as object
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_owner_delete_count from removed \gset
 select is(
-  (with removed as (
-    delete from storage.objects as object
-     where object.bucket_id = 'our-days-intake'
-       and object.name = :'processing_object_path'
-    returning 1
-  ) select count(*)::bigint from removed),
+  :'processing_owner_delete_count'::bigint,
   0::bigint,
   'storage delete policy blocks deleting intake objects for the owner session'
 );
@@ -484,13 +501,15 @@ select is(
   1::bigint,
   'worker identity can select the verified-published intake object'
 );
+with removed as (
+  delete from storage.objects as object
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_worker_delete_count from removed \gset
 select is(
-  (with removed as (
-    delete from storage.objects as object
-     where object.bucket_id = 'our-days-intake'
-       and object.name = :'processing_object_path'
-    returning 1
-  ) select count(*)::bigint from removed),
+  :'processing_worker_delete_count'::bigint,
   1::bigint,
   'storage delete policy allows worker cleanup for verified-published intake objects'
 );
