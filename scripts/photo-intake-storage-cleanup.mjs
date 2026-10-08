@@ -14,6 +14,17 @@ function toTableRows(rows, mapper) {
   return rows.map((row) => mapper(row));
 }
 
+/**
+ * @typedef {Pick<Console, "info" | "table">} IntakeCleanupLogger
+ */
+/**
+ * @typedef {{
+ *   applyCleanup?: boolean,
+ *   client: any,
+ *   log?: IntakeCleanupLogger
+ * }} IntakeCleanupReportOptions
+ */
+
 async function listBucketFiles(client, bucket, rootPrefix) {
   const queue = [rootPrefix];
   const files = [];
@@ -114,6 +125,9 @@ export async function deleteIntakeObjects(client, candidates) {
   return data ?? [];
 }
 
+/**
+ * @param {IntakeCleanupReportOptions} options
+ */
 export async function runIntakeCleanupReport({
   applyCleanup = false,
   client,
