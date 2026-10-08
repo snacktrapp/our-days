@@ -20,6 +20,7 @@ const ORGANIZER_B = "10000000-0000-4000-8000-000000000006";
 const NO_CIRCLE_USER = "10000000-0000-4000-8000-000000000007";
 
 const PERSON_ORGANIZER_A = "30000000-0000-4000-8000-000000000001";
+const PERSON_ORGANIZER_A_TWO = "30000000-0000-4000-8000-000000000002";
 const PERSON_MEMBER_A = "30000000-0000-4000-8000-000000000003";
 const PERSON_DUAL_B = "30000000-0000-4000-8000-000000000007";
 const MANAGED_CHILD_A = "30000000-0000-4000-8000-000000000008";
@@ -1284,13 +1285,17 @@ try {
     "Same-URL TUS acknowledgement",
   );
 
+  // Organizer B already holds the account open-intake limit: the duplicate
+  // reservation is still reserved, and the claim-race and same-URL intakes
+  // stay uploaded_unverified. Those states are the open-work quota. The
+  // remaining upload scenarios use organizer A two, who has no open intakes.
   const dualTusReservation = reservationRow(
     await reservePhoto(
       apiUrl,
       apiKey,
-      tokens.organizerB,
-      CIRCLE_B,
-      PERSON_ORGANIZER_B,
+      tokens.organizerATwo,
+      CIRCLE_A,
+      PERSON_ORGANIZER_A_TWO,
       randomUUID(),
     ),
     "Adversarial dual-TUS reservation",
@@ -1299,7 +1304,7 @@ try {
   const dualTusClaim = await claimPhotoUpload(
     apiUrl,
     apiKey,
-    tokens.organizerB,
+    tokens.organizerATwo,
     dualTusReservation.intake_id,
     competingPhotoA,
   );
@@ -1314,7 +1319,7 @@ try {
       createTusUpload(
         apiUrl,
         apiKey,
-        tokens.organizerB,
+        tokens.organizerATwo,
         dualTusReservation.object_path,
         bytes.length,
         dualTusClaim.uploadMetadata,
@@ -1333,7 +1338,7 @@ try {
     dualTusCreations.map((creation, index) =>
       patchTusUpload(
         apiKey,
-        tokens.organizerB,
+        tokens.organizerATwo,
         tusUploadUrl(apiUrl, creation),
         [competingPhotoA, competingPhotoB][index],
       ),
@@ -1372,7 +1377,7 @@ try {
     await acknowledgePhoto(
       apiUrl,
       apiKey,
-      tokens.organizerB,
+      tokens.organizerATwo,
       dualTusReservation.intake_id,
     ),
     dualTusReservation,
@@ -1402,9 +1407,9 @@ try {
     await reservePhoto(
       apiUrl,
       apiKey,
-      tokens.organizerB,
-      CIRCLE_B,
-      PERSON_ORGANIZER_B,
+      tokens.organizerATwo,
+      CIRCLE_A,
+      PERSON_ORGANIZER_A_TWO,
       randomUUID(),
     ),
     "Validator-revocation race reservation",
@@ -1413,7 +1418,7 @@ try {
   const validatorRevocationUploadClaim = await claimPhotoUpload(
     apiUrl,
     apiKey,
-    tokens.organizerB,
+    tokens.organizerATwo,
     validatorRevocationReservation.intake_id,
     syntheticPhoto,
   );
@@ -1425,7 +1430,7 @@ try {
   const validatorRevocationUpload = await uploadClaimedTus(
     apiUrl,
     apiKey,
-    tokens.organizerB,
+    tokens.organizerATwo,
     validatorRevocationReservation.object_path,
     syntheticPhoto,
     validatorRevocationUploadClaim.uploadMetadata,
@@ -1442,7 +1447,7 @@ try {
     await acknowledgePhoto(
       apiUrl,
       apiKey,
-      tokens.organizerB,
+      tokens.organizerATwo,
       validatorRevocationReservation.intake_id,
     ),
     validatorRevocationReservation,
