@@ -38,6 +38,19 @@ as $$
   );
 $$;
 
+create or replace function private.current_user_is_photo_validator()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    private.photo_validator_is_allowed((select auth.uid())),
+    false
+  );
+$$;
+
 create or replace function private.cleanup_published_photo_intake(
   requested_intake_id uuid
 )
@@ -277,7 +290,7 @@ using (
       and (select private.photo_validation_source_is_readable(name, id, version))
     )
     or (
-      (select private.photo_validator_is_allowed((select auth.uid())))
+      (select private.current_user_is_photo_validator())
       and exists (
         select 1
           from regexp_matches(
@@ -300,7 +313,7 @@ for delete
 to authenticated
 using (
   bucket_id = 'our-days-intake'
-  and (select private.photo_validator_is_allowed((select auth.uid())))
+  and (select private.current_user_is_photo_validator())
   and exists (
     select 1
       from regexp_matches(
@@ -321,10 +334,14 @@ revoke all on function public.cleanup_published_photo_intake(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function private.photo_intake_cleanup_is_safe(uuid, text)
   from public, anon, authenticated, service_role;
+revoke all on function private.current_user_is_photo_validator()
+  from public, anon, authenticated, service_role;
 
 grant execute on function public.cleanup_published_photo_intake(uuid)
   to authenticated;
 grant execute on function private.cleanup_published_photo_intake(uuid)
   to authenticated;
 grant execute on function private.photo_intake_cleanup_is_safe(uuid, text)
+  to authenticated;
+grant execute on function private.current_user_is_photo_validator()
   to authenticated;

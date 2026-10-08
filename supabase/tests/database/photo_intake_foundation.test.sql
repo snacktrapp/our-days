@@ -1,6 +1,6 @@
 begin;
 
-select plan(121);
+select plan(122);
 
 update private.photo_capabilities
    set enabled = true, updated_at = statement_timestamp()
@@ -470,7 +470,7 @@ select ok(
        and pg_catalog.pg_get_expr(
          policy_row.polqual,
          policy_row.polrelid
-       ) like '%photo_validator_is_allowed%'
+       ) like '%current_user_is_photo_validator%'
        and pg_catalog.pg_get_expr(
          policy_row.polqual,
          policy_row.polrelid
@@ -558,7 +558,7 @@ select ok(
        and pg_catalog.pg_get_expr(
          policy_row.polqual,
          policy_row.polrelid
-       ) like '%photo_validator_is_allowed(( SELECT auth.uid()%'
+       ) like '%current_user_is_photo_validator%'
        and pg_catalog.pg_get_expr(
          policy_row.polqual,
          policy_row.polrelid
@@ -569,6 +569,13 @@ select ok(
 
 set local role authenticated;
 select pg_temp.set_photo_test_user('10000000-0000-4000-8000-000000000001'::uuid);
+select is(
+  (select count(*)::bigint
+     from storage.objects as object
+    where object.bucket_id = 'our-days-intake'),
+  0::bigint,
+  'a regular authenticated user can read intake storage without errors and sees no intake rows'
+);
 
 select *
   from pg_temp.reserve_photo_intake(

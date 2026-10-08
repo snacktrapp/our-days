@@ -370,6 +370,7 @@ select is(
     'create_written_moment(requested_circle_id uuid, requested_journal_person_id uuid, requested_body text, requested_occurred_on date, requested_occurred_at timestamp with time zone, requested_occurred_timezone text, requested_audience text)',
     'current_family_session_is_live()',
     'current_membership_id(requested_circle_id uuid)',
+    'current_user_is_photo_validator()',
     'delete_empty_circle(target_circle_id uuid, expected_name text)',
     'delete_entry_draft(requested_id uuid)',
     'delete_expo_push_token(requested_token text)',
