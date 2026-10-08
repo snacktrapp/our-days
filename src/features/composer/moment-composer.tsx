@@ -40,11 +40,15 @@ import { normalizeMomentAudience } from "@/features/moments/moment-audience";
 import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
   acceptedVideoMime,
-  maximumVideoBytes,
   maximumVideoDurationMs,
   type VideoUploadAttempt,
   type VideoUploadStage,
 } from "./video-upload";
+import {
+  maximumVideoSourceBytes,
+  overDurationVideoMessage,
+  sourceVideoTooLargeMessage,
+} from "@/features/video/video-upload-policy";
 import {
   emptyBibleVerseSelection,
   formatBibleVerseMoment,
@@ -862,9 +866,9 @@ export function MomentComposer({
         if (photoInputRef.current) photoInputRef.current.value = "";
         return;
       }
-      if (file.size > maximumVideoBytes) {
+      if (file.size > maximumVideoSourceBytes) {
         setPhotoDecodeState("error");
-        setPhotoError("Choose a video smaller than 100 MB.");
+        setPhotoError(sourceVideoTooLargeMessage);
         if (photoInputRef.current) photoInputRef.current.value = "";
         return;
       }
@@ -950,7 +954,7 @@ export function MomentComposer({
     const durationMs = Math.ceil(duration * 1000);
     if (durationMs > maximumVideoDurationMs) {
       rejectUndecodablePhoto(expectedUrl);
-      setPhotoError("Choose a video about 2 minutes or shorter.");
+      setPhotoError(overDurationVideoMessage);
       return;
     }
     if (
@@ -1650,7 +1654,9 @@ export function MomentComposer({
 
   const photoUploadLabel =
     photoUploadStage?.state === "preparing"
-      ? `Preparing your ${mode === "video" ? "video" : "photo"} privately…`
+      ? mode === "video"
+        ? "Preparing your video on this device…"
+        : "Preparing your photo privately…"
       : photoUploadStage?.state === "uploading"
         ? "retrying" in photoUploadStage && photoUploadStage.retrying
           ? `Retrying ${mode === "video" ? "video" : "photo"} upload… ${Math.round(photoUploadStage.progress * 100)}%`
@@ -1951,8 +1957,8 @@ export function MomentComposer({
                       <span>Choose photo or video</span>
                       <small>
                         {connectedPhotoAvailable
-                          ? "The original uploads privately to this family."
-                          : "It stays on this device in the preview."}
+                          ? "Videos up to 40 seconds. The original uploads privately to this family."
+                          : "Videos up to 40 seconds. It stays on this device in the preview."}
                       </small>
                       <input
                         ref={photoInputRef}
