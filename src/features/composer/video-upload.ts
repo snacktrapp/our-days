@@ -189,9 +189,34 @@ async function currentSession(
   };
 }
 
+const connectionDroppedMessage =
+  "Your connection dropped before the upload finished. Try again.";
+
 function tusResponseStatus(error: Error | DetailedError) {
   if (!("originalResponse" in error) || !error.originalResponse) return null;
   return error.originalResponse.getStatus();
+}
+
+function isOfflineTransferFailure(error: Error | DetailedError) {
+  if (tusResponseStatus(error) != null) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return true;
+  }
+  const causing =
+    "causingError" in error && error.causingError instanceof Error
+      ? error.causingError
+      : null;
+  const text = `${error.name} ${error.message} ${causing?.name ?? ""} ${causing?.message ?? ""}`;
+  if (
+    /\b(?:failed to fetch|network ?error|offline|timed out|timeout|load failed|network connection was lost)\b/iu.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  const noResponse =
+    !("originalResponse" in error) || error.originalResponse == null;
+  return noResponse && causing instanceof TypeError;
 }
 
 /** Prefer smaller video chunks so a flaky mobile hop retries less work. */
@@ -282,7 +307,9 @@ async function uploadWithTusClient(input: {
           }
           reject(
             new VideoUploadError(
-              "The private video transfer could not be completed. Try again.",
+              isOfflineTransferFailure(error)
+                ? connectionDroppedMessage
+                : "The private video transfer could not be completed. Try again.",
             ),
           );
         });
@@ -476,6 +503,12 @@ export async function uploadVideoMoment(
       true,
       false,
       true,
+    );
+  }
+  if (reservationError?.code === "22023") {
+    throw new VideoUploadError(
+      "That video moment could not be prepared.",
+      false,
     );
   }
   if (
