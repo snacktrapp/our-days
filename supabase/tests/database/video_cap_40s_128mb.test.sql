@@ -25,36 +25,36 @@ select lives_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of 40 seconds.',
+    body := 'A clip at the accepted duration boundary.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 40000,
+    duration_ms := 40499,
     request_key := 'd1200000-0000-4000-8000-000000000001',
     audience := 'family'
   )$$,
-  'reserve accepts exactly 40000 ms'
+  'reserve accepts 40499 ms (< 40.5 seconds)'
 );
 
 select throws_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of 41 seconds.',
+    body := 'A clip at the refused duration boundary.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 41000,
+    duration_ms := 40500,
     request_key := 'd1200000-0000-4000-8000-000000000002',
     audience := 'family'
   )$$,
   '22023',
   'Video moment could not be prepared',
-  'reserve rejects 40001 ms and above'
+  'reserve rejects 40500 ms and above'
 );
 
 select throws_ok(
@@ -122,7 +122,7 @@ select lives_ok(
     'upload_claimed',
     'video/mp4',
     134217728,
-    40000,
+    40499,
     template.body,
     template.place_name,
     template.occurred_on,
@@ -136,7 +136,7 @@ select lives_ok(
     template.audience
   from template;
   $$,
-  'video_upload_requests accepts exact boundary values'
+  'video_upload_requests accepts 40499 ms and 128 MiB exactly'
 );
 
 select throws_ok(
@@ -206,7 +206,7 @@ select throws_ok(
     'upload_claimed',
     'video/mp4',
     134217728,
-    40001,
+    40500,
     template.body,
     template.place_name,
     template.occurred_on,
@@ -222,7 +222,7 @@ select throws_ok(
   $$,
   '23514',
   'new row for relation "video_upload_requests" violates check constraint "video_upload_requests_duration_cap_40s"',
-  'video_upload_requests rejects 40001 ms'
+  'video_upload_requests rejects 40500 ms'
 );
 
 select lives_ok(
@@ -250,7 +250,7 @@ select lives_ok(
       'upload_claimed',
       'video/mp4',
       134217728,
-      40000,
+      40499,
       template.body,
       template.place_name,
       template.occurred_on,
@@ -300,7 +300,7 @@ select lives_ok(
     ''
   );
   $$,
-  'moment_videos accepts exact boundary values'
+  'moment_videos accepts 40499 ms and 128 MiB exactly'
 );
 
 select throws_ok(
@@ -453,14 +453,14 @@ select throws_ok(
     'video/d1200000-0000-4000-8000-000000000030',
     'video/mp4',
     1000,
-    40001,
+    40500,
     'd1200000-0000-4000-8000-000000000032'::uuid,
     ''
   );
   $$,
   '23514',
   'new row for relation "moment_videos" violates check constraint "moment_videos_duration_cap_40s"',
-  'moment_videos rejects 40001 ms'
+  'moment_videos rejects 40500 ms'
 );
 
 select is(

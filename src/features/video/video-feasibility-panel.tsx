@@ -7,10 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { maximumVideoDurationMs } from "@/features/composer/video-upload";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
 import {
+  maximumVideoDurationSecondsExclusive,
   maximumVideoSourceBytes,
   overDurationVideoMessage,
   sourceVideoTooLargeMessage,
@@ -26,7 +26,7 @@ const allowedVideoTypes = new Set([
 ]);
 const fallbackVideoExtension = /\.(m4v|mov|mp4|webm)$/iu;
 const byteLimit = maximumVideoSourceBytes;
-const durationLimitSeconds = maximumVideoDurationMs / 1000;
+const durationLimitSeconds = maximumVideoDurationSecondsExclusive;
 const pixelLimit = 9_000_000;
 const slowInspectionDelayMs = 5_000;
 const inspectionTimeoutMs = 15_000;

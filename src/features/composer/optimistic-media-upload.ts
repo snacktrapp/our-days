@@ -11,6 +11,7 @@ import {
   createVideoUploadAttempt,
   uploadVideoMoment,
   VideoUploadError,
+  type VideoUploadAttempt,
   type VideoMomentDraft,
 } from "./video-upload";
 import { inspectVideoFile } from "@/features/video/inspect-video-file";
@@ -99,6 +100,7 @@ type PhotoRetryRecord = Readonly<{
 type VideoRetryRecord = Readonly<{
   kind: "video";
   input: StartVideoUploadInput;
+  attempt: VideoUploadAttempt;
 }>;
 
 type RetryRecord = PhotoRetryRecord | VideoRetryRecord;
@@ -138,13 +140,35 @@ function currentUpload(id: string) {
 }
 
 function uploadErrorMessage(error: unknown, kind: "photo" | "video") {
-  if (error instanceof PhotoUploadError || error instanceof VideoUploadError) {
-    return error.message;
+  const fallback = `That ${kind} could not be uploaded.`;
+  const rawMessage =
+    error instanceof PhotoUploadError || error instanceof VideoUploadError
+      ? error.message
+      : error instanceof DOMException && error.name === "AbortError"
+        ? "Upload stopped"
+        : error instanceof Error
+          ? error.message
+          : "";
+  const message = rawMessage.trim().replace(/\s+/gu, " ");
+  if (!message) return fallback;
+  if (/\b(?:22\d{3}|23\d{3}|42\d{3}|40\d{3}|5\d{4})\b/u.test(message)) {
+    return fallback;
   }
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "Upload stopped";
+  if (/\b(?:sqlstate|postgres|supabase|rpc)\b/iu.test(message)) {
+    return fallback;
   }
-  return `That ${kind} could not be uploaded.`;
+  if (/\b(?:permission denied|access changed)\b/iu.test(message)) {
+    return "Your family access changed. Please try again.";
+  }
+  if (/\b(?:network|fetch|timed out|timeout)\b/iu.test(message)) {
+    return "Your connection dropped before the upload finished. Try again.";
+  }
+  if (message.length > 160) return fallback;
+  return message;
+}
+
+function uploadFailureRequiresFreshAttempt(error: unknown) {
+  return error instanceof VideoUploadError && error.discardUpload;
 }
 
 function uploadFailureIsRetryable(error: unknown) {
@@ -216,6 +240,12 @@ function persistFailedUpload(id: string) {
       record.kind === "video" ? record.input.posterDataUrl : undefined,
     width: record.kind === "video" ? record.input.width : undefined,
     height: record.kind === "video" ? record.input.height : undefined,
+    videoRequestId:
+      record.kind === "video" ? record.attempt.requestId : undefined,
+    videoRequestKey:
+      record.kind === "video" ? record.attempt.requestKey : undefined,
+    videoUploadUrl:
+      record.kind === "video" ? record.attempt.uploadUrl : undefined,
   };
   void saveFailedMediaUploadDraft(persisted).catch(() => undefined);
 }
@@ -305,6 +335,12 @@ export function restoreFailedMediaUploads() {
       }
       retryRecords.set(draft.id, {
         kind: "video",
+        attempt: {
+          requestKey: draft.videoRequestKey ?? crypto.randomUUID(),
+          requestId: draft.videoRequestId,
+          momentId: draft.momentId,
+          uploadUrl: draft.videoUploadUrl,
+        },
         input: {
           file: files[0]!,
           occurredTime: draft.occurredTime,
@@ -343,6 +379,15 @@ function failUpload(
   kind: "photo" | "video",
   patch: UploadPatch,
 ) {
+  if (kind === "video" && uploadFailureRequiresFreshAttempt(error)) {
+    const record = retryRecords.get(id);
+    if (record?.kind === "video") {
+      retryRecords.set(id, {
+        ...record,
+        attempt: createVideoUploadAttempt(),
+      });
+    }
+  }
   updateOptimisticMediaUpload(id, {
     ...patch,
     retryable: uploadFailureIsRetryable(error),
@@ -570,7 +615,7 @@ function beginVideoUpload(input: StartVideoUploadInput) {
   const attempt = createVideoUploadAttempt();
   const controller = new AbortController();
   controllers.set(id, controller);
-  retryRecords.set(id, { kind: "video", input });
+  retryRecords.set(id, { kind: "video", input, attempt });
 
   void (async () => {
     try {
@@ -762,7 +807,7 @@ export function retryOptimisticMediaUpload(id: string) {
     completedFiles: 0,
     retryable: true,
   });
-  const attempt = createVideoUploadAttempt();
+  const attempt = record.attempt;
   const controller = new AbortController();
   controllers.set(id, controller);
   void (async () => {

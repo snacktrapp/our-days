@@ -194,8 +194,8 @@ describe("connected private video upload", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
-  it("accepts 40 seconds and rejects 41 seconds", async () => {
-    expect(maximumVideoDurationMs).toBe(40_000);
+  it("accepts durations under 40.5 seconds and rejects 40.5+ seconds", async () => {
+    expect(maximumVideoDurationMs).toBe(40_499);
     const { client, rpc } = connectedClient();
     const upload = vi.fn(async (input) => {
       input.onStage({ state: "uploading", progress: 1 });
@@ -211,10 +211,13 @@ describe("connected private video upload", () => {
       );
 
     await expect(run(40_000)).resolves.toEqual({ momentId });
+    await expect(run(40_008)).resolves.toEqual({ momentId });
+    await expect(run(40_490)).resolves.toEqual({ momentId });
     expect(rpc).toHaveBeenCalledWith(
       "reserve_video_moment",
-      expect.objectContaining({ duration_ms: 40_000 }),
+      expect.objectContaining({ duration_ms: 40_490 }),
     );
+    await expect(run(40_500)).rejects.toThrow("40 seconds or less");
     await expect(run(41_000)).rejects.toThrow("40 seconds or less");
   });
 

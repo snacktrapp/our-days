@@ -388,6 +388,57 @@ describe("optimistic media upload queue", () => {
     );
   });
 
+  it("retries a failed video upload using the original attempt identity", async () => {
+    const reservedMomentId = "d6000000-0000-4000-8000-000000000060";
+    let firstRequestKey = "";
+    videoUpload.upload
+      .mockImplementationOnce(async (_file, _draft, attempt) => {
+        firstRequestKey = attempt.requestKey;
+        attempt.momentId = reservedMomentId;
+        throw new Error("network timeout while uploading");
+      })
+      .mockResolvedValueOnce({
+        momentId: reservedMomentId,
+      });
+    const file = new File([new Uint8Array(24)], "retry.mov", {
+      type: "video/quicktime",
+    });
+
+    startOptimisticVideoUpload({
+      draft: { ...draft, durationMs: 40_000 },
+      file,
+      occurredTime: "14:58",
+      person,
+    });
+
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message:
+          "Your connection dropped before the upload finished. Try again.",
+      }),
+    );
+    const upload = optimisticMediaUploadSnapshot()[0];
+    expect(upload).toEqual(
+      expect.objectContaining({
+        momentId: reservedMomentId,
+      }),
+    );
+
+    expect(retryOptimisticMediaUpload(upload!.id)).toBe(true);
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "published",
+      }),
+    );
+    expect(videoUpload.upload).toHaveBeenCalledTimes(2);
+    const retryAttempt = videoUpload.upload.mock.calls[1]?.[2] as {
+      requestKey: string;
+    };
+    expect(firstRequestKey).not.toBe("");
+    expect(retryAttempt.requestKey).toBe(firstRequestKey);
+  });
+
   it("restores a 403 failure with its caption, audience, and media after reload", async () => {
     const { IDBFactory } = await import("fake-indexeddb");
     Object.defineProperty(window, "indexedDB", {
@@ -418,7 +469,7 @@ describe("optimistic media upload queue", () => {
     await vi.waitFor(() =>
       expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
         state: "failed",
-        message: "permission denied",
+        message: "Your family access changed. Please try again.",
       }),
     );
     expect(optimisticMediaUploadSnapshot()[0]?.retryable).toBe(true);
@@ -450,7 +501,10 @@ describe("optimistic media upload queue", () => {
         occurredOn: draft.occurredOn,
         occurredTime: "05:12",
         retryable: true,
-        stage: { state: "failed", message: "permission denied" },
+        stage: {
+          state: "failed",
+          message: "Your family access changed. Please try again.",
+        },
       }),
     );
 

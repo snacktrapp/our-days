@@ -357,7 +357,7 @@ async function readVideoDurationMs(file: File, signal?: AbortSignal) {
       });
       video.addEventListener("error", onError, { once: true });
     });
-    const durationMs = Math.ceil(video.duration * 1000);
+    const durationMs = Math.floor(video.duration * 1000);
     if (!Number.isFinite(video.duration) || durationMs < 1) return null;
     return durationMs;
   } finally {

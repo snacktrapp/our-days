@@ -293,6 +293,7 @@ describe("PhotoStatusShelf", () => {
     render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
 
     expect(screen.getByText("Upload failed")).toBeVisible();
+    expect(screen.getByText("That photo could not be uploaded.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
     expect(screen.queryByRole("img")).toBeNull();
