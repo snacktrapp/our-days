@@ -246,6 +246,49 @@ describe("private media delivery checks", () => {
     vi.unstubAllGlobals();
   });
 
+  it("accepts missing MIME and stringified size while still enforcing capped verification", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const digest =
+      "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://storage.example.test/signed" },
+      error: null,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "", "content-length": "5" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(bytes, {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: "5" },
+        "missing-mime-string-size",
+      ),
+    ).resolves.toEqual(bytes);
+    await expect(
+      readCappedVerifiedPrivateBytes(
+        { createSignedUrl },
+        "display/private/photo.webp",
+        { mime: "image/webp", sha: digest, size: "6" },
+        "mismatch-size",
+      ),
+    ).resolves.toBeNull();
+    vi.unstubAllGlobals();
+  });
+
   it("cache-busts a same-origin retry without dropping the photo id", () => {
     expect(privateMediaRetrySrc("/api/media/moments/one", 0)).toBe(
       "/api/media/moments/one",
