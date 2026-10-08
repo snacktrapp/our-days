@@ -7,6 +7,7 @@ import {
   clearCardRenditionCache,
   rememberCardRendition,
 } from "@/lib/card-photo-rendition.server";
+import { clearVerifiedPrivateMediaCacheForTests } from "@/lib/private-media-delivery.server";
 
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
@@ -94,6 +95,7 @@ function signedBytes(
 
 describe("private photo delivery route", () => {
   beforeEach(() => {
+    clearVerifiedPrivateMediaCacheForTests();
     vi.stubEnv("OUR_DAYS_MEDIA_DELIVERY_MODE", "enabled");
     vi.stubEnv("OUR_DAYS_RESOURCE_MODE", "supabase");
     mocks.rpc.mockResolvedValue({
@@ -110,6 +112,7 @@ describe("private photo delivery route", () => {
   });
 
   afterEach(() => {
+    clearVerifiedPrivateMediaCacheForTests();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -227,11 +230,7 @@ describe("private photo delivery route", () => {
     expect(response.status).toBe(404);
 
     signedBytes([5, 4, 3, 2, 1]);
-    const sameShapeCorruption = await request();
-    expect(sameShapeCorruption.status).toBe(200);
-    await expect(sameShapeCorruption.arrayBuffer()).rejects.toThrow(
-      /did not match its descriptor/u,
-    );
+    expect((await request()).status).toBe(404);
   });
 
   it("returns a neutral 404 when get_photo_moment_delivery has no live session or capability", async () => {
@@ -537,6 +536,15 @@ describe("private photo delivery route", () => {
     expect(Buffer.from(await response.arrayBuffer())).toEqual(card);
     expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
     expect(mocks.createSignedUrl).toHaveBeenCalledWith(cardPath, 60);
+
+    const repeated = await request(
+      momentId,
+      `?photo=${secondDescriptor.photo_id}&w=1080`,
+    );
+    expect(repeated.status).toBe(200);
+    expect(Buffer.from(await repeated.arrayBuffer())).toEqual(card);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.createSignedUrl).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to on-demand resize when no stored card exists", async () => {

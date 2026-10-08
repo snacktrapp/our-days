@@ -53,7 +53,7 @@ export async function persistVideoPoster(input: {
     const { error: uploadError } = await supabase.storage
       .from("our-days-videos")
       .upload(objectPath, blob, {
-        cacheControl: "3600",
+        cacheControl: "31536000, immutable",
         contentType: "image/jpeg",
         upsert: replaceExisting,
       });

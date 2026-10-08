@@ -12,7 +12,6 @@ import {
   renderCardPhoto,
 } from "@/lib/card-photo-rendition.server";
 import {
-  openSignedPrivateObject,
   readCappedVerifiedPrivateBytes,
 } from "@/lib/private-media-delivery.server";
 import { normalizedSha256Hex } from "@/lib/private-media-delivery";
@@ -211,6 +210,10 @@ export async function GET(
   if (cardWidth != null) {
     const sha = normalizedSha256Hex(descriptor.output_sha256_hex);
     if (!sha) return unavailable(mediaTiming(authMs, 0, 0));
+    const cached = readCachedCardRendition(sha, cardWidth);
+    if (cached) {
+      return imageResponse(cached, "image/webp", mediaTiming(authMs, 0, 0));
+    }
     const stored = storedCard(descriptor.card_renditions, cardWidth);
     if (stored) {
       const fetchStarted = performance.now();
@@ -218,19 +221,17 @@ export async function GET(
         supabase.storage.from(stored.bucket),
         stored.path,
         { mime: stored.mime, sha: stored.sha, size: stored.size },
+        stored.bucket,
       );
       const fetchMs = elapsedSince(fetchStarted);
       if (verified) {
+        rememberCardRendition(sha, cardWidth, verified);
         return imageResponse(
           verified,
           "image/webp",
           mediaTiming(authMs, fetchMs, 0),
         );
       }
-    }
-    const cached = readCachedCardRendition(sha, cardWidth);
-    if (cached) {
-      return imageResponse(cached, "image/webp", mediaTiming(authMs, 0, 0));
     }
     const fetchStarted = performance.now();
     const verified = await readCappedVerifiedPrivateBytes(
@@ -241,6 +242,7 @@ export async function GET(
         mime: descriptor.output_mime_type,
         sha: descriptor.output_sha256_hex,
       },
+      descriptor.bucket_id,
     );
     const fetchMs = elapsedSince(fetchStarted);
     if (!verified) return unavailable(mediaTiming(authMs, fetchMs, 0));
@@ -259,7 +261,7 @@ export async function GET(
   }
 
   const fetchStarted = performance.now();
-  const photo = await openSignedPrivateObject(
+  const photo = await readCappedVerifiedPrivateBytes(
     supabase.storage.from(descriptor.bucket_id),
     descriptor.object_path,
     {
@@ -267,22 +269,9 @@ export async function GET(
       mime: descriptor.output_mime_type,
       sha: descriptor.output_sha256_hex,
     },
+    descriptor.bucket_id,
   );
   const fetchMs = elapsedSince(fetchStarted);
   if (!photo) return unavailable(mediaTiming(authMs, fetchMs, 0));
-
-  // No ETag: the descriptor digest is checked while the body streams, so a
-  // hash ETag would require buffering the whole object before the first byte.
-  // Cache-Control stays private/no-store, which is what keeps iOS from pinning.
-  return new Response(photo.stream, {
-    status: 200,
-    headers: {
-      ...privateHeaders,
-      ...(photo.contentLength == null
-        ? {}
-        : { "Content-Length": String(photo.contentLength) }),
-      "Content-Type": descriptor.output_mime_type,
-      "Server-Timing": mediaTiming(authMs, fetchMs, 0),
-    },
-  });
+  return imageResponse(photo, descriptor.output_mime_type, mediaTiming(authMs, fetchMs, 0));
 }

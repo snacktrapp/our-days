@@ -20,6 +20,84 @@ type SignedUrlBucket = {
   }>;
 };
 
+type CachedVerifiedBytes = {
+  key: string;
+  bytes: Uint8Array;
+  expiresAt: number;
+};
+
+const verifiedBytesCache: CachedVerifiedBytes[] = [];
+const verifiedBytesCacheTtlMs = 15 * 60 * 1000;
+const verifiedBytesCacheMaxEntries = 128;
+const verifiedBytesCacheMaxBytes = 96 * 1024 * 1024;
+const verifiedBytesCacheMaxEntryBytes = 12 * 1024 * 1024;
+let verifiedBytesCacheBytes = 0;
+
+function evictCachedVerifiedBytes(index: number) {
+  const [removed] = verifiedBytesCache.splice(index, 1);
+  if (!removed) return;
+  verifiedBytesCacheBytes = Math.max(
+    0,
+    verifiedBytesCacheBytes - removed.bytes.byteLength,
+  );
+}
+
+function trimCachedVerifiedBytes(now = Date.now()) {
+  for (let index = verifiedBytesCache.length - 1; index >= 0; index -= 1) {
+    const entry = verifiedBytesCache[index];
+    if (!entry || entry.expiresAt > now) continue;
+    evictCachedVerifiedBytes(index);
+  }
+  while (
+    verifiedBytesCache.length > verifiedBytesCacheMaxEntries ||
+    verifiedBytesCacheBytes > verifiedBytesCacheMaxBytes
+  ) {
+    evictCachedVerifiedBytes(0);
+  }
+}
+
+function readCachedVerifiedBytes(key: string) {
+  trimCachedVerifiedBytes();
+  const index = verifiedBytesCache.findIndex((entry) => entry.key === key);
+  if (index < 0) return null;
+  const [hit] = verifiedBytesCache.splice(index, 1);
+  if (!hit) return null;
+  verifiedBytesCache.push(hit);
+  return hit.bytes;
+}
+
+function rememberCachedVerifiedBytes(key: string, bytes: Uint8Array) {
+  if (bytes.byteLength < 1 || bytes.byteLength > verifiedBytesCacheMaxEntryBytes)
+    return;
+  const existing = verifiedBytesCache.findIndex((entry) => entry.key === key);
+  if (existing >= 0) evictCachedVerifiedBytes(existing);
+  const stored = bytes.slice();
+  verifiedBytesCache.push({
+    key,
+    bytes: stored,
+    expiresAt: Date.now() + verifiedBytesCacheTtlMs,
+  });
+  verifiedBytesCacheBytes += stored.byteLength;
+  trimCachedVerifiedBytes();
+}
+
+function cachedVerifiedBytesKey(input: {
+  cacheScope: string;
+  objectPath: string;
+  size: number;
+  sha: string;
+  mime: string | null | undefined;
+}) {
+  return `${input.cacheScope}:${input.objectPath}:${input.size}:${normalizedMediaType(
+    input.mime,
+  )}:${input.sha}`;
+}
+
+export function clearVerifiedPrivateMediaCacheForTests() {
+  verifiedBytesCache.length = 0;
+  verifiedBytesCacheBytes = 0;
+}
+
 export function streamVerifiedBytes(
   source: ReadableStream<Uint8Array>,
   expectedSize: number,
@@ -213,7 +291,20 @@ export async function readCappedVerifiedPrivateBytes(
   bucket: SignedUrlBucket,
   objectPath: string,
   expected: PrivateObjectExpectation,
+  cacheScope = "default",
 ) {
+  const size = declaredByteSize(expected.size);
+  const sha = normalizedSha256Hex(expected.sha);
+  if (size == null || !sha) return null;
+  const cacheKey = cachedVerifiedBytesKey({
+    cacheScope,
+    mime: expected.mime,
+    objectPath,
+    sha,
+    size,
+  });
+  const cached = readCachedVerifiedBytes(cacheKey);
+  if (cached) return cached.slice();
   const { data: signed, error } = await bucket.createSignedUrl(objectPath, 60);
   if (error || !signed?.signedUrl) return null;
   const upstream = await fetchSignedUrl(signed.signedUrl);
@@ -223,12 +314,6 @@ export async function readCappedVerifiedPrivateBytes(
     return null;
   }
   if (!mediaTypeMatches(upstream.headers.get("content-type"), expected.mime)) {
-    await upstream.body.cancel();
-    return null;
-  }
-  const size = declaredByteSize(expected.size);
-  const sha = normalizedSha256Hex(expected.sha);
-  if (size == null || !sha) {
     await upstream.body.cancel();
     return null;
   }
@@ -265,5 +350,6 @@ export async function readCappedVerifiedPrivateBytes(
   }
   const digest = createHash("sha256").update(bytes).digest("hex");
   if (!sha256HexMatches(digest, sha)) return null;
+  rememberCachedVerifiedBytes(cacheKey, bytes);
   return bytes;
 }
