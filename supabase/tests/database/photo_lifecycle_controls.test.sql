@@ -1,6 +1,6 @@
 begin;
 
-select plan(41);
+select plan(44);
 
 update private.photo_capabilities
    set enabled = true, updated_at = statement_timestamp()
@@ -462,11 +462,44 @@ select public.complete_photo_display_derivative(
   3,
   1
 ) as display_derivative_id \gset processing_display_
+set constraints photo_moment_publish_after_derivative immediate;
+reset role;
+select is(
+  (select state from private.photo_intakes
+    where id = :'processing_intake_id'::uuid),
+  'verified'::text,
+  'the processing intake reaches verified state before cleanup checks'
+);
+select is(
+  (select count(*)::bigint
+     from public.moment_photos as photo
+     join private.photo_originals as original
+       on original.id = photo.original_id
+    where original.intake_id = :'processing_intake_id'::uuid),
+  1::bigint,
+  'publication links the processing intake original into moment_photos before cleanup checks'
+);
+set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
 );
-select * from public.cleanup_published_photo_intake(:'processing_intake_id'::uuid)
+with cleanup as (
+  select * from public.cleanup_published_photo_intake(
+    :'processing_intake_id'::uuid
+  )
+)
+select
+  coalesce(bool_or(safe_to_delete), false) as safe_to_delete,
+  coalesce(max(bucket_id) filter (where safe_to_delete), '') as bucket_id,
+  coalesce(max(object_path) filter (where safe_to_delete), '') as object_path,
+  coalesce(max(reason), '') as reason
+from cleanup
   \gset processing_cleanup_safe_
+select is(
+  :'processing_cleanup_safe_safe_to_delete'::boolean,
+  true,
+  'cleanup reports the intake as safe to delete after verified publication'
+);
 select is(
   row(
     :'processing_cleanup_safe_safe_to_delete',
