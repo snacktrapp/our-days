@@ -74,12 +74,19 @@ export type VideoMomentDraft = Readonly<{
 export class VideoUploadError extends Error {
   readonly retryable: boolean;
   readonly discardUpload: boolean;
+  readonly requestReused: boolean;
 
-  constructor(message: string, retryable = true, discardUpload = false) {
+  constructor(
+    message: string,
+    retryable = true,
+    discardUpload = false,
+    requestReused = false,
+  ) {
     super(message);
     this.name = "VideoUploadError";
     this.retryable = retryable;
     this.discardUpload = discardUpload;
+    this.requestReused = requestReused;
   }
 }
 
@@ -330,6 +337,15 @@ function firstRow<T>(value: readonly T[] | null) {
   return value?.[0];
 }
 
+function reservationRequestWasReused(
+  error: { code?: string; message?: string } | null,
+) {
+  return (
+    error?.code === "22023" &&
+    /video upload request was reused/iu.test(error.message ?? "")
+  );
+}
+
 async function uploadLocalVideoMoment(
   file: File,
   draft: VideoMomentDraft,
@@ -454,6 +470,14 @@ export async function uploadVideoMoment(
     },
   );
   const reservation = firstRow(reservationRows);
+  if (reservationRequestWasReused(reservationError)) {
+    throw new VideoUploadError(
+      "That video moment could not be prepared.",
+      true,
+      false,
+      true,
+    );
+  }
   if (
     reservationError ||
     !reservation ||

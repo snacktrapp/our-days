@@ -26,7 +26,6 @@ const allowedVideoTypes = new Set([
 ]);
 const fallbackVideoExtension = /\.(m4v|mov|mp4|webm)$/iu;
 const byteLimit = maximumVideoSourceBytes;
-const durationLimitSeconds = maximumVideoDurationSecondsExclusive;
 const pixelLimit = 9_000_000;
 const slowInspectionDelayMs = 5_000;
 const inspectionTimeoutMs = 15_000;
@@ -190,7 +189,7 @@ function VideoFeasibilityDialog({
       );
       return;
     }
-    if (duration > durationLimitSeconds) {
+    if (duration >= maximumVideoDurationSecondsExclusive) {
       rejectSelection(overDurationVideoMessage, expectedUrl);
       return;
     }

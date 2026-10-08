@@ -97,10 +97,13 @@ type PhotoRetryRecord = Readonly<{
   input: StartPhotoUploadInput;
 }>;
 
+type PreparedVideoUpload = Awaited<ReturnType<typeof preparedVideoDraft>>;
+
 type VideoRetryRecord = Readonly<{
   kind: "video";
   input: StartVideoUploadInput;
   attempt: VideoUploadAttempt;
+  prepared?: PreparedVideoUpload;
 }>;
 
 type RetryRecord = PhotoRetryRecord | VideoRetryRecord;
@@ -610,6 +613,82 @@ async function preparedVideoDraft(
   };
 }
 
+function storePreparedVideo(id: string, prepared: PreparedVideoUpload) {
+  const record = retryRecords.get(id);
+  if (record?.kind !== "video") return;
+  retryRecords.set(id, { ...record, prepared });
+}
+
+function replaceVideoAttempt(id: string, attempt: VideoUploadAttempt) {
+  const record = retryRecords.get(id);
+  if (record?.kind !== "video") return;
+  retryRecords.set(id, { ...record, attempt });
+}
+
+async function publishPreparedVideo(input: {
+  id: string;
+  attempt: VideoUploadAttempt;
+  prepared: PreparedVideoUpload;
+  signal: AbortSignal;
+  fallbackMomentId?: string;
+}) {
+  const result = await uploadVideoMoment(
+    input.prepared.file,
+    input.prepared.draft,
+    input.attempt,
+    input.signal,
+    (stage) => {
+      if (input.signal.aborted || !uploadStillExists(input.id)) return;
+      rememberPoster(
+        input.attempt.momentId ?? input.fallbackMomentId,
+        input.prepared.posterDataUrl,
+        input.prepared.width,
+        input.prepared.height,
+      );
+      updateOptimisticMediaUpload(input.id, {
+        momentId: input.attempt.momentId ?? input.fallbackMomentId,
+        stage,
+      });
+    },
+    {},
+    input.prepared.posterDataUrl &&
+      input.prepared.width &&
+      input.prepared.height
+      ? {
+          dataUrl: input.prepared.posterDataUrl,
+          width: input.prepared.width,
+          height: input.prepared.height,
+        }
+      : undefined,
+  );
+  if (!uploadStillExists(input.id)) return null;
+  rememberPoster(
+    result.momentId,
+    input.prepared.posterDataUrl,
+    input.prepared.width,
+    input.prepared.height,
+  );
+  if (
+    input.prepared.posterDataUrl &&
+    input.prepared.width &&
+    input.prepared.height
+  ) {
+    void persistVideoPoster({
+      momentId: result.momentId,
+      posterDataUrl: input.prepared.posterDataUrl,
+      width: input.prepared.width,
+      height: input.prepared.height,
+    });
+  }
+  updateOptimisticMediaUpload(input.id, {
+    momentId: result.momentId,
+    completedFiles: 1,
+    stage: { state: "published" },
+  });
+  forgetFailedUpload(input.id);
+  return result;
+}
+
 function beginVideoUpload(input: StartVideoUploadInput) {
   const id = createOptimisticUpload("video", input, 1);
   const attempt = createVideoUploadAttempt();
@@ -620,54 +699,13 @@ function beginVideoUpload(input: StartVideoUploadInput) {
   void (async () => {
     try {
       const prepared = await preparedVideoDraft(input, controller.signal);
-      const result = await uploadVideoMoment(
-        prepared.file,
-        prepared.draft,
+      storePreparedVideo(id, prepared);
+      await publishPreparedVideo({
+        id,
         attempt,
-        controller.signal,
-        (stage) => {
-          if (controller.signal.aborted || !uploadStillExists(id)) return;
-          rememberPoster(
-            attempt.momentId,
-            prepared.posterDataUrl,
-            prepared.width,
-            prepared.height,
-          );
-          updateOptimisticMediaUpload(id, {
-            momentId: attempt.momentId,
-            stage,
-          });
-        },
-        {},
-        prepared.posterDataUrl && prepared.width && prepared.height
-          ? {
-              dataUrl: prepared.posterDataUrl,
-              width: prepared.width,
-              height: prepared.height,
-            }
-          : undefined,
-      );
-      if (!uploadStillExists(id)) return;
-      rememberPoster(
-        result.momentId,
-        prepared.posterDataUrl,
-        prepared.width,
-        prepared.height,
-      );
-      if (prepared.posterDataUrl && prepared.width && prepared.height) {
-        void persistVideoPoster({
-          momentId: result.momentId,
-          posterDataUrl: prepared.posterDataUrl,
-          width: prepared.width,
-          height: prepared.height,
-        });
-      }
-      updateOptimisticMediaUpload(id, {
-        momentId: result.momentId,
-        completedFiles: 1,
-        stage: { state: "published" },
+        prepared,
+        signal: controller.signal,
       });
-      forgetFailedUpload(id);
     } catch (error) {
       if (!uploadStillExists(id)) return;
       failUpload(id, error, "video", { momentId: attempt.momentId });
@@ -807,63 +845,44 @@ export function retryOptimisticMediaUpload(id: string) {
     completedFiles: 0,
     retryable: true,
   });
-  const attempt = record.attempt;
+  const hadPreparedFile = Boolean(record.prepared);
+  let attempt = record.attempt;
   const controller = new AbortController();
   controllers.set(id, controller);
   void (async () => {
     try {
-      const prepared = await preparedVideoDraft(
-        record.input,
-        controller.signal,
-      );
-      const result = await uploadVideoMoment(
-        prepared.file,
-        prepared.draft,
-        attempt,
-        controller.signal,
-        (stage) => {
-          if (controller.signal.aborted || !uploadStillExists(id)) return;
-          rememberPoster(
-            attempt.momentId ?? upload.momentId,
-            prepared.posterDataUrl,
-            prepared.width,
-            prepared.height,
-          );
-          updateOptimisticMediaUpload(id, {
-            momentId: attempt.momentId ?? upload.momentId,
-            stage,
-          });
-        },
-        {},
-        prepared.posterDataUrl && prepared.width && prepared.height
-          ? {
-              dataUrl: prepared.posterDataUrl,
-              width: prepared.width,
-              height: prepared.height,
-            }
-          : undefined,
-      );
-      if (!uploadStillExists(id)) return;
-      rememberPoster(
-        result.momentId,
-        prepared.posterDataUrl,
-        prepared.width,
-        prepared.height,
-      );
-      if (prepared.posterDataUrl && prepared.width && prepared.height) {
-        void persistVideoPoster({
-          momentId: result.momentId,
-          posterDataUrl: prepared.posterDataUrl,
-          width: prepared.width,
-          height: prepared.height,
+      const prepared = hadPreparedFile
+        ? record.prepared!
+        : await preparedVideoDraft(record.input, controller.signal);
+      if (!hadPreparedFile) storePreparedVideo(id, prepared);
+      try {
+        await publishPreparedVideo({
+          id,
+          attempt,
+          prepared,
+          signal: controller.signal,
+          fallbackMomentId: upload.momentId,
+        });
+      } catch (error) {
+        if (
+          hadPreparedFile ||
+          !(error instanceof VideoUploadError) ||
+          !error.requestReused
+        ) {
+          throw error;
+        }
+        // The compressed bytes are gone, so a new encode can change size and
+        // make the original request key fail its payload hash. Start once
+        // with a new key. The previous upload_claimed row is left behind.
+        attempt = createVideoUploadAttempt();
+        replaceVideoAttempt(id, attempt);
+        await publishPreparedVideo({
+          id,
+          attempt,
+          prepared,
+          signal: controller.signal,
         });
       }
-      updateOptimisticMediaUpload(id, {
-        momentId: result.momentId,
-        completedFiles: 1,
-        stage: { state: "published" },
-      });
-      forgetFailedUpload(id);
     } catch (error) {
       if (!uploadStillExists(id)) return;
       failUpload(id, error, "video", {

@@ -9,6 +9,12 @@ const videoUpload = vi.hoisted(() => ({
 const videoInspect = vi.hoisted(() => ({
   inspect: vi.fn(),
 }));
+const videoPrepare = vi.hoisted(() => ({
+  prepare: vi.fn(async (input: { file: File }) => ({
+    file: input.file,
+    compressed: false,
+  })),
+}));
 
 vi.mock("./photo-upload", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./photo-upload")>()),
@@ -20,6 +26,9 @@ vi.mock("./video-upload", async (importOriginal) => ({
 }));
 vi.mock("@/features/video/inspect-video-file", () => ({
   inspectVideoFile: videoInspect.inspect,
+}));
+vi.mock("@/features/video/prepare-video-upload-file", () => ({
+  prepareVideoUploadFile: videoPrepare.prepare,
 }));
 
 import { PhotoUploadError } from "./photo-upload";
@@ -60,6 +69,11 @@ function jpeg(name: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  videoPrepare.prepare.mockReset();
+  videoPrepare.prepare.mockImplementation(async (input: { file: File }) => ({
+    file: input.file,
+    compressed: false,
+  }));
   clearOptimisticMediaUploads();
 });
 
@@ -534,5 +548,165 @@ describe("optimistic media upload queue", () => {
     await vi.waitFor(async () => {
       await expect(store.loadFailedMediaUploadDrafts()).resolves.toEqual([]);
     });
+  });
+
+  it("reuses the compressed file on retry and opens a new key only after reload", async () => {
+    const compressedSizes = [10_677_211, 10_663_295];
+    const compressedFile = (size: number, name: string) => {
+      const file = new File([new Uint8Array([1])], name, { type: "video/mp4" });
+      Object.defineProperty(file, "size", { configurable: true, value: size });
+      return file;
+    };
+    const firstCompressed = compressedFile(
+      compressedSizes[0]!,
+      "compressed-a.mp4",
+    );
+    const secondCompressed = compressedFile(
+      compressedSizes[1]!,
+      "compressed-b.mp4",
+    );
+    const source = new File([new Uint8Array(24)], "clip.mov", {
+      type: "video/quicktime",
+    });
+    const videoInput = {
+      draft: { ...draft, durationMs: 39_997 },
+      file: source,
+      occurredTime: "14:58",
+      person,
+      posterDataUrl: "data:image/jpeg;base64,abc",
+      width: 1920,
+      height: 1080,
+    };
+
+    videoPrepare.prepare.mockResolvedValueOnce({
+      file: firstCompressed,
+      compressed: true,
+    });
+    const reservedMomentId = "d6000000-0000-4000-8000-000000000070";
+    let firstRequestKey = "";
+    videoUpload.upload.mockImplementationOnce(async (file, _draft, attempt) => {
+      expect(file).toBe(firstCompressed);
+      expect(file.size).toBe(compressedSizes[0]);
+      firstRequestKey = attempt.requestKey;
+      attempt.momentId = reservedMomentId;
+      throw new Error("network timeout while uploading");
+    });
+
+    startOptimisticVideoUpload(videoInput);
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message:
+          "Your connection dropped before the upload finished. Try again.",
+      }),
+    );
+    expect(videoPrepare.prepare).toHaveBeenCalledTimes(1);
+    const inMemoryId = optimisticMediaUploadSnapshot()[0]!.id;
+
+    videoUpload.upload.mockImplementationOnce(async (file, _draft, attempt) => {
+      expect(file).toBe(firstCompressed);
+      expect(attempt.requestKey).toBe(firstRequestKey);
+      return { momentId: reservedMomentId };
+    });
+    expect(retryOptimisticMediaUpload(inMemoryId)).toBe(true);
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "published",
+      }),
+    );
+    expect(videoPrepare.prepare).toHaveBeenCalledTimes(1);
+    expect(videoUpload.upload).toHaveBeenCalledTimes(2);
+    expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+      state: "published",
+    });
+
+    const { IDBFactory } = await import("fake-indexeddb");
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: new IDBFactory(),
+    });
+    videoPrepare.prepare.mockClear();
+    videoUpload.upload.mockClear();
+    videoPrepare.prepare.mockResolvedValueOnce({
+      file: firstCompressed,
+      compressed: true,
+    });
+    const restoredMomentId = "d6000000-0000-4000-8000-000000000071";
+    let restoredRequestKey = "";
+    videoUpload.upload.mockImplementationOnce(
+      async (_file, _draft, attempt) => {
+        restoredRequestKey = attempt.requestKey;
+        attempt.momentId = restoredMomentId;
+        throw new Error("network timeout while uploading");
+      },
+    );
+    startOptimisticVideoUpload(videoInput);
+    await vi.waitFor(() =>
+      expect(optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "failed",
+        message:
+          "Your connection dropped before the upload finished. Try again.",
+      }),
+    );
+    const store = await import("./failed-media-upload-store");
+    await vi.waitFor(async () => {
+      const drafts = await store.loadFailedMediaUploadDrafts();
+      expect(drafts).toEqual([
+        expect.objectContaining({
+          kind: "video",
+          videoRequestKey: restoredRequestKey,
+        }),
+      ]);
+    });
+    expect(videoPrepare.prepare).toHaveBeenCalledTimes(1);
+
+    vi.resetModules();
+    const restored = await import("./optimistic-media-upload");
+    const { VideoUploadError: RestoredVideoUploadError } =
+      await import("./video-upload");
+    await restored.restoreFailedMediaUploads();
+    const restoredUpload = restored.optimisticMediaUploadSnapshot()[0];
+    expect(restoredUpload?.retryable).toBe(true);
+
+    const freshMomentId = "d6000000-0000-4000-8000-000000000072";
+    videoPrepare.prepare.mockResolvedValueOnce({
+      file: secondCompressed,
+      compressed: true,
+    });
+    videoUpload.upload
+      .mockImplementationOnce(async (file, _draft, attempt) => {
+        expect(file).toBe(secondCompressed);
+        expect(file.size).toBe(compressedSizes[1]);
+        expect(file.size).not.toBe(compressedSizes[0]);
+        expect(attempt.requestKey).toBe(restoredRequestKey);
+        throw new RestoredVideoUploadError(
+          "That video moment could not be prepared.",
+          true,
+          false,
+          true,
+        );
+      })
+      .mockImplementationOnce(async (file, _draft, attempt) => {
+        expect(file).toBe(secondCompressed);
+        expect(attempt.requestKey).not.toBe(restoredRequestKey);
+        expect(attempt.requestKey).not.toBe("");
+        return { momentId: freshMomentId };
+      });
+
+    expect(restored.retryOptimisticMediaUpload(restoredUpload!.id)).toBe(true);
+    await vi.waitFor(() =>
+      expect(restored.optimisticMediaUploadSnapshot()[0]?.stage).toEqual({
+        state: "published",
+      }),
+    );
+    expect(videoPrepare.prepare).toHaveBeenCalledTimes(2);
+    expect(videoUpload.upload).toHaveBeenCalledTimes(3);
+    expect(restored.optimisticMediaUploadSnapshot()[0]).toEqual(
+      expect.objectContaining({
+        momentId: freshMomentId,
+        stage: { state: "published" },
+      }),
+    );
+    expect(videoUpload.upload.mock.calls[2]?.[0]).toBe(secondCompressed);
   });
 });

@@ -257,6 +257,38 @@ describe("connected private video upload", () => {
       mention_ends: [6],
     });
   });
+
+  it("marks a reused reservation as retryable without a generic reserve failure", async () => {
+    const { client, rpc } = connectedClient();
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "reserve_video_moment") {
+        return {
+          data: null,
+          error: {
+            code: "22023",
+            message: "Video upload request was reused",
+          },
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({
+      message: "That video moment could not be prepared.",
+      name: "VideoUploadError",
+      requestReused: true,
+      retryable: true,
+    });
+  });
 });
 
 describe("local private video upload", () => {
