@@ -5,6 +5,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { maximumMomentPhotos } from "@/features/moments/moment-photos";
 import {
+  maximumStoredVideoBytes,
+  maximumVideoDurationMs,
+  overDurationVideoMessage,
+  storedVideoTooLargeMessage,
+} from "@/features/video/video-upload-policy";
+import {
   attachLocalPhotoToMoment,
   localJournalMediaDirectory,
   publishLocalMediaMoment,
@@ -15,8 +21,7 @@ import {
 import type { LocalMedia } from "./types";
 
 const maximumPhotoBytes = 25 * 1024 * 1024;
-const maximumVideoBytes = 100 * 1024 * 1024;
-const maximumVideoDurationMs = 120_500;
+const maximumVideoBytes = maximumStoredVideoBytes;
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const plainDatePattern = /^\d{4}-\d{2}-\d{2}$/u;
@@ -250,12 +255,10 @@ export async function publishVerifiedVideoMoment(
     input.durationMs < 1 ||
     input.durationMs > maximumVideoDurationMs
   ) {
-    throw new LocalMediaCoordinatorError(
-      "Choose a video about 2 minutes or shorter.",
-    );
+    throw new LocalMediaCoordinatorError(overDurationVideoMessage);
   }
   if (input.file.size < 1 || input.file.size > maximumVideoBytes) {
-    throw new LocalMediaCoordinatorError("Choose a video smaller than 100 MB.");
+    throw new LocalMediaCoordinatorError(storedVideoTooLargeMessage);
   }
   const bytes = Buffer.from(await input.file.arrayBuffer());
   const mimeType = detectVideoMime(bytes, input.file.type);

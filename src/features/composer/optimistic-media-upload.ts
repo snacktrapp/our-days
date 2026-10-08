@@ -14,6 +14,7 @@ import {
   type VideoMomentDraft,
 } from "./video-upload";
 import { inspectVideoFile } from "@/features/video/inspect-video-file";
+import { prepareVideoUploadFile } from "@/features/video/prepare-video-upload-file";
 import {
   rememberVideoFrame,
   rememberVideoPoster,
@@ -545,8 +546,21 @@ async function preparedVideoDraft(
     width = width ?? inspected.width;
     height = height ?? inspected.height;
   }
+  if (!durationMs || !width || !height) {
+    throw new VideoUploadError("That video could not be prepared.", false);
+  }
+  const preparedFile = await prepareVideoUploadFile(
+    {
+      durationMs,
+      file: input.file,
+      height,
+      signal,
+      width,
+    },
+  );
   return {
     draft: { ...input.draft, durationMs },
+    file: preparedFile.file,
     posterDataUrl,
     width,
     height,
@@ -564,7 +578,7 @@ function beginVideoUpload(input: StartVideoUploadInput) {
     try {
       const prepared = await preparedVideoDraft(input, controller.signal);
       const result = await uploadVideoMoment(
-        input.file,
+        prepared.file,
         prepared.draft,
         attempt,
         controller.signal,
@@ -760,7 +774,7 @@ export function retryOptimisticMediaUpload(id: string) {
         controller.signal,
       );
       const result = await uploadVideoMoment(
-        record.input.file,
+        prepared.file,
         prepared.draft,
         attempt,
         controller.signal,

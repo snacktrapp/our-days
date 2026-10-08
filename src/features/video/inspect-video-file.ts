@@ -1,9 +1,13 @@
 import {
-  maximumVideoBytes,
   maximumVideoDurationMs,
   VideoUploadError,
   acceptedVideoMime,
 } from "@/features/composer/video-upload";
+import {
+  maximumVideoSourceBytes,
+  overDurationVideoMessage,
+  sourceVideoTooLargeMessage,
+} from "./video-upload-policy";
 import { captureVideoPoster } from "@/features/video/capture-video-poster";
 
 export type InspectedVideo = Readonly<{
@@ -61,8 +65,8 @@ export async function inspectVideoFile(
       false,
     );
   }
-  if (file.size > maximumVideoBytes) {
-    throw new VideoUploadError("Choose a video smaller than 100 MB.", false);
+  if (file.size > maximumVideoSourceBytes) {
+    throw new VideoUploadError(sourceVideoTooLargeMessage, false);
   }
   if (typeof document === "undefined") {
     throw new VideoUploadError("That video could not be prepared.", false);
@@ -134,10 +138,7 @@ export async function inspectVideoFile(
               );
             }
             if (durationMs > maximumVideoDurationMs) {
-              throw new VideoUploadError(
-                "Choose a video about 2 minutes or shorter.",
-                false,
-              );
+              throw new VideoUploadError(overDurationVideoMessage, false);
             }
             if (
               video.videoWidth <= 0 ||

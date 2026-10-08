@@ -1,6 +1,6 @@
 begin;
 
-select plan(2);
+select plan(3);
 
 insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
 values (
@@ -25,36 +25,55 @@ select lives_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of about 94 seconds.',
+    body := 'A clip of about 59 seconds.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 94360,
+    duration_ms := 59360,
     request_key := 'd1200000-0000-4000-8000-000000000001',
     audience := 'family'
   )$$,
-  'a clip of about 94 seconds (94360 ms) is accepted'
+  'a clip of about 59 seconds (59360 ms) is accepted'
 );
 
 select throws_ok(
   $$select * from public.reserve_video_moment(
     circle_id := '20000000-0000-4000-8000-000000000001',
     journal_person_id := '30000000-0000-4000-8000-000000000001',
-    body := 'A clip of 121 seconds.',
+    body := 'A clip of 70 seconds.',
     place_name := null,
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-29',
     expected_mime_type := 'video/mp4',
     expected_size_bytes := 1000,
-    duration_ms := 121000,
+    duration_ms := 70000,
     request_key := 'd1200000-0000-4000-8000-000000000002',
     audience := 'family'
   )$$,
   '22023',
   'Video moment could not be prepared',
-  'a clip of 121 seconds is rejected'
+  'a clip of 70 seconds is rejected'
+);
+
+select throws_ok(
+  $$select * from public.reserve_video_moment(
+    circle_id := '20000000-0000-4000-8000-000000000001',
+    journal_person_id := '30000000-0000-4000-8000-000000000001',
+    body := 'A large clip reserve.',
+    place_name := null,
+    tagged_person_ids := '{}'::uuid[],
+    occurred_on := '2026-08-29',
+    expected_mime_type := 'video/mp4',
+    expected_size_bytes := 33554433,
+    duration_ms := 30000,
+    request_key := 'd1200000-0000-4000-8000-000000000003',
+    audience := 'family'
+  )$$,
+  '22023',
+  'Video moment could not be prepared',
+  'a reserve above 32 MiB is rejected'
 );
 
 select * from finish();

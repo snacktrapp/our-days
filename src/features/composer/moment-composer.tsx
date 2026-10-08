@@ -40,11 +40,15 @@ import { normalizeMomentAudience } from "@/features/moments/moment-audience";
 import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
   acceptedVideoMime,
-  maximumVideoBytes,
   maximumVideoDurationMs,
   type VideoUploadAttempt,
   type VideoUploadStage,
 } from "./video-upload";
+import {
+  maximumVideoSourceBytes,
+  overDurationVideoMessage,
+  sourceVideoTooLargeMessage,
+} from "@/features/video/video-upload-policy";
 import {
   emptyBibleVerseSelection,
   formatBibleVerseMoment,
@@ -862,9 +866,9 @@ export function MomentComposer({
         if (photoInputRef.current) photoInputRef.current.value = "";
         return;
       }
-      if (file.size > maximumVideoBytes) {
+      if (file.size > maximumVideoSourceBytes) {
         setPhotoDecodeState("error");
-        setPhotoError("Choose a video smaller than 100 MB.");
+        setPhotoError(sourceVideoTooLargeMessage);
         if (photoInputRef.current) photoInputRef.current.value = "";
         return;
       }
@@ -950,7 +954,7 @@ export function MomentComposer({
     const durationMs = Math.ceil(duration * 1000);
     if (durationMs > maximumVideoDurationMs) {
       rejectUndecodablePhoto(expectedUrl);
-      setPhotoError("Choose a video about 2 minutes or shorter.");
+      setPhotoError(overDurationVideoMessage);
       return;
     }
     if (

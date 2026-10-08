@@ -10,6 +10,11 @@ import {
 import { maximumVideoDurationMs } from "@/features/composer/video-upload";
 import { containDialogFocus } from "@/features/dialog/contain-dialog-focus";
 import { useModalDialog } from "@/features/dialog/lock-background-scroll";
+import {
+  maximumVideoSourceBytes,
+  overDurationVideoMessage,
+  sourceVideoTooLargeMessage,
+} from "./video-upload-policy";
 
 type InspectionState = "empty" | "inspecting" | "ready" | "error";
 
@@ -20,7 +25,7 @@ const allowedVideoTypes = new Set([
   "video/webm",
 ]);
 const fallbackVideoExtension = /\.(m4v|mov|mp4|webm)$/iu;
-const byteLimit = 100 * 1024 * 1024;
+const byteLimit = maximumVideoSourceBytes;
 const durationLimitSeconds = maximumVideoDurationMs / 1000;
 const pixelLimit = 9_000_000;
 const slowInspectionDelayMs = 5_000;
@@ -142,9 +147,7 @@ function VideoFeasibilityDialog({
       return;
     }
     if (file.size > byteLimit) {
-      rejectSelection(
-        "Choose a video smaller than 100 MB for this feasibility preview.",
-      );
+      rejectSelection(sourceVideoTooLargeMessage);
       return;
     }
 
@@ -188,10 +191,7 @@ function VideoFeasibilityDialog({
       return;
     }
     if (duration > durationLimitSeconds) {
-      rejectSelection(
-        "Choose a video about 2 minutes or shorter for this feasibility preview.",
-        expectedUrl,
-      );
+      rejectSelection(overDurationVideoMessage, expectedUrl);
       return;
     }
     if (
@@ -284,7 +284,7 @@ function VideoFeasibilityDialog({
             {previewUrl ? "Choose a different video" : "Choose a short video"}
           </span>
           <small id="video-feasibility-picker-constraints">
-            One local clip · about 2 minutes · up to 100 MB
+            One local clip · up to 60 seconds
           </small>
           <input
             ref={inputRef}

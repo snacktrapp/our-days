@@ -6,13 +6,19 @@ import type {
 } from "tus-js-client";
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
+  maximumStoredVideoBytes,
+  maximumVideoDurationMs as maximumVideoDurationLimitMs,
+  overDurationVideoMessage,
+  storedVideoTooLargeMessage,
+} from "@/features/video/video-upload-policy";
+import {
   hostedVercelClientRuntime,
   readOptionalSupabasePublicConfig,
   readSupabasePublicConfig,
 } from "@/lib/supabase/public-config";
 
-export const maximumVideoBytes = 100 * 1024 * 1024;
-export const maximumVideoDurationMs = 120_500;
+export const maximumVideoBytes = maximumStoredVideoBytes;
+export const maximumVideoDurationMs = maximumVideoDurationLimitMs;
 
 const allowedVideoTypes = new Set([
   "video/mp4",
@@ -108,17 +114,14 @@ function inspectVideo(file: File, durationMs: number) {
     );
   }
   if (file.size > maximumVideoBytes) {
-    throw new VideoUploadError("Choose a video smaller than 100 MB.", false);
+    throw new VideoUploadError(storedVideoTooLargeMessage, false);
   }
   if (
     !Number.isInteger(durationMs) ||
     durationMs < 1 ||
     durationMs > maximumVideoDurationMs
   ) {
-    throw new VideoUploadError(
-      "Choose a video about 2 minutes or shorter.",
-      false,
-    );
+    throw new VideoUploadError(overDurationVideoMessage, false);
   }
   return mimeType;
 }

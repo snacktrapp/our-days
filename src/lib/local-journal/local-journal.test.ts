@@ -386,7 +386,7 @@ describe("local journal happy path", () => {
     expect(ownMoment.moment.taggedPeopleLabel).toBe("Jordan");
   });
 
-  it("accepts a video of about 94 seconds and rejects 121 seconds", async () => {
+  it("accepts a video under 60 seconds and rejects 70 seconds", async () => {
     const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
     const input = {
       file: new File([videoBytes], "wave.mp4", { type: "video/mp4" }),
@@ -399,13 +399,13 @@ describe("local journal happy path", () => {
       occurredTimezone: null,
     };
     await expect(
-      publishVerifiedVideoMoment(access, { ...input, durationMs: 121_000 }),
-    ).rejects.toThrow("2 minutes or shorter");
+      publishVerifiedVideoMoment(access, { ...input, durationMs: 70_000 }),
+    ).rejects.toThrow("60 seconds or less");
     await expect(
-      publishVerifiedVideoMoment(access, { ...input, durationMs: 94_360 }),
+      publishVerifiedVideoMoment(access, { ...input, durationMs: 59_360 }),
     ).resolves.toMatchObject({
       kind: "video",
-      media: expect.objectContaining({ durationMs: 94_360 }),
+      media: expect.objectContaining({ durationMs: 59_360 }),
     });
   });
 
