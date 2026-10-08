@@ -1,6 +1,6 @@
 begin;
 
-select plan(3);
+select plan(4);
 
 insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
 values (
@@ -74,6 +74,26 @@ select throws_ok(
   '22023',
   'Video moment could not be prepared',
   'a reserve above 32 MiB is rejected'
+);
+
+select lives_ok(
+  $$select * from public.reserve_video_moment(
+    circle_id := '20000000-0000-4000-8000-000000000001',
+    journal_person_id := '30000000-0000-4000-8000-000000000001',
+    body := '@A Organizer Two joins this short clip.',
+    place_name := null,
+    tagged_person_ids := '{}'::uuid[],
+    occurred_on := '2026-08-29',
+    expected_mime_type := 'video/mp4',
+    expected_size_bytes := 2000,
+    duration_ms := 30000,
+    request_key := 'd1200000-0000-4000-8000-000000000004',
+    audience := 'family',
+    mentioned_user_ids := array['10000000-0000-4000-8000-000000000002']::uuid[],
+    mention_starts := array[0]::integer[],
+    mention_ends := array[16]::integer[]
+  )$$,
+  'a short video reserve with mentions succeeds'
 );
 
 select * from finish();

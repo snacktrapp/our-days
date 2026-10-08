@@ -549,15 +549,13 @@ async function preparedVideoDraft(
   if (!durationMs || !width || !height) {
     throw new VideoUploadError("That video could not be prepared.", false);
   }
-  const preparedFile = await prepareVideoUploadFile(
-    {
-      durationMs,
-      file: input.file,
-      height,
-      signal,
-      width,
-    },
-  );
+  const preparedFile = await prepareVideoUploadFile({
+    durationMs,
+    file: input.file,
+    height,
+    signal,
+    width,
+  });
   return {
     draft: { ...input.draft, durationMs },
     file: preparedFile.file,

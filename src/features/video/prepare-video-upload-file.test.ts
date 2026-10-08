@@ -62,7 +62,7 @@ describe("prepareVideoUploadFile", () => {
     ).rejects.toEqual(
       expect.objectContaining<Partial<VideoUploadError>>({
         message:
-          "This browser cannot safely shrink that video yet. Please choose one under 32 MB.",
+          "That clip is too big to share from this phone. Trim it in Photos or pick a shorter clip.",
       }),
     );
   });
@@ -83,5 +83,59 @@ describe("prepareVideoUploadFile", () => {
       file: source,
       compressed: false,
     });
+  });
+
+  it("falls back to a small raw file when compression times out", async () => {
+    const source = videoFile(maximumStoredVideoBytes - 1, "video/quicktime");
+    const compress = vi.fn(async () => {
+      throw new VideoUploadError(
+        "This video took too long to prepare. Try again.",
+      );
+    });
+    await expect(
+      prepareVideoUploadFile(
+        {
+          durationMs: 30_000,
+          file: source,
+          height: 1080,
+          width: 1920,
+        },
+        {
+          compress,
+          resolveSupport: () => compressionSupport,
+        },
+      ),
+    ).resolves.toEqual({
+      file: source,
+      compressed: false,
+    });
+  });
+
+  it("shows a clear message when timeout leaves a large raw file", async () => {
+    const source = videoFile(maximumStoredVideoBytes + 1, "video/quicktime");
+    const compress = vi.fn(async () => {
+      throw new VideoUploadError(
+        "This video took too long to prepare. Try again.",
+      );
+    });
+    await expect(
+      prepareVideoUploadFile(
+        {
+          durationMs: 30_000,
+          file: source,
+          height: 1080,
+          width: 1920,
+        },
+        {
+          compress,
+          resolveSupport: () => compressionSupport,
+        },
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<VideoUploadError>>({
+        message:
+          "That clip took too long to prepare on this phone. Trim it in Photos or pick a shorter clip.",
+      }),
+    );
   });
 });

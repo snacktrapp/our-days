@@ -104,9 +104,7 @@ describe("VideoFeasibilityPanel", () => {
       value: 256 * 1024 * 1024 + 1,
     });
     await user.upload(picker, oversized);
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "under 256 MB",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("under 256 MB");
     expect(createObjectURL).not.toHaveBeenCalled();
     expect(screen.queryByText(/private-name/u)).not.toBeInTheDocument();
   });

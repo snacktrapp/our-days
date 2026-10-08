@@ -1654,7 +1654,9 @@ export function MomentComposer({
 
   const photoUploadLabel =
     photoUploadStage?.state === "preparing"
-      ? `Preparing your ${mode === "video" ? "video" : "photo"} privately…`
+      ? mode === "video"
+        ? "Preparing your video on this device…"
+        : "Preparing your photo privately…"
       : photoUploadStage?.state === "uploading"
         ? "retrying" in photoUploadStage && photoUploadStage.retrying
           ? `Retrying ${mode === "video" ? "video" : "photo"} upload… ${Math.round(photoUploadStage.progress * 100)}%`

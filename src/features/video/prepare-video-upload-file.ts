@@ -1,6 +1,8 @@
 import { VideoUploadError } from "@/features/composer/video-upload";
 import {
+  maximumVideoDurationMs,
   maximumStoredVideoBytes,
+  overDurationVideoMessage,
   preferredVideoLongEdgePx,
   storedVideoTooLargeMessage,
   unsupportedVideoCompressionMessage,
@@ -8,6 +10,14 @@ import {
 
 const fallbackPrepareMessage =
   "That video could not be prepared. Please try again.";
+const prepareTimeoutMessage = "This video took too long to prepare. Try again.";
+const slowPrepareTooLargeMessage =
+  "That clip took too long to prepare on this phone. Trim it in Photos or pick a shorter clip.";
+const metadataTimeoutMs = 15_000;
+const minimumPlaybackTimeoutMs = 45_000;
+const playbackTimeoutMarginMs = 20_000;
+const recorderStopTimeoutMs = 3_000;
+const outputDurationProbeTimeoutMs = 8_000;
 
 const preferredRecorderMimeTypes = [
   "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
@@ -94,7 +104,9 @@ function defaultCompressionSupport(): VideoCompressionSupport | null {
 function downscaledDimensions(width: number, height: number) {
   const longEdge = Math.max(width, height);
   const scale =
-    longEdge > preferredVideoLongEdgePx ? preferredVideoLongEdgePx / longEdge : 1;
+    longEdge > preferredVideoLongEdgePx
+      ? preferredVideoLongEdgePx / longEdge
+      : 1;
   const even = (value: number) => {
     const rounded = Math.max(2, Math.round(value));
     return rounded % 2 === 0 ? rounded : rounded - 1;
@@ -111,6 +123,10 @@ function renamedFile(name: string, extension: "mp4" | "webm") {
 
 async function waitForMetadata(video: HTMLVideoElement, signal?: AbortSignal) {
   await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new VideoUploadError(prepareTimeoutMessage, true));
+    }, metadataTimeoutMs);
     const onAbort = () => {
       cleanup();
       try {
@@ -128,6 +144,7 @@ async function waitForMetadata(video: HTMLVideoElement, signal?: AbortSignal) {
       reject(new VideoUploadError(fallbackPrepareMessage));
     };
     const cleanup = () => {
+      window.clearTimeout(timeout);
       video.removeEventListener("loadedmetadata", onLoadedMetadata);
       video.removeEventListener("error", onError);
       signal?.removeEventListener("abort", onAbort);
@@ -161,6 +178,51 @@ function tunedBitrates(durationMs: number) {
   return { audioBitsPerSecond: audio, videoBitsPerSecond: video };
 }
 
+function playbackTimeoutMs(durationMs: number) {
+  return Math.max(
+    minimumPlaybackTimeoutMs,
+    durationMs + playbackTimeoutMarginMs,
+  );
+}
+
+async function waitForPlaybackFinished(input: {
+  signal?: AbortSignal;
+  timeoutMs: number;
+  video: HTMLVideoElement;
+}) {
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new VideoUploadError(prepareTimeoutMessage, true));
+    }, input.timeoutMs);
+    const onAbort = () => {
+      cleanup();
+      try {
+        throwIfAborted(input.signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const onEnded = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new VideoUploadError(fallbackPrepareMessage));
+    };
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      input.signal?.removeEventListener("abort", onAbort);
+      input.video.removeEventListener("ended", onEnded);
+      input.video.removeEventListener("error", onError);
+    };
+    input.signal?.addEventListener("abort", onAbort, { once: true });
+    input.video.addEventListener("ended", onEnded, { once: true });
+    input.video.addEventListener("error", onError, { once: true });
+  });
+}
+
 function createRecorder(
   stream: MediaStream,
   mimeType: string,
@@ -187,7 +249,59 @@ function createRecorder(
   throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
 }
 
-async function compressWithMediaRecorder(input: CompressionInput): Promise<File> {
+async function readVideoDurationMs(file: File, signal?: AbortSignal) {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.preload = "metadata";
+  video.src = url;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, outputDurationProbeTimeoutMs);
+      const onAbort = () => {
+        cleanup();
+        try {
+          throwIfAborted(signal);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      const onLoadedMetadata = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        resolve();
+      };
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
+        video.removeEventListener("loadedmetadata", onLoadedMetadata);
+        video.removeEventListener("error", onError);
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      video.addEventListener("loadedmetadata", onLoadedMetadata, {
+        once: true,
+      });
+      video.addEventListener("error", onError, { once: true });
+    });
+    const durationMs = Math.ceil(video.duration * 1000);
+    if (!Number.isFinite(video.duration) || durationMs < 1) return null;
+    return durationMs;
+  } finally {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function compressWithMediaRecorder(
+  input: CompressionInput,
+): Promise<File> {
   throwIfAborted(input.signal);
   const url = URL.createObjectURL(input.file);
   const video = document.createElement("video");
@@ -197,9 +311,15 @@ async function compressWithMediaRecorder(input: CompressionInput): Promise<File>
   video.setAttribute("webkit-playsinline", "");
   video.src = url;
 
+  let recorder: MediaRecorder | null = null;
+  let waitForRecorderStop: Promise<void> | null = null;
+  let onRecorderData: ((event: BlobEvent) => void) | null = null;
+  let onRecorderStop: (() => void) | null = null;
+  let onRecorderError: (() => void) | null = null;
   let output: MediaStream | null = null;
   let source: MediaStream | null = null;
   let stopDrawing = () => undefined;
+  const chunks: BlobPart[] = [];
   try {
     await waitForMetadata(video, input.signal);
     throwIfAborted(input.signal);
@@ -230,58 +350,41 @@ async function compressWithMediaRecorder(input: CompressionInput): Promise<File>
       output = source;
     }
 
-    const recorder = createRecorder(
+    recorder = createRecorder(
       output,
       input.support.mimeType,
       input.durationMs,
       source.getAudioTracks().length > 0,
     );
-    const chunks: BlobPart[] = [];
-    const stopped = new Promise<void>((resolve, reject) => {
-      recorder.addEventListener("dataavailable", (event) => {
+    const activeRecorder = recorder;
+    waitForRecorderStop = new Promise<void>((resolve, reject) => {
+      onRecorderData = (event: BlobEvent) => {
         if (event.data.size > 0) chunks.push(event.data);
-      });
-      recorder.addEventListener("stop", () => resolve(), { once: true });
-      recorder.addEventListener(
-        "error",
-        () => reject(new VideoUploadError(fallbackPrepareMessage)),
-        { once: true },
-      );
-    });
-
-    const finishedPlayback = new Promise<void>((resolve, reject) => {
-      const onAbort = () => {
-        cleanup();
-        try {
-          throwIfAborted(input.signal);
-        } catch (error) {
-          reject(error);
-        }
       };
-      const onEnded = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = () => {
-        cleanup();
+      onRecorderStop = () => resolve();
+      onRecorderError = () =>
         reject(new VideoUploadError(fallbackPrepareMessage));
-      };
-      const cleanup = () => {
-        input.signal?.removeEventListener("abort", onAbort);
-        video.removeEventListener("ended", onEnded);
-        video.removeEventListener("error", onError);
-      };
-      input.signal?.addEventListener("abort", onAbort, { once: true });
-      video.addEventListener("ended", onEnded, { once: true });
-      video.addEventListener("error", onError, { once: true });
+      activeRecorder.addEventListener("dataavailable", onRecorderData);
+      activeRecorder.addEventListener("stop", onRecorderStop, { once: true });
+      activeRecorder.addEventListener("error", onRecorderError, {
+        once: true,
+      });
     });
 
-    recorder.start(750);
+    activeRecorder.start(750);
     const playback = video.play();
-    if (playback) await playback;
-    await finishedPlayback;
+    try {
+      if (playback) await playback;
+    } catch {
+      throw new VideoUploadError(prepareTimeoutMessage, true);
+    }
+    await waitForPlaybackFinished({
+      signal: input.signal,
+      timeoutMs: playbackTimeoutMs(input.durationMs),
+      video,
+    });
     if (recorder.state !== "inactive") recorder.stop();
-    await stopped;
+    await waitForRecorderStop;
     throwIfAborted(input.signal);
 
     const blob = new Blob(chunks, {
@@ -290,11 +393,40 @@ async function compressWithMediaRecorder(input: CompressionInput): Promise<File>
     if (blob.size < 1) throw new VideoUploadError(fallbackPrepareMessage);
     const extension = /webm/iu.test(blob.type) ? "webm" : "mp4";
     const type = extension === "webm" ? "video/webm" : "video/mp4";
-    return new File([blob], renamedFile(input.file.name, extension), {
+    const file = new File([blob], renamedFile(input.file.name, extension), {
       lastModified: input.file.lastModified,
       type,
     });
+    const outputDurationMs = await readVideoDurationMs(file, input.signal);
+    if (outputDurationMs && outputDurationMs > maximumVideoDurationMs) {
+      throw new VideoUploadError(overDurationVideoMessage, false);
+    }
+    return file;
   } finally {
+    if (recorder) {
+      if (onRecorderData) {
+        recorder.removeEventListener("dataavailable", onRecorderData);
+      }
+      if (onRecorderStop) recorder.removeEventListener("stop", onRecorderStop);
+      if (onRecorderError) {
+        recorder.removeEventListener("error", onRecorderError);
+      }
+      if (recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch {
+          // Ignore invalid-state stops while cleaning up.
+        }
+      }
+    }
+    if (waitForRecorderStop) {
+      await Promise.race([
+        waitForRecorderStop.catch(() => undefined),
+        new Promise<void>((resolve) =>
+          window.setTimeout(resolve, recorderStopTimeoutMs),
+        ),
+      ]);
+    }
     stopDrawing();
     video.pause();
     video.removeAttribute("src");
@@ -327,7 +459,8 @@ export async function prepareVideoUploadFile(
   }>,
   dependencies: PrepareDependencies = {},
 ): Promise<PreparedVideoUploadFile> {
-  const resolveSupport = dependencies.resolveSupport ?? defaultCompressionSupport;
+  const resolveSupport =
+    dependencies.resolveSupport ?? defaultCompressionSupport;
   const compress = dependencies.compress ?? compressWithMediaRecorder;
   const support = resolveSupport();
   const needsCompression = shouldAttemptCompression(
@@ -360,9 +493,17 @@ export async function prepareVideoUploadFile(
       throw error;
     }
     if (error instanceof VideoUploadError) {
-      if (error.message === storedVideoTooLargeMessage) throw error;
+      if (
+        error.message === storedVideoTooLargeMessage ||
+        error.message === overDurationVideoMessage
+      ) {
+        throw error;
+      }
       if (input.file.size <= maximumStoredVideoBytes) {
         return { file: input.file, compressed: false };
+      }
+      if (error.message === prepareTimeoutMessage) {
+        throw new VideoUploadError(slowPrepareTooLargeMessage, false);
       }
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }

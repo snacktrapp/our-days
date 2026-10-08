@@ -10,4 +10,4 @@ export const sourceVideoTooLargeMessage =
 export const storedVideoTooLargeMessage =
   "Please choose or export a video under 32 MB before posting.";
 export const unsupportedVideoCompressionMessage =
-  "This browser cannot safely shrink that video yet. Please choose one under 32 MB.";
+  "That clip is too big to share from this phone. Trim it in Photos or pick a shorter clip.";
