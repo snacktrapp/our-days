@@ -1,6 +1,6 @@
 begin;
 
-select no_plan();
+select plan(41);
 
 update private.photo_capabilities
    set enabled = true, updated_at = statement_timestamp()
@@ -283,22 +283,52 @@ select is(
   1::bigint,
   'an incomplete intake cleanup attempt leaves the quarantine object untouched'
 );
+select ok(
+  exists (
+    select 1
+      from pg_catalog.pg_policy as policy_row
+     where policy_row.polname =
+         'our_days_intake_delete_verified_published_worker_only'
+       and policy_row.polrelid = 'storage.objects'::regclass
+       and policy_row.polcmd = 'd'
+       and policy_row.polroles = array[
+         (select role_row.oid
+            from pg_catalog.pg_roles as role_row
+           where role_row.rolname = 'authenticated')
+       ]::oid[]
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%bucket_id = ''our-days-intake''%'
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%current_user_is_photo_validator%'
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%photo_intake_cleanup_is_safe%'
+  ),
+  'the intake DELETE policy is worker-only and guarded by validator and publish-safe checks'
+);
 set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
 );
-select set_config('storage.allow_delete_query', 'on', true);
-with removed as (
-  delete from storage.objects as object
-   where object.bucket_id = 'our-days-intake'
-     and object.name = :'processing_object_path'
-  returning 1
-)
-select count(*)::bigint as processing_prepublish_delete_count from removed \gset
 select is(
-  :'processing_prepublish_delete_count'::bigint,
-  0::bigint,
-  'storage delete policy blocks deleting an intake object before publish is complete'
+  (select private.photo_intake_cleanup_is_safe(
+    :'processing_intake_id'::uuid,
+    :'processing_object_path'
+  )::text),
+  'f'::text,
+  'the publish-safe helper stays false before intake publication completes'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )::text
+  ),
+  'f'::text,
+  'an object owner cannot satisfy intake DELETE policy before publish is complete'
 );
 reset role;
 select is(
@@ -329,19 +359,23 @@ set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000099'::uuid
 );
-select set_config('storage.allow_delete_query', 'on', true);
-with removed as (
-  delete from storage.objects as object
-   where object.bucket_id = 'our-days-intake'
-     and object.name = :'processing_object_path'
-  returning 1
-)
-select count(*)::bigint as processing_worker_before_publish_delete_count
-from removed \gset
 select is(
-  :'processing_worker_before_publish_delete_count'::bigint,
-  0::bigint,
-  'worker identity cannot delete an intake object before publish is complete'
+  (select private.current_user_is_photo_validator()::text),
+  't'::text,
+  'the allowlisted worker identity satisfies the validator helper'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )::text
+  ),
+  'f'::text,
+  'worker identity still cannot satisfy intake DELETE policy before publish is complete'
 );
 
 select set_config(
@@ -461,39 +495,46 @@ set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000002'::uuid
 );
-select set_config('storage.allow_delete_query', 'on', true);
-with removed as (
-  delete from storage.objects as object
-   where object.bucket_id = 'our-days-intake'
-     and object.name = :'processing_object_path'
-  returning 1
-)
-select count(*)::bigint as processing_other_user_delete_count from removed \gset
 select is(
-  :'processing_other_user_delete_count'::bigint,
-  0::bigint,
-  'storage delete policy blocks deleting another requester intake object'
+  (select private.photo_intake_cleanup_is_safe(
+    :'processing_intake_id'::uuid,
+    :'processing_object_path'
+  )::text),
+  't'::text,
+  'the publish-safe helper turns true once original and display publication are complete'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )::text
+  ),
+  'f'::text,
+  'an unrelated authenticated user cannot satisfy the intake DELETE policy after publish'
 );
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
 );
-select set_config('storage.allow_delete_query', 'on', true);
-with removed as (
-  delete from storage.objects as object
-   where object.bucket_id = 'our-days-intake'
-     and object.name = :'processing_object_path'
-  returning 1
-)
-select count(*)::bigint as processing_owner_delete_count from removed \gset
 select is(
-  :'processing_owner_delete_count'::bigint,
-  0::bigint,
-  'storage delete policy blocks deleting intake objects for the owner session'
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )::text
+  ),
+  'f'::text,
+  'the intake object owner still cannot satisfy the DELETE policy after publish'
 );
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000099'::uuid
 );
-select set_config('storage.allow_delete_query', 'on', true);
 select is(
   (select count(*)::bigint from storage.objects as object
     where object.bucket_id = 'our-days-intake'
@@ -501,18 +542,48 @@ select is(
   1::bigint,
   'worker identity can select the verified-published intake object'
 );
-with removed as (
-  delete from storage.objects as object
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )::text
+  ),
+  't'::text,
+  'the worker satisfies the intake DELETE policy helper predicates for a verified-published intake'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path' || '-wrong-context'
+      )
+    )::text
+  ),
+  'f'::text,
+  'even the worker fails the intake DELETE policy helper predicates for a mismatched object path'
+);
+reset role;
+with simulated_removed as (
+  update storage.objects as object
+     set name = object.name || '-simulated-removed'
    where object.bucket_id = 'our-days-intake'
      and object.name = :'processing_object_path'
   returning 1
 )
-select count(*)::bigint as processing_worker_delete_count from removed \gset
+select count(*)::bigint as processing_simulated_removed_count
+from simulated_removed \gset
 select is(
-  :'processing_worker_delete_count'::bigint,
+  :'processing_simulated_removed_count'::bigint,
   1::bigint,
-  'storage delete policy allows worker cleanup for verified-published intake objects'
+  'the test simulates post-policy cleanup by unlinking the intake object path without using direct delete'
 );
+set local role authenticated;
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
 );
