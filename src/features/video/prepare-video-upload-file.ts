@@ -18,6 +18,7 @@ const minimumPlaybackTimeoutMs = 45_000;
 const playbackTimeoutMarginMs = 20_000;
 const recorderStopTimeoutMs = 3_000;
 const outputDurationProbeTimeoutMs = 8_000;
+const audioResumeTimeoutMs = 3_000;
 
 const preferredRecorderMimeTypes = [
   "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
@@ -187,6 +188,43 @@ function webAudioContextConstructor(): AudioContextConstructor | null {
   return typeof webkitContext === "function" ? webkitContext : null;
 }
 
+async function resumeAudioContext(context: AudioContext, signal?: AbortSignal) {
+  const isRunning = () => context.state === "running";
+  if (isRunning()) return;
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new VideoUploadError(unsupportedVideoCompressionMessage, false));
+    }, audioResumeTimeoutMs);
+    const onAbort = () => {
+      cleanup();
+      try {
+        throwIfAborted(signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    void context
+      .resume()
+      .then(() => {
+        cleanup();
+        resolve();
+      })
+      .catch((error: unknown) => {
+        cleanup();
+        reject(error);
+      });
+  });
+  if (!isRunning()) {
+    throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+  }
+}
+
 function tunedBitrates(durationMs: number) {
   const durationSeconds = Math.max(1, durationMs / 1000);
   const total = Math.floor(
@@ -337,10 +375,7 @@ async function compressWithMediaRecorder(
   const url = URL.createObjectURL(input.file);
   const video = document.createElement("video");
   video.preload = "auto";
-  video.muted = true;
-  video.defaultMuted = true;
   video.playsInline = true;
-  video.volume = 0;
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
   video.src = url;
@@ -373,12 +408,15 @@ async function compressWithMediaRecorder(
       audioNode = audioContext.createMediaElementSource(video);
       audioDestination = audioContext.createMediaStreamDestination();
       audioNode.connect(audioDestination);
-      await audioContext.resume();
-    } catch {
+      await resumeAudioContext(audioContext, input.signal);
+    } catch (error) {
       await audioContext?.close().catch(() => undefined);
       audioContext = null;
       audioNode = null;
       audioDestination = null;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
 

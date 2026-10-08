@@ -99,26 +99,127 @@ select lives_ok(
 reset role;
 
 select lives_ok(
-  $$update private.video_upload_requests
-       set expected_size_bytes = 134217728,
-           duration_ms = 40000
-     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid$$,
+  $$
+  with template as (
+    select * from private.video_upload_requests
+     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid
+  )
+  insert into private.video_upload_requests (
+    id, circle_id, journal_person_id, requested_by_membership_id,
+    request_key, moment_id, object_path, state, expected_mime_type,
+    expected_size_bytes, duration_ms, body, place_name, occurred_on,
+    occurred_at, occurred_timezone, time_precision, request_payload_hash,
+    requested_at, upload_expires_at, published_at, audience
+  )
+  select
+    'd1200000-0000-4000-8000-000000000110'::uuid,
+    template.circle_id,
+    template.journal_person_id,
+    template.requested_by_membership_id,
+    'd1200000-0000-4000-8000-000000000110'::uuid,
+    'd1200000-0000-4000-8000-000000000111'::uuid,
+    'video/d1200000-0000-4000-8000-000000000110',
+    'upload_claimed',
+    'video/mp4',
+    134217728,
+    40000,
+    template.body,
+    template.place_name,
+    template.occurred_on,
+    template.occurred_at,
+    template.occurred_timezone,
+    template.time_precision,
+    template.request_payload_hash,
+    template.requested_at,
+    template.requested_at + interval '2 hours',
+    null,
+    template.audience
+  from template;
+  $$,
   'video_upload_requests accepts exact boundary values'
 );
 
 select throws_ok(
-  $$update private.video_upload_requests
-       set expected_size_bytes = 134217729
-     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid$$,
+  $$
+  with template as (
+    select * from private.video_upload_requests
+     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid
+  )
+  insert into private.video_upload_requests (
+    id, circle_id, journal_person_id, requested_by_membership_id,
+    request_key, moment_id, object_path, state, expected_mime_type,
+    expected_size_bytes, duration_ms, body, place_name, occurred_on,
+    occurred_at, occurred_timezone, time_precision, request_payload_hash,
+    requested_at, upload_expires_at, published_at, audience
+  )
+  select
+    'd1200000-0000-4000-8000-000000000120'::uuid,
+    template.circle_id,
+    template.journal_person_id,
+    template.requested_by_membership_id,
+    'd1200000-0000-4000-8000-000000000120'::uuid,
+    'd1200000-0000-4000-8000-000000000121'::uuid,
+    'video/d1200000-0000-4000-8000-000000000120',
+    'upload_claimed',
+    'video/mp4',
+    134217729,
+    40000,
+    template.body,
+    template.place_name,
+    template.occurred_on,
+    template.occurred_at,
+    template.occurred_timezone,
+    template.time_precision,
+    template.request_payload_hash,
+    template.requested_at,
+    template.requested_at + interval '2 hours',
+    null,
+    template.audience
+  from template;
+  $$,
   '23514',
   'new row for relation "video_upload_requests" violates check constraint "video_upload_requests_size_cap_128mb"',
   'video_upload_requests rejects 128 MiB + 1 byte'
 );
 
 select throws_ok(
-  $$update private.video_upload_requests
-       set duration_ms = 40001
-     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid$$,
+  $$
+  with template as (
+    select * from private.video_upload_requests
+     where request_key = 'd1200000-0000-4000-8000-000000000001'::uuid
+  )
+  insert into private.video_upload_requests (
+    id, circle_id, journal_person_id, requested_by_membership_id,
+    request_key, moment_id, object_path, state, expected_mime_type,
+    expected_size_bytes, duration_ms, body, place_name, occurred_on,
+    occurred_at, occurred_timezone, time_precision, request_payload_hash,
+    requested_at, upload_expires_at, published_at, audience
+  )
+  select
+    'd1200000-0000-4000-8000-000000000130'::uuid,
+    template.circle_id,
+    template.journal_person_id,
+    template.requested_by_membership_id,
+    'd1200000-0000-4000-8000-000000000130'::uuid,
+    'd1200000-0000-4000-8000-000000000131'::uuid,
+    'video/d1200000-0000-4000-8000-000000000130',
+    'upload_claimed',
+    'video/mp4',
+    134217728,
+    40001,
+    template.body,
+    template.place_name,
+    template.occurred_on,
+    template.occurred_at,
+    template.occurred_timezone,
+    template.time_precision,
+    template.request_payload_hash,
+    template.requested_at,
+    template.requested_at + interval '2 hours',
+    null,
+    template.audience
+  from template;
+  $$,
   '23514',
   'new row for relation "video_upload_requests" violates check constraint "video_upload_requests_duration_cap_40s"',
   'video_upload_requests rejects 40001 ms'
