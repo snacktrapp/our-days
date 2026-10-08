@@ -288,6 +288,24 @@ select is(
   1::bigint,
   'an incomplete intake cleanup attempt leaves the quarantine object untouched'
 );
+select set_config('storage.allow_delete_query', 'on', true);
+select is(
+  (with removed as (
+    delete from storage.objects as object
+     where object.bucket_id = 'our-days-intake'
+       and object.name = :'processing_object_path'
+    returning 1
+  ) select count(*)::bigint from removed),
+  0::bigint,
+  'storage delete policy blocks deleting an intake object before publish is complete'
+);
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'a blocked pre-publish delete leaves the intake object untouched'
+);
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
 values (
   '10000000-0000-4000-8000-000000000099',
@@ -410,14 +428,33 @@ select is(
   )::text,
   'an authenticated intake owner receives a safe storage-api cleanup verdict after publish'
 );
-reset role;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000002'::uuid
+);
 select set_config('storage.allow_delete_query', 'on', true);
-delete from storage.objects as object
- where object.bucket_id = 'our-days-intake'
-   and object.name = :'processing_object_path';
-set local role authenticated;
+select is(
+  (with removed as (
+    delete from storage.objects as object
+     where object.bucket_id = 'our-days-intake'
+       and object.name = :'processing_object_path'
+    returning 1
+  ) select count(*)::bigint from removed),
+  0::bigint,
+  'storage delete policy blocks deleting another requester intake object'
+);
 select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000001'::uuid
+);
+select set_config('storage.allow_delete_query', 'on', true);
+select is(
+  (with removed as (
+    delete from storage.objects as object
+     where object.bucket_id = 'our-days-intake'
+       and object.name = :'processing_object_path'
+    returning 1
+  ) select count(*)::bigint from removed),
+  1::bigint,
+  'storage delete policy allows the intake owner to delete after publish is complete'
 );
 select is(
   (select count(*)::bigint from public.list_my_photo_intakes(

@@ -108,7 +108,10 @@ describe("private photo processing route", () => {
       return { data: null, error: { message: `Unexpected RPC: ${name}` } };
     });
     mocks.process.mockResolvedValue(undefined);
-    mocks.remove.mockResolvedValue({ data: [], error: null });
+    mocks.remove.mockResolvedValue({
+      data: [{ name: intakeObjectPath }],
+      error: null,
+    });
     mocks.storageFrom.mockImplementation((bucket: string) => ({
       remove:
         bucket === "our-days-intake"
@@ -280,6 +283,42 @@ describe("private photo processing route", () => {
     expect(response.status).toBe(200);
     expect(mocks.storageFrom).toHaveBeenCalledWith("our-days-intake");
     expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+  });
+
+  it("reports cleanup-not-removed when storage removal deletes nothing", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const infoSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    mocks.remove.mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    try {
+      const response = await request();
+      expect(response.status).toBe(200);
+      expect(mocks.remove).toHaveBeenCalledWith([intakeObjectPath]);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[photo-process] cleanup-not-removed",
+        expect.objectContaining({
+          bucketId: "our-days-intake",
+          intakeId,
+          momentId,
+          objectPath: intakeObjectPath,
+        }),
+      );
+      expect(
+        infoSpy.mock.calls.some(
+          ([message]) => message === "[photo-process] intake cleanup removed",
+        ),
+      ).toBe(false);
+    } finally {
+      warnSpy.mockRestore();
+      infoSpy.mockRestore();
+    }
   });
 
   it("uses the same neutral response when the session lacks exact access", async () => {

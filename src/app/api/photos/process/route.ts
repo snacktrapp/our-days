@@ -90,11 +90,30 @@ async function cleanupPublishedIntake(
   }
 
   try {
-    const { error: removeError } = await supabase.storage
+    const { data: removedRows, error: removeError } = await supabase.storage
       .from(cleanup.bucket_id)
       .remove([cleanup.object_path]);
     if (removeError) {
       console.warn("[photo-process] intake cleanup remove failed", {
+        bucketId: cleanup.bucket_id,
+        intakeId,
+        momentId,
+        objectPath: cleanup.object_path,
+        reason: cleanup.reason,
+        workerVersion: PHOTO_WORKER_VERSION,
+      });
+      return;
+    }
+    const removedPaths = (removedRows ?? [])
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        if ("name" in row && typeof row.name === "string") return row.name;
+        if ("path" in row && typeof row.path === "string") return row.path;
+        return null;
+      })
+      .filter((path): path is string => Boolean(path));
+    if (!removedPaths.includes(cleanup.object_path)) {
+      console.warn("[photo-process] cleanup-not-removed", {
         bucketId: cleanup.bucket_id,
         intakeId,
         momentId,

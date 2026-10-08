@@ -234,6 +234,29 @@ as $$
   order by intake.requested_at desc, intake.id;
 $$;
 
+create policy our_days_intake_delete_verified_published_owner
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'our-days-intake'
+  and owner_id = (select auth.uid()::text)
+  and exists (
+    select 1
+      from regexp_matches(
+        name,
+        '^intake/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$',
+        'i'
+      ) as path_parts(parts)
+      cross join lateral private.cleanup_published_photo_intake(
+        (path_parts.parts)[1]::uuid
+      ) as cleanup
+     where cleanup.safe_to_delete
+       and cleanup.bucket_id = bucket_id
+       and cleanup.object_path = name
+  )
+);
+
 revoke all on function private.cleanup_published_photo_intake(uuid)
   from public, anon, authenticated, service_role;
 revoke all on function public.cleanup_published_photo_intake(uuid)
