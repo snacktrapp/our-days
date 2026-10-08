@@ -313,8 +313,8 @@ select is(
   (select private.photo_intake_cleanup_is_safe(
     :'processing_intake_id'::uuid,
     :'processing_object_path'
-  )::text),
-  'f'::text,
+  )),
+  false,
   'the publish-safe helper stays false before intake publication completes'
 );
 select is(
@@ -325,9 +325,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path'
       )
-    )::text
+    )
   ),
-  'f'::text,
+  false,
   'an object owner cannot satisfy intake DELETE policy before publish is complete'
 );
 reset role;
@@ -360,8 +360,8 @@ select pg_temp.set_lifecycle_user(
   '10000000-0000-4000-8000-000000000099'::uuid
 );
 select is(
-  (select private.current_user_is_photo_validator()::text),
-  't'::text,
+  (select private.current_user_is_photo_validator()),
+  true,
   'the allowlisted worker identity satisfies the validator helper'
 );
 select is(
@@ -372,9 +372,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path'
       )
-    )::text
+    )
   ),
-  'f'::text,
+  false,
   'worker identity still cannot satisfy intake DELETE policy before publish is complete'
 );
 
@@ -403,7 +403,7 @@ insert into storage.objects (
     'lease_attempt_id', :'processing_validation_lease_attempt_id',
     'expected_mime_type', 'image/jpeg',
     'expected_size_bytes', 12,
-    'expected_sha256', repeat('a', 64),
+    'expected_sha256', repeat('b', 64),
     'verification_profile_version', 1
   )
 );
@@ -414,7 +414,7 @@ select public.complete_photo_validation(
   '',
   'image/jpeg',
   12,
-  repeat('a', 64),
+  repeat('b', 64),
   4,
   3,
   3,
@@ -499,8 +499,8 @@ select is(
   (select private.photo_intake_cleanup_is_safe(
     :'processing_intake_id'::uuid,
     :'processing_object_path'
-  )::text),
-  't'::text,
+  )),
+  true,
   'the publish-safe helper turns true once original and display publication are complete'
 );
 select is(
@@ -511,9 +511,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path'
       )
-    )::text
+    )
   ),
-  'f'::text,
+  false,
   'an unrelated authenticated user cannot satisfy the intake DELETE policy after publish'
 );
 select pg_temp.set_lifecycle_user(
@@ -527,9 +527,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path'
       )
-    )::text
+    )
   ),
-  'f'::text,
+  false,
   'the intake object owner still cannot satisfy the DELETE policy after publish'
 );
 select pg_temp.set_lifecycle_user(
@@ -550,9 +550,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path'
       )
-    )::text
+    )
   ),
-  't'::text,
+  true,
   'the worker satisfies the intake DELETE policy helper predicates for a verified-published intake'
 );
 select is(
@@ -563,9 +563,9 @@ select is(
         :'processing_intake_id'::uuid,
         :'processing_object_path' || '-wrong-context'
       )
-    )::text
+    )
   ),
-  'f'::text,
+  false,
   'even the worker fails the intake DELETE policy helper predicates for a mismatched object path'
 );
 reset role;
