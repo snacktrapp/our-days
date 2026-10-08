@@ -80,6 +80,7 @@ function localToken(userId: string, jwtSecret: string) {
       iat: now,
       iss: "supabase-demo",
       role: "authenticated",
+      session_id: userId,
       sub: userId,
     }),
   ).toString("base64url");
@@ -324,6 +325,18 @@ describe.skipIf(!enabled)("local invitation provisioning and delivery", () => {
     queryDatabase(`
       insert into private.invitation_delivery_worker_allowlist (auth_user_id)
       values ('${deliveryId}'::uuid)
+    `);
+    // PostgREST rejects authenticated calls unless auth.sessions matches
+    // the JWT session_id (private.enforce_live_data_api_session).
+    queryDatabase(`
+      insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+      select auth_user.id, auth_user.id, statement_timestamp(),
+        statement_timestamp(), statement_timestamp() + interval '1 day'
+        from auth.users as auth_user
+      on conflict (id) do update
+        set user_id = excluded.user_id,
+            updated_at = excluded.updated_at,
+            not_after = excluded.not_after
     `);
     organizerToken = localToken(ORGANIZER_A, jwtSecret);
     provisionerToken = await signInWithPassword(
