@@ -138,4 +138,31 @@ describe("prepareVideoUploadFile", () => {
       }),
     );
   });
+
+  it("falls back to the original file when supported compression fails under the backstop", async () => {
+    const source = videoFile(120 * 1024 * 1024, "video/quicktime");
+    const compress = vi.fn(async () => {
+      throw new VideoUploadError(
+        "That clip is too big to share from this phone. Trim it in Photos or pick a shorter clip.",
+        false,
+      );
+    });
+    await expect(
+      prepareVideoUploadFile(
+        {
+          durationMs: 30_000,
+          file: source,
+          height: 1080,
+          width: 1920,
+        },
+        {
+          compress,
+          resolveSupport: () => compressionSupport,
+        },
+      ),
+    ).resolves.toEqual({
+      file: source,
+      compressed: false,
+    });
+  });
 });

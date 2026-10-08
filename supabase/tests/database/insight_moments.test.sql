@@ -227,7 +227,7 @@ select throws_ok(
     tagged_person_ids := '{}'::uuid[],
     occurred_on := '2026-08-28',
     expected_mime_type := 'video/mp4',
-    expected_size_bytes := 104857601,
+    expected_size_bytes := 134217729,
     duration_ms := 17000,
     occurred_at := null,
     occurred_timezone := null,

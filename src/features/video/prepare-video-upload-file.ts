@@ -27,6 +27,7 @@ const preferredRecorderMimeTypes = [
 ] as const;
 
 type CaptureMethod = "captureStream" | "webkitCaptureStream";
+type AudioContextConstructor = new () => AudioContext;
 
 export type VideoCompressionSupport = Readonly<{
   captureMethod: CaptureMethod;
@@ -166,6 +167,24 @@ function sourceStream(video: HTMLVideoElement, method: CaptureMethod) {
   } catch {
     return null;
   }
+}
+
+function webAudioContextConstructor(): AudioContextConstructor | null {
+  if (typeof window === "undefined") return null;
+  const context = (
+    window as Window &
+      typeof globalThis & {
+        webkitAudioContext?: AudioContextConstructor;
+      }
+  ).AudioContext;
+  if (typeof context === "function") return context;
+  const webkitContext = (
+    window as Window &
+      typeof globalThis & {
+        webkitAudioContext?: AudioContextConstructor;
+      }
+  ).webkitAudioContext;
+  return typeof webkitContext === "function" ? webkitContext : null;
 }
 
 function tunedBitrates(durationMs: number) {
@@ -318,11 +337,17 @@ async function compressWithMediaRecorder(
   const url = URL.createObjectURL(input.file);
   const video = document.createElement("video");
   video.preload = "auto";
+  video.muted = true;
+  video.defaultMuted = true;
   video.playsInline = true;
+  video.volume = 0;
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
   video.src = url;
 
+  let audioContext: AudioContext | null = null;
+  let audioNode: MediaElementAudioSourceNode | null = null;
+  let audioDestination: MediaStreamAudioDestinationNode | null = null;
   let recorder: MediaRecorder | null = null;
   let waitForRecorderStop: Promise<void> | null = null;
   let onRecorderData: ((event: BlobEvent) => void) | null = null;
@@ -339,7 +364,25 @@ async function compressWithMediaRecorder(
     if (!source) {
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
+    const AudioContextCtor = webAudioContextConstructor();
+    if (!AudioContextCtor) {
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+    }
+    try {
+      audioContext = new AudioContextCtor();
+      audioNode = audioContext.createMediaElementSource(video);
+      audioDestination = audioContext.createMediaStreamDestination();
+      audioNode.connect(audioDestination);
+      await audioContext.resume();
+    } catch {
+      await audioContext?.close().catch(() => undefined);
+      audioContext = null;
+      audioNode = null;
+      audioDestination = null;
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+    }
 
+    let videoCaptureStream: MediaStream;
     if (input.support.canvasCapture) {
       const canvas = document.createElement("canvas");
       const target = downscaledDimensions(input.width, input.height);
@@ -347,8 +390,7 @@ async function compressWithMediaRecorder(
       canvas.height = target.height;
       const context = canvas.getContext("2d");
       if (!context) throw new VideoUploadError(fallbackPrepareMessage);
-      output = canvas.captureStream(30);
-      for (const track of source.getAudioTracks()) output.addTrack(track);
+      videoCaptureStream = canvas.captureStream(30);
       let raf = 0;
       const draw = () => {
         context.drawImage(video, 0, 0, target.width, target.height);
@@ -359,14 +401,25 @@ async function compressWithMediaRecorder(
         if (raf) window.cancelAnimationFrame(raf);
       };
     } else {
-      output = source;
+      videoCaptureStream = source;
+    }
+
+    const captureVideoTrack = videoCaptureStream.getVideoTracks()[0];
+    if (!captureVideoTrack) {
+      throw new VideoUploadError(fallbackPrepareMessage);
+    }
+    output = new MediaStream();
+    output.addTrack(captureVideoTrack);
+    const captureAudioTrack = audioDestination.stream.getAudioTracks()[0];
+    if (captureAudioTrack) {
+      output.addTrack(captureAudioTrack);
     }
 
     recorder = createRecorder(
       output,
       input.support.mimeType,
       input.durationMs,
-      source.getAudioTracks().length > 0,
+      output.getAudioTracks().length > 0,
     );
     const activeRecorder = recorder;
     waitForRecorderStop = new Promise<void>((resolve, reject) => {
@@ -415,6 +468,15 @@ async function compressWithMediaRecorder(
     }
     return file;
   } finally {
+    if (audioNode) {
+      audioNode.disconnect();
+    }
+    if (audioDestination) {
+      audioDestination.disconnect();
+    }
+    if (audioContext) {
+      await audioContext.close().catch(() => undefined);
+    }
     if (recorder) {
       if (onRecorderData) {
         recorder.removeEventListener("dataavailable", onRecorderData);

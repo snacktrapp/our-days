@@ -7,6 +7,14 @@
 -- are enforced immediately.
 
 alter table private.video_upload_requests
+  drop constraint if exists video_upload_requests_size_valid,
+  drop constraint if exists video_upload_requests_duration_valid;
+
+alter table public.moment_videos
+  drop constraint if exists moment_videos_size_valid,
+  drop constraint if exists moment_videos_duration_valid;
+
+alter table private.video_upload_requests
   add constraint video_upload_requests_size_cap_128mb check (
     expected_size_bytes between 1 and 134217728
   ) not valid;
