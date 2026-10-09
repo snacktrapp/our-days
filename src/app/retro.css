@@ -137,9 +137,46 @@
   font-variant-numeric: tabular-nums;
 }
 
-:root[data-appearance="retro"] :focus-visible {
+/* Keyboard navigation only. iOS Safari and desktop WebKit treat taps and
+   element.focus() (sheet titles, focus restore when a dialog closes) as
+   :focus-visible, which painted this accent box. data-modality is set in
+   the pre-paint script before focus moves. */
+:root[data-appearance="retro"][data-modality="keyboard"]
+  :focus-visible:not([tabindex="-1"]):not(dialog) {
   outline: 1px solid var(--accent) !important;
   outline-offset: 2px;
+}
+
+:root[data-appearance="retro"] :focus:not(:focus-visible),
+:root[data-appearance="retro"] [tabindex="-1"]:focus,
+:root[data-appearance="retro"] [tabindex="-1"]:focus-visible,
+:root[data-appearance="retro"] dialog:focus,
+:root[data-appearance="retro"] dialog:focus-visible,
+:root[data-appearance="retro"] .activity-sheet:focus,
+:root[data-appearance="retro"] .activity-sheet:focus-visible,
+:root[data-appearance="retro"] .composer-sheet:focus,
+:root[data-appearance="retro"] .composer-sheet:focus-visible,
+:root[data-appearance="retro"] .activity-sheet-bar h2:focus,
+:root[data-appearance="retro"] .activity-sheet-bar h2:focus-visible,
+:root[data-appearance="retro"] .composer-sheet h2:focus,
+:root[data-appearance="retro"] .composer-sheet h2:focus-visible,
+:root[data-appearance="retro"] .circle-management-sheet-bar h2:focus,
+:root[data-appearance="retro"] .circle-management-sheet-bar h2:focus-visible,
+:root[data-appearance="retro"][data-modality="keyboard"]
+  .activity-sheet-bar
+  h2:focus-visible,
+:root[data-appearance="retro"][data-modality="keyboard"]
+  .composer-sheet
+  h2:focus-visible,
+:root[data-appearance="retro"][data-modality="keyboard"]
+  .circle-management-sheet-bar
+  h2:focus-visible,
+:root[data-appearance="retro"][data-modality="keyboard"]
+  section.activity-sheet:focus-visible,
+:root[data-appearance="retro"][data-modality="keyboard"]
+  section.composer-sheet:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 :root[data-appearance="retro"] .private-entry-content a,
