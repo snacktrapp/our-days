@@ -111,6 +111,70 @@ export type Database = {
           },
         ];
       };
+      content_mentions: {
+        Row: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at: string;
+          end_offset: number;
+          id: string;
+          mentioned_user_id: string;
+          moment_id: string;
+          note_id: string | null;
+          notified_at: string | null;
+          removed_at: string | null;
+          start_offset: number;
+        };
+        Insert: {
+          author_membership_id: string;
+          circle_id: string;
+          created_at?: string;
+          end_offset: number;
+          id?: string;
+          mentioned_user_id: string;
+          moment_id: string;
+          note_id?: string | null;
+          notified_at?: string | null;
+          removed_at?: string | null;
+          start_offset: number;
+        };
+        Update: {
+          author_membership_id?: string;
+          circle_id?: string;
+          created_at?: string;
+          end_offset?: number;
+          id?: string;
+          mentioned_user_id?: string;
+          moment_id?: string;
+          note_id?: string | null;
+          notified_at?: string | null;
+          removed_at?: string | null;
+          start_offset?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "content_mentions_author_fkey";
+            columns: ["circle_id", "author_membership_id"];
+            isOneToOne: false;
+            referencedRelation: "circle_memberships";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "content_mentions_moment_fkey";
+            columns: ["circle_id", "moment_id"];
+            isOneToOne: false;
+            referencedRelation: "moments";
+            referencedColumns: ["circle_id", "id"];
+          },
+          {
+            foreignKeyName: "content_mentions_note_fkey";
+            columns: ["circle_id", "note_id"];
+            isOneToOne: false;
+            referencedRelation: "moment_notes";
+            referencedColumns: ["circle_id", "id"];
+          },
+        ];
+      };
       moment_circles: {
         Row: {
           circle_id: string;
@@ -797,39 +861,39 @@ export type Database = {
           state: string;
         }[];
       };
-      claim_moment_push_delivery: {
-        Args: { requested_moment_id: string };
-        Returns: boolean;
-      };
       claim_mention_push_deliveries: {
         Args: { requested_moment_id: string; requested_note_id?: string };
         Returns: {
           actor_name: string;
           auth: string;
-          circle_name: string | null;
+          circle_name: string;
           endpoint: string;
           moment_id: string;
-          moment_kind: string | null;
-          note_id: string | null;
+          moment_kind: string;
+          note_id: string;
           p256dh: string;
-          reaction_type: string | null;
-          snippet: string | null;
-          visible_circle_id: string | null;
+          reaction_type: string;
+          snippet: string;
+          visible_circle_id: string;
         }[];
+      };
+      claim_moment_push_delivery: {
+        Args: { requested_moment_id: string };
+        Returns: boolean;
       };
       claim_note_reaction_push_deliveries: {
         Args: { requested_note_id: string };
         Returns: {
           actor_name: string;
           auth: string;
-          circle_name: string | null;
+          circle_name: string;
           endpoint: string;
           moment_id: string;
-          moment_kind: string | null;
+          moment_kind: string;
           note_id: string;
           p256dh: string;
-          reaction_type: string | null;
-          visible_circle_id: string | null;
+          reaction_type: string;
+          visible_circle_id: string;
         }[];
       };
       claim_photo_card_backfill_lease: {
@@ -1067,14 +1131,15 @@ export type Database = {
         Returns: undefined;
       };
       delete_entry_draft: { Args: { draft_id: string }; Returns: boolean };
+      delete_expo_push_token: {
+        Args: { requested_token: string };
+        Returns: boolean;
+      };
       delete_web_push_subscription: {
         Args: { endpoint: string };
         Returns: boolean;
       };
-      enrich_timeline_page: {
-        Args: { moment_ids: string[] };
-        Returns: Json;
-      };
+      enrich_timeline_page: { Args: { moment_ids: string[] }; Returns: Json };
       finalize_video_moment: { Args: { request_id: string }; Returns: string };
       flag_photo_display_derivative_for_review: {
         Args: {
@@ -1235,6 +1300,22 @@ export type Database = {
           membership_id: string;
         }[];
       };
+      list_expo_push_deliveries: {
+        Args: {
+          requested_activity_id: string;
+          requested_activity_kind: string;
+          requested_note_id?: string;
+        };
+        Returns: {
+          actor_name: string;
+          moment_id: string;
+          moment_kind: string;
+          note_id: string;
+          reaction_type: string;
+          snippet: string;
+          token: string;
+        }[];
+      };
       list_manageable_trashed_written_moments: {
         Args: { circle_id: string };
         Returns: {
@@ -1331,24 +1412,15 @@ export type Database = {
         }[];
       };
       list_my_mention_notifications: {
-        Args: Record<PropertyKey, never>;
+        Args: never;
         Returns: {
           actor_membership_id: string;
           actor_name: string;
           created_at: string;
           mention_id: string;
           moment_id: string;
-          note_id: string | null;
+          note_id: string;
           snippet: string;
-        }[];
-      };
-      moment_push_delivery_status: {
-        Args: { requested_moment_id: string };
-        Returns: {
-          already_notified: boolean;
-          fallback_elapsed: boolean;
-          media_ready: boolean;
-          should_send: boolean;
         }[];
       };
       list_my_photo_intakes: {
@@ -1385,10 +1457,7 @@ export type Database = {
         }[];
       };
       list_photo_card_backfill_candidates: {
-        Args: {
-          after_display_derivative_id: string;
-          batch_limit: number;
-        };
+        Args: { after_display_derivative_id: string; batch_limit: number };
         Returns: {
           bucket_id: string;
           display_derivative_id: string;
@@ -1446,11 +1515,11 @@ export type Database = {
         Args: { moment_ids: string[] };
         Returns: {
           active: boolean;
-          display_name: string | null;
+          display_name: string;
           end_offset: number;
           mentioned_user_id: string;
           moment_id: string;
-          note_id: string | null;
+          note_id: string;
           start_offset: number;
         }[];
       };
@@ -1515,6 +1584,15 @@ export type Database = {
           state: string;
         }[];
       };
+      moment_push_delivery_status: {
+        Args: { requested_moment_id: string };
+        Returns: {
+          already_notified: boolean;
+          fallback_elapsed: boolean;
+          media_ready: boolean;
+          should_send: boolean;
+        }[];
+      };
       preflight_invitation: {
         Args: { email: string; token: string };
         Returns: boolean;
@@ -1539,19 +1617,6 @@ export type Database = {
           token_sha256_hex: string;
         }[];
       };
-      record_photo_card_rendition: {
-        Args: {
-          card_width: number;
-          display_derivative_id: string;
-          output_height: number;
-          output_sha256_hex: string;
-          output_size_bytes: number;
-          output_width: number;
-          storage_object_id: string;
-          storage_object_version: string;
-        };
-        Returns: string;
-      };
       read_invitation_delivery_auth: {
         Args: { invitation_job_id: string };
         Returns: {
@@ -1564,6 +1629,19 @@ export type Database = {
           target_auth_user_id: string;
           token_sha256_hex: string;
         }[];
+      };
+      record_photo_card_rendition: {
+        Args: {
+          card_width: number;
+          display_derivative_id: string;
+          output_height: number;
+          output_sha256_hex: string;
+          output_size_bytes: number;
+          output_width: number;
+          storage_object_id: string;
+          storage_object_version: string;
+        };
+        Returns: string;
       };
       reject_photo_display_derivative: {
         Args: {
@@ -1718,6 +1796,10 @@ export type Database = {
         };
         Returns: string;
       };
+      save_expo_push_token: {
+        Args: { requested_token: string };
+        Returns: string;
+      };
       save_web_push_subscription: {
         Args: { auth: string; endpoint: string; p256dh: string };
         Returns: string;
@@ -1788,18 +1870,18 @@ export type Database = {
           requested_not_before?: string;
         };
         Returns: {
-          actor_name: string | null;
-          auth: string | null;
+          actor_name: string;
+          auth: string;
           channel: string;
-          circle_name: string | null;
-          destination: string | null;
+          circle_name: string;
+          destination: string;
           kind: string;
           moment_id: string;
-          moment_kind: string | null;
-          note_id: string | null;
-          p256dh: string | null;
-          snippet: string | null;
-          visible_circle_id: string | null;
+          moment_kind: string;
+          note_id: string;
+          p256dh: string;
+          snippet: string;
+          visible_circle_id: string;
         }[];
       };
       sweep_expired_invitation_email_requests: {
