@@ -180,7 +180,7 @@ describe("VideoFeasibilityPanel", () => {
       1080,
       "duration could not be read",
     ],
-    ["too long", 40.6, 1920, 1080, "40 seconds or less"],
+    ["too long", 40.5, 1920, 1080, "40 seconds or less"],
     ["missing dimensions", 20, 0, 0, "picture size is not supported"],
     ["oversized dimensions", 20, 4096, 2304, "picture size is not supported"],
   ])(

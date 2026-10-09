@@ -1,5 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const tusHarness = vi.hoisted(() => ({
+  onStart: null as
+    null | ((options: { onError: (error: Error) => void }) => void),
+}));
+
+vi.mock("tus-js-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("tus-js-client")>();
+  return {
+    ...actual,
+    Upload: class {
+      options: { onError: (error: Error) => void };
+      url: string | null = null;
+
+      constructor(
+        _file: unknown,
+        options: { onError: (error: Error) => void },
+      ) {
+        this.options = options;
+      }
+
+      start() {
+        tusHarness.onStart?.(this.options);
+      }
+
+      abort() {
+        return Promise.resolve();
+      }
+    },
+  };
+});
+
 vi.mock("@/features/family-settings/web-push-actions", () => ({
   deliverPublishedMomentPushAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
@@ -73,6 +104,7 @@ function connectedClient() {
 
 describe("connected private video upload", () => {
   beforeEach(() => {
+    tusHarness.onStart = null;
     vi.stubEnv(
       "NEXT_PUBLIC_SUPABASE_URL",
       "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
@@ -194,8 +226,8 @@ describe("connected private video upload", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
-  it("accepts 40 seconds and rejects 41 seconds", async () => {
-    expect(maximumVideoDurationMs).toBe(40_000);
+  it("accepts durations under 40.5 seconds and rejects 40.5+ seconds", async () => {
+    expect(maximumVideoDurationMs).toBe(40_499);
     const { client, rpc } = connectedClient();
     const upload = vi.fn(async (input) => {
       input.onStage({ state: "uploading", progress: 1 });
@@ -211,10 +243,13 @@ describe("connected private video upload", () => {
       );
 
     await expect(run(40_000)).resolves.toEqual({ momentId });
+    await expect(run(40_008)).resolves.toEqual({ momentId });
+    await expect(run(40_490)).resolves.toEqual({ momentId });
     expect(rpc).toHaveBeenCalledWith(
       "reserve_video_moment",
-      expect.objectContaining({ duration_ms: 40_000 }),
+      expect.objectContaining({ duration_ms: 40_490 }),
     );
+    await expect(run(40_500)).rejects.toThrow("40 seconds or less");
     await expect(run(41_000)).rejects.toThrow("40 seconds or less");
   });
 
@@ -252,6 +287,98 @@ describe("connected private video upload", () => {
       mentioned_user_ids: [mentionedUserId],
       mention_starts: [0],
       mention_ends: [6],
+    });
+  });
+
+  it("marks a reused reservation as retryable without a generic reserve failure", async () => {
+    const { client, rpc } = connectedClient();
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "reserve_video_moment") {
+        return {
+          data: null,
+          error: {
+            code: "22023",
+            message: "Video upload request was reused",
+          },
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({
+      message: "That video moment could not be prepared.",
+      name: "VideoUploadError",
+      requestReused: true,
+      retryable: true,
+    });
+  });
+
+  it("marks a non-reused reserve rejection as not retryable", async () => {
+    const { client, rpc } = connectedClient();
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "reserve_video_moment") {
+        return {
+          data: null,
+          error: {
+            code: "22023",
+            message: "Video moment could not be prepared",
+          },
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({
+      message: "That video moment could not be prepared.",
+      name: "VideoUploadError",
+      requestReused: false,
+      retryable: false,
+    });
+  });
+
+  it("maps an offline tus transfer to the connection-dropped reason", async () => {
+    const { DetailedError } = await import("tus-js-client");
+    const { client } = connectedClient();
+    tusHarness.onStart = (options) => {
+      const cause = new TypeError("Failed to fetch");
+      const offline = new DetailedError(
+        `tus: failed to upload chunk at offset 0, caused by ${cause.toString()}, originated from request (method: PATCH, url: https://aaaaaaaaaaaaaaaaaaaa.storage.supabase.co/storage/v1/upload/resumable, response code: n/a, response text: n/a, request id: n/a)`,
+      );
+      offline.causingError = cause;
+      offline.originalResponse = null;
+      options.onError(offline);
+    };
+
+    await expect(
+      uploadVideoMoment(
+        videoFile(),
+        draft,
+        createVideoUploadAttempt(),
+        new AbortController().signal,
+        vi.fn(),
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({
+      message: "Your connection dropped before the upload finished. Try again.",
+      retryable: true,
     });
   });
 });

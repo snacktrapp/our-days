@@ -85,8 +85,24 @@ describe("inspectVideoFile", () => {
     });
   });
 
-  it("rejects a clip longer than 40 seconds", async () => {
-    stubInspectableVideo({ duration: 41 });
+  it.each([
+    ["exactly 40.0 seconds", 40, 40_000],
+    ["40.008 seconds", 40.008, 40_008],
+    ["40.49 seconds", 40.49, 40_490],
+  ])("accepts %s", async (_label, duration, durationMs) => {
+    stubInspectableVideo({ duration });
+    await expect(
+      inspectVideoFile(
+        new File([new Uint8Array(24)], "near-limit.mp4", { type: "video/mp4" }),
+      ),
+    ).resolves.toMatchObject({ durationMs });
+  });
+
+  it.each([
+    ["exactly 40.5 seconds", 40.5],
+    ["41 seconds", 41],
+  ])("rejects %s", async (_label, duration) => {
+    stubInspectableVideo({ duration });
     await expect(
       inspectVideoFile(
         new File([new Uint8Array(24)], "long.mp4", { type: "video/mp4" }),

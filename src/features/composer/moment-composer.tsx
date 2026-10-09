@@ -40,12 +40,12 @@ import { normalizeMomentAudience } from "@/features/moments/moment-audience";
 import { type PhotoUploadAttempt, type PhotoUploadStage } from "./photo-upload";
 import {
   acceptedVideoMime,
-  maximumVideoDurationMs,
   type VideoUploadAttempt,
   type VideoUploadStage,
 } from "./video-upload";
 import {
   maximumVideoSourceBytes,
+  maximumVideoDurationSecondsExclusive,
   overDurationVideoMessage,
   sourceVideoTooLargeMessage,
 } from "@/features/video/video-upload-policy";
@@ -951,12 +951,12 @@ export function MomentComposer({
       );
       return;
     }
-    const durationMs = Math.ceil(duration * 1000);
-    if (durationMs > maximumVideoDurationMs) {
+    if (duration >= maximumVideoDurationSecondsExclusive) {
       rejectUndecodablePhoto(expectedUrl);
       setPhotoError(overDurationVideoMessage);
       return;
     }
+    const durationMs = Math.floor(duration * 1000);
     if (
       videoWidth <= 0 ||
       videoHeight <= 0 ||

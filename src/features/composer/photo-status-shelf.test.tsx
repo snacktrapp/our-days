@@ -293,10 +293,67 @@ describe("PhotoStatusShelf", () => {
     render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
 
     expect(screen.getByText("Upload failed")).toBeVisible();
+    expect(screen.getByText("That photo could not be uploaded.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.queryByText("Should not become a feed card.")).toBeNull();
+  });
+
+  it("shows Dismiss only when a failure is not retryable", async () => {
+    mocks.rpc.mockResolvedValue({ data: [], error: null });
+    const failedUpload = {
+      circleId,
+      kind: "video" as const,
+      body: "Porch light",
+      occurredOn: "2026-09-01",
+      occurredTime: "",
+      journalPersonId: "person-1",
+      journalPersonName: "Brian",
+      journalPersonInitial: "B",
+      journalPersonAccent: "teal" as const,
+    };
+    addOptimisticMediaUpload({
+      ...failedUpload,
+      id: "non-retryable-video",
+      previewUrl: "blob:non-retryable",
+      retryable: false,
+      stage: {
+        state: "failed",
+        message: "That video moment could not be prepared.",
+      },
+    });
+
+    const view = render(
+      <PhotoStatusShelf circleId={circleId} today="2026-09-01" />,
+    );
+    expect(
+      screen.getByText("That video moment could not be prepared."),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+    view.unmount();
+    clearOptimisticMediaUploads();
+    addOptimisticMediaUpload({
+      ...failedUpload,
+      id: "retryable-video",
+      previewUrl: "blob:retryable",
+      retryable: true,
+      stage: {
+        state: "failed",
+        message:
+          "Your connection dropped before the upload finished. Try again.",
+      },
+    });
+    render(<PhotoStatusShelf circleId={circleId} today="2026-09-01" />);
+    expect(
+      screen.getByText(
+        "Your connection dropped before the upload finished. Try again.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeVisible();
   });
 
   it("dismisses a retryable failed upload without retrying", async () => {

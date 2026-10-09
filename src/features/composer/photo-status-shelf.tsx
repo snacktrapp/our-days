@@ -495,10 +495,11 @@ function uploadChip(
     !failed && queuedCount > 0
       ? `${queuedCount} more ${queuedCount === 1 ? "post is" : "posts are"} waiting to upload.`
       : null;
+  const failureDetail = failed ? upload.stage.message : null;
   return {
     busy: !failed && upload.stage.state !== "published",
     label: optimisticUploadChipLabel(upload),
-    detail: waitingDetail,
+    detail: failureDetail ?? waitingDetail,
     progress: optimisticUploadChipProgress(upload),
     primaryAction:
       upload.stage.state === "published"

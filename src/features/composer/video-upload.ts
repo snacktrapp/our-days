@@ -74,12 +74,19 @@ export type VideoMomentDraft = Readonly<{
 export class VideoUploadError extends Error {
   readonly retryable: boolean;
   readonly discardUpload: boolean;
+  readonly requestReused: boolean;
 
-  constructor(message: string, retryable = true, discardUpload = false) {
+  constructor(
+    message: string,
+    retryable = true,
+    discardUpload = false,
+    requestReused = false,
+  ) {
     super(message);
     this.name = "VideoUploadError";
     this.retryable = retryable;
     this.discardUpload = discardUpload;
+    this.requestReused = requestReused;
   }
 }
 
@@ -182,9 +189,34 @@ async function currentSession(
   };
 }
 
+const connectionDroppedMessage =
+  "Your connection dropped before the upload finished. Try again.";
+
 function tusResponseStatus(error: Error | DetailedError) {
   if (!("originalResponse" in error) || !error.originalResponse) return null;
   return error.originalResponse.getStatus();
+}
+
+function isOfflineTransferFailure(error: Error | DetailedError) {
+  if (tusResponseStatus(error) != null) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return true;
+  }
+  const causing =
+    "causingError" in error && error.causingError instanceof Error
+      ? error.causingError
+      : null;
+  const text = `${error.name} ${error.message} ${causing?.name ?? ""} ${causing?.message ?? ""}`;
+  if (
+    /\b(?:failed to fetch|network ?error|offline|timed out|timeout|load failed|network connection was lost)\b/iu.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  const noResponse =
+    !("originalResponse" in error) || error.originalResponse == null;
+  return noResponse && causing instanceof TypeError;
 }
 
 /** Prefer smaller video chunks so a flaky mobile hop retries less work. */
@@ -275,7 +307,9 @@ async function uploadWithTusClient(input: {
           }
           reject(
             new VideoUploadError(
-              "The private video transfer could not be completed. Try again.",
+              isOfflineTransferFailure(error)
+                ? connectionDroppedMessage
+                : "The private video transfer could not be completed. Try again.",
             ),
           );
         });
@@ -328,6 +362,15 @@ async function uploadWithTusClient(input: {
 
 function firstRow<T>(value: readonly T[] | null) {
   return value?.[0];
+}
+
+function reservationRequestWasReused(
+  error: { code?: string; message?: string } | null,
+) {
+  return (
+    error?.code === "22023" &&
+    /video upload request was reused/iu.test(error.message ?? "")
+  );
 }
 
 async function uploadLocalVideoMoment(
@@ -454,6 +497,20 @@ export async function uploadVideoMoment(
     },
   );
   const reservation = firstRow(reservationRows);
+  if (reservationRequestWasReused(reservationError)) {
+    throw new VideoUploadError(
+      "That video moment could not be prepared.",
+      true,
+      false,
+      true,
+    );
+  }
+  if (reservationError?.code === "22023") {
+    throw new VideoUploadError(
+      "That video moment could not be prepared.",
+      false,
+    );
+  }
   if (
     reservationError ||
     !reservation ||
