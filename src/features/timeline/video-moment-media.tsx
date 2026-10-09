@@ -149,9 +149,7 @@ export function VideoMomentMedia({
         src={moment.video.src}
         label={label}
         poster={poster}
-        preload={
-          videoNearViewport ? (shouldWarmPoster ? "auto" : "metadata") : "none"
-        }
+        preload={videoNearViewport ? "metadata" : "none"}
         controls
         playsInline
         width={width}

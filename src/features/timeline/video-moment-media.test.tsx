@@ -125,7 +125,7 @@ describe("VideoMomentMedia poster warmup", () => {
     });
     expect(screen.getByLabelText("Lex clip")).toHaveAttribute(
       "data-preload",
-      "auto",
+      "metadata",
     );
     expect(screen.getByLabelText("Lex clip")).toHaveAttribute(
       "data-has-ready-frame",
@@ -173,7 +173,7 @@ describe("VideoMomentMedia poster warmup", () => {
     );
   });
 
-  it("warms posters when the server has no poster yet", async () => {
+  it("uses metadata preload on the visible player while poster warm-up runs", async () => {
     render(
       <VideoMomentMedia
         moment={{
@@ -205,7 +205,7 @@ describe("VideoMomentMedia poster warmup", () => {
     });
     expect(screen.getByLabelText("Missing poster clip")).toHaveAttribute(
       "data-preload",
-      "auto",
+      "metadata",
     );
   });
 });
