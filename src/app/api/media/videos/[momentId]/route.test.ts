@@ -176,13 +176,11 @@ describe("private video delivery route", () => {
         headers: { "content-type": "video/mp4" },
       }),
     );
-    const response = await request("bytes=0-1");
-    expect(response.status).toBe(404);
-    expect(response.headers.get("cache-control")).toBe(
-      "private, no-store, max-age=0",
-    );
-    expect(response.headers.get("content-range")).toBeNull();
-    expect(await response.text()).toBe("");
+    const response = await request("bytes=0-");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe("bytes 0-9/10");
+    expect(response.headers.get("content-length")).toBe("10");
+    await expect(response.arrayBuffer()).rejects.toThrow(/ended early/u);
   });
 
   it("fails closed when the private descriptor or upstream shape changes", async () => {
@@ -460,6 +458,142 @@ describe("private video delivery route", () => {
     expect(pulled).toBeGreaterThanOrEqual(windowBytes);
     expect(pulled).toBeLessThanOrEqual(windowBytes + chunkSize);
     expect(pulled).toBeLessThan(size);
+  });
+
+  it("streams a bounded window when a ranged 200 omits Content-Length", async () => {
+    const size = 3_000_000;
+    const start = 4;
+    const windowBytes = 1_048_576;
+    const end = start + windowBytes - 1;
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, size_bytes: size }],
+      error: null,
+    });
+    let produced = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (produced >= start + windowBytes) {
+          controller.close();
+          return;
+        }
+        const next = Math.min(256 * 1024, start + windowBytes - produced);
+        const chunk = new Uint8Array(next);
+        if (produced === 0) chunk.set([9, 8, 7, 6]);
+        produced += next;
+        controller.enqueue(chunk);
+      },
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request(`bytes=${start}-`);
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe(
+      `bytes ${start}-${end}/${size}`,
+    );
+    expect(response.headers.get("content-length")).toBe(String(windowBytes));
+    const body = new Uint8Array(await response.arrayBuffer());
+    expect(body.byteLength).toBe(windowBytes);
+    expect(body[0]).toBe(0);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/signed",
+      expect.objectContaining({
+        headers: { Range: `bytes=${start}-${end}` },
+      }),
+    );
+  });
+
+  it.each(["bytes=10-", "bytes=10-20", "bytes=40-"])(
+    "returns 416 when %s starts at or past EOF",
+    async (range) => {
+      const response = await request(range);
+      expect(response.status).toBe(416);
+      expect(response.headers.get("content-range")).toBe("bytes */10");
+      expect(response.headers.get("cache-control")).toBe(
+        "private, no-store, max-age=0",
+      );
+      expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.rpc).toHaveBeenCalledWith("get_video_moment_delivery", {
+        moment_id: momentId,
+      });
+    },
+  );
+
+  it("clamps a bounded end past EOF to the last byte and still caps the window", async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array([4, 5, 6, 7, 8, 9, 10]), {
+        status: 206,
+        headers: {
+          "content-length": "7",
+          "content-range": "bytes 3-9/10",
+          "content-type": "video/mp4",
+        },
+      }),
+    );
+    const small = await request("bytes=3-100");
+    expect(small.status).toBe(206);
+    expect(small.headers.get("content-range")).toBe("bytes 3-9/10");
+    expect(small.headers.get("content-length")).toBe("7");
+    expect(new Uint8Array(await small.arrayBuffer())).toEqual(
+      new Uint8Array([4, 5, 6, 7, 8, 9, 10]),
+    );
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://storage.example.test/signed",
+      expect.objectContaining({ headers: { Range: "bytes=3-9" } }),
+    );
+
+    const size = 8_000_000;
+    mocks.rpc.mockResolvedValue({
+      data: [{ ...descriptor, size_bytes: size }],
+      error: null,
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(new Uint8Array(1_048_576), {
+        status: 206,
+        headers: {
+          "content-length": "1048576",
+          "content-range": `bytes 0-1048575/${size}`,
+          "content-type": "video/mp4",
+        },
+      }),
+    );
+    const capped = await request("bytes=0-9000000");
+    expect(capped.status).toBe(206);
+    expect(capped.headers.get("content-range")).toBe(`bytes 0-1048575/${size}`);
+    expect(capped.headers.get("content-length")).toBe("1048576");
+    expect(mocks.fetch).toHaveBeenLastCalledWith(
+      "https://storage.example.test/signed",
+      expect.objectContaining({ headers: { Range: "bytes=0-1048575" } }),
+    );
+  });
+
+  it("streams a non-range response when Storage omits Content-Length", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.enqueue(new Uint8Array([4, 5]));
+        controller.close();
+      },
+    });
+    mocks.fetch.mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      }),
+    );
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.has("content-length")).toBe(false);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array([1, 2, 3, 4, 5]),
+    );
+    const init = mocks.fetch.mock.calls[0]?.[1] as RequestInit;
+    expect(init.headers).toBeUndefined();
   });
 
   it("passes request.signal to the upstream fetch and fails closed when that fetch aborts", async () => {

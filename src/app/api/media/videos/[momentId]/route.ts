@@ -83,40 +83,34 @@ function contentRangeParts(response: Response) {
   };
 }
 
-function requestedByteRange(range: string, total: number) {
+function boundedByteRange(range: string, total: number) {
   const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
-  if (!match) return null;
-  let start: number;
-  let end: number;
+  if (!match || !Number.isSafeInteger(total) || total < 0) return null;
   if (match[1] === "") {
     const suffix = Number(match[2]);
+    if (total === 0) return "unsatisfiable";
     if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
-    start = Math.max(0, total - suffix);
-    end = total - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] === "" ? total - 1 : Number(match[2]);
+    const start = Math.max(0, total - suffix);
+    return {
+      start,
+      end: Math.min(total - 1, start + videoRangeWindowBytes - 1),
+    };
   }
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(end) ||
-    start < 0 ||
-    end < start ||
-    end >= total
-  ) {
-    return null;
-  }
-  return { start, end };
+  const start = Number(match[1]);
+  if (!Number.isSafeInteger(start) || start < 0) return null;
+  if (start >= total) return "unsatisfiable";
+  const requestedEnd = match[2] === "" ? total - 1 : Number(match[2]);
+  if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) return null;
+  return {
+    start,
+    end: Math.min(requestedEnd, total - 1, start + videoRangeWindowBytes - 1),
+  };
 }
 
-function boundedByteRange(range: string, total: number) {
-  const requested = requestedByteRange(range, total);
-  if (!requested) return null;
-  const end = Math.min(
-    requested.end,
-    requested.start + videoRangeWindowBytes - 1,
-  );
-  return { start: requested.start, end };
+function unsatisfiableRange(total: number) {
+  const headers = new Headers(privateNoStoreHeaders);
+  headers.set("Content-Range", `bytes */${total}`);
+  return new Response(null, { status: 416, headers });
 }
 
 function upstreamBodyStartsAt(
@@ -224,42 +218,6 @@ function boundedPartialResponse(
   });
 }
 
-async function readAtMost(body: ReadableStream<Uint8Array>, limit: number) {
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  let overflow = false;
-  try {
-    while (total < limit) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      if (value.byteLength === 0) continue;
-      if (value.byteLength > limit - total) {
-        overflow = true;
-        break;
-      }
-      chunks.push(value);
-      total += value.byteLength;
-    }
-    if (!overflow && total === limit) {
-      const extra = await reader.read();
-      if (!extra.done && extra.value && extra.value.byteLength > 0) {
-        overflow = true;
-      }
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-  if (overflow) return null;
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
-}
-
 export async function GET(
   request: Request,
   context: Readonly<{ params: Promise<{ momentId: string }> }>,
@@ -292,6 +250,9 @@ export async function GET(
     headers.set("Vary", varyWithRange());
     if (range) {
       const bounded = boundedByteRange(range, bytes.byteLength);
+      if (bounded === "unsatisfiable") {
+        return unsatisfiableRange(bytes.byteLength);
+      }
       if (!bounded) return unavailable();
       headers.set("Content-Length", String(bounded.end - bounded.start + 1));
       headers.set(
@@ -327,6 +288,7 @@ export async function GET(
     descriptor.mime_type,
   ]);
   const bounded = range ? boundedByteRange(range, expectedSize) : null;
+  if (bounded === "unsatisfiable") return unsatisfiableRange(expectedSize);
   if (range && !bounded) return unavailable();
   if (!range) {
     const match = request.headers.get("if-none-match");
@@ -384,13 +346,19 @@ export async function GET(
   if (!bounded) {
     if (
       upstream.status !== 200 ||
-      !upstream.headers.has("content-length") ||
       !contentLengthAgrees(upstream.headers, expectedSize)
     ) {
       await upstream.body.cancel();
       return unavailable();
     }
-    responseHeaders.set("Content-Length", String(contentLength));
+    if (upstream.headers.has("content-length")) {
+      const bytes = { byteLength: contentLength };
+      if (!byteSizeMatches(bytes.byteLength, expectedSize)) {
+        await upstream.body.cancel();
+        return unavailable();
+      }
+      responseHeaders.set("Content-Length", String(bytes.byteLength));
+    }
     return new Response(upstream.body, {
       status: 200,
       headers: responseHeaders,
@@ -411,31 +379,12 @@ export async function GET(
     );
   }
 
-  // Storage sometimes answers Range with a 200 of the whole object. Stream
-  // only the bounded window and cancel the remainder. A missing Content-Length
-  // is accepted only when the object fits in the window cap.
+  // Storage sometimes answers Range with a 200 of the whole object, including
+  // TUS uploads that omit Content-Length. Stream only the bounded window.
   if (
     upstream.status === 200 &&
     contentLengthAgrees(upstream.headers, expectedSize)
   ) {
-    if (!upstream.headers.has("content-length")) {
-      const cap = bounded.start + videoRangeWindowBytes;
-      if (expectedSize > cap) {
-        await upstream.body.cancel();
-        return unavailable();
-      }
-      const bytes = await readAtMost(upstream.body, expectedSize);
-      if (!bytes || !byteSizeMatches(bytes.byteLength, expectedSize)) {
-        return unavailable();
-      }
-      const sliced = bytes.subarray(bounded.start, bounded.end + 1);
-      responseHeaders.set("Content-Length", String(sliced.byteLength));
-      responseHeaders.set(
-        "Content-Range",
-        `bytes ${bounded.start}-${bounded.end}/${expectedSize}`,
-      );
-      return new Response(sliced, { status: 206, headers: responseHeaders });
-    }
     return boundedPartialResponse(
       upstream.body,
       bounded.start,
