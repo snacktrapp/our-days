@@ -1,4 +1,6 @@
-export const maximumVideoDurationMs = 40_000;
+// Accept clips under 40.5s so "0:40" recordings with metadata jitter still pass.
+export const maximumVideoDurationMs = 40_499;
+export const maximumVideoDurationSecondsExclusive = 40.5;
 export const maximumVideoSourceBytes = 256 * 1024 * 1024;
 export const maximumStoredVideoBytes = 128 * 1024 * 1024;
 export const preferredVideoLongEdgePx = 1280;

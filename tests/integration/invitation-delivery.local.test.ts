@@ -534,7 +534,7 @@ describe.skipIf(!enabled)("local invitation provisioning and delivery", () => {
     expect(accepted.value).toMatch(/^[0-9a-f-]{36}$/u);
   }, 120_000);
 
-  it("provisions unconfirmed, delivers through Mailpit, confirms by OTP, and accepts once", async () => {
+  it("provisions confirmed, delivers through Mailpit, confirms by OTP, and accepts once", async () => {
     const rpcDiagnostics: string[] = [];
     const rpcFetch = diagnosticRpcFetch(rpcDiagnostics);
     const requested = await requestJson(
@@ -575,7 +575,9 @@ describe.skipIf(!enabled)("local invitation provisioning and delivery", () => {
       await authAdmin.findByNormalizedEmail(recipientEmail);
     expect(provisionedTarget).toMatchObject({
       email: recipientEmail,
-      emailConfirmedAt: null,
+      emailConfirmedAt: expect.stringMatching(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u,
+      ),
     });
 
     const provider = new LocalMailpitInvitationProvider({
@@ -623,7 +625,7 @@ describe.skipIf(!enabled)("local invitation provisioning and delivery", () => {
         body: JSON.stringify({
           email: recipientEmail,
           token: otp,
-          type: "invite",
+          type: "email",
         }),
         method: "POST",
       },

@@ -49,6 +49,9 @@ export type FailedMediaUploadDraft = Readonly<{
   posterDataUrl?: string;
   width?: number;
   height?: number;
+  videoRequestKey?: string;
+  videoRequestId?: string;
+  videoUploadUrl?: string;
 }>;
 
 type StoredFile = Readonly<{
@@ -181,6 +184,9 @@ function draftFromStored(row: StoredDraft): FailedMediaUploadDraft | null {
     posterDataUrl: row.posterDataUrl,
     width: row.width,
     height: row.height,
+    videoRequestKey: row.videoRequestKey,
+    videoRequestId: row.videoRequestId,
+    videoUploadUrl: row.videoUploadUrl,
   };
 }
 

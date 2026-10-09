@@ -1,10 +1,10 @@
 import {
-  maximumVideoDurationMs,
   VideoUploadError,
   acceptedVideoMime,
 } from "@/features/composer/video-upload";
 import {
   maximumVideoSourceBytes,
+  maximumVideoDurationSecondsExclusive,
   overDurationVideoMessage,
   sourceVideoTooLargeMessage,
 } from "./video-upload-policy";
@@ -126,7 +126,7 @@ export async function inspectVideoFile(
             throwIfAborted(signal);
             await decodeCurrentFrame(video);
             throwIfAborted(signal);
-            const durationMs = Math.ceil(video.duration * 1000);
+            const durationMs = Math.floor(video.duration * 1000);
             if (
               !Number.isFinite(video.duration) ||
               !Number.isInteger(durationMs) ||
@@ -137,7 +137,7 @@ export async function inspectVideoFile(
                 false,
               );
             }
-            if (durationMs > maximumVideoDurationMs) {
+            if (video.duration >= maximumVideoDurationSecondsExclusive) {
               throw new VideoUploadError(overDurationVideoMessage, false);
             }
             if (
