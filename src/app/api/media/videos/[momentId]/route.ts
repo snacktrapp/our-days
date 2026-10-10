@@ -14,6 +14,12 @@ import { createOurDaysServerClient } from "@/lib/supabase/server";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const singleByteRangePattern = /^bytes=(?:\d+-\d*|\d*-\d+)$/u;
+const defaultVideoRangeWindowBytes = 1_048_576;
+const maximumVideoRangeWindowBytes = 2_097_152;
+const videoRangeWindowBytes = Math.min(
+  defaultVideoRangeWindowBytes,
+  maximumVideoRangeWindowBytes,
+);
 
 const privateNoStoreHeaders = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -65,61 +71,151 @@ function validPartialResponse(response: Response, expectedSize: number) {
   );
 }
 
-function requestedByteRange(range: string, total: number) {
-  const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
+function contentRangeParts(response: Response) {
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/u.exec(
+    response.headers.get("content-range") ?? "",
+  );
   if (!match) return null;
-  let start: number;
-  let end: number;
-  if (match[1] === "") {
-    const suffix = Number(match[2]);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
-    start = Math.max(0, total - suffix);
-    end = total - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] === "" ? total - 1 : Number(match[2]);
-  }
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(end) ||
-    start < 0 ||
-    end < start ||
-    end >= total
-  ) {
-    return null;
-  }
-  return { start, end };
+  return {
+    start: Number(match[1]),
+    end: Number(match[2]),
+    total: Number(match[3]),
+  };
 }
 
-async function sliceStreamToRange(
-  body: ReadableStream<Uint8Array>,
+function boundedByteRange(range: string, total: number) {
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
+  if (!match || !Number.isSafeInteger(total) || total < 0) return null;
+  if (match[1] === "") {
+    const suffix = Number(match[2]);
+    if (total === 0) return "unsatisfiable";
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
+    const start = Math.max(0, total - suffix);
+    return {
+      start,
+      end: Math.min(total - 1, start + videoRangeWindowBytes - 1),
+    };
+  }
+  const start = Number(match[1]);
+  if (!Number.isSafeInteger(start) || start < 0) return null;
+  if (start >= total) return "unsatisfiable";
+  const requestedEnd = match[2] === "" ? total - 1 : Number(match[2]);
+  if (!Number.isSafeInteger(requestedEnd) || requestedEnd < start) return null;
+  return {
+    start,
+    end: Math.min(requestedEnd, total - 1, start + videoRangeWindowBytes - 1),
+  };
+}
+
+function unsatisfiableRange(total: number) {
+  const headers = new Headers(privateNoStoreHeaders);
+  headers.set("Content-Range", `bytes */${total}`);
+  return new Response(null, { status: 416, headers });
+}
+
+function upstreamBodyStartsAt(
+  response: Response,
+  expectedSize: number,
   start: number,
   end: number,
 ) {
-  const reader = body.getReader();
-  const needed = end - start + 1;
-  const out = new Uint8Array(needed);
-  let skipped = 0;
-  let written = 0;
-  try {
-    while (written < needed) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      let offset = 0;
-      if (skipped < start) {
-        const canSkip = Math.min(value.length, start - skipped);
-        skipped += canSkip;
-        offset = canSkip;
-        if (skipped < start) continue;
-      }
-      const take = Math.min(value.length - offset, needed - written);
-      out.set(value.subarray(offset, offset + take), written);
-      written += take;
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
+  if (
+    response.status !== 206 ||
+    !validPartialResponse(response, expectedSize)
+  ) {
+    return false;
   }
-  return written === needed ? out : null;
+  const parts = contentRangeParts(response);
+  return parts !== null && parts.start === start && parts.end >= end;
+}
+
+function limitStream(
+  body: ReadableStream<Uint8Array>,
+  count: number,
+  skip: number,
+  signal: AbortSignal,
+) {
+  const reader = body.getReader();
+  let skipped = 0;
+  let sent = 0;
+  let settled = false;
+  const stop = () => {
+    if (settled) return;
+    settled = true;
+    signal.removeEventListener("abort", onAbort);
+  };
+  function onAbort() {
+    void reader.cancel().catch(() => undefined);
+  }
+  signal.addEventListener("abort", onAbort, { once: true });
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        while (sent < count) {
+          if (signal.aborted) {
+            stop();
+            await reader.cancel().catch(() => undefined);
+            controller.error(
+              signal.reason ??
+                new DOMException("The operation was aborted.", "AbortError"),
+            );
+            return;
+          }
+          const { done, value } = await reader.read();
+          if (done || !value) {
+            stop();
+            await reader.cancel().catch(() => undefined);
+            controller.error(new Error("Video byte range ended early."));
+            return;
+          }
+          if (value.byteLength === 0) continue;
+          let offset = 0;
+          if (skipped < skip) {
+            const canSkip = Math.min(value.byteLength, skip - skipped);
+            skipped += canSkip;
+            offset = canSkip;
+            if (offset >= value.byteLength) continue;
+          }
+          const take = Math.min(value.byteLength - offset, count - sent);
+          controller.enqueue(
+            new Uint8Array(value.subarray(offset, offset + take)),
+          );
+          sent += take;
+          if (sent >= count) break;
+          return;
+        }
+        stop();
+        await reader.cancel().catch(() => undefined);
+        controller.close();
+      } catch (error) {
+        stop();
+        await reader.cancel().catch(() => undefined);
+        controller.error(error);
+      }
+    },
+    cancel() {
+      stop();
+      return reader.cancel();
+    },
+  });
+}
+
+function boundedPartialResponse(
+  body: ReadableStream<Uint8Array>,
+  start: number,
+  end: number,
+  total: number,
+  headers: Headers,
+  signal: AbortSignal,
+  skip: number,
+) {
+  headers.set("Content-Length", String(end - start + 1));
+  headers.set("Content-Range", `bytes ${start}-${end}/${total}`);
+  return new Response(limitStream(body, end - start + 1, skip, signal), {
+    status: 206,
+    headers,
+  });
 }
 
 export async function GET(
@@ -153,22 +249,17 @@ export async function GET(
     headers.set("Content-Type", moment.media.mimeType);
     headers.set("Vary", varyWithRange());
     if (range) {
-      const match = /^bytes=(\d*)-(\d*)$/u.exec(range);
-      if (!match) return unavailable();
-      const start = match[1] ? Number(match[1]) : 0;
-      const end = match[2] ? Number(match[2]) : bytes.byteLength - 1;
-      if (
-        !Number.isSafeInteger(start) ||
-        !Number.isSafeInteger(end) ||
-        start < 0 ||
-        end < start ||
-        end >= bytes.byteLength
-      ) {
-        return unavailable();
+      const bounded = boundedByteRange(range, bytes.byteLength);
+      if (bounded === "unsatisfiable") {
+        return unsatisfiableRange(bytes.byteLength);
       }
-      headers.set("Content-Length", String(end - start + 1));
-      headers.set("Content-Range", `bytes ${start}-${end}/${bytes.byteLength}`);
-      return new Response(bytes.subarray(start, end + 1), {
+      if (!bounded) return unavailable();
+      headers.set("Content-Length", String(bounded.end - bounded.start + 1));
+      headers.set(
+        "Content-Range",
+        `bytes ${bounded.start}-${bounded.end}/${bytes.byteLength}`,
+      );
+      return new Response(bytes.subarray(bounded.start, bounded.end + 1), {
         status: 206,
         headers,
       });
@@ -196,6 +287,9 @@ export async function GET(
     expectedSize,
     descriptor.mime_type,
   ]);
+  const bounded = range ? boundedByteRange(range, expectedSize) : null;
+  if (bounded === "unsatisfiable") return unsatisfiableRange(expectedSize);
+  if (range && !bounded) return unavailable();
   if (!range) {
     const match = request.headers.get("if-none-match");
     if (
@@ -226,8 +320,11 @@ export async function GET(
   try {
     upstream = await fetch(signed.signedUrl, {
       cache: "no-store",
-      headers: range ? { Range: range } : undefined,
+      headers: bounded
+        ? { Range: `bytes=${bounded.start}-${bounded.end}` }
+        : undefined,
       redirect: "error",
+      signal: request.signal,
     });
   } catch {
     return unavailable();
@@ -246,7 +343,7 @@ export async function GET(
   responseHeaders.set("Content-Type", descriptor.mime_type);
   responseHeaders.set("Vary", varyWithRange());
 
-  if (!range) {
+  if (!bounded) {
     if (
       upstream.status !== 200 ||
       !contentLengthAgrees(upstream.headers, expectedSize)
@@ -254,72 +351,49 @@ export async function GET(
       await upstream.body.cancel();
       return unavailable();
     }
-    if (!upstream.headers.has("content-length")) {
-      const bytes = await upstream.arrayBuffer();
+    if (upstream.headers.has("content-length")) {
+      const bytes = { byteLength: contentLength };
       if (!byteSizeMatches(bytes.byteLength, expectedSize)) {
+        await upstream.body.cancel();
         return unavailable();
       }
       responseHeaders.set("Content-Length", String(bytes.byteLength));
-      return new Response(bytes, { status: 200, headers: responseHeaders });
     }
-    responseHeaders.set("Content-Length", String(contentLength));
     return new Response(upstream.body, {
       status: 200,
       headers: responseHeaders,
     });
   }
 
-  if (upstream.status === 206 && validPartialResponse(upstream, expectedSize)) {
-    responseHeaders.set("Content-Length", String(contentLength));
-    const contentRange = upstream.headers.get("content-range");
-    if (contentRange) responseHeaders.set("Content-Range", contentRange);
-    return new Response(upstream.body, {
-      status: 206,
-      headers: responseHeaders,
-    });
+  if (
+    upstreamBodyStartsAt(upstream, expectedSize, bounded.start, bounded.end)
+  ) {
+    return boundedPartialResponse(
+      upstream.body,
+      bounded.start,
+      bounded.end,
+      expectedSize,
+      responseHeaders,
+      request.signal,
+      0,
+    );
   }
 
-  // iPhone Safari always sends Range. Some Storage/CDN objects (especially
-  // TUS multipart videos) answer that with a 200 of the whole file, sometimes
-  // without Content-Length. Slice a truthful 206 so the lightbox does not get
-  // an empty error mat.
+  // Storage sometimes answers Range with a 200 of the whole object, including
+  // TUS uploads that omit Content-Length. Stream only the bounded window.
   if (
     upstream.status === 200 &&
     contentLengthAgrees(upstream.headers, expectedSize)
   ) {
-    const parsed = requestedByteRange(range, expectedSize);
-    if (!parsed) {
-      await upstream.body.cancel();
-      return unavailable();
-    }
-    // Missing Content-Length is allowed for Safari, but the body must still
-    // be the descriptor's whole object. Slice-only reads would advertise
-    // bytes 0-1/10 from a 2-byte truncated stream.
-    if (!upstream.headers.has("content-length")) {
-      const bytes = await upstream.arrayBuffer();
-      if (!byteSizeMatches(bytes.byteLength, expectedSize)) {
-        return unavailable();
-      }
-      const sliced = bytes.slice(parsed.start, parsed.end + 1);
-      responseHeaders.set("Content-Length", String(sliced.byteLength));
-      responseHeaders.set(
-        "Content-Range",
-        `bytes ${parsed.start}-${parsed.end}/${expectedSize}`,
-      );
-      return new Response(sliced, { status: 206, headers: responseHeaders });
-    }
-    const sliced = await sliceStreamToRange(
+    return boundedPartialResponse(
       upstream.body,
-      parsed.start,
-      parsed.end,
+      bounded.start,
+      bounded.end,
+      expectedSize,
+      responseHeaders,
+      request.signal,
+      bounded.start,
     );
-    if (!sliced) return unavailable();
-    responseHeaders.set("Content-Length", String(sliced.byteLength));
-    responseHeaders.set(
-      "Content-Range",
-      `bytes ${parsed.start}-${parsed.end}/${expectedSize}`,
-    );
-    return new Response(sliced, { status: 206, headers: responseHeaders });
   }
 
   await upstream.body.cancel();
