@@ -6,6 +6,7 @@ import {
   processPhotoIntake,
   PhotoWorkerError,
   PHOTO_WORKER_VERSION,
+  withAuthenticatedPhotoWorkerClient,
 } from "@/lib/photo-worker.server";
 import { createOurDaysServerClient } from "@/lib/supabase/server";
 
@@ -58,6 +59,90 @@ function sameOrigin(request: Request) {
   }
 }
 
+async function cleanupPublishedIntake(
+  supabase: Awaited<ReturnType<typeof createOurDaysServerClient>>,
+  intakeId: string,
+  momentId: string,
+) {
+  const { data, error } = await supabase
+    .rpc("cleanup_published_photo_intake", { intake_id: intakeId })
+    .then(
+      (result) => result,
+      () => ({ data: null, error: true }),
+    );
+  const cleanup = error ? null : data?.[0];
+  if (!cleanup) {
+    console.warn("[photo-process] intake cleanup unavailable", {
+      intakeId,
+      momentId,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  if (!cleanup.safe_to_delete || !cleanup.bucket_id || !cleanup.object_path) {
+    console.info("[photo-process] intake cleanup skipped", {
+      intakeId,
+      momentId,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  const bucketId = cleanup.bucket_id;
+  const objectPath = cleanup.object_path;
+  let removedPaths: string[] = [];
+  try {
+    removedPaths = await withAuthenticatedPhotoWorkerClient(
+      async (workerClient) => {
+        const { data: removedRows, error: removeError } =
+          await workerClient.storage.from(bucketId).remove([objectPath]);
+        if (removeError) throw removeError;
+        return (removedRows ?? [])
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            if ("name" in row && typeof row.name === "string") return row.name;
+            if ("path" in row && typeof row.path === "string") return row.path;
+            return null;
+          })
+          .filter((path): path is string => Boolean(path));
+      },
+    );
+  } catch {
+    console.warn("[photo-process] intake cleanup remove failed", {
+      bucketId: cleanup.bucket_id,
+      intakeId,
+      momentId,
+      objectPath: cleanup.object_path,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  if (!removedPaths.includes(objectPath)) {
+    console.warn("[photo-process] cleanup-not-removed", {
+      bucketId: cleanup.bucket_id,
+      intakeId,
+      momentId,
+      objectPath: cleanup.object_path,
+      reason: cleanup.reason,
+      workerVersion: PHOTO_WORKER_VERSION,
+    });
+    return;
+  }
+
+  console.info("[photo-process] intake cleanup removed", {
+    bucketId: cleanup.bucket_id,
+    intakeId,
+    momentId,
+    objectPath: cleanup.object_path,
+    reason: cleanup.reason,
+    workerVersion: PHOTO_WORKER_VERSION,
+  });
+}
+
 export async function POST(request: Request) {
   if (!photoPostingIsEnabled() || !sameOrigin(request)) {
     return response({ ok: false }, 404);
@@ -92,6 +177,7 @@ export async function POST(request: Request) {
   const before = beforeRows?.[0];
   if (beforeError || !before) return response({ ok: false }, 404);
   if (before.status === "published") {
+    await cleanupPublishedIntake(supabase, intakeId, before.moment_id);
     // Do not push here: a retried intake is not a new family action, and
     // multi-photo edits would otherwise notify once per finished photo.
     return response({ ok: true, momentId: before.moment_id }, 200);
@@ -123,6 +209,7 @@ export async function POST(request: Request) {
       );
     const current = failureStatusError ? null : failureRows?.[0];
     if (current?.status === "published" && current.moment_id) {
+      await cleanupPublishedIntake(supabase, intakeId, current.moment_id);
       return response({ ok: true, momentId: current.moment_id }, 200);
     }
     const serverStatus = current?.status ?? "unavailable";
@@ -162,6 +249,7 @@ export async function POST(request: Request) {
       202,
     );
   }
+  await cleanupPublishedIntake(supabase, intakeId, after.moment_id);
   console.info("[photo-process] published", {
     intakeId,
     momentId: after.moment_id,

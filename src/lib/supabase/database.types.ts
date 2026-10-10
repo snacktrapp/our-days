@@ -970,6 +970,16 @@ export type Database = {
           verification_profile_version: number;
         }[];
       };
+      cleanup_published_photo_intake: {
+        Args: { intake_id: string };
+        Returns: {
+          bucket_id: string;
+          intake_id: string;
+          object_path: string;
+          reason: string;
+          safe_to_delete: boolean;
+        }[];
+      };
       complete_invitation_delivery: {
         Args: {
           delivery_version: number;

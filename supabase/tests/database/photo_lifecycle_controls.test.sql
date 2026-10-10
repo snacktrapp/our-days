@@ -1,6 +1,6 @@
 begin;
 
-select no_plan();
+select plan(44);
 
 update private.photo_capabilities
    set enabled = true, updated_at = statement_timestamp()
@@ -56,10 +56,22 @@ select ok(
     'authenticated', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
   ) and has_function_privilege(
     'authenticated', 'public.list_my_photo_intakes(uuid)', 'EXECUTE'
+  ) and has_function_privilege(
+    'authenticated', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
+  ) and has_function_privilege(
+    'authenticated', 'private.cleanup_published_photo_intake(uuid)', 'EXECUTE'
   ) and not has_function_privilege(
     'anon', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
   ) and not has_function_privilege(
     'service_role', 'public.cancel_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'anon', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'service_role', 'public.cleanup_published_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'anon', 'private.cleanup_published_photo_intake(uuid)', 'EXECUTE'
+  ) and not has_function_privilege(
+    'service_role', 'private.cleanup_published_photo_intake(uuid)', 'EXECUTE'
   ),
   'only authenticated members can reach lifecycle RPCs'
 );
@@ -252,6 +264,370 @@ insert into storage.objects (
   )
 );
 select * from public.acknowledge_photo_intake(:'processing_intake_id'::uuid);
+select ok(
+  exists (
+    select 1
+      from public.cleanup_published_photo_intake(:'processing_intake_id'::uuid)
+     where not safe_to_delete
+       and bucket_id is null
+       and object_path is null
+       and reason = 'intake_not_verified'
+  ),
+  'cleanup refuses to mark intake bytes safe before publish is complete'
+);
+reset role;
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'an incomplete intake cleanup attempt leaves the quarantine object untouched'
+);
+select ok(
+  exists (
+    select 1
+      from pg_catalog.pg_policy as policy_row
+     where policy_row.polname =
+         'our_days_intake_delete_verified_published_worker_only'
+       and policy_row.polrelid = 'storage.objects'::regclass
+       and policy_row.polcmd = 'd'
+       and policy_row.polroles = array[
+         (select role_row.oid
+            from pg_catalog.pg_roles as role_row
+           where role_row.rolname = 'authenticated')
+       ]::oid[]
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%bucket_id = ''our-days-intake''%'
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%current_user_is_photo_validator%'
+       and pg_catalog.pg_get_expr(policy_row.polqual, policy_row.polrelid)
+         like '%photo_intake_cleanup_is_safe%'
+  ),
+  'the intake DELETE policy is worker-only and guarded by validator and publish-safe checks'
+);
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
+);
+select is(
+  (select private.photo_intake_cleanup_is_safe(
+    :'processing_intake_id'::uuid,
+    :'processing_object_path'
+  )),
+  false,
+  'the publish-safe helper stays false before intake publication completes'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )
+  ),
+  false,
+  'an object owner cannot satisfy intake DELETE policy before publish is complete'
+);
+reset role;
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'a blocked pre-publish delete leaves the intake object untouched'
+);
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+values (
+  '10000000-0000-4000-8000-000000000099',
+  'lifecycle-validator@example.test',
+  statement_timestamp(),
+  '{}'
+);
+insert into auth.sessions (id, user_id, created_at, updated_at, not_after)
+values (
+  extensions.gen_random_uuid(),
+  '10000000-0000-4000-8000-000000000099',
+  statement_timestamp(),
+  statement_timestamp(),
+  statement_timestamp() + interval '1 day'
+);
+insert into private.photo_validator_allowlist (auth_user_id)
+values ('10000000-0000-4000-8000-000000000099');
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000099'::uuid
+);
+select is(
+  (select private.current_user_is_photo_validator()),
+  true,
+  'the allowlisted worker identity satisfies the validator helper'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )
+  ),
+  false,
+  'worker identity still cannot satisfy intake DELETE policy before publish is complete'
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '10000000-0000-4000-8000-000000000099',
+  true
+);
+select * from public.claim_photo_validation(
+  :'processing_intake_id'::uuid,
+  'f4300000-0000-4000-8000-000000000001'
+) \gset processing_validation_
+select set_config('storage.operation', 'object.upload', true);
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'f4400000-0000-4000-8000-000000000001', 'our-days-originals',
+  :'processing_validation_canonical_object_path',
+  '10000000-0000-4000-8000-000000000099',
+  '{"mimetype":"image/jpeg","size":12}'::jsonb,
+  jsonb_build_object(
+    'validation_job_id', :'processing_validation_validation_job_id',
+    'intake_id', :'processing_intake_id',
+    'original_id',
+      split_part(:'processing_validation_canonical_object_path', '/', 2),
+    'lease_attempt_id', :'processing_validation_lease_attempt_id',
+    'expected_mime_type', 'image/jpeg',
+    'expected_size_bytes', 12,
+    'expected_sha256', repeat('b', 64),
+    'verification_profile_version', 1
+  )
+);
+select public.complete_photo_validation(
+  :'processing_validation_validation_job_id'::uuid,
+  'f4300000-0000-4000-8000-000000000001',
+  'f4400000-0000-4000-8000-000000000001',
+  '',
+  'image/jpeg',
+  12,
+  repeat('b', 64),
+  4,
+  3,
+  3,
+  1
+) as original_id \gset processing_original_
+select * from public.claim_photo_display_derivative(
+  :'processing_original_original_id'::uuid,
+  'f4500000-0000-4000-8000-000000000001'
+) \gset processing_derivative_
+select jsonb_build_object(
+  'derivative_job_id', :'processing_derivative_derivative_job_id',
+  'original_id', :'processing_original_original_id',
+  'derivative_id', split_part(:'processing_derivative_display_object_path', '/', 2),
+  'lease_attempt_id', :'processing_derivative_lease_attempt_id',
+  'source_storage_object_id', 'f4400000-0000-4000-8000-000000000001',
+  'source_storage_object_version', '',
+  'output_mime_type', 'image/webp',
+  'output_size_bytes', 8,
+  'output_sha256', repeat('b', 64),
+  'output_width', 2,
+  'output_height', 2,
+  'output_channels', 3,
+  'output_pages', 1,
+  'maximum_size_bytes', 12582912,
+  'transform_profile_version', 1
+)::text as processing_derivative_metadata \gset
+insert into storage.objects (
+  id, bucket_id, name, owner_id, metadata, user_metadata
+) values (
+  'f4600000-0000-4000-8000-000000000001', 'our-days-display',
+  :'processing_derivative_display_object_path',
+  '10000000-0000-4000-8000-000000000099',
+  '{"mimetype":"image/webp","size":8}'::jsonb,
+  :'processing_derivative_metadata'::jsonb
+);
+select public.complete_photo_display_derivative(
+  :'processing_derivative_derivative_job_id'::uuid,
+  'f4500000-0000-4000-8000-000000000001',
+  'f4600000-0000-4000-8000-000000000001',
+  '',
+  8,
+  repeat('b', 64),
+  2,
+  2,
+  3,
+  1
+) as display_derivative_id \gset processing_display_
+set constraints private.photo_moment_publish_after_derivative immediate;
+reset role;
+select is(
+  (select state from private.photo_intakes
+    where id = :'processing_intake_id'::uuid),
+  'verified'::text,
+  'the processing intake reaches verified state before cleanup checks'
+);
+select is(
+  (select count(*)::bigint
+     from public.moment_photos as photo
+     join private.photo_originals as original
+       on original.id = photo.original_id
+    where original.intake_id = :'processing_intake_id'::uuid),
+  1::bigint,
+  'publication links the processing intake original into moment_photos before cleanup checks'
+);
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
+);
+with cleanup as (
+  select * from public.cleanup_published_photo_intake(
+    :'processing_intake_id'::uuid
+  )
+)
+select
+  coalesce(bool_or(safe_to_delete), false) as safe_to_delete,
+  coalesce(max(bucket_id) filter (where safe_to_delete), '') as bucket_id,
+  coalesce(max(object_path) filter (where safe_to_delete), '') as object_path,
+  coalesce(max(reason), '') as reason
+from cleanup
+  \gset processing_cleanup_safe_
+select is(
+  :'processing_cleanup_safe_safe_to_delete'::boolean,
+  true,
+  'cleanup reports the intake as safe to delete after verified publication'
+);
+select is(
+  row(
+    :'processing_cleanup_safe_safe_to_delete',
+    :'processing_cleanup_safe_bucket_id',
+    :'processing_cleanup_safe_object_path',
+    :'processing_cleanup_safe_reason'
+  )::text,
+  row(
+    't'::text,
+    'our-days-intake'::text,
+    :'processing_object_path',
+    'safe_to_delete'::text
+  )::text,
+  'an authenticated intake owner receives a safe storage-api cleanup verdict after publish'
+);
+reset role;
+select is(
+  (select count(*)::bigint
+     from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'the published intake object remains until worker cleanup executes'
+);
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000002'::uuid
+);
+select is(
+  (select private.photo_intake_cleanup_is_safe(
+    :'processing_intake_id'::uuid,
+    :'processing_object_path'
+  )),
+  true,
+  'the publish-safe helper turns true once original and display publication are complete'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )
+  ),
+  false,
+  'an unrelated authenticated user cannot satisfy the intake DELETE policy after publish'
+);
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )
+  ),
+  false,
+  'the intake object owner still cannot satisfy the DELETE policy after publish'
+);
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000099'::uuid
+);
+select is(
+  (select count(*)::bigint from storage.objects as object
+    where object.bucket_id = 'our-days-intake'
+      and object.name = :'processing_object_path'),
+  1::bigint,
+  'worker identity can select the verified-published intake object'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path'
+      )
+    )
+  ),
+  true,
+  'the worker satisfies the intake DELETE policy helper predicates for a verified-published intake'
+);
+select is(
+  (
+    select (
+      private.current_user_is_photo_validator()
+      and private.photo_intake_cleanup_is_safe(
+        :'processing_intake_id'::uuid,
+        :'processing_object_path' || '-wrong-context'
+      )
+    )
+  ),
+  false,
+  'even the worker fails the intake DELETE policy helper predicates for a mismatched object path'
+);
+reset role;
+with simulated_removed as (
+  update storage.objects as object
+     set name = object.name || '-simulated-removed'
+   where object.bucket_id = 'our-days-intake'
+     and object.name = :'processing_object_path'
+  returning 1
+)
+select count(*)::bigint as processing_simulated_removed_count
+from simulated_removed \gset
+select is(
+  :'processing_simulated_removed_count'::bigint,
+  1::bigint,
+  'the test simulates post-policy cleanup by unlinking the intake object path without using direct delete'
+);
+set local role authenticated;
+select pg_temp.set_lifecycle_user(
+  '10000000-0000-4000-8000-000000000001'::uuid
+);
+select is(
+  (select count(*)::bigint from public.list_my_photo_intakes(
+      '20000000-0000-4000-8000-000000000001'
+    )
+    where intake_id = :'processing_intake_id'::uuid),
+  0::bigint,
+  'published intake work stays hidden once its intake object is removed'
+);
 select throws_ok(
   format(
     'select * from public.cancel_photo_intake(%L::uuid)',
