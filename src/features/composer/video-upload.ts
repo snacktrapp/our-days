@@ -7,7 +7,6 @@ import type {
 import { createOurDaysBrowserClient } from "@/lib/supabase/browser";
 import {
   maximumStoredVideoBytes,
-  maximumUploadVideoBytes,
   maximumVideoDurationMs as maximumVideoDurationLimitMs,
   overDurationVideoMessage,
   storedVideoTooLargeMessage,
@@ -121,7 +120,7 @@ function inspectVideo(file: File, durationMs: number) {
       false,
     );
   }
-  if (file.size > maximumUploadVideoBytes(durationMs)) {
+  if (file.size > maximumVideoBytes) {
     if (durationMs <= maximumVideoDurationMs) {
       console.warn("[video-upload] backstop_edge_case", {
         durationMs,

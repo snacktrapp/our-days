@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { maximumMomentPhotos } from "@/features/moments/moment-photos";
 import {
-  maximumUploadVideoBytes,
+  maximumStoredVideoBytes,
   maximumVideoDurationMs,
   overDurationVideoMessage,
   storedVideoTooLargeMessage,
@@ -256,10 +256,7 @@ export async function publishVerifiedVideoMoment(
   ) {
     throw new LocalMediaCoordinatorError(overDurationVideoMessage);
   }
-  if (
-    input.file.size < 1 ||
-    input.file.size > maximumUploadVideoBytes(input.durationMs)
-  ) {
+  if (input.file.size < 1 || input.file.size > maximumStoredVideoBytes) {
     throw new LocalMediaCoordinatorError(storedVideoTooLargeMessage);
   }
   const bytes = Buffer.from(await input.file.arrayBuffer());

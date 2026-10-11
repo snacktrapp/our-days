@@ -386,10 +386,9 @@ describe("local journal happy path", () => {
     expect(ownMoment.moment.taggedPeopleLabel).toBe("Jordan");
   });
 
-  it("rejects a 37 MB video that is still under the storage backstop", async () => {
-    const file = new File([new Uint8Array([1])], "iphone.mp4", {
-      type: "video/mp4",
-    });
+  it("accepts an original under the 128 MiB backstop", async () => {
+    const videoBytes = readFileSync("tests/fixtures/synthetic-short.mp4");
+    const file = new File([videoBytes], "iphone.mp4", { type: "video/mp4" });
     Object.defineProperty(file, "size", {
       configurable: true,
       value: 37 * 1024 * 1024,
@@ -406,7 +405,10 @@ describe("local journal happy path", () => {
         occurredTimezone: null,
         durationMs: 40_000,
       }),
-    ).rejects.toThrow("too big to share");
+    ).resolves.toMatchObject({
+      kind: "video",
+      media: expect.objectContaining({ durationMs: 40_000 }),
+    });
   });
 
   it("accepts a video at 40 seconds and rejects 41 seconds", async () => {

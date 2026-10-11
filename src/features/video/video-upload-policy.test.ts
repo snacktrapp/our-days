@@ -22,7 +22,7 @@ describe("video upload policy copy", () => {
     }
   });
 
-  it("budgets a 40 second clip near 13 MB and refuses originals around 37 MB", () => {
+  it("budgets a 40 second re-encode near 13 MB", () => {
     expect(targetStoredVideoBytes(40_000)).toBe(14_927_000);
     expect(targetStoredVideoBytes(40_000)).toBeGreaterThan(10 * 1024 * 1024);
     expect(targetStoredVideoBytes(40_000)).toBeLessThan(15 * 1024 * 1024);

@@ -261,8 +261,35 @@ function tunedBitrates() {
   };
 }
 
-function uploadableVideoSize(size: number, durationMs: number) {
+function originalWithinBackstop(size: number) {
+  return size >= 1 && size <= maximumStoredVideoBytes;
+}
+
+function reencodedWithinCeiling(size: number, durationMs: number) {
   return size >= 1 && size <= maximumUploadVideoBytes(durationMs);
+}
+
+function sourceHasAudioTrack(
+  video: HTMLVideoElement,
+  captured: MediaStream | null,
+  captureMethod: CaptureMethod | null,
+) {
+  const listed = (
+    video as HTMLVideoElement & { audioTracks?: { length: number } }
+  ).audioTracks;
+  if (listed) return listed.length > 0;
+  const probed =
+    captured ?? (captureMethod ? sourceStream(video, captureMethod) : null);
+  if (!probed) {
+    // Unknown on this browser. Assume the clip has sound so a muted
+    // re-encode cannot replace it.
+    return true;
+  }
+  const hasAudio = probed.getAudioTracks().length > 0;
+  if (probed !== captured) {
+    probed.getTracks().forEach((track) => track.stop());
+  }
+  return hasAudio;
 }
 
 function playbackTimeoutMs(durationMs: number) {
@@ -519,6 +546,11 @@ async function compressWithMediaRecorder(
     if (!captureVideoTrack) {
       throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
+    const sourceHasAudio = sourceHasAudioTrack(
+      video,
+      source,
+      input.support.captureMethod,
+    );
 
     const AudioContextCtor = webAudioContextConstructor();
     if (AudioContextCtor) {
@@ -545,6 +577,9 @@ async function compressWithMediaRecorder(
         releaseAudioContext = false;
         if (isAbortError(error)) throw error;
       }
+    }
+    if (sourceHasAudio && !audioDestination) {
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
     }
 
     const startRecording = (withAudio: boolean) => {
@@ -596,8 +631,11 @@ async function compressWithMediaRecorder(
       if (isAbortError(error)) throw error;
       throwIfAborted(input.signal);
       // iPhone Safari rejects unmuted playback after the picker gesture ends.
-      // Retry muted so the frames still re-encode, and skip the Web Audio tap
-      // because a muted element would record silence.
+      // A muted retry would record silence, so a clip that has audio keeps
+      // the original instead. Silent clips can still re-encode muted.
+      if (sourceHasAudio) {
+        throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+      }
       await abandonRecording();
       video.pause();
       try {
@@ -623,6 +661,9 @@ async function compressWithMediaRecorder(
     if (recording.recorder.state !== "inactive") recording.recorder.stop();
     await recording.stopped;
     throwIfAborted(input.signal);
+    if (sourceHasAudio && recording.stream.getAudioTracks().length < 1) {
+      throw new VideoUploadError(unsupportedVideoCompressionMessage, false);
+    }
 
     const blob = new Blob(chunks, {
       type: recording.recorder.mimeType || input.support.mimeType,
@@ -691,10 +732,7 @@ export async function prepareVideoUploadFile(
     input.height,
     input.durationMs,
   );
-  const originalIsUploadable = uploadableVideoSize(
-    input.file.size,
-    input.durationMs,
-  );
+  const originalIsUploadable = originalWithinBackstop(input.file.size);
 
   if (!support || !needsCompression) {
     if (!originalIsUploadable) {
@@ -717,7 +755,7 @@ export async function prepareVideoUploadFile(
     if (compressed.size < 1) {
       throw new VideoUploadError(fallbackPrepareMessage);
     }
-    const compressedIsUploadable = uploadableVideoSize(
+    const compressedIsUploadable = reencodedWithinCeiling(
       compressed.size,
       input.durationMs,
     );

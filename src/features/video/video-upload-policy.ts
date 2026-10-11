@@ -35,8 +35,8 @@ export function targetStoredVideoBytes(durationMs: number) {
   );
 }
 
-// Client and app-server ceiling. Larger originals are not stored when
-// compression cannot bring them under this. The 128 MiB bucket backstop stays.
+// Ceiling for a re-encoded file. Originals that keep their audio use the
+// 128 MiB backstop instead of this budget.
 export function maximumUploadVideoBytes(durationMs: number) {
   return Math.min(
     maximumStoredVideoBytes,
