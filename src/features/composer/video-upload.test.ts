@@ -220,6 +220,14 @@ describe("connected private video upload", () => {
       value: maximumVideoBytes + 1,
     });
     await expect(run(oversized, 1_000)).rejects.toThrow("too big to share");
+    const phoneOriginal = videoFile(1, "video/mp4", "iphone.mp4");
+    Object.defineProperty(phoneOriginal, "size", {
+      configurable: true,
+      value: 37 * 1024 * 1024,
+    });
+    await expect(run(phoneOriginal, 40_000)).rejects.toThrow(
+      "too big to share",
+    );
     await expect(run(videoFile(), maximumVideoDurationMs + 1)).rejects.toThrow(
       "40 seconds or less",
     );
